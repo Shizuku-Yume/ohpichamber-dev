@@ -2,10 +2,21 @@ import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import React from 'react';
 
 import { toast } from '@/components/ui';
+import { AttachedOverlayScrollbar } from '@/components/ui/AttachedOverlayScrollbar';
 import { Button } from '@/components/ui/button';
+<<<<<<< HEAD
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { KnowledgeCard } from './KnowledgeCard';
+=======
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { KnowledgeCard } from './KnowledgeCard';
+import { KnowledgeEntryView } from './KnowledgeEntryView';
+import { KnowledgeSplit } from './KnowledgeSplit';
+import { KnowledgeMenu } from './KnowledgeActions';
+import { ButtonTooltip } from '@/components/ui/action-toolbar';
+import { memoryDeleteKey, scheduleKnowledgeDelete, usePendingKnowledgeDeletes } from './pendingKnowledgeDeletes';
+>>>>>>> bc50ba56a
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { AGENT_MEMORY_BODY_MAX_LENGTH, AGENT_MEMORY_TITLE_MAX_LENGTH, type AgentMemoryEntry, type AgentMemoryScope } from '@/lib/agentMemoryApi';
@@ -15,11 +26,116 @@ import { selectProjectMemoryForPath, useAgentMemoryStore } from '@/stores/useAge
 import { useUIStore } from '@/stores/useUIStore';
 
 /**
+<<<<<<< HEAD
  * One stored memory.
  *
  * Read-only text on purpose: this is what the agent wrote, and the useful
  * action on someone else's claim is to remove it, not to quietly rewrite it
  * into something the agent will contradict next session.
+=======
+ * Starts the tidy-up session. Offered only while both scopes are loaded for
+ * this project: a store that failed to load would reach the agent as empty,
+ * and it would tidy against half the data.
+ */
+const MemoryTidyButton: React.FC<{ projectPath: string | null }> = ({ projectPath }) => {
+  const { t } = useI18n();
+  const [starting, setStarting] = React.useState(false);
+  const ready = useAgentMemoryStore((state) => (
+    Boolean(projectPath)
+    && state.loaded
+    && !state.loading
+    && !state.globalFailed
+    && !state.projectFailed
+    && state.projectPath === projectPath
+    && state.global.length + state.project.length > 0
+  ));
+
+  const handleClick = async () => {
+    if (!projectPath || starting) return;
+    const { global, project } = useAgentMemoryStore.getState();
+    setStarting(true);
+    try {
+      const outcome = await startMemoryTidy({
+        projectPath,
+        title: t('rightSidebar.contextNotesTodo.memory.tidy.sessionTitle'),
+        memory: { global, project },
+      });
+      if (!outcome.ok) {
+        toast.error(t(outcome.reason === 'no-model'
+          ? 'rightSidebar.contextNotesTodo.memory.tidy.noModel'
+          : 'rightSidebar.contextNotesTodo.memory.tidy.failed'));
+      }
+    } catch {
+      toast.error(t('rightSidebar.contextNotesTodo.memory.tidy.failed'));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <ButtonTooltip label={t('contextTooltips.workspace.memory.tidy')} className="ms-auto shrink-0">
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        disabled={!ready || starting}
+        onClick={() => void handleClick()}
+        className="gap-1 border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)] hover:bg-[var(--status-info-background)] hover:text-[var(--status-info)]"
+      >
+        <Icon name={starting ? 'loader-4' : 'brush'} className={cn('size-3.5', starting && 'animate-spin')} />
+        {t('rightSidebar.contextNotesTodo.memory.tidy.action')}
+      </Button>
+    </ButtonTooltip>
+  );
+};
+
+const MemoryBadgePill: React.FC<{ badge: MemoryBadge }> = ({ badge }) => {
+  const { t } = useI18n();
+  if (!badge) return null;
+  return (
+    <span
+      className={cn(
+        'flex-shrink-0 rounded-full px-1.5 py-px typography-micro font-medium',
+        badge === 'new'
+          ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
+          : 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]',
+      )}
+    >
+      {t(badge === 'new'
+        ? 'rightSidebar.contextNotesTodo.memory.badge.new'
+        : 'rightSidebar.contextNotesTodo.memory.badge.changed')}
+    </span>
+  );
+};
+
+/** Type and the withheld warning: the card footer and the open entry's toolbar. */
+const MemoryMeta: React.FC<{ entry: AgentMemoryEntry; scopeLabel?: string }> = ({ entry, scopeLabel }) => {
+  const { t } = useI18n();
+  const typeLabel = t(`rightSidebar.contextNotesTodo.memory.type.${entry.type}` as Parameters<typeof t>[0]);
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 typography-micro text-muted-foreground">
+      {scopeLabel ? (
+        <>
+          <span>{scopeLabel}</span>
+          <span aria-hidden="true">·</span>
+        </>
+      ) : null}
+      <span>{typeLabel}</span>
+      {entry.flagged ? (
+        // Shown rather than hidden: an entry withheld from the agent is
+        // exactly the one the user needs to look at.
+        <span className="flex items-center gap-1 text-[var(--status-error)]">
+          <Icon name="error-warning" className="h-3 w-3 flex-shrink-0" />
+          {t('rightSidebar.contextNotesTodo.memory.flagged')}
+        </span>
+      ) : null}
+    </span>
+  );
+};
+
+/**
+ * One stored memory in the list. A click opens it.
+>>>>>>> bc50ba56a
  *
  * There is no confirm button. A badge that the user has to dismiss by hand asks
  * them to do work that tells the agent nothing — the agent already has the
@@ -32,7 +148,62 @@ const MemoryRow: React.FC<{
   onToggleExpanded: () => void;
   onSave: (patch: { title?: string; body?: string }) => void;
   onDelete: () => void;
+<<<<<<< HEAD
 }> = ({ entry, badge, expanded, onToggleExpanded, onSave, onDelete }) => {
+=======
+  selected: boolean;
+}> = ({ entry, badge, onOpen, onDelete , selected}) => {
+  const { t } = useI18n();
+  const menuItems = [{
+    id: 'delete',
+    label: t('rightSidebar.contextNotesTodo.memory.actions.delete'),
+    destructive: true,
+    onSelect: onDelete,
+  }];
+  return (
+    <KnowledgeCard
+      selected={selected}
+      entryId={entry.id}
+      onOpen={onOpen}
+      label={entry.title}
+      header={(
+        <>
+          <MemoryBadgePill badge={badge} />
+          <span className="min-w-0 flex-1 truncate typography-ui-label font-medium text-foreground" dir="auto" title={entry.title}>
+            {entry.title}
+          </span>
+        </>
+      )}
+      actions={<KnowledgeMenu items={menuItems} />}
+      menuItems={menuItems}
+      footer={<MemoryMeta entry={entry} />}
+    >
+      <p className="line-clamp-2 whitespace-pre-wrap break-words typography-meta text-muted-foreground" dir="auto">
+        {entry.body}
+      </p>
+    </KnowledgeCard>
+  );
+};
+
+/**
+ * An open memory, in place of the list, with its title and text editable.
+ *
+ * Editable on purpose. A memory worded badly enough to mislead should be
+ * fixable where it is read; deleting it and hoping the agent learns it again,
+ * better, is not a repair. Changes save when a field loses focus and when the
+ * entry is left. A rewrite by the agent is adopted while the user has not
+ * changed anything since the last version they saw.
+ */
+const MemoryView: React.FC<{
+  entry: AgentMemoryEntry;
+  badge: MemoryBadge;
+  scopeLabel: string;
+  onSave: (patch: { title: string; body: string }) => void;
+  onDelete: () => void;
+  onClose: () => void;
+  showBack: boolean;
+}> = ({ entry, badge, scopeLabel, onSave, onDelete, onClose , showBack}) => {
+>>>>>>> bc50ba56a
   const { t } = useI18n();
   const [titleDraft, setTitleDraft] = React.useState(entry.title);
   const [bodyDraft, setBodyDraft] = React.useState(entry.body);
@@ -45,7 +216,15 @@ const MemoryRow: React.FC<{
     setBodyDraft(entry.body);
   }, [entry.body, entry.title, expanded]);
 
+<<<<<<< HEAD
   const commit = React.useCallback(() => {
+=======
+  const bodyRef = React.useRef<HTMLTextAreaElement>(null);
+  const [bodyScroller, setBodyScroller] = React.useState<HTMLTextAreaElement | null>(null);
+  const emojiPicker = useEmojiPicker(bodyRef);
+  const commitRef = React.useRef<() => void>(() => {});
+  commitRef.current = () => {
+>>>>>>> bc50ba56a
     const title = titleDraft.trim();
     const body = bodyDraft.trim();
     // An emptied field is a rejected write, not a delete: restore it rather
@@ -110,6 +289,7 @@ const MemoryRow: React.FC<{
         </button>
       )}
     >
+<<<<<<< HEAD
       {expanded ? (
         // Editable on purpose. A memory worded badly enough to mislead should
         // be fixable where it is read; deleting it and hoping the agent learns
@@ -141,6 +321,35 @@ const MemoryRow: React.FC<{
         </>
       )}
     </KnowledgeCard>
+=======
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <input
+          value={titleDraft}
+          onChange={(event) => setTitleDraft(event.target.value.slice(0, AGENT_MEMORY_TITLE_MAX_LENGTH))}
+          onBlur={() => commitRef.current()}
+          aria-label={t('rightSidebar.contextNotesTodo.memory.actions.editTitle')}
+          dir="auto"
+          className="w-full flex-shrink-0 bg-transparent typography-ui-header font-semibold text-foreground outline-none focus-visible:outline-none"
+        />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <textarea
+            ref={(node) => {
+              bodyRef.current = node;
+              setBodyScroller(node);
+            }}
+            value={bodyDraft}
+            onChange={(event) => setBodyDraft(event.target.value.slice(0, AGENT_MEMORY_BODY_MAX_LENGTH))}
+            onBlur={() => commitRef.current()}
+            aria-label={t('rightSidebar.contextNotesTodo.memory.actions.editBody')}
+            dir="auto"
+            className="min-h-0 w-full flex-1 resize-none overflow-y-auto bg-transparent typography-ui-label leading-relaxed text-foreground outline-none focus-visible:outline-none"
+          />
+          <AttachedOverlayScrollbar scroller={bodyScroller} disableHorizontal />
+        </div>
+        {emojiPicker}
+      </div>
+    </KnowledgeEntryView>
+>>>>>>> bc50ba56a
   );
 };
 
@@ -212,9 +421,19 @@ export const MemorySection: React.FC<{
     }
   }, [saveEntry, scope, t]);
 
-  const scopeOptions: Array<{ id: AgentMemoryScope; label: string; count: number }> = [
-    { id: 'project', label: t('rightSidebar.contextNotesTodo.memory.scope.project'), count: projectEntries.length },
-    { id: 'global', label: t('rightSidebar.contextNotesTodo.memory.scope.global'), count: globalEntries.length },
+  const scopeOptions: Array<{ id: AgentMemoryScope; label: string; tooltip: string; count: number }> = [
+    {
+      id: 'project',
+      label: t('rightSidebar.contextNotesTodo.memory.scope.project'),
+      tooltip: t('contextTooltips.workspace.memory.scope.project'),
+      count: projectEntries.length,
+    },
+    {
+      id: 'global',
+      label: t('rightSidebar.contextNotesTodo.memory.scope.global'),
+      tooltip: t('contextTooltips.workspace.memory.scope.global'),
+      count: globalEntries.length,
+    },
   ];
 
   return (
@@ -223,6 +442,7 @@ export const MemorySection: React.FC<{
           not which view you are in, and the chip's pressed state says which one
           is selected far more plainly than a pill sitting on a matching
           background did. */}
+<<<<<<< HEAD
       <div role="group" aria-label={t('rightSidebar.contextNotesTodo.memory.scope.label')} className="flex items-center gap-1">
         {scopeOptions.map((option) => (
           <Button
@@ -237,6 +457,32 @@ export const MemorySection: React.FC<{
             {`${option.label} ${option.count}`}
           </Button>
         ))}
+=======
+      <div className="flex items-center gap-1">
+        <div role="group" aria-label={t('rightSidebar.contextNotesTodo.memory.scope.label')} className="flex items-center gap-1">
+          {scopeOptions.map((option) => (
+            <Tooltip key={option.id}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="chip"
+                  size="xs"
+                  aria-pressed={scope === option.id}
+                  className="!font-normal"
+                  onClick={() => {
+                    scopePickedRef.current = true;
+                    setScope(option.id);
+                  }}
+                >
+                  {`${option.label} ${option.count}`}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent sideOffset={6}>{option.tooltip}</TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
+        <MemoryTidyButton projectPath={projectPath} />
+>>>>>>> bc50ba56a
       </div>
 
       {scope === 'project' && !projectPath ? (

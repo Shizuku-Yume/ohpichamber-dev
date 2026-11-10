@@ -2,6 +2,7 @@
 
 ## Custom Themes (User)
 
+<<<<<<< HEAD:packages/ui/src/lib/theme/references/adding-themes.md
 Drop a JSON file into `~/.config/openchamber/themes/`. No rebuild needed.
 
 1. Create theme file (e.g., `my-theme.json`)
@@ -9,6 +10,9 @@ Drop a JSON file into `~/.config/openchamber/themes/`. No rebuild needed.
 3. Select from dropdown
 
 See the [custom theme format](../../../../../../docs/CUSTOM_THEMES.md) for supported fields.
+=======
+User themes are JSON files in `~/.config/openchamber/themes/`, loaded without a rebuild; the format is in `docs/CUSTOM_THEMES.md`.
+>>>>>>> bc50ba56a:.agents/skills/theme-system/references/adding-themes.md
 
 ## Built-in Themes (Development)
 
@@ -40,10 +44,16 @@ export const presetThemes: Theme[] = [
 
 ### 3. Validate
 
-```bash
-bun run type-check && bun run lint && bun run build
-```
+Run `bun run build`; the JSON is imported at build time.
 
+<<<<<<< HEAD:packages/ui/src/lib/theme/references/adding-themes.md
+=======
+### Judging a palette
+
+- Status colours keep their everyday meaning in light and dark variants: success green, info blue, error red, warning amber. Tune the shade to its background, not the hue family.
+- Contrast numbers only point at candidates; the verdict comes from the real UI: body text, bold chat text and borders on the canvas, the sidebar and elevated surfaces. Dark built-ins share one band: body text about 13.3 to 13.6:1 and secondary text about 6:1, reached by raising OKLab lightness only so hue holds. Too low reads dim on external monitors; too high reads harsh. Catppuccin stays on its official palette.
+
+>>>>>>> bc50ba56a:.agents/skills/theme-system/references/adding-themes.md
 ## Authoring Tools
 
 Both do the mechanical work of steps 1–2 and are run by hand:

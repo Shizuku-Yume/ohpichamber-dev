@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import type { Spy } from "bun:test"
+import { GitNetworkOperationRequestError } from "./api/types"
 import type { GitAPI, GitStatus } from "./api/types"
 import { generateCommitMessage, generatePullRequestDescription, getGitStatus, resolveGitRepositoryPrefix, stageGitFile, stageGitFiles, unstageGitFile, unstageGitFiles } from "./gitApi"
 import { switchRuntimeEndpoint } from "./runtime-switch"
@@ -354,5 +355,16 @@ describe('generateCommitMessage reasoning request', () => {
 
     await generateCommitMessage('/repo', files, { reasoning: true })
     expect(JSON.parse(captured[1].body ?? '{}').reasoningEffort).toBe('medium')
+  })
+})
+
+describe("operations a registered runtime omits", () => {
+  test("reject as unsupported instead of falling back to HTTP", async () => {
+    const { getGitLog } = await import("./gitApi")
+    await withRuntimeGit({}, async () => {
+      const error = await getGitLog("/repo").catch((caught: unknown) => caught)
+      expect(error).toBeInstanceOf(GitNetworkOperationRequestError)
+      expect(error).toMatchObject({ code: "RUNTIME_UNSUPPORTED", status: 501 })
+    })
   })
 })

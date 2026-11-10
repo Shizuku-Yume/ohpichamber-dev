@@ -7,13 +7,22 @@ import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
 import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
+<<<<<<< HEAD
+=======
+import { toggleExpandedContextZone } from '@/lib/workspace/toggleExpandedZone';
+>>>>>>> bc50ba56a
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useKeybinds } from '@/hooks/useKeybind';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
+<<<<<<< HEAD
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
+=======
+import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
+import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isVSCodeRuntime } from '@/lib/desktop';
+>>>>>>> bc50ba56a
 import {
   eventMatchesShortcut,
   eventMatchesShortcutPrefix,
@@ -46,6 +55,9 @@ import {
   invokeActiveSelectionAddToChat,
 } from '@/lib/addSelectionToChat';
 import { isIMECompositionEvent } from '@/lib/ime';
+import { getNextFavoriteModel } from '@/lib/modelRefs';
+import { dispatchPromptHistorySearch } from '@/components/chat/composer/state/promptHistorySearchRoute';
+import { isLinuxPlatform } from '@/lib/platform';
 import { canUseDigitShortcut, hasActiveBtwComposer, hasOpenDropdown, isEditableEventTarget, shouldStopDropdownImeEscape } from './keyboard-shortcut-dom';
 
 const dropdownTargetSelector = [
@@ -113,6 +125,7 @@ export const useKeyboardShortcuts = () => {
     useUIStore.getState().openContextSurface(normalizeContextPanelDirectoryKey(currentDirectory), 'terminal');
   };
 
+<<<<<<< HEAD
   const toggleTerminalSurfaceExpanded = () => {
     if (!currentDirectory) return;
     const key = normalizeContextPanelDirectoryKey(currentDirectory);
@@ -124,10 +137,16 @@ export const useKeyboardShortcuts = () => {
     state.toggleContextPanelExpanded(key);
   };
 
+=======
+>>>>>>> bc50ba56a
   useKeybinds({
     open_command_palette: () => {
+      // The palette renders only in the MainLayout (web and desktop); in VS Code
+      // this keystroke is Quick Open.
+      if (isVSCodeRuntime()) return false;
       useUIStore.getState().toggleCommandPalette();
     },
+    search_prompt_history: (event) => dispatchPromptHistorySearch(event),
     open_timeline_dialog: () => {
       useUIStore.getState().setTimelineDialogOpen(true);
     },
@@ -246,23 +265,31 @@ export const useKeyboardShortcuts = () => {
       const backward = combo && !combo.includes('shift') ? normalizeCombo(`shift+${combo}`) : '';
       const direction = backward && eventMatchesShortcut(event, backward) ? -1 : 1;
       const config = useConfigStore.getState();
+<<<<<<< HEAD
       const agents = selectAgentsForDirectory(useAgentsStore.getState(), useDirectoryStore.getState().currentDirectory);
       const next = getCycledAgentId(agents, config.currentAgentName, direction, state.favoriteAgents);
+=======
+      const sessionId = useSessionUIStore.getState().currentSessionId;
+      const shownAgent = (sessionId ? useSelectionStore.getState().getSessionAgentPick(sessionId) : null) ?? config.currentAgentName;
+      const next = getCycledPrimaryAgentName(config.getVisibleAgents(), shownAgent, direction, state.favoriteAgents);
+>>>>>>> bc50ba56a
       if (!next) return false;
+      if (sessionId) {
+        useSelectionStore.getState().pickSessionAgent(sessionId, next);
+      }
       config.setAgent(next);
       state.addRecentAgent(next);
-      const sessionId = useSessionUIStore.getState().currentSessionId;
-      if (sessionId) {
-        useSelectionStore.getState().saveSessionAgentSelection(sessionId, next);
-      }
     },
     toggle_terminal: () => {
-      if (useUIStore.getState().isMobile) return false;
+      // Desktop and web only: no terminal surface renders in VS Code, where
+      // this keystroke toggles the bottom panel.
+      if (useUIStore.getState().isMobile || isVSCodeRuntime()) return false;
       return toggleTerminalSurface();
     },
-    toggle_terminal_expanded: () => {
-      if (useUIStore.getState().isMobile) return false;
-      return toggleTerminalSurfaceExpanded();
+    toggle_context_panel_expanded: () => {
+      // No ContextPanel renders in VS Code, so the store change would be invisible.
+      if (useUIStore.getState().isMobile || isVSCodeRuntime() || !currentDirectory) return false;
+      toggleExpandedContextZone(currentDirectory);
     },
     open_model_selector: () => {
       if (hasActiveBtwComposer()) return false;
@@ -282,6 +309,7 @@ export const useKeyboardShortcuts = () => {
         || state.isSessionSwitcherOpen
         || state.isAboutDialogOpen;
       if (state.isSettingsDialogOpen || hasOverlay) return false;
+<<<<<<< HEAD
       const config = useConfigStore.getState();
       const model = config.getCurrentModel();
       if (!model?.reasoningEffortSupported && !model?.reasoningOptions.length) return false;
@@ -306,6 +334,9 @@ export const useKeyboardShortcuts = () => {
         );
         useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, currentAgentName ?? ROOT_SELECTION_AGENT, currentProviderId, currentModelId, null);
       }
+=======
+      if (!cycleThinkingVariant(useSessionUIStore.getState().currentSessionId)) return false;
+>>>>>>> bc50ba56a
     },
     cycle_favorite_model_forward: () => cycleFavoriteModel(1),
     cycle_favorite_model_backward: () => cycleFavoriteModel(-1),
@@ -347,20 +378,20 @@ export const useKeyboardShortcuts = () => {
       || state.isHelpDialogOpen
       || state.isSessionSwitcherOpen
       || state.isAboutDialogOpen;
-    if (
-      state.isSettingsDialogOpen
-      || hasOverlay
-      || state.favoriteModels.length === 0
-    ) {
-      return false;
-    }
+    if (state.isSettingsDialogOpen || hasOverlay) return false;
     const config = useConfigStore.getState();
-    const index = state.favoriteModels.findIndex((model) => (
-      model.providerID === config.currentProviderId && model.modelID === config.currentModelId
-    ));
-    const next = state.favoriteModels[(index + delta + state.favoriteModels.length) % state.favoriteModels.length];
+    const next = getNextFavoriteModel(
+      state.favoriteModels,
+      config.providers,
+      state.hiddenModels,
+      { providerID: config.currentProviderId, modelID: config.currentModelId },
+      delta,
+    );
+    if (!next) return false;
     config.setProvider(next.providerID);
     config.setModel(next.modelID);
+    const sessionId = useSessionUIStore.getState().currentSessionId;
+    if (sessionId) useSelectionStore.getState().pickSessionModel(sessionId, next.providerID, next.modelID);
     state.addRecentModel(next.providerID, next.modelID);
     state.setLastSelectedModel(next.providerID, next.modelID);
   }
@@ -377,7 +408,7 @@ export const useKeyboardShortcuts = () => {
         useUIStore.getState().shortcutOverrides,
       );
       const actionId = eventMatchesShortcut(event, getBinding('toggle_terminal')) ? 'toggle_terminal'
-        : eventMatchesShortcut(event, getBinding('toggle_terminal_expanded')) ? 'toggle_terminal_expanded' : null;
+        : eventMatchesShortcut(event, getBinding('toggle_context_panel_expanded')) ? 'toggle_context_panel_expanded' : null;
       if (actionId && invokeRegistered(actionId, event)) {
         event.preventDefault();
         event.stopPropagation();
@@ -580,9 +611,37 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
+<<<<<<< HEAD
       if (dispatcher.dispatch(event)) event.preventDefault();
+=======
+      if (dispatcher.dispatch(event)) {
+        event.preventDefault();
+        return;
+      }
+      if (!useUIStore.getState().isMobile && !hasOverlayOpen()) inputRedirect.redirectKey(event);
+    };
+    const handlePaste = (event: ClipboardEvent) => {
+      const allowComposerFallback = !useUIStore.getState().isMobile
+        && !hasOverlayOpen()
+        && !hasActiveSelectionToolbar();
+      inputRedirect.redirectPaste(event, allowComposerFallback);
+    };
+    let windowFocusFrame: number | null = null;
+    const handleWindowFocus = () => {
+      if (useUIStore.getState().isMobile) return;
+      if (windowFocusFrame !== null) cancelAnimationFrame(windowFocusFrame);
+      // The element that held focus gets it back after the window's own
+      // event; check what holds it once that has happened.
+      windowFocusFrame = requestAnimationFrame(() => {
+        windowFocusFrame = requestAnimationFrame(() => {
+          windowFocusFrame = null;
+          if (!hasOverlayOpen()) inputRedirect.refocusAfterWindowFocus();
+        });
+      });
+>>>>>>> bc50ba56a
     };
     const handleKeyHoldDown = (event: KeyboardEvent) => {
+      inputRedirect.clearPendingMiddleClick();
       heldKeysRef.current.add(event.key.toLowerCase());
       heldKeysRef.current.add(resolveShortcutEventKey(event).toLowerCase());
     };
@@ -603,7 +662,36 @@ export const useKeyboardShortcuts = () => {
     window.addEventListener('keydown', handleActivePrefixKeyDownCapture, true);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('blur', handleBlur);
+<<<<<<< HEAD
     return () => {
+=======
+    window.addEventListener('pointerdown', inputRedirect.rememberColumn, true);
+    window.addEventListener('pointerup', inputRedirect.releaseMiddleClick, true);
+    window.addEventListener('pointercancel', inputRedirect.releaseMiddleClick, true);
+    window.addEventListener('focusin', inputRedirect.rememberColumn, true);
+    // Pair a Linux middle click with its paste before a focused editor can
+    // consume it. Keyboard paste keeps the bubble listener below.
+    const captureMiddleClickPaste = isLinuxPlatform();
+    const handleMiddleClickPaste = (event: ClipboardEvent) => {
+      inputRedirect.captureMiddleClickPaste(event);
+    };
+    if (captureMiddleClickPaste) {
+      window.addEventListener('paste', handleMiddleClickPaste, true);
+    }
+    window.addEventListener('paste', handlePaste);
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      window.removeEventListener('pointerdown', inputRedirect.rememberColumn, true);
+      window.removeEventListener('pointerup', inputRedirect.releaseMiddleClick, true);
+      window.removeEventListener('pointercancel', inputRedirect.releaseMiddleClick, true);
+      window.removeEventListener('focusin', inputRedirect.rememberColumn, true);
+      if (captureMiddleClickPaste) {
+        window.removeEventListener('paste', handleMiddleClickPaste, true);
+      }
+      window.removeEventListener('paste', handlePaste);
+      window.removeEventListener('focus', handleWindowFocus);
+      if (windowFocusFrame !== null) cancelAnimationFrame(windowFocusFrame);
+>>>>>>> bc50ba56a
       window.removeEventListener('keydown', handleKeyHoldDown, true);
       window.removeEventListener('keydown', handleSelectionToolbarKeyDownCapture, true);
       window.removeEventListener('keyup', handleKeyUp, true);

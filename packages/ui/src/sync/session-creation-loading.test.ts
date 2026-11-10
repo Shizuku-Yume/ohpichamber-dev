@@ -9,6 +9,7 @@ import { createSession, setActionRefs } from "./session-actions"
 import { SessionMessageLoader, setImperativeSessionMessageLoader } from "./session-message-loader"
 import { deferred, nativeClient, nativeMessage, nativeSnapshot } from "./session-message-loader-test-fixtures"
 import { useSessionUIStore } from "./session-ui-store"
+import { useProjectsStore } from "@/stores/useProjectsStore"
 
 const originalUI = useSessionUIStore.getState()
 const originalGlobal = useGlobalSessionsStore.getState()
@@ -21,9 +22,13 @@ let loader: SessionMessageLoader
 let requests: number
 
 beforeEach(() => {
+<<<<<<< HEAD
   resetWorkspaceDirectories()
   useGlobalSessionsStore.getState().applySnapshot([], [])
   useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null })
+=======
+  useProjectsStore.setState({ projects: [{ id: "project-created", path: session.directory }] })
+>>>>>>> bc50ba56a
   requests = 0
   childStores = new ChildStoreManager()
   loader = new SessionMessageLoader(childStores, { client: nativeClient({ getSnapshot: async () => { requests += 1; throw new Error("history unavailable") } }), runtimeKey: getRuntimeKey() })

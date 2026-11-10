@@ -12,48 +12,76 @@ Object.assign(globalThis, {
     IS_REACT_ACT_ENVIRONMENT: true,
 });
 
+<<<<<<< HEAD
 // Exception: DOM globals must be in place before React/ReactDOM initializes its event system.
+=======
+>>>>>>> bc50ba56a
 const React = await import('react');
 const { act } = React;
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { FormFieldControl } = await import('./FormFieldControl');
+<<<<<<< HEAD
 import type { AskAnswerState, AskQuestion } from './questionRequest';
+=======
+const { fieldAnswer, initialFormValues, valueOf } = await import('./formCardState');
+import type { FormField } from '@opencode/client';
+>>>>>>> bc50ba56a
 
 const container = document.createElement('div');
 document.body.append(container);
 let root = createRoot(container);
 
 afterEach(async () => {
+<<<<<<< HEAD
     await act(async () => root.unmount());
+=======
+    await act(() => root.unmount());
+>>>>>>> bc50ba56a
     root = createRoot(container);
 });
 
 // happy-dom has no layout. Model a border-box textarea: scrollHeight includes
 // padding and is at least clientHeight, but excludes the two 1px borders.
+<<<<<<< HEAD
+=======
+// This is the browser contract the old sizing effect fed back into itself.
+>>>>>>> bc50ba56a
 function installGeometry(textarea: HTMLTextAreaElement) {
     let reads = 0;
     Object.defineProperties(textarea, {
         offsetHeight: { get: () => Math.max(10, Number.parseFloat(textarea.style.height) || 0) },
         clientHeight: { get: () => Math.max(8, textarea.offsetHeight - 2) },
+<<<<<<< HEAD
         scrollHeight: {
             configurable: true, get: () => {
                 reads += 1;
                 return Math.max(textarea.clientHeight, textarea.value.split('\n').length * 20 + 8);
             }
         },
+=======
+        scrollHeight: { configurable: true, get: () => {
+            reads += 1;
+            return Math.max(textarea.clientHeight, textarea.value.split('\n').length * 20 + 8);
+        } },
+>>>>>>> bc50ba56a
     });
     return () => reads;
 }
 
 async function enterText(textarea: HTMLTextAreaElement, text: string) {
+<<<<<<< HEAD
     await act(async () => {
+=======
+    await act(() => {
+>>>>>>> bc50ba56a
         Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(textarea, text);
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
     });
 }
 
 async function mountField(custom: boolean) {
+<<<<<<< HEAD
     const question: AskQuestion = {
         id: 'q1',
         question: 'What should we do?',
@@ -88,6 +116,26 @@ async function mountField(custom: boolean) {
         if (other) {
             await act(async () => other.click());
         }
+=======
+    const field = {
+        key: 'answer', type: 'string', title: 'Answer',
+        custom,
+        options: custom ? [{ label: 'Preset', value: 'preset' }] : undefined,
+    } satisfies FormField;
+    function Form() {
+        const [values, setValues] = React.useState(() => initialFormValues([field]));
+        return <I18nProvider><FormFieldControl
+            field={field} values={values} missing={[]} showErrors={false} isResponding={false}
+            updateValue={(key, patch) => setValues((previous) => ({ ...previous, [key]: { ...valueOf(previous, key), ...patch } }))}
+            onTextKeyDown={() => {}}
+        /><output>{fieldAnswer(field, values)}</output></I18nProvider>;
+    }
+    await act(() => root.render(<Form />));
+    if (custom) {
+        const other = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Other'));
+        if (!other) throw new Error('Custom answer option missing');
+        await act(() => other.click());
+>>>>>>> bc50ba56a
     }
     const textarea = container.querySelector('textarea');
     if (!textarea) throw new Error('Answer textarea missing');
@@ -127,12 +175,21 @@ describe('form answer textarea sizing', () => {
             get: () => Math.max(textarea.offsetHeight + 24, Number.parseFloat(parent.style.minHeight) || 0),
         });
         const scrollHeight = Object.getOwnPropertyDescriptor(textarea, 'scrollHeight')?.get;
+<<<<<<< HEAD
         Object.defineProperty(textarea, 'scrollHeight', {
             get: () => {
                 parent.scrollTop = Math.min(parent.scrollTop, Math.max(0, parent.offsetHeight - 120));
                 return scrollHeight?.call(textarea);
             }
         });
+=======
+        Object.defineProperty(textarea, 'scrollHeight', { get: () => {
+            // A layout read clamps a short scrolling parent's offset when its
+            // content temporarily collapses. Reserving the wrapper prevents it.
+            parent.scrollTop = Math.min(parent.scrollTop, Math.max(0, parent.offsetHeight - 120));
+            return scrollHeight?.call(textarea);
+        } });
+>>>>>>> bc50ba56a
         await enterText(textarea, 'Long answer\n'.repeat(20));
         parent.scrollTop = 104;
         await enterText(textarea, `${textarea.value}x`);

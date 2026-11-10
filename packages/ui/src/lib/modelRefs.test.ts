@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+<<<<<<< HEAD
 type ModelRef = { providerID: string; modelID: string };
 interface TestModel {
   id: string;
@@ -48,6 +49,9 @@ const getNextFavoriteModel = (
   const next = available[(index + delta + available.length) % available.length];
   return next ? { providerID: next.providerID, modelID: next.modelID } : null;
 };
+=======
+import { getNextFavoriteModel, resolveModelRefs } from './modelRefs';
+>>>>>>> bc50ba56a
 
 const model = (providerId: string, modelId: string) => ({
   id: `${providerId}/${modelId}`,

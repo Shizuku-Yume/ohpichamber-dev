@@ -11,6 +11,7 @@ import {
   SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { CompactionSettings } from './CompactionSettings';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { AgentSelector } from '@/components/sections/agents/AgentSelector';
@@ -647,6 +648,8 @@ export const DefaultsSettings: React.FC = () => {
           />
         </SettingsInset>
       </SettingsSection>
+
+      <CompactionSettings />
     </>
   );
 };

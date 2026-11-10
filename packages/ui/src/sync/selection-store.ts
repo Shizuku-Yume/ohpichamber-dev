@@ -9,9 +9,12 @@ import { z } from "zod"
 import { createDeferredSafeJSONStorage } from "@/stores/utils/safeStorage"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { isAutoModel } from "@/lib/routing/autoModel"
+<<<<<<< HEAD
 
 /** Root chats have no agent, so their per-session choices use this stable key. */
 export const ROOT_SELECTION_AGENT = ''
+=======
+>>>>>>> bc50ba56a
 
 type ModelSelection = { providerId: string; modelId: string }
 type LastUsedProvider = { providerID: string; modelID: string }
@@ -267,8 +270,12 @@ export const useSelectionStore = create<SelectionState>()(
       clearSessionSelections: (sessionId) => set((state) => {
         const variantKey = variantSessionKey(sessionId)
         const hadVariant = state.agentModelVariantSelections.has(variantKey)
+<<<<<<< HEAD
         const hadReasoningEffort = state.agentModelReasoningEffortSelections.has(variantKey)
         if (!hadVariant && !hadReasoningEffort && !state.sessionModelSelections.has(sessionId)
+=======
+        if (!hadVariant && !state.sessionModelSelections.has(sessionId)
+>>>>>>> bc50ba56a
           && !state.sessionPickedModels.has(variantKey)
           && !state.sessionAgentSelections.has(sessionId)
           && !state.sessionPickedAgents.has(sessionId)
@@ -296,8 +303,12 @@ export const useSelectionStore = create<SelectionState>()(
         sessionFollowedModelRevisions.delete(sessionId)
         sessionAgentModelSelections.delete(sessionId)
         agentModelVariantSelections.delete(variantKey)
+<<<<<<< HEAD
         agentModelReasoningEffortSelections.delete(variantKey)
         return { sessionModelSelections, sessionPickedModels, sessionAgentSelections, sessionPickedAgents, sessionFollowedAgents, sessionFollowedModels, sessionFollowedAgentRevisions, sessionFollowedModelRevisions, sessionAgentModelSelections, agentModelVariantSelections, agentModelReasoningEffortSelections }
+=======
+        return { sessionModelSelections, sessionPickedModels, sessionAgentSelections, sessionPickedAgents, sessionFollowedAgents, sessionFollowedModels, sessionFollowedAgentRevisions, sessionFollowedModelRevisions, sessionAgentModelSelections, agentModelVariantSelections }
+>>>>>>> bc50ba56a
       }),
 
       saveAgentModelVariantForSession: (sessionId, agentName, providerId, modelId, variant) => set((state) => {

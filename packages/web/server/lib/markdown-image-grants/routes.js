@@ -1,9 +1,19 @@
 import express from 'express';
+<<<<<<< HEAD
 import { constants as fsConstants } from 'node:fs';
 import { EntityIdSchema, HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_SOURCES = 12;
+=======
+import { mintOutsideFileGrant } from '../fs/routes.js';
+import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
+import { fitRenderPageImages, renderPageImageSources } from '../openchamber-control/render-page.js';
+import { generatedImagePaths } from '../openchamber-control/generate-image.js';
+import { capturedScreenshotPaths } from '../openchamber-control/screenshots.js';
+import { isString } from '../shared/guards.js';
+import { inspectLocalImage } from './inspect-image.js';
+>>>>>>> bc50ba56a
 
 const asString = (value) => typeof value === 'string' ? value.trim() : '';
 
@@ -223,6 +233,7 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
   const outsideWorkspace = !isWithin(path.resolve(sourcePath), workspaceRoot, path);
   const root = outsideWorkspace ? approvedTempRoot : workspaceRoot;
 
+<<<<<<< HEAD
   try {
     // Resolve symlinks before comparing roots; lexical prefixes are not an authorization boundary.
     const [canonicalRoot, canonicalPath] = await Promise.all([
@@ -258,6 +269,79 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
     }
     throw error;
   }
+=======
+/**
+ * A file path the way two spellings of it compare: the chat sends the
+ * destination Markdown made of it, percent-encoded and, for a Windows path, a
+ * `file:` URL. Only the generated images compare this way; text and pages
+ * keep their exact references.
+ */
+const comparablePath = (value) => {
+  let text = value;
+  if (/^file:\/\//i.test(text)) {
+    try {
+      text = new URL(text).pathname;
+    } catch {
+      return '';
+    }
+  }
+  try {
+    text = decodeURIComponent(text);
+  } catch {
+    // A stray % in a literal path stays as written.
+  }
+  text = text.replace(/\\/g, '/');
+  return /^\/[A-Za-z]:\//.test(text) ? text.slice(1) : text;
+};
+
+// The tools whose stored result names image files the chat draws in their row,
+// with the reader of those names. `browser.capture` runs behind Code Mode, so
+// its result is usually an `execute` call's.
+const TOOL_RESULT_IMAGE_PATHS = new Map([
+  ['openchamber_image', generatedImagePaths],
+  ['openchamber_web', capturedScreenshotPaths],
+  ['execute', capturedScreenshotPaths],
+]);
+
+/**
+ * The files the message's openchamber_image calls saved and its page
+ * screenshots, named by the result each call stored, as `comparablePath`
+ * spells them. The chat draws them in the call's row.
+ */
+const toolResultImageSources = (message) => {
+  const sources = new Set();
+  for (const part of messageContent(message)) {
+    const readPaths = part?.type === 'tool' ? TOOL_RESULT_IMAGE_PATHS.get(part.name) : undefined;
+    if (!readPaths || part.state?.status !== 'completed') continue;
+    for (const item of Array.isArray(part.state.content) ? part.state.content : []) {
+      if (item?.type !== 'text' || !isString(item.text)) continue;
+      for (const source of readPaths(item.text)) sources.add(comparablePath(source));
+    }
+  }
+  return sources;
+};
+
+const fetchMessage = async ({ sessionId, messageId, directory, buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
+  const url = new URL(buildOpenCodeUrl(
+    `/api/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`,
+    '',
+  ));
+  url.searchParams.set('directory', directory);
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json',
+      // Percent-encoded to match the SDK wire format; raw non-ASCII values
+      // are rejected by OpenCode.
+      'x-opencode-directory': encodeURIComponent(directory),
+      ...getOpenCodeAuthHeaders(),
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`OpenCode returned ${response.status}`);
+  const message = unwrapOpenCodeResponse(await response.json().catch(() => null));
+  return message && typeof message === 'object' && typeof message.id === 'string' ? message : null;
+>>>>>>> bc50ba56a
 };
 
 export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
@@ -336,6 +420,7 @@ export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
           if (read.bytesRead === 0) break;
           length += read.bytesRead;
         }
+<<<<<<< HEAD
         const bytes = buffer.subarray(0, length);
         if (length > stats.size || !hasImageSignature(bytes)) return res.status(404).json({ error: 'Image unavailable' });
         const header = bytes.subarray(0, 12).toString('ascii');
@@ -345,4 +430,61 @@ export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
       } finally { await handle.close(); }
     } catch { return res.status(503).json({ error: 'Image unavailable' }); }
   });
+=======
+        const inspect = (source) => inspectLocalImage({
+          source,
+          directory: validatedDirectory.directory,
+          fsPromises,
+          path,
+        }).catch(() => ({ status: 'error' }));
+        // The assistant's text and pages are authoritative: a remote client cannot mint grants for unreferenced paths.
+        // A page's images are checked together, so the page shows them in its own order up to its weight budget.
+        let check;
+        if (callId) {
+          const html = renderPages(message).get(callId);
+          if (html === undefined) return res.status(404).json({ error: 'Page not found' });
+          const { images } = await fitRenderPageImages(html, inspect);
+          const checked = new Map(images.map((image) => [image.source, image]));
+          check = (source) => checked.get(source) ?? { status: 'error' };
+        } else {
+          const referenced = new Set([...markdownImageSources(message), ...renderPageSources(message)]);
+          const generated = toolResultImageSources(message);
+          check = (source) => (referenced.has(source) || generated.has(comparablePath(source)) ? inspect(source) : { status: 'error' });
+        }
+        const results = [];
+        for (const source of sources) {
+          try {
+            const inspected = await check(source);
+            if (inspected.status !== 'ready') {
+              results.push({ source, status: inspected.status });
+              continue;
+            }
+            // Reuse the existing path-bound raw-file grant instead of creating another asset lifecycle.
+            const grant = inspected.outsideWorkspace
+              ? await mintOutsideFileGrant(inspected.path, {
+                scopes: ['raw'],
+                fsPromises,
+                path,
+                crypto,
+              })
+              : null;
+            results.push({
+              source,
+              status: 'ready',
+              path: inspected.path,
+              outsideFileGrant: grant?.outsideFileGrant,
+              expiresAt: grant?.expiresAt,
+            });
+          } catch {
+            results.push({ source, status: 'error' });
+          }
+        }
+        return res.json({ results });
+      } catch (error) {
+        console.warn('[MarkdownImageGrants] failed to prepare images:', error?.message || error);
+        return res.status(503).json({ error: 'Failed to prepare session images' });
+      }
+    },
+  );
+>>>>>>> bc50ba56a
 };

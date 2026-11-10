@@ -52,8 +52,155 @@ const createApp = async ({ enterprise = false, credentials = {} } = {}) => {
   return { app, runtime, state, store, resolved, sent };
 };
 
+<<<<<<< HEAD
 const config = () => ({ ...resolveEffectiveConfig(null), enabled: true,
   fallback: { model: { providerID: 'anthropic', modelID: 'claude-sonnet-5' }, variant: 'medium' },
+=======
+describe('routing send rewrite', () => {
+  it('swallows the Auto sentinel on a model switch instead of forwarding it', async () => {
+    const { app, runtime, forwarded } = createApp();
+    await request(app)
+      .post('/api/session/s1/model?directory=%2Frepo')
+      .send({ model: { providerID: 'openchamber', id: 'auto' } })
+      .expect(204);
+    expect(forwarded).toEqual([]);
+    expect(runtime.noteModelSelection).toHaveBeenCalledWith('s1', { providerID: 'openchamber', id: 'auto' }, '/repo');
+    expect(runtime.isAutoSession('s1')).toBe(true);
+  });
+
+  it('drops the Auto sentinel from a session create so OpenCode never stores it', async () => {
+    const { app, forwarded, runtime } = createApp();
+    await request(app)
+      .post('/api/session?directory=%2Frepo')
+      .send({ title: 'btw', model: { providerID: 'openchamber', id: 'auto' }, agent: 'build' })
+      .expect(204);
+    expect(forwarded).toEqual([{ path: '/session', parsed: true, body: { title: 'btw', agent: 'build' } }]);
+    expect(runtime.noteModelSelection).not.toHaveBeenCalled();
+
+    await request(app).post('/api/session').send({ model: { providerID: 'anthropic', id: 'claude-opus-5' } }).expect(204);
+    expect(forwarded[1]).toEqual({ path: '/session', parsed: true, body: { model: { providerID: 'anthropic', id: 'claude-opus-5' } } });
+  });
+
+  it('forwards a real model switch untouched and takes the session off Auto', async () => {
+    const { app, forwarded, runtime } = createApp();
+    await request(app).post('/api/session/s1/model').send({ model: { providerID: 'openchamber', id: 'auto' } }).expect(204);
+    await request(app).post('/api/session/s1/model').send({ model: { providerID: 'anthropic', id: 'claude-opus-5' } }).expect(204);
+    expect(forwarded).toEqual([{ path: '/session/s1/model', parsed: true, body: { model: { providerID: 'anthropic', id: 'claude-opus-5' } } }]);
+    expect(runtime.isAutoSession('s1')).toBe(false);
+  });
+
+  it('routes a prompt in an Auto session and passes the directory along', async () => {
+    const autoSessions = new Set(['s1']);
+    const { app, runtime, forwarded } = createApp({ autoSessions });
+    await request(app)
+      .post('/api/session/s1/prompt?directory=%2Frepo')
+      .send({ text: 'hi' })
+      .expect(204);
+    expect(forwarded).toEqual([{ path: '/session/s1/prompt', parsed: true, body: { text: 'hi' } }]);
+    expect(runtime.routeSend).toHaveBeenCalledWith({ sessionId: 's1', directory: '/repo', body: { text: 'hi' } });
+  });
+
+  it('decodes a URI-encoded directory header the way OpenCode reads it', async () => {
+    const { app, runtime } = createApp({ autoSessions: new Set(['s1']) });
+    await request(app)
+      .post('/api/session/s1/prompt')
+      .set('x-opencode-directory', '%2Frepo')
+      .send({ text: 'hi' })
+      .expect(204);
+    expect(runtime.routeSend).toHaveBeenCalledWith({ sessionId: 's1', directory: '/repo', body: { text: 'hi' } });
+  });
+
+  it('decodes a directory header marked as URI-encoded', async () => {
+    const { app, runtime } = createApp();
+    await request(app)
+      .post('/api/session/s1/model')
+      .set('x-opencode-directory', '%2Frepo')
+      .set('x-opencode-directory-encoding', 'uri')
+      .send({ model: { providerID: 'openchamber', id: 'auto' } })
+      .expect(204);
+    expect(runtime.noteModelSelection).toHaveBeenCalledWith('s1', { providerID: 'openchamber', id: 'auto' }, '/repo');
+  });
+
+  it('forwards a directory header without percent-escapes untouched', async () => {
+    const { app, runtime } = createApp({ autoSessions: new Set(['s1']) });
+    await request(app)
+      .post('/api/session/s1/prompt')
+      .set('x-opencode-directory', '/repo')
+      .send({ text: 'hi' })
+      .expect(204);
+    expect(runtime.routeSend).toHaveBeenCalledWith({ sessionId: 's1', directory: '/repo', body: { text: 'hi' } });
+  });
+
+  it('keeps a directory header with malformed escapes as it arrived', async () => {
+    const { app, runtime } = createApp({ autoSessions: new Set(['s1']) });
+    await request(app)
+      .post('/api/session/s1/prompt')
+      .set('x-opencode-directory', '%2Frepo%ZZ')
+      .send({ text: 'hi' })
+      .expect(204);
+    expect(runtime.routeSend).toHaveBeenCalledWith({ sessionId: 's1', directory: '%2Frepo%ZZ', body: { text: 'hi' } });
+  });
+
+  it('leaves a send in a session that is not on Auto unread', async () => {
+    const { app, runtime, forwarded } = createApp();
+    await request(app).post('/api/session/s1/prompt').send({ text: 'hi' }).expect(204);
+    expect(runtime.routeSend).not.toHaveBeenCalled();
+    expect(forwarded[0].parsed).toBe(false);
+  });
+
+  it('leaves the stream untouched when the body is not JSON', async () => {
+    const text = createApp({ autoSessions: new Set(['s1']) });
+    await request(text.app).post('/api/session/s1/command').set('content-type', 'text/plain').send('raw').expect(204);
+    expect(text.forwarded[0]).toEqual({ path: '/session/s1/command', parsed: false, raw: 'raw' });
+  });
+
+
+  it('routes a form reply in a routed session onto the real model before forwarding the answer', async () => {
+    const order = [];
+    const { app, forwarded } = createApp({
+      autoSessions: new Set(['s1']),
+      routeSend: vi.fn(async () => { order.push(`switched with ${forwarded.length} forwarded`); }),
+    });
+    await request(app)
+      .post('/api/session/s1/form/f1/reply?directory=%2Frepo')
+      .send({ answer: { choice: 'ship it' } })
+      .expect(204);
+    expect(order).toEqual(['switched with 0 forwarded']);
+    expect(forwarded).toEqual([{ path: '/session/s1/form/f1/reply', parsed: true, body: { answer: { choice: 'ship it' } } }]);
+  });
+
+  it('leaves a form unanswered when its reply cannot be routed', async () => {
+    const { app, forwarded } = createApp({
+      autoSessions: new Set(['s1']),
+      routeSend: vi.fn(async () => { throw Object.assign(new Error('no fallback'), { status: 400 }); }),
+    });
+    const response = await request(app).post('/api/session/s1/form/f1/reply').send({ answer: { choice: 'ship it' } });
+    expect(response.status).toBe(400);
+    expect(forwarded).toEqual([]);
+  });
+
+  it('passes a form reply outside a routed session through as a stream', async () => {
+    const { app, runtime, forwarded } = createApp();
+    await request(app)
+      .post('/api/session/global/form/f1/reply')
+      .set('content-type', 'application/json')
+      .send('{"answer":{"choice":"ok"}}')
+      .expect(204);
+    expect(runtime.routeSend).not.toHaveBeenCalled();
+    expect(forwarded).toEqual([{ path: '/session/global/form/f1/reply', parsed: false, raw: '{"answer":{"choice":"ok"}}' }]);
+  });
+
+  it('answers with the runtime error instead of forwarding an unroutable send', async () => {
+    const { app, forwarded } = createApp({
+      autoSessions: new Set(['s1']),
+      routeSend: vi.fn(async () => { throw Object.assign(new Error('no fallback'), { status: 400 }); }),
+    });
+    const response = await request(app).post('/api/session/s1/prompt').send({ text: 'hi' });
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'no fallback' });
+    expect(forwarded).toEqual([]);
+  });
+>>>>>>> bc50ba56a
 });
 
 describe('canonical routing settings HTTP boundary', () => {

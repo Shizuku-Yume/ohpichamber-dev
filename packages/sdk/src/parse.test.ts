@@ -1,8 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
+<<<<<<< HEAD
 import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
 const OPENCHAMBER_SDK_API_VERSION = OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0];
 import { clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicSourceControl, toPublicSessionEvents, toPublicNotifications, toPublicTracker, toPublicQuota, isOpenCodeProviderId, isTrackerUrlTemplate, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes } from './manifest.ts';
+=======
+import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
+import { GUEST_PROVIDER_LOGOS_MAX, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
+import type { JsonValue } from './contract.ts';
+import type { LinksContribution } from './manifest.ts';
+>>>>>>> bc50ba56a
 import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
@@ -948,6 +955,38 @@ describe('page-less extensions', () => {
     contributes: { panel: pageless, ...extra },
   });
 
+  test('provider logos need no page and no capability', () => {
+    const result = withContributes({ providerLogos: { acme: 'assets/acme.svg', 'wafer.ai': 'assets/wafer.PNG' } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.contributes.providerLogos).toEqual({ acme: 'assets/acme.svg', 'wafer.ai': 'assets/wafer.PNG' });
+    expect(requestedGuestCapabilities(result.manifest.contributes)).toEqual([]);
+  });
+
+  test('provider logos hold an icon pack, with an alias as another key for the same file', () => {
+    const pack = Object.fromEntries(new Array(GUEST_PROVIDER_LOGOS_MAX).fill(null).map((_, index) => [`p${index}`, index % 2 === 0 ? 'a.svg' : 'b.png']));
+    const result = withContributes({ providerLogos: pack });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(Object.keys(result.manifest.contributes.providerLogos ?? {})).toHaveLength(GUEST_PROVIDER_LOGOS_MAX);
+  });
+
+  test('rejects malformed provider logos as invalid-provider-logos', () => {
+    const tooMany = Object.fromEntries(new Array(GUEST_PROVIDER_LOGOS_MAX + 1).fill(null).map((_, index) => [`p${index}`, 'logo.svg']));
+    const cases: Record<string, string>[] = [
+      {},
+      tooMany,
+      { acme: 'acme.gif' },
+      { acme: '../acme.svg' },
+      { acme: '/acme.svg' },
+      { acme: 'https://example.com/acme.svg' },
+      { 'Not An Id': 'acme.svg' },
+    ];
+    for (const providerLogos of cases) {
+      expect(withContributes({ providerLogos })).toMatchObject({ ok: false, code: 'invalid-provider-logos' });
+    }
+  });
+
   test('background entry enables actions, commands and granted APIs without a visible panel', () => {
     const result = withContributes({
       background: { entry: 'background/index.html' },
@@ -1233,6 +1272,21 @@ describe('contributes.sourceControl', () => {
     },
   }));
   const withSourceControl = <T,>(patch: T) => manifest({ sourceControl: { ...sourceControl, ...patch } });
+
+  test('accepts service login alone or beside a token, and requires at least one', () => {
+    const login = { kind: 'service', hint: 'Run teahouse auth login on the OpenChamber server' };
+    const result = withSourceControl({ token: undefined, login });
+    expect(result).toMatchObject({ ok: true, manifest: { contributes: { sourceControl: { login } } } });
+    if (result.ok) expect(result.manifest.contributes.sourceControl).not.toHaveProperty('token');
+    expect(withSourceControl({ login }).ok).toBe(true);
+    expect(withSourceControl({ login: { ...login, hint: `  ${login.hint}  ` } }))
+      .toMatchObject({ ok: true, manifest: { contributes: { sourceControl: { login } } } });
+    expect(withSourceControl({ login: { ...login, hint: '   ' } })).toMatchObject({ ok: false, code: 'invalid-service' });
+    expect(withSourceControl({ login: { ...login, future: true } })).toMatchObject({ ok: false, code: 'invalid-service' });
+    expect(withSourceControl({ token: undefined })).toMatchObject({ ok: false, code: 'invalid-service' });
+    expect(withSourceControl({ login: { kind: 'service', hint: '' } })).toMatchObject({ ok: false, code: 'invalid-service' });
+    expect(withSourceControl({ login: { kind: 'cli', hint: 'Sign in' } })).toMatchObject({ ok: false, code: 'invalid-service' });
+  });
 
   test('a source-control service needs no panel entry, and capabilities left out are off', () => {
     const result = manifest({});
@@ -1623,6 +1677,16 @@ describe('services that act on their own', () => {
     expect(requestedGuestCapabilities({ service: declared, sessionControl: {} })).toEqual(['service', 'sessionControl']);
     expect(requestedGuestCapabilities({ service: declared, sessionControl: { content: true }, instructions: true, skills: 'skills' }))
       .toEqual(['service', 'transcript', 'sessionControl', 'instructions', 'skills']);
+<<<<<<< HEAD
+=======
+    expect(requestedGuestCapabilities({ service: declared, sessionControl: { answers: true } })).toEqual(['service', 'sessionControl', 'sessionAnswers']);
+  });
+
+  test('session control takes answers: true and nothing else', () => {
+    const running = { ...service, keepRunning: true };
+    expect(parse({ panel: pageless, service: running, sessionControl: { answers: true } }).ok).toBe(true);
+    expect(parse({ panel: pageless, service: running, sessionControl: { answers: false } })).toMatchObject({ ok: false, code: 'invalid-session-control' });
+>>>>>>> bc50ba56a
   });
 
   test('skills stay inside the package', () => {
@@ -1630,10 +1694,24 @@ describe('services that act on their own', () => {
     expect(parse({ panel: pageless, skills: '../skills' })).toMatchObject({ ok: false, code: 'invalid-skills' });
   });
 
+<<<<<<< HEAD
   test('a legacy plugin contribution is dropped as retired/unrecognized', () => {
     const res = parse({ panel: pageless, opencodePlugin: 'plugin' });
     expect(res.ok).toBe(true);
     if (res.ok) expect('opencodePlugin' in res.manifest.contributes).toBe(false);
+=======
+  test('an OpenCode plugin is a folder inside the package and asks for its own capability', () => {
+    const accepted = parse({ panel: pageless, opencodePlugin: 'plugin' });
+    expect(accepted.ok).toBe(true);
+    if (accepted.ok) expect(accepted.manifest.contributes.opencodePlugin).toBe('plugin');
+    expect(parse({ panel: pageless, opencodePlugin: 'plugins/teapot' }).ok).toBe(true);
+    expect(requestedGuestCapabilities({ opencodePlugin: 'plugin' })).toEqual(['opencodePlugin']);
+    expect(requestedGuestCapabilities({ skills: 'skills', opencodePlugin: 'plugin' })).toEqual(['skills', 'opencodePlugin']);
+    // The value becomes a path OpenCode executes code from: nothing that leaves the package, no URL, no NUL, no empty value.
+    for (const hostile of ['../x', '/etc', 'file:///x', 'https://example.test/plugin', 'plugin\0', '', ' ', 'a//b', './plugin', 'plugin\\win']) {
+      expect(parse({ panel: pageless, opencodePlugin: hostile }), hostile).toMatchObject({ ok: false, code: 'invalid-opencode-plugin' });
+    }
+>>>>>>> bc50ba56a
     expect(requestedGuestCapabilities({ skills: 'skills' })).toEqual(['skills']);
   });
 
@@ -1668,3 +1746,55 @@ describe('contributes.blocks', () => {
     expect(parse([{ ...block, entry: 'blocks/issue.js' }])).toMatchObject({ ok: false, code: 'invalid-blocks' });
   });
 });
+<<<<<<< HEAD
+=======
+
+describe('contributes.links', () => {
+  const panel = { id: 'tasks', name: 'Tasks', icon: 'task', entry: 'panel/index.html' };
+  const urls: NonNullable<LinksContribution['urls']> = { origin: 'https://tasks.example.com', identifier: 'key-number', item: ['/tasks/{id}'] };
+  const parse = (links: JsonValue, withPanel: JsonValue = panel) => parseManifestJson(JSON.stringify({
+    apiVersion: OPENCHAMBER_SDK_API_VERSION,
+    contributes: { panel: withPanel, links },
+  }));
+
+  test('accepts literal keys, link templates under one origin, and asks for its own capability', () => {
+    const accepted = parse({ action: 'open', identifier: { keys: ['DEMO', 'OPS_2'] }, urls });
+    expect(accepted.ok).toBe(true);
+    if (accepted.ok) expect(accepted.manifest.contributes.links?.identifier?.keys).toEqual(['DEMO', 'OPS_2']);
+    expect(parse({ action: 'attach', urls }).ok).toBe(true);
+    expect(parse({ action: 'open', urls: { ...urls, identifier: 'number', item: ['/{segments+}/c/{id}', '/browse?selectedIssue={id}'] } }).ok).toBe(true);
+    expect(requestedGuestCapabilities({ links: { action: 'open', urls } })).toEqual(['links']);
+  });
+
+  test('refuses keys that are not literal upper-case words', () => {
+    for (const key of ['P.*', '(A|B)', 'proj', 'Proj', '1PROJ', 'PROJ-1', '', 'A'.repeat(33)]) {
+      expect(parse({ action: 'open', identifier: { keys: [key] } }), key).toMatchObject({ ok: false, code: 'invalid-links' });
+    }
+    expect(parse({ action: 'open', identifier: { keys: Array.from({ length: 9 }, (_, index) => `K${index}`) } })).toMatchObject({ ok: false, code: 'invalid-links' });
+    expect(parse({ action: 'open', identifier: { keys: ['DEMO', 'DEMO'] } })).toMatchObject({ ok: false, code: 'invalid-links' });
+  });
+
+  test('refuses an origin that is not a public https origin', () => {
+    for (const origin of ['http://tasks.example.com', 'javascript:alert(1)', 'https://tasks.example.com/app', 'https://user@tasks.example.com', 'https://localhost', 'https://127.0.0.1', 'https://[::1]', 'https://*.example.com']) {
+      expect(parse({ action: 'open', urls: { ...urls, origin } }), origin).toMatchObject({ ok: false, code: 'invalid-links' });
+    }
+  });
+
+  test('refuses templates outside the tracker grammar', () => {
+    for (const template of ['/tasks/(.*)', 'tasks/{id}', '/tasks', '/{segments+}/{segments+}/{id}', '/../{id}', '/tasks/{id}/{id}']) {
+      expect(parse({ action: 'open', urls: { ...urls, item: [template] } }), template).toMatchObject({ ok: false, code: 'invalid-links' });
+    }
+  });
+
+  test('a chip names its link, an open needs a page, and something has to be declared', () => {
+    expect(parse({ action: 'attach', identifier: { keys: ['DEMO'] } })).toMatchObject({ ok: false, code: 'invalid-links' });
+    expect(parse({ action: 'attach', identifier: { keys: ['SC'] }, urls: { ...urls, identifier: 'number', item: ['/story/{id}'] } })).toMatchObject({ ok: false, code: 'invalid-links' });
+    expect(parse({ action: 'open', identifier: { keys: ['SC'] }, urls: { ...urls, identifier: 'number', item: ['/story/{id}'] } }).ok).toBe(true);
+    expect(parse({ action: 'attach', urls: { ...urls, item: ['/{segment}/{id}'] } })).toMatchObject({ ok: false, code: 'invalid-links' });
+    expect(parse({ action: 'open', urls }, { id: 'tasks', name: 'Tasks', icon: 'task' })).toMatchObject({ ok: false, code: 'invalid-links' });
+    expect(parse({ action: 'attach', urls }, { id: 'tasks', name: 'Tasks', icon: 'task' }).ok).toBe(true);
+    expect(parse({ action: 'open' })).toMatchObject({ ok: false, code: 'invalid-links' });
+    expect(parse({ action: 'jump', urls })).toMatchObject({ ok: false, code: 'invalid-links' });
+  });
+});
+>>>>>>> bc50ba56a

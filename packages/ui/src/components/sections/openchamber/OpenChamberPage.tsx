@@ -15,8 +15,14 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
+<<<<<<< HEAD
 import { DesktopAppSettings } from './DesktopAppSettings';
 import { MobileWorkspaceTabsSettings } from './MobileWorkspaceTabsSettings';
+=======
+import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
+import { ChatSettings } from './ChatSettings';
+import { GeneralConnectionAndPrivacySettings, GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
+>>>>>>> bc50ba56a
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { useDeviceInfo } from '@/lib/device';
@@ -108,6 +114,7 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         tunnel: t('settings.page.tunnel.title'),
     }[section];
 
+<<<<<<< HEAD
     const pageDescription = {
         general: t('settings.page.general.description'),
         visual: t('settings.page.appearance.description'),
@@ -121,10 +128,12 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         tunnel: t('settings.page.tunnel.description'),
     }[section];
 
+=======
+>>>>>>> bc50ba56a
     return (
         <SettingsPageLayout
             title={pageTitle}
-            description={pageDescription}
+            namedBySidebar
             showSaveStatus
             className="openchamber-page-body"
         >
@@ -137,8 +146,16 @@ const ShortcutsSectionContent: React.FC = () => {
     return <KeyboardShortcutsSettings />;
 };
 
+<<<<<<< HEAD
 // General section: app-level settings — startup/tray/network, access password,
 // passkeys, message stream transport, privacy.
+=======
+// General, by what people come here for: the desktop app itself, the agent's
+// tools, how other devices reach this app, the window, global shortcuts, the
+// OpenCode CLI and its environment, files and the terminal, then trusted
+// links, message transport and privacy. The layout drops the divider above
+// whichever section renders first.
+>>>>>>> bc50ba56a
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
     const { isMobile } = useDeviceInfo();
@@ -149,6 +166,7 @@ const GeneralSectionContent: React.FC = () => {
     const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isCapacitorApp();
     return (
         <>
+<<<<<<< HEAD
             {isLocalDesktop && <DesktopAppSettings />}
             {isMobile && <MobileWorkspaceTabsSettings />}
             {showDesktopNetworkSettings && <DesktopNetworkSettings />}
@@ -169,6 +187,21 @@ const GeneralSectionContent: React.FC = () => {
                 'messageTransport',
                 'reportUsage',
             ]} />
+=======
+            {/* Remote hosts too: the Dock badge works there. */}
+            {isDesktopShell() && <DesktopAppSettings />}
+            {!isVSCode && <OpenChamberToolsSettings />}
+            {isLocalDesktop && <DesktopNetworkSettings />}
+            {showPasskeySettings && <PasskeySettings />}
+            <GeneralInterfaceSettings />
+            {isLocalDesktop && <DesktopQuickAccessSettings />}
+            {!isVSCode && <OpenCodeCliSettings />}
+            {/* Remounts on a runtime switch: the names come from that server. */}
+            {!isVSCode && <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />}
+            <GeneralFilesAndTerminalSettings />
+            <AppLinkSecuritySettings />
+            <GeneralConnectionAndPrivacySettings />
+>>>>>>> bc50ba56a
         </>
     );
 };

@@ -12,7 +12,7 @@ import {
   SettingsAddCard,
   SettingsCard,
   SettingsCardPill,
-  SettingsCardSearch,
+  SettingsCardToolbar,
   type SettingsCardTone,
 } from '@/components/sections/shared/SettingsCards';
 import { SETTINGS_CALLOUT_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
@@ -70,6 +70,7 @@ const ClassificationCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
 
 const StatusPill: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
   const { t } = useI18n();
+<<<<<<< HEAD
   const label = status.kind === 'connected'
     ? t('settings.providers.card.status.connected')
     : status.kind === 'environment'
@@ -77,6 +78,19 @@ const StatusPill: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
       : t('settings.providers.card.status.signInNeeded');
   const tone: SettingsCardTone = status.kind === 'connected'
     ? 'success'
+=======
+  let label: string;
+  switch (status.kind) {
+    case 'reauthNeeded': label = t('settings.providers.card.status.reauthNeeded'); break;
+    case 'accounts': label = t('settings.providers.card.status.accounts', { count: status.count }); break;
+    case 'connected': label = t('settings.providers.card.status.connected'); break;
+    case 'noModels': label = t('settings.providers.card.status.noModels'); break;
+    case 'environment': label = t('settings.providers.card.status.environment'); break;
+    case 'signInNeeded': label = t('settings.providers.card.status.signInNeeded'); break;
+  }
+  const tone: SettingsCardTone = status.kind === 'signInNeeded' || status.kind === 'reauthNeeded' || status.kind === 'noModels'
+    ? 'warning'
+>>>>>>> bc50ba56a
     : status.kind === 'environment'
       ? 'neutral'
       : 'warning';
@@ -122,6 +136,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
   return (
     <SettingsPageLayout
       title={t('settings.page.providers.title')}
+<<<<<<< HEAD
       description={t('settings.providers.native.description')}
       headerEnd={<SettingsProjectSelector className="w-full min-w-0 @xl:w-56" />}
     >
@@ -139,6 +154,16 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
       {providers.length > 0 ? (
         <SettingsCardSearch value={query} onChange={setQuery} placeholder={t('settings.providers.grid.searchPlaceholder')} />
       ) : null}
+=======
+      namedBySidebar
+      className="[&>section:first-of-type]:pt-8"
+    >
+      {locked ? <EnterpriseProvidersNotice directory={directory} integrations={integrations} /> : null}
+      <SettingsCardToolbar
+        search={providers.length > 0 ? { value: query, onChange: setQuery, placeholder: t('settings.providers.grid.searchPlaceholder') } : null}
+        actions={<SettingsProjectSelector className="min-w-0 w-56" />}
+      />
+>>>>>>> bc50ba56a
 
       {providers.length === 0 ? (
         <p className="py-6 typography-meta text-muted-foreground">{t('settings.providers.grid.empty')}</p>
@@ -158,8 +183,18 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
         )}
         {hasQuery ? null : <ClassificationCard onOpen={onOpenClassification} />}
         {filtered.map((provider) => {
+<<<<<<< HEAD
           const status = getProviderCardStatus(provider);
           const count = modelCounts[provider.providerId] ?? 0;
+=======
+          const status = getProviderCardStatus({
+            integrations,
+            providerId: provider.id,
+            optionsApiKey: readProviderApiKeySetting(provider),
+            machineCredentials: usesMachineCredentials(provider),
+            noModels: provider.models.length === 0,
+          });
+>>>>>>> bc50ba56a
           return (
             <SettingsCard
               key={provider.providerId}

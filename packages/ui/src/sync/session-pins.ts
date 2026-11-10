@@ -17,6 +17,7 @@ export const pinQueues = new Map<string, { tail: Promise<void>; count: number }>
  * when the server could not store it, and the row flips back.
  */
 export function toggleSessionPin(target: PinTarget): Promise<void> {
+<<<<<<< HEAD
  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
  if (!key) return Promise.resolve();
  const pinned = !useSessionPinnedStore.getState().ids.has(key);
@@ -40,6 +41,44 @@ export function toggleSessionPin(target: PinTarget): Promise<void> {
  });
  queue.tail = run.catch(() => undefined);
  return run;
+=======
+  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
+  if (!key) return Promise.resolve();
+  return writeSessionPin(key, target, !useSessionPinnedStore.getState().ids.has(key), null);
+}
+
+/**
+ * Pin to: file the session's pin in `list` (null is Pinned), or unpin it with
+ * `pinned` false. Moving a pin between lists shows once the server answers.
+ */
+export function setSessionPinList(target: PinTarget, pinned: boolean, list: string | null): Promise<void> {
+  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
+  if (!key) return Promise.resolve();
+  return writeSessionPin(key, target, pinned, list);
+}
+
+function writeSessionPin(key: string, target: PinTarget, pinned: boolean, list: string | null): Promise<void> {
+  setPendingPin(key, pinned);
+
+  const queue = pinQueues.get(key) ?? { tail: Promise.resolve(), count: 0 };
+  queue.count += 1;
+  pinQueues.set(key, queue);
+  const run = queue.tail.then(async () => {
+    try {
+      await setSessionPinned(target.sessionId, target.directory, pinned, list);
+      // An old local pin must not bring back a session the user just unpinned.
+      if (!pinned) forgetLegacyPins([key]);
+    } finally {
+      queue.count -= 1;
+      if (queue.count === 0) {
+        pinQueues.delete(key);
+        setPendingPin(key, null);
+      }
+    }
+  });
+  queue.tail = run.catch(() => undefined);
+  return run;
+>>>>>>> bc50ba56a
 }
 
 const migratingRuntimes = new Set<string>();

@@ -3,8 +3,18 @@ import { useMessageTTS } from "@/hooks/useMessageTTS";
 import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";
 import { findLatestCompletedReply } from "@/lib/messages/latestReply";
 import React from 'react';
+import { SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
+import { DraftProjectName } from '@/components/chat/DraftProjectName';
 import { createPortal } from 'react-dom';
+<<<<<<< HEAD
 import type { Message as CanonicalMessage, Part, Turn } from '@openchamber/agent-contract';
+=======
+import type { Message, Part, Session } from '@/lib/opencode/model';
+import { getLastConversationRecord, isIncompleteAssistantTurn } from '@/lib/opencode/model';
+import { keepCommandSubagentReports } from '@/lib/opencode/subagent-run';
+import { dropReplyCommandRows } from '@/lib/opencode/reply-command';
+import { isOpencodeNotFound, opencodeClient } from '@/lib/opencode/client';
+>>>>>>> bc50ba56a
 
 import { ChatInput } from './ChatInput';
 import { CHAT_INPUT_EDITOR_SELECTOR } from './composer/editor/dom';
@@ -40,9 +50,10 @@ const TIMELINE_SETTLE_CAP_MS = 300;
 // Mirrors the oc-chat-hydration-reveal duration in index.css.
 const TIMELINE_REVEAL_FADE_MS = 100;
 import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry } from '@/sync/form-recovery';
+import { useIsPageWaiting } from '@/sync/global-blocking-requests';
+import { holdPendingSynthetic } from './lib/holdPendingSynthetic';
 import { toast } from '@/components/ui';
 import { StatusRowContainer } from './StatusRowContainer';
-import { SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
 import {
  FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX,
  forgetComposerSlot,
@@ -68,6 +79,8 @@ import { TimelineDialog } from './TimelineDialog';
 import { useChatTurnNavigation } from './hooks/useChatTurnNavigation';
 import { ChatQuoteHighlightContext, useChatQuoteHighlightStore } from './hooks/chatQuoteHighlightStore';
 import { ChatQuoteHighlightLayer } from './message/ChatQuoteHighlightLayer';
+import { TextSelectionMenu } from './message/TextSelectionMenu';
+import { loadQuoteSource as loadQuoteSourceMessage, scrollToQuoteSource as scrollToQuoteSourceMessage } from './quoteNavigation';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
@@ -97,8 +110,16 @@ import {
  useDirectorySync,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+<<<<<<< HEAD
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { useI18n } from '@/lib/i18n';
+=======
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useI18n } from '@/lib/i18n';
+import { useDraftHeading } from './useDraftHeading';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { SEMANTIC_TYPOGRAPHY, VSCODE_TYPOGRAPHY, getScaledTypographyStyle } from '@/lib/typography';
+>>>>>>> bc50ba56a
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { ChatSearchBar } from './search/ChatSearchBar';
 import { WorkStatusPanel } from './work-status/WorkStatusPanel';
@@ -108,21 +129,45 @@ import { resolveChatPromptReadOnly } from './chatPromptReadOnly';
 import { PermissionDock } from './PermissionDock';
 import { FormDock } from './FormDock';
 import { ensureSpaceArchives, useSpaceArchiveOf } from '@/lib/spaces/space-archives';
+import { useSpaceDirectoryStopped } from '@/lib/spaces/spaces-store';
+import { SpaceChatPlaceholder } from '@/components/session/spaces/SpaceChatPlaceholder';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { createFirstVisibleSessionPerformanceTracker } from '@/sync/session-load-performance';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
+<<<<<<< HEAD
 const EMPTY_MESSAGES: CanonicalMessage[] = [];
 const EMPTY_TURNS: readonly Turn[] = [];
 const IDLE_SESSION_STATUS = 'idle' as const;
+=======
+function HoistedUiPageSelection({ scrollNode, sessionId }: { scrollNode: HTMLElement; sessionId: string }) {
+    const containerRef = React.useMemo(() => ({ current: scrollNode }), [scrollNode]);
+    const surface = useChatSurfaceMode();
+    const showTTS = useConfigStore((state) => state.showMessageTTSButtons);
+    return <TextSelectionMenu containerRef={containerRef} readingKey={sessionId} uiRenderSelection
+        canReadAloud={surface !== 'mini-chat' && showTTS} />;
+}
+
+const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
+const IDLE_SESSION_STATUS = { type: 'idle' as const };
+>>>>>>> bc50ba56a
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DRAFT_EXIT_DURATION_MS = 120;
 const COMPOSER_MOVE_DURATION_MS = 180;
 const CHAT_SCROLL_STYLE = {
+<<<<<<< HEAD
  minWidth: 1,
  overflowAnchor: 'none',
  overscrollBehavior: 'contain',
  overscrollBehaviorY: 'contain',
+=======
+    // A chat column squeezed to 0px gives the rows no area, and the browser
+    // drops the scroll position with the scrollable height.
+    minWidth: 1,
+    overflowAnchor: 'none',
+    overscrollBehavior: 'contain',
+    overscrollBehaviorY: 'contain',
+>>>>>>> bc50ba56a
 } as const;
 const CHAT_NAVIGATION_IGNORED_TARGET_SELECTOR = [
  'a[href]',
@@ -197,6 +242,7 @@ type HydratingToolSkeletonRow = {
 };
 
 type ChatViewportProps = {
+<<<<<<< HEAD
  currentSessionId: string;
  currentSessionKey: string;
  isDesktopExpandedInput: boolean;
@@ -239,9 +285,60 @@ type ChatViewportProps = {
  canLoadEarlierPrompts: boolean;
  isLoadingOlderPrompts: boolean;
  onLoadEarlierPrompts: () => void;
+=======
+    /** Loading, error, draft or empty content; undefined shows the transcript. */
+    placeholder: React.ReactNode;
+    currentSessionId: string;
+    currentSessionKey: string;
+    isDesktopExpandedInput: boolean;
+    isMobile: boolean;
+    /** The composer floats over the transcript and reserves its band via
+        `--chat-composer-tail-inset` on the tail spacer (composerInsetReaders). */
+    floatingComposer: boolean;
+    /** Height the floating status row takes above the composer while the
+        session works, px; 0 when there is no row. */
+    statusRowClearance: number;
+    directory?: string;
+    scrollRef: React.RefObject<HTMLDivElement | null>;
+    messageListRef: React.RefObject<MessageListHandle | null>;
+    registerList: (list: TimelineListHandle | null, sessionKey?: string) => void;
+    captureOutgoingPosition: () => void;
+    onIsAtEndChange: (isAtEnd: boolean) => void;
+    onListMetricsChange: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
+    onTimelineDataChange: () => void;
+    renderedMessages: SessionMessageRecord[];
+    isLoadingOlder: boolean;
+    sessionIsWorking: boolean;
+    streamingMessageId: string | null;
+    activeStreamingPhase: import('./message/types').StreamPhase | null;
+    retryOverlay: {
+        sessionId: string;
+        message: string;
+        confirmedAt?: number;
+        fallbackTimestamp?: number;
+    } | null;
+    scrollToBottom: () => void;
+    /** A drag on the overlay scrollbar's thumb takes the scroll from auto-follow. */
+    onScrollbarDrag: () => void;
+    endPinningReleased: boolean;
+    /** The user waited for this session (held or fetched); reveal it with a fade. */
+    revealWaited: boolean;
+    revealGate: TimelineRevealGate;
+    isProgrammaticFollowActive: boolean;
+    showLoadOlderButton: boolean;
+    onLoadOlder: () => void;
+    turnIds: string[];
+    activeTurnId: string | null;
+    onSelectTurn: (turnId: string) => void;
+    showPromptNavigator: boolean;
+    canLoadEarlierPrompts: boolean;
+    isLoadingOlderPrompts: boolean;
+    onLoadEarlierPrompts: () => void;
+>>>>>>> bc50ba56a
 };
 
 const ChatViewport = React.memo(({
+<<<<<<< HEAD
  currentSessionId,
  currentSessionKey,
  isDesktopExpandedInput,
@@ -275,6 +372,44 @@ const ChatViewport = React.memo(({
  canLoadEarlierPrompts,
  isLoadingOlderPrompts,
  onLoadEarlierPrompts,
+=======
+    placeholder,
+    currentSessionId,
+    currentSessionKey,
+    isDesktopExpandedInput,
+    isMobile,
+    floatingComposer,
+    statusRowClearance,
+    directory,
+    scrollRef,
+    messageListRef,
+    registerList,
+    captureOutgoingPosition,
+    onIsAtEndChange,
+    onListMetricsChange,
+    onTimelineDataChange,
+    renderedMessages,
+    isLoadingOlder,
+    sessionIsWorking,
+    streamingMessageId,
+    activeStreamingPhase,
+    retryOverlay,
+    scrollToBottom,
+    onScrollbarDrag,
+    endPinningReleased,
+    revealWaited,
+    revealGate,
+    isProgrammaticFollowActive,
+    showLoadOlderButton,
+    onLoadOlder,
+    turnIds,
+    activeTurnId,
+    onSelectTurn,
+    showPromptNavigator,
+    canLoadEarlierPrompts,
+    isLoadingOlderPrompts,
+    onLoadEarlierPrompts,
+>>>>>>> bc50ba56a
 }: ChatViewportProps) => {
  const { t } = useI18n();
  const promptPreviewsByTurnIdRef = React.useRef<Map<string, Part[]>>(new Map());
@@ -381,6 +516,7 @@ const ChatViewport = React.memo(({
                 variables written straight by observers (the composer's onto
                 this element itself, see composerInsetReaders), so a growing
                 composer or panel resizes the footer without a list re-render;
+<<<<<<< HEAD
                 the list's own footer observer then extends the content. */}
    <div
     ref={registerComposerInsetReader}
@@ -394,6 +530,41 @@ const ChatViewport = React.memo(({
    />
   </>
  ), [currentSessionId, directory, floatingComposer, isMobile]);
+=======
+                the list's own footer observer then extends the content.
+                While the session works, the composer gets no growth
+                allowance: the status row and the live end fade sit in the
+                gap, so a composer grown into it (a background command, a
+                queued message) left the last line under the row. */}
+            <div
+                ref={registerComposerInsetReader}
+                className="relative flex-shrink-0"
+                style={{
+                    height: floatingComposer
+                        ? `calc(${sessionIsWorking
+                            ? `max(var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px), var(--chat-composer-inset, 0px) + ${FLOATING_COMPOSER_GAP_PX}px)`
+                            : `var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px)`} + var(--chat-floating-panel-clearance, 0px))`
+                        : (isMobile ? '40px' : '10vh'),
+                }}
+            >
+                {/* The recap of the latest answer lies at the top of this band,
+                    right under the answer's footer: it takes no room, so its
+                    arrival and leaving move nothing. Rows of the list paint
+                    only inside their own box (`contain: paint`), so it lives
+                    here rather than in the answer's row. It goes once a new
+                    prompt makes the session busy, and while the composer grows
+                    into the band or a panel docks over it (design-system.css). */}
+                {floatingComposer && currentSessionId ? (
+                    <div className="oc-recap-hint pointer-events-none absolute inset-x-0 top-0 transition-opacity duration-300 ease-out">
+                        <div className="chat-message-column">
+                            <SessionRecapNote sessionId={currentSessionId} directory={directory} isMobile={isMobile} />
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+        </>
+    ), [currentSessionId, directory, floatingComposer, isMobile, sessionIsWorking]);
+>>>>>>> bc50ba56a
 
  // Opening a session paints the timeline as one finished picture: the root
  // stays invisible only until the viewport is in place (the scroll hook's
@@ -506,6 +677,7 @@ const ChatViewport = React.memo(({
   'data-orientation': 'vertical',
  }), [focusScrollContainer]);
 
+<<<<<<< HEAD
  return (
   <div
    className={cn(
@@ -564,6 +736,102 @@ const ChatViewport = React.memo(({
    </div>
   </div>
  );
+=======
+    const scrollContainerProps = React.useMemo(() => ({
+        className: 'absolute inset-0 overflow-y-auto overflow-x-hidden z-0 chat-scroll overlay-scrollbar-target',
+        style: CHAT_SCROLL_STYLE,
+        tabIndex: 0,
+        onClick: focusScrollContainer,
+        'data-scrollbar': 'chat',
+        'data-scroll-shadow': 'true',
+        'data-orientation': 'vertical',
+    }), [focusScrollContainer]);
+
+    return (
+        <>
+            {placeholder}
+            <div
+                className={cn(
+                    'relative min-h-0',
+                    isDesktopExpandedInput
+                        ? 'absolute inset-0 opacity-0 pointer-events-none'
+                        : 'flex-1',
+                )}
+                ref={timelineRootRef}
+                style={showingTranscript ? undefined : { display: 'none' }}
+                aria-hidden={isDesktopExpandedInput}
+            >
+                <div className="absolute inset-0">
+                    {/* Retained by session ID: the session key also holds the
+                        directory, which settles after the session opens, and
+                        a key change left a hidden second copy of the open
+                        session. The list still remounts on a key change. */}
+                    <KeepAlive
+                        key={getRuntimeKey()}
+                        cacheKey={showingTranscript ? currentSessionId : null}
+                        capacity={retainedTimelines()}
+                        onBeforeHide={captureOutgoingPosition}
+                    >
+                        <ChatColumnSessionContext.Provider value={session}>
+                            <MessageList
+                                key={currentSessionKey}
+                                ref={messageListRef}
+                                sessionKey={currentSessionId}
+                                messages={renderedMessages}
+                                sessionIsWorking={sessionIsWorking}
+                                activeStreamingMessageId={streamingMessageId}
+                                activeStreamingPhase={activeStreamingPhase}
+                                retryOverlay={retryOverlay}
+                                isLoadingOlder={isLoadingOlder}
+                                scrollToBottom={scrollToBottom}
+                                endPinningReleased={endPinningReleased}
+                                directory={directory}
+                                registerList={registerSessionList}
+                                // The footer already reserves the composer's band.
+                                composerOverlayHeight={0}
+                                onIsAtEndChange={onIsAtEndChange}
+                                onListMetricsChange={onListMetricsChange}
+                                onTimelineDataChange={onTimelineDataChange}
+                                listHeader={listHeader}
+                                listFooter={listFooter}
+                                scrollContainerProps={scrollContainerProps}
+                            />
+                        </ChatColumnSessionContext.Provider>
+                    </KeepAlive>
+                    {/* The transcript's edge fades must follow the scroller. */}
+                    <div aria-hidden="true" className="chat-scroll-fade chat-scroll-fade--top" />
+                    <div
+                        ref={registerComposerInsetReader}
+                        aria-hidden="true"
+                        className="chat-scroll-fade chat-scroll-fade--end"
+                        style={endFadeStyle}
+                    />
+                    <OverlayScrollbar
+                        containerRef={scrollRef}
+                        disableHorizontal
+                        suppressVisibility={isProgrammaticFollowActive}
+                        userIntentOnly
+                        observeMutations={false}
+                        onThumbDragStart={onScrollbarDrag}
+                    />
+                    {showPromptNavigator && promptTurnIds.length >= 2 ? (
+                        <PromptNavigatorRail
+                            sessionId={currentSessionId}
+                            directory={directory}
+                            turnIds={promptTurnIds}
+                            previewsByTurnId={promptPreviewsByTurnId}
+                            activeTurnId={railActiveTurnId}
+                            onSelectTurn={onSelectTurn}
+                            canLoadEarlier={canLoadEarlierPrompts}
+                            isLoadingOlder={isLoadingOlderPrompts}
+                            onLoadEarlier={onLoadEarlierPrompts}
+                        />
+                    ) : null}
+                </div>
+            </div>
+        </>
+    );
+>>>>>>> bc50ba56a
 }, (prev, next) => {
  return prev.currentSessionId === next.currentSessionId
   && prev.currentSessionKey === next.currentSessionKey
@@ -634,6 +902,7 @@ const HYDRATING_SKELETON_ITEMS: Array<{
 // `onStop` is set while a subagent's turn runs: its session takes no
 // prompts, but the user can still stop it from here.
 const ReadOnlyPromptBanner: React.FC<{ text: string; onStop?: () => void; stopLabel?: string }> = ({ text, onStop, stopLabel }) => (
+<<<<<<< HEAD
  <div className="w-full py-3">
   <div className="chat-input-column">
    <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-[var(--surface-background)] px-4 py-3 typography-ui-label text-muted-foreground">
@@ -653,6 +922,31 @@ const ReadOnlyPromptBanner: React.FC<{ text: string; onStop?: () => void; stopLa
    </div>
   </div>
  </div>
+=======
+    <div className="w-full py-3" data-composer-transient="">
+        <div className="chat-input-column">
+            <div className="flex items-center gap-2 rounded-2xl border border-edge bg-[var(--surface-background)] px-4 py-3 typography-ui-label text-muted-foreground">
+                <span className="min-w-0 flex-1 text-center">{text}</span>
+                {onStop ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="-my-1.5 -me-2 shrink-0 text-[var(--status-error)] hover:text-[var(--status-error)]"
+                                onClick={onStop}
+                                aria-label={stopLabel}
+                            >
+                                <StopIcon className="size-4" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" sideOffset={6}>{stopLabel}</TooltipContent>
+                    </Tooltip>
+                ) : null}
+            </div>
+        </div>
+    </div>
+>>>>>>> bc50ba56a
 );
 
 const getProjectDisplayLabel = (project: { label?: string; path: string }): string => {
@@ -665,6 +959,7 @@ const renderDraftTitle = (title: string, projectLabel: string | null): React.Rea
  const projectIndex = title.indexOf(projectLabel);
  if (projectIndex === -1) return title;
 
+<<<<<<< HEAD
  return (
   <>
    {title.slice(0, projectIndex)}
@@ -706,6 +1001,44 @@ const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false }) => {
    />
   </div>
  );
+=======
+    return (
+        <>
+            {title.slice(0, projectIndex)}
+            <DraftProjectName label={projectLabel} />
+            {title.slice(projectIndex + projectLabel.length)}
+        </>
+    );
+};
+
+const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false }) => {
+    const draftTarget = useSessionUIStore((state) => state.newSessionDraft.target);
+    const selectedProjectId = useSessionUIStore((state) => state.newSessionDraft.selectedProjectId ?? null);
+    const projectLabel = useProjectsStore(React.useCallback((state) => {
+        if (draftTarget === 'chat') return null;
+        const projectId = selectedProjectId ?? state.activeProjectId;
+        const project = (projectId
+            ? state.projects.find((candidate) => candidate.id === projectId)
+            : null) ?? state.projects[0] ?? null;
+        return project ? getProjectDisplayLabel(project) : null;
+    }, [draftTarget, selectedProjectId]));
+    const draftHeading = useDraftHeading(projectLabel);
+
+    return (
+        <div className={cn(
+            'oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
+            exiting && 'pointer-events-none opacity-0',
+        )}>
+            <h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
+                {renderDraftTitle(draftHeading, projectLabel)}
+            </h1>
+            <DraftPresetChips
+                onSubmit={(starter) => useInputStore.getState().requestPresetSubmit(starter.submitText, starter.ref.type)}
+                className="oc-draft-starters mt-8 max-w-md"
+            />
+        </div>
+    );
+>>>>>>> bc50ba56a
 };
 
 type ChatContainerProps = {
@@ -729,6 +1062,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  readOnly = false,
  pinnedSession,
 }) => {
+<<<<<<< HEAD
  const pinned = pinnedSession !== undefined;
  const autoOpenDraft = autoOpenDraftProp && !pinned;
  const { t } = useI18n();
@@ -789,6 +1123,69 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  const { sessionId: currentSessionId, directory: currentSessionDirectory } = React.useDeferredValue(targetSelection);
  shownSelectionRef.current = { sessionId: currentSessionId, directory: currentSessionDirectory };
  const revealWaited = Boolean(currentSessionId) && currentSessionId === waitedSessionIdRef.current;
+=======
+    const pinned = pinnedSession !== undefined;
+    const autoOpenDraft = autoOpenDraftProp && !pinned;
+    const { t } = useI18n();
+    // A pinned column starts on its session and moves only through its own
+    // navigation. A different session from the owner starts it over.
+    const [pinnedOrigin, setPinnedOrigin] = React.useState<PinnedSelection | null>(pinnedSession ?? null);
+    const [pinnedSelection, setPinnedSelection] = React.useState<PinnedSelection | null>(pinnedSession ?? null);
+    if (pinnedSession && (pinnedSession.sessionId !== pinnedOrigin?.sessionId || pinnedSession.directory !== pinnedOrigin?.directory)) {
+        setPinnedOrigin(pinnedSession);
+        setPinnedSelection(pinnedSession);
+    }
+    // Session UI state. The selection is published synchronously by the
+    // sidebar click, but the chat swaps its content on a deferred copy: the
+    // first commit paints the cheap reactions (active row, URL, tab) while the
+    // timeline for the new session renders in an interruptible transition
+    // behind it. Both fields travel as one value so the key, the message
+    // subscription, and the loader target never mix an old directory with a
+    // new session id. A pinned column does not subscribe to the selection.
+    const globalSessionId = useSessionUIStore((s) => (pinned ? null : s.currentSessionId));
+    const globalSessionDirectory = useSessionUIStore((s) => (pinned ? null : s.currentSessionDirectory));
+    const pinnedSessionDirectory = usePinnedSessionDirectory(pinned ? pinnedSelection : null);
+    const liveSessionId = pinned ? (pinnedSessionDirectory ? pinnedSelection?.sessionId ?? null : null) : globalSessionId;
+    const liveSessionDirectory = pinned ? pinnedSessionDirectory : globalSessionDirectory;
+    const materializedDraftSessionId = useSessionUIStore((s) => (pinned ? null : s.materializedDraftSessionId));
+    const liveSelection = React.useMemo(
+        () => ({ sessionId: liveSessionId, directory: liveSessionDirectory }),
+        [liveSessionId, liveSessionDirectory],
+    );
+    // A session whose messages are not in memory yet keeps the previous
+    // timeline on screen while they load, instead of flashing a skeleton
+    // between two conversations. The hold ends when the session becomes
+    // renderable or after SESSION_SWITCH_HOLD_MS, whichever comes first, and
+    // never applies when nothing was shown before or when the session was just
+    // created from a draft.
+    const liveSessionRenderable = useSessionRenderable(liveSessionId ?? '', liveSessionDirectory ?? undefined);
+    const shownSelectionRef = React.useRef(liveSelection);
+    const [expiredHoldSessionId, setExpiredHoldSessionId] = React.useState<string | null>(null);
+    const holdPreviousTimeline = Boolean(liveSessionId)
+        && !liveSessionRenderable
+        && liveSessionId !== materializedDraftSessionId
+        && shownSelectionRef.current.sessionId !== null
+        && shownSelectionRef.current.sessionId !== liveSessionId
+        && expiredHoldSessionId !== liveSessionId;
+    React.useEffect(() => {
+        if (!holdPreviousTimeline || !liveSessionId) return;
+        const timer = window.setTimeout(() => setExpiredHoldSessionId(liveSessionId), SESSION_SWITCH_HOLD_MS);
+        return () => window.clearTimeout(timer);
+    }, [holdPreviousTimeline, liveSessionId]);
+    // A session the user waited for (not in memory at the click) fades in; one
+    // that was ready appears in the same frame. Decided once per selection so
+    // a later, warm visit to the same session is instant again.
+    const lastLiveSessionIdRef = React.useRef<string | null | undefined>(undefined);
+    const waitedSessionIdRef = React.useRef<string | null>(null);
+    if (liveSessionId !== lastLiveSessionIdRef.current) {
+        lastLiveSessionIdRef.current = liveSessionId;
+        waitedSessionIdRef.current = liveSessionId && !liveSessionRenderable ? liveSessionId : null;
+    }
+    const targetSelection = holdPreviousTimeline ? shownSelectionRef.current : liveSelection;
+    const { sessionId: currentSessionId, directory: currentSessionDirectory } = useShownSessionSelection(targetSelection);
+    shownSelectionRef.current = { sessionId: currentSessionId, directory: currentSessionDirectory };
+    const revealWaited = Boolean(currentSessionId) && currentSessionId === waitedSessionIdRef.current;
+>>>>>>> bc50ba56a
 
  const clearMaterializedDraftSession = useSessionUIStore((s) => s.clearMaterializedDraftSession);
  const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
@@ -844,6 +1241,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   [effectiveSessionDirectory, sync],
  );
 
+<<<<<<< HEAD
  // UI store
  const globalExpandedInput = useUIStore((state) => (pinned ? false : state.isExpandedInput));
  const [pinnedExpandedInput, setPinnedExpandedInput] = React.useState(false);
@@ -910,6 +1308,81 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  );
  const sessionLoadProblem = canonicalProblemDetail(sessionMessageLoadState.error);
  const [firstVisiblePerformance] = React.useState(createFirstVisibleSessionPerformanceTracker);
+=======
+    // UI store
+    const isExpandedInput = useUIStore((state) => (pinned ? false : state.isExpandedInput));
+    const stickyUserHeader = useUIStore((state) => state.stickyUserHeader);
+    const promptNavigatorEnabled = useUIStore((state) => state.promptNavigatorEnabled);
+    const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
+    const chatFontSize = useUIStore((state) => state.chatFontSize);
+    // The chat's own text size, on top of the interface size: the semantic
+    // text variables are redefined for this column only (as FilesView does
+    // for its preview), so the sidebar keeps the interface size.
+    // SAFETY: CSS custom properties are valid inline styles; React's type lists only standard ones.
+    const chatTypographyStyle = React.useMemo(() => getScaledTypographyStyle(
+        chatFontSize,
+        isVSCodeRuntime() ? VSCODE_TYPOGRAPHY : SEMANTIC_TYPOGRAPHY,
+    ) as React.CSSProperties | undefined, [chatFontSize]);
+    // The timeline dialog of the main chat is app state (a global shortcut
+    // opens it); a pinned column keeps its own.
+    const globalTimelineDialogOpen = useUIStore((s) => s.isTimelineDialogOpen);
+    const setGlobalTimelineDialogOpen = useUIStore((s) => s.setTimelineDialogOpen);
+    const [pinnedTimelineDialogOpen, setPinnedTimelineDialogOpen] = React.useState(false);
+    const isTimelineDialogOpen = pinned ? pinnedTimelineDialogOpen : globalTimelineDialogOpen;
+    const setTimelineDialogOpen = pinned ? setPinnedTimelineDialogOpen : setGlobalTimelineDialogOpen;
+    const columnRootRef = React.useRef<HTMLDivElement | null>(null);
+    const pinnedColumnActions = React.useMemo<ChatColumnActions | null>(() => (pinned ? {
+        pinned: true,
+        openSession: (sessionId, directory) => setPinnedSelection({ sessionId, directory }),
+        openTimelineDialog: () => setPinnedTimelineDialogOpen(true),
+        focusInput: () => columnRootRef.current?.querySelector<HTMLElement>(CHAT_INPUT_EDITOR_SELECTOR)?.focus(),
+    } : null), [pinned]);
+    const inheritedColumnActions = useChatColumnActions();
+    const columnActions = pinnedColumnActions ?? inheritedColumnActions;
+
+    // Streaming state
+    const streamingMessageId = useStreamingStore(
+        React.useCallback(
+            (s) => (currentSessionId ? s.streamingMessageIds.get(currentSessionId) ?? null : null),
+            [currentSessionId],
+        ),
+    );
+    const activeStreamingPhase = useStreamingStore(
+        React.useCallback(
+            (s) => {
+                if (!streamingMessageId) return null;
+                return s.messageStreamStates.get(streamingMessageId)?.phase ?? null;
+            },
+            [streamingMessageId],
+        ),
+    );
+    const hasRenderableSessionSnapshot = useSessionRenderable(currentSessionId ?? '', effectiveSessionDirectory);
+    const isPageWaiting = useIsPageWaiting(currentSessionId);
+    // Messages from sync system. Only the live tail overlays a suspended
+    // message's newest parts, so a page held back in its record is lost to
+    // whatever reads the record: an opened Activity builds its rows from it.
+    // Nothing is suspended while a call waits for the user.
+    const suspendedMessageId = isPageWaiting ? null : streamingMessageId;
+    const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '', effectiveSessionDirectory, {
+        enabled: active,
+        suspendPartUpdates: Boolean(suspendedMessageId),
+        suspendPartUpdatesForMessageId: suspendedMessageId,
+    });
+    const sessionMessages = React.useMemo(() => {
+        if (!currentSessionId) return EMPTY_MESSAGES;
+        return isPageWaiting ? holdPendingSynthetic(sessionMessageRecords) : sessionMessageRecords;
+    }, [currentSessionId, isPageWaiting, sessionMessageRecords]);
+    const authSessionExpired = useAuthSessionStore((store) => store.state !== 'ok');
+    const wasAuthExpiredRef = React.useRef(false);
+    const sessionMessageLoadState = useSessionMessageLoadState(
+        currentSessionId ?? '',
+        effectiveSessionDirectory,
+    );
+    // The messages of a space's session live inside the space: while it is stopped, gone or out
+    // of reach a load only waits for its timeout, so the chat holds it and says why instead.
+    const spaceStopped = useSpaceDirectoryStopped(effectiveSessionDirectory);
+    const [firstVisiblePerformance] = React.useState(createFirstVisibleSessionPerformanceTracker);
+>>>>>>> bc50ba56a
 
  React.useEffect(() => {
   if (!active || !currentSessionKey || !hasRenderableSessionSnapshot || sessionMessages.length === 0) return;
@@ -957,12 +1430,39 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
    return true;
   }
 
+<<<<<<< HEAD
   // Runtime status is authoritative; canonical messages do not carry
   // per-message completion or retry timestamps.
   return false;
  }, [currentSessionId, sessionPermissions.length, sessionForms.length, sessionStatusForCurrent]);
  // Canonical runtime status has no retry state or retry-message payload.
  const retryOverlay = null;
+=======
+    const latestCompletedReply = React.useMemo(
+        () => findLatestCompletedReply(sessionMessages),
+        [sessionMessages],
+    );
+    const autoReadAloudEnabled = useConfigStore((state) => state.autoReadAloudEnabled);
+    // Use the reply's own message id as the reading key so the message
+    // button shows the auto-started reading as playing and can stop it.
+    const { play: playAutoReadAloud } = useMessageTTS(latestCompletedReply?.messageId);
+    // Permission prompts pause `sessionIsWorking` while the turn is still
+    // running, so status also marks the session as active for the auto-read
+    // baseline.
+    const sessionIsActive = sessionIsWorking
+        || sessionStatusForCurrent.type === 'busy'
+        || sessionStatusForCurrent.type === 'retry';
+    useAutoReadAloud({
+        sessionKey: currentSessionKey ?? '',
+        ready: hasRenderableSessionSnapshot && sessionMessageLoadState.status === 'ready',
+        sessionIsActive,
+        reply: latestCompletedReply,
+        history: sessionMessages,
+        olderCompletedReplyIds: sessionMessageLoadState.olderCompletedReplyIds,
+        enabled: autoReadAloudEnabled && !pinned,
+        play: playAutoReadAloud,
+    });
+>>>>>>> bc50ba56a
 
  // History metadata — use sync's hasMore/isLoading
  const historyMeta = React.useMemo(() => {
@@ -1063,6 +1563,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   openColumnSession(parentSession.sessionId, parentDirectory ?? null);
  }, [openColumnSession, parentDirectory, parentSession]);
 
+<<<<<<< HEAD
  const returnToParentButton = parentSession && !hideReturnToParent ? (
   <Button
    type="button"
@@ -1091,6 +1592,59 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   allowPromptingSubagentSessions,
   readOnly,
  );
+=======
+    const { isMobile } = useDeviceInfo();
+    const isVSCode = isVSCodeRuntime();
+    const chatSurfaceMode = useChatSurfaceMode();
+    // The new-session draft is the main chat's; a pinned column never shows it.
+    const draftOpen = !pinned && Boolean(newSessionDraft?.open);
+    const isManagedChatContext = draftOpen
+        ? newSessionDraft?.target === 'chat'
+        : isChatDirectoryPath(effectiveSessionDirectory);
+    // A draft can target another project or a pending worktree before it has a
+    // session. Keep the panel on that same directory so its project, MCP, and
+    // usage readouts describe where the draft will run rather than the project
+    // the user came from.
+    const workStatusDirectory = draftOpen
+        ? (isManagedChatContext ? null : newSessionDraft?.bootstrapPendingDirectory ?? newSessionDraft?.directoryOverride ?? effectiveSessionDirectory)
+        : effectiveSessionDirectory;
+    const initError = useGlobalSyncStore((s) => s.error);
+    // Despite the historical name, this now covers mobile too: the mobile
+    // composer enters the same fullscreen-input mode via its drag handle.
+    const isDesktopExpandedInput = isExpandedInput;
+    const useCompactDraftLayout = isMobile || isVSCode || chatSurfaceMode === 'mini-chat';
+    // Work-status panel: a borderless column to the right of the transcript.
+    // It yields to a narrow chat, and to the context panel unless the chat area
+    // fits both beside the transcript; `rowRef` goes on the row that holds both
+    // columns, so its width never depends on the panel's own visibility.
+    const {
+        rowRef: workStatusRowRef,
+        visible: workStatusVisible,
+        fits: workStatusFits,
+        roomy: workStatusRoomy,
+        roomyBesidePanel: workStatusRoomyBesidePanel,
+    } = useWorkStatusVisibility({
+        isMobile,
+        isVSCode,
+    });
+    const attachColumnRoot = React.useCallback((node: HTMLDivElement | null) => {
+        columnRootRef.current = node;
+        workStatusRowRef(node);
+    }, [workStatusRowRef]);
+    // Surfaces that never host the panel skip it entirely; the rest keep it
+    // mounted so its visibility can animate rather than snap.
+    // A pinned column leaves the panel, and the app-wide flags below, to the
+    // main chat.
+    const workStatusPanelMountable = !isMobile
+        && !isVSCode
+        && !pinned
+        && chatSurfaceMode !== 'mini-chat';
+    const showWorkStatusPanel = workStatusPanelMountable && workStatusVisible;
+    // The inline card renders in the right slot beside the chat, which owns
+    // the one width animation for the card and the context panel together
+    // (components/layout/rightSlot.ts).
+    const workStatusHost = useRightSlotStore((state) => state.workStatusHost);
+>>>>>>> bc50ba56a
 
 
  // Selection policy reads the live selection, not the deferred one: right
@@ -1258,6 +1812,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   setChatSearch((current) => ({ ...current, open: false }));
  }, []);
 
+<<<<<<< HEAD
  // Canonical messages already contain the transcript; OpenCode command
  // subagent report roles do not exist on this boundary.
  const viewportMessages = sessionMessages;
@@ -1663,6 +2218,42 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
        )}
       </div>
      </div>
+=======
+    const returnToParentButton = parentSession && !hideReturnToParent ? (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={handleReturnToParentSession}
+                    className="absolute inset-s-3 top-3 z-20 !font-normal bg-[var(--surface-background)]/95"
+                    aria-label={t('chat.container.returnToParent.aria')}
+                >
+                    <Icon name="arrow-left" className="h-4 w-4" />
+                    {t('chat.container.returnToParent.label')}
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+                {parentSession.title?.trim()
+                    ? t('chat.container.returnToParent.titleNamed', { title: parentSession.title })
+                    : t('chat.container.returnToParent.title')}
+            </TooltipContent>
+        </Tooltip>
+    ) : null;
+    // A chat of a deleted isolated space is on the Archive page and read-only; the server refuses
+    // to run it whatever the screen shows. Its directory is the archive's own, and the list of
+    // archives is read once per runtime. A draft opened after such a chat still sits in the
+    // archive's directory until it is sent, and is not read-only: it is a new chat.
+    React.useEffect(() => {
+        ensureSpaceArchives();
+    }, []);
+    const spaceArchive = useSpaceArchiveOf(currentSessionId ? effectiveSessionDirectory : null);
+    const promptReadOnly = spaceArchive !== null || resolveChatPromptReadOnly(
+        currentSession,
+        allowPromptingSubagentSessions,
+        readOnly,
+>>>>>>> bc50ba56a
     );
    }
 
@@ -1756,6 +2347,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   );
  })();
 
+<<<<<<< HEAD
  return (
   <div
    ref={attachColumnRoot}
@@ -1801,6 +2393,698 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
            />
           </div>
          ) : null}
+=======
+    // The composer sits below the timeline, but the status/working row floats
+    // OVER the timeline's bottom edge; its measured height keeps the live
+    // streaming line above it and reserves matching end inset in the list.
+    const [statusOverlayHeight, setStatusOverlayHeight] = React.useState(0);
+    // The reserve is fixed so the timeline's end does not move when the row
+    // appears a commit after the session opened: a viewport pinned to the end
+    // would otherwise be left sitting the row's height above it. Measurement
+    // only extends the reserve for a taller row.
+    const composerOverlayHeight = Math.max(STATUS_OVERLAY_RESERVED_HEIGHT, statusOverlayHeight);
+    const statusOverlayObserverRef = React.useRef<ResizeObserver | null>(null);
+    const onStatusOverlayNode = React.useCallback((node: HTMLDivElement | null) => {
+        statusOverlayObserverRef.current?.disconnect();
+        statusOverlayObserverRef.current = null;
+        if (!node || !globalThis.ResizeObserver) {
+            setStatusOverlayHeight(0);
+            return;
+        }
+        const update = () => {
+            // +8 for the mb-2 gap between the row and the composer, which the
+            // node's own box does not include.
+            const height = node.getBoundingClientRect().height + 8;
+            setStatusOverlayHeight((prev) => (Math.abs(prev - height) < 1 ? prev : height));
+        };
+        const observer = new ResizeObserver(update);
+        observer.observe(node);
+        statusOverlayObserverRef.current = observer;
+        update();
+    }, []);
+    React.useEffect(() => () => {
+        statusOverlayObserverRef.current?.disconnect();
+        statusOverlayObserverRef.current = null;
+    }, []);
+    // The timeline controller owns history loading and needs this hook's
+    // scroll commands, so the hook reaches the loader through a ref.
+    const loadHistoryUntilMessageRef = React.useRef<(messageId: string, maxBatches: number) => Promise<boolean>>(async () => false);
+    const currentSessionKeyRef = React.useRef(currentSessionKey);
+    currentSessionKeyRef.current = currentSessionKey;
+    const loadHistoryUntilMessage = React.useCallback(
+        (messageId: string, maxBatches: number) => loadHistoryUntilMessageRef.current(messageId, maxBatches),
+        [],
+    );
+    const handleLinkedMessageMissing = React.useCallback(() => {
+        toast.info(t('chat.messageLink.notFound'));
+    }, [t]);
+    // One request settles whether a linked message exists before the timeline
+    // pages through the whole history toward it. Only a 404 means missing.
+    const checkLinkedMessage = React.useCallback(async (messageId: string): Promise<LinkedMessageState> => {
+        if (!currentSessionId) return 'unknown';
+        try {
+            await opencodeClient.getSessionMessage(currentSessionId, messageId, effectiveSessionDirectory);
+            return 'exists';
+        } catch (error) {
+            return isOpencodeNotFound(error) ? 'missing' : 'unknown';
+        }
+    }, [currentSessionId, effectiveSessionDirectory]);
+    const {
+        scrollRef,
+        scrollNode,
+        registerList,
+        captureOutgoingPosition,
+        onIsAtEndChange,
+        onListMetricsChange,
+        onManualNavigation,
+        onTimelineDataChange,
+        goToBottom,
+        scrollToBottomOnSend,
+        restoreSnapshot,
+        isPinned,
+        isFollowingProgrammatically,
+        showScrollButton,
+        userOwnsScroll,
+        nearContentStart,
+    } = useChatTimelineScroll({
+        currentSessionId,
+        currentSessionKey,
+        composerOverlayHeight,
+        messageListRef,
+        loadHistoryUntilMessage,
+        checkLinkedMessage,
+        onLinkedMessageMissing: handleLinkedMessageMissing,
+        sessionIsWorking,
+        pinned,
+        revealGate,
+        onActiveTurnChange: handleActiveTurnChange,
+    });
+
+    // ── in-conversation search ──────────────────────────────────────────────
+    // Cmd+F belongs to whatever has focus: the editor keeps its own search,
+    // the chat (its composer, or nothing focused after clicking its text)
+    // opens this bar. With several chat columns on screen, an unfocused
+    // Cmd+F goes to the column the pointer last pressed in. Search is opt-in;
+    // while it is off the shortcut is left alone. VS Code has no OpenChamber
+    // server and so no index to search.
+    const chatRootRef = React.useRef<HTMLDivElement>(null);
+    const lastPressedInsideRef = React.useRef(false);
+    const [chatSearch, setChatSearch] = React.useState({ open: false, focusRequest: 0 });
+    const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+    const messageSearchEnabled = useUIStore((state) => state.messageSearchEnabled);
+    React.useEffect(() => {
+        if (!active || !currentSessionId || !messageSearchEnabled || isVSCodeRuntime()) return;
+        const combo = getEffectiveShortcutCombo('find_in_file', shortcutOverrides);
+        const onPointerDown = (event: PointerEvent) => {
+            // SAFETY: a pointer event target inside the document is a Node.
+            lastPressedInsideRef.current = Boolean(chatRootRef.current?.contains(event.target as Node));
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.defaultPrevented || !eventMatchesShortcut(event, combo)) return;
+            const root = chatRootRef.current;
+            const focused = document.activeElement;
+            const unfocused = !focused || focused === document.body;
+            if (!root || (unfocused ? !lastPressedInsideRef.current : !root.contains(focused))) return;
+            event.preventDefault();
+            setChatSearch((current) => ({ open: true, focusRequest: current.focusRequest + 1 }));
+        };
+        document.addEventListener('pointerdown', onPointerDown, { capture: true });
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown, { capture: true });
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [active, currentSessionId, messageSearchEnabled, shortcutOverrides]);
+    // The search belongs to the conversation it was opened in.
+    React.useEffect(() => {
+        setChatSearch((current) => (current.open ? { ...current, open: false } : current));
+    }, [currentSessionId]);
+    const closeChatSearch = React.useCallback(() => {
+        setChatSearch((current) => ({ ...current, open: false }));
+    }, []);
+
+    // A subagent report opens a turn of its own at the end of the chat only for
+    // a `subagent: true` command; a call's report finishes that call's row
+    // (see `ToolPart`), and a run started before the loaded history stays in
+    // the session's subagent list, so the chat never shifts for either. A
+    // command run from a code block of a reply shows in that block.
+    const sessionStartTimes = useSessionStartTimes(effectiveSessionDirectory);
+    const viewportMessages = React.useMemo(
+        () => dropReplyCommandRows(keepCommandSubagentReports(sessionMessages, (childSessionID) => sessionStartTimes.get(childSessionID))),
+        [sessionStartTimes, sessionMessages],
+    );
+
+    const timelineController = useChatTimelineController({
+        sessionId: currentSessionId,
+        sessionKey: currentSessionKey,
+        messages: viewportMessages,
+        historyMeta,
+        scrollRef,
+        messageListRef,
+        loadMoreMessages,
+        goToBottom,
+        releaseAutoFollow: onManualNavigation,
+        isPinned,
+        showScrollButton,
+    });
+
+    // A transcript someone works in keeps every turn it receives, and every
+    // timeline pass walks all of them. When a turn starts or ends with the
+    // reader at the end, the loader cuts what outgrew the cold-navigation
+    // window back to it; the older turns load again on scroll, as in a freshly
+    // opened session. Both edges count, since queued prompts and agent loops
+    // start the next turn the moment one ends. The pause lets the send glide,
+    // the turn's last block, its footer and the turn-end glide land first. A
+    // reader away from the end holds the history, so another column showing
+    // this session never cuts what they look at.
+    // Prepending older turns must not re-arm the trim timer.
+    const newestTurnId = timelineController.turnIds[timelineController.turnIds.length - 1] ?? null;
+    const isPinnedRef = React.useRef(isPinned);
+    isPinnedRef.current = isPinned;
+    React.useEffect(() => {
+        if (!active || !currentSessionId || !effectiveSessionDirectory) return;
+        const timer = window.setTimeout(() => {
+            if (!isPinnedRef.current) return;
+            messageLoader.trimHistory({ directory: effectiveSessionDirectory, sessionID: currentSessionId });
+        }, HISTORY_TRIM_DELAY_MS);
+        return () => window.clearTimeout(timer);
+    }, [active, currentSessionId, effectiveSessionDirectory, messageLoader, sessionIsWorking, newestTurnId]);
+    React.useEffect(() => {
+        if (isPinned || !currentSessionId || !effectiveSessionDirectory) return;
+        return messageLoader.retainSessionHistory({ directory: effectiveSessionDirectory, sessionID: currentSessionId }, 'browsing');
+    }, [currentSessionId, effectiveSessionDirectory, isPinned, messageLoader]);
+
+    const handleHistoryScroll = timelineController.handleHistoryScroll;
+    React.useEffect(() => {
+        if (!scrollNode) return;
+        const onScroll = () => handleHistoryScroll();
+        scrollNode.addEventListener('scroll', onScroll, { passive: true });
+        return () => {
+            scrollNode.removeEventListener('scroll', onScroll);
+        };
+    }, [handleHistoryScroll, scrollNode]);
+
+    const resumeToLatestInstant = React.useCallback(() => {
+        goToBottom('instant');
+    }, [goToBottom]);
+
+    // A window too short to scroll must stay manually pageable on every runtime.
+    const showLoadOlderButton = timelineController.historySignals.canLoadEarlier && nearContentStart;
+    const timelineLoadEarlier = timelineController.loadEarlier;
+    const handleLoadOlderClick = React.useCallback(() => {
+        // Loading older history is an explicit move INTO the past: release
+        // live follow first, or the prepend's content growth would trigger an
+        // end correction and throw the viewport to the bottom.
+        onManualNavigation();
+        void timelineLoadEarlier({ userInitiated: true });
+    }, [onManualNavigation, timelineLoadEarlier]);
+
+    React.useEffect(() => {
+        activeTurnChangeRef.current = timelineController.handleActiveTurnChange;
+    }, [timelineController.handleActiveTurnChange]);
+    // Assigned during render: the entry restore runs in a layout effect of
+    // this same commit, before passive effects could update the ref.
+    const controllerLoadHistoryUntilMessage = timelineController.loadHistoryUntilMessage;
+    loadHistoryUntilMessageRef.current = (messageId, maxBatches) => controllerLoadHistoryUntilMessage(messageId, { maxBatches });
+    const chatQuoteHighlights = useChatQuoteHighlightStore();
+    const loadQuoteSource = React.useCallback(async (messageId: string): Promise<boolean> => {
+        return loadQuoteSourceMessage(messageId, {
+            currentSessionKey,
+            currentSessionKeyRef,
+            onManualNavigation,
+            loadHistoryUntilMessage: controllerLoadHistoryUntilMessage,
+            checkLinkedMessage,
+            onLinkedMessageMissing: handleLinkedMessageMissing,
+        });
+    }, [checkLinkedMessage, controllerLoadHistoryUntilMessage, currentSessionKey, handleLinkedMessageMissing, onManualNavigation]);
+    const scrollToTimelineMessage = timelineController.scrollToMessage;
+    const scrollToQuoteSource = React.useCallback(async (
+        messageId: string,
+        options?: { behavior?: ScrollBehavior },
+    ): Promise<boolean> => {
+        return scrollToQuoteSourceMessage(messageId, {
+            currentSessionKey,
+            currentSessionKeyRef,
+            scrollToTimelineMessage,
+            messageListRef,
+            ...options,
+        });
+    }, [currentSessionKey, scrollToTimelineMessage]);
+    const resolveUiPageMessageId = React.useCallback((messageId: string, partId: string) => (
+        messageListRef.current?.resolveUiPageMessageId(messageId, partId) ?? messageId
+    ), []);
+    const scrollToUiPageRow = React.useCallback((messageId: string) => (
+        messageListRef.current?.scrollToUiPageRow(messageId) ?? false
+    ), []);
+
+    const navigation = useChatTurnNavigation({
+        sessionId: currentSessionId,
+        turnIds: timelineController.turnIds,
+        activeTurnId: timelineController.activeTurnId,
+        scrollToTurn: timelineController.scrollToTurn,
+        scrollToMessage: timelineController.scrollToMessage,
+        resumeToBottom: timelineController.resumeToBottomInstant,
+    });
+    const handlePromptNavigatorSelect = React.useCallback((turnId: string) => {
+        // Instant on purpose: a long smooth scroll through a virtualized
+        // timeline gets cancelled by row remounts and lands mid-way or on the
+        // wrong message; a teleport always arrives.
+        void navigation.scrollToTurnId(turnId, { behavior: 'auto' });
+    }, [navigation]);
+    const canLoadEarlierPrompts = timelineController.historySignals.canLoadEarlier;
+    // The mini chat window is too narrow for the navigator's panel.
+    const showPromptNavigator = !isMobile
+        && chatSurfaceMode !== 'mini-chat'
+        && !isDesktopExpandedInput
+        && promptNavigatorEnabled
+        && timelineController.turnIds.length >= 2;
+
+    React.useEffect(() => {
+        if (!showPromptNavigator && !pinned) {
+            useUIStore.getState().setPromptNavigatorPanelOpen(false);
+        }
+    }, [pinned, showPromptNavigator]);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || !currentSessionId) return;
+
+        const handleForceScrollBottom = (event: Event) => {
+            const customEvent = event as CustomEvent<{ sessionId?: string }>;
+            if (customEvent.detail?.sessionId && customEvent.detail.sessionId !== currentSessionId) return;
+            goToBottom('instant');
+        };
+
+        window.addEventListener(CHAT_FORCE_SCROLL_BOTTOM_EVENT, handleForceScrollBottom as EventListener);
+        return () => {
+            window.removeEventListener(CHAT_FORCE_SCROLL_BOTTOM_EVENT, handleForceScrollBottom as EventListener);
+        };
+    }, [currentSessionId, goToBottom]);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || !currentSessionId || isDesktopExpandedInput) {
+            return;
+        }
+
+        const handleChatTurnKeyDown = (event: KeyboardEvent) => {
+            if (event.defaultPrevented || event.isComposing) {
+                return;
+            }
+
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+                return;
+            }
+
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+                return;
+            }
+
+            if (hasBlockingChatOverlay()) {
+                return;
+            }
+
+            const scrollContainer = scrollRef.current;
+            if (shouldIgnoreChatNavigationForFocus(document.activeElement, scrollContainer)) {
+                return;
+            }
+
+            if (shouldIgnoreChatNavigationTarget(event.target)) {
+                return;
+            }
+
+            event.preventDefault();
+            const offset = event.key === 'ArrowUp' ? -1 : 1;
+            void navigation.scrollByTurnOffset(offset, { resumePastEnd: false });
+        };
+
+        window.addEventListener('keydown', handleChatTurnKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleChatTurnKeyDown);
+        };
+    }, [currentSessionId, isDesktopExpandedInput, navigation, scrollRef]);
+
+    const lastScrolledSessionKeyRef = React.useRef<string | null>(null);
+
+    const isSessionHydrating =
+        Boolean(currentSessionId)
+        && !hasRenderableSessionSnapshot;
+    const retrySessionLoad = React.useCallback(() => {
+        if (!active || !currentSessionId) return;
+        void sync.ensureSessionRenderable(currentSessionId, true, effectiveSessionDirectory);
+    }, [currentSessionId, effectiveSessionDirectory, active, sync]);
+
+    // A load that failed while the session was expired retries itself the
+    // moment the re-login lands — the error screen should never outlive its
+    // cause.
+    React.useEffect(() => {
+        if (authSessionExpired) {
+            wasAuthExpiredRef.current = true;
+            return;
+        }
+        if (wasAuthExpiredRef.current) {
+            wasAuthExpiredRef.current = false;
+            if (sessionMessageLoadState.status === 'error') {
+                retrySessionLoad();
+            }
+        }
+    }, [authSessionExpired, retrySessionLoad, sessionMessageLoadState.status]);
+
+
+    React.useEffect(() => {
+        if (!active || !currentSessionId) return;
+        if (lastScrolledSessionKeyRef.current === currentSessionKey) return;
+
+        const hasHashTarget = typeof window !== 'undefined' && window.location.hash.length > 0;
+        lastScrolledSessionKeyRef.current = currentSessionKey;
+        if (hasHashTarget) {
+            // Hash navigation handler will scroll to target; we just release auto-follow.
+            onManualNavigation();
+            return;
+        }
+
+        const run = () => {
+            void restoreSnapshot();
+        };
+        if (typeof window === 'undefined') {
+            run();
+        } else {
+            window.requestAnimationFrame(run);
+        }
+    }, [active, currentSessionId, currentSessionKey, onManualNavigation, restoreSnapshot]);
+
+    React.useEffect(() => {
+        if (!active || !currentSessionId) return;
+        if (hasRenderableSessionSnapshot || spaceStopped) return;
+        void ensureSessionRenderable(currentSessionId);
+    }, [currentSessionId, ensureSessionRenderable, hasRenderableSessionSnapshot, active, spaceStopped]);
+
+    // A space that runs again answers the load the chat held, or the one that failed while it
+    // was going down: the user waiting on its start sees the chat without a retry.
+    const wasSpaceStoppedRef = React.useRef(spaceStopped);
+    React.useEffect(() => {
+        const wasStopped = wasSpaceStoppedRef.current;
+        wasSpaceStoppedRef.current = spaceStopped;
+        if (wasStopped && !spaceStopped && !hasRenderableSessionSnapshot) retrySessionLoad();
+    }, [hasRenderableSessionSnapshot, retrySessionLoad, spaceStopped]);
+
+    const composerSlotRef = React.useRef<HTMLDivElement | null>(null);
+    // The slot mounts after the first commit (behind the session gate), so
+    // the inset observer keys on the node itself rather than on mount.
+    const [composerSlotNode, setComposerSlotNode] = React.useState<HTMLDivElement | null>(null);
+    const attachComposerSlot = React.useCallback((node: HTMLDivElement | null) => {
+        composerSlotRef.current = node;
+        setComposerSlotNode(node);
+    }, []);
+    const previousComposerRectRef = React.useRef<DOMRect | null>(null);
+    const previousDraftOpenRef = React.useRef(draftOpen);
+    const previousDraftLayoutVisibleRef = React.useRef(draftOpen);
+    const [draftExitAnimating, setDraftExitAnimating] = React.useState(false);
+    const shouldAnimateDraftTransition = Boolean(
+        currentSessionId && materializedDraftSessionId === currentSessionId,
+    );
+    const draftPresentationExiting = draftExitAnimating
+        || (previousDraftOpenRef.current && !draftOpen && shouldAnimateDraftTransition);
+    const draftLayoutVisible = draftOpen || draftPresentationExiting;
+    // The composer floats over the transcript in a normal session view; the
+    // draft screen (centred composer) and the expanded editor keep it in flow.
+    // On mobile the keyboard choreography still moves the form inside the
+    // slot and shrinks the column around it, so the slot rides along unchanged.
+    const floatingComposer = !draftLayoutVisible && !isDesktopExpandedInput;
+    // The slot's height is published as `--chat-composer-inset` (the end fade
+    // reads it) and the list footer's tail spacer reads
+    // `--chat-composer-tail-inset` (see composerTailInset: a composer that
+    // grows takes the gap above it before it pushes the transcript). Both are
+    // written straight from the observer so composer growth never re-renders
+    // the timeline, and onto the reading elements, not the column: inherited
+    // from the column, every new composer line restyled the whole transcript
+    // (composerInsetReaders). While the composer is taller than at rest,
+    // `data-composer-grown` on the column hides the recap hint, which lies
+    // in the gap under the latest answer the composer then grows into.
+    React.useLayoutEffect(() => {
+        const slot = composerSlotNode;
+        const column = slot?.parentElement;
+        if (!floatingComposer || !slot || !column || !globalThis.ResizeObserver) return;
+        const update = () => {
+            const height = Math.round(slot.getBoundingClientRect().height);
+            // Only the composer itself at its natural height can set the
+            // resting height. What stands in for it (a subagent's read-only
+            // banner, the mobile comment composer: data-composer-transient)
+            // and a slot the pill morph pins for its tween (an inline height,
+            // measured with the keyboard's padding) are shorter, and kept as
+            // the floor they left the composer "grown" (recap hidden) until a
+            // reload.
+            const transient = slot.style.height !== '' || slot.querySelector('[data-composer-transient]') !== null;
+            const { tailInset, grown } = recordComposerSlotHeight(column, height, !transient);
+            publishComposerInsets(column, { inset: height, tailInset });
+            column.toggleAttribute('data-composer-grown', grown);
+        };
+        const observer = new ResizeObserver(update);
+        observer.observe(slot);
+        update();
+        return () => {
+            observer.disconnect();
+            forgetComposerSlot(column);
+            withdrawComposerInsets(column);
+            column.removeAttribute('data-composer-grown');
+        };
+    }, [composerSlotNode, floatingComposer]);
+    // The list owns the scroll element, so the shadows and the load-older
+    // trigger bind to its node rather than to a wrapper we render.
+    const scrollNodeRef = React.useMemo(() => ({ current: scrollNode }), [scrollNode]);
+    useScrollShadow(scrollNodeRef, {
+        observeMutations: false,
+        hideTopShadow: isMobile && stickyUserHeader,
+        // The glass composer is the visible end of the transcript.
+        hideBottomShadow: floatingComposer,
+    });
+
+    React.useLayoutEffect(() => {
+        if (draftOpen) {
+            setDraftExitAnimating(false);
+            return;
+        }
+        if (!previousDraftOpenRef.current || !shouldAnimateDraftTransition) return;
+
+        setDraftExitAnimating(true);
+        const timeoutId = window.setTimeout(() => setDraftExitAnimating(false), DRAFT_EXIT_DURATION_MS);
+        return () => window.clearTimeout(timeoutId);
+    }, [draftOpen, shouldAnimateDraftTransition]);
+
+    React.useLayoutEffect(() => {
+        previousDraftOpenRef.current = draftOpen;
+    }, [draftOpen]);
+
+    React.useLayoutEffect(() => {
+        const composerSlot = composerSlotRef.current;
+        if (!composerSlot) return;
+
+        const composerEditor = composerSlot.querySelector('[data-testid="chat-input"]');
+        const currentRect = composerEditor?.getBoundingClientRect() ?? composerSlot.getBoundingClientRect();
+        const previousRect = previousComposerRectRef.current;
+        const leftDraftLayout = previousDraftLayoutVisibleRef.current
+            && !draftLayoutVisible
+            && Boolean(currentSessionId);
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+        const shouldMoveComposer = leftDraftLayout && shouldAnimateDraftTransition;
+        if (shouldMoveComposer && previousRect && !reduceMotion && !useCompactDraftLayout && !isDesktopExpandedInput) {
+            const deltaX = previousRect.left - currentRect.left;
+            const deltaY = previousRect.top - currentRect.top;
+            composerSlot.animate(
+                [
+                    { transform: `translate(${deltaX}px, ${deltaY}px)` },
+                    { transform: 'translate(0, 0)' },
+                ],
+                { duration: COMPOSER_MOVE_DURATION_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+            );
+        }
+        previousComposerRectRef.current = currentRect;
+        previousDraftLayoutVisibleRef.current = draftLayoutVisible;
+        if (leftDraftLayout && currentSessionId) {
+            clearMaterializedDraftSession(currentSessionId);
+        }
+    }, [
+        clearMaterializedDraftSession,
+        currentSessionId,
+        draftLayoutVisible,
+        isDesktopExpandedInput,
+        shouldAnimateDraftTransition,
+        useCompactDraftLayout,
+    ]);
+
+	if (!currentSessionId && !draftOpen) {
+		// The auto-open effect runs on the next tick. Use a neutral background
+		// until then instead of flashing the standard empty state.
+		if (autoOpenDraft && !initError) {
+			return <div className="flex h-full flex-col bg-background" />;
+		}
+		return (
+			<div className="flex flex-col h-full bg-background">
+				<ChatEmptyState />
+			</div>
+		);
+	}
+
+    const sessionPlaceholder = (() => {
+        if (draftOpen || draftPresentationExiting) {
+            if (!useCompactDraftLayout || isDesktopExpandedInput) {
+                return null;
+            }
+            return <DraftWelcome exiting={draftPresentationExiting} />;
+        }
+
+        const showHydrationSkeleton = isSessionHydrating && sessionMessages.length === 0 && !sessionIsWorking;
+        if (showHydrationSkeleton) {
+            if (spaceStopped && effectiveSessionDirectory) {
+                return <SpaceChatPlaceholder directory={effectiveSessionDirectory} />;
+            }
+            if (sessionMessageLoadState.status === 'error') {
+                return (
+                    <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+                        <div className="max-w-sm text-center">
+                            <div className="mx-auto mb-3 flex size-9 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--status-error)_10%,transparent)] text-[var(--status-error)]">
+                                <Icon name="error-warning" className="size-4" />
+                            </div>
+                            <p className="typography-ui-label font-medium text-foreground">{t('chat.container.sessionLoadError.title')}</p>
+                            <p className="typography-meta mt-1 text-muted-foreground">
+                                {authSessionExpired
+                                    ? t('chat.container.sessionLoadError.authDescription')
+                                    : t('chat.container.sessionLoadError.description')}
+                            </p>
+                            {authSessionExpired ? (
+                                <Button variant="outline" size="sm" className="mt-4" onClick={() => useAuthSessionStore.getState().markReauthenticating()}>
+                                    {t('sessionAuth.expired.loginAction')}
+                                </Button>
+                            ) : (
+                                <Button variant="outline" size="sm" className="mt-4" onClick={retrySessionLoad}>
+                                    {t('chat.container.sessionLoadError.retry')}
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div
+                    data-chat-hydration-skeleton=""
+                    className={cn(
+                        'relative min-h-0',
+                        isDesktopExpandedInput ? 'pointer-events-none absolute inset-0 opacity-0' : 'flex-1',
+                    )}
+                    aria-hidden={isDesktopExpandedInput}
+                >
+                    <div className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-background pt-6" style={CHAT_SCROLL_STYLE}>
+                        <HydrationSkeleton waiting={!isDesktopExpandedInput} />
+                    </div>
+                </div>
+            );
+        }
+
+        if (sessionMessages.length === 0 && !sessionIsWorking) {
+            return (
+                <div
+                    className={cn(
+                        'relative min-h-0',
+                        isDesktopExpandedInput ? 'pointer-events-none absolute inset-0 opacity-0' : 'flex-1',
+                    )}
+                    aria-hidden={isDesktopExpandedInput}
+                />
+            );
+        }
+
+        return undefined;
+    })();
+
+    const sessionSurface = (
+        <ChatViewport
+            placeholder={sessionPlaceholder}
+            currentSessionId={currentSessionId ?? ''}
+            currentSessionKey={currentSessionKey ?? currentSessionId ?? ''}
+            isDesktopExpandedInput={isDesktopExpandedInput}
+            isMobile={isMobile}
+            floatingComposer={floatingComposer}
+            statusRowClearance={sessionIsWorking ? composerOverlayHeight : 0}
+            directory={effectiveSessionDirectory}
+            scrollRef={scrollRef}
+            registerList={registerList}
+            captureOutgoingPosition={captureOutgoingPosition}
+            onIsAtEndChange={onIsAtEndChange}
+            onListMetricsChange={onListMetricsChange}
+            onTimelineDataChange={onTimelineDataChange}
+            messageListRef={messageListRef}
+            renderedMessages={timelineController.renderedMessages}
+            isLoadingOlder={timelineController.isLoadingOlder}
+            sessionIsWorking={sessionIsWorking}
+            streamingMessageId={streamingMessageId}
+            activeStreamingPhase={activeStreamingPhase}
+            retryOverlay={retryOverlay}
+            scrollToBottom={resumeToLatestInstant}
+            onScrollbarDrag={onManualNavigation}
+            endPinningReleased={userOwnsScroll}
+            revealWaited={revealWaited}
+            revealGate={revealGate}
+            isProgrammaticFollowActive={isFollowingProgrammatically}
+            showLoadOlderButton={showLoadOlderButton}
+            onLoadOlder={handleLoadOlderClick}
+            turnIds={timelineController.turnIds}
+            activeTurnId={timelineController.activeTurnId}
+            onSelectTurn={handlePromptNavigatorSelect}
+            showPromptNavigator={showPromptNavigator}
+            canLoadEarlierPrompts={canLoadEarlierPrompts}
+            isLoadingOlderPrompts={timelineController.isLoadingOlder}
+            onLoadEarlierPrompts={handleLoadOlderClick}
+        />
+    );
+
+	return (
+		<div
+			ref={attachColumnRoot}
+			// App-wide handlers (double Escape to stop) find the pinned
+			// column's session and whether it runs here.
+			data-chat-column={pinned ? 'pinned' : 'main'}
+			data-chat-session-id={pinned ? currentSessionId ?? undefined : undefined}
+			data-chat-working={pinned && sessionIsWorking ? 'true' : undefined}
+			className="flex h-full min-h-0 bg-background"
+			style={chatTypographyStyle}
+		>
+		<ChatColumnSessionContext.Provider value={chatColumnSession}>
+		<ChatColumnActionsContext.Provider value={columnActions}>
+		{/* One mobile comment controller per column: selections in this column
+		    comment into this column's composer, never a sibling's. */}
+		<MobileCommentComposerContext.Provider value={mobileCommentComposer}>
+		<ChatQuoteHighlightContext.Provider value={chatQuoteHighlights}>
+		<ChatQuoteHighlightLayer
+			store={chatQuoteHighlights}
+			scrollNode={scrollNode}
+			loadHistoryUntilMessage={loadQuoteSource}
+			scrollToMessage={scrollToQuoteSource}
+			resolveUiPageMessageId={resolveUiPageMessageId}
+			scrollToUiPageRow={scrollToUiPageRow}
+		/>
+		{scrollNode && currentSessionId ? <HoistedUiPageSelection key={currentSessionKey ?? currentSessionId} scrollNode={scrollNode} sessionId={currentSessionId} /> : null}
+		<div
+			ref={chatRootRef}
+			data-composer-bound
+			// A live reply can outrun the follow glide; while it streams and the
+			// view follows it (no scroll-to-bottom pill, no reader gesture), the
+			// transcript fades out above the composer (index.css). Once the
+			// reader leaves the end, the rows slide under its glass again.
+			data-live-tail={sessionStatusForCurrent.type === 'busy' && isFollowingProgrammatically ? 'true' : undefined}
+			className="relative flex min-w-0 flex-1 flex-col h-full bg-background"
+		>
+			{returnToParentButton}
+			{sessionSurface}
+			{chatSearch.open && currentSessionId && messageSearchEnabled ? (
+				<div className="pointer-events-none absolute inset-e-3 top-2 z-20">
+					<ChatSearchBar
+						sessionId={currentSessionId}
+						scrollNode={scrollNode}
+						focusRequest={chatSearch.focusRequest}
+						onClose={closeChatSearch}
+					/>
+				</div>
+			) : null}
+>>>>>>> bc50ba56a
 
          <div
           ref={attachComposerSlot}
@@ -1849,6 +3133,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               {/* The glass chip itself is rendered inside
                                     StatusRow (its root is a size container
                                     that cannot shrink-wrap). */}
+<<<<<<< HEAD
               <div
                ref={onStatusOverlayNode}
                className={cn(
@@ -1891,6 +3176,24 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {promptReadOnly ? (
            <>
             {/* The docks live inside ChatInput, which a read-only
+=======
+                                <div
+                                    ref={onStatusOverlayNode}
+                                    className={cn(
+                                        '[&:not(:has(*))]:hidden',
+                                        userOwnsScroll ? 'pointer-events-none' : 'pointer-events-auto',
+                                    )}
+                                >
+                                    <StatusRowContainer />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {promptReadOnly ? (
+                    <>
+                        {/* The docks live inside ChatInput, which a read-only
+>>>>>>> bc50ba56a
                             chat does not mount. A subagent still asks for
                             permissions and answers, and they must be answerable
                             where the user is looking; the parent shows the same
@@ -1949,6 +3252,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           onLoadEarlier={handleLoadOlderClick}
          />
         </div>
+<<<<<<< HEAD
        </ChatQuoteHighlightContext.Provider>
       </MobileCommentComposerContext.Provider>
      </ChatColumnExpandedInputContext.Provider>
@@ -1969,4 +3273,27 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
    ) : null}
   </div>
  );
+=======
+        </ChatQuoteHighlightContext.Provider>
+        </MobileCommentComposerContext.Provider>
+        </ChatColumnActionsContext.Provider>
+        </ChatColumnSessionContext.Provider>
+        {/* Kept mounted while it could ever show, so it can fade out and back
+            in; `visible` drives that, `reserved` keeps its column in the right
+            slot while the context panel covers it, and `besidePanel` keeps it
+            beside the open panel. */}
+        {workStatusPanelMountable && workStatusHost ? createPortal(
+            <WorkStatusPanel
+                visible={showWorkStatusPanel}
+                reserved={workStatusReserved}
+                besidePanel={workStatusRoomyBesidePanel}
+                sessionId={currentSessionId ?? null}
+                directory={workStatusDirectory ?? null}
+                repositoryEnabled={!isManagedChatContext}
+            />,
+            workStatusHost,
+        ) : null}
+        </div>
+    );
+>>>>>>> bc50ba56a
 };

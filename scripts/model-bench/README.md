@@ -4,7 +4,11 @@ Measures how a model handles real OpenChamber work, so the team can decide which
 
 ## Measuring a new model
 
+<<<<<<< HEAD
 1. Find the model id: `omp models | grep <name>` (format `provider/model`, optionally `#variant`).
+=======
+1. Find the model id: `opencode models | grep <name>` (format `provider/model`, optionally `#variant`).
+>>>>>>> bc50ba56a
 2. Run it on every task, level 3 tasks twice:
 
    ```sh
@@ -19,9 +23,15 @@ Options: `--timeout <minutes>` per run (default 30), `--keep` keeps each run's c
 ## What a run is
 
 - A fresh copy of the repository at the commit's parent, made with `git archive`, so it has no history the model could read the fix from, and its dependencies installed from that commit's lockfile.
+<<<<<<< HEAD
 - `omp run` with the `build` agent in that copy, under a private agent config: no OpenChamber plugins, no personal `AGENTS.md`, no web tools, file tools denied outside the copy.
 - A watchdog stops a run at the time limit or after 6 minutes without any event, and kills every process it started. A tool call that names the real checkout stops the whole bench; one that reaches this repository on GitHub stops the run and marks it `leaked`.
 - After the run: the commit's own tests are dropped in and run, and the copy and its agent session are deleted.
+=======
+- `opencode run` with the `build` agent in that copy, under a private OpenCode config: no OpenChamber plugins, no personal `AGENTS.md`, no web tools, file tools denied outside the copy.
+- A watchdog stops a run at the time limit or after 6 minutes without any event, and kills every process it started. A tool call that names the real checkout stops the whole bench; one that reaches this repository on GitHub stops the run and marks it `leaked`.
+- After the run: the commit's own tests are dropped in and run, and the copy and its OpenCode session are deleted.
+>>>>>>> bc50ba56a
 
 Results: one line per run in `~/.config/openchamber/model-bench/results.jsonl` (time, steps, tokens, tests, stop reason); artifacts in `~/.cache/openchamber-model-bench/results/<run>/` (`model.patch`, `reference.patch`, `events.jsonl`, `tests.txt`, `answer.txt` for reviews).
 
@@ -39,4 +49,8 @@ Reference tests alone are a weak signal: three tasks (`testsAdvisory` in `tasks.
 
 ## Results so far
 
+<<<<<<< HEAD
 The first full run (10 models, judged by Sol, Opus and DeepSeek V4.1 Flash) put GPT-6.1 Sol and DeepSeek V4.1 Flash on top for code, with Opus and GLM-5.3-Flash close behind; every model was weak at finding visual bugs in review. The agent roster in `~/.omp/agent` follows from it.
+=======
+The first full run (10 models, judged by Sol, Opus and DeepSeek V4.1 Flash) put GPT-6.1 Sol and DeepSeek V4.1 Flash on top for code, with Opus and GLM-5.3-Flash close behind; every model was weak at finding visual bugs in review. The agent roster in `~/.config/opencode/agents` and `.opencode/agent` follows from it.
+>>>>>>> bc50ba56a

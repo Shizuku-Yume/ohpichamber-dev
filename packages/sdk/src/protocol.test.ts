@@ -8,7 +8,16 @@ import {
   GUEST_ATTACH_DATA_MAX,
   GUEST_ATTACH_TITLE_MAX,
   GUEST_COMPOSE_TEXT_MAX,
+<<<<<<< HEAD
+=======
+  GUEST_GENERATE_PROMPT_MAX,
+  GUEST_GENERATE_SYSTEM_MAX,
+  GUEST_GENERATE_TIMEOUT_MS,
+  isGuestAttachItem,
+  isGuestLinkItem,
+>>>>>>> bc50ba56a
   readHostMessage,
+  type JsonValue,
 } from './contract.ts';
 import { GUEST_POPOVER_DATA_MAX, isGuestPopoverRequest } from './popover.ts';
 import {
@@ -943,6 +952,7 @@ describe('actions, commands, and badge wire shapes', () => {
   });
 });
 
+<<<<<<< HEAD
 describe('late generate protocol', () => {
   test('accepts the late generate listen notice and a late answer, and drops a malformed one', () => {
     const envelope = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION };
@@ -953,5 +963,25 @@ describe('late generate protocol', () => {
     expect(parseHostMessage(failed)).toEqual(failed);
     expect(parseHostMessage({ ...answered, payload: { request: { prompt: '' }, ok: true, result: { text: 'x' } } })).toBeNull();
     expect(parseHostMessage({ ...failed, payload: { ...failed.payload, code: 'NOPE' } })).toBeNull();
+=======
+describe('the link item', () => {
+  const push = (item: JsonValue) => parseHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'item', payload: { item } });
+
+  test('reaches the guest as a link, never as a composer chip', () => {
+    const item = { kind: 'link', identifier: 'DEMO-12', url: 'https://tasks.example.com/tasks/DEMO-12' };
+    const message = push(item);
+    expect(message?.type === 'item' && message.payload.item).toEqual(item);
+    if (message?.type === 'item') {
+      expect(isGuestLinkItem(message.payload.item)).toBe(true);
+      expect(isGuestAttachItem(message.payload.item)).toBe(false);
+    }
+    expect(push({ kind: 'link', identifier: 'DEMO-12' })?.type).toBe('item');
+  });
+
+  test('refuses a link item with extra or empty fields', () => {
+    expect(push({ kind: 'link', identifier: '' })).toBeNull();
+    expect(push({ kind: 'link', identifier: 'DEMO-12', title: 'x' })).toBeNull();
+    expect(push({ kind: 'link', identifier: 'D'.repeat(129) })).toBeNull();
+>>>>>>> bc50ba56a
   });
 });

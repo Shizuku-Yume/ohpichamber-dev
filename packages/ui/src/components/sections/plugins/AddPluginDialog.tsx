@@ -227,6 +227,7 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
       className="h-10"
      />
 
+<<<<<<< HEAD
      <div className="flex flex-col gap-4">
       {tab === 'marketplace' ? (
        <>
@@ -269,6 +270,146 @@ export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenCh
           <Icon name="settings-3" className="size-3.5" />
           {t('settings.plugins.marketplace.sourcesButton')}
          </Button>
+=======
+        <SortableTabsStrip
+          items={tabs}
+          activeId={tab}
+          onSelect={(id) => handleTabChange(id as TabKey)}
+          layoutMode="fit"
+          variant="active-pill"
+          pillSize="form"
+          className="h-8"
+        />
+
+        <div className="flex flex-col gap-4">
+          {(tab === 'npm' || tab === 'path') && (
+            <>
+              <div data-settings-item="plugins.spec" className="flex flex-col gap-1.5">
+                <label htmlFor="plugin-spec" className="typography-ui-label text-foreground">
+                  {t('settings.plugins.page.field.spec')}
+                </label>
+                <Input
+                  id="plugin-spec"
+                  value={spec}
+                  onChange={(e) => {
+                    setSpec(e.target.value);
+                    setSpecRejected(false);
+                  }}
+                  placeholder={t('settings.plugins.page.field.spec.placeholder')}
+                  aria-invalid={specRejected || undefined}
+                  disabled={submitting}
+                />
+                {specEmpty && (
+                  <p className="typography-meta text-muted-foreground">
+                    {t('settings.plugins.validation.specRequired')}
+                  </p>
+                )}
+                {specRejected && (
+                  <p className="typography-meta text-[var(--status-error)]">
+                    {t('settings.plugins.validation.specUnloadable')}
+                  </p>
+                )}
+              </div>
+
+              <div data-settings-item="plugins.options" className="flex flex-col gap-1.5">
+                <label htmlFor="plugin-options" className="typography-ui-label text-foreground">
+                  {t('settings.plugins.page.field.options')}
+                </label>
+                <Textarea
+                  id="plugin-options"
+                  dir="ltr"
+                  value={optionsJson}
+                  onChange={(e) => setOptionsJson(e.target.value)}
+                  rows={5}
+                  className="font-mono"
+                  hasError={optionsInvalid}
+                  disabled={submitting}
+                />
+                {optionsInvalid && (
+                  <p className="typography-meta text-[var(--status-error)]">
+                    {t('settings.plugins.page.field.options.invalidJson')}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
+          {tab === 'file' && (
+            <>
+              <div data-settings-item="plugins.content" className="flex flex-col gap-1.5">
+                <label htmlFor="plugin-filename" className="typography-ui-label text-foreground">
+                  {t('settings.plugins.page.field.fileName')}
+                </label>
+                <Input
+                  id="plugin-filename"
+                  value={fileName}
+                  onChange={(e) => setFileName(e.target.value)}
+                  placeholder="my-plugin.ts"
+                  aria-invalid={fileNameInvalid || undefined}
+                  disabled={submitting}
+                />
+                {fileNameInvalid && (
+                  <p className="typography-meta text-[var(--status-error)]">
+                    {t('settings.plugins.validation.fileName')}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="plugin-content" className="typography-ui-label text-foreground">
+                  {t('settings.plugins.page.field.content')}
+                </label>
+                <Textarea
+                  id="plugin-content"
+                  dir="ltr"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={16}
+                  className="font-mono"
+                  disabled={submitting}
+                />
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <span className="typography-ui-label text-foreground">
+              {t('settings.plugins.page.field.scope')}
+            </span>
+            <div className="flex items-center gap-4">
+              {(['user', 'project'] as const).map((value) => {
+                const selected = scope === value;
+                const label =
+                  value === 'user'
+                    ? t('settings.plugins.scope.user')
+                    : t('settings.plugins.scope.project');
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setScope(value)}
+                    disabled={submitting}
+                    className="flex items-center gap-2 py-1 text-start disabled:opacity-50"
+                  >
+                    <Radio
+                      checked={selected}
+                      onChange={() => setScope(value)}
+                      ariaLabel={label}
+                    />
+                    <span
+                      className={cn(
+                        'typography-ui-label font-normal',
+                        selected ? 'text-foreground' : 'oc-title-rest',
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+>>>>>>> bc50ba56a
         </div>
 
         {(catalog?.marketplaceSources.length ?? 0) > 0 ? (

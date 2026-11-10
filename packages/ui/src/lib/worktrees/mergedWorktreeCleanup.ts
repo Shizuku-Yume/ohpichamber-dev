@@ -1,7 +1,11 @@
 import type { GitStatus } from '@/lib/api/types';
+<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { normalizePath } from '@/lib/pathNormalization';
+=======
+import type { Session } from '@/lib/opencode/model';
+>>>>>>> bc50ba56a
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SourceControlProvider } from '@/lib/source-control/types';
 
@@ -64,6 +68,7 @@ export const hasUnmergedCommits = async (input: {
   return input.status.tracking ? input.status.ahead > 0 : null;
 };
 
+<<<<<<< HEAD
 /** Sessions working in the worktree, its subdirectories included. */
 const sessionsInWorktree = (sessions: readonly Session[], worktreePath: string): Session[] => {
   const root = normalizePath(worktreePath);
@@ -74,6 +79,8 @@ const sessionsInWorktree = (sessions: readonly Session[], worktreePath: string):
   });
 };
 
+=======
+>>>>>>> bc50ba56a
 export type MergedWorktreeOutcome =
   | { kind: 'removed'; candidate: MergedWorktreeCandidate; archivedCount: number }
   | { kind: 'archived'; candidate: MergedWorktreeCandidate; archivedCount: number }
@@ -81,16 +88,27 @@ export type MergedWorktreeOutcome =
 
 export type MergedWorktreeCleanupDeps = {
   listCandidates: () => MergedWorktreeCandidate[];
+<<<<<<< HEAD
   /** Sessions are archived once per worktree and PR, so work continued in a kept worktree is never archived again. */
+=======
+  /** Archived or taken back for this PR, or waiting out the delay after a failed archive. */
+>>>>>>> bc50ba56a
   isHandled: (candidate: MergedWorktreeCandidate) => boolean;
+  /** Archived or restored: done with for this PR. */
   markHandled: (candidate: MergedWorktreeCandidate) => void;
-  getActiveSessions: () => readonly Session[];
-  isSessionIdle: (sessionId: string) => boolean;
-  isSessionOpen: (sessionId: string) => boolean;
-  /** The worktree is the directory on screen, e.g. a new-session draft there. */
-  isWorktreeOpen: (path: string) => boolean;
+  /** The archive failed: try again later, each time after a longer delay. */
+  markFailed: (candidate: MergedWorktreeCandidate) => void;
+  /** Sessions to archive with the worktree, its subdirectories and subsessions included. */
+  getWorktreeSessions: (path: string) => readonly Session[];
+  /**
+   * Whether anything works there now: an agent or a background command runs,
+   * or it is on screen. Only "free" lets the archive go; "unknown" waits.
+   */
+  readWorktreeUse: (path: string) => Promise<'free' | 'busy' | 'inUse' | 'unknown'>;
   /** Something here archives or removes it right now (Done, a delete). */
   isWorktreeRemoving: (path: string) => boolean;
+  /** False once the app switched servers since the pass began. */
+  isCurrentRuntime: () => boolean;
   /** The user restored it from the archive since the last pass; answers once. */
   takeRestored: (path: string) => boolean;
   readWorktreeState: (candidate: MergedWorktreeCandidate) => Promise<{ isDirty: boolean | null; hasUnmergedCommits: boolean | null }>;
@@ -113,13 +131,18 @@ export async function runMergedWorktreeCleanup(
   options: { recheckKept: boolean } = { recheckKept: true },
 ): Promise<void> {
   for (const candidate of deps.listCandidates()) {
+<<<<<<< HEAD
     if (deps.isWorktreeRemoving(candidate.worktree.path)) continue;
+=======
+    if (deps.isHandled(candidate)) continue;
+>>>>>>> bc50ba56a
     // Restoring a merged worktree is the user taking it back: this PR is done
     // with, and only a later one cleans it up again.
     if (deps.takeRestored(candidate.worktree.path)) {
       deps.markHandled(candidate);
       continue;
     }
+<<<<<<< HEAD
     const handled = deps.isHandled(candidate);
     if (handled && !options.recheckKept) continue;
     const sessions = sessionsInWorktree(deps.getActiveSessions(), candidate.worktree.path);
@@ -161,7 +184,21 @@ export async function runMergedWorktreeCleanup(
         await deps.archiveWorktree(candidate, sessions);
         deps.report({ kind: 'archived', candidate, archivedCount: sessionIds.length });
       }
+=======
+    // Read before the removal check: a Done may start while the host answers.
+    const use = await deps.readWorktreeUse(candidate.worktree.path);
+    // Another server's worktree with the same path must not be archived.
+    if (!deps.isCurrentRuntime()) return;
+    if (use !== 'free' || deps.isWorktreeRemoving(candidate.worktree.path)) continue;
+    const sessions = deps.getWorktreeSessions(candidate.worktree.path);
+
+    try {
+      await deps.archiveWorktree(candidate, sessions);
+      deps.markHandled(candidate);
+      deps.report({ kind: 'archived', candidate, archivedCount: sessions.length });
+>>>>>>> bc50ba56a
     } catch (error) {
+      deps.markFailed(candidate);
       deps.report({ kind: 'failed', candidate, error: error instanceof Error ? error : new Error(String(error)) });
     }
   }

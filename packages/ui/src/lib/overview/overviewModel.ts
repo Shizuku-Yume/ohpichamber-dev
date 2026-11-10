@@ -12,11 +12,16 @@ export const OVERVIEW_STALE_WORKTREE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 /** With In work off, sessions touched within this window stand in for the ones in work. */
 export const OVERVIEW_UNTRACKED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
+<<<<<<< HEAD
 /**
  * What keeps a session's turn open (see `useSessionTurnActivity`), or that the
  * user asked to follow a pull request from it.
  */
 export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'pullRequest';
+=======
+/** What keeps a session's turn open (see `useSessionTurnActivity`). */
+export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'image' | 'pullRequest';
+>>>>>>> bc50ba56a
 
 /** What a session waits on: a permission, or a question, form or page that needs an answer. */
 export type OverviewBlocking = 'permission' | 'question';

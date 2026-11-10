@@ -29,12 +29,12 @@ import {
  type ScheduledTask,
  type ScheduledTaskStatus,
 } from '@/lib/scheduledTasksApi';
-import { ScheduledTaskEditorDialog } from './ScheduledTaskEditorDialog';
-import { canonicalizeTimezone } from '@/lib/timezones';
+import { ScheduledTaskEditorDialog, type ScheduledTaskScopeOption } from './ScheduledTaskEditorDialog';
 import { getModelDisplayName } from '@/lib/modelDisplay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
+<<<<<<< HEAD
 
 const scheduleTimes = (task: ScheduledTask): string[] => {
  const raw = Array.isArray(task.schedule.times)
@@ -43,6 +43,13 @@ const scheduleTimes = (task: ScheduledTask): string[] => {
  const valid = raw.filter((value) => typeof value === 'string' && /^([01]\d|2[0-3]):([0-5]\d)$/.test(value));
  return Array.from(new Set(valid)).sort((a, b) => a.localeCompare(b));
 };
+=======
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { createTaskRequestGate, mayCommitTaskList, mayEndTaskLoad } from './scheduledTasksRequests';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { formatSchedule } from './scheduledTaskSchedule';
+
+>>>>>>> bc50ba56a
 
 /** Show the captured model selection, or explain that the task follows defaults. */
 const TaskModelLine: React.FC<{ task: ScheduledTask }> = ({ task }) => {
@@ -61,6 +68,7 @@ const TaskModelLine: React.FC<{ task: ScheduledTask }> = ({ task }) => {
  );
 };
 
+<<<<<<< HEAD
 const formatSchedule = (task: ScheduledTask, t: ReturnType<typeof useI18n>['t']): string => {
  const timesLabel = scheduleTimes(task).join(', ') || '--:--';
  const formatWeekday = (value: number) => {
@@ -119,6 +127,8 @@ const formatSchedule = (task: ScheduledTask, t: ReturnType<typeof useI18n>['t'])
  }
  return t('sessions.scheduledTasks.dialog.schedule.cron', { cron: task.schedule.cron || '' });
 };
+=======
+>>>>>>> bc50ba56a
 
 const formatClockTime = (value: number | undefined, timeFormatPreference: TimeFormatPreference): string => {
  if (!value || !Number.isFinite(value)) {
@@ -186,6 +196,7 @@ const TaskTargetLine: React.FC<{ sessionId: string }> = ({ sessionId }) => {
 // Next to "Paused" on a repository loop that waits for the user: the icon
 // says why, the sentence is its title. A loop the user paused has none.
 const LoopApprovalMark: React.FC<{ reason: NonNullable<ScheduledTask['loopApproval']> }> = ({ reason }) => {
+<<<<<<< HEAD
  const { t } = useI18n();
  const label = reason === 'outdated'
   ? t('sessions.scheduledTasks.dialog.loopFile.changedSinceEnabled')
@@ -195,6 +206,17 @@ const LoopApprovalMark: React.FC<{ reason: NonNullable<ScheduledTask['loopApprov
    <Icon name={reason === 'outdated' ? 'file-edit' : 'git-branch'} className="size-3.5" />
   </span>
  );
+=======
+  const { t } = useI18n();
+  const label = reason === 'outdated'
+    ? t('sessions.scheduledTasks.dialog.loopFile.changedSinceEnabled')
+    : t('sessions.scheduledTasks.dialog.loopFile.enableOnThisComputer');
+  return (
+    <span role="img" aria-label={label} title={label} className="inline-flex text-muted-foreground">
+      <Icon name={reason === 'outdated' ? 'file-edit' : 'git-branch'} className="h-3.5 w-3.5" />
+    </span>
+  );
+>>>>>>> bc50ba56a
 };
 
 const toneStyle = (tone: StatusTone): React.CSSProperties => {
@@ -242,6 +264,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
   [projects, selectedProjectID],
  );
 
+<<<<<<< HEAD
  const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
   const displayLabel = project.label?.trim() || formatDirectoryName(project.path, homeDirectory || undefined);
   const projectIconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
@@ -267,6 +290,646 @@ export function ScheduledTasksView({ layout, onLeave }: {
        }}
        className="h-full w-full object-contain"
        fallback={fallbackIcon}
+=======
+  const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
+    const displayLabel = project.label?.trim() || formatDirectoryName(project.path, homeDirectory || undefined);
+    const projectIconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+    const iconColor = resolveProjectColor(project.color) ?? undefined;
+    const fallbackIcon = projectIconName ? (
+      <Icon name={projectIconName} className="h-3.5 w-3.5 shrink-0" style={iconColor ? { color: iconColor } : undefined} />
+    ) : (
+      <Icon name="folder" className="h-3.5 w-3.5 shrink-0 text-muted-foreground"  style={iconColor ? { color: iconColor } : undefined}/>
+    );
+
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {project.iconImage ? (
+          <span
+            className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-hidden rounded-[3px]"
+            style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+          >
+            <ProjectIconImage
+              project={{ id: project.id, iconImage: project.iconImage ?? null }}
+              options={{
+                themeVariant: currentTheme.metadata.variant,
+                iconColor: currentTheme.colors.surface.foreground,
+              }}
+              className="h-full w-full object-contain"
+              fallback={fallbackIcon}
+            />
+          </span>
+        ) : fallbackIcon}
+        <span className="truncate">{displayLabel}</span>
+      </span>
+    );
+  }, [homeDirectory, currentTheme.metadata.variant, currentTheme.colors.surface.foreground]);
+
+  // Every selection change routes through here once, so the mirror ref and
+  // the state can never disagree about which scope is on screen.
+  const selectProjectScope = React.useCallback((nextProjectID: string) => {
+    selectedProjectRef.current = nextProjectID;
+    setSelectedProjectID(nextProjectID);
+  }, []);
+
+  // The only writer of the task list. It refuses a list that does not belong
+  // to the scope on screen: a project change is the selection's to answer,
+  // and a slow fetch for an earlier project has no say over this view.
+  const commitTaskList = React.useCallback((projectID: string, nextTasks: ScheduledTask[]) => {
+    if (!mayCommitTaskList(projectID, selectedProjectRef.current)) {
+      return;
+    }
+    listOwnerRef.current = projectID;
+    setTasks(nextTasks);
+  }, []);
+
+  const reloadTasks = React.useCallback(async (projectID: string, options?: { silent?: boolean }) => {
+    // A newer request for the same project supersedes an older one; a
+    // request for another project is answered by the selection, since
+    // commitTaskList refuses anything that is not on screen.
+    if (!projectID) {
+      commitTaskList('', []);
+      setLoading(false);
+      return;
+    }
+    const request = taskRequestGate.begin(projectID);
+    if (!options?.silent) {
+      setLoading(true);
+    }
+    try {
+      const nextTasks = await fetchScheduledTasks(projectID);
+      if (!taskRequestGate.isLatest(projectID, request)) {
+        return; // A newer fetch for this project owns the list; drop this one.
+      }
+      nextTasks.sort((a, b) => {
+        if (a.enabled !== b.enabled) {
+          return a.enabled ? -1 : 1;
+        }
+        const byName = a.name.localeCompare(b.name);
+        if (byName !== 0) {
+          return byName;
+        }
+        return (a.state?.nextRunAt || Number.MAX_SAFE_INTEGER) - (b.state?.nextRunAt || Number.MAX_SAFE_INTEGER);
+      });
+      commitTaskList(projectID, nextTasks);
+    } catch (error) {
+      if (!taskRequestGate.isLatest(projectID, request)) {
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.loadFailed'));
+      if (!options?.silent) {
+        commitTaskList(projectID, []);
+      }
+    } finally {
+      // The latest load for the scope on screen decides the spinner, silent
+      // or not. A response for another scope is refused by commitTaskList
+      // and must not clear the new selection's pending load either.
+      if (mayEndTaskLoad(taskRequestGate, projectID, request, selectedProjectRef.current)) {
+        setLoading(false);
+      }
+    }
+  }, [commitTaskList, taskRequestGate, t]);
+
+  // Keyed on the stored list: a "Recent" reorder must not reset the chosen scope.
+  React.useEffect(() => {
+    const preferredProjectID = activeProject?.id || storedProjects[0]?.id || (chatsAvailable ? CHAT_DRAFT_PROJECT_ID : '');
+    selectProjectScope(preferredProjectID);
+    if (preferredProjectID) {
+      void reloadTasks(preferredProjectID);
+    } else {
+      commitTaskList('', []);
+      setLoading(false);
+    }
+  }, [activeProject, storedProjects, chatsAvailable, reloadTasks, selectProjectScope, commitTaskList]);
+
+  React.useEffect(() => {
+    let timeoutID: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type !== 'scheduled-task-ran') {
+        return;
+      }
+      if (event.projectId !== selectedProjectID) {
+        return;
+      }
+      if (timeoutID) {
+        clearTimeout(timeoutID);
+      }
+      timeoutID = setTimeout(() => {
+        void reloadTasks(selectedProjectID, { silent: true });
+      }, 400);
+    });
+    return () => {
+      if (timeoutID) {
+        clearTimeout(timeoutID);
+      }
+      unsubscribe();
+    };
+  }, [selectedProjectID, reloadTasks]);
+
+  const handleSaveTask = React.useCallback(async (taskDraft: Partial<ScheduledTask>, targetProjectID: string) => {
+    // An existing task belongs to the scope whose list displayed it, captured
+    // when the editor opened, so a scope switch in the list meanwhile cannot
+    // misfile it. The editor's own scope field names where it is saved.
+    const ownerProjectID = taskDraft.id ? editorOwnerRef.current : '';
+    const projectID = targetProjectID || ownerProjectID || selectedProjectID;
+    if (!projectID) {
+      throw new Error(t('sessions.scheduledTasks.dialog.error.chooseProjectFirst'));
+    }
+    if (taskDraft.id && ownerProjectID && projectID !== ownerProjectID) {
+      // Tasks are stored per project, so a move is a new task there and a
+      // delete here. The new one is written first: a failed delete leaves
+      // two copies the user is told about, never none.
+      const { id: originalTaskID, state: _state, ...movedTask } = taskDraft;
+      await upsertScheduledTask(projectID, movedTask);
+      try {
+        await deleteScheduledTask(ownerProjectID, originalTaskID);
+      } catch {
+        toast.error(t('sessions.scheduledTasks.dialog.toast.moveLeftOriginal'));
+      }
+    } else {
+      await upsertScheduledTask(projectID, taskDraft);
+    }
+    // Refresh what is on screen: normally the scope that was just saved; if
+    // the user switched while the editor was open, the newer scope's list is
+    // what the view belongs to and it must stay consistent.
+    if (selectedProjectID) {
+      await reloadTasks(selectedProjectID);
+    }
+    toast.success(t('sessions.scheduledTasks.dialog.toast.saved'));
+  }, [selectedProjectID, reloadTasks, t]);
+
+  const handleToggleEnabled = React.useCallback(async (task: ScheduledTask, enabled: boolean) => {
+    // The row's own project decides where the mutation lands: a task shown
+    // under a scope belongs to that scope, even if the user has already
+    // switched and the selection now names another project.
+    const projectID = listOwnerRef.current;
+    if (!projectID) {
+      return;
+    }
+    setMutatingTaskID(task.id);
+    // The reload brings the reason back if the server keeps the loop paused.
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, enabled, loopApproval: undefined } : item)));
+    try {
+      if (task.loopFile) {
+        await setLoopScheduledTaskEnabled(projectID, task.id, enabled);
+      } else {
+        await upsertScheduledTask(projectID, { ...task, enabled });
+      }
+      await reloadTasks(projectID, { silent: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.updateFailed'));
+      await reloadTasks(projectID, { silent: true });
+    } finally {
+      setMutatingTaskID(null);
+    }
+  }, [reloadTasks, t]);
+
+  const handleDeleteTask = React.useCallback(async (task: ScheduledTask) => {
+    const projectID = listOwnerRef.current;
+    if (!projectID) {
+      return;
+    }
+    const confirmed = window.confirm(task.loopFile
+      ? t('sessions.scheduledTasks.dialog.confirm.deleteLoopFile', { taskName: task.name })
+      : t('sessions.scheduledTasks.dialog.confirm.deleteTask', { taskName: task.name }));
+    if (!confirmed) {
+      return;
+    }
+
+    setMutatingTaskID(task.id);
+    try {
+      if (task.loopFile) {
+        await deleteScheduledTaskLoopFile(projectID, task.id);
+      } else {
+        await deleteScheduledTask(projectID, task.id);
+      }
+      await reloadTasks(projectID, { silent: true });
+      toast.success(t('sessions.scheduledTasks.dialog.toast.deleted'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.deleteFailed'));
+    } finally {
+      setMutatingTaskID(null);
+    }
+  }, [reloadTasks, t]);
+
+  const handleEditTask = React.useCallback((task: ScheduledTask) => {
+    if (!task.loopFile) {
+      setEditorTask(task);
+      // The editor saves into the task's own project, captured now, later
+      // switches of the selected scope must not redirect the save.
+      editorOwnerRef.current = listOwnerRef.current;
+      setEditorOpen(true);
+      return;
+    }
+    const ownerProject = projects.find((project) => project.id === listOwnerRef.current);
+    if (!ownerProject?.path) {
+      return;
+    }
+    useFilesViewTabsStore.getState().setSelectedPath(ownerProject.path, task.loopFile, { allowOutsideRoot: true });
+    useUIStore.getState().openContextFile(ownerProject.path, task.loopFile);
+    onLeave('file');
+  }, [projects, onLeave]);
+
+  // The session of the task's latest run; a run records it as soon as it
+  // creates the session, so a running or failed run has one too. The session
+  // owns its directory: one in a linked worktree must not open on the
+  // project root, so the session's own record decides, not the selection.
+  const openLastRunSession = React.useCallback((task: ScheduledTask) => {
+    const sessionId = task.state?.lastSessionId;
+    if (!sessionId) return;
+    void openSessionFromRoute(sessionId);
+    // A run can create its session after the global list last loaded; that
+    // list cannot name the folder until it is fetched again.
+    if (!useGlobalSessionsStore.getState().entityById.has(sessionId)) {
+      void refreshGlobalSessions().then(() => openSessionFromRoute(sessionId));
+    }
+    onLeave('session');
+  }, [onLeave]);
+
+  const handleRunNow = React.useCallback(async (task: ScheduledTask) => {
+    // Like every mutation here, the run belongs to the task's own project,
+    // not to whatever the selection has become since the list was rendered.
+    const projectID = listOwnerRef.current;
+    if (!projectID) {
+      return;
+    }
+    setMutatingTaskID(task.id);
+    try {
+      const { sessionId, directory, persistError } = await runScheduledTaskNow(projectID, task.id);
+      await Promise.all([
+        reloadTasks(projectID, { silent: true }),
+        refreshGlobalSessions(),
+      ]);
+      if (persistError) {
+        toast.warning(t('sessions.scheduledTasks.dialog.toast.startedPersistWarning'));
+      } else {
+        toast.success(t('sessions.scheduledTasks.dialog.toast.started'));
+      }
+      if (sessionId) {
+        // Jump straight into the started session.
+        const project = projects.find((entry) => entry.id === projectID);
+        useSessionUIStore.getState().setCurrentSession(sessionId, directory ?? project?.path ?? null);
+        onLeave('session');
+      }
+    } catch (error) {
+      if (error instanceof ScheduledTaskBusyError) {
+        const startedAt = task.state?.lastRunAt;
+        const message = error.busy === 'queued'
+          ? t('sessions.scheduledTasks.dialog.toast.alreadyQueued')
+          : startedAt
+            ? t('sessions.scheduledTasks.dialog.toast.alreadyRunningSince', { time: formatClockTime(startedAt, timeFormatPreference) })
+            : t('sessions.scheduledTasks.dialog.toast.alreadyRunning');
+        toast.info(message, error.busy === 'running' && task.state?.lastSessionId
+          ? { action: { label: t('sessions.scheduledTasks.dialog.actions.openSession'), onClick: () => openLastRunSession(task) } }
+          : undefined);
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.runFailed'));
+    } finally {
+      setMutatingTaskID(null);
+    }
+  }, [projects, reloadTasks, onLeave, t, timeFormatPreference, openLastRunSession]);
+
+  const chatsLabel = (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <Icon name="chat-4" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="truncate">{t('sessions.scheduledTasks.dialog.project.chats')}</span>
+    </span>
+  );
+  const hasScopes = chatsAvailable || projects.length > 0;
+  const editorScopes: ScheduledTaskScopeOption[] = [
+    ...(chatsAvailable ? [{ id: CHAT_DRAFT_PROJECT_ID, label: chatsLabel }] : []),
+    ...projects.map((project) => ({ id: project.id, label: renderProjectLabel(project) })),
+  ];
+
+  const projectSelector = (
+    <div className="flex flex-col items-start gap-1">
+      <span className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.dialog.project.label')}</span>
+      <Select
+        value={selectedProjectID || '__none'}
+        onValueChange={(value) => {
+          const nextProjectID = value === '__none' ? '' : value;
+          selectProjectScope(nextProjectID);
+          if (nextProjectID) {
+            void reloadTasks(nextProjectID);
+          } else {
+            commitTaskList('', []);
+            setLoading(false);
+          }
+        }}
+      >
+        <SelectTrigger className="w-full">
+          {selectedProjectID === CHAT_DRAFT_PROJECT_ID ? (
+            <SelectValue>{chatsLabel}</SelectValue>
+          ) : selectedProject ? (
+            <SelectValue>{renderProjectLabel(selectedProject)}</SelectValue>
+          ) : (
+            <SelectValue>
+              {hasScopes ? t('sessions.scheduledTasks.dialog.project.placeholder') : t('sessions.scheduledTasks.dialog.project.empty')}
+            </SelectValue>
+          )}
+        </SelectTrigger>
+        <SelectContent>
+          {!hasScopes ? <SelectItem value="__none">{t('sessions.scheduledTasks.dialog.project.empty')}</SelectItem> : null}
+          {chatsAvailable ? <SelectItem value={CHAT_DRAFT_PROJECT_ID}>{chatsLabel}</SelectItem> : null}
+          {projects.map((project) => (
+            <SelectItem key={project.id} value={project.id}>
+              {renderProjectLabel(project)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const openNewTaskEditor = () => {
+    setEditorTask(null);
+    editorOwnerRef.current = '';
+    setEditorOpen(true);
+  };
+
+  const selectProject = (nextProjectID: string) => {
+    selectProjectScope(nextProjectID);
+    if (nextProjectID) {
+      void reloadTasks(nextProjectID);
+    } else {
+      commitTaskList('', []);
+      setLoading(false);
+    }
+  };
+
+  const renderScopeButton = (scopeID: string, label: React.ReactNode) => (
+    <button
+      key={scopeID}
+      type="button"
+      onClick={() => selectProject(scopeID)}
+      className={cn(
+        'flex w-full min-w-0 items-center rounded-md px-2 py-1.5 text-start typography-ui-label focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        selectedProjectID === scopeID
+          ? 'bg-interactive-selection text-foreground'
+          : 'text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
+      )}
+    >
+      {label}
+    </button>
+  );
+
+  const tasksList = (
+      <div className="min-h-[280px]">
+      {loading ? (
+        <div className="flex items-center gap-2 typography-meta text-muted-foreground">
+          <Icon name="loader-4" className="h-4 w-4 animate-spin" /> {t('sessions.scheduledTasks.dialog.loading')}
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-4 typography-meta text-muted-foreground">
+          {selectedProjectID ? t('sessions.scheduledTasks.dialog.empty.noTasks') : t('sessions.scheduledTasks.dialog.empty.selectProject')}
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {tasks.map((task) => {
+            const isBusy = mutatingTaskID === task.id;
+            const status = task.state?.lastStatus || 'idle';
+            const meta: TaskStatusMeta = STATUS_META[status];
+            const statusLabel = status === 'queued' ? t('sessions.scheduledTasks.dialog.status.queued')
+              : status === 'sent' ? t('sessions.scheduledTasks.dialog.status.sent')
+              : status === 'skipped' ? t('sessions.scheduledTasks.dialog.status.skipped')
+              : status === 'failed' ? t('sessions.scheduledTasks.dialog.status.error')
+              : status === 'cancelled' ? t('sessions.scheduledTasks.dialog.status.cancelled')
+              : status === 'success'
+              ? t('sessions.scheduledTasks.dialog.status.success')
+              : status === 'error'
+                ? t('sessions.scheduledTasks.dialog.status.error')
+                : status === 'running'
+                  ? t('sessions.scheduledTasks.dialog.status.running')
+                  : t('sessions.scheduledTasks.dialog.status.idle');
+            const nextAt = task.state?.nextRunAt;
+            const lastAt = task.state?.lastRunAt;
+
+            return (
+              <div
+                key={task.id}
+                className={cn(
+                  'rounded-lg border border-border p-4 transition-opacity',
+                )}
+              >
+                <div className={cn('min-w-0', !task.enabled && 'opacity-60')}>
+                  <div className="typography-ui-header truncate font-semibold text-foreground">
+                    {task.name}
+                  </div>
+                  <div className="typography-micro truncate text-muted-foreground">
+                    {formatSchedule(task.schedule, t)}
+                  </div>
+                  <div className="typography-micro flex min-w-0 items-center gap-1 text-muted-foreground" title={task.execution.useDefaults ? undefined : `${task.execution.providerID ?? ''}/${task.execution.modelID ?? ''}`}>
+                    <TaskModelLine task={task} />
+                  </div>
+                  {task.targetSessionId ? <TaskTargetLine sessionId={task.targetSessionId} /> : null}
+                  {task.loopFile ? (
+                    <div
+                      className="typography-micro truncate text-muted-foreground"
+                      title={task.loopFile}
+                    >
+                      {t('sessions.scheduledTasks.dialog.loopFile.note', { file: task.loopFile })}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={cn('mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 typography-micro text-muted-foreground', !task.enabled && 'opacity-60')}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="timer" className="h-3.5 w-3.5" />
+                    <span className="font-medium text-foreground">{t('sessions.scheduledTasks.dialog.nextRun.label')}</span>
+                    {nextAt ? (
+                      <>
+                        <span className="text-foreground">{formatRelativeTime(nextAt, t)}</span>
+                        <span className="text-muted-foreground/50">·</span>
+                        <span>{formatClockTime(nextAt, timeFormatPreference)}</span>
+                      </>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="history" className="h-3.5 w-3.5" />
+                    <span className="font-medium text-foreground">{t('sessions.scheduledTasks.dialog.lastRun.label')}</span>
+                    {status === 'running' ? (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ color: 'var(--status-warning)' }}
+                      >
+                        <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
+                        {t('sessions.scheduledTasks.dialog.lastRun.runningNow')}
+                      </span>
+                    ) : lastAt ? (
+                      <>
+                        {meta.tone !== 'muted' ? (
+                          <span
+                            className="inline-flex items-center gap-1"
+                            style={{ color: `var(--status-${meta.tone})` }}
+                          >
+                            {meta.spin ? <Spinner className="h-3.5 w-3.5" /> : <Icon name={meta.Icon} className="h-3.5 w-3.5" />}
+                            {statusLabel}
+                          </span>
+                        ) : null}
+                        <span className="text-muted-foreground/50">·</span>
+                        <span>{formatRelativeTime(lastAt, t)}</span>
+                      </>
+                    ) : (
+                      <span>{t('sessions.scheduledTasks.dialog.lastRun.never')}</span>
+                    )}
+                  </span>
+                  {task.state?.lastRunIsolated ? (
+                    <span className="inline-flex items-center gap-1.5" title={task.state?.lastRunBranch || undefined}>
+                      <Icon name="git-branch" className="h-3.5 w-3.5" />
+                      {task.state?.lastRunBranch
+                        ? t('sessions.scheduledTasks.dialog.lastRun.isolatedBranch', { branch: task.state.lastRunBranch })
+                        : t('sessions.scheduledTasks.dialog.lastRun.isolated')}
+                    </span>
+                  ) : null}
+                </div>
+
+                {task.state?.lastError ? (
+                  <div
+                    className={cn('mt-3 flex items-start gap-2 rounded-md border p-2 typography-micro', !task.enabled && 'opacity-60')}
+                    style={toneStyle('error')}
+                  >
+                    <Icon name="error-warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 break-words">{task.state.lastError}</span>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                  <div className="inline-flex items-center gap-1">
+                    <label
+                      className={cn(
+                        'inline-flex cursor-pointer items-center gap-2 typography-micro font-medium',
+                        task.enabled ? 'text-foreground' : 'text-muted-foreground',
+                        isBusy && 'cursor-not-allowed opacity-50',
+                      )}
+                    >
+                      <Checkbox
+                        checked={task.enabled}
+                        onChange={(enabled) => void handleToggleEnabled(task, enabled)}
+                        ariaLabel={task.enabled
+                          ? t('sessions.scheduledTasks.dialog.taskToggle.pauseAria', { taskName: task.name })
+                          : t('sessions.scheduledTasks.dialog.taskToggle.enableAria', { taskName: task.name })}
+                        disabled={isBusy}
+                      />
+                      {task.enabled ? t('sessions.scheduledTasks.dialog.taskToggle.enabled') : t('sessions.scheduledTasks.dialog.taskToggle.paused')}
+                    </label>
+                    {task.loopApproval ? <LoopApprovalMark reason={task.loopApproval} /> : null}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {task.state?.lastSessionId ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openLastRunSession(task)}
+                        aria-label={t('sessions.scheduledTasks.dialog.actions.openSessionAria', { taskName: task.name })}
+                      >
+                        <Icon name="chat-1" className="h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.openSession')}
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleRunNow(task)}
+                      disabled={isBusy}
+                    >
+                      <Icon name="play" className="h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.runNow')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditTask(task)}
+                      disabled={isBusy}
+                      aria-label={t('sessions.scheduledTasks.dialog.actions.editAria', { taskName: task.name })}
+                    >
+                      <Icon name="edit-2" className="h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.edit')}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void handleDeleteTask(task)}
+                      disabled={isBusy}
+                      aria-label={t('sessions.scheduledTasks.dialog.actions.deleteAria', { taskName: task.name })}
+                    >
+                      <Icon name="delete-bin" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      </div>
+  );
+
+  const newTaskButton = (className?: string) => (
+    <Button className={className} size={layout === 'page' ? 'sm' : 'default'} onClick={openNewTaskEditor} disabled={!selectedProjectID}>
+      <Icon name="add" className="me-1 h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.newTask')}
+    </Button>
+  );
+
+  return (
+    <>
+      {layout === 'mobile' ? (
+        <div className="flex h-full min-h-0 flex-col">
+          <ScrollableOverlay outerClassName="min-h-0 flex-1" className="space-y-4 px-4 py-4" disableHorizontal>
+            <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.dialog.description')}</p>
+            {projectSelector}
+            {tasksList}
+          </ScrollableOverlay>
+          <div
+            className="shrink-0 border-t border-edge px-4 pt-2"
+            style={{ paddingBottom: 'calc(0.5rem + var(--oc-safe-area-bottom, 0px))' }}
+          >
+            {newTaskButton('w-full')}
+          </div>
+        </div>
+      ) : (
+        // Full-page surface replacing the chat area (mounted inside <main>).
+        // Master-detail: a scrollable scope list at the left, the selected
+        // scope's tasks at the right. The app Header shows the surface title,
+        // so the page itself only carries the close affordance.
+        <div className="absolute inset-0 z-10 flex flex-col bg-background">
+          <div className="flex min-h-0 flex-1">
+            <div className="flex w-60 flex-shrink-0 flex-col border-e border-edge">
+              <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-0.5 p-2" disableHorizontal>
+                {!hasScopes ? (
+                  <div className="px-2 py-2 typography-meta text-muted-foreground">
+                    {t('sessions.scheduledTasks.dialog.project.empty')}
+                  </div>
+                ) : null}
+                {chatsAvailable ? renderScopeButton(CHAT_DRAFT_PROJECT_ID, chatsLabel) : null}
+                {projects.map((project) => renderScopeButton(project.id, renderProjectLabel(project)))}
+              </ScrollableOverlay>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              {/* Pages have no close button: you leave by picking a session,
+                  a draft, or another surface in the sidebar. */}
+              <div className="flex items-center px-6 pt-3">
+                {newTaskButton()}
+              </div>
+              <ScrollableOverlay outerClassName="min-h-0 flex-1" className="px-6 py-4" disableHorizontal>
+                <div className="mx-auto w-full max-w-3xl">
+                  {tasksList}
+                </div>
+              </ScrollableOverlay>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ScheduledTaskEditorDialog
+        open={editorOpen}
+        task={editorTask}
+        // The editor works in the task's own scope: an existing task keeps
+        // the project it was captured with even if the selection has moved.
+        projectId={editorOwnerRef.current || selectedProjectID}
+        scopes={editorScopes}
+        onOpenChange={setEditorOpen}
+        onSave={handleSaveTask}
+>>>>>>> bc50ba56a
       />
      </span>
     ) : fallbackIcon}

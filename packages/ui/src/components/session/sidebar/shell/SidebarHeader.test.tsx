@@ -4,7 +4,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { I18nProvider } from '@/lib/i18n';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useUIStore } from '@/stores/useUIStore';
 import { SidebarHeader } from './SidebarHeader';
 
 const baseProps = {
@@ -25,6 +24,7 @@ const baseProps = {
   searchMatchCount: 0,
   collapseAll: () => undefined,
   expandAll: () => undefined,
+  showStats: true,
 };
 
 function StatefulHeader({
@@ -54,10 +54,20 @@ beforeEach(() => {
     navigator: browser.navigator,
     Element: browser.Element,
     HTMLElement: browser.HTMLElement,
+    Node: browser.Node,
+    Event: browser.Event,
+    MouseEvent: browser.MouseEvent,
     InputEvent: browser.InputEvent,
     KeyboardEvent: browser.KeyboardEvent,
+<<<<<<< HEAD
     MouseEvent: browser.MouseEvent,
     PointerEvent: browser.PointerEvent,
+=======
+    ResizeObserver: browser.ResizeObserver,
+    getComputedStyle: browser.getComputedStyle.bind(browser),
+    requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+    cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+>>>>>>> bc50ba56a
     IS_REACT_ACT_ENVIRONMENT: true,
   })) {
     descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -150,6 +160,7 @@ describe('SidebarHeader', () => {
   });
 
 
+<<<<<<< HEAD
   test('a page button opens its page, shows it pressed, and closes it on the next click', async () => {
     const initial = useUIStore.getState();
     try {
@@ -177,6 +188,18 @@ describe('SidebarHeader', () => {
     } finally {
       useUIStore.setState(initial);
     }
+=======
+  test('the row holds the list controls and one More menu, and no page buttons', async () => {
+    await act(async () => root.render(
+      <I18nProvider>
+        <TooltipProvider>
+          <SidebarHeader {...baseProps} />
+        </TooltipProvider>
+      </I18nProvider>,
+    ));
+    const labels = [...document.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
+    expect(labels).toEqual(['Search sessions', 'Add project', 'Display mode', 'More']);
+>>>>>>> bc50ba56a
   });
 
   test('the search button opens the field and, once open, closes it', async () => {

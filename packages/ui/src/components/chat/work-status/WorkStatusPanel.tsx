@@ -1,6 +1,7 @@
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import React from 'react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { DockedPanelSurfaceContext } from '@/hooks/usePageColors';
@@ -18,6 +19,7 @@ import { WorkStatusPresenceProvider } from './presence';
 import { Icon } from '@/components/icon/Icon';
 
 type Props = {
+<<<<<<< HEAD
  /** Null on a new-session draft: repository readouts still apply. */
  sessionId: string | null;
  directory: string | null;
@@ -41,6 +43,31 @@ type Props = {
   * is too narrow to give it a column of its own.
   */
  overlay?: boolean;
+=======
+  /** Null on a new-session draft: repository readouts still apply. */
+  sessionId: string | null;
+  directory: string | null;
+  /** Managed Chats have no project repository, even if another project remains active. */
+  repositoryEnabled?: boolean;
+  /** Whether the panel should currently be shown. */
+  visible: boolean;
+  /**
+   * Inline only: the right slot keeps the card's column (see
+   * `components/layout/rightSlot.ts`). True while the context panel covers
+   * the card too, so closing the panel goes straight back to the card.
+   */
+  reserved?: boolean;
+  /**
+   * Inline only: with `reserved`, the card keeps its column beside the open
+   * context panel too, because the chat area fits both and the transcript.
+   */
+  besidePanel?: boolean;
+  /**
+   * Floats over the transcript instead of sitting beside it, for when the chat
+   * is too narrow to give it a column of its own.
+   */
+  overlay?: boolean;
+>>>>>>> bc50ba56a
 };
 
 /**
@@ -66,6 +93,7 @@ const PANEL_TRANSITION_EASING = LAYOUT_ANIMATION_EASING;
  * say there is more to see.
  */
 export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible, reserved = false, besidePanel = false, repositoryEnabled = true, overlay = false }) => {
+<<<<<<< HEAD
  const { t } = useI18n();
  // The card's fade and lift follow the side columns' animation setting.
  const panelTransitionMs = useLayoutAnimationMs();
@@ -78,6 +106,20 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
  // nothing on the way in would make the card flash out and back on arrival.
  const [renderedSections, setRenderedSections] = React.useState(1);
  const frameRef = React.useRef<number | null>(null);
+=======
+  const { t, direction } = useI18n();
+  // The card's fade and lift follow the side columns' animation setting.
+  const panelTransitionMs = useLayoutAnimationMs();
+  const setScrollTop = useUIStore((state) => state.setWorkStatusScrollTop);
+  const setOverlayOpen = useUIStore((state) => state.setWorkStatusOverlayOpen);
+  const sectionLayout = useWorkStatusSectionLayout();
+  const { allSectionsHidden } = sectionLayout;
+  const [sectionsDialogOpen, setSectionsDialogOpen] = React.useState(false);
+  // Starts optimistic: sections report after their first commit, and rendering
+  // nothing on the way in would make the card flash out and back on arrival.
+  const [renderedSections, setRenderedSections] = React.useState(1);
+  const frameRef = React.useRef<number | null>(null);
+>>>>>>> bc50ba56a
 
  // Restoring the offset has to happen the moment the scroller attaches, and
  // the panel unmounts whenever the context panel opens. Reading the stored
@@ -140,9 +182,22 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
   });
  }, [setScrollTop]);
 
+<<<<<<< HEAD
  React.useEffect(() => () => {
   if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
  }, []);
+=======
+  // Tells the right slot whether to keep the card's column. A card whose
+  // sections all reported nothing gives it back, as its collapse did before.
+  const empty = contentMounted && renderedSections === 0 && !allSectionsHidden;
+  const wantsColumn = !overlay && reserved && !empty;
+  const wantsColumnBesidePanel = wantsColumn && besidePanel;
+  React.useLayoutEffect(() => {
+    if (overlay) return undefined;
+    setWorkStatusColumn(wantsColumn, wantsColumnBesidePanel);
+    return () => setWorkStatusColumn(false, false);
+  }, [overlay, wantsColumn, wantsColumnBesidePanel]);
+>>>>>>> bc50ba56a
 
  // The offset belongs to the panel a session produced, not to the panel in
  // general: restoring one session's scroll into another's shorter panel lands
@@ -257,6 +312,7 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
     >
      {/* Overlaid rather than placed in flow: the panel has no header of its
           own, and giving it one would cost a row of height on every session. */}
+<<<<<<< HEAD
      <Tooltip>
       <TooltipTrigger asChild>
        <button
@@ -270,6 +326,21 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>{t('chat.workStatus.sections.open')}</TooltipContent>
      </Tooltip>
+=======
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={t('chat.workStatus.sections.open')}
+            onClick={() => setSectionsDialogOpen(true)}
+            className="absolute inset-e-2 top-1.5 z-10 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Icon name="equalizer-2" className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>{t('chat.workStatus.sections.open')}</TooltipContent>
+      </Tooltip>
+>>>>>>> bc50ba56a
 
      {contentMounted ? (
       <WorkStatusPresenceProvider onChange={setRenderedSections}>
@@ -283,10 +354,18 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
         disableHorizontal
        >
         <WorkStatusSectionList
+<<<<<<< HEAD
          sessionId={sessionId}
          directory={directory}
          repositoryEnabled={repositoryEnabled}
          layout={sectionLayout}
+=======
+          sessionId={sessionId}
+          directory={directory}
+          repositoryEnabled={repositoryEnabled}
+          layout={sectionLayout}
+          visible={visible}
+>>>>>>> bc50ba56a
         />
        </ScrollableOverlay>
       </WorkStatusPresenceProvider>

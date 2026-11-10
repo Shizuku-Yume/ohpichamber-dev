@@ -2,6 +2,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { ApprovalRequest, CanonicalEvent, QuestionRequest, SessionSnapshot } from '@openchamber/agent-contract';
 import { compareCounters } from './event-reducer';
 
+<<<<<<< HEAD
 export type BlockingPermissionRequest = ApprovalRequest;
 export type BlockingFormRequest = QuestionRequest;
 type PendingBlockingRequests = { directory: string; permissions: readonly BlockingPermissionRequest[]; forms: readonly BlockingFormRequest[] };
@@ -17,6 +18,111 @@ const upsertRequest = <T extends { approvalId?: string; questionId?: string }>(l
   if (!id) return null;
   const index = list.findIndex((entry) => (entry.approvalId ?? entry.questionId) === id);
   if (index < 0) return [...list, request];
+=======
+// Cross-directory index of permission requests and forms still waiting for an
+// answer. Directory stores remain the source for open directories; this index
+// exists for the ones that are never bootstrapped, whose pending requests
+// would otherwise be invisible to the tray and to any surface that does not
+// mount a row for them.
+//
+// It is fed by the same rare events the directory reducer consumes
+// (`permission.asked`/`permission.replied`, `form.created`/`form.settled`,
+// `session.deleted`) and seeded from the host. Pages that wait for the
+// user's answer have no OpenCode event and no directory store; the server
+// announces them (`applyWaitingPageEvent`), and this index is their only home. Nothing streams through
+// here, so consumers subscribe per session ID without cost.
+//
+// Only the fields the consuming surfaces render are kept. The host seed can
+// carry no more than this, and storing the full requests would make the two
+// feeds disagree on shape for no gain.
+export type BlockingPermissionRequest = Pick<PermissionRequest, 'id' | 'sessionID' | 'action' | 'resources' | 'save'>;
+export type BlockingFormRequest = Pick<FormRequest, 'id' | 'sessionID' | 'title'>;
+/**
+ * A page an agent showed that waits for the user's answer (render.page with
+ * awaitAnswer). It blocks the agent like a form, so every surface shows it as
+ * one, but it is answered on the page in the chat: it is kept apart from
+ * forms so nothing tries to answer it as a form. `id` is the tool call id.
+ */
+type BlockingPageRequest = { id: string; sessionID: string; title: string };
+
+type PendingBlockingRequests = {
+  directory: string;
+  permissions: readonly BlockingPermissionRequest[];
+  forms: readonly BlockingFormRequest[];
+  pages: readonly BlockingPageRequest[];
+};
+
+type GlobalBlockingRequestsState = {
+  bySession: ReadonlyMap<string, PendingBlockingRequests>;
+};
+
+const EMPTY: readonly never[] = [];
+type WaitingPageEvent = Extract<SyncEvent, { type: 'openchamber.page-waiting' | 'openchamber.page-settled' | 'session.deleted' }>;
+const pageSnapshotObservers = new Set<(event: WaitingPageEvent) => void>();
+
+const recordWaitingPageEvent = (event: WaitingPageEvent): void => {
+  for (const observer of pageSnapshotObservers) observer(event);
+};
+
+export const useGlobalBlockingRequestsStore = create<GlobalBlockingRequestsState>(() => ({
+  bySession: new Map(),
+}));
+
+/** Whether a page or a secret card in this session waits for the user's answer. */
+export const useIsPageWaiting = (sessionId: string | null | undefined): boolean => (
+  useGlobalBlockingRequestsStore((state) => Boolean(sessionId && state.bySession.get(sessionId)?.pages.length))
+);
+
+/** Whether this call's page or secret card waits for the user's answer, as the server announced it. */
+export const useIsCallWaiting = (sessionId: string | null | undefined, callId: string | null | undefined): boolean => (
+  useGlobalBlockingRequestsStore((state) => Boolean(sessionId && callId && state.bySession.get(sessionId)?.pages.some((page) => page.id === callId)))
+);
+
+/**
+ * The pages that stopped waiting between two states of the index, as
+ * `sessionID:pageID`: answered, settled by the host's snapshot after a missed
+ * end, or gone with their session.
+ */
+export const settledPageKeys = (
+  previous: ReadonlyMap<string, PendingBlockingRequests>,
+  next: ReadonlyMap<string, PendingBlockingRequests>,
+): string[] => {
+  const settled: string[] = [];
+  for (const [sessionId, entry] of previous) {
+    if (entry.pages.length === 0) continue;
+    const remaining = next.get(sessionId)?.pages;
+    if (remaining === entry.pages) continue;
+    const kept = new Set(remaining?.map((page) => page.id));
+    for (const page of entry.pages) if (!kept.has(page.id)) settled.push(`${sessionId}:${page.id}`);
+  }
+  return settled;
+};
+
+export const resetGlobalBlockingRequests = (): void => {
+  pageSnapshotObservers.clear();
+  useGlobalBlockingRequestsStore.setState({ bySession: new Map() });
+};
+
+const normalizeDirectory = (directory: string): string => normalizeProjectPath(directory) ?? directory;
+
+// The live events carry the whole request; only the rendered fields are kept,
+// so the index holds the same shape the host seed can provide and a long-lived
+// global map never retains a form's full field definitions.
+const toBlockingPermission = ({ id, sessionID, action, resources, save }: PermissionRequest): BlockingPermissionRequest => (
+  { id, sessionID, action, resources, save }
+);
+const toBlockingForm = ({ id, sessionID, title }: FormRequest): BlockingFormRequest => ({ id, sessionID, title });
+
+/**
+ * Returns the list with the request added or replaced, or null when nothing
+ * changed. OpenCode re-sends an unanswered ask, and the projection above makes
+ * a fresh object every time, so equality is by value: an identical repeat must
+ * not publish a new store snapshot to every subscriber.
+ */
+const upsertRequest = <T extends { id: string }>(list: readonly T[], request: T): readonly T[] | null => {
+  const index = list.findIndex((entry) => entry.id === request.id);
+  if (index === -1) return [...list, request];
+>>>>>>> bc50ba56a
   if (JSON.stringify(list[index]) === JSON.stringify(request)) return null;
   const next = [...list]; next[index] = request; return next;
 };

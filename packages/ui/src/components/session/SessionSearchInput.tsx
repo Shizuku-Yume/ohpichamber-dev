@@ -2,6 +2,7 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PICKER_SEARCH_INPUT_CLASS } from '@/components/ui/MobileSheetList';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -46,8 +47,13 @@ export function SessionSearchInput({
 
   return (
     <div>
+<<<<<<< HEAD
       <div className="relative">
         <Icon name="search" className={cn('pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-muted-foreground', mobile ? 'left-3' : 'left-2')} />
+=======
+      <div className={cn('relative', mobile && 'border-b border-edge-muted py-1')}>
+        <Icon name="search" className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground', mobile ? 'inset-s-2.5 size-3.5' : 'inset-s-2 size-4')} />
+>>>>>>> bc50ba56a
         <Input
           ref={ref}
           value={draft}
@@ -55,7 +61,11 @@ export function SessionSearchInput({
           aria-describedby={mobile ? undefined : hintId}
           enterKeyHint="search"
           placeholder={placeholder}
+<<<<<<< HEAD
           className={mobile ? 'h-11 pl-9 pr-10' : 'h-8 w-full rounded-md border border-border bg-transparent pl-8 pr-8 typography-ui-label text-foreground'}
+=======
+          className={mobile ? cn(PICKER_SEARCH_INPUT_CLASS, 'pe-8') : 'h-8 w-full rounded-md border border-border bg-transparent ps-8 pe-8 typography-ui-label text-foreground'}
+>>>>>>> bc50ba56a
           onChange={(event) => {
             const next = event.target.value;
             setDraft(next);
@@ -87,7 +97,11 @@ export function SessionSearchInput({
             variant="ghost"
             size="icon"
             aria-label={clearLabel}
+<<<<<<< HEAD
             className={cn('absolute right-1 top-1/2 size-6 -translate-y-1/2 text-muted-foreground', mobile && 'right-1.5 size-8')}
+=======
+            className={cn('absolute inset-e-1 top-1/2 size-6 -translate-y-1/2 text-muted-foreground', mobile && 'inset-e-0')}
+>>>>>>> bc50ba56a
             onClick={() => { clear(); ref.current?.focus(); }}
           >
             <Icon name="close" className="size-3.5" />

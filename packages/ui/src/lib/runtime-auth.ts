@@ -225,6 +225,7 @@ const mintedUrlAuthTokenSchema = z.object({ token: z.string(), expiresAt: z.numb
 // mode the mint must ride the tunnel, not the network: there is no reachable
 // network base URL. Same auth headers, same route, tunneled.
 const postUrlAuthTokenMint = async (apiBaseUrl: string | null | undefined, scope?: UrlAuthScope): Promise<MintedUrlAuthToken> => {
+<<<<<<< HEAD
  const credential = await getRuntimeAuthCredential();
  const headers = new Headers();
  for (const [key, value] of Object.entries(getRuntimeExtraHeadersSync())) {
@@ -253,6 +254,36 @@ const postUrlAuthTokenMint = async (apiBaseUrl: string | null | undefined, scope
  // Servers older than `expiresIn` only send `expiresAt`.
  const { token, expiresAt, expiresIn } = parsed.data;
  return { token: token.trim(), expiresAt: expiresIn === undefined ? expiresAt : Date.now() + expiresIn };
+=======
+  const credential = await getRuntimeAuthCredential();
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(getRuntimeExtraHeadersSync())) {
+    headers.set(key, value);
+  }
+  if (credential?.type === 'bearer') {
+    headers.set('Authorization', `Bearer ${credential.token}`);
+  }
+  const route = scope ? `/auth/url-token?scope=${encodeURIComponent(scope)}` : '/auth/url-token';
+  const relay = getActiveRelayTunnel();
+  const response = relay
+    ? await relay.fetch(route, { method: 'POST', headers })
+    : await fetch(buildAuthUrl(apiBaseUrl, route), {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+      });
+  if (!response.ok) {
+    throw new Error(`Failed to mint runtime URL auth token (${response.status})`);
+  }
+  const parsed = mintedUrlAuthTokenSchema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) return { token: '', expiresAt: 0 };
+  // `expiresAt` is on the server's clock, and every expiry check here reads this
+  // device's clock. A device even a minute ahead would discard each fresh token
+  // and open realtime sockets without one, so prefer the remaining lifetime.
+  // Servers older than `expiresIn` only send `expiresAt`.
+  const { token, expiresAt, expiresIn } = parsed.data;
+  return { token: token.trim(), expiresAt: expiresIn === undefined ? expiresAt : Date.now() + expiresIn };
+>>>>>>> bc50ba56a
 };
 
 /**

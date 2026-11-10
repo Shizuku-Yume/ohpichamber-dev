@@ -72,7 +72,11 @@ import {
   sanitizeClientTokenForStorage,
   sanitizeHostRelayForStorage,
 } from './desktop-hosts-storage.mjs';
+<<<<<<< HEAD
 import { isRemoteSafeCommand, isSplashColor, redactHostsConfigForRemote } from './remote-page-policy.mjs';
+=======
+import { isSplashColor, redactHostsConfigForRemote } from './remote-page-policy.mjs';
+>>>>>>> bc50ba56a
 import { connectDefaultSshInstanceAtStartup, resolveDefaultSshInstanceId } from './startup-ssh.mjs';
 import { findReusableHostWindowIndex, normalizeNotificationInput, readTrimmedString, resolveHostEntryForRuntimeKey, resolveSenderHostId, runtimeKeyForDeepLinkHost, stampForwardedNotification } from './notification-host-routing.mjs';
 import { isPackagedUiRuntimeRequest } from './packaged-ui-routing.mjs';
@@ -103,11 +107,22 @@ import { menuAccelerator, normalizeMenuShortcuts } from './menu-shortcuts.mjs';
 import { createCopyLinkMenuHook } from './context-menu-clipboard.mjs';
 import { createCopyMenuAction } from './menu-copy-action.mjs';
 import {
+<<<<<<< HEAD
   CANARY_UPDATER_FEED,
   PRODUCTION_UPDATER_FEED,
   isCanaryVersion,
   isUpdateChannel,
   normalizeUpdateChannel,
+=======
+  CANARY_MIRROR_UPDATER_FEED,
+  CANARY_UPDATER_FEED,
+  PRODUCTION_UPDATER_FEED,
+  STABLE_MIRROR_UPDATER_FEED,
+  isCanaryVersion,
+  isUpdateChannel,
+  normalizeUpdateChannel,
+  pickUpdaterSource,
+>>>>>>> bc50ba56a
   resolveUpdaterFeed,
 } from './updater-feed.mjs';
 import {
@@ -328,9 +343,19 @@ const state = {
   // path may end the process: the update sequence owns the exit.
   updateInstallPending: false,
   pendingUpdate: null,
+<<<<<<< HEAD
   // The channel the updater's feed was last pointed at (applyUpdaterChannel),
   // and the update check in flight, if any.
   updaterChannel: null,
+=======
+  // The channel and source ('mirror' or 'github') the updater's feed was last
+  // pointed at (applyUpdaterChannel), and the update check in flight, if any.
+  updaterChannel: null,
+  updaterSource: null,
+  // When the Stable mirror last failed a check or a download; checks read
+  // GitHub for a while after (pickUpdaterSource).
+  updaterMirrorFailedAt: null,
+>>>>>>> bc50ba56a
   updateCheck: null,
   updateDownloadPromise: null,
   updateDownloadVersion: null,
@@ -2783,6 +2808,20 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
   browserWindow.webContents.on('did-start-navigation', (details) => {
     if (browserWindow === state.mainWindow && details.isMainFrame && !details.isSameDocument) {
       mainWindowTrayActionsReady = false;
+<<<<<<< HEAD
+=======
+    }
+  });
+
+  // An extension frame navigating itself would carry data out in the URL;
+  // refused before the request (see guest-frame-navigation.mjs).
+  browserWindow.webContents.on('will-frame-navigate', (details) => {
+    let frameOrigin;
+    try {
+      frameOrigin = details.frame?.origin;
+    } catch {
+      frameOrigin = undefined;
+>>>>>>> bc50ba56a
     }
   });
 
@@ -3607,6 +3646,7 @@ const readUpdateChannel = () => normalizeUpdateChannel(readSettingsRoot().deskto
  * restart. Stable from a Canary build allows the downgrade to the latest
  * release, which is the way back; a release build never downgrades.
  */
+<<<<<<< HEAD
 const applyUpdaterChannel = (channel) => {
   if (state.updaterChannel === channel) return;
   // An update found on the other channel is not this channel's; the next
@@ -3615,6 +3655,16 @@ const applyUpdaterChannel = (channel) => {
   const feed = resolveUpdaterFeed({ testBuild: UPDATER_E2E_BUILD, channel });
   // Both published feeds carry the Windows ARM64 manifest; the E2E fixture does not.
   const updaterChannel = feed === PRODUCTION_UPDATER_FEED || feed === CANARY_UPDATER_FEED
+=======
+const applyUpdaterChannel = (channel, source = pickUpdaterSource({ mirrorFailedAt: state.updaterMirrorFailedAt })) => {
+  if (state.updaterChannel === channel && state.updaterSource === source) return;
+  // An update found on the other channel is not this channel's; the next
+  // check starts clean (a failed feed otherwise keeps it, #5921).
+  if (state.updaterChannel !== null && state.updaterChannel !== channel) state.pendingUpdate = null;
+  const feed = resolveUpdaterFeed({ testBuild: UPDATER_E2E_BUILD, channel, source });
+  // Every published feed carries the Windows ARM64 manifest; the E2E fixture does not.
+  const updaterChannel = [PRODUCTION_UPDATER_FEED, CANARY_UPDATER_FEED, STABLE_MIRROR_UPDATER_FEED, CANARY_MIRROR_UPDATER_FEED].includes(feed)
+>>>>>>> bc50ba56a
     ? resolveUpdaterChannel({ platform: process.platform, architecture: process.arch })
     : null;
   if (updaterChannel) {
@@ -3623,8 +3673,15 @@ const applyUpdaterChannel = (channel) => {
   autoUpdater.setFeedURL(feed);
   autoUpdater.allowDowngrade = channel === 'stable' && isCanaryVersion(APP_VERSION);
   state.updaterChannel = channel;
+<<<<<<< HEAD
   log.info('[electron] updater feed configured', {
     channel,
+=======
+  state.updaterSource = source;
+  log.info('[electron] updater feed configured', {
+    channel,
+    source,
+>>>>>>> bc50ba56a
     provider: feed.provider,
     target: feed.provider === 'github' ? `${feed.owner}/${feed.repo}` : feed.url,
     manifest: updaterChannel || 'latest',
@@ -4714,7 +4771,12 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
             locale: normalizeMenuLocale(readPreferredLocale()),
             onAction: (action) => { void dispatchTrayAction(action); },
           });
+<<<<<<< HEAD
           app.dock.setMenu(template.length > 0 ? Menu.buildFromTemplate(template) : null);
+=======
+          // An empty menu clears it; Electron 45 rejects null here.
+          app.dock.setMenu(Menu.buildFromTemplate(template));
+>>>>>>> bc50ba56a
         }
         if (process.platform === 'win32' && app.isPackaged) {
           const jumpList = buildUnreadJumpList(args, {
@@ -5078,6 +5140,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (state.updateCheck && readUpdateChannel() !== state.updaterChannel) {
         await state.updateCheck.catch(() => null);
       }
+<<<<<<< HEAD
       applyUpdaterChannel(readUpdateChannel());
       const currentVersion = APP_VERSION;
       const check = checkForDesktopUpdate({
@@ -5085,6 +5148,36 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         currentVersion,
         pendingUpdate: state.pendingUpdate,
       });
+=======
+      const channel = readUpdateChannel();
+      applyUpdaterChannel(channel);
+      // The source this check started on. A check running beside it can fall
+      // back first and move the shared state to GitHub; this one still owes
+      // its caller the same fallback.
+      const startedOn = state.updaterSource;
+      const currentVersion = APP_VERSION;
+      const runCheck = () => checkForDesktopUpdate({
+        autoUpdater,
+        currentVersion,
+        pendingUpdate: state.pendingUpdate,
+        missingFeedIsError: state.updaterSource === 'mirror',
+      });
+      // The whole check, the GitHub retry included, is what a channel switch
+      // waits for: a switch that ran between the two would have its feed
+      // replaced by the retry.
+      const check = (async () => {
+        try {
+          return await runCheck();
+        } catch (error) {
+          if (startedOn !== 'mirror') throw error;
+          // The mirror failed: GitHub answers this check and the next ones for a while.
+          log.warn('[electron] update mirror failed, checking GitHub', error instanceof Error ? error.message : String(error));
+          state.updaterMirrorFailedAt = Date.now();
+          applyUpdaterChannel(channel, 'github');
+          return runCheck();
+        }
+      })();
+>>>>>>> bc50ba56a
       state.updateCheck = check;
       let result;
       try {
@@ -5130,6 +5223,11 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
           data: {},
         }));
         return null;
+      } catch (error) {
+        // A retry checks first (useUpdateStore.downloadUpdate), so marking the
+        // mirror failed sends the retry's check and download to GitHub.
+        if (state.updaterSource === 'mirror') state.updaterMirrorFailedAt = Date.now();
+        throw error;
       } finally {
         setTaskbarProgress(-1);
       }
@@ -5845,6 +5943,35 @@ const isLocalSender = (webContents) => {
   }
 };
 
+<<<<<<< HEAD
+=======
+const COMMANDS_SAFE_FOR_REMOTE = new Set([
+  'desktop_hosts_get',
+  'desktop_host_probe',
+  'desktop_switch_to_local',
+  'desktop_new_window',
+  'desktop_set_menu_shortcuts',
+  'desktop_new_window_at_url',
+  'desktop_new_window_for_host',
+  'desktop_set_window_title',
+  'desktop_set_window_theme',
+  'desktop_set_close_tab_target',
+  'desktop_is_window_fullscreen',
+  'desktop_start_window_drag',
+  'desktop_minimize_current_window',
+  'desktop_toggle_current_window_maximized',
+  'desktop_close_current_window',
+  'desktop_get_current_window_state',
+  'desktop_get_app_version',
+  'desktop_get_lan_address',
+  'desktop_capture_page_rect',
+  'desktop_tray_update',
+  'desktop_tray_actions_ready',
+  // A remote page can only dismiss delivered notifications of a session id it names.
+  'desktop_clear_session_notifications',
+]);
+
+>>>>>>> bc50ba56a
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
   if (!isLocalSender(event.sender) && !isRemoteSafeCommand(command)) {
     log.warn(`[ipc] rejected ${command} from non-local origin: ${event.sender?.getURL?.() || '(unknown)'}`);

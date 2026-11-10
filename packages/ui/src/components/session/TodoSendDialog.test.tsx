@@ -21,9 +21,15 @@ type Deferred = { directory: string; resolve: (value: DirectoryDefaults | null) 
 let pending: Deferred[] = [];
 const configState = {
   providers: [
+<<<<<<< HEAD
     { providerId: 'fallback', models: [{ modelId: 'first-model', variants: [] }] },
     { providerId: 'anthropic', models: [{ modelId: 'claude', variants: [{ variant: 'high', label: 'High', reasoningEffort: 'high' }] }] },
     { providerId: 'picked', models: [{ modelId: 'picked-model', variants: [{ variant: 'picked-effort', label: 'Picked', reasoningEffort: 'picked-effort' }] }] },
+=======
+    { id: 'fallback', models: [{ id: 'first-model' }] },
+    { id: 'anthropic', models: [{ id: 'claude', variants: [{ id: 'high' }] }] },
+    { id: 'picked', models: [{ id: 'picked-model', variants: [{ id: 'picked-effort' }] }] },
+>>>>>>> bc50ba56a
   ],
   agents: [],
   // The composer of whatever session is open; the dialog must not start from it.
@@ -103,6 +109,10 @@ const settle = (deferred: Deferred | undefined, value: DirectoryDefaults | null)
   deferred?.resolve(value);
 });
 const shownModel = () => host.querySelector('[data-model]')?.getAttribute('data-model');
+<<<<<<< HEAD
+=======
+const shownAgent = () => host.querySelector('[data-agent]')?.getAttribute('data-agent');
+>>>>>>> bc50ba56a
 const send = () => act(async () => {
   Array.from(host.querySelectorAll<HTMLElement>('[data-action="button"]'))
     .find((element) => element.textContent === 'rightSidebar.contextNotesTodo.sendDialog.actions.send')
@@ -161,6 +171,7 @@ test('defaults of a project the dialog left never land', async () => {
   await render('/repo-b');
   await settle(pending[1], { agentName: 'plan', providerId: 'anthropic', modelId: 'claude' });
   await settle(pending[0], { agentName: 'build', providerId: 'openai', modelId: 'gpt' });
+<<<<<<< HEAD
   await send();
 
   expect(shownModel()).toBe('anthropic/claude');
@@ -168,6 +179,11 @@ test('defaults of a project the dialog left never land', async () => {
     providerID: 'anthropic', modelID: 'claude', variant: '', agent: 'plan',
     picked: { model: false, variant: false, agent: false },
   }]);
+=======
+
+  expect(shownModel()).toBe('anthropic/claude');
+  expect(shownAgent()).toBe('plan');
+>>>>>>> bc50ba56a
 });
 
 test('a configured model the catalog has not listed keeps its effort', async () => {

@@ -2,6 +2,11 @@ import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+<<<<<<< HEAD
+=======
+import { isBtwSession } from '@/lib/sessionBtwMetadata';
+import { isWorkflowAgentSession } from '@/lib/sessionWorkflowMetadata';
+>>>>>>> bc50ba56a
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useGitAllBranches } from '@/stores/useGitStore';
@@ -10,6 +15,14 @@ import { isPathWithinProject, normalizePath } from '../utils';
 import { buildWorktreeByPathIndex } from '../worktreeIndex';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+<<<<<<< HEAD
+=======
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { isVSCodeWithoutWorkspace } from '@/lib/vscodeBootstrap';
+import { isChatDirectoryPath } from '@/lib/chatDirectories';
+import { spaceProjectDirectoryIn, useSpacesStore } from '@/lib/spaces/spaces-store';
+import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
+>>>>>>> bc50ba56a
 
 export type SwitcherItem = {
   node: SessionNode;
@@ -28,7 +41,11 @@ type SwitcherItemsOptions = {
   currentSessionId?: string | null;
   /** How many parent sessions to return (default 7 — the desktop dropdown). */
   maxParents?: number;
+  /** Plain recency: a pinned session gets no head start. */
+  ignorePins?: boolean;
 };
+
+const NO_PINS = new Set<string>();
 
 const formatProjectLabel = (project: { label?: string | null; path: string } | null): string | null => {
   if (!project) return null;
@@ -98,7 +115,7 @@ export const selectSwitcherParents = (
 };
 
 export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions = {}): SwitcherItem[] => {
-  const { scopeProjectId = null, currentSessionId = null, maxParents = MAX_PARENT_SESSIONS } = options;
+  const { scopeProjectId = null, currentSessionId = null, maxParents = MAX_PARENT_SESSIONS, ignorePins = false } = options;
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const projects = useProjectsStore((state) => state.projects);
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
@@ -123,8 +140,12 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
     [availableWorktreesByProject, normalizedProjects],
   );
 
+  const spaceMarks = useSpacesStore((state) => state.spaces);
+  const spacesJourney = useSpacesStore((state) => state.journey);
   const findProjectForDirectory = React.useCallback(
-    (directory: string | null) => {
+    (sessionDirectory: string | null) => {
+      // A space's session belongs to the project the space was made from.
+      const directory = spaceProjectDirectoryIn({ spaces: spaceMarks, journey: spacesJourney }, sessionDirectory) ?? sessionDirectory;
       if (!directory) return null;
       // Known worktree → its project, regardless of where the worktree lives.
       const worktreeHit = worktreeByPath.get(normalizePath(directory) ?? directory);
@@ -134,7 +155,7 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
         .sort((a, b) => (b.normalizedPath?.length ?? 0) - (a.normalizedPath?.length ?? 0));
       return matches[0] ?? null;
     },
-    [normalizedProjects, worktreeByPath],
+    [normalizedProjects, spaceMarks, spacesJourney, worktreeByPath],
   );
 
   const items = React.useMemo<SwitcherItem[]>(() => {
@@ -142,9 +163,18 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
 
     const childrenByParent = new Map<string, Session[]>();
     for (const session of activeSessions) {
+<<<<<<< HEAD
       const parentId = session.parentSessionId;
       if (!parentId) continue;
       if (session.archivedAt !== undefined) continue;
+=======
+      if (!isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session), projects, availableWorktreesByProject)) continue;
+      const parentId = (session as Session & { parentID?: string | null }).parentID;
+      if (!parentId) continue;
+      if (session.time?.archived) continue;
+      // A workflow run can start a hundred agents; its card lists them.
+      if (isWorkflowAgentSession(session)) continue;
+>>>>>>> bc50ba56a
       const bucket = childrenByParent.get(parentId);
       if (bucket) {
         bucket.push(session);
@@ -158,12 +188,18 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
 
     const parents = selectSwitcherParents(
       activeSessions,
-      pinnedSessionIds,
+      ignorePins ? NO_PINS : pinnedSessionIds,
       sessionOrderRanks,
       scopeProjectId,
       currentSessionId,
       (session) => findProjectForDirectory(resolveGlobalSessionDirectory(session))?.id ?? null,
       maxParents,
+<<<<<<< HEAD
+=======
+      // btw forks stay hidden until promoted to a full session
+      (session) => isBtwSession(session) || (isVSCode && !isVSCodeWithoutWorkspace() && isChatDirectoryPath(resolveGlobalSessionDirectory(session)))
+        || !isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session), projects, availableWorktreesByProject),
+>>>>>>> bc50ba56a
     );
 
     const buildNode = (session: Session): SessionNode => {
@@ -194,7 +230,11 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
         },
       };
     });
+<<<<<<< HEAD
   }, [activeSessions, branchesByDirectory, currentSessionId, enabled, findProjectForDirectory, maxParents, pinnedSessionIds, scopeProjectId, sessionOrderRanks, worktreeByPath]);
+=======
+  }, [activeSessions, availableWorktreesByProject, branchesByDirectory, currentSessionId, enabled, findProjectForDirectory, ignorePins, isVSCode, maxParents, pinnedSessionIds, projects, scopeProjectId, sessionOrderRanks, worktreeByPath]);
+>>>>>>> bc50ba56a
 
   return items;
 };

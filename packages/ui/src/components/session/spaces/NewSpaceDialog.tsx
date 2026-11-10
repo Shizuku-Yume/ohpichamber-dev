@@ -169,11 +169,102 @@ export const NewSpaceDialog: React.FC<NewSpaceDialogProps> = ({ open, onOpenChan
     </section>
   );
 
+<<<<<<< HEAD
   const option = (checked: boolean, onSelect: () => void, label: string, disabled = false) => (
     <label className={`flex items-start gap-2 ${disabled ? 'opacity-50' : 'cursor-pointer'}`}>
       <Radio checked={checked} onChange={onSelect} disabled={disabled} ariaLabel={label} className="mt-0.5" />
       <span className="typography-ui-label text-foreground">{label}</span>
     </label>
+=======
+  // A place by the name the user knows it: this computer, or the machine as they wrote it.
+  const placeName = (candidate: SpacePlace) => candidate.machine ?? t('spaces.create.place.localDocker');
+  // Under the chosen place: on this computer, the action that gets Docker going or the step to
+  // take, and a memory too small for a space; elsewhere what the host said; on another machine,
+  // what granting a key below means there.
+  const placeDetails = (candidate: SpacePlace) => {
+    const setupShown = candidate.setup && (candidate.setup.remedy || candidate.setup.job || (candidate.available && candidate.setup.memory?.low));
+    return (
+      <>
+        {setupShown ? <DockerSetupNotice place={candidate} onRecheck={recheckPlaces} withCheck={!candidate.available} /> : null}
+        {!setupShown && !candidate.available ? (
+          <p className="typography-meta text-status-error">{spaceFailureText(t, candidate, candidate.machine === null ? undefined : { machine: candidate.machine })}</p>
+        ) : null}
+        {candidate.machine !== null ? <p className="typography-meta text-status-warning">{t('spaces.create.place.keysOnMachine', { machine: candidate.machine })}</p> : null}
+      </>
+    );
+  };
+
+  const placeBlock = (() => {
+    if (places.kind === 'checking') {
+      return (
+        <p className="flex items-center gap-1.5 typography-meta text-muted-foreground" role="status">
+          <Spinner className="h-3.5 w-3.5" />
+          {t('spaces.create.place.checking')}
+        </p>
+      );
+    }
+    if (places.kind === 'failed') {
+      return <p className="typography-meta text-status-error">{spaceFailureText(t, places.failure)}</p>;
+    }
+    if (listed.length === 1 && place !== null) {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 typography-ui-label text-foreground">
+            <Icon name="computer" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>
+              {placeName(place)}
+              {/* A product name and its version, the same in every language. */}
+              {place.available && place.version ? <span className="ms-2 whitespace-nowrap typography-meta text-muted-foreground">{`Docker ${place.version}`}</span> : null}
+            </span>
+          </div>
+          {placeDetails(place)}
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <SettingsRadioGroup aria-label={t('spaces.create.place.label')}>
+          {listed.map((candidate) => (
+            <SettingsRadioOption ariaLabel={placeName(candidate)} key={candidate.id} selected={place?.id === candidate.id} onSelect={() => setPlaceId(candidate.id)} label={placeName(candidate)} />
+          ))}
+        </SettingsRadioGroup>
+        {place ? placeDetails(place) : null}
+      </div>
+    );
+  })();
+
+  const filesText = changedFiles.length === 1 ? t('spaces.create.start.filesSingle') : t('spaces.create.start.filesPlural', { count: changedFiles.length });
+  const codeBlock = changes.kind === 'ready' && !hasChanges ? (
+    <p className="typography-meta text-muted-foreground">{t('spaces.create.start.cleanOnly')}</p>
+  ) : (
+    <div className="space-y-1.5">
+      <SettingsRadioGroup aria-label={t('spaces.create.start.label')}>
+        <SettingsRadioOption ariaLabel={t('spaces.create.start.clean')} selected={effectiveStart === 'clean'} onSelect={() => setStart('clean')} label={t('spaces.create.start.clean')} />
+        <SettingsRadioOption
+          ariaLabel={t('spaces.create.start.uncommitted')}
+          selected={effectiveStart === 'uncommitted'}
+          onSelect={() => setStart('uncommitted')}
+          disabled={changes.kind !== 'ready'}
+          label={t('spaces.create.start.uncommitted')}
+          description={changes.kind === 'unknown' ? t('spaces.create.start.changesUnknown') : hasChanges ? filesText : undefined}
+        />
+      </SettingsRadioGroup>
+      {hasChanges && effectiveStart === 'uncommitted' ? (
+        <div className="ps-6">
+          <button type="button" className="inline-flex items-center typography-meta text-muted-foreground hover:text-foreground hover:underline" onClick={() => setShowFiles((value) => !value)}>
+            {showFiles ? t('spaces.create.start.hideFiles') : t('spaces.create.start.showFiles')}
+            <Icon name={showFiles ? 'arrow-down-s' : 'arrow-right-s'} className="ms-0.5 h-3.5 w-3.5" />
+          </button>
+          {showFiles ? (
+            // Paths from the user's own repository: text to show, left to right in every language.
+            <ScrollableOverlay as="ul" dir="ltr" outerClassName="mt-1 max-h-32" className="typography-meta text-muted-foreground" disableHorizontal>
+              {changedFiles.map((file) => <li key={file} className="truncate font-mono">{file}</li>)}
+            </ScrollableOverlay>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+>>>>>>> bc50ba56a
   );
 
   const body = (
@@ -309,7 +400,7 @@ export const NewSpaceDialog: React.FC<NewSpaceDialogProps> = ({ open, onOpenChan
       <DialogContent className="flex max-h-[80vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="box-3" className="h-5 w-5" />
+            <Icon name="instance" className="h-5 w-5" />
             {t('spaces.create.title')}
           </DialogTitle>
         </DialogHeader>

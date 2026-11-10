@@ -155,4 +155,30 @@ describe('createConfiguredWebAPIs', () => {
 
     expect(restoreDesktopRelayRuntime).toHaveBeenCalledWith();
   });
+
+  test('reports the runtime key to the desktop shell at boot and on switch', async () => {
+    const invoke = vi.fn(() => Promise.resolve());
+    const current = makeWindow();
+    current.__OPENCHAMBER_API_BASE_URL__ = 'http://127.0.0.1:3901';
+    current.__OPENCHAMBER_LOCAL_ORIGIN__ = 'http://127.0.0.1:3902';
+    current.__OPENCHAMBER_DESKTOP__ = { invoke };
+    installWindow(current);
+
+    createConfiguredWebAPIs();
+
+    expect(invoke).toHaveBeenCalledWith('desktop_set_window_runtime_key', { runtimeKey: 'local' });
+    runtimeChangeSubscribers.at(-1)?.({ runtimeKey: 'host:abc123' });
+    await vi.waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('desktop_set_window_runtime_key', { runtimeKey: 'host:abc123' });
+    });
+  });
+
+  test('skips the runtime key report when the desktop bridge is absent', () => {
+    const current = makeWindow();
+    current.__OPENCHAMBER_API_BASE_URL__ = 'http://127.0.0.1:3901';
+    current.__OPENCHAMBER_LOCAL_ORIGIN__ = 'http://127.0.0.1:3902';
+    installWindow(current);
+
+    expect(() => createConfiguredWebAPIs()).not.toThrow();
+  });
 });

@@ -32,7 +32,11 @@ export const PullRequestWatchStrip = memo(({ sessionId }: { sessionId: string | 
   if (!watch) return null;
 
   const handleStop = () => {
+<<<<<<< HEAD
     void stopPrWatch(watch.sessionID).catch((error: unknown) => {
+=======
+    void stopPrWatch(watch.sessionID).catch((error) => {
+>>>>>>> bc50ba56a
       console.warn('[pr-watch] failed to stop watching', error);
       toast.error(t('chat.prWatch.toast.stopFailed'));
     });

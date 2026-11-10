@@ -6,11 +6,18 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import {
+<<<<<<< HEAD
+=======
+  buildActiveSessionTreeFromCache,
+  collectParentIdDescendantIds,
+  collectSessionMoveDescendants,
+>>>>>>> bc50ba56a
   collectSessionSubtreeIds,
   runSessionSubtreeAction,
   undoArchive,
   type SessionSubtreeStore,
 } from './sessionSubtreeActions';
+import type { SessionNode } from '../types';
 
 const session = (sessionId: string): Session => ({
   sessionId, rootSessionId: sessionId,
@@ -165,6 +172,131 @@ describe('collectSessionSubtreeIds', () => {
   });
 });
 
+<<<<<<< HEAD
+=======
+describe('collectParentIdDescendantIds', () => {
+  beforeEach(resetGlobalSessions);
+
+  const node = (session: Session, children: SessionNode[] = []): SessionNode => ({ session, children, worktree: null });
+
+  const treeOf = () => {
+    const root = node(linked('root', null));
+    const subagent = node(linked('subagent', 'root'), [node(linked('grandchild', 'subagent'))]);
+    const fork = node(linked('fork', null), [node(linked('fork-subagent', 'fork'))]);
+    const review = node({ ...linked('review', null), metadata: { openchamber: { kind: 'review', originalSessionID: 'root' } } });
+    const promoted = node({ ...linked('promoted', null), metadata: { openchamber: { btwPromoted: true } } });
+    return node(root.session, [subagent, fork, review, promoted]);
+  };
+
+  test('takes the sessions OpenCode nests, not the ones the sidebar folds in', () => {
+    expect(collectParentIdDescendantIds(treeOf())).toEqual(['subagent', 'grandchild']);
+  });
+
+  test('includes linked reviews while leaving forks and promoted btw sessions out of row actions', () => {
+    const tree = treeOf();
+    useGlobalSessionsStore.getState().upsertSessions([
+      tree.session, ...tree.children.map((child) => child.session), linked('grandchild', 'subagent'),
+    ]);
+
+    expect(collectSessionSubtreeIds(tree.session.id, collectParentIdDescendantIds(tree), false))
+      .toEqual(['subagent', 'grandchild', 'review']);
+    expect(collectSessionSubtreeIds(tree.session.id, [], true))
+      .toEqual(['subagent', 'grandchild', 'review']);
+  });
+});
+
+describe('buildActiveSessionTreeFromCache', () => {
+  beforeEach(resetGlobalSessions);
+
+  test('builds the nested active tree a flat row does not render', () => {
+    useGlobalSessionsStore.getState().upsertSessions([
+      linked('root', null),
+      linked('child', 'root'),
+      linked('grandchild', 'child'),
+      linked('archived-child', 'root', 5),
+      linked('below-archived', 'archived-child'),
+    ]);
+
+    const tree = buildActiveSessionTreeFromCache(linked('root', null));
+    expect(tree.session.id).toBe('root');
+    expect(tree.children.map((child) => child.session.id)).toEqual(['child']);
+    expect(tree.children[0].children.map((child) => child.session.id)).toEqual(['grandchild']);
+    expect(tree.children[0].children[0].children).toEqual([]);
+  });
+});
+
+describe('collectSessionMoveDescendants', () => {
+  const ids = (sessions: Session[]) => sessions.map((entry) => entry.id);
+
+  beforeEach(resetGlobalSessions);
+
+  test('a flat row with no rendered children still takes the whole active tree', () => {
+    useGlobalSessionsStore.getState().upsertSessions([
+      linked('root', null),
+      linked('child', 'root'),
+      linked('grandchild', 'child'),
+    ]);
+
+    expect(ids(collectSessionMoveDescendants(linked('root', null), []))).toEqual(['child', 'grandchild']);
+  });
+
+  test('stops at an archived session, as the project tree does', () => {
+    useGlobalSessionsStore.getState().upsertSessions([
+      linked('root', null),
+      linked('child', 'root'),
+      linked('archived-child', 'root', 5),
+      linked('below-archived', 'archived-child'),
+    ]);
+
+    expect(ids(collectSessionMoveDescendants(linked('root', null), []))).toEqual(['child']);
+  });
+
+  test('keeps the rendered descendants and their order, adding what only the cache knows', () => {
+    const rendered = linked('live-child', 'root');
+    useGlobalSessionsStore.getState().upsertSessions([
+      linked('root', null),
+      linked('live-child', 'root'),
+      linked('cached-grandchild', 'live-child'),
+    ]);
+
+    const descendants = collectSessionMoveDescendants(linked('root', null), [rendered]);
+    expect(ids(descendants)).toEqual(['live-child', 'cached-grandchild']);
+    expect(descendants[0]).toBe(rendered);
+  });
+});
+
+describe('the same root from the project tree and from a flat row', () => {
+  const ids = (sessions: readonly Session[]) => sessions.map((entry) => entry.id);
+  const sorted = (values: readonly string[]) => [...values].sort();
+
+  beforeEach(resetGlobalSessions);
+
+  test('resolves the same lineage for move, archive, and delete', () => {
+    // root > a > b, root > archived > below-archived
+    useGlobalSessionsStore.getState().upsertSessions([
+      linked('root', null),
+      linked('a', 'root'),
+      linked('b', 'a'),
+      linked('archived', 'root', 5),
+      linked('below-archived', 'archived'),
+    ]);
+    const root = linked('root', null);
+    // The project tree renders the active tree; a flat row renders no children.
+    const treeDescendants = (function collect(node: ReturnType<typeof buildActiveSessionTreeFromCache>): Session[] {
+      return node.children.flatMap((child) => [child.session, ...collect(child)]);
+    })(buildActiveSessionTreeFromCache(root));
+    expect(ids(treeDescendants)).toEqual(['a', 'b']);
+
+    expect(ids(collectSessionMoveDescendants(root, treeDescendants))).toEqual(ids(collectSessionMoveDescendants(root, [])));
+    expect(sorted(collectSessionSubtreeIds('root', ids(treeDescendants), false)))
+      .toEqual(sorted(collectSessionSubtreeIds('root', [], false)));
+    expect(sorted(collectSessionSubtreeIds('root', ids(treeDescendants), false))).toEqual(['a', 'b', 'below-archived']);
+    expect(sorted(collectSessionSubtreeIds('root', ids(treeDescendants), true)))
+      .toEqual(sorted(collectSessionSubtreeIds('root', [], true)));
+  });
+});
+
+>>>>>>> bc50ba56a
 describe('undoArchive', () => {
   const original = useSessionUIStore.getState();
   const restored: string[][] = [];

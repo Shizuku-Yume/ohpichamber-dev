@@ -2,7 +2,13 @@ import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
+<<<<<<< HEAD
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+=======
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { getSettingsSurface } from '@/lib/settings/surface';
+import { isSpaceDirectoryStopped } from '@/lib/spaces/spaces-store';
+>>>>>>> bc50ba56a
 
 const SESSION_PREFETCH_HOVER_DELAY_MS = 180;
 const SESSION_PREFETCH_SETTLE_MS = 150;
@@ -87,8 +93,9 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
         continue;
       }
 
-      // Check if the session is already renderable in the sync child store.
-      if (getSyncSessionMaterializationStatus(request.sessionId, request.directory).renderable) {
+      // Check if the session is already renderable in the sync child store. A stopped space
+      // cannot answer: its read would only wait for a timeout.
+      if (getSyncSessionMaterializationStatus(request.sessionId, request.directory).renderable || isSpaceDirectoryStopped(request.directory)) {
         continue;
       }
 
@@ -106,7 +113,11 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   const scheduleSessionPrefetch = React.useCallback((session: PrefetchTarget | null | undefined, origin: 'hover' | 'neighbor' = 'neighbor') => {
     const sessionId = session?.sessionId;
     const directory = sessionDirectory(session);
+<<<<<<< HEAD
     if (!enabled || !sessionId || !directory || sessionId === currentSessionId) {
+=======
+    if (!enabled || prefetchDisabled || !sessionId || !directory || sessionId === currentSessionId || isSpaceDirectoryStopped(directory)) {
+>>>>>>> bc50ba56a
       return;
     }
     const request = { sessionId, directory, generation: generationRef.current };

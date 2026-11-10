@@ -9,7 +9,24 @@ description: Connect the services and subscriptions OpenChamber works with.
 
 ## GitHub
 
+<<<<<<< HEAD
 Expand the **GitHub** card and choose **Connect GitHub** to sign in with a short device code. Once connected, OpenChamber can start sessions from issues and pull requests, attach them to messages, and open or update PRs. Everything GitHub can do is on [GitHub Issues & PRs](/github/).
+=======
+Expand the **GitHub** card and choose **Connect GitHub** to sign in with a short device code. Once connected, OpenChamber can start sessions from issues and pull requests, attach them to messages, and open or update PRs. Everything the git hosts can do is on [Git hosts](/github/).
+
+## GitLab, Gitea, Forgejo and Gerrit
+
+GitLab, Gitea, Forgejo and Gerrit each have their own card next to GitHub. Once connected, their issues and pull requests (merge requests on GitLab, changes on Gerrit) show on the [Issues and PRs](/issues-and-prs/) board and in the chat's **+** menu, like GitHub's.
+
+- **GitLab**: on gitlab.com, sign in with a short device code, a personal access token, or the `glab` login on the server. For a self-managed GitLab, add its address and paste a personal access token with the `api` scope. Device-code sign-in works there only when the server sets `OPENCHAMBER_GITLAB_CLIENT_ID` to an application registered on that instance.
+- **Gitea**: add your instance's address, such as `https://gitea.example.com`, and paste a personal access token with the `write:repository`, `write:issue` and `read:user` scopes. The card links to the page on your instance that creates one. If you're logged in with Gitea's `gt` CLI on the server (`gt auth login`), the instance shows on the card by itself: choose **Use gt CLI** to work as that login. The `gt` login covers issues and pull requests; for push and pull, connect a token or set up Git yourself, for example with `gt auth setup-git`. It needs Gitea 1.21 or newer, served from the root of its address.
+- **Forgejo**: Codeberg is already on the card, so connecting it takes only a personal access token with the `write:repository`, `write:issue` and `read:user` scopes; the card links to the page on Codeberg that creates one. For another Forgejo server, add its address, such as `https://forgejo.example.com`, and paste a token with the same scopes. It needs Forgejo 7.0 or newer, served from the root of its address. A Forgejo server connects on this card and a Gitea server on the Gitea card.
+- **Gerrit**: add your instance's address, such as `https://gerrit.example.com`, then your Gerrit username and an HTTP password. Generate the password in Gerrit under **Settings → HTTP Credentials**; the card links there. Your sign-in password won't work, and an account without a username can't connect. It needs Gerrit 3.8 or newer, served from the root of its address. Sites whose review address differs from the Git address, such as googlesource.com with `.gitcookies`, aren't supported.
+
+On Gerrit you review changes. Each upload of a change is a patchset, and the change's preview lets you pick an earlier one to read. You review by voting on the project's labels, such as Code-Review and Verified, and land a change with **Submit** once its submit requirements are met. Gerrit has no issues, so only changes show. To create a change, or upload a new patchset to one, use **Push for review** in the Git panel; see [Git](/git/#push-for-review-on-gerrit).
+
+The project's remote decides which card's account OpenChamber uses, and an account on any of these cards can be a project's [Git identity](/git-identities/). An [extension](/extensions/#an-extension-as-a-git-host) can add another host with a card of its own.
+>>>>>>> bc50ba56a
 
 ## Linear
 

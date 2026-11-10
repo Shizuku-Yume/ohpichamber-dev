@@ -218,7 +218,11 @@ bun run profile:soak -- --minutes 15 --delay 0 --cdp-port 9339 --output tmp/soak
 What each source gives:
 
 - `ps` every 250 ms: CPU per process of the app's tree by role (main with the
+<<<<<<< HEAD
   server, renderer, GPU, network, agent worker, git, other children), and every
+=======
+  server, renderer, GPU, network, OpenCode, git, other children), and every
+>>>>>>> bc50ba56a
   process that appears. The recorder leaves out its own shell's subtree when
   started from an agent inside the app; `--exclude-pid` leaves out another.
 - `footprint` every 30 s: physical footprint per long-lived process with its
@@ -236,7 +240,11 @@ What each source gives:
   process, which hosts the server, through the Node inspector of an app
   started with `--inspect=<port>`, and reports time per source file.
 - `soak-capture.sh` under sudo: request lines on loopback to the server and to
+<<<<<<< HEAD
   the agent worker (where the server's own calls to it show), connection
+=======
+  OpenCode (where the server's own calls to OpenCode show), connection
+>>>>>>> bc50ba56a
   openings and DNS lookups with the process behind them, and `eslogger exec`
   for every spawned process when the terminal has Full Disk Access.
 
@@ -249,7 +257,11 @@ arrive together share it, so confirm a suspect with an ablation.
 
 Per-process CPU does not depend on what else runs on the machine, so the user
 may keep working in other apps. Agent sessions inside the app do count: their
+<<<<<<< HEAD
 agent worker work, tool processes and streaming land in the measured processes.
+=======
+OpenCode work, tool processes and streaming land in the measured processes.
+>>>>>>> bc50ba56a
 
 ## profile:session
 

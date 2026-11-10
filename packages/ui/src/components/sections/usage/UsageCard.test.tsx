@@ -10,6 +10,11 @@ const { flushSync } = await import('react-dom');
 const { act } = await import('react');
 const { UsageCard } = await import('./UsageCard');
 const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
+<<<<<<< HEAD
+=======
+const { dict: enDict } = await import('@/lib/i18n/messages/en');
+const { dict: ukDict } = await import('@/lib/i18n/messages/uk');
+>>>>>>> bc50ba56a
 
 const balanceWindow: UsageWindow = {
   usedPercent: null,
@@ -40,14 +45,22 @@ const render = (window: UsageWindow) => {
 
 afterEach(() => {
   for (const container of containers.splice(0)) container.remove();
+<<<<<<< HEAD
   void useI18nStore.getState().setLocale('en');
 });
 
 test('changes the credits-used message when locale changes with the same quota sample', async () => {
+=======
+  flushSync(() => useI18nStore.setState({ locale: 'en', dictionary: enDict }));
+});
+
+test('changes the credits-used message when locale changes with the same quota sample', () => {
+>>>>>>> bc50ba56a
   const window = { ...balanceWindow, valueLabel: undefined, creditsUsed: 3233.27 };
   const container = render(window);
   expect(container.textContent).toContain('3,233.3 Credits Used');
 
+<<<<<<< HEAD
   await act(async () => {
     useI18nStore.setState({
       dictionary: {
@@ -56,6 +69,9 @@ test('changes the credits-used message when locale changes with the same quota s
       },
     });
   });
+=======
+  flushSync(() => useI18nStore.setState({ locale: 'uk', dictionary: ukDict }));
+>>>>>>> bc50ba56a
 
   expect(container.textContent).toContain('Використано кредитів: 3,233.3');
   expect(container.textContent).not.toContain('Credits Used');
@@ -65,6 +81,10 @@ test('changes the credits-used message when locale changes with the same quota s
 
 test('cached Zen values update when the locale changes without another quota request', async () => {
   const originalLocale = useI18nStore.getState();
+<<<<<<< HEAD
+=======
+  const { dict: ukDictionary } = await import('@/lib/i18n/messages/uk');
+>>>>>>> bc50ba56a
   const count = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'requests', count: 292 } });
   const spend = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'spend', spent: 2, limit: null } });
   const capped = render({ ...percentWindow, value: { kind: 'spend', spent: 2, limit: 10 } });
@@ -72,6 +92,7 @@ test('cached Zen values update when the locale changes without another quota req
   expect(spend.textContent).toContain('$2.00 spent');
   expect(capped.textContent).toContain('$2.00 of $10.00');
 
+<<<<<<< HEAD
   await act(async () => {
     useI18nStore.setState({
       dictionary: {
@@ -86,6 +107,13 @@ test('cached Zen values update when the locale changes without another quota req
   expect(spend.textContent).toContain('Витрачено');
   expect(capped.textContent).toContain(' з ');
   await act(async () => { await useI18nStore.getState().setLocale(originalLocale.locale); });
+=======
+  flushSync(() => useI18nStore.setState({ locale: 'uk', dictionary: ukDictionary }));
+  expect(count.textContent).toContain('Запити: 292');
+  expect(spend.textContent).toContain('Витрачено');
+  expect(capped.textContent).toContain(' з ');
+  flushSync(() => useI18nStore.setState(originalLocale));
+>>>>>>> bc50ba56a
 });
 
 test('a balance-only window shows its value without a progress bar or "used" caption', () => {

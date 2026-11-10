@@ -15,6 +15,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
+<<<<<<< HEAD
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { useI18n } from '@/lib/i18n';
 import { resolveEffortForModelSelection } from '@/lib/modelEfforts';
@@ -26,6 +27,18 @@ type TodoSendTarget = 'session' | 'worktree';
 // directory the session lands in.
 import type { TodoSendExecution } from './todoSendExecution';
 
+=======
+import { selectConfigAgentsForDirectory, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
+import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
+import { useI18n } from '@/lib/i18n';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
+import { resolveEffortForModelSelection } from '@/lib/modelEfforts';
+import type { TodoSendExecution } from './todoSendExecution';
+
+type TodoSendTarget = 'session' | 'worktree';
+
+>>>>>>> bc50ba56a
 type TodoSendDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,14 +80,24 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
   const showRunAsGoal = allowRunAsGoal && !isVSCodeRuntime();
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
+<<<<<<< HEAD
   // The catalog of the project the dialog sends to, which need not be the active one.
   const pickerDirectory = projectDirectory ?? undefined;
   const providers = useConfigStore((state) => selectProvidersForDirectory(state, projectDirectory));
+=======
+  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
+  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
+  // The catalogs of the project the dialog sends to, which need not be the active one.
+  const pickerDirectory = projectDirectory ?? undefined;
+  const providers = useConfigStore((state) => selectProvidersForDirectory(state, projectDirectory));
+  const agents = useConfigStore((state) => selectConfigAgentsForDirectory(state, pickerDirectory));
+>>>>>>> bc50ba56a
   const resolveDirectoryDefaultSelection = useConfigStore((state) => state.resolveDirectoryDefaultSelection);
 
   const [execution, setExecution] = React.useState<TodoSendExecution>(EMPTY_EXECUTION);
   const [defaultsResolved, setDefaultsResolved] = React.useState(false);
 
+<<<<<<< HEAD
   const resolveVariantForModel = React.useCallback((providerID: string, modelID: string) => {
     const provider = providers.find((item) => item.providerId === providerID);
     const model = provider?.models?.find((item) => item.modelId === modelID);
@@ -85,6 +108,20 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
       configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID),
     }) ?? '';
   }, [projectDirectory, providers]);
+=======
+  const resolveVariantForModel = React.useCallback((providerID: string, modelID: string, agentName: string) => {
+    const provider = providers.find((item) => item.id === providerID);
+    const model = provider?.models?.find((item) => item.id === modelID) as { variants?: ModelVariantSource } | undefined;
+    return resolveEffortForModelSelection({
+      providerID,
+      modelID,
+      variants: listModelVariantIds(model?.variants),
+      agents,
+      agentName,
+      configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID, projectDirectory),
+    }) ?? '';
+  }, [agents, projectDirectory, providers]);
+>>>>>>> bc50ba56a
 
   React.useEffect(() => {
     if (!open) return;
@@ -127,6 +164,7 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
     if (!open || !defaultsResolved || providers.length === 0 || execution.providerID) return;
 
     const provider = providers[0];
+<<<<<<< HEAD
     const nextModelID = provider?.models?.[0]?.modelId ?? '';
     setExecution((prev) => ({
       ...prev,
@@ -141,6 +179,24 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
     return provider?.models?.find((item) => item.modelId === execution.modelID);
   }, [providers, execution.providerID, execution.modelID]);
   const variantOptions = React.useMemo(() => selectedModel?.variants.map((variant) => variant.variant) ?? [], [selectedModel]);
+=======
+    const nextModelID = provider?.models?.[0]?.id ?? '';
+    setExecution((prev) => ({
+      ...prev,
+      providerID: provider?.id ?? '',
+      modelID: nextModelID,
+      variant: resolveVariantForModel(provider?.id ?? '', nextModelID, prev.agent),
+    }));
+  }, [open, defaultsResolved, providers, execution.providerID, resolveVariantForModel]);
+
+  const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
+
+  const selectedModel = React.useMemo(() => {
+    const provider = providers.find((item) => item.id === execution.providerID);
+    return provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
+  }, [providers, execution.providerID, execution.modelID]);
+  const variantOptions = React.useMemo(() => listModelVariantIds(selectedModel?.variants), [selectedModel]);
+>>>>>>> bc50ba56a
 
   const hasVariantOptions = variantOptions.length > 0;
 
@@ -195,7 +251,11 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
                   ...prev,
                   providerID,
                   modelID,
+<<<<<<< HEAD
                   variant: resolveVariantForModel(providerID, modelID),
+=======
+                  variant: resolveVariantForModel(providerID, modelID, prev.agent),
+>>>>>>> bc50ba56a
                   picked: { ...prev.picked, model: true },
                 }));
               }}
@@ -208,6 +268,19 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
               options={variantOptions}
               disabled={!hasVariantOptions}
               onChange={(variant) => setExecution((prev) => ({ ...prev, variant, picked: { ...prev.picked, variant: true } }))}
+<<<<<<< HEAD
+=======
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
+            <AgentSelector
+              agentName={execution.agent}
+              directory={pickerDirectory}
+              filter={agentFilter}
+              dropdownPortalToBody
+              onChange={(agent) => setExecution((prev) => ({ ...prev, agent, picked: { ...prev.picked, agent: true } }))}
+>>>>>>> bc50ba56a
             />
           </div>
         </div>

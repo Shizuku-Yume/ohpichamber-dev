@@ -95,12 +95,21 @@ export const fixedPopupStyle = (placement: CaretPopupPlacement): React.CSSProper
  * the room there.
  */
 export const viewportLimits = (): PopupLimits => {
+<<<<<<< HEAD
  const top = window.visualViewport?.offsetTop ?? 0;
  const keyboard = readMobileKeyboardVar('--oc-keyboard-inset');
  return {
   top,
   bottom: Math.min(top + (window.visualViewport?.height ?? window.innerHeight), window.innerHeight - keyboard),
  };
+=======
+  const top = window.visualViewport?.offsetTop ?? 0;
+  const keyboard = readMobileKeyboardVar('--oc-keyboard-inset');
+  return {
+    top,
+    bottom: Math.min(top + (window.visualViewport?.height ?? window.innerHeight), window.innerHeight - keyboard),
+  };
+>>>>>>> bc50ba56a
 };
 
 // What decides where a textarea's text wraps, copied onto the measuring box.

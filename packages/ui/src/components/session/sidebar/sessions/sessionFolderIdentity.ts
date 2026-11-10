@@ -1,8 +1,12 @@
 import { getChatsRootFromDirectory } from '@/lib/chatDirectories';
 import type { SessionGroup, SessionGroupFolderScope } from '../types';
 import { normalizePath } from '../utils';
+<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+=======
+import type { Session } from '@/lib/opencode/model';
+>>>>>>> bc50ba56a
 import type { DirectoryOwner } from './sessionOwnership';
 
 export const getSessionFolderIdentityKey = (scopeKey: string, folderId: string): string => (
@@ -15,12 +19,19 @@ export const getSessionFolderDropId = (scopeKey: string, folderId: string): stri
  `folder-drop:${getSessionFolderIdentityKey(scopeKey, folderId)}`
 );
 
+export const getSessionDragId = (dragKey: string): string => `session-drag:${dragKey}`;
+
+export const getSessionFolderDropId = (scopeKey: string, folderId: string): string => (
+  `folder-drop:${getSessionFolderIdentityKey(scopeKey, folderId)}`
+);
+
 export const getSessionFolderOwnerKey = (
  projectId: string | null | undefined,
  directory: string | null | undefined,
 ): string | null => projectId ?? getChatsRootFromDirectory(directory) ?? normalizePath(directory ?? null);
 
 export const getAuthoritativeSessionFolderOwnerKey = (
+<<<<<<< HEAD
  session: Session,
  owner: DirectoryOwner | undefined,
 ): string | null => {
@@ -28,6 +39,14 @@ export const getAuthoritativeSessionFolderOwnerKey = (
  const directory = resolveGlobalSessionDirectory(session) ?? (session.displayPath || null);
  const chatsRoot = getChatsRootFromDirectory(directory);
  return chatsRoot ? getSessionFolderOwnerKey(null, chatsRoot) : null;
+=======
+  session: Session,
+  owner: DirectoryOwner | undefined,
+): string | null => {
+  if (owner) return getSessionFolderOwnerKey(owner.projectId, owner.scopeDirectory);
+  const chatsRoot = getChatsRootFromDirectory(session.directory);
+  return chatsRoot ? getSessionFolderOwnerKey(null, chatsRoot) : null;
+>>>>>>> bc50ba56a
 };
 
 const WORK_FOLDER_OWNER_PREFIX = 'work:';
@@ -39,6 +58,7 @@ const WORK_FOLDER_OWNER_PREFIX = 'work:';
 export const getWorkFolderOwnerKey = (directory: string): string => `${WORK_FOLDER_OWNER_PREFIX}${directory}`;
 
 export const getGroupFolderOwnerKey = (
+<<<<<<< HEAD
  projectId: string | null | undefined,
  group: Pick<SessionGroup, 'isMain' | 'isArchivedBucket' | 'directory' | 'worktree' | 'space'>,
 ): string | null => {
@@ -46,11 +66,24 @@ export const getGroupFolderOwnerKey = (
  return !group.isMain && !group.isArchivedBucket && (group.worktree !== null || group.space) && directory
   ? getWorkFolderOwnerKey(directory)
   : getSessionFolderOwnerKey(projectId, group.directory);
+=======
+  projectId: string | null | undefined,
+  group: Pick<SessionGroup, 'isMain' | 'isArchivedBucket' | 'directory' | 'worktree' | 'space'>,
+): string | null => {
+  const directory = normalizePath(group.directory ?? null);
+  return !group.isMain && !group.isArchivedBucket && (group.worktree !== null || group.space) && directory
+    ? getWorkFolderOwnerKey(directory)
+    : getSessionFolderOwnerKey(projectId, group.directory);
+>>>>>>> bc50ba56a
 };
 
 /** The directory of the worktree or space whose folders an owner key names, or null. */
 export const getWorkFolderScope = (ownerKey: string | null | undefined): string | null => (
+<<<<<<< HEAD
  ownerKey?.startsWith(WORK_FOLDER_OWNER_PREFIX) ? ownerKey.slice(WORK_FOLDER_OWNER_PREFIX.length) : null
+=======
+  ownerKey?.startsWith(WORK_FOLDER_OWNER_PREFIX) ? ownerKey.slice(WORK_FOLDER_OWNER_PREFIX.length) : null
+>>>>>>> bc50ba56a
 );
 
 export const getSessionFolderScopes = (

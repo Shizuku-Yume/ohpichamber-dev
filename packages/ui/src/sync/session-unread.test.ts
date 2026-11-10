@@ -1,9 +1,17 @@
+<<<<<<< HEAD
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { isSessionUnread, isSessionUnreadWithError, markSessionUnreadSeen } from './session-unread';
+=======
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import type { Session } from "@/lib/opencode/model"
+import { opencodeClient } from "@/lib/opencode/client"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { getUnreadSessionIds, isSessionUnread, isSessionUnreadWithError, markSessionsUnreadSeen, markSessionUnreadSeen } from "./session-unread"
+>>>>>>> bc50ba56a
 
 const session = (id: string, workbench?: { lastIdleAt?: number; viewedAt?: number; lastTurnOutcome?: 'completed' | 'failed' | 'cancelled' }, extra: Partial<Session> = {}): Session => ({
   sessionId: id,
@@ -87,6 +95,7 @@ describe('markSessionUnreadSeen', () => {
     });
     spyOn(canonicalClient, 'patchSessionMetadata').mockImplementation(() => promise);
 
+<<<<<<< HEAD
     markSessionUnreadSeen('a');
     expect(isSessionUnread(record('a'))).toBe(false);
     reject(new Error('offline'));
@@ -108,3 +117,28 @@ describe('markSessionUnreadSeen', () => {
     expect(patchSpy).not.toHaveBeenCalled();
   });
 });
+=======
+  test("a session that is already seen sends nothing", () => {
+    useGlobalSessionsStore.getState().upsertSession(session("a", { idle: 10, viewed: 10, updated: 2 }))
+    markSessionUnreadSeen("a")
+    markSessionUnreadSeen("missing")
+    expect(view.mock.calls).toEqual([])
+  })
+
+  test("marking all clears every unread mark in one store update and records each view", () => {
+    view.mockResolvedValue(undefined)
+    useGlobalSessionsStore.getState().upsertSessions([
+      session("b", { idle: 30 }),
+      session("c", { idle: 40, viewed: 40 }),
+    ])
+    let updates = 0
+    const unsubscribe = useGlobalSessionsStore.subscribe(() => { updates += 1 })
+    const marked = markSessionsUnreadSeen(getUnreadSessionIds())
+    unsubscribe()
+    expect(marked.sort()).toEqual(["a", "b"])
+    expect(updates).toBe(1)
+    expect(getUnreadSessionIds()).toEqual([])
+    expect(view.mock.calls.sort()).toEqual([["a", 10, "/repo"], ["b", 30, "/repo"]])
+  })
+})
+>>>>>>> bc50ba56a

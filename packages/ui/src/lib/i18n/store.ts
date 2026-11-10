@@ -4,6 +4,7 @@ import { dict as enDict, type I18nKey } from './messages/en';
 import { subagentHudI18n } from './messages/subagent-hud.i18n';
 import { timelineNoticesI18n } from './messages/timeline-notices.i18n';
 import { DEFAULT_LOCALE, detectInitialLocale, type Locale, writeStoredLocale } from './runtime';
+import { hasRightToLeftText, isolateInsertedText } from './textDirection';
 
 export type I18nParams = Record<string, string | number | boolean | null | undefined>;
 export type I18nDictionary = Record<I18nKey, string>;
@@ -111,9 +112,14 @@ export function formatMessage(dictionary: I18nDictionary, key: I18nKey, params?:
     return template;
   }
 
+  const sentenceHasRightToLeft = hasRightToLeftText(template);
   return template.replace(/\{([^{}]+)\}/g, (match, rawKey) => {
     const value = params[rawKey.trim()];
-    return value === null || value === undefined ? match : String(value);
+    if (value === null || value === undefined) return match;
+    // Numbers have no direction of their own, even written as 1e-7 or NaN;
+    // only strings come back from String() unchanged.
+    const text = String(value);
+    return text === value ? isolateInsertedText(text, sentenceHasRightToLeft) : text;
   });
 }
 

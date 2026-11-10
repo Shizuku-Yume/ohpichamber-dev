@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
@@ -102,8 +103,14 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
         const name = account.label || account.email || account.accountId || `${methodLabel} ${index + 1}`;
         const methodIcon: IconName = account.method === 'oauth' ? 'user-3' : 'key';
 
+        // The row's right click opens the same menu as its ⋯ button.
         return (
+<<<<<<< HEAD
           <div key={account.credentialRef} className={cn('flex min-w-0 items-center gap-3 py-2.5', account.disabled && 'opacity-60')}>
+=======
+          <ContextMenu key={connection.id} disabled={busy || renamingId === connection.id}>
+          <ContextMenuTrigger render={<div className={cn('flex min-w-0 items-center gap-3 py-2.5', unused && 'opacity-60')} />}>
+>>>>>>> bc50ba56a
             <AccountTile icon={methodIcon} />
             {renamingId === account.credentialRef ? (
               <RenameField
@@ -123,7 +130,11 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
               <>
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
+<<<<<<< HEAD
                     <span className="truncate typography-ui-label font-medium text-foreground">{name}</span>
+=======
+                    <span dir="auto" className="truncate typography-ui-label font-medium text-foreground">{connection.label}</span>
+>>>>>>> bc50ba56a
                     {showActive && active ? (
                       <span className="shrink-0 rounded-full bg-[var(--interactive-selection)] px-2 py-px typography-micro font-medium text-[var(--interactive-selection-foreground)]">
                         {t('settings.providers.accounts.active')}
@@ -163,7 +174,7 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                       className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0')}
                       aria-label={t('settings.providers.accounts.menuAria', { account: name })}
                     >
-                      <Icon name="more-2" className="size-4" />
+                      <Icon name="more" className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -186,7 +197,18 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                 </DropdownMenu>
               </>
             )}
-          </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => setRenamingId(connection.id)}>
+              <Icon name="pencil" className="size-4" />
+              {t('settings.providers.accounts.rename')}
+            </ContextMenuItem>
+            <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => onRemove(connection)}>
+              <Icon name="delete-bin" className="size-4" />
+              {t('settings.providers.accounts.remove')}
+            </ContextMenuItem>
+          </ContextMenuContent>
+          </ContextMenu>
         );
       })}
     </div>

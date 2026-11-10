@@ -63,6 +63,20 @@ export const collectParentIdDescendantIds = (root: SessionNode): string[] => {
  return ids;
 };
 
+/** Rendered subsessions only; the global action lineage adds linked reviews. */
+export const collectParentIdDescendantIds = (root: SessionNode): string[] => {
+  const ids: string[] = [];
+  const visit = (node: SessionNode): void => {
+    for (const child of node.children) {
+      if (child.session.parentID !== node.session.id) continue;
+      ids.push(child.session.id);
+      visit(child);
+    }
+  };
+  visit(root);
+  return ids;
+};
+
 /**
  * A session's active subtree from the global cache, built the way the project
  * tree builds it: it stops at an archived session and everything below it.

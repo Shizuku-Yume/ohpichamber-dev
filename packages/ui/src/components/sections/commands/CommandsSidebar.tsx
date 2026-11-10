@@ -385,6 +385,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
       <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (e) => { e.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
+<<<<<<< HEAD
         <div className="flex min-w-0 flex-1 items-center">
           <button
             onClick={onSelect}
@@ -401,8 +402,31 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
                   : t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
                 {command.group ? ` / ${command.group}` : ''}
               </span>
+=======
+      <div className="flex min-w-0 flex-1 items-center">
+        <button
+          onClick={onSelect}
+          className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          tabIndex={0}
+        >
+          <div className="flex items-center gap-2">
+            <span className="typography-ui-label font-normal truncate text-foreground">
+              /{command.name}
+            </span>
+            {(command.scope || isCommandBuiltIn(command)) && (
+              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-edge">
+                {isCommandBuiltIn(command) ? t('settings.agents.sidebar.badge.system') : command.scope}
+              </span>
+            )}
+          </div>
+
+          {command.description && (
+            <div className="typography-micro text-muted-foreground truncate leading-tight">
+              {command.description}
+>>>>>>> bc50ba56a
             </div>
 
+<<<<<<< HEAD
             {getLocalizedCommandDescription(command, t) && (
               <div className="typography-micro text-muted-foreground truncate leading-tight">
                 {getLocalizedCommandDescription(command, t)}
@@ -425,6 +449,22 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+=======
+        <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm"
+              variant="ghost"
+              className="h-6 w-6 px-0 flex-shrink-0 -me-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 pointer-fine:hidden"
+            >
+              <Icon name="more" className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-fit min-w-20">
+            {renderMenuItems(DropdownMenuItem)}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+>>>>>>> bc50ba56a
       </ContextMenuTrigger>
       <ContextMenuContent className="w-fit min-w-20">
         {renderMenuItems(ContextMenuItem)}

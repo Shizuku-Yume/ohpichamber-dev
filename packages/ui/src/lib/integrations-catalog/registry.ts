@@ -2430,10 +2430,53 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     components: [{ kind: 'skill', source: 'openai/skills', subpath: 'skills/.curated/pdf', skillDir: 'pdf' }],
   },
 
+<<<<<<< HEAD
   // --- Native OMP plugins (npm, pinned to a major, explicit confirmation) ---
   // No entry yet: the upstream OpenCode plugins in this catalog position
   // (Langfuse, LangSmith, Claude Code, Search Providers) load only in
   // OpenCode's plugin runtime, which OMP does not provide.
+=======
+  // --- OpenCode plugins (npm, pinned to a major, explicit confirmation) ---
+  {
+    id: 'langfuse-plugin',
+    name: 'Langfuse',
+    publisher: 'Langfuse',
+    verified: true,
+    descriptionKey: 'integrationsCatalog.entry.langfuse-plugin.description',
+    detailsKey: 'integrationsCatalog.entry.langfuse-plugin.details',
+    categories: ['ai'],
+    icon: 'pulse',
+    homepage: 'https://langfuse.com',
+    status: 'stable',
+    components: [{ kind: 'plugin', spec: '@langfuse/opencode-observability-plugin@^1', license: 'MIT' }],
+  },
+  {
+    id: 'langsmith-plugin',
+    name: 'LangSmith',
+    publisher: 'LangChain',
+    verified: true,
+    descriptionKey: 'integrationsCatalog.entry.langsmith-plugin.description',
+    detailsKey: 'integrationsCatalog.entry.langsmith-plugin.details',
+    categories: ['ai'],
+    icon: 'pulse',
+    homepage: 'https://smith.langchain.com',
+    status: 'stable',
+    components: [{ kind: 'plugin', spec: '@langchain/langsmith-opencode@^1', license: 'MIT' }],
+  },
+  {
+    id: 'opencode-search-providers',
+    name: 'Search Providers',
+    publisher: 'OpenChamber',
+    verified: true,
+    descriptionKey: 'integrationsCatalog.entry.opencode-search-providers.description',
+    detailsKey: 'integrationsCatalog.entry.opencode-search-providers.details',
+    categories: ['openchamber', 'ai'],
+    icon: 'search',
+    homepage: 'https://github.com/openchamber/opencode-search-providers',
+    status: 'stable',
+    components: [{ kind: 'plugin', spec: '@openchamber/opencode-search-providers@^1', license: 'MIT' }],
+  },
+>>>>>>> bc50ba56a
 
   // --- OpenChamber extensions (installed from Git like Settings → Integrations) ---
   {

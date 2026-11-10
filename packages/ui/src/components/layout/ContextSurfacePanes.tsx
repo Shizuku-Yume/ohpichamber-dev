@@ -27,7 +27,11 @@ import { setExternallyViewedSession } from '@/sync/sync-context';
 import { ContextPanelHeaderSlotProvider } from './contextPanelHeaderSlot';
 import { getSessionIDFromDedupeKey } from './contextPanelSessionTitles';
 import { MovablePane } from './MovablePane';
+<<<<<<< HEAD
 import { closeZoneOnEscape } from './zoneEscape';
+=======
+import { SidebarFilesTree } from './SidebarFilesTree';
+>>>>>>> bc50ba56a
 import { startZoneDragGesture } from './zoneDrag';
 import { ZoneSurfaceDragContext } from './zoneSurfaceDragContext';
 import { SidebarFilesTree } from './SidebarFilesTree';
@@ -223,12 +227,9 @@ const EditorTreeColumn: React.FC<{ visible: boolean; active: boolean; fill?: boo
  );
 };
 
-/**
- * A keep-alive pane: portalled into its zone's body, with the zone's Escape.
- * Its React events do not pass through the zone frame, so it closes the zone
- * itself.
- */
+/** A keep-alive pane, portalled into its zone's body. */
 const ZonePane: React.FC<{
+<<<<<<< HEAD
  zone: ContextZone;
  isOpen: boolean;
  interactive: boolean;
@@ -257,6 +258,29 @@ const ZonePane: React.FC<{
    </div>
   </MovablePane>
  );
+=======
+  zone: ContextZone;
+  isOpen: boolean;
+  interactive: boolean;
+  /** The zone's frame is inert at opacity 0 (`contentHidden`). */
+  hidden: boolean;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ zone, isOpen, interactive, hidden, className, children }) => {
+  // A closed zone keeps its panes mounted at opacity 0; their spinners,
+  // blinks and counters stand still until it opens again.
+  return (
+    <MovablePane zone={zone}>
+      <div className={className}>
+        <DockedPanelSurfaceContext.Provider value>
+          <ZoneInteractiveContext.Provider value={interactive}>
+            <PauseClock paused={!isOpen || hidden}>{children}</PauseClock>
+          </ZoneInteractiveContext.Provider>
+        </DockedPanelSurfaceContext.Provider>
+      </div>
+    </MovablePane>
+  );
+>>>>>>> bc50ba56a
 };
 
 /**
@@ -297,12 +321,39 @@ export const ContextSurfacePanes: React.FC = () => {
  // under it too; its frame closes then (ContextPanel), and so must its panes.
  const chatCovered = useRightSlotStore((state) => state.chatCovered);
 
+<<<<<<< HEAD
  // What each zone shows. A zone is open only with a tab of its own.
  const storedZones = React.useMemo(() => {
   const viewOf = (zone: ContextZone) => {
    const activeTab = panelState ? resolveZoneActiveTab(panelState, placement, zone) : null;
    const covered = zone === 'bottom' && chatCovered;
    return { activeTab, isOpen: Boolean(panelState && getZoneView(panelState, zone).isOpen && activeTab) && !covered };
+=======
+  // What each zone shows. A zone is open only with a tab of its own.
+  const storedZones = React.useMemo(() => {
+    const viewOf = (zone: ContextZone) => {
+      const activeTab = panelState ? resolveZoneActiveTab(panelState, placement, zone) : null;
+      const covered = zone === 'bottom' && chatCovered;
+      return { activeTab, isOpen: Boolean(panelState && getZoneView(panelState, zone).isOpen && activeTab) && !covered };
+    };
+    return { left: viewOf('left'), right: viewOf('right'), bottom: viewOf('bottom') };
+  }, [chatCovered, panelState, placement]);
+  // A closing zone keeps drawing what it showed, as its frame does (ContextPanel).
+  const zones = {
+    left: { ...storedZones.left, activeTab: useClosingZoneTab(storedZones.left.activeTab, storedZones.left.isOpen) },
+    right: { ...storedZones.right, activeTab: useClosingZoneTab(storedZones.right.activeTab, storedZones.right.isOpen) },
+    bottom: { ...storedZones.bottom, activeTab: useClosingZoneTab(storedZones.bottom.activeTab, storedZones.bottom.isOpen) },
+  };
+
+  // A closing zone's content leaves the document (the editor's `detached`)
+  // only once its animation has settled. The zone frame runs the same hook
+  // for its `inert`; both settle in one task, so they change in one commit.
+  // Rendered after the frames, so their animation has begun by now.
+  const settledShown = {
+    left: useOpenUntilSettled(zones.left.isOpen),
+    right: useOpenUntilSettled(zones.right.isOpen),
+    bottom: useOpenUntilSettled(zones.bottom.isOpen),
+>>>>>>> bc50ba56a
   };
   return { left: viewOf('left'), right: viewOf('right'), bottom: viewOf('bottom') };
  }, [chatCovered, panelState, placement]);
@@ -462,6 +513,7 @@ export const ContextSurfacePanes: React.FC = () => {
   });
  }, [diffActiveTab, directoryKey, openContextPanelTab]);
 
+<<<<<<< HEAD
  // Every browser tab of the project on screen stays mounted, in a stable
  // order, so a moved webview keeps its page. Tabs of other projects load
  // when their project is shown (cross-project live-tab limits are the
@@ -502,6 +554,29 @@ export const ContextSurfacePanes: React.FC = () => {
   }
   return dockings;
  }, [guests]);
+=======
+  // Tells agent browser control which project is on screen and which browser
+  // tab the user last had in front of them there; a session without a tab of
+  // its own may use that tab only when it is the user's and in its project.
+  // From the store, not the drawn tab: a closed zone still remembers it.
+  const storedBrowserTab = storedZones[browserZone.zone].activeTab;
+  const shownBrowserTabId = storedBrowserTab?.mode === 'browser' ? storedBrowserTab.id : null;
+  React.useEffect(() => {
+    setShownBrowserTab(directoryKey, shownBrowserTabId);
+  }, [directoryKey, shownBrowserTabId]);
+
+  const fileActiveTab = storedZones[fileZone.zone].activeTab;
+  React.useEffect(() => {
+    if (!contentDirectory || fileActiveTab?.mode !== 'file' || !fileActiveTab.targetPath) {
+      return;
+    }
+    // The editor reads its file under the folder the panel shows. A draft waiting for a space
+    // shows only the space's files, so a tab opened on this computer's before stays empty; and a
+    // tab the draft opened in the space stays empty in the project's other chats.
+    const sameSide = spaceIdOfDirectory(fileActiveTab.targetPath) === spaceIdOfDirectory(contentDirectory);
+    setSelectedFilePath(normalizeContextPanelDirectoryKey(contentDirectory), fileActiveTab.targetPath, { allowOutsideRoot: !draftSpace && sameSide });
+  }, [contentDirectory, draftSpace, fileActiveTab, setSelectedFilePath]);
+>>>>>>> bc50ba56a
 
  // A terminal tab dragged out of the terminal's own strip moves the terminal.
  const terminalZoneOfPlacement = terminalZone.zone;
@@ -513,6 +588,7 @@ export const ContextSurfacePanes: React.FC = () => {
  // The header slot goes to the pane on screen in its zone only.
  const headerSlotFor = (zone: ContextZone, active: boolean): HTMLElement | null => (active ? headerSlots[zone] : null);
 
+<<<<<<< HEAD
  return (
   <>
    {hasFileTabs ? (
@@ -700,4 +776,355 @@ export const ContextSurfacePanes: React.FC = () => {
    })}
   </>
  );
+=======
+  const chatActiveTab = chatZone.isOpen && chatZone.activeTab?.mode === 'chat' ? chatZone.activeTab : null;
+  const activeChatSessionID = chatActiveTab ? getSessionIDFromDedupeKey(chatActiveTab.dedupeKey) : null;
+  // A chat opened from another project (or Chat) carries its own directory;
+  // tabs opened without one (subtasks, reviews) belong to this panel's.
+  const activeChatDirectory = React.useMemo(() => {
+    const own = chatActiveTab?.targetDirectory ? normalizeContextPanelDirectoryKey(chatActiveTab.targetDirectory) : '';
+    return own || directoryKey || null;
+  }, [chatActiveTab?.targetDirectory, directoryKey]);
+  const activeChatPinnedSession = React.useMemo(
+    () => (activeChatSessionID ? { sessionId: activeChatSessionID, directory: activeChatDirectory } : null),
+    [activeChatSessionID, activeChatDirectory],
+  );
+
+  React.useEffect(() => {
+    if (!activeChatDirectory || !activeChatSessionID || typeof window === 'undefined') {
+      return;
+    }
+
+    const markActiveChatViewed = () => {
+      if (document.visibilityState === 'hidden' || !document.hasFocus()) {
+        setExternallyViewedSession(activeChatDirectory, activeChatSessionID, false);
+        return;
+      }
+
+      markSessionViewed(activeChatSessionID);
+      setExternallyViewedSession(activeChatDirectory, activeChatSessionID, true);
+    };
+
+    markActiveChatViewed();
+    const interval = window.setInterval(markActiveChatViewed, 10_000);
+    window.addEventListener('focus', markActiveChatViewed);
+    window.addEventListener('blur', markActiveChatViewed);
+    document.addEventListener('visibilitychange', markActiveChatViewed);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', markActiveChatViewed);
+      window.removeEventListener('blur', markActiveChatViewed);
+      document.removeEventListener('visibilitychange', markActiveChatViewed);
+      setExternallyViewedSession(activeChatDirectory, activeChatSessionID, false);
+    };
+  }, [activeChatDirectory, activeChatSessionID]);
+
+  const diffActiveTab = diffZone.activeTab;
+  const handleDiffScopeChange = React.useCallback((nextScope: PendingDiffScope) => {
+    if (!directoryKey || diffActiveTab?.mode !== 'diff') {
+      return;
+    }
+
+    openContextPanelTab(directoryKey, {
+      mode: 'diff',
+      targetPath: diffActiveTab.targetPath,
+      targetDirectory: diffActiveTab.targetDirectory,
+      stagedDiff: nextScope === 'staged',
+      diffScope: nextScope,
+    });
+  }, [diffActiveTab, directoryKey, openContextPanelTab]);
+
+  const visibleBrowserTabId = browserZone.isOpen && browserZone.activeTab?.mode === 'browser' ? browserZone.activeTab.id : null;
+  React.useEffect(() => {
+    if (visibleBrowserTabId && directoryKey) wakeBrowserTab(directoryKey, visibleBrowserTabId);
+  }, [directoryKey, visibleBrowserTabId, wakeBrowserTab]);
+  // The browser tabs agents can reach: this project's, and every other
+  // project's agent tabs, so a session working in a project the user is not
+  // looking at keeps its page. The user's own tabs in other projects stay
+  // loaded while among the most recently used, and are left out otherwise.
+  // Sorted by directory and tab id, an order that neither the project on
+  // screen nor the store's own reordering of directories can change: a moved
+  // webview reloads its page.
+  const { loadedBrowserTabs, sleepingBrowserTabs } = React.useMemo(() => {
+    const recent = new Set(recentBrowserTabs);
+    const openUserTabs = new Set<string>();
+    for (const [directory, directoryState] of Object.entries(contextPanelByDirectory)) {
+      for (const tab of directoryState.tabs) {
+        if (tab.mode === 'browser' && tab.ownerSessionId === null) openUserTabs.add(browserTabRenderKey(directory, tab.id));
+      }
+    }
+    const liveUserTabs = pickLiveBrowserTabs(recentBrowserTabs, openUserTabs, liveBrowserTabLimit);
+    const loaded: PanelBrowserTab[] = [];
+    const sleeping: PanelBrowserTab[] = [];
+    for (const [directory, directoryState] of Object.entries(contextPanelByDirectory)) {
+      const isShownDirectory = directory === directoryKey;
+      for (const tab of directoryState.tabs) {
+        if (tab.mode !== 'browser') continue;
+        const key = browserTabRenderKey(directory, tab.id);
+        const isUserTab = tab.ownerSessionId === null;
+        const isLoaded = (isShownDirectory && tab.id === visibleBrowserTabId)
+          || (isUserTab ? liveUserTabs.has(key) : recent.has(key));
+        if (!isLoaded && !isShownDirectory && isUserTab) continue;
+        const entry = { directory, id: tab.id, targetPath: tab.targetPath, ownerSessionId: tab.ownerSessionId };
+        (isLoaded ? loaded : sleeping).push(entry);
+      }
+    }
+    loaded.sort((a, b) => (browserTabRenderKey(a.directory, a.id) < browserTabRenderKey(b.directory, b.id) ? -1 : 1));
+    return { loadedBrowserTabs: loaded, sleepingBrowserTabs: sleeping };
+  }, [contextPanelByDirectory, directoryKey, liveBrowserTabLimit, recentBrowserTabs, visibleBrowserTabId]);
+  React.useEffect(() => {
+    // Only a Chromium host mounts views that agents can drive, so only it may
+    // offer to wake a tab; anywhere else a claimed action could never run.
+    if (!window.__OPENCHAMBER_ELECTRON__) return;
+    const unregister = sleepingBrowserTabs.map((tab) => registerSleepingBrowserTab({
+      tabId: tab.id,
+      directory: tab.directory,
+      ownerSessionId: tab.ownerSessionId,
+      describe: () => ({ title: '', url: tab.targetPath ?? '' }),
+      wake: () => wakeBrowserTab(tab.directory, tab.id),
+    }));
+    return () => unregister.forEach((release) => release());
+  }, [sleepingBrowserTabs, wakeBrowserTab]);
+
+  const diffTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === 'diff'), [tabs]);
+  const terminalTab = React.useMemo(
+    () => tabs.find((tab) => tab.mode === 'terminal') ?? null,
+    [tabs],
+  );
+  // Keep-alive: the walkthrough holds reading progress and scroll position that
+  // a remount would silently throw away.
+  const walkthroughTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'walkthrough') ?? null, [tabs]);
+  const pluginTabs = React.useMemo(() => tabs.filter((tab) => isPluginContextPanelMode(tab.mode)), [tabs]);
+  const guests = useGuestsStore((state) => state.guests);
+  const surfaceGuestIds = React.useMemo(
+    () => new Set(guests.filter(guestHasSharedSurface).map((guest) => guest.id)),
+    [guests],
+  );
+  // Surface extensions that also ship a page: it is docked to one edge of the picture.
+  const surfaceDockings = React.useMemo(() => {
+    const dockings = new Map<string, GuestSurfaceDocking>();
+    for (const guest of guests) {
+      const docking = guestSurfaceDocking(guest);
+      if (docking) dockings.set(guest.id, docking);
+    }
+    return dockings;
+  }, [guests]);
+
+  // A terminal tab dragged out of the terminal's own strip moves the terminal.
+  const terminalZoneOfPlacement = terminalZone.zone;
+  const terminalDragOut = React.useCallback((isOutside: (point: { x: number; y: number }) => boolean) => {
+    const gesture = startZoneDragGesture({ mode: 'terminal', label: t('layout.mainTab.terminal'), from: terminalZoneOfPlacement }, isOutside);
+    return { finish: () => gesture.finish(directoryKey), cancel: gesture.cancel };
+  }, [directoryKey, t, terminalZoneOfPlacement]);
+
+  // The header slot goes to the pane on screen in its zone only.
+  const headerSlotFor = (zone: ContextZone, active: boolean): HTMLElement | null => (active ? headerSlots[zone] : null);
+
+
+  // A tab restored from the last run starts its page the first time it shows:
+  // an extension nobody looked at this run runs nothing. After that it stays
+  // mounted, which keeps the page's state while another tab is in front.
+  const [seenPluginTabs, setSeenPluginTabs] = React.useState<ReadonlySet<string>>(() => new Set());
+  const newlyShownPluginTabs = pluginTabs.filter((tab) => {
+    if (seenPluginTabs.has(tab.id)) return false;
+    const zone = zoneFor(tab.mode);
+    return zone.isOpen && zone.activeTab?.id === tab.id;
+  });
+  if (newlyShownPluginTabs.length > 0) {
+    setSeenPluginTabs(new Set([...seenPluginTabs, ...newlyShownPluginTabs.map((tab) => tab.id)]));
+  }
+
+  return (
+    <>
+      {hasFileTabs ? (
+        <ZonePane
+          zone={fileZone.zone}
+          interactive={interactive[fileZone.zone]}
+          isOpen={fileZone.isOpen}
+          hidden={contentHidden(fileZone.zone)}
+          className={cn('absolute inset-0 flex', fileTreeSide === 'left' && 'flex-row-reverse', isFileTabActive ? 'flex' : 'hidden')}
+        >
+          {spacePreparing ? (
+            <div className="h-full min-w-0 flex-1"><SpacePreparing /></div>
+          ) : hasOpenEditorFile || !contextEditorTreeVisible ? (
+            // Hidden rather than unmounted so a hidden editor keeps its state.
+            <div className={cn('h-full min-w-0 flex-1', hasOpenEditorFile && !showsEditor && 'hidden')}>
+              {hasOpenEditorFile ? (
+                <React.Suspense fallback={null}><FilesView mode="editor-only" visible={!contentHidden(fileZone.zone) && isFileTabActive && showsEditor} onCloseFile={handleCloseEditorFile} /></React.Suspense>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                  <Icon name="file-code" className="h-12 w-12 text-muted-foreground/50" />
+                  <div className="typography-ui-header text-foreground">{t('contextPanel.editorEmpty.title')}</div>
+                  <div className="max-w-sm typography-micro text-muted-foreground">{t('contextPanel.editorEmpty.description')}</div>
+                </div>
+              )}
+            </div>
+          ) : null}
+          {spacePreparing ? null : <EditorTreeColumn visible={contextEditorTreeVisible} active={fileZone.isOpen && isFileTabActive} fill={!showsEditor} side={fileTreeSide} />}
+        </ZonePane>
+      ) : null}
+      {chatActiveTab && activeChatSessionID && activeChatPinnedSession ? (
+        // The chat renders in this app, pinned to its session: it shares
+        // the app's connection, stores and theme, and opens like a session
+        // switch instead of booting a second app.
+        <ZonePane key={chatActiveTab.id} zone={chatZone.zone} interactive={interactive[chatZone.zone]} isOpen={chatZone.isOpen} hidden={contentHidden(chatZone.zone)} className="absolute inset-0 bg-background">
+          <section
+            aria-label={t('contextPanel.iframe.sessionChatTitle', { sessionID: activeChatSessionID })}
+            className="h-full"
+          >
+            <ChatView
+              pinnedSession={activeChatPinnedSession}
+              readOnly={chatActiveTab.readOnly}
+            />
+          </section>
+        </ZonePane>
+      ) : null}
+      {loadedBrowserTabs.map((tab) => {
+        const shown = tab.directory === directoryKey && browserZone.activeTab?.id === tab.id;
+        // A tab of the draft on screen browses the space it waits for once the space runs.
+        const siteDirectory = tab.directory === directoryKey ? draftSpaceDirectory ?? tab.directory : tab.directory;
+        return (
+          <ZonePane
+            // Keyed by the directory as well: a tab of the next directory with the
+            // same id is another tab, with its own view and its own session. Kept
+            // on the same instance, the view went on showing the previous
+            // directory's page, and a space's page would run in the host's
+            // session instead of the space's own.
+            key={browserTabRenderKey(tab.directory, tab.id)}
+            zone={browserZone.zone}
+            interactive={interactive[browserZone.zone]}
+            isOpen={browserZone.isOpen}
+            hidden={contentHidden(browserZone.zone)}
+            // Invisible rather than display:none, so a background tab the agent
+            // is working keeps its layout and its snapshots read a real page.
+            className={cn('absolute inset-0', !shown && 'invisible pointer-events-none')}
+          >
+            <div className="h-full" aria-hidden={!shown || undefined}>
+              <PauseClock paused={!shown}>
+              {tab.directory === directoryKey && spacePreparing ? <SpacePreparing /> : (
+                <BrowserPane
+                  // Remounted when the space starts: its page runs in the space's own session.
+                  key={siteDirectory}
+                  initialUrl={tab.targetPath ?? ''}
+                  directory={tab.directory}
+                  siteDirectory={siteDirectory}
+                  tabID={tab.id}
+                  ownerSessionId={tab.ownerSessionId}
+                  visible={shown && browserZone.isOpen}
+                />
+              )}
+              </PauseClock>
+            </div>
+          </ZonePane>
+        );
+      })}
+      {diffTabs.map((tab) => {
+        const active = diffZone.activeTab?.id === tab.id;
+        return (
+          <ZonePane
+            key={tab.id}
+            zone={diffZone.zone}
+            interactive={interactive[diffZone.zone]}
+            isOpen={diffZone.isOpen}
+            hidden={contentHidden(diffZone.zone)}
+            className={cn('absolute inset-0', !active && 'hidden')}
+          >
+            <React.Suspense fallback={null}>
+              <ContextPanelHeaderSlotProvider value={headerSlotFor(diffZone.zone, active)}>
+                {spacePreparing && !tab.targetDirectory ? <SpacePreparing /> : <DiffView
+                  directory={tab.targetDirectory ?? draftSpaceDirectory}
+                  visible={diffZone.isOpen && active}
+                  hideStackedFileSidebar
+                  stackedDefaultCollapsedAll
+                  pinSelectedFileHeaderToTopOnNavigate
+                  showOpenInEditorAction
+                  diffScope={tab.diffScope ?? (tab.stagedDiff ? 'staged' : null)}
+                  onDiffScopeChange={handleDiffScopeChange}
+                  targetFilePath={tab.targetPath}
+                  flushContent
+                />}
+              </ContextPanelHeaderSlotProvider>
+            </React.Suspense>
+          </ZonePane>
+        );
+      })}
+      {terminalTab ? (
+        <ZonePane
+          zone={terminalZone.zone}
+          interactive={interactive[terminalZone.zone]}
+          isOpen={terminalZone.isOpen}
+          hidden={contentHidden(terminalZone.zone)}
+          className={cn('absolute inset-0', terminalZone.activeTab?.mode === 'terminal' ? 'block' : 'hidden')}
+        >
+          <ContextPanelHeaderSlotProvider value={headerSlotFor(terminalZone.zone, terminalZone.activeTab?.mode === 'terminal')}>
+            <ZoneSurfaceDragContext.Provider value={terminalDragOut}>
+              <TerminalView
+                visible={terminalZone.isOpen && terminalZone.activeTab?.mode === 'terminal'}
+                directory={terminalTab.targetDirectory}
+                onLastTabClosed={() => { if (directoryKey) closeContextPanelTab(directoryKey, terminalTab.id); }}
+              />
+            </ZoneSurfaceDragContext.Provider>
+          </ContextPanelHeaderSlotProvider>
+        </ZonePane>
+      ) : null}
+      {walkthroughTab ? (
+        <ZonePane
+          zone={walkthroughZone.zone}
+          interactive={interactive[walkthroughZone.zone]}
+          isOpen={walkthroughZone.isOpen}
+          hidden={contentHidden(walkthroughZone.zone)}
+          className={cn('absolute inset-0', walkthroughZone.activeTab?.mode === 'walkthrough' ? 'block' : 'hidden')}
+        >
+          <React.Suspense fallback={null}>
+            <ContextPanelHeaderSlotProvider value={headerSlotFor(walkthroughZone.zone, walkthroughZone.activeTab?.mode === 'walkthrough')}>
+              <WalkthroughView directory={walkthroughTab.targetDirectory ?? effectiveDirectory} visible={walkthroughZone.isOpen && walkthroughZone.activeTab?.mode === 'walkthrough'} />
+            </ContextPanelHeaderSlotProvider>
+          </React.Suspense>
+        </ZonePane>
+      ) : null}
+      {pluginTabs.map((tab) => {
+        if (!isPluginContextPanelMode(tab.mode)) return null;
+        const pluginZone = zoneFor(tab.mode);
+        if (!seenPluginTabs.has(tab.id)) return null;
+        // A shared-surface extension's picture is drawn by the host and
+        // mounted only while shown, so an unwatched surface holds no socket
+        // and its service can idle out. Its own page, when it has one, is
+        // docked to one edge of the picture and stays mounted like any
+        // panel iframe.
+        const guestId = pluginIdFromMode(tab.mode);
+        const sharedSurface = surfaceGuestIds.has(guestId);
+        const docking = surfaceDockings.get(guestId);
+        const shown = pluginZone.activeTab?.id === tab.id;
+        const surfaceMounted = shown && pluginZone.isOpen;
+        if (sharedSurface && !docking && !surfaceMounted) return null;
+        return (
+          <ZonePane
+            key={tab.id}
+            zone={pluginZone.zone}
+            interactive={interactive[pluginZone.zone]}
+            isOpen={pluginZone.isOpen}
+            hidden={contentHidden(pluginZone.zone)}
+            className={cn('absolute inset-0', shown ? 'block' : 'hidden')}
+          >
+            <React.Suspense fallback={null}>
+              {!sharedSurface ? (
+                <PluginPane mode={tab.mode} />
+              ) : !docking ? (
+                <GuestSurfacePane mode={tab.mode} />
+              ) : (
+                <div className={cn('flex h-full', DOCK_LAYOUT[docking.dock].container)}>
+                  <DockedGuestPage mode={tab.mode} docking={docking} />
+                  <div className="min-h-0 min-w-0 flex-1">
+                    {surfaceMounted ? <GuestSurfacePane mode={tab.mode} /> : null}
+                  </div>
+                </div>
+              )}
+            </React.Suspense>
+          </ZonePane>
+        );
+      })}
+    </>
+  );
+>>>>>>> bc50ba56a
 };

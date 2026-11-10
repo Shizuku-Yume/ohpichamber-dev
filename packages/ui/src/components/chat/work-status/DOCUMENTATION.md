@@ -37,14 +37,58 @@ the inline card keeps its lighter, non-blurred fill instead.
   the viewport, the composer and the timeline dialog;
 - `WorkStatusPanel`, a fixed-width `shrink-0` sibling.
 
+<<<<<<< HEAD
 Nothing inside `ChatViewport` changed. The virtualizer sees the column shrink
 exactly as it already does when the context panel opens.
+=======
+When the chat area also fits the context panel (`roomyBesidePanel`), the card
+keeps its column beside the open panel (`besidePanel`). The slot then grows
+to the panel plus the card's column, the card's host anchors to the slot's
+start and the panel card is offset past it, so the card stays between the
+chat and the panel. Opening the panel slides it in from the window's edge
+while the card moves with the chat's edge; closing reverses that. The
+answer is known while the panel is closed too, so the commit that opens it
+already animates to the final width.
+
+The card has the lowest priority in the row: it claims no room from the left
+zone and never makes the session sidebar fold. A panel dragged wider stops
+where the chat would drop under its own minimum next to the card, and the card
+yields once the panel is released wider than it fits beside.
+
+The overlay form stays inside the chat column in `ChatContainer`.
+>>>>>>> bc50ba56a
+
+### Why the header carries context, Open In and the project action
+
+The card yields whenever a rail panel needs its room, so anything that lives
+only in the card disappears while the user reads a diff or a file. The context
+fill, the Open In app and the project action are what people check or press
+throughout a session, so the header carries them in every layout
+(`HeaderContextUsage`, `HeaderProjectControls`). Open In and the project
+action live only there: in the card the app icon had no reading of its own,
+and the action row added only the action's name, which the header button's
+tooltip shows. The context row stays in the card as well, because it carries
+what the header has no room for: the cache-warming switch, the cost at rest
+with its subagent split, and the note after a compaction. Hiding the header's
+context while the card shows the same figure was rejected: the reading then
+jumps between two places as panels open and close, and the user has to look
+for it each time.
+
+### Why the card docks beside the panel instead of floating over the chat
+
+A pinned card that floats over the transcript while a side panel is open was
+weighed against it. Floating covers the transcript it reports on and needs an
+opaque surface over moving text plus a rule for narrow windows. Docking uses
+room the window already has and adds no setting: where the room is missing,
+the card yields exactly as it did before, and the header still offers the
+overlay.
 
 ## Visibility
 
 `useWorkStatusVisibility` hides the panel when any of these hold:
 
 - the user switched it off;
+<<<<<<< HEAD
 - the layout is mobile (including hosted mobile and Capacitor phone shells);
 - the context panel is open for the directory the app is effectively on —
   looked up through `useEffectiveDirectory` and `normalizeContextPanelDirectoryKey`,
@@ -53,6 +97,27 @@ exactly as it already does when the context panel opens.
   that empty key answered "closed" for a context panel that was plainly open;
 - the row cannot fit `WORK_STATUS_MIN_CHAT_WIDTH` of transcript alongside
   `WORK_STATUS_PANEL_WIDTH` of panel.
+=======
+- the runtime is mobile or VS Code (the phone shows the sections in its own
+  tab, see below);
+- the row cannot fit `WORK_STATUS_MIN_CHAT_WIDTH` of transcript alongside
+  `WORK_STATUS_PANEL_WIDTH` of panel. Only the threshold decisions are state
+  (`roomy`, `roomyBesidePanel`); the width itself is not, because it changes
+  on every frame of a sidebar animation and storing it re-rendered the whole
+  chat each frame;
+- the right zone's context panel is open and the row cannot also fit that
+  panel at its own width (`sideZoneWidth`: the zone's stored size, or the tree
+  width for Files showing only its tree), or the panel is expanded. The panel
+  is looked up for the directory the app is effectively on, through
+  `useEffectiveDirectory` and `normalizeContextPanelDirectoryKey`, the same
+  key the rail and the panel use. It is deliberately **not** the directory
+  this panel reports about: a managed Chat reports about none, and that empty
+  key answered "closed" for a context panel that was plainly open.
+
+The panel's width comes from the store, never from the DOM: it is the user's
+setting, so a resize or a surface switch moves the threshold and the last
+area reading is re-decided before paint.
+>>>>>>> bc50ba56a
 
 `ChatContainer` additionally suppresses it in mini-chat and in expanded-input
 mode. It remains available on a new-session draft: when the draft targets a
@@ -97,17 +162,30 @@ which requests only providers enabled for this panel.
 | Block | Source | Notes |
 |---|---|---|
 | Context + cost | `contextUsage.ts` over `useSessionMessages`; cost via `useSubagentCostRollup` (own cost + every descendant subagent, recursively) | see below — the store getters cannot serve this |
+| Cache hit | `computeLastReplyCacheHit` over `useSessionMessages` | the reply the context reading comes from; see below |
 | Branch, ahead/behind, attention | `useGitStore` directory state | warmed via `runBackgroundNetworkTask(ensureStatus)` and refreshed from Git mutation hints |
 | Changed files | `useGitStore` status `files` + `diffStats` | working tree, not session-authored edits |
 | PR + checks | `useFreshestPrVisualSummaryForBranch` | **read-only**; follows the freshest remote-keyed entry for the branch |
 | Subagents | child sessions from `useAllLiveSessions` (`parentID`) + `useAllSessionStatuses`; per-row cost from `useSubagentCostRollup`'s `perChildCost` (each child's own subtree total, so nested subagent-of-subagent cost rolls up under its immediate parent row) | |
 | Subagent blockers | directory `permission` / `question` maps | one subscription covers every child |
+<<<<<<< HEAD
 | Usage | `components/usage/usageGroups.ts` over `useQuotaStore` | grouping shared with the mobile popover; presentation is not |
 | Linked threads | `lib/linkedIssues.ts` over session metadata | written by the flows that attach an issue or PR |
 | Turn stats | `telemetry.ts` over `useSessionMessageRecords` | computed only while expanded and authoritatively idle; either rate above 5,000 tok/s is reported as unknown (see the two-rate description below) |
 | Goal | `useSessionGoal` | respects the Settings toggle |
 | MCP | `useMcpStore` | connect/disconnect reuses the dropdown's actions |
 | Pinned messages | `getContextObligatoryMessages` + `state.part` | see below |
+=======
+| Workflows | `useSessionWorkflowRuns` (`lib/workflows/store.ts`): the session's runs read once from the server, then kept current by `openchamber:workflow-run` events | only while workflows are shown: not in VS Code, and only with the workflow tool on (`selectWorkflowsShown`) |
+| Usage | `components/usage/usageGroups.ts` over `useQuotaStore` | grouping shared with the mobile popover; presentation is not |
+| Linked plans | `useProjectContextStore` plans of the session's project whose `session.sessionId` is this session | refreshed through `observeProjectContext` |
+| Linked threads | `lib/linkedIssues.ts` over session metadata; state from tracked items | written by the flows that attach an issue or PR, and removable from the row; a linked PR that is also the checked-out branch's PR shows the branch summary, as its sidebar row does |
+| Turn stats | `telemetry.ts` over `useSessionMessageRecords` | computed while authoritatively idle, including when collapsed; active mounts read warm records once for the previous turn; either rate above 5,000 tok/s is reported as unknown (see the two-rate description below) |
+| Keep-warm switch | `useSessionWarmingStore`, mirrored from the server's `lib/session-warming` | on the Context row, shown only while Settings chose per-session warming and for a root session outside an isolated space; the tooltip's countdown ticks only while it is open |
+| Goal | `useSessionGoal` | respects the Settings toggle |
+| MCP | `useMcpStore` | the switch reuses the dropdown's `setEnabled` |
+| Pinned messages | `getContextObligatoryMessages` + `state.part`, else one `getSessionMessage` read | see below |
+>>>>>>> bc50ba56a
 | Todos | live `state.todo[sessionId]`, persisted fallback | live channel wins |
 
 ### Turn stats
@@ -116,7 +194,11 @@ The section follows Usage by default and reuses the panel's existing rows. Only 
 has an icon; metric rows use labels and values without leading icons. It
 reads already-loaded records without fetching history. The newest turn needs a
 preceding user message and completed assistant steps. A truncated or unfinished
-turn has no whole-turn result; later materialization can supply it.
+turn has no whole-turn result; later materialization can supply it. A newest
+user message with no reply yet arrives while the session still reports idle, so
+the section computes the turn before it instead and flags it as the previous
+turn. Computing nothing there would commit an empty result just before the
+session turns busy and blank the section for the whole run.
 
 Two rates answer different questions. Response speed uses the final assistant
 message's output tokens divided by the union of its nonempty text intervals.
@@ -144,13 +226,36 @@ scroller. Tooltips explain the measurement in every locale. The token row uses
 compact input/output arrows; its tooltip gives full counts and explains that
 input excludes cached tokens and output includes reasoning across all steps.
 
+<<<<<<< HEAD
 Records subscriptions and aggregation stop while collapsed, busy, retrying, or
 awaiting status authority. Explicit idle events or a successful directory status
 snapshot allow computation. One component-owned committed result keeps the
 headline and rows stable during the next active turn. Its identity includes
+=======
+Records subscriptions stop while busy, retrying, or awaiting
+status authority. Explicit idle events or a successful directory status snapshot
+allow computation even when collapsed: the response-speed headline remains visible
+and updates when a turn completes, after a remount, or when idle records change.
+The collapsed body stays unmounted. One component-owned committed result keeps the
+headline and rows stable during the next active turn. Whenever the shown numbers
+belong to an earlier turn (a pending prompt, or a busy or retrying session), the
+header says "Previous turn", followed by the response speed when there is one.
+Opening or reopening the section mid-run reads already-loaded, revert-filtered
+records once per scope, without fetching history or subscribing to streaming
+updates. It excludes the entire newest user-bounded turn, even if some of its
+assistant steps have completed. Missing or incomplete previous history shows no
+numbers until idle. The retained result's identity includes
+>>>>>>> bc50ba56a
 runtime, normalized directory and session. Scope changes discard it; fresh empty
 or reverted records clear it. There is no global message-ID cache. Corrections
 to existing message/part identities invalidate the current result.
+
+### Why active mounts read history once
+
+The mobile drawer unmounts its sections when closed, so component retention alone
+loses the previous turn on reopen. One warm-store snapshot recovers that turn
+without adding streaming work or history requests. The newest user-bounded turn
+is excluded because a completed tool step does not prove that turn has finished.
 
 ### Context usage has its own computation, on purpose
 
@@ -193,13 +298,47 @@ There is no cost-only fallback row. A row labelled "Context" showing nothing but
 a price is not a context reading; cost rides along with the percentage or waits
 for it.
 
+### Why the cache row shows the last reply and not session totals
+
+The row under the context meter answers "what is the provider caching now":
+the cache hit of the reply the context reading comes from, on every surface.
+Its output was dropped as uninteresting for one reply. Whole-session totals
+were tried here and dropped too: they span every
+compaction, so a session's 97% average says nothing about the prompt that
+goes out next. They stay in the context panel's overview
+(`computeSessionTokenTotals`), read off the session record, which OpenCode
+adds every step's usage to; summing loaded messages would shrink as a long
+session keeps only its tail. Their "Input" counts the whole prompt, cache
+included, since OpenCode's `input` is only the uncached part.
+
 ### Pinned messages load only what they need
 
 Pins are most useful on a long session — which is exactly when the pinned
+<<<<<<< HEAD
 message has scrolled far enough back not to be loaded, leaving the row with a
 placeholder. The section materialises the session, but only when a pin actually
 resolves to nothing: having pins is not a reason to fetch a session, and
 neither is something being unloaded in general.
+=======
+message sits before the loaded part of the transcript. Session metadata keeps
+the pin's id, time, role and owning `sessionID`. A child accepts only its own
+explicitly owned pins. It accepts a legacy ownerless pin only when its message
+was created strictly after the child; missing session ids and incomplete child
+timestamps fail closed. Root sessions, including user forks, keep inherited pins.
+A pin that is not loaded reads its one
+message from OpenCode (`opencodeClient.getSessionMessage`) for the row's text.
+That read targets only the displayed session and never walks to a parent, and the
+row keeps only a text part whose session and message ids match the pin, so a
+parent's text cannot supply the label. No session is materialised for it, a loaded pin
+costs nothing, and a failed read leaves the placeholder until the section mounts
+again.
+
+### Why pin ownership filtering applies only to child sessions
+
+Child and subagent sessions must not display parent pins. User forks retain
+their existing pin inheritance and compaction cursor. Copied messages receive
+new ids, so mapping inherited pins to forked messages needs a separate change.
+>>>>>>> bc50ba56a
 
 ### PR status is deliberately read-only
 
@@ -239,17 +378,55 @@ changes on the branch, so the panel neither fetches status nor renders the
 changed-files row until the bootstrap settles, then forces one status fetch so
 the row reflects the reset tree rather than a mid-creation snapshot.
 
+<<<<<<< HEAD
+=======
+### Workflow rows
+
+The Workflows section lists the runs the session proposed
+(`packages/web/server/lib/workflows`), newest first. Where the context panel
+exists (desktop and web), a run is one row that opens it in the Workflows
+panel (`components/chat/workflows/WorkflowsPanel.tsx`), which shows its agents,
+log, result and script. The row carries Run and Don't run while the run waits
+for approval and Resume after a failure or a stop; a running run shows its
+current phase and how many of its agents finished; a finished run's icon is
+its state, with no word beside it, as in Subagents. Stop lives in the panel
+and on the chat card. On the phone, which has no context panel, a run's row
+carries the same actions plus Stop, an open run lists its phases with how many
+agents finished and each phase its agents, and a finished run folds to its row
+until pressed. An agent row opens its session like a subagent row
+(`useOpenChildSession`, shared with the Subagents section).
+
+A workflow's agents are child sessions of the session too. The Subagents
+section leaves them out, so a run of fifty agents does not bury the session's
+own subagents and each session shows in one place.
+
+While workflows are not shown (VS Code, or the workflow tool off) the section
+exists in no list: the panel and the sections dialog both drop it (`useUnavailableWorkStatusSections`),
+so the dialog never offers a section that stays empty. Its id stays in the
+saved order, so it comes back where the user put it.
+
+>>>>>>> bc50ba56a
 ## Section order
 
 The default order is by durability:
 
 1. **Session** (goal, context, cost), **Project** (attention, branch,
+<<<<<<< HEAD
    changes, PR, checks), **Usage**, and **Turn stats** (session telemetry:
    throughput, duration, TTFT, cache hit rate) — true for as long as the session
    is open. Usage sits here rather than lower down because a spent quota stops the
    work outright;
 2. **Subagents**, **Tasks** — what is happening right now;
 3. **MCP**, **Pinned messages**, **Context sources** — supporting material.
+=======
+   changes, PR, checks), **Usage**, **Context sources**, and **Turn stats**
+   (session telemetry: throughput, duration, TTFT, cache hit rate) — true for as
+   long as the session is open. Usage sits here rather than lower down because a
+   spent quota stops the work outright, and Context sources because it holds the
+   linked issue and PR, which tell what the session is about;
+2. **Subagents** and **Workflows** — what is happening right now;
+3. **MCP** and **Pinned messages** — supporting material.
+>>>>>>> bc50ba56a
 
 The sections dialog has drag handles for changing this order, including hidden
 sections. A drop updates the panel immediately. `workStatusSectionOrder` is a
@@ -258,9 +435,18 @@ store. Missing or empty order uses the default; duplicate and obsolete ids are
 discarded, and newly introduced sections append in default order. Visibility
 changes never alter positions.
 
+<<<<<<< HEAD
 Guest SDK status sections remain available through the existing guest catalog
 on web/PWA and Electron. Only mobile surfaces keep the catalog unsupported;
 the panel and section dialog do not add a separate mobile guest path.
+=======
+Clients saved the default as their order without the user choosing it, so a
+saved list can't tell a choice from the default on its own.
+`workStatusSectionOrderExplicit` turns true on the first drag. Without it, an
+order that matches the old default with Context sources last moves that section
+up, on load and on each settings apply; any other order stays. The marker keeps
+a user who drags Context sources back to the bottom from being moved again.
+>>>>>>> bc50ba56a
 
 `WorkStatusPrimaryGroup` supplies Session and Project through a composition
 callback so the panel can place them independently while retaining one set of
@@ -373,15 +559,71 @@ Rows that name something the app can already show are buttons:
 | Context | the context overview (`openContextOverview`), same destination as the header readout |
 | Changes | working-tree diff (`openContextPanelTab`, `diffScope: 'working'`, no target path) |
 | Branch | git surface (`openContextSurface(dir, 'git')`) |
+<<<<<<< HEAD
 | Pull request, Checks | PR surface (`openContextSurface(dir, 'pr')`) |
 | Subagent | that child session's chat tab, read-only |
 | Goal (row) | the composer's own `SessionGoalDialog` |
 | Goal (pause/resume) | OMP `goal` control through the composer's `SessionGoalDialog` |
 | MCP switch | connects/disconnects the server |
+=======
+| Pull request, Checks | The Tracker's branch tab (`openContextPanelTab(dir, { mode: 'pr' })`) |
+| Subagent | that child session's chat tab, read-only |
+| Goal (row) | the composer's own `SessionGoalDialog` |
+| Goal (pause/resume) | `setSessionGoalStatus(sessionId, directory, status)` |
+| MCP switch | turns the server on or off in its config file (`useMcpStore.setEnabled`) |
+>>>>>>> bc50ba56a
 | MCP status | the state doubles as the button that reconnects |
 | Pinned (pin icon) | unpins the message |
 | Pinned (text) | jumps the transcript to that message |
 
+<<<<<<< HEAD
+=======
+### Project actions
+
+The panel shows no project action; the header button runs or stops the shown
+one. The project's own actions come first and auto-discovery last, so with
+nothing picked the button offers the first configured action, or
+auto-discovery when there is none. The pick is stored per runtime and project
+(`lib/projectActionSelection.ts`) and survives remounts and restarts; a pick
+that no longer names an action falls back to the first one. A running action
+takes the button over an idle pick, and pressing it acts on the action it
+shows, through the same shared-setup trust prompt as the menu.
+
+Auto-discovery reuses a personal action when its name identifies a dev server or its command runs a conventional dev script. A shared action needs a matching script command as well as the same trust confirmation as choosing it from the menu: renaming an already trusted shared action does not change its trust hash. Arbitrary `start` substrings and unrelated `start:*` scripts must not launch through discovery.
+
+`components/layout/ProjectActionsProvider` mounts one runner
+(`useProjectActionsRunner`) in `MainLayout` for the project
+`useProjectActionsContext` resolves. A managed
+Chat resolves to none. A draft waiting for a new space has no actions until the
+space runs, then runs them in the space (`useDraftSpaceTarget`). Three views read that runner through
+`projectActionsRunnerContext`:
+
+- the header's button (`HeaderProjectControls`): the shown action's
+  run state as one icon, the preview globe while it serves a page, the action
+  list on right click. It observes the run listing while mounted,
+  so a run another client started never shows as Run;
+- `ProjectActionsDialog`, opened by `open_project_actions` (`mod+alt+r`). It
+  lists the actions with their state, opens with the button's action highlighted,
+  and Enter picks the action and runs or stops it;
+- the command palette's search-only "Run: name" / "Stop: name" entries and its
+  "Project actions" entry.
+
+The runner lives above the layout, so a run keeps its output watch (URL
+auto-open, exit tracking) whatever is on screen. The server terminal listing
+still runs only on demand: each view calls `useObserveProjectActionRuns` while
+it is on screen. The shared observer lists once, then refreshes on terminal
+lifecycle signals, control-stream connections, runtime switches and visibility,
+focus or online recovery. Hidden/offline clients wait for recovery.
+
+### Why events and not polling
+
+The header is nearly always mounted, so a five-second listing loop generated
+idle requests even when no action ran. Terminal create, exit, restart and removal
+invalidate the list through the existing realtime control stream. A fresh list
+on connection or visibility recovery also discovers runs started on another
+client during a disconnect, while failed reads preserve the last known state.
+
+>>>>>>> bc50ba56a
 The goal icon reproduces the **composer target button's** colour mapping, not
 the goal strip's. The two disagree today — the strip paints `paused` muted and
 `blocked` warning, the button paints them info and error — and the button is
@@ -401,7 +643,26 @@ of nesting another panel. The work-status card itself stays hidden on mobile.
 
 ## Context sources
 
+<<<<<<< HEAD
 Linked GitHub threads first, then skills and MCP counts.
+=======
+The plan the session works on and linked issues and change requests first,
+then pinned knowledge, memory, skills and MCP counts.
+
+### The plan the session works on
+
+A plan records the session it was sent to (Implement or Improve in the plan,
+or an agent's `knowledge.save` with a `sessionId`), and its card in Project
+knowledge opens that session. The row here is the way back: it lists every
+plan of the session's project whose link names this session, with the plan's
+step progress, and opens the plan in place in Project knowledge on desktop and
+web (`openProjectKnowledgePlan`, the same request an agent's `knowledge.show`
+makes) and full screen on the phone (`MobileAppActions.openPlan`). The plans
+come from the project's knowledge store, refreshed through
+`observeProjectContext` behind the background gate. A plan both linked and
+pinned shows once, as the linked row with the pin as its leading control.
+There is no unlink control: the plan's own card owns its link.
+>>>>>>> bc50ba56a
 
 Agents are deliberately absent: an agent is who does the work, not material
 loaded into the context. Tools are absent too — `Agent.tools` is a per-agent
@@ -414,6 +675,19 @@ Written by the flows that already attach a thread — the composer's issue/PR
 pickers, and session creation from an issue or PR in `NewWorktreeDialog` and
 `GitHubIssuePickerDialog`. There is no manual "link this" control: attaching a
 thread to the work *is* the act of linking it.
+
+Before the close control sits a copy-link control (`useCopyReferenceLink`, the
+same one the Tracker preview's header uses). It shows on hover or focus inside
+the row, and always on a coarse pointer, which has no hover: at rest a row
+keeps one action, and the copy is confirmed by a toast since nothing on screen
+changes.
+
+### Why the copy control takes no space at rest and not a reserved slot
+
+A slot kept for it cut every linked title short by an icon's width, though the
+control is used now and then. It is out of the layout until the row is hovered
+or focused, so the title is full width at rest and narrows only under the
+pointer.
 
 Stored in session metadata as a **snapshot** (`lib/linkedIssues.ts`, namespace
 `openchamber.linked_issues`), riding the same `patchSessionMetadata` channel as
@@ -440,8 +714,9 @@ Two readouts had no loader of their own and appeared only after the user opened
 the matching header dropdown:
 
 - **MCP** — `McpDropdown` was the only mount-time caller of `refresh()`.
-- **Usage** — `useQuotaAutoRefresh` schedules the shared fixed three-minute
-  refresh; the *first* fetch was performed by the dropdown's open handler.
+- **Usage** — `useQuotaAutoRefresh` owns the initial fetch and the shared
+  three-minute refresh while a quota readout is shown. The panel passes its
+  visibility through the section list, so retained closing content does no work.
 - **Skills** — `loadSkills()` ran only when the composer's slash autocomplete
   opened, so the context-sources count was whatever happened to be cached. The
   section loads them itself, keyed on the directory, since skills are
@@ -454,9 +729,10 @@ which on a remote instance is not true when the UI mounts — a fetch fired at
 mount gets "nothing configured" for every provider, and since each one then has
 a result, nothing asks again until the three-minute refresh. That is why Usage
 could stay missing from the panel until Settings -> Usage forced a fresh fetch.
-`useQuotaStore.ensureLoadedForRuntime` owns both the readiness rule and the
-once-per-instance bookkeeping, so every caller can ask on each connection
-change.
+`useQuotaStore.ensureLoadedForRuntime` owns the readiness rule and runtime
+bookkeeping. `useQuotaAutoRefresh` applies the shared 15-second opening freshness
+window and suspends demand while the document or native window is hidden. The
+store documentation defines the refresh contract for all quota readouts.
 
 ### These readouts belong to the connected instance
 

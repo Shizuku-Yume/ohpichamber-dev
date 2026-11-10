@@ -96,19 +96,19 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
   },
   {
-    id: 'notes',
-    descriptionKey: 'contextRail.surface.notes.description',
-    mode: 'notes',
-    icon: 'book-marked',
-    labelKey: 'contextRail.surface.notes',
-    availability: 'always',
-  },
-  {
     id: 'browser',
     descriptionKey: 'contextRail.surface.browser.description',
     mode: 'browser',
     icon: 'global',
     labelKey: 'contextPanel.mode.browser',
+    availability: 'always',
+  },
+  {
+    id: 'notes',
+    descriptionKey: 'contextRail.surface.notes.description',
+    mode: 'notes',
+    icon: 'book-marked',
+    labelKey: 'contextRail.surface.notes',
     availability: 'always',
   },
   {

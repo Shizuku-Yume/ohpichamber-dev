@@ -450,7 +450,11 @@ const main = async () => {
       // Each block gets fresh Chrome profiles: the app keeps the sidebar and
       // the last session in storage per origin, and both sides share one.
       rmSync(paths.chrome, { recursive: true, force: true })
+<<<<<<< HEAD
       server = await log.time("server start", label, () => startIsolatedServer({ repo: sides[side].worktree, dist: sides[side].dist, state: paths.state, project: paths.project, port: options.port, fixturePort: options.fixturePort, ompBinary: options.ompBinary, logFile: join(options.root, "logs", `server-${side}-${label.replace(/\W+/g, "-")}.log`) }))
+=======
+      server = await log.time("server start", label, () => startIsolatedServer({ repo: sides[side].worktree, dist: sides[side].dist, state: paths.state, project: paths.project, port: options.port, fixturePort: options.fixturePort, opencodeBinary: options.opencodeBinary, logFile: join(options.root, "logs", `server-${side}-${label.replace(/\W+/g, "-")}.log`) }))
+>>>>>>> bc50ba56a
       const sideOutput = dirname(pending[0].output)
       mkdirSync(sideOutput, { recursive: true })
       writeFileSync(join(sideOutput, "bundle-check.json"), JSON.stringify(server.bundle, null, 2))

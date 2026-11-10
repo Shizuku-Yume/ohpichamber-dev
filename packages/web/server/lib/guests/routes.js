@@ -38,6 +38,11 @@ import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
 import { injectGuestDocumentStyles } from './html-styles.js';
 import { installGuest, installGuestFromZipBuffer, parseInstallRequest, uninstallGuest } from './install.js';
 import { enterpriseBlockedCapabilities } from './enterprise.js';
+<<<<<<< HEAD
+=======
+import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
+import { themedLogoSvg } from '../opencode/provider-logo-routes.js';
+>>>>>>> bc50ba56a
 import { guestUploadMaxBytes, readGuestUploadBody } from './upload.js';
 import { checkAllGuestUpdates, updateGuest, withGuestUpdate } from './updates.js';
 import { extensionsPersistPath, readExtensionStore, setCapabilityGrants } from './persist.js';
@@ -428,8 +433,52 @@ export const registerGuestRoutes = (app, {
     return null;
   };
 
+<<<<<<< HEAD
   app.post('/api/guests/:id/opencode-plugin/global-config', async (_req, res) => {
     return res.status(501).json({ error: 'unsupported' });
+=======
+  app.post('/api/guests/:id/opencode-plugin/global-config', async (req, res) => {
+    try {
+      const guest = await loadGuest(req.params.id);
+      const refused = pluginRefusal(guest);
+      if (refused) {
+        return res.status(refused.status).json(refused.body);
+      }
+      const delivery = opencodePlugins.delivery();
+      if (delivery !== 'restart' && delivery !== 'none') {
+        return res.status(409).json({ error: 'not-needed', delivery });
+      }
+      const directory = await resolveOpenCodePluginFolder(fs, guest.packageRoot, guest.opencodePlugin);
+      if (!directory) {
+        return res.status(409).json({ error: 'plugin-missing' });
+      }
+      // The row and the policy are read again right before the write: a Pause,
+      // a withdrawn approval or a policy change meanwhile must not reach the
+      // user's file, which outlives the extension.
+      const current = await loadGuest(guest.id);
+      const refusedNow = pluginRefusal(current);
+      if (refusedNow) {
+        return res.status(refusedNow.status).json(refusedNow.body);
+      }
+      if (enterpriseBlockedCapabilities(current, { source: current.source, gitUrl: current.gitOrigin?.url }).includes('opencodePlugin')) {
+        return res.status(403).json({ error: 'enterprise-mode' });
+      }
+      let written;
+      try {
+        written = opencodePlugins.addGlobalEntry(directory);
+      } catch (error) {
+        if (error?.code === 'CONFIG_INVALID') {
+          return res.status(409).json({ error: 'config-invalid', message: error.message });
+        }
+        throw error;
+      }
+      if (written.added) announce();
+      res.json({ path: written.path });
+    } catch (error) {
+      console.error('Failed to add an extension plugin to the global OpenCode config:', error);
+      res.status(500).json({ error: 'write-failed', message: error?.message ?? 'Failed to write the OpenCode config.' });
+    }
+>>>>>>> bc50ba56a
   });
 
   app.post('/api/guests', json16, async (req, res) => {
@@ -1059,8 +1108,9 @@ export const registerGuestRoutes = (app, {
 
   // One extension file, as a frame loads it. `token` is the legacy query
   // credential copied onto the page's relative URLs; `connectSource` is the
-  // one path the page may fetch from.
-  const sendGuestFile = async (res, guest, rawPath, { token = '', connectSource }) => {
+  // one path the page may fetch from; `theme` colours an SVG drawn as a
+  // provider logo, which an <img> cannot do from outside.
+  const sendGuestFile = async (res, guest, rawPath, { token = '', connectSource, theme }) => {
     let relativePath;
     try {
       relativePath = decodeURIComponent(Array.isArray(rawPath) ? rawPath.join('/') : (rawPath || ''));
@@ -1080,9 +1130,10 @@ export const registerGuestRoutes = (app, {
     } catch {
       return res.status(404).end();
     }
+    const themedSvg = contentType === 'image/svg+xml' ? themedLogoSvg(raw, theme) : null;
     const body = contentType.startsWith('text/html')
       ? injectGuestDocumentStyles(injectGuestAssetTokens(raw.toString('utf8'), token))
-      : raw;
+      : themedSvg ?? raw;
     res.setHeader('Content-Type', contentType);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store');
@@ -1164,6 +1215,7 @@ export const registerGuestRoutes = (app, {
       return await sendGuestFile(res, guest, req.params.filePath, {
         token: parseGuestUrlToken(req.query.oc_url_token),
         connectSource: connectSourceFor(req, `/api/guests/${guest.id}/`),
+        theme: req.query.theme,
       });
     } catch (error) {
       console.error('Failed to serve guest asset:', error);

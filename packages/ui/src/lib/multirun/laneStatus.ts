@@ -1,14 +1,26 @@
 import type { Session } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
+import { getSessionGoal } from '@/lib/sessionGoalMetadata';
 import type { LaneReplyState } from './useLaneSummaries';
+
+/** The server is still driving this lane: idle now means between two goal turns. */
+export const hasRunningGoal = (session: Pick<Session, 'metadata'> | undefined): boolean => (
+  getSessionGoal(session)?.status === 'active'
+);
 
 /**
  * What a run member is doing, from live and recorded facts only:
  * - `permission` / `question`: a blocking request waits for the user, so the
  *   turn cannot move on (a blocked session also counts as busy, so this wins);
+<<<<<<< HEAD
  * - `working`: the turn is live;
  * - `failed` / `stopped`: the canonical turn failed or was cancelled;
  * - `notStarted`: no recorded turn and none is running;
+=======
+ * - `working`: the turn is live, or an active goal is between turns;
+ * - `failed` / `stopped`: OpenCode recorded the turn as failed or interrupted;
+ * - `notStarted`: no turn has ended and none is running;
+>>>>>>> bc50ba56a
  * - `noReply`: the turn ended normally without any answer text;
  * - `finished`: the turn ended normally. It says nothing about quality.
  */
@@ -17,18 +29,29 @@ export type LaneStatus = 'permission' | 'question' | 'working' | 'failed' | 'sto
 export type LaneBlockingState = 'permission' | 'question' | null;
 
 export function resolveLaneStatus(input: {
+<<<<<<< HEAD
   session: Pick<Session, 'runtimeStatus'>;
+=======
+  session: Pick<Session, 'outcome' | 'time' | 'metadata'>;
+>>>>>>> bc50ba56a
   busy: boolean;
   blocking: LaneBlockingState;
   reply: LaneReplyState | undefined;
 }): LaneStatus {
   if (input.blocking) return input.blocking;
+<<<<<<< HEAD
   if (input.busy) return 'working';
   if (input.session.runtimeStatus === 'unavailable') return 'failed';
   if (input.reply?.state === 'ready' && input.reply.status === 'failed') return 'failed';
   if (input.reply?.state === 'ready' && input.reply.status === 'cancelled') return 'stopped';
   if (input.reply?.state !== 'ready') return 'finished';
   if (input.reply.status === null) return 'notStarted';
+=======
+  if (input.busy || hasRunningGoal(input.session)) return 'working';
+  if (input.session.outcome === 'failed') return 'failed';
+  if (input.session.outcome === 'interrupted') return 'stopped';
+  if (!input.session.time.idle) return 'notStarted';
+>>>>>>> bc50ba56a
   if (input.reply?.state === 'ready' && !input.reply.text) return 'noReply';
   return 'finished';
 }

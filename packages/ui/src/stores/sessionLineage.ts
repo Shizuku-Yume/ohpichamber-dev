@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
+=======
+import type { Session } from '@/lib/opencode/model';
+import { getOriginalSessionID, isReviewSession } from '@/lib/sessionReviewMetadata';
+>>>>>>> bc50ba56a
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 
 /**
@@ -11,6 +16,9 @@ import { useGlobalSessionsStore } from './useGlobalSessionsStore';
  * - `all`: every session at any depth, archived ones included. Delete.
  * - `archived`: archived sessions, stopping at an active one. Restore, which
  *   brings back the archived subsessions of a root.
+ *
+ * Archive, delete and restore also follow review metadata. The `active`
+ * policy keeps OpenCode's parentID graph for move, export and activity.
  */
 type SessionLineagePolicy = 'active' | 'activeThroughArchived' | 'all' | 'archived';
 
@@ -41,12 +49,18 @@ const keeps = {
  */
 export const createSessionLineage = (sessions: readonly Session[]): SessionLineage => {
   const childrenByParentId = new Map<string, Session[]>();
+  const reviewsByOriginalId = new Map<string, Session[]>();
   for (const session of sessions) {
+<<<<<<< HEAD
     const parentId = session.parentSessionId;
+=======
+    const parentId = session.parentID ?? (isReviewSession(session) ? getOriginalSessionID(session) : null);
+>>>>>>> bc50ba56a
     if (!parentId) continue;
-    const siblings = childrenByParentId.get(parentId);
+    const index = session.parentID ? childrenByParentId : reviewsByOriginalId;
+    const siblings = index.get(parentId);
     if (siblings) siblings.push(session);
-    else childrenByParentId.set(parentId, [session]);
+    else index.set(parentId, [session]);
   }
 
   return {
@@ -56,9 +70,17 @@ export const createSessionLineage = (sessions: readonly Session[]): SessionLinea
       const descendants: Session[] = [];
       const visited = new Set<string>([rootId]);
       const visit = (parentId: string): void => {
+<<<<<<< HEAD
         for (const child of childrenByParentId.get(parentId) ?? []) {
           if (visited.has(child.sessionId) || !walk(child)) continue;
           visited.add(child.sessionId);
+=======
+        const children = childrenByParentId.get(parentId) ?? [];
+        const reviews = policy === 'active' ? [] : reviewsByOriginalId.get(parentId) ?? [];
+        for (const child of [...children, ...reviews]) {
+          if (visited.has(child.id) || !walk(child)) continue;
+          visited.add(child.id);
+>>>>>>> bc50ba56a
           if (keep(child)) descendants.push(child);
           visit(child.sessionId);
         }

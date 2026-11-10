@@ -46,6 +46,136 @@ const createRuntime = async ({
 };
 
 describe('settings runtime', () => {
+<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.test.js
+=======
+  it('serializes session project registration with settings writes without changing navigation', async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime({ mergePersistedSettings: (current, changes) => ({ ...current, ...changes }) });
+    try {
+      const kept = createProjectIdFromPath('/kept');
+      const added = createProjectIdFromPath('/new');
+      await fsPromises.writeFile(settingsFilePath, JSON.stringify({ projects: [{ id: kept, path: '/kept', label: 'Kept' }], activeProjectId: kept, lastDirectory: '/kept', future: 42 }));
+      const append = () => runtime.registerSessionProject((projects) => projects.find(p => p.id === added) ?? { id: added, path: '/new' });
+      await Promise.all([append(), runtime.persistSettings({ lightThemeId: 'test' }), append()]);
+      const stored = JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'));
+      expect(stored.projects).toEqual([{ id: kept, path: '/kept', label: 'Kept' }, { id: added, path: '/new' }]);
+      expect(stored).toMatchObject({ activeProjectId: kept, lastDirectory: '/kept', future: 42, lightThemeId: 'test' });
+    } finally { await cleanup(); }
+  });
+
+  it('resolves changes against the settings left by the save queued before them', async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime({ mergePersistedSettings: (current, changes) => ({ ...current, ...changes }) });
+    try {
+      await fsPromises.writeFile(settingsFilePath, JSON.stringify({ lightThemeId: 'old' }));
+      await Promise.all([
+        runtime.persistSettings({ lightThemeId: 'queued-first' }),
+        runtime.persistResolvedSettings((current) => ({ darkThemeId: `after-${current.lightThemeId}` })),
+      ]);
+      const stored = JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'));
+      expect(stored).toMatchObject({ lightThemeId: 'queued-first', darkThemeId: 'after-queued-first' });
+    } finally { await cleanup(); }
+  });
+
+  it('does not overwrite a malformed registry and allows registration after repair', async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime();
+    try {
+      await fsPromises.writeFile(settingsFilePath, '{broken');
+      const append = () => runtime.registerSessionProject(() => ({ id: 'new', path: '/new' }));
+      await expect(append()).rejects.toThrow();
+      expect(await fsPromises.readFile(settingsFilePath, 'utf8')).toBe('{broken');
+      await fsPromises.writeFile(settingsFilePath, '{"projects":[]}');
+      await expect(append()).resolves.toEqual({ id: 'new', path: '/new' });
+    } finally { await cleanup(); }
+  });
+
+  it('preserves the registry after a failed session append and allows retry', async () => {
+    let fail = true;
+    const { runtime, settingsFilePath, cleanup } = await createRuntime({ fs: {
+      ...fsPromises,
+      rename: async (...args) => {
+        if (fail) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
+        return fsPromises.rename(...args);
+      },
+    } });
+    try {
+      const original = '{"projects":[],"lastDirectory":"/kept"}';
+      await fsPromises.writeFile(settingsFilePath, original);
+      const append = () => runtime.registerSessionProject(() => ({ id: 'new', path: '/new' }));
+      await expect(append()).rejects.toThrow();
+      expect(await fsPromises.readFile(settingsFilePath, 'utf8')).toBe(original);
+      fail = false;
+      await expect(append()).resolves.toEqual({ id: 'new', path: '/new' });
+    } finally { await cleanup(); }
+  });
+
+  it('reports the directory the UI moved to, once per change', async () => {
+    const onLastDirectoryChanged = vi.fn();
+    const { runtime, cleanup } = await createRuntime({
+      mergePersistedSettings: (current, changes) => ({ ...current, ...changes }),
+      onLastDirectoryChanged,
+    });
+    try {
+      await runtime.persistSettings({ lastDirectory: '/work/a' });
+      await runtime.persistSettings({ lastDirectory: '/work/a' });
+      await runtime.persistSettings({ lightThemeId: 'flexoki-light' });
+      await runtime.persistSettings({ lastDirectory: '/work/b' });
+      expect(onLastDirectoryChanged.mock.calls).toEqual([['/work/a'], ['/work/b']]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('refreshes the managed OpenCode config only when a managed plugin setting changed', async () => {
+    const onManagedPluginSettingsChanged = vi.fn(async () => {});
+    const { runtime, cleanup } = await createRuntime({ onManagedPluginSettingsChanged });
+    try {
+      await runtime.persistSettings({ lightThemeId: 'flexoki-light' });
+      expect(onManagedPluginSettingsChanged).not.toHaveBeenCalled();
+
+      await runtime.persistSettings({ agentWebToolEnabled: false });
+      expect(onManagedPluginSettingsChanged).toHaveBeenCalledTimes(1);
+
+      // The limit failover plugin loads only while one of its options is set.
+      await runtime.persistSettings({ fallbackModel: 'openai/gpt-5.6' });
+      await runtime.persistSettings({ accountSwitchProviders: ['anthropic'] });
+      expect(onManagedPluginSettingsChanged).toHaveBeenCalledTimes(3);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('tells the running spaces the default permission mode only when it changed, once it is written', async () => {
+    const seen = [];
+    let settingsFilePath = '';
+    const { runtime, cleanup, settingsFilePath: filePath } = await createRuntime({
+      onPermissionDefaultModeChanged: async (mode) => {
+        seen.push([mode, JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8')).permissionDefaultMode]);
+      },
+    });
+    settingsFilePath = filePath;
+    try {
+      await runtime.persistSettings({ lightThemeId: 'flexoki-light' });
+      await runtime.persistSettings({ permissionDefaultMode: 'auto' });
+      await runtime.persistSettings({ permissionDefaultMode: 'auto' });
+      await vi.waitFor(() => expect(seen).toEqual([['auto', 'auto']]));
+      await runtime.persistSettings({ permissionDefaultMode: 'ask' });
+      await vi.waitFor(() => expect(seen).toEqual([['auto', 'auto'], ['ask', 'ask']]));
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('still answers the settings write when the managed config refresh fails', async () => {
+    const onManagedPluginSettingsChanged = vi.fn(async () => { throw new Error('disk full'); });
+    const { runtime, cleanup } = await createRuntime({ onManagedPluginSettingsChanged });
+    try {
+      await expect(runtime.persistSettings({ agentMemoryToolEnabled: true }))
+        .resolves.toMatchObject({ agentMemoryToolEnabled: true });
+    } finally {
+      await cleanup();
+    }
+  });
+
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-runtime.test.js
   it('round-trips both archived-only retention states through instance settings', async () => {
     const { runtime, settingsFilePath, cleanup } = await createRuntime();
     try {
@@ -152,13 +282,14 @@ describe('settings runtime', () => {
     }
   });
 
-  it('round-trips shared sidebar preferences through preferences.json', async () => {
+  it('round-trips shared profile preferences through preferences.json', async () => {
     const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
     const preferences = {
       sidebarProjectDisplayMode: 'single',
       sidebarGrouping: 'time',
       sidebarProjectSortOrder: 'date-added',
       sidebarShowChatsSection: false,
+      selectionApprovalText: '认可此方案 👍',
     };
     try {
       await runtime.persistSettings(preferences);
@@ -168,6 +299,8 @@ describe('settings runtime', () => {
       expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'))).toEqual(preferences);
       const stored = JSON.parse(await fsPromises.readFile(path.join(tempRoot, 'preferences.json'), 'utf8'));
       expect(Object.fromEntries(Object.entries(stored.fields).map(([key, entry]) => [key, entry.value]))).toEqual(preferences);
+      await runtime.persistSettings({ ...preferences, selectionApprovalText: '' });
+      await expect(runtime.readSettingsFromDisk()).resolves.toEqual({ ...preferences, selectionApprovalText: '' });
     } finally {
       await cleanup();
     }

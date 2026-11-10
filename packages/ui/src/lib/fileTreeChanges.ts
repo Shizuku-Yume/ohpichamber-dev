@@ -1,5 +1,24 @@
+<<<<<<< HEAD
 /** Native tool mutations invalidate Host file listings independently of mounted chat parts. */
 import type { Part } from '@openchamber/agent-contract';
+=======
+/**
+ * Tells file browsers which listings may be out of date, from signals the
+ * client already receives. There is no watcher and no timer: OpenCode 2.2
+ * watches single files on request (`lib/watchedFiles`, for the file on
+ * screen), not folders, so the agent's own activity is the source.
+ *
+ * - A finished `write` or `patch` names its files: their directories change.
+ * - A finished `shell`, `execute`, MCP or plugin call could touch anything.
+ *   Its session is remembered until the step ends; the step's snapshot then
+ *   says whether any file changed. A step that changed nothing costs nothing,
+ *   which is the common case for read-only commands.
+ * - A finished user shell command and a revert are unknown changes.
+ *
+ * Changes outside the agent (an editor, a terminal) are not seen here.
+ */
+
+>>>>>>> bc50ba56a
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
 import { isExplorationTool, isWebTool } from '@/lib/toolHelpers';
 

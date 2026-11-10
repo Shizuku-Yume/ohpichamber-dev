@@ -3,6 +3,11 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
 import { copyTextToClipboard } from '@/lib/clipboard';
+<<<<<<< HEAD
+=======
+import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { restartOpenCodeWithFeedback } from '@/lib/restartOpenCode';
+>>>>>>> bc50ba56a
 import { sessionEvents } from '@/lib/sessionEvents';
 import { isSessionPinned } from '@/lib/sessionPins';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
@@ -39,9 +44,14 @@ export const showContextUsage: PaletteCommand = () => {
   useUIStore.getState().openContextOverview(directory);
 };
 
+<<<<<<< HEAD
 /** The app's diagnostics live in About (the dialog shows them in dev builds). */
 export const showDiagnosticTimeline: PaletteCommand = () => {
   useUIStore.getState().setAboutDialogOpen(true);
+=======
+export const showDiagnosticTimeline: PaletteCommand = () => {
+  void showOpenCodeStatus();
+>>>>>>> bc50ba56a
 };
 
 export const openOverview: PaletteCommand = () => {
@@ -72,6 +82,13 @@ export const openNotes: PaletteCommand = () => openProjectNotesTab('notes');
 
 export const openTodos: PaletteCommand = () => openProjectNotesTab('todos');
 
+<<<<<<< HEAD
+=======
+export const restartOpenCode = (t: Translate): PaletteCommand => () => {
+  void restartOpenCodeWithFeedback(t);
+};
+
+>>>>>>> bc50ba56a
 export const pinCurrentSession = (t: Translate): PaletteCommand => () => {
   const sessionId = useSessionUIStore.getState().currentSessionId;
   const directory = useDirectoryStore.getState().currentDirectory;
@@ -100,8 +117,13 @@ export const toggleWorkCurrentSession = (t: Translate): PaletteCommand => () => 
   if (!useUIStore.getState().sessionWorkEnabled) return false;
   const sessionId = useSessionUIStore.getState().currentSessionId;
   if (!sessionId) return false;
+<<<<<<< HEAD
   const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.sessionId === sessionId);
   if (!session || session.parentSessionId) return false;
+=======
+  const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.id === sessionId);
+  if (!session || session.parentID) return false;
+>>>>>>> bc50ba56a
   const directory = resolveGlobalSessionDirectory(session) ?? useDirectoryStore.getState().currentDirectory;
   if (!directory || isChatDirectoryPath(directory)) return false;
   const next = isSessionInWork(session) ? 'done' : 'open';

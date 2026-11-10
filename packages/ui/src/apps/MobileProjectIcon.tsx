@@ -71,6 +71,7 @@ export const MobileProjectIcon: React.FC<{
 
   return (
     <span
+<<<<<<< HEAD
       className={cn(
         'flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground',
         // The small variant sits inline in a text line and needs no tile.
@@ -78,6 +79,10 @@ export const MobileProjectIcon: React.FC<{
         containerClasses,
       )}
       style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+=======
+      className="flex size-3.5 shrink-0 items-center justify-center overflow-hidden rounded-[3px] text-muted-foreground"
+      style={image ? imageBackground : undefined}
+>>>>>>> bc50ba56a
     >
       {project.iconImage ? (
         <ProjectIconImage

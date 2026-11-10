@@ -27,7 +27,11 @@ No es un callback de montaje único. Monta la UI y registra suscripciones una ve
 | `theme.tokens` | los colores de la app (superficies, texto, estados de interacción, primario, success/warning/error/info), `font`, `mono` y `radius`. Pásalo a `applyHostReady` antes de montar la UI. |
 | `locale` | la etiqueta de idioma de la app |
 | `directory` | el directorio del proyecto actual, o `null` |
+<<<<<<< HEAD
 | `session` | `{ id, title, busy }` o `null`. Si no hay título, se usa el id de la sesión. `busy` es el estado en vivo. `model` y `agent` (el agente de Host) aparecen cuando la sesión los tiene. |
+=======
+| `session` | `{ id, title, busy }` o `null`. Si no hay título, se usa el id de la sesión. `busy` es el estado en vivo. `model` y `agent` (el agente de OpenCode) aparecen cuando la sesión los tiene. |
+>>>>>>> bc50ba56a
 | `surface` | `panel` en la barra lateral, `dialog` en la ventana de adjuntar, `page` a pantalla completa, `status` en el panel Work Status, `file` como editor de archivos en Files, `block` en un bloque de UI del chat |
 | `item` | para qué se abrió esta superficie, o `null`: el elemento adjunto en el que el usuario hizo clic (los mismos campos que pasaste a `attach`, incluido `data`), un mensaje (`kind: "message"`) o una sesión (`kind: "session"`) desde una de tus acciones declaradas. Ver [Acciones](/sdk/#acciones-comandos-y-la-insignia). |
 | `connection` | `{ connected, account }` de tu integración |
@@ -247,7 +251,15 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
+<<<<<<< HEAD
 `sessions.start`, `sessions.send`, `sessions.retry` y `sessions.status` necesitan `contributes.sessionControl`, que el usuario aprueba como una línea propia. `sessions.lastReply` necesita `sessionControl: { content: true }`. `setInstructions` necesita `contributes.instructions` y añade contenido a lo que leen los agentes, en una carpeta o, con `null`, en todas partes.
+=======
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` y `sessions.stop` necesitan `contributes.sessionControl`, que el usuario aprueba como una línea propia. `sessions.lastReply` necesita `sessionControl: { content: true }`. Un mensaje de `sessions.send` cierra un formulario o una página que el agente espera en esa sesión, igual que un mensaje escrito en el chat.
+
+Para llevar las solicitudes del agente a otro sitio, como una app de chat, añade `answers: true`. El usuario lo aprueba como una línea más, y entonces el servicio puede responder en nombre del usuario en cualquier sesión: `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (o `'deny'` con un `message` que lee el agente) para un evento `permission-asked`, y `sessions.answerForm(sessionId, formId, values)` para un evento `question-asked` cuyo `event.question.kind` es `form`. El contenido del evento lista los campos del formulario con su `key` y sus opciones. `null` en lugar de valores descarta el formulario. Un permiso concedido cubre solo esa solicitud.
+
+`setInstructions` necesita `contributes.instructions` y añade contenido a lo que leen los agentes, en una carpeta o, con `null`, en todas partes.
+>>>>>>> bc50ba56a
 
 `emit` llega a tus frames abiertos mediante `host.onServiceEvent`, así un panel deja de hacer sondeos. Nada se reenvía, por lo que un frame que se abre más tarde lee primero el estado actual. `readSettings` da al servicio la configuración de la integración, incluidos los campos `secret`, y `needsConfiguration` muestra un mensaje en la tarjeta de la extensión.
 
@@ -382,14 +394,22 @@ Cuando el usuario activa los comentarios de sesión, OpenChamber llama a `commen
 
 ## Proveedores de uso
 
+<<<<<<< HEAD
 Un servicio puede informar del uso junto a los proveedores integrados: declara `provides: ["quota"]` y enumera en `contributes.quota.providers` los proveedores de Host cuyas credenciales necesita. OpenChamber llama al proveedor `ext-<panel.id>`, dibuja su tarjeta con el nombre y el icono de la extensión y le pregunta como pregunta a un proveedor integrado.
+=======
+Un servicio puede informar del uso junto a los proveedores integrados: declara `provides: ["quota"]` y enumera en `contributes.quota.providers` los proveedores de OpenCode cuyas credenciales necesita. OpenChamber llama al proveedor `ext-<panel.id>`, dibuja su tarjeta con el nombre y el icono de la extensión y le pregunta como pregunta a un proveedor integrado.
+>>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
+<<<<<<< HEAD
 El diálogo de aprobación enumera esos proveedores, y una versión que cambie la lista vuelve a preguntar. En cada actualización OpenChamber envía una llamada, `usage.read`, a `POST /quota`, con `input.credentials` con la credencial que Host guarda para cada proveedor enumerado del que tenga una (una clave de API o los tokens de un inicio de sesión en el navegador) y nada más del almacén. Un proveedor enumerado para el que Host no guarda credencial se muestra como no configurado y el servicio no se llama; se permite una lista vacía, para un proveedor cuya clave vive en los ajustes propios de la extensión.
+=======
+El diálogo de aprobación enumera esos proveedores, y una versión que cambie la lista vuelve a preguntar. En cada actualización OpenChamber envía una llamada, `usage.read`, a `POST /quota`, con `input.credentials` con la credencial que OpenCode guarda para cada proveedor enumerado del que tenga una (una clave de API o los tokens de un inicio de sesión en el navegador) y nada más del almacén. Un proveedor enumerado para el que OpenCode no guarda credencial se muestra como no configurado y el servicio no se llama; se permite una lista vacía, para un proveedor cuya clave vive en los ajustes propios de la extensión.
+>>>>>>> bc50ba56a
 
 Lee el cuerpo con `readQuotaProviderRequest` y responde `{ ok: true, data }` con el resultado que calcula un proveedor integrado: `ok`, `configured`, `error`, `planLabel` y `usage.windows` por nombre de ventana, cada una con `usedPercent`, `windowSeconds`, `resetAt` (época en milisegundos) y un `valueLabel` o `value` opcional, más `usage.models` para las ventanas por modelo. OpenChamber deriva la parte restante, la cuenta atrás del reinicio y las cadenas formateadas, así que la tarjeta coincide con la de un proveedor integrado.
 

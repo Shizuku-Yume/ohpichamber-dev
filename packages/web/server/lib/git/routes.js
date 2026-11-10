@@ -19,6 +19,26 @@ const toGitRemoteSummary = (remote) => ({
 
 const toLocationKey = (directory) => String(directory || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
+<<<<<<< HEAD
+=======
+/**
+ * Builds the best-effort disposal hook handed to `removeWorktree`, also run
+ * when a repair completes a failed checkout so OpenCode opens the repaired
+ * folder afresh. The URL and auth headers are route dependencies, so this
+ * module never resolves the OpenCode runtime itself, and both are read at
+ * call time. OpenCode 2 has no
+ * instance route; evicting the location drops its cached services (file
+ * watchers, LSP, MCP), which is what held the worktree folder.
+ *
+ * A session of a project opened on a folder of its repository runs in that
+ * folder of the worktree (`<worktree>/ai`), which is a location of its own, so
+ * every running location inside the worktree is evicted along with its root.
+ * When the location list cannot be read, the root is still evicted and the
+ * list error is rethrown for the removal wrapper to log.
+ */
+const toLocationKey = (directory) => String(directory || '').replace(/\\/g, '/').replace(/\/+$/, '');
+
+>>>>>>> bc50ba56a
 export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
   return async (worktreeDirectory) => {
     if (!buildOpenCodeUrl || !getOpenCodeAuthHeaders) return;
@@ -60,10 +80,16 @@ export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAu
 // Actions the user starts here may run a project's environment command, so
 // hooks find the project's tools; reads the UI repeats on its own may not
 // (lib/environment/refresh-scope.js).
+<<<<<<< HEAD
 const GIT_DIFFS_MAX_PATHS = 1000;
 const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5000;
 const worktreeTitleBodySchema = z.object({ title: z.string(), by: z.enum(['user', 'agent']).default('user') });
 const worktreePinBodySchema = z.object({ pinned: z.boolean(), list: z.string().nullable().optional() });
+=======
+const worktreeTitleBodySchema = z.object({ title: z.string(), by: z.enum(['user', 'agent']).default('user') });
+const worktreePinBodySchema = z.object({ pinned: z.boolean(), list: z.string().nullable().optional() });
+
+>>>>>>> bc50ba56a
 const userAction = (handler) => (req, res, next) => runAsUserAction(() => handler(req, res, next));
 
 export function registerGitRoutes(app, {
@@ -116,6 +142,12 @@ export function registerGitRoutes(app, {
   };
 
   const isNonRepoGitError = (error) => /not a git repository/i.test(extractGitErrorText(error));
+  // Git could not tell whether the directory is a repository (`probeRepository`):
+  // its message goes to the client instead of a "not a repository" answer.
+  const isUnreadableRepositoryError = (error) => error?.code === 'GIT_REPOSITORY_UNREADABLE';
+  const unreadableRepositoryBody = (error) => ({ error: error.message, code: error.code });
+  // Every repository check a client acts on reports a Git that could not answer.
+  const probeOptions = { failOnGitError: true };
 
   const nonRepoStatusPayload = () => ({
     isGitRepository: false,
@@ -517,9 +549,12 @@ export function registerGitRoutes(app, {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const isRepo = await isGitRepository(directory);
+      const isRepo = await isGitRepository(directory, probeOptions);
       res.json({ isGitRepository: isRepo });
     } catch (error) {
+      if (isUnreadableRepositoryError(error)) {
+        return res.status(500).json(unreadableRepositoryBody(error));
+      }
       if (isNonRepoGitError(error)) {
         console.warn('Git check treated non-repository path as not a git repo:', extractGitErrorText(error));
         return res.json({ isGitRepository: false });
@@ -590,8 +625,15 @@ export function registerGitRoutes(app, {
     };
     return readProjectBatch(req, res, async (directory) => {
       try {
+<<<<<<< HEAD
         const isRepo = await isGitRepository(directory);
         if (!isRepo) return nonRepoEntry(directory);
+=======
+        const isRepo = await isGitRepository(directory, probeOptions);
+        if (!isRepo) {
+          return nonRepoEntry(directory);
+        }
+>>>>>>> bc50ba56a
 
         const entry = { directory, isGitRepository: true };
         const failures = [];
@@ -625,8 +667,18 @@ export function registerGitRoutes(app, {
         if (failures.length > 0) entry.errors = failures;
         return entry;
       } catch (error) {
+<<<<<<< HEAD
         if (isNonRepoGitError(error)) return nonRepoEntry(directory);
         console.error('Failed to read git project overview:', error);
+=======
+        if (isUnreadableRepositoryError(error)) {
+          return { directory, ...unreadableRepositoryBody(error) };
+        }
+        if (isNonRepoGitError(error)) {
+          return nonRepoEntry(directory);
+        }
+        console.error('Failed to read git project overview:', directory, error);
+>>>>>>> bc50ba56a
         return { directory, error: 'Failed to read project repository' };
       }
     });
@@ -777,7 +829,7 @@ export function registerGitRoutes(app, {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const isRepo = await isGitRepository(directory);
+      const isRepo = await isGitRepository(directory, probeOptions);
       if (!isRepo) {
         return res.json(nonRepoStatusPayload());
       }
@@ -791,6 +843,9 @@ export function registerGitRoutes(app, {
       const status = await getStatus(directory, { mode });
       res.json(status);
     } catch (error) {
+      if (isUnreadableRepositoryError(error)) {
+        return res.status(500).json(unreadableRepositoryBody(error));
+      }
       // Non-repo / GitError must not abort callers that enumerate projects or
       // sessions (e.g. sidebar discovery). Log a warning and continue.
       if (isNonRepoGitError(error)) {
@@ -1884,7 +1939,14 @@ export function registerGitRoutes(app, {
         deleteLocalBranch: req.body?.deleteLocalBranch === true,
         teardownCommand: z.string().safeParse(req.body?.teardownCommand).data,
         isContributorCheckout,
+<<<<<<< HEAD
         disposeInstance: (buildOpenCodeUrl && getOpenCodeAuthHeaders) ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) : undefined,      }, {
+=======
+        disposeInstance: canDisposeWorktreeInstance
+          ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
+          : undefined,
+      }, {
+>>>>>>> bc50ba56a
         bootstrapStore: worktreeBootstrapStore,
       });
       res.json({ success: Boolean(result) });

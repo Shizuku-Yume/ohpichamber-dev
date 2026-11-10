@@ -33,6 +33,7 @@ const unexpected = (): never => { throw new Error('Unexpected runtime API access
 const statusReads: string[] = [];
 let statusFails = false;
 const trackers: TrackerAPI = {
+<<<<<<< HEAD
  providers: async () => [plane],
  authStatus: async (provider) => {
   statusReads.push(provider);
@@ -43,6 +44,18 @@ const trackers: TrackerAPI = {
  refreshListReads: unexpected, get: unexpected, states: unexpected, updateState: unexpected,
  mappingGet: unexpected, mappingSet: unexpected, sessionStatusPost: unexpected,
  preferencesGet: unexpected, preferencesSet: unexpected, authConnectToken: unexpected, authSaveOAuthClient: unexpected,
+=======
+  providers: async () => [plane],
+  authStatus: async (provider) => {
+    statusReads.push(provider);
+    if (statusFails) throw new Error('offline');
+    return { connected: false };
+  },
+  authStart: unexpected, authConnectToken: unexpected, authSaveOAuthClient: unexpected, authDisconnect: unexpected, authActivate: unexpected, list: unexpected,
+  refreshListReads: unexpected, get: unexpected, states: unexpected, updateState: unexpected,
+  mappingGet: unexpected, mappingSet: unexpected, sessionStatusPost: unexpected,
+  preferencesGet: unexpected, preferencesSet: unexpected,
+>>>>>>> bc50ba56a
 };
 const apis: RuntimeAPIs = {
  runtime: { platform: 'web', isDesktop: false }, trackers,

@@ -34,7 +34,10 @@ const setup: ProjectSetup = {
     setupWorktree: [],
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
+<<<<<<< HEAD
     worktreeDirectory: null,
+=======
+>>>>>>> bc50ba56a
     teardownWorktree: [],
     projectActions: [],
     projectActionsPrimaryId: null,

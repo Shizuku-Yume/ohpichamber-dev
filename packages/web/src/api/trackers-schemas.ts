@@ -13,6 +13,9 @@ import type {
   TrackerConnectFailureCode,
   TrackerConnectResult,
   TrackerComment,
+  TrackerConnectFailureCode,
+  TrackerConnectInfo,
+  TrackerConnectResult,
   TrackerItem,
   TrackerItemResult,
   TrackerItemSummary,
@@ -155,14 +158,30 @@ const accountSchema: z.ZodType<TrackerAccount> = z.object({
   user: personSchema.optional(),
   current: z.boolean().catch(false),
   authorizedAt: z.number().nullish().catch(null),
+  // An extension tracker's account says whether its server still takes the credential; a built-in's says nothing.
+  status: z.enum(['valid', 'invalid']).optional().catch(undefined),
+  invalidReason: z.string().trim().min(1).max(256).optional().catch(undefined),
+  method: z.enum(['oauth', 'token']).optional().catch(undefined),
+});
+
+/** What an extension tracker's card needs to connect; absent on a built-in or an older server. */
+const connectInfoSchema: z.ZodType<TrackerConnectInfo> = z.object({
+  instance: z.string().trim().min(1).max(2_048).nullable().catch(null),
+  instances: z.union([
+    z.object({ kind: z.literal('fixed'), origin: z.string().trim().min(1).max(2_048) }),
+    z.object({ kind: z.literal('user'), label: z.string().trim().min(1).max(64), placeholder: z.string().trim().min(1).max(256).optional() }),
+  ]),
+  hasClient: z.boolean().catch(false),
+  redirectUri: z.string().trim().min(1).max(2_048).nullable().catch(null),
 });
 
 export const authStatusSchema: z.ZodType<TrackerAuthStatus> = z.union([
-  disconnected,
+  z.object({ connected: z.literal(false), accounts: listOf(accountSchema).optional(), connect: connectInfoSchema.optional().catch(undefined) }),
   z.object({
     connected: z.literal(true),
     account: accountSchema.nullish().catch(null),
     accounts: listOf(accountSchema),
+    connect: connectInfoSchema.optional().catch(undefined),
   }),
 ]);
 

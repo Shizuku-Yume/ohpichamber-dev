@@ -6,11 +6,18 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { MiniChatLayout } from '@/components/mini-chat/MiniChatLayout';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
+import { SnippetQuickCreateDialog } from '@/components/snippets/SnippetQuickCreateDialog';
 import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { useRootScrollLock } from '@/hooks/useRootScrollLock';
+<<<<<<< HEAD
+=======
+import { useGlobalSessionsPolling } from '@/hooks/useGlobalSessionsPolling';
+import { opencodeClient } from '@/lib/opencode/client';
+import { openSession } from '@/lib/router/openSessionFromRoute';
+>>>>>>> bc50ba56a
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
@@ -156,6 +163,7 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
   // tray while this window was focused) instead of spawning a new window.
   React.useEffect(() => {
     const onOpenSession = (event: Event) => {
+<<<<<<< HEAD
       const detail = (event as CustomEvent<{ sessionId?: string; directory?: string }>).detail;
       const sessionId = typeof detail?.sessionId === 'string' ? detail.sessionId.trim() : '';
       if (!sessionId) return;
@@ -166,11 +174,23 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
         || (typeof detail?.directory === 'string' && detail.directory.trim().length > 0 ? detail.directory.trim() : null);
       void sync.ensureSessionRenderable(sessionId, false, directory ?? undefined);
       setCurrentSession(sessionId, directory);
+=======
+      const parsed = openSessionDetailSchema.safeParse(event instanceof CustomEvent ? event.detail : null);
+      if (!parsed.success) return;
+      const { sessionId, messageId, runtimeKey } = parsed.data;
+      if (openSessionInOwningHostWindow(sessionId, runtimeKey || null, messageId || null)) return;
+      const sessionDirectory = (sessions.find((entry) => entry.id === sessionId) as { directory?: string | null } | undefined)?.directory?.trim();
+      const directory = sessionDirectory || parsed.data.directory || null;
+      void sync.ensureSessionRenderable(sessionId);
+      // Same resolver as the main window: a `/btw` fork opens as its parent,
+      // with that parent's panel showing.
+      void openSession(sessionId, { directory, messageId: messageId || null });
+>>>>>>> bc50ba56a
       sessionBootstrappedRef.current = true;
     };
     window.addEventListener('openchamber:open-session', onOpenSession);
     return () => window.removeEventListener('openchamber:open-session', onOpenSession);
-  }, [sessions, setCurrentSession, sync]);
+  }, [sessions, sync]);
 
   React.useEffect(() => {
     if (config.mode !== 'draft' || draftOpen || currentSessionId) return;
@@ -348,6 +368,7 @@ export function ElectronMiniChatApp({ apis }: ElectronMiniChatAppProps) {
             <div className="h-full text-foreground bg-background">
               <ElectronMiniChatContent config={config} />
               <AppLinkConfirmDialog />
+              <SnippetQuickCreateDialog />
               <SharedTrustConfirmDialog />
               <Toaster />
             </div>

@@ -33,6 +33,7 @@
     --oc-tile-tone: 4%;
     --oc-tile-inset-tone: 6%;
     --oc-tile-hover-tone: 7%;
+<<<<<<< HEAD
 
     /* Motion: springs traced as linear() easings (lib/motion/springs.ts,
        whose test keeps these in step). Popups open on the popup spring and
@@ -43,6 +44,8 @@
     --oc-motion-popup-exit-duration: 110ms;
     --oc-motion-layout-duration: 294ms;
     --oc-motion-layout-easing: linear(0, 0.0344, 0.1145, 0.2151, 0.3209, 0.423, 0.5166, 0.5995, 0.6712, 0.7322, 0.7832, 0.8255, 0.8602, 0.8885, 0.9114, 0.9298, 0.9445, 0.9563, 0.9657, 0.9731, 0.9789, 0.9835, 0.9872, 0.99, 0.9922, 0.994, 0.9953, 0.9964, 0.9972, 0.9978, 0.9983, 0.9987, 1);
+=======
+>>>>>>> bc50ba56a
 
     /* Semantic typography defaults (must match SEMANTIC_TYPOGRAPHY) */
     --text-markdown: 0.875rem;

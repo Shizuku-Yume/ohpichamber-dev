@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
+<<<<<<< HEAD
 import { QuotaProviderLogo } from './QuotaProviderLogo';
+=======
+import { QuotaProviderLogo } from '@/components/usage/QuotaProviderLogo';
+>>>>>>> bc50ba56a
 import { preloadProviderLogos } from '@/hooks/useProviderLogo';
 import { formatQuotaResetLabel, formatQuotaWindowValueLabel, isExtensionQuotaProviderId } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';

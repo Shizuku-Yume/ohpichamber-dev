@@ -223,6 +223,73 @@ export const parseMessageQueueKey = (key: string): MessageQueueTarget | null => 
 // Server contract (packages/web/server/lib/message-queue)
 // ---------------------------------------------------------------------------
 
+<<<<<<< HEAD
+=======
+const serverSendConfigSchema = z.object({
+    providerID: z.string().min(1),
+    modelID: z.string().min(1),
+    agent: z.string().optional(),
+    variant: z.string().optional(),
+});
+
+const serverGoalSchema = z.object({
+    objective: z.string().min(1).optional(),
+    tokenBudget: z.number().int().positive().nullable(),
+});
+
+const serverAttachmentSchema = z.object({
+    id: z.string(),
+    filename: z.string(),
+    mimeType: z.string(),
+    size: z.number(),
+    source: z.enum(['local', 'server', 'vscode']),
+    serverPath: z.string().optional(),
+    /** The file's on-disk path, when the runtime resolved one; the model is handed it as the file identity. */
+    agentPath: z.string().optional(),
+    /** Present only on a taken item; broadcasts and snapshots omit payloads. */
+    dataUrl: z.string().optional(),
+});
+
+const serverContextPartSchema = z.discriminatedUnion('kind', [
+    z.object({
+        kind: z.literal('context'),
+        text: z.string(),
+        metadata: contextPartMetadataSchema,
+        instructions: z.string().optional(),
+    }),
+    z.object({ kind: z.literal('instruction'), text: z.string() }),
+    z.object({ kind: z.literal('synthetic'), text: z.string() }),
+]);
+
+const serverItemBaseSchema = z.object({
+    id: z.string().min(1),
+    createdAt: z.number(),
+    content: z.string(),
+    text: z.string(),
+    agentMention: z.string().optional(),
+    attachments: z.array(serverAttachmentSchema),
+    /** Present only on a taken item; broadcasts and snapshots omit it like attachment payloads. */
+    context: z.array(serverContextPartSchema).optional(),
+    contextPreview: z.string().optional(),
+    sendConfig: serverSendConfigSchema,
+    goal: serverGoalSchema.optional(),
+});
+
+const scheduledTaskSchema = z.object({
+    projectId: z.string().min(1), taskId: z.string().min(1),
+});
+const serverItemSchema = z.union([
+    serverItemBaseSchema.extend({ scheduledTask: scheduledTaskSchema, sendConfig: serverSendConfigSchema.partial() }),
+    serverItemBaseSchema,
+]);
+
+const serverSessionSchema = z.object({
+    sessionId: z.string().min(1),
+    directory: z.string(),
+    items: z.array(serverItemSchema),
+    sendingId: z.string().nullable(),
+});
+>>>>>>> bc50ba56a
 
 const serverSnapshotSchema = z.object({
     revision: z.union([z.number(), z.string()]).optional(),
@@ -230,7 +297,63 @@ const serverSnapshotSchema = z.object({
     errors: z.array(z.unknown()).optional(),
 });
 
+<<<<<<< HEAD
 const toQueuedMessage = (item: QueueItem): QueuedMessage => {
+=======
+const serverSessionResponseSchema = z.object({
+    revision: z.number(),
+    session: serverSessionSchema,
+});
+
+const serverTakeResponseSchema = serverSessionResponseSchema.extend({ item: serverItemSchema });
+const serverTakeAllResponseSchema = serverSessionResponseSchema.extend({ items: z.array(serverItemSchema) });
+
+type ServerQueueSession = z.infer<typeof serverSessionSchema>;
+type ServerQueueItem = z.infer<typeof serverItemSchema>;
+type ServerQueueAttachment = z.infer<typeof serverAttachmentSchema>;
+
+const decodeDataUrl = (dataUrl: string): ArrayBuffer | null => {
+    const commaIndex = dataUrl.indexOf(',');
+    if (!dataUrl.startsWith('data:') || commaIndex === -1) return null;
+    const meta = dataUrl.slice(5, commaIndex);
+    const payload = dataUrl.slice(commaIndex + 1);
+    try {
+        if (meta.endsWith(';base64')) {
+            const binary = atob(payload);
+            const buffer = new ArrayBuffer(binary.length);
+            const bytes = new Uint8Array(buffer);
+            for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+            return buffer;
+        }
+        const encoded = new TextEncoder().encode(decodeURIComponent(payload));
+        const buffer = new ArrayBuffer(encoded.byteLength);
+        new Uint8Array(buffer).set(encoded);
+        return buffer;
+    } catch {
+        return null;
+    }
+};
+
+/** A taken item carries its payload; a projection item has an empty file. */
+const toAttachedFile = (attachment: ServerQueueAttachment): AttachedFile => {
+    const dataUrl = attachment.dataUrl ?? '';
+    const bytes = dataUrl ? decodeDataUrl(dataUrl) : null;
+    const file: AttachedFile = {
+        id: attachment.id,
+        file: new File(bytes ? [bytes] : [], attachment.filename, { type: attachment.mimeType }),
+        dataUrl,
+        mimeType: attachment.mimeType,
+        filename: attachment.filename,
+        size: attachment.size,
+        source: attachment.source,
+    };
+    if (attachment.serverPath) file.serverPath = attachment.serverPath;
+    if (attachment.agentPath) file.agentPath = attachment.agentPath;
+    return file;
+};
+
+const toQueuedMessage = (item: ServerQueueItem): QueuedMessage => {
+>>>>>>> bc50ba56a
     const message: QueuedMessage = {
         id: item.queueItemId,
         content: item.content,
@@ -269,11 +392,60 @@ const toQueuedMessage = (item: QueueItem): QueuedMessage => {
     return message;
 };
 
+<<<<<<< HEAD
 type QueueRequestBody =
     | QueueAppendRequest
     | QueueReorderRequest
     | QueueDeleteRequest
     | { held: boolean; ttlMs?: number };
+=======
+type ServerQueueAttachmentInput = Omit<ServerQueueAttachment, 'dataUrl'> & { dataUrl: string };
+
+type ServerQueueItemInput = {
+    content: string;
+    text: string;
+    agentMention?: string;
+    attachments: ServerQueueAttachmentInput[];
+    context: QueuedContextPart[];
+    contextPreview?: string;
+    sendConfig: QueuedMessageSendConfig;
+    goal?: QueuedMessageGoal;
+};
+
+type ServerQueueRequestBody =
+    | { directory: string; item: ServerQueueItemInput }
+    | { itemIds: string[] };
+
+const toServerAttachment = (attachment: AttachedFile): ServerQueueAttachmentInput => {
+    const input: ServerQueueAttachmentInput = {
+        id: attachment.id,
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        source: attachment.source,
+        dataUrl: attachment.dataUrl,
+    };
+    if (attachment.serverPath) input.serverPath = attachment.serverPath;
+    if (attachment.agentPath) input.agentPath = attachment.agentPath;
+    return input;
+};
+
+const toServerItemInput = (message: QueuedMessageInput, sendConfig: QueuedMessageSendConfig): ServerQueueItemInput => {
+    const item: ServerQueueItemInput = {
+        content: message.content,
+        text: message.text ?? message.content,
+        attachments: (message.attachments ?? []).filter((file) => Boolean(file.dataUrl)).map(toServerAttachment),
+        context: message.context ?? [],
+        sendConfig,
+    };
+    if (message.agentMention) item.agentMention = message.agentMention;
+    if (message.goal) item.goal = message.goal;
+    const contextPreview = getQueuedMessagePreview({ content: '', context: message.context });
+    if (contextPreview) item.contextPreview = contextPreview;
+    return item;
+};
+
+>>>>>>> bc50ba56a
 const requestJson = async <T,>(schema: z.ZodType<T>, path: string, init?: RuntimeFetchOptions): Promise<T> => {
     const response = await runtimeFetch(path, init);
     if (!response.ok) {
@@ -378,9 +550,13 @@ interface MessageQueueActions {
      * Server-owned queue: apply one session's authoritative state (broadcast or response) from its
      * owner, the host ('') or a space; a session the owner may not speak for is ignored.
      */
+<<<<<<< HEAD
     applyServerSession: (session: QueueState | { sessionId: string; directory?: string; items: unknown[]; sendingId?: string | null }, revision?: number | string, expectedRuntimeKey?: string, owner?: string) => void;
     /** Server-owned queue: tell the server that owns the session's queue to hold or release its delivery. */
     setServerHold: (sessionId: string, directory: string, held: boolean) => Promise<void>;
+=======
+    applyServerSession: (session: ServerQueueSession, revision: number, expectedRuntimeKey: string, owner?: string) => void;
+>>>>>>> bc50ba56a
     resetForRuntimeSwitch: (previousRuntimeKey: string | null | undefined) => void;
 }
 
@@ -930,11 +1106,14 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
                     applyServerSession,
 
+<<<<<<< HEAD
                     setServerHold: async (sessionId, directory, held) => {
                         const response = await runtimeFetch(`${sessionPath(sessionId)}/hold`, { ...jsonInit('PUT', { held }), directory });
                         if (!response.ok) throw new Error(`Message queue hold request failed (${response.status})`);
                     },
 
+=======
+>>>>>>> bc50ba56a
                     resetForRuntimeSwitch: (previousRuntimeKey) => {
                         hydrationGeneration += 1;
                         hydration = null;

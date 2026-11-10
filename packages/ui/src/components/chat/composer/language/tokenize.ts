@@ -68,6 +68,8 @@ export interface ComposerLanguageContext {
     sessionLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
     /** Link origins the mention syntax accepts; the app's own when absent. */
     sessionLinkOrigins?: readonly string[];
+    /** Links to issues, change requests and tracker items the composer has read, by the link as written; each draws as a chip. */
+    referenceLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
 }
 
 /** Mention ranges alone — the composer also needs these to resolve references. */

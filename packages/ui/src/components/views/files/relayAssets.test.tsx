@@ -32,9 +32,12 @@ test('over the relay, Files media and prepared chat images are read through the 
       const url = new URL(String(input), 'http://tunnel');
       paths.push(url.pathname);
       if (url.pathname.endsWith('/markdown-image-grants')) return Response.json({ results: [{ source: '/tmp/qr.png', status: 'ready', path: '/tmp/qr.png', outsideFileGrant: 'grant' }] });
+<<<<<<< HEAD
       // The short-lived URL token is minted over the tunnel too: the real host
       // serves /auth/url-token there. Every other request is an asset read.
       if (url.pathname === '/auth/url-token') return Response.json({ token: 'fixture-url-token', expiresAt: Date.now() + 60_000, expiresIn: 60_000 });
+=======
+>>>>>>> bc50ba56a
       expect(url.pathname).toBe('/api/fs/raw');
       if (url.searchParams.get('path') === '/tmp/qr.png') {
         expect(url.searchParams.get('outsideFileGrant')).toBe('grant');

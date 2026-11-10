@@ -103,10 +103,24 @@ export function updateBrowserURL(
   const params = serializeRoute(state);
   const url = buildURL(params);
 
+<<<<<<< HEAD
   if (options.replace) {
    window.history.replaceState({ ...window.history.state, route: state }, '', url);
   } else {
    pushRouteEntry({ route: state }, url);
+=======
+  try {
+    const params = serializeRoute(state);
+    const url = buildURL(params);
+
+    if (options.replace) {
+      window.history.replaceState({ ...window.history.state, route: state }, '', url);
+    } else {
+      pushRouteEntry({ route: state }, url);
+    }
+  } catch {
+    // Silently fail - URL updates are non-critical
+>>>>>>> bc50ba56a
   }
  } catch {
   // Silently fail - URL updates are non-critical

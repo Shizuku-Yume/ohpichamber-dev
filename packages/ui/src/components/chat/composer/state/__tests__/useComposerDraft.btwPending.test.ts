@@ -14,11 +14,19 @@ const fork: ChatDraftIdentity = { ...parent, sessionId: 'fork-1' };
 
 function renderComposer(initialText: string) {
     const dom = installHookTestDom();
+<<<<<<< HEAD
     const originalRaf = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
     const originalCancelRaf = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
     // Restoring a draft asks for a frame; the text is what this file asserts.
     Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, writable: true, value: () => 0 });
     Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, writable: true, value: () => undefined });
+=======
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancelRaf = globalThis.cancelAnimationFrame;
+    // Restoring a draft asks for a frame; the text is what this file asserts.
+    globalThis.requestAnimationFrame = () => 0;
+    globalThis.cancelAnimationFrame = () => undefined;
+>>>>>>> bc50ba56a
     const root = createRoot(dom.container);
     const mentionsRef: React.RefObject<Set<string>> = { current: new Set() };
     let controlsForTest: ComposerDraftControls | undefined;
@@ -30,7 +38,10 @@ function renderComposer(initialText: string) {
         React.useEffect(() => { messageRef.current = message; }, [message]);
         const controls = useComposerDraft({
             message, messageRef, setMessage, confirmedMentionsRef: mentionsRef, identity,
+<<<<<<< HEAD
             persistEnabled: true,
+=======
+>>>>>>> bc50ba56a
             initialDraft: { text: '', identity },
         });
         result.text = message;
@@ -47,10 +58,15 @@ function renderComposer(initialText: string) {
         render,
         teardown: () => {
             act(() => { root.unmount(); });
+<<<<<<< HEAD
             if (originalRaf) Object.defineProperty(globalThis, 'requestAnimationFrame', originalRaf);
             else Reflect.deleteProperty(globalThis, 'requestAnimationFrame');
             if (originalCancelRaf) Object.defineProperty(globalThis, 'cancelAnimationFrame', originalCancelRaf);
             else Reflect.deleteProperty(globalThis, 'cancelAnimationFrame');
+=======
+            globalThis.requestAnimationFrame = originalRaf;
+            globalThis.cancelAnimationFrame = originalCancelRaf;
+>>>>>>> bc50ba56a
             dom.restore();
         },
     };
@@ -138,6 +154,7 @@ describe('/btw fork still being created', () => {
         }
     });
 
+<<<<<<< HEAD
     test('keeps the source draft when the destination cannot be written', () => {
         writeChatDraft(parent, 'text from the parent', []);
         const composer = renderComposer('text from the parent');
@@ -159,6 +176,8 @@ describe('/btw fork still being created', () => {
         }
     });
 
+=======
+>>>>>>> bc50ba56a
     test('keeps nothing under its placeholder identity', () => {
         const composer = renderComposer('first question');
         try {

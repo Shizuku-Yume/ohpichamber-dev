@@ -4,9 +4,15 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { useSessions } from '@/sync/sync-context';
 import * as sessionActions from '@/sync/session-actions';
+<<<<<<< HEAD
 import { useChatColumnActions, useChatSessionSelection } from './chatColumnSession';
 
 export type PermissionResponse = 'once' | 'always' | 'reject';
+=======
+import { canSavePermission } from './permissionSummary';
+import { eventMatchesShortcut, getEffectiveShortcutCombo, type ShortcutActionId } from '@/lib/shortcuts';
+import { useUIStore } from '@/stores/useUIStore';
+>>>>>>> bc50ba56a
 
 type ColumnKind = 'main' | 'pinned';
 type ActivePermissionCard = { id: string; column: ColumnKind };
@@ -20,6 +26,27 @@ const columnOfEvent = (event: KeyboardEvent): ColumnKind => (
     event.target instanceof Element && event.target.closest('[data-chat-column="pinned"]') ? 'pinned' : 'main'
 );
 
+<<<<<<< HEAD
+=======
+/**
+ * The reply a key press gives. "Always" needs something to save. Bindings are
+ * single chords matched here, in the capture phase, because the composer would
+ * otherwise take the default Alt+Enter as a new line.
+ */
+export const permissionShortcutReply = (
+  event: KeyboardEvent,
+  canSave: boolean,
+  overrides?: Record<string, string>,
+): PermissionReply | null => {
+  const pressed = (actionId: ShortcutActionId) => (
+    eventMatchesShortcut(event, getEffectiveShortcutCombo(actionId, overrides))
+  );
+  if (pressed('permission_allow_once')) return 'once';
+  if (pressed('permission_deny')) return 'reject';
+  return canSave && pressed('permission_allow_always') ? 'always' : null;
+};
+
+>>>>>>> bc50ba56a
 /** The request was raised by a child of the session the user is looking at. */
 export const usePermissionFromSubagent = (permission: ApprovalRequest): boolean => {
     const { sessionId: currentSessionId, directory } = useChatSessionSelection();
@@ -74,8 +101,35 @@ export const usePermissionResponse = (
         }
     }, [hasResponded, onResponse, permission.approvalId, permission.policyTarget, permission.sessionId, t]);
 
+<<<<<<< HEAD
     const respondRef = React.useRef(respond);
     respondRef.current = respond;
+=======
+  React.useEffect(() => {
+    if (hasResponded) return;
+    const card = { id: permission.id, column };
+    activePermissionCards.push(card);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = columnOfEvent(event);
+      let owner: typeof card | undefined;
+      for (const entry of activePermissionCards) {
+        if (entry.column === target) owner = entry;
+      }
+      if (owner !== card) return;
+      const response = permissionShortcutReply(event, canSave, useUIStore.getState().shortcutOverrides);
+      if (!response) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void respondRef.current(response);
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      const index = activePermissionCards.lastIndexOf(card);
+      if (index !== -1) activePermissionCards.splice(index, 1);
+    };
+  }, [canSave, column, hasResponded, permission.id]);
+>>>>>>> bc50ba56a
 
     React.useEffect(() => {
         if (hasResponded) return;

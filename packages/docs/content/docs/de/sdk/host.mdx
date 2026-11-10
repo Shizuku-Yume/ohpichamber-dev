@@ -27,7 +27,11 @@ Das ist kein einmaliger Mount-Callback. Mounte die UI und registriere Abonnement
 | `theme.tokens` | die Farben der App (Flächen, Text, Interaktionszustände, primary, success/warning/error/info), `font`, `mono` und `radius`. Gib das an `applyHostReady` weiter, bevor du UI mountest. |
 | `locale` | das Sprach-Tag der App |
 | `directory` | aktuelles Projektverzeichnis oder `null` |
+<<<<<<< HEAD
 | `session` | `{ id, title, busy }` oder `null`. Fehlt der Titel, steht dort die Session-ID. `busy` ist der Live-Status. `model` und `agent` (the session agent) erscheinen, wenn die Session sie hat. |
+=======
+| `session` | `{ id, title, busy }` oder `null`. Fehlt der Titel, steht dort die Session-ID. `busy` ist der Live-Status. `model` und `agent` (der OpenCode-Agent) erscheinen, wenn die Session sie hat. |
+>>>>>>> bc50ba56a
 | `surface` | `panel` in der Leiste, `dialog` im Anhängen-Fenster, `page` im Vollbild, `status` im Work-Status-Panel, `file` als Datei-Editor in Files, `block` in einem UI-Block im Chat |
 | `item` | wofür diese Oberfläche geöffnet wurde, oder `null`: der angehängte Eintrag, den der Nutzer angeklickt hat (dieselben Felder, die du an `attach` übergeben hast, einschließlich `data`), eine Nachricht (`kind: "message"`) oder eine Session (`kind: "session"`) aus einer deiner deklarierten Aktionen. Siehe [Aktionen](/sdk/#aktionen-befehle-und-das-badge). |
 | `connection` | `{ connected, account }` für deine Integration |
@@ -247,7 +251,15 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
+<<<<<<< HEAD
 `sessions.start`, `sessions.send`, `sessions.retry` und `sessions.status` brauchen `contributes.sessionControl`, das der Nutzer als eigene Zeile freigibt. `sessions.lastReply` braucht `sessionControl: { content: true }`. `setInstructions` braucht `contributes.instructions` und ergänzt, was Agenten lesen, in einem Ordner oder, mit `null`, überall.
+=======
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` und `sessions.stop` brauchen `contributes.sessionControl`, das der Nutzer als eigene Zeile freigibt. `sessions.lastReply` braucht `sessionControl: { content: true }`. Eine Nachricht aus `sessions.send` schließt ein Formular oder eine Seite, auf die der Agent in dieser Sitzung wartet, genau wie eine im Chat getippte Nachricht.
+
+Um die Anfragen des Agenten woandershin zu bringen, etwa in eine Chat-App, füge `answers: true` hinzu. Der Nutzer gibt das als weitere Zeile frei, und der Dienst kann dann in jeder Sitzung im Namen des Nutzers antworten: `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (oder `'deny'` mit einer `message`, die der Agent liest) auf ein `permission-asked`-Ereignis und `sessions.answerForm(sessionId, formId, values)` auf ein `question-asked`-Ereignis, dessen `event.question.kind` `form` ist. Der Inhalt des Ereignisses listet die Felder des Formulars mit ihrem `key` und den Auswahlmöglichkeiten. `null` statt Werten verwirft das Formular. Eine Freigabe gilt nur für diese eine Anfrage.
+
+`setInstructions` braucht `contributes.instructions` und ergänzt, was Agenten lesen, in einem Ordner oder, mit `null`, überall.
+>>>>>>> bc50ba56a
 
 `emit` erreicht deine offenen Frames über `host.onServiceEvent`, sodass ein Panel nicht mehr pollen muss. Nichts wird nachgeliefert, also liest ein später geöffneter Frame zuerst den aktuellen Zustand. `readSettings` gibt dem Dienst die Einstellungen der Integration einschließlich der `secret`-Felder, und `needsConfiguration` zeigt eine Meldung auf der Karte der Erweiterung.
 
@@ -382,14 +394,22 @@ Schaltet der Nutzer Sitzungskommentare ein, ruft OpenChamber `comments.create` m
 
 ## Nutzungsanbieter
 
+<<<<<<< HEAD
 Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die model providers auf, deren Zugangsdaten er braucht. OpenChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
+=======
+Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die OpenCode-Anbieter auf, deren Zugangsdaten er braucht. OpenChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
+>>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
+<<<<<<< HEAD
 Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OpenChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die Host für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in Host wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
+=======
+Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OpenChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in OpenCode wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
+>>>>>>> bc50ba56a
 
 Lies den Body mit `readQuotaProviderRequest` und antworte mit `{ ok: true, data }` und dem Ergebnis, das ein eingebauter Anbieter berechnet: `ok`, `configured`, `error`, `planLabel` und `usage.windows` nach Fensternamen, jedes mit `usedPercent`, `windowSeconds`, `resetAt` (Epoche in Millisekunden) und optional `valueLabel` oder `value`, dazu `usage.models` für Fenster je Modell. OpenChamber leitet den verbleibenden Anteil, den Countdown bis zum Reset und die formatierten Zeichenketten ab, sodass die Karte der eines eingebauten Anbieters entspricht.
 

@@ -38,10 +38,15 @@ const childStores = {
   },
   clearBootstrapDemand: (owner: string) => state.clearedOwners.push(owner),
 };
+<<<<<<< HEAD
 // The fork's global list is authoritative as a whole once its status is
 // ready; there is no separate snapshot beside it.
 type GlobalSessionsState = { activeSessions: unknown[]; archivedSessions: unknown[]; status: 'ready' };
 const globalSessions: GlobalSessionsState = { activeSessions: [], archivedSessions: [], status: 'ready' };
+=======
+type GlobalSessionsState = { activeSessions: never[]; archivedSessions: never[]; authoritativeSessions: never[]; status: 'ready' };
+const globalSessions: GlobalSessionsState = { activeSessions: [], archivedSessions: [], authoritativeSessions: [], status: 'ready' };
+>>>>>>> bc50ba56a
 
 mock.module('@/sync/sync-context', () => ({
   useChildStoreManager: () => childStores,
@@ -176,6 +181,7 @@ describe('useSessionListSync', () => {
   });
 
   test('head updates to visible arrays never advance the authoritative cleanup snapshot', () => {
+<<<<<<< HEAD
     const kept = { sessionId: 'kept' };
     globalSessions.activeSessions = [kept];
     act(() => root.render(<LifecycleProbe />));
@@ -194,6 +200,17 @@ describe('useSessionListSync', () => {
     globalSessions.activeSessions = [];
     act(() => root.render(<LifecycleProbe />));
     expect(state.cleanupInputs.at(-1)?.sessions).toEqual([]);
+=======
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    const baseline = state.cleanupInputs.at(-1)?.sessions;
+    globalSessions.activeSessions = [];
+    globalSessions.archivedSessions = [];
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    expect(state.cleanupInputs.at(-1)?.sessions).toBe(baseline);
+    globalSessions.authoritativeSessions = [];
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    expect(state.cleanupInputs.at(-1)?.sessions).not.toBe(baseline);
+>>>>>>> bc50ba56a
   });
 
   test('cancels a pending control-event refresh before a layout remount', async () => {

@@ -300,6 +300,7 @@ export function CodeMirrorEditor({
  const widgetContainersRef = React.useRef(new Map<string, HTMLElement>());
  const [portalWidgets, setPortalWidgets] = React.useState<Array<{ id: string; content: React.ReactNode; container: HTMLElement }>>([]);
 
+<<<<<<< HEAD
  const syncPortalWidgets = React.useCallback((widgets?: BlockWidgetDef[]) => {
   const next = (widgets ?? [])
    .map((widget) => {
@@ -314,6 +315,166 @@ export function CodeMirrorEditor({
     };
    })
    .filter((widget): widget is { id: string; content: React.ReactNode; container: HTMLElement } => widget !== null);
+=======
+    setPortalWidgets((prev) => {
+      if (
+        prev.length === next.length &&
+        prev.every((widget, index) => {
+          const candidate = next[index];
+          return (
+            widget.id === candidate.id &&
+            widget.content === candidate.content &&
+            widget.container === candidate.container
+          );
+        })
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  // The gutter width for inline comment widgets. Read in CodeMirror's own
+  // measure phase: read on every update, it forced a layout of the page on
+  // each keystroke and each reconfigure.
+  const gutterWidthRef = React.useRef<string | null>(null);
+  // The scrollbar frame stops above bottom panels (the vim status line), so
+  // the horizontal thumb sits at the scroller's own bottom edge.
+  const bottomPanelsHeightRef = React.useRef<string | null>(null);
+  const scrollbarFrameRef = React.useRef<HTMLDivElement | null>(null);
+  const [scroller, setScroller] = React.useState<HTMLElement | null>(null);
+  const syncEditorCssVars = React.useCallback((view?: EditorView | null) => {
+    const resolvedView = view ?? viewRef.current;
+    if (!hostRef.current || !resolvedView) {
+      return;
+    }
+
+    resolvedView.requestMeasure({
+      key: gutterWidthMeasureKey,
+      read: (measuredView) => {
+        // Hidden or detached, everything measures zero: keep the last real sizes.
+        if (!measuredView.dom.isConnected || measuredView.dom.offsetParent === null) return null;
+        const gutters = measuredView.dom.querySelector('.cm-gutters');
+        const bottomPanels = measuredView.dom.querySelector('.cm-panels-bottom');
+        return {
+          gutterWidth: gutters instanceof HTMLElement ? gutters.getBoundingClientRect().width : 0,
+          bottomPanelsHeight: bottomPanels instanceof HTMLElement ? bottomPanels.getBoundingClientRect().height : 0,
+        };
+      },
+      write: (sizes) => {
+        const host = hostRef.current;
+        if (!host || sizes === null) return;
+        const nextGutterWidth = `${sizes.gutterWidth}px`;
+        if (gutterWidthRef.current !== nextGutterWidth) {
+          gutterWidthRef.current = nextGutterWidth;
+          host.style.setProperty('--oc-editor-gutter-width', nextGutterWidth);
+        }
+        const nextBottomPanelsHeight = `${sizes.bottomPanelsHeight}px`;
+        if (bottomPanelsHeightRef.current !== nextBottomPanelsHeight) {
+          bottomPanelsHeightRef.current = nextBottomPanelsHeight;
+          scrollbarFrameRef.current?.style.setProperty('bottom', nextBottomPanelsHeight);
+        }
+      },
+    });
+  }, []);
+
+  React.useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  React.useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  React.useEffect(() => {
+    onViewReadyRef.current = onViewReady;
+    onViewDestroyRef.current = onViewDestroy;
+  }, [onViewReady, onViewDestroy]);
+
+  React.useEffect(() => {
+    onSearchOpenChangeRef.current = onSearchOpenChange;
+  }, [onSearchOpenChange]);
+
+  React.useEffect(() => {
+    blockWidgetsRef.current = blockWidgets;
+    syncPortalWidgets(blockWidgets);
+  }, [blockWidgets, syncPortalWidgets]);
+
+  React.useEffect(() => {
+    if (!hostRef.current) {
+      return;
+    }
+
+    const cspNonce = (() => {
+      if (typeof document === 'undefined') return null;
+      const metaNonce = document.querySelector('meta[name="csp-nonce"]')?.getAttribute('content');
+      if (metaNonce) return metaNonce;
+      const windowNonce = (window as Window & { __OPENCHAMBER_CSP_NONCE__?: string }).__OPENCHAMBER_CSP_NONCE__;
+      return typeof windowNonce === 'string' && windowNonce.length > 0 ? windowNonce : null;
+    })();
+
+    const state = EditorState.create({
+      doc: valueRef.current,
+      extensions: [
+        ...(cspNonce ? [EditorView.cspNonce.of(cspNonce)] : []),
+        gutters({ fixed: true }),
+        lineNumbersCompartment.of(lineNumbers(lineNumbersConfig)),
+        history(),
+        indentUnit.of('  '),
+        vimCompartment.of(createVimModeExtensions(vimMode)),
+        keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
+        EditorView.updateListener.of((update) => {
+          // Edits while detached (a reload, an agent's write) move the text
+          // under the remembered scroll position.
+          if (update.docChanged && scrollSnapshotRef.current) {
+            scrollSnapshotRef.current = scrollSnapshotRef.current.map(update.changes) ?? null;
+          }
+          if (update.docChanged || update.geometryChanged || update.viewportChanged || update.transactions.some((tr) => tr.reconfigured)) {
+            syncEditorCssVars(update.view);
+          }
+          if (update.viewportChanged || update.geometryChanged) {
+            syncPortalWidgets(blockWidgetsRef.current);
+          }
+          // Detect search panel open/close and sync back to React state
+          const wasOpen = searchPanelOpen(update.startState);
+          const isOpen = searchPanelOpen(update.state);
+          if (wasOpen !== isOpen) {
+            onSearchOpenChangeRef.current?.(isOpen);
+          }
+          const queryChanged = !getSearchQuery(update.startState).eq(getSearchQuery(update.state));
+          if (isOpen && (wasOpen !== isOpen || queryChanged || update.docChanged || update.selectionSet)) {
+            syncSearchPanelStatus(update.view.dom, update.view, wasOpen !== isOpen || queryChanged || update.docChanged);
+          }
+          if (!update.docChanged) {
+            return;
+          }
+          const next = update.state.doc.toString();
+          valueRef.current = next;
+          onChangeRef.current(next);
+          syncPortalWidgets(blockWidgetsRef.current);
+        }),
+        editableCompartment.of(EditorView.editable.of(!readOnly)),
+        externalExtensionsCompartment.of(extensions ?? []),
+        highlightLinesCompartment.of(createHighlightLinesExtension(highlightLines)),
+        blockWidgetsCompartment.of(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
+        searchCompartment.of(enableSearch ? createSearchExtensions() : []),
+      ],
+    });
+
+    viewRef.current = new EditorView({
+      state,
+      parent: hostRef.current,
+    });
+    if (detachedRef.current) {
+      viewRef.current.dom.remove();
+    }
+    const scrolledView = viewRef.current;
+    const recordScroll = () => {
+      scrollSnapshotRef.current = scrolledView.scrollSnapshot();
+    };
+    scrolledView.scrollDOM.addEventListener('scroll', recordScroll, { passive: true });
+    setScroller(scrolledView.scrollDOM);
+>>>>>>> bc50ba56a
 
   setPortalWidgets((prev) => {
    if (
@@ -348,6 +509,7 @@ export function CodeMirrorEditor({
    return;
   }
 
+<<<<<<< HEAD
   resolvedView.requestMeasure({
    key: gutterWidthMeasureKey,
    read: (measuredView) => {
@@ -361,6 +523,67 @@ export function CodeMirrorEditor({
     };
    },
    write: (sizes) => {
+=======
+    return () => {
+      scrolledView.scrollDOM.removeEventListener('scroll', recordScroll);
+      onViewDestroyRef.current?.();
+      viewRef.current?.destroy();
+      viewRef.current = null;
+      setScroller(null);
+      setPortalWidgets([]);
+    };
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockWidgetsRef, syncEditorCssVars, syncPortalWidgets]);
+
+  // Only the compartments whose input changed are reconfigured: a reconfigure
+  // rebuilds the gutters and re-measures the editor, and hosts may pass fresh
+  // objects on every render. The creation effect applied the first values.
+  const appliedConfigRef = React.useRef({ lineNumbersConfig, readOnly, extensions, highlightLines, blockWidgets, enableSearch });
+  React.useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    const applied = appliedConfigRef.current;
+    appliedConfigRef.current = { lineNumbersConfig, readOnly, extensions, highlightLines, blockWidgets, enableSearch };
+    const effects: StateEffect<unknown>[] = [];
+    if (applied.lineNumbersConfig !== lineNumbersConfig) {
+      effects.push(lineNumbersCompartment.reconfigure(lineNumbers(lineNumbersConfig)));
+    }
+    if (applied.readOnly !== readOnly) {
+      effects.push(editableCompartment.reconfigure(EditorView.editable.of(!readOnly)));
+    }
+    if (applied.extensions !== extensions) {
+      effects.push(externalExtensionsCompartment.reconfigure(extensions ?? []));
+    }
+    if (applied.highlightLines?.start !== highlightLines?.start || applied.highlightLines?.end !== highlightLines?.end) {
+      effects.push(highlightLinesCompartment.reconfigure(createHighlightLinesExtension(highlightLines)));
+    }
+    if (applied.blockWidgets !== blockWidgets) {
+      effects.push(blockWidgetsCompartment.reconfigure(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)));
+    }
+    if (applied.enableSearch !== enableSearch) {
+      effects.push(searchCompartment.reconfigure(enableSearch ? createSearchExtensions() : []));
+    }
+    if (effects.length === 0) {
+      return;
+    }
+
+    view.dispatch({ effects });
+
+    forceParsingCompat(view, view.state.doc.length, 200);
+    view.requestMeasure();
+    requestAnimationFrame(() => {
+      syncEditorCssVars(view);
+      syncPortalWidgets(blockWidgetsRef.current);
+    });
+  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch, syncEditorCssVars, syncPortalWidgets]);
+
+  // A layout effect, so the DOM leaves in the same commit that hides the host
+  // and the browser never lays out or exposes the editor hidden in place.
+  React.useLayoutEffect(() => {
+    detachedRef.current = detached;
+>>>>>>> bc50ba56a
     const host = hostRef.current;
     if (!host || sizes === null) return;
     const nextGutterWidth = `${sizes.gutterWidth}px`;
@@ -535,6 +758,7 @@ export function CodeMirrorEditor({
 
   view.dispatch({ effects });
 
+<<<<<<< HEAD
   forceParsingCompat(view, view.state.doc.length, 200);
   view.requestMeasure();
   requestAnimationFrame(() => {
@@ -638,4 +862,27 @@ export function CodeMirrorEditor({
    })}
   </div>
  );
+=======
+  return (
+    <div className="relative h-full w-full">
+      <div
+        ref={hostRef}
+        // Code reads left to right in every UI language; gutters stay on the left.
+        dir="ltr"
+        className={cn(
+          'oc-surface-code h-full w-full',
+          '[&_.cm-editor]:h-full [&_.cm-editor]:w-full',
+          '[&_.cm-scroller]:font-mono [&_.cm-scroller]:text-[var(--text-code)] [&_.cm-scroller]:leading-6',
+          className,
+        )}
+      />
+      <div ref={scrollbarFrameRef} className="pointer-events-none absolute inset-0">
+        <AttachedOverlayScrollbar scroller={detached ? null : scroller} />
+      </div>
+      {portalWidgets.map((widget) => {
+        return createPortal(widget.content, widget.container, widget.id);
+      })}
+    </div>
+  );
+>>>>>>> bc50ba56a
 }

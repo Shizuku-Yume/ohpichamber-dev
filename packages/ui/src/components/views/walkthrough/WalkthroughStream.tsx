@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Button } from '@/components/ui/button';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { groupHunksByFile } from '@/lib/walkthrough/model';
@@ -83,12 +84,34 @@ const StopHeader = ({ stopView }: { stopView: WalkthroughStopView }) => {
  * hunks — the path is the main orientation cue in a long stream, and as a plain
  * caption it was easy to scroll straight past.
  */
+<<<<<<< HEAD
 const FileHeader = ({ path }: { path: string }) => (
   <div className="sticky top-0 z-10 flex items-center gap-1.5 border-b border-[var(--interactive-border)]/35 bg-[var(--surface-elevated)]/90 px-4 py-1.5 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--surface-elevated)]/80">
     <FileTypeIcon filePath={path} className="size-3.5 shrink-0" />
     <span className="typography-meta truncate font-mono text-foreground">{path}</span>
   </div>
 );
+=======
+const FileHeader = ({ path, commentOrigin }: { path: string; commentOrigin?: DiffCommentOrigin }) => {
+  const wholeFileComment = useWholeFileComment({ fileLabel: path, origin: commentOrigin });
+  return (
+    <>
+      <div className="sticky top-0 z-10 border-b border-[var(--interactive-border)]/35 bg-[var(--surface-elevated)]/90 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--surface-elevated)]/80">
+        <div className="flex items-center gap-1.5 px-4 py-1.5">
+          <FileTypeIcon filePath={path} className="size-3.5 shrink-0" />
+          <ChangedPathLabel path={path} className="typography-meta min-w-0 flex-1 font-mono" />
+          <WholeFileCommentButton
+            onClick={wholeFileComment.toggle}
+            active={wholeFileComment.isOpen}
+          />
+        </div>
+        {wholeFileComment.editor}
+      </div>
+      {wholeFileComment.cards}
+    </>
+  );
+};
+>>>>>>> bc50ba56a
 
 const HunkRuns = ({
   hunks,
@@ -133,7 +156,7 @@ export const WalkthroughStream = memo(function WalkthroughStream({
   wrapLines,
 }: WalkthroughStreamProps) {
   const { t } = useI18n();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
   const [uncoveredOpen, setUncoveredOpen] = useState(false);
 
   // Set while a click-driven jump is in flight. Without it the observer reports
@@ -217,11 +240,12 @@ export const WalkthroughStream = memo(function WalkthroughStream({
   const uncoveredRuns = useMemo(() => groupHunksByFile(view.uncoveredHunks), [view.uncoveredHunks]);
 
   return (
-    <div
+    <ScrollableOverlay
       ref={scrollRef}
-      className="min-h-0 flex-1 overflow-y-auto"
+      outerClassName="min-h-0 flex-1"
       data-diff-virtual-root
       data-diff-virtual-content
+      disableHorizontal
     >
       {view.stops.map((stopView) => (
         <section
@@ -229,7 +253,7 @@ export const WalkthroughStream = memo(function WalkthroughStream({
           id={stopElementId(stopView.stop.id)}
           data-stop-id={stopView.stop.id}
           className={cn(
-            'border-b border-border/60',
+            'border-b border-edge',
             activeStopId === stopView.stop.id && 'bg-interactive-selection/5'
           )}
         >
@@ -249,7 +273,7 @@ export const WalkthroughStream = memo(function WalkthroughStream({
       ))}
 
       {view.uncoveredHunks.length > 0 && (
-        <section className="border-b border-border/60">
+        <section className="border-b border-edge">
           <Button
             type="button"
             variant="ghost"
@@ -281,6 +305,6 @@ export const WalkthroughStream = memo(function WalkthroughStream({
             ))}
         </section>
       )}
-    </div>
+    </ScrollableOverlay>
   );
 });

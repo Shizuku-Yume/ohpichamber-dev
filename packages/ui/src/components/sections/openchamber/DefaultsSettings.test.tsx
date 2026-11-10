@@ -71,6 +71,7 @@ const mockOmpSettings = {
   ],
 };
 
+<<<<<<< HEAD
 mock.module('@/api/canonicalClient', () => ({
   CanonicalApiError: class extends Error {},
   canonicalClient: {
@@ -82,6 +83,153 @@ mock.module('@/api/canonicalClient', () => ({
     updateCacheWarming: async () => ({ mode: 'off' }),
   },
 }));
+=======
+const configState: ConfigState = {
+  providers: [],
+  modelsMetadata: new Map<string, never>(),
+  setProvider: () => undefined,
+  setModel: () => undefined,
+  setAgent: () => undefined,
+  setCurrentVariant: () => undefined,
+  setCurrentVariantOverride: () => undefined,
+  setSettingsDefaultModel: () => undefined,
+  setSettingsDefaultVariant: () => undefined,
+  setSettingsDefaultAgent: () => undefined,
+  selectionSource: 'auto',
+  agentSelectionSource: 'auto',
+  agents: [],
+  currentAgentName: undefined,
+};
+
+const settingsState = {
+  showDeletionDialog: false,
+  setShowDeletionDialog: () => undefined,
+};
+
+const selectionState = {
+  getSessionModelSelection: () => undefined,
+  getSessionAgentSelection: () => undefined,
+};
+
+const sessionState = { currentSessionId: null } satisfies { currentSessionId: string | null };
+let savedSettings: DesktopSettings | null = null;
+const updateCalls: Array<Partial<DesktopSettings>> = [];
+
+mock.module('@/stores/useConfigStore', () => ({
+  useConfigStore: <T,>(selector: (state: ConfigState) => T): T => selector(configState),
+}));
+mock.module('@/stores/useUIStore', () => ({
+  useUIStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
+}));
+mock.module('@/sync/selection-store', () => ({
+  useSelectionStore: <T,>(selector: (state: typeof selectionState) => T): T => selector(selectionState),
+}));
+mock.module('@/sync/session-ui-store', () => ({
+  useSessionUIStore: <T,>(selector: (state: typeof sessionState) => T): T => selector(sessionState),
+}));
+mock.module('@/stores/useDirectoryStore', () => ({
+  useDirectoryStore: <T,>(selector: (state: { currentDirectory: string }) => T): T =>
+    selector({ currentDirectory: '/test/project' }),
+}));
+const runtimeFetchCalls: string[] = [];
+const runtimeFetchModule = await import('@/lib/runtime-fetch');
+mock.module('@/lib/runtime-fetch', () => ({
+  ...runtimeFetchModule,
+  runtimeFetch: async (url: string) => {
+    runtimeFetchCalls.push(url);
+    return new Response(JSON.stringify({ authenticatedProviders: [] }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  },
+}));
+const persistenceModule = await import('@/lib/persistence');
+mock.module('@/lib/persistence', () => ({
+  ...persistenceModule,
+  loadDesktopSettings: async () => savedSettings,
+  updateDesktopSettings: async (changes: Partial<DesktopSettings>) => {
+    updateCalls.push(changes);
+    return { ok: true };
+  },
+  reportSettingsSaveState: () => {},
+}));
+const opencodeModule = await import('@/lib/opencode/client');
+mock.module('@/lib/opencode/client', () => ({
+  ...opencodeModule,
+  opencodeClient: { getConfig: async () => ({ warming: false }) },
+}));
+mock.module('@/lib/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+  getCurrentIntlLocale: () => 'en-US',
+}));
+mock.module('@/components/chat/mobileControlsUtils', () => ({
+  isPrimaryMode: (mode: string | undefined) => mode === 'primary',
+}));
+mock.module('@/components/sections/agents/ModelSelector', () => ({
+  ModelSelector: ({
+    providerId,
+    modelId,
+    onChange,
+  }: {
+    providerId: string;
+    modelId: string;
+    onChange: (providerId: string, modelId: string) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => onChange(providerId, modelId === 'small' ? 'other' : modelId)}
+    >
+      {providerId}/{modelId}
+    </button>
+  ),
+}));
+mock.module('@/components/sections/commands/AgentSelector', () => ({
+  AgentSelector: () => <button type="button">agent</button>,
+}));
+mock.module('@/components/sections/shared/SettingsInfoHint', () => ({
+  SettingsInfoHint: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+// The permission row reads the routing and UI stores; it has no bearing on the defaults under test.
+mock.module('@/components/sections/openchamber/PermissionDefaultModeField', () => ({
+  PermissionDefaultModeField: () => null,
+}));
+mock.module('@/components/sections/shared/SettingsSection', () => ({
+  SettingsSection: ({ description, children }: { description?: React.ReactNode; children: React.ReactNode }) => (
+    <section>{description}{children}</section>
+  ),
+  SettingsFieldRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SettingsCheckboxRow: ({ children, label }: { children?: React.ReactNode; label?: React.ReactNode }) => (
+    <div>{label}{children}</div>
+  ),
+  SETTINGS_CUSTOM_TRIGGER_CLASS: '',
+  SETTINGS_HELPER_CLASS: '',
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS: '',
+  SETTINGS_OPTION_STACK_CLASS: '',
+  SettingsChipGroup: () => null,
+}));
+mock.module('@/components/ui/select', () => ({
+  Select: ({
+    value,
+    onValueChange,
+    disabled,
+    children,
+  }: {
+    value?: string;
+    onValueChange?: (value: string) => void;
+    disabled?: boolean;
+    children: React.ReactNode;
+  }) => (
+    <div data-select-value={value} data-select-disabled={disabled ? 'true' : undefined}>
+      {children}
+      <button type="button" onClick={() => onValueChange?.('medium')}>select-medium</button>
+      <button type="button" onClick={() => onValueChange?.('__default__')}>select-default</button>
+    </div>
+  ),
+  SelectContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectValue: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+>>>>>>> bc50ba56a
 
 // React DOM must evaluate after happy-dom installs browser globals into globalThis.
 const { act } = await import('react');

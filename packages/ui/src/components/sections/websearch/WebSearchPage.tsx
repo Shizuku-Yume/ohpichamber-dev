@@ -414,6 +414,7 @@ export const WebSearchPage: React.FC = () => {
    || outcome.persistence !== 'persisted'
    || outcome.workers.some((worker) => worker.status === 'failed'));
 
+<<<<<<< HEAD
  return (
   <SettingsPageLayout
    title={t('settings.page.webSearch.title')}
@@ -445,4 +446,54 @@ export const WebSearchPage: React.FC = () => {
    )}
   </SettingsPageLayout>
  );
+=======
+  if (snapshot && open) {
+    return <ProviderDetail entry={open} snapshot={snapshot} onBack={() => setOpenId(null)} />;
+  }
+
+  return (
+    <SettingsPageLayout
+      title={t('settings.page.webSearch.title')}
+      namedBySidebar
+      showSaveStatus
+    >
+      {snapshot ? (
+        <>
+          <ModeSection snapshot={snapshot} />
+          <SettingsSection
+            title={t('settings.webSearch.section.providers')}
+            info={t('settings.webSearch.section.providersInfo')}
+            settingsItem="web-search.providers"
+          >
+            {entries.length === 0 ? (
+              <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.noProviders')}</p>
+            ) : (
+              <div className={SETTINGS_CARD_GRID_CLASS}>
+                {entries.map((entry) => (
+                  <ProviderCard key={entry.provider.id} entry={entry} snapshot={snapshot} onOpen={() => setOpenId(entry.provider.id)} />
+                ))}
+              </div>
+            )}
+            {snapshot.access === null ? (
+              <p className={`${SETTINGS_HELPER_CLASS} mt-3`}>{t('settings.webSearch.state.keysUnavailable')}</p>
+            ) : null}
+          </SettingsSection>
+        </>
+      ) : state.kind === 'failed' ? (
+        <SettingsSection divider={false}>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="typography-meta text-[var(--status-error)]">{t('settings.webSearch.state.loadFailed')}</p>
+            <Button variant="outline" size="xs" onClick={() => void load()}>
+              {t('settings.webSearch.actions.retry')}
+            </Button>
+          </div>
+        </SettingsSection>
+      ) : (
+        <SettingsSection divider={false}>
+          <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.loading')}</p>
+        </SettingsSection>
+      )}
+    </SettingsPageLayout>
+  );
+>>>>>>> bc50ba56a
 };

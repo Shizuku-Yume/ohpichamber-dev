@@ -27,7 +27,11 @@ Het is geen eenmalige callback voor het opbouwen van de interface. Bouw uw UI en
 | `theme.tokens` | appkleuren voor achtergronden, tekst, interactiestatussen, primary en success/warning/error/info, plus `font`, `mono` en `radius`; geef deze vóór het opbouwen van de UI aan `applyHostReady` door |
 | `locale` | taalcode van de app |
 | `directory` | huidige projectmap, of `null` |
+<<<<<<< HEAD
 | `session` | `{ id, title, busy }` of `null`; zonder titel wordt de sessie-ID gebruikt. `busy` is de livestatus. `model` en `agent`, de Host-agent, zijn aanwezig wanneer de sessie die heeft. |
+=======
+| `session` | `{ id, title, busy }` of `null`; zonder titel wordt de sessie-ID gebruikt. `busy` is de livestatus. `model` en `agent`, de OpenCode-agent, zijn aanwezig wanneer de sessie die heeft. |
+>>>>>>> bc50ba56a
 | `surface` | `panel` in de balk, `dialog` in het bijlagevenster, `page` schermvullend, `status` in Werkstatus, `file` als editor in Bestanden, `block` in een UI-blok in de chat |
 | `item` | waarvoor de weergave werd geopend, of `null`: het aangeklikte gekoppelde item met dezelfde velden als bij `attach`, inclusief `data`, een bericht met `kind: "message"` of een sessie met `kind: "session"` uit een opgegeven actie. Zie [Acties](/nl/sdk/#acties-opdrachten-en-de-badge). |
 | `connection` | `{ connected, account }` voor uw integratie |
@@ -271,7 +275,15 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
+<<<<<<< HEAD
 `sessions.start`, `sessions.send`, `sessions.retry` en `sessions.status` hebben `contributes.sessionControl` nodig, dat de gebruiker als eigen regel goedkeurt. `sessions.lastReply` heeft `sessionControl: { content: true }` nodig. `setInstructions` heeft `contributes.instructions` nodig en vult aan wat agents lezen, in één map of, met `null`, overal.
+=======
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` en `sessions.stop` hebben `contributes.sessionControl` nodig, dat de gebruiker als eigen regel goedkeurt. `sessions.lastReply` heeft `sessionControl: { content: true }` nodig. Een bericht via `sessions.send` sluit een formulier of pagina waarop de agent in die sessie wacht, net als een bericht dat in de chat is getypt.
+
+Om de verzoeken van de agent ergens anders heen te brengen, zoals een chat-app, voegt u `answers: true` toe. De gebruiker keurt dat als nog een regel goed, en daarna kan de service in elke sessie namens de gebruiker antwoorden: `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (of `'deny'` met een `message` die de agent leest) op een `permission-asked`-gebeurtenis, en `sessions.answerForm(sessionId, formId, values)` op een `question-asked`-gebeurtenis waarvan `event.question.kind` `form` is. De inhoud van de gebeurtenis somt de velden van het formulier op met hun `key` en keuzes. `null` in plaats van waarden sluit het formulier zonder antwoord. Een toestemming geldt alleen voor dat ene verzoek.
+
+`setInstructions` heeft `contributes.instructions` nodig en vult aan wat agents lezen, in één map of, met `null`, overal.
+>>>>>>> bc50ba56a
 
 `emit` bereikt uw open frames via `host.onServiceEvent`, zodat een paneel niet meer hoeft te pollen. Niets wordt opnieuw verstuurd, dus een frame dat later opent, leest eerst de huidige status. `readSettings` geeft de service de instellingen van de integratie, inclusief `secret`-velden, en `needsConfiguration` toont een bericht op de kaart van de extensie.
 
@@ -406,14 +418,22 @@ Wanneer de gebruiker sessiereacties inschakelt, roept OpenChamber `comments.crea
 
 ## Verbruiksproviders
 
+<<<<<<< HEAD
 Een service kan het verbruik naast de ingebouwde providers rapporteren: geef `provides: ["quota"]` op en noem in `contributes.quota.providers` de model providers waarvan hij de aanmeldgegevens nodig heeft. OpenChamber noemt de provider `ext-<panel.id>`, tekent zijn kaart met de naam en het pictogram van de extensie en bevraagt hem zoals een ingebouwde provider.
+=======
+Een service kan het verbruik naast de ingebouwde providers rapporteren: geef `provides: ["quota"]` op en noem in `contributes.quota.providers` de OpenCode-providers waarvan hij de aanmeldgegevens nodig heeft. OpenChamber noemt de provider `ext-<panel.id>`, tekent zijn kaart met de naam en het pictogram van de extensie en bevraagt hem zoals een ingebouwde provider.
+>>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
+<<<<<<< HEAD
 De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, vraagt opnieuw. Bij elke vernieuwing stuurt OpenChamber één aanroep, `usage.read`, naar `POST /quota`, met in `input.credentials` de aanmeldgegevens die Host bewaart voor elke genoemde provider waarvoor het die heeft (een API-sleutel of de tokens van een browseraanmelding) en verder niets uit de opslag. Een genoemde provider waarvoor Host geen aanmeldgegevens heeft, wordt als niet ingesteld getoond en de service wordt niet aangeroepen; een lege lijst is toegestaan, voor een provider waarvan de sleutel in de eigen instellingen van de extensie staat.
+=======
+De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, vraagt opnieuw. Bij elke vernieuwing stuurt OpenChamber één aanroep, `usage.read`, naar `POST /quota`, met in `input.credentials` de aanmeldgegevens die OpenCode bewaart voor elke genoemde provider waarvoor het die heeft (een API-sleutel of de tokens van een browseraanmelding) en verder niets uit de opslag. Een genoemde provider waarvoor OpenCode geen aanmeldgegevens heeft, wordt als niet ingesteld getoond en de service wordt niet aangeroepen; een lege lijst is toegestaan, voor een provider waarvan de sleutel in de eigen instellingen van de extensie staat.
+>>>>>>> bc50ba56a
 
 Lees de body met `readQuotaProviderRequest` en antwoord `{ ok: true, data }` met het resultaat dat een ingebouwde provider berekent: `ok`, `configured`, `error`, `planLabel` en `usage.windows` per vensternaam, elk met `usedPercent`, `windowSeconds`, `resetAt` (epoch in milliseconden) en een optionele `valueLabel` of `value`, plus `usage.models` voor vensters per model. OpenChamber leidt het resterende deel, de aftelling tot de reset en de opgemaakte tekst af, zodat de kaart overeenkomt met die van een ingebouwde provider.
 

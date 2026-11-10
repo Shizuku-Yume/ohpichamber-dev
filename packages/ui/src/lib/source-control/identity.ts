@@ -143,6 +143,7 @@ export const resolveSourceControlTarget = (
  remotes: GitRemote[],
  identities: readonly SourceControlIdentity[],
 ): SourceControlTarget | null => {
+<<<<<<< HEAD
  const targets: SourceControlTarget[] = [];
  for (const remote of remotes) {
   const authority = getRemoteAuthority(remote);
@@ -156,6 +157,21 @@ export const resolveSourceControlTarget = (
   if (identity) targets.push({ identity, remote });
  }
  return targets.length === 1 ? targets[0] : null;
+=======
+  const targets: SourceControlTarget[] = [];
+  for (const remote of remotes) {
+    const authority = getRemoteAuthority(remote);
+    if (!authority) continue;
+    const traits = remoteTraits(remote.pushUrl?.trim() || remote.fetchUrl?.trim() || '');
+    const identity = identities.find((candidate) => {
+      if (getIdentityAuthority(candidate) === authority) return true;
+      const ssh = candidate.instanceSshUrl && traits.ssh ? sshInstanceTraits(candidate.instanceSshUrl) : null;
+      return ssh !== null && ssh.host === traits.host?.replace(/\.$/, '') && ssh.port === traits.sshPort;
+    });
+    if (identity) targets.push({ identity, remote });
+  }
+  return targets.length === 1 ? targets[0] : null;
+>>>>>>> bc50ba56a
 };
 
 export const resolveSourceControlIdentity = (
@@ -223,6 +239,7 @@ export const isSshRemoteUrl = (remoteUrl: string): boolean => {
 export type RemoteTraits = { host: string | null; https: boolean; ssh: boolean; sshPort?: number };
 
 export const remoteTraits = (remoteUrl: string): RemoteTraits => {
+<<<<<<< HEAD
  const value = remoteUrl.trim();
  const ssh = isSshRemoteUrl(value);
  let sshPort: number | undefined;
@@ -237,10 +254,27 @@ export const remoteTraits = (remoteUrl: string): RemoteTraits => {
  const traits: RemoteTraits = { host: gitRemoteHost(value), https: value.startsWith('https://'), ssh };
  if (sshPort !== undefined) traits.sshPort = sshPort;
  return traits;
+=======
+  const value = remoteUrl.trim();
+  const ssh = isSshRemoteUrl(value);
+  let sshPort: number | undefined;
+  if (ssh) {
+    if (value.startsWith('ssh://')) {
+      try { sshPort = Number(new URL(value).port || 22); }
+      catch { sshPort = 22; }
+    } else {
+      sshPort = 22;
+    }
+  }
+  const traits: RemoteTraits = { host: gitRemoteHost(value), https: value.startsWith('https://'), ssh };
+  if (sshPort !== undefined) traits.sshPort = sshPort;
+  return traits;
+>>>>>>> bc50ba56a
 };
 
 /** The host and port a stored instance SSH address names, or null. */
 export const sshInstanceTraits = (sshUrl: string): { host: string; port: number } | null => {
+<<<<<<< HEAD
  const value = sshUrl.trim();
  if (!value) return null;
  try {
@@ -250,6 +284,17 @@ export const sshInstanceTraits = (sshUrl: string): { host: string; port: number 
  } catch {
   return null;
  }
+=======
+  const value = sshUrl.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'ssh:' || !url.hostname) return null;
+    return { host: url.hostname.toLowerCase().replace(/\.$/, ''), port: Number(url.port || 22) };
+  } catch {
+    return null;
+  }
+>>>>>>> bc50ba56a
 };
 
 /** The host a provider instance names, whether stored bare or as a URL. */
@@ -263,6 +308,15 @@ export const instanceSshHostsFrom = (identities: readonly SourceControlIdentity[
   if (identity.instanceSshUrl) addresses[identity.instance] = identity.instanceSshUrl;
  }
  return addresses;
+};
+
+/** Each provider instance's separate SSH address, keyed by instance, for the identity pickers. */
+export const instanceSshHostsFrom = (identities: readonly SourceControlIdentity[]) => {
+  const addresses: Record<string, string> = {};
+  for (const identity of identities) {
+    if (identity.instanceSshUrl) addresses[identity.instance] = identity.instanceSshUrl;
+  }
+  return addresses;
 };
 
 /**
@@ -365,6 +419,7 @@ export const identityDisplayName = (
 };
 
 export const proposeIdentityForHost = <T extends { id: string; account?: { instance: string } | null }>(
+<<<<<<< HEAD
  identities: T[],
  host: string | null,
  defaultIdentityId?: string | null,
@@ -385,6 +440,28 @@ export const proposeIdentityForHost = <T extends { id: string; account?: { insta
   // is the default rather than a guess.
   || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
   || null;
+=======
+  identities: T[],
+  host: string | null,
+  defaultIdentityId?: string | null,
+  instanceSshHosts: Readonly<Record<string, string>> = {},
+): T | null => {
+  const matching = host
+    ? identities.find((identity) => {
+      const instance = identity.account?.instance ?? '';
+      if (!instance) return false;
+      return instanceHost(instance) === host
+        || gitRemoteHost(instanceSshHosts[instance] ?? '') === host;
+    })
+    : undefined;
+  if (matching) return matching;
+  const preferred = defaultIdentityId?.trim();
+  return (preferred && identities.find((identity) => identity.id === preferred))
+    // The System identity is what a repository has before anyone chooses; it
+    // is the default rather than a guess.
+    || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
+    || null;
+>>>>>>> bc50ba56a
 };
 
 type ManagedAccountOption = {

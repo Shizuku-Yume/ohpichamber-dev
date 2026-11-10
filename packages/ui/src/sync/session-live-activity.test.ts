@@ -1,9 +1,17 @@
+<<<<<<< HEAD
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { Session } from "@openchamber/agent-contract"
 import { ChildStoreManager } from "./child-store"
 import { getSessionLiveActivity, setActionRefs } from "./session-actions"
 import { setSyncRefs } from "./sync-refs"
 import { useSessionUIStore } from "./session-ui-store"
+=======
+import { describe, expect, spyOn, test } from "bun:test"
+import type { Session } from "@/lib/opencode/model"
+import { opencodeClient } from "@/lib/opencode/client"
+import { ChildStoreManager } from "./child-store"
+import { getSessionLiveActivity, readSessionsLiveActivity, setActionRefs } from "./session-actions"
+>>>>>>> bc50ba56a
 import { useGlobalSessionsStore } from "../stores/useGlobalSessionsStore"
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from "../stores/globalSessions"
 import { applyGlobalSessionStatusSnapshot, replaceGlobalSessionStatusById } from "./global-session-status"
@@ -72,5 +80,43 @@ describe("session live activity authority", () => {
     expect(getSessionLiveActivity(session.sessionId)).toBe("active")
     applyGlobalSessionStatusSnapshot("/tree", { [session.sessionId]: "unavailable" }, [session.sessionId])
     expect(getSessionLiveActivity(session.sessionId)).toBe("unknown")
+  })
+})
+
+describe("readSessionsLiveActivity", () => {
+  const readWith = async (
+    snapshot: Awaited<ReturnType<typeof opencodeClient.getActiveSessionStatuses>>,
+    prepare?: (store: ReturnType<ChildStoreManager["ensureChild"]>) => void,
+  ) => {
+    const manager = new ChildStoreManager()
+    const store = manager.ensureChild("/tree", { bootstrap: false })
+    setActionRefs(manager, () => "/tree")
+    useGlobalSessionsStore.getState().applySnapshot([session], [])
+    prepare?.(store)
+    const read = spyOn(opencodeClient, "getActiveSessionStatuses").mockImplementation(async () => snapshot)
+    try {
+      return { activity: await readSessionsLiveActivity([session.id], "/tree"), askedDirectories: read.mock.calls.map(([directory]) => directory) }
+    } finally {
+      read.mockRestore()
+      manager.disposeAll()
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+      replaceGlobalSessionStatusById(new Map())
+    }
+  }
+
+  test("a successful read settles a session no store has a status for", async () => {
+    expect(await readWith({})).toEqual({ activity: "idle", askedDirectories: ["/tree"] })
+    expect(await readWith({ [session.id]: { type: "busy" } })).toEqual({ activity: "active", askedDirectories: ["/tree"] })
+  })
+
+  test("a failed read stays unknown", async () => {
+    expect(await readWith(null)).toEqual({ activity: "unknown", askedDirectories: ["/tree"] })
+  })
+
+  test("stores that already answer need no read", async () => {
+    expect(await readWith(null, (store) => store.setState({ session_status: { [session.id]: { type: "idle" } } })))
+      .toEqual({ activity: "idle", askedDirectories: [] })
+    expect(await readWith(null, (store) => store.setState({ session_status: { [session.id]: { type: "busy" } } })))
+      .toEqual({ activity: "active", askedDirectories: [] })
   })
 })

@@ -30,9 +30,17 @@ const folderInstall = async ({ fail = false } = {}) => {
       contributes: {
         panel: { id: 'hello', name: 'Hello', icon: 'window', entry: 'panel/index.html' },
         service: { entry: 'service/main.js', runtime: 'host' },
+<<<<<<< HEAD
       },
     },
   }));
+=======
+        providerLogos: { acme: 'assets/acme.svg' },
+      },
+    },
+  }));
+  await write(root, 'assets/acme.svg', 'one');
+>>>>>>> bc50ba56a
   await write(root, 'panel/index.html', '<link rel="stylesheet" href="styles.css"><img src="logo.png"><script src="../dist/main.js"></script>');
   await write(root, 'panel/styles.css', 'one');
   await write(root, 'panel/logo.png', 'one');
@@ -86,6 +94,21 @@ describe('createGuestPackageWatch', () => {
     expect(changes).toEqual([root, root, root]);
   });
 
+<<<<<<< HEAD
+=======
+  test('a provider logo counts', async () => {
+    const { root, changes, settle } = await folderInstall();
+
+    await write(root, 'assets/other.svg', 'two two');
+    await settle();
+    expect(changes).toEqual([]);
+
+    await write(root, 'assets/acme.svg', 'two two');
+    await settle();
+    expect(changes).toEqual([root]);
+  });
+
+>>>>>>> bc50ba56a
   test('a build that removes its output folder is reported again when the output comes back', async () => {
     const { root, changes, settle } = await folderInstall();
 

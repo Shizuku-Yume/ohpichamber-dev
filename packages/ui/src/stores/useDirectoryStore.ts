@@ -2,7 +2,12 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
+<<<<<<< HEAD
 import { getDesktopHomeDirectory } from '@/lib/desktop';
+=======
+import { getDesktopHomeDirectory, isVSCodeRuntime } from '@/lib/desktop';
+import { getVSCodeBootstrapConfig, isVSCodeWithoutWorkspace } from '@/lib/vscodeBootstrap';
+>>>>>>> bc50ba56a
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getChatsRoot, resolveChatsRootDirectory } from '@/lib/chatDirectories';
@@ -49,6 +54,7 @@ export const isDirectoryUnknown = (state: Pick<DirectoryStore, 'currentDirectory
  * root, where a chat draft works anyway. Every OpenCode read names the app's
  * directory, and with the home there OpenCode started over the whole home
  * folder, file watcher and MCP servers included. The home stays the answer
+<<<<<<< HEAD
  * only when the server cannot name the chats root.
  */
 const noProjectDirectory = (home: string, chatsRoot: string | null | undefined): string =>
@@ -58,6 +64,28 @@ const noProjectDirectory = (home: string, chatsRoot: string | null | undefined):
 const resolveChatsRoot = (): Promise<string | null> => (
   resolveChatsRootDirectory().catch(() => null)
 );
+=======
+ * only when the server cannot name the chats root, or VS Code has a workspace.
+ */
+const noProjectDirectory = (home: string, chatsRoot: string | null | undefined): string =>
+  isVSCodeWithoutWorkspace() ? chatsRoot || '' : (!isVSCodeRuntime() && chatsRoot) || home;
+
+/** The chats root the host names; workspace windows keep their existing directory. */
+const resolveChatsRoot = async (): Promise<string | null> => {
+  if (isVSCodeRuntime() && !isVSCodeWithoutWorkspace()) return null;
+  const runtimeKey = getRuntimeKey();
+  try {
+    const root = await resolveChatsRootDirectory();
+    if (getRuntimeKey() !== runtimeKey) return null;
+    // The host's home lookup is read-only. Bootstrap owns making its working
+    // directory exist before any directory-scoped OpenCode reads can start.
+    if (isVSCodeWithoutWorkspace()) await opencodeClient.createDirectory(root);
+    return root;
+  } catch {
+    return null;
+  }
+};
+>>>>>>> bc50ba56a
 
 let cachedHomeDirectory: string | null = null;
 let homeResolveGeneration = 0;
@@ -247,7 +275,11 @@ const initialCurrentDirectory = (() => {
   // No project open: no directory until the server names the chats root
   // (noProjectDirectory). Nothing is read for an empty directory, and the app
   // stays unmounted until then because the home is not ready either.
+<<<<<<< HEAD
   return '';
+=======
+  return isVSCodeRuntime() && !isVSCodeWithoutWorkspace() ? initialHomeDirectory : '';
+>>>>>>> bc50ba56a
 })();
 
 if (initialCurrentDirectory) {
@@ -424,7 +456,11 @@ export const useDirectoryStore = create<DirectoryStore>()(
         // login on a server with a UI password while the home is known from
         // storage. It stays not ready, so the session gate resolves again after
         // login; marked ready, the app would work in the home all session.
+<<<<<<< HEAD
         const awaitingChatsRoot = shouldReplaceCurrent && !chatsRoot;
+=======
+        const awaitingChatsRoot = shouldReplaceCurrent && (!isVSCodeRuntime() || isVSCodeWithoutWorkspace()) && !chatsRoot;
+>>>>>>> bc50ba56a
         const updates: Partial<DirectoryStore> = {
           homeDirectory: resolvedHome,
           hasPersistedDirectory: hasSavedLastDirectory,
@@ -445,7 +481,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         set(() => updates as Partial<DirectoryStore>);
 
-        if ((shouldReplaceCurrent || currentChanged) && resolvedReady) {
+        if ((shouldReplaceCurrent || currentChanged) && resolvedReady && !awaitingChatsRoot) {
           const nextDirectory = shouldReplaceCurrent ? fallbackDirectory : (resolvedCurrent as string);
           hostFilesystem.setDirectory(nextDirectory);
           invalidateFileSearchCache();

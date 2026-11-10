@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
+<<<<<<< HEAD
 import { CanonicalClient } from '@/api/canonicalClient';
+=======
+import { OpenCode } from '@opencode/client';
+>>>>>>> bc50ba56a
 import { toast } from '@/components/ui';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
@@ -23,7 +27,11 @@ describe('inline comment target', () => {
   let frameDescriptor: PropertyDescriptor | undefined;
   let controller: ReturnType<typeof useInlineCommentController<Range>>;
   const saveComment = (text: string, range?: Range) => controller.saveComment(text, range);
+<<<<<<< HEAD
   const client = new CanonicalClient();
+=======
+  const sdk = OpenCode.make({ baseUrl: 'http://comments.test', fetch: () => new Promise<Response>(() => undefined) });
+>>>>>>> bc50ba56a
 
   const Harness = () => {
     controller = useInlineCommentController<Range>({
@@ -53,7 +61,11 @@ describe('inline comment target', () => {
     useInlineCommentDraftStore.setState({ drafts: {} });
     await act(async () => root.render(
       <I18nProvider>
+<<<<<<< HEAD
         <SyncProvider client={client} directory={directory}>
+=======
+        <SyncProvider sdk={sdk} directory={directory}>
+>>>>>>> bc50ba56a
           <Harness />
         </SyncProvider>
       </I18nProvider>,

@@ -411,6 +411,19 @@ const toRestorableAttachment = (attachment: AttachedFile): InputHistoryAttachmen
   // The note is a few lines, so unlike file content it may stay in history.
   const path = attachment.agentPath && attachment.serverPath === attachment.agentPath ? attachment.agentPath : undefined;
   if (!path && !canRestoreReference(reference)) return null;
+<<<<<<< HEAD
+=======
+  if (attachment.source === 'vscode' && attachment.vscodeSource === 'file') {
+    return {
+      key: buildAttachmentKey(attachment),
+      source: 'vscode-file',
+      filename: attachment.filename,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      reference,
+    };
+  }
+>>>>>>> bc50ba56a
   return {
     key: buildAttachmentKey(attachment),
     source: 'file-url',

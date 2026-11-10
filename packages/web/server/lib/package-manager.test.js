@@ -15,6 +15,7 @@ const {
   checkForUpdates,
   detectPackageManager,
   executeUpdate,
+  fetchRequiredOpenCodeVersion,
   getCurrentVersion,
   getUpdateCommand,
   readUpdateChannel,
@@ -309,6 +310,38 @@ describe('checkForUpdates', () => {
     expect(upToDate.downloadUrl).toBeUndefined();
   });
 
+<<<<<<< HEAD
+  it('reports an unreadable canary pre-release as an error for a Canary Android app', async () => {
+=======
+  it('offers the Canary APK from the R2 mirror once the mirror has it', async () => {
+>>>>>>> bc50ba56a
+    fetchMock
+      .when('api.openchamber.dev', {
+        ok: true,
+        json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }),
+      })
+<<<<<<< HEAD
+      .when('api.github.com/repos/openchamber/openchamber/releases/tags/canary', { ok: false, status: 503 });
+=======
+      .when('api.github.com/repos/openchamber/openchamber/releases/tags/canary', {
+        ok: true,
+        json: async () => ({
+          assets: [{ name: 'OpenChamber-2.5.4-canary.20261031.5-29858440-android.apk', browser_download_url: 'https://downloads.example/new.apk' }],
+        }),
+      })
+      .when('downloads.openchamber.dev/desktop/canary/OpenChamber-2.5.4-canary.20261031.5-29858440-android.apk', { ok: true });
+>>>>>>> bc50ba56a
+
+    const result = await checkForUpdates({
+      appType: 'mobile-capacitor',
+      platform: 'android',
+      currentVersion: '2.5.4-canary.20261030.4',
+<<<<<<< HEAD
+=======
+    });
+    expect(result.downloadUrl).toBe('https://downloads.openchamber.dev/desktop/canary/OpenChamber-2.5.4-canary.20261031.5-29858440-android.apk');
+  });
+
   it('reports an unreadable canary pre-release as an error for a Canary Android app', async () => {
     fetchMock
       .when('api.openchamber.dev', {
@@ -321,6 +354,7 @@ describe('checkForUpdates', () => {
       appType: 'mobile-capacitor',
       platform: 'android',
       currentVersion: '2.5.4-canary.20261030.4',
+>>>>>>> bc50ba56a
     });
 
     expect(result.available).toBe(false);
@@ -526,6 +560,7 @@ describe('checkForUpdates on the update channels', () => {
     expect((await checkForUpdates({ currentVersion: '2.5.4-canary.20261031.7' })).available).toBe(false);
   });
 
+<<<<<<< HEAD
   it('leaves the desktop app and phones on releases', async () => {
     pickChannel('canary');
     serveDistTags({ latest: '2.5.3', canary: '2.5.4-canary.20261031.7' });
@@ -538,6 +573,16 @@ describe('checkForUpdates on the update channels', () => {
       expect(result.version).toBe('2.5.3');
       expect(result.available).toBe(false);
     }
+=======
+  it('leaves the desktop app, VS Code and phones on releases', async () => {
+    pickChannel('canary');
+    serveDistTags({ latest: '2.5.3', canary: '2.5.4-canary.20261031.7' });
+
+    const result = await checkForUpdates({ currentVersion: '2.5.3', appType: 'vscode' });
+
+    expect(result.version).toBe('2.5.3');
+    expect(result.available).toBe(false);
+>>>>>>> bc50ba56a
   });
 });
 
@@ -545,6 +590,30 @@ describe('getCurrentVersion', () => {
   it('is exported for the CLI update command', () => {
     expect(typeof getCurrentVersion).toBe('function');
     expect(getCurrentVersion()).toMatch(/^\d+\.\d+\.\d+|unknown$/);
+  });
+});
+
+describe('fetchRequiredOpenCodeVersion', () => {
+  let originalFetch;
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('reads the oldest OpenCode from engines.opencode of the published release', async () => {
+    const cases = [
+      [{ opencode: '>=2.3.0' }, '2.3.0'],
+      [{ node: '>=24.14.0' }, null],
+      [{ opencode: '^2.3.0' }, null],
+    ];
+    for (const [engines, expected] of cases) {
+      globalThis.fetch = createFetchMock().when('@openchamber%2Fweb/2.7.1', { ok: true, json: async () => ({ version: '2.7.1', engines }) });
+      expect(await fetchRequiredOpenCodeVersion('2.7.1')).toBe(expected);
+    }
+    globalThis.fetch = createFetchMock().when('@openchamber%2Fweb/2.7.1', { ok: false, status: 404 });
+    expect(await fetchRequiredOpenCodeVersion('2.7.1')).toBeNull();
   });
 });
 

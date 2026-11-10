@@ -1,9 +1,15 @@
+<<<<<<< HEAD
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachmentHint, createRoutingRuntime, routingRequestTextOf } from './runtime.js';
 import { createRoutingStore, resolveEffectiveConfig } from './store.js';
+=======
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { attachmentHint, createRoutingRuntime, readOpenCodeKeys, requestTextOf, routingRequestTextOf } from './runtime.js';
+import { resolveEffectiveConfig } from './store.js';
+>>>>>>> bc50ba56a
 import { excerptHead, excerptHeadTail, turnsToHistory } from './history.js';
 import { createJevClient, decidePermission, decideRouting } from './jev.js';
 import { classifierEndpoint, parseCustomEndpointUrl, resolveClassifier } from './classifier.js';
@@ -28,6 +34,7 @@ const readyConfig = () => {
     : category);
   return config;
 };
+<<<<<<< HEAD
 const historyPage = (messages = [], turns = []) => ({
   sessionId: 's1', branch: { branchId: 'branch_a', branchVersion: '1', leafMessageId: messages.at(-1)?.messageId ?? null },
   turns, messages, nextCursor: null,
@@ -129,6 +136,83 @@ const image = (name, mediaType = 'image/png') => ({ attachmentId: 'attachment_1'
 describe('attachment hint for the classifier', () => {
   it('describes a pasted image from its media type and names it', () => {
     expect(attachmentHint({ text: "what's wrong?", attachments: [image('screenshot.png')] }))
+=======
+
+const makeRuntime = ({
+  config = readyConfig(), token = 'key', classifierSource = null, customEndpoint = null, providerKeys = {}, zenPromotionActive = true,
+  enterprise = false, pinned = null, catalog = [], answers, askError, lastAnswer = null, configEntries = [], nowMs = 1_000_000_000,
+  warmSessions = [],
+  // The agent OpenCode holds per session; tests switch it the way a send does.
+  sessionAgents = {},
+} = {}) => {
+  const events = [];
+  const store = {
+    readConfig: vi.fn(async () => config),
+    writeConfig: vi.fn(async (next) => next),
+    readToken: vi.fn(async () => token),
+    writeToken: vi.fn(async () => undefined),
+    clearToken: vi.fn(async () => undefined),
+    readClassifierSource: vi.fn(async () => classifierSource),
+    writeClassifierSource: vi.fn(async () => undefined),
+    readCustomEndpoint: vi.fn(async () => customEndpoint),
+    writeCustomEndpoint: vi.fn(async () => undefined),
+    clearCustomEndpoint: vi.fn(async () => undefined),
+  };
+  const jev = { ask: vi.fn(async () => { if (askError) throw askError; return { answers, ms: 12 }; }) };
+  const readConfigEntries = vi.fn(async () => {
+    if (configEntries instanceof Error) throw configEntries;
+    return configEntries;
+  });
+  const runtime = createRoutingRuntime({
+    dataDir: '/unused',
+    buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
+    getOpenCodeAuthHeaders: () => ({}),
+    broadcastGlobalUiEvent: (event) => events.push(event),
+    store,
+    jev,
+    readProviderKeys: () => ({ zenKey: null, openrouterKey: null, vercelKey: null, ...providerKeys }),
+    zenPromotionActive,
+    enterpriseMode: () => enterprise,
+    readPinnedEndpoint: () => pinned,
+    listCatalogModels: async () => {
+      if (catalog instanceof Error) throw catalog;
+      return catalog;
+    },
+    readSessionHistory: async () => ({ history: [], lastAnswer }),
+    readConfigEntries,
+    readSessionAgent: async ({ sessionId }) => {
+      if (sessionAgents.unreadable) throw new Error('OpenCode down');
+      return sessionAgents[sessionId] ?? null;
+    },
+    isSessionWarm: (sessionId) => warmSessions.includes(sessionId),
+    now: () => nowMs,
+  });
+  return { runtime, store, jev, events, readConfigEntries };
+};
+
+describe('requestTextOf', () => {
+  it('reads the prompt text a v2 send carries', () => {
+    expect(requestTextOf({ text: '  fix the typo in README  ', files: [{ uri: 'data:...' }] })).toBe('fix the typo in README');
+  });
+  it('renders a v2 command body (`name` plus `text`) as the slash command', () => {
+    expect(requestTextOf({ name: 'review', text: ' src ' })).toBe('/review src');
+  });
+  it('keeps the command name when it has no arguments', () => {
+    expect(requestTextOf({ name: 'review', text: '' })).toBe('/review');
+    expect(requestTextOf({ name: 'review' })).toBe('/review');
+  });
+});
+
+describe('requestTextOf a form reply', () => {
+  it('is the values the user filled in', () => {
+    expect(requestTextOf({ answer: { q1: 'refactor the parser', q2: ['tests', 'docs'], q3: true } })).toBe('refactor the parser\ntests\ndocs\ntrue');
+  });
+});
+
+describe('attachmentHint', () => {
+  it('describes a pasted image from its data URL and names it', () => {
+    expect(attachmentHint({ text: "what's wrong?", files: [{ uri: 'data:image/png;base64,iVBORw0KGgo=', name: 'screenshot.png' }] }))
+>>>>>>> bc50ba56a
       .toBe('\n\n[The user attached an image: screenshot.png]');
   });
   it('counts several images and lists at most three names', () => {
@@ -265,7 +349,107 @@ describe('native Auto selection', () => {
   });
 });
 
+<<<<<<< HEAD
 describe('prompt-cache hysteresis from settled native history', () => {
+=======
+describe('the agent a category set', () => {
+  // `hard` runs as plan, `trivial` names no agent.
+  const route = async (made, choice, agent = null) => {
+    made.answers.category = { choice, confidence: 0.95 };
+    const resolved = await made.runtime.resolveAutoSelection({ sessionId: 's1', model: AUTO, agent, requestText: 'go' });
+    if (resolved.agent) made.sessionAgents.s1 = resolved.agent;
+    return resolved;
+  };
+  const setup = (sessionAgents = { s1: 'build' }) => {
+    const answers = {};
+    return { ...makeRuntime({ answers, sessionAgents }), answers, sessionAgents };
+  };
+
+  it('goes back to the agent before routing when the next category names none (#6392)', async () => {
+    const made = setup();
+    expect((await route(made, 'hard')).agent).toBe('plan');
+    // In Auto the composer shows the session's agent, so a queued send names plan.
+    expect((await route(made, 'trivial', 'plan')).agent).toBe('build');
+    expect((await route(made, 'trivial')).agent).toBeNull();
+    expect(made.sessionAgents.s1).toBe('build');
+  });
+
+  it('does not hold the routed category for a queued send while the cache is warm', async () => {
+    const answers = {};
+    const sessionAgents = { s1: 'build' };
+    const lastAnswer = { providerID: 'openai', modelID: 'gpt-6-astra', completed: 1_000_000_000 - 60_000 };
+    const made = { ...makeRuntime({ answers, sessionAgents, lastAnswer }), answers, sessionAgents };
+    await route(made, 'hard');
+    const resolved = await route(made, 'trivial', 'plan');
+    expect(resolved.decision.cacheHold).toBeUndefined();
+    expect(resolved.agent).toBe('build');
+  });
+
+  it('goes back on a classifier failure too', async () => {
+    const made = setup();
+    await route(made, 'hard');
+    made.jev.ask.mockRejectedValueOnce(new Error('Jev down'));
+    const resolved = await made.runtime.resolveAutoSelection({ sessionId: 's1', model: AUTO, agent: null, requestText: 'go' });
+    expect(resolved.decision.reason).toBe('error');
+    expect(resolved.agent).toBe('build');
+  });
+
+  it('keeps an agent the user chose, before Auto or since', async () => {
+    const chosenBefore = setup({ s1: 'plan' });
+    expect((await route(chosenBefore, 'hard')).agent).toBe('plan');
+    expect((await route(chosenBefore, 'trivial')).agent).toBeNull();
+
+    const switchedSince = setup();
+    await route(switchedSince, 'hard');
+    switchedSince.sessionAgents.s1 = 'review';
+    expect((await route(switchedSince, 'trivial')).agent).toBeNull();
+
+    const leftAuto = setup();
+    await route(leftAuto, 'hard');
+    leftAuto.runtime.noteModelSelection('s1', { providerID: 'anthropic', id: 'claude-opus-5' });
+    expect((await route(leftAuto, 'trivial')).agent).toBeNull();
+  });
+
+  it('follows a composer agent other than the routed one', async () => {
+    const made = setup();
+    await route(made, 'hard');
+    expect((await route(made, 'trivial', 'review')).agent).toBe('review');
+    expect((await route(made, 'trivial')).agent).toBeNull();
+  });
+
+  it('remembers the first agent across several routed agents', async () => {
+    const config = readyConfig();
+    config.categories = config.categories.map((c) => (c.id === 'research' ? { ...c, agent: 'review' } : c));
+    const answers = {};
+    const sessionAgents = { s1: 'build' };
+    const made = { ...makeRuntime({ config, answers, sessionAgents }), answers, sessionAgents };
+    await route(made, 'hard');
+    expect((await route(made, 'research')).agent).toBe('review');
+    expect((await route(made, 'trivial')).agent).toBe('build');
+  });
+
+  it('retries the switch back when it did not take, and leaves the agent when it cannot read it', async () => {
+    const made = setup();
+    await route(made, 'hard');
+    made.answers.category = { choice: 'trivial', confidence: 0.95 };
+    const send = { sessionId: 's1', model: AUTO, agent: null, requestText: 'go' };
+    // The caller's switch failed, so the session is still on plan.
+    expect((await made.runtime.resolveAutoSelection(send)).agent).toBe('build');
+    expect((await made.runtime.resolveAutoSelection(send)).agent).toBe('build');
+
+    made.sessionAgents.unreadable = true;
+    expect((await made.runtime.resolveAutoSelection(send)).agent).toBeNull();
+    made.sessionAgents.unreadable = false;
+    expect((await made.runtime.resolveAutoSelection(send)).agent).toBe('build');
+  });
+});
+
+describe('preserving the prompt cache', () => {
+  const NOW = 1_000_000_000;
+  const MINUTE = 60_000;
+  const HARD = { providerID: 'openai', modelID: 'gpt-6-astra' };
+  // Hard on its own model and the composer's agent, so only the model differs.
+>>>>>>> bc50ba56a
   const cacheConfig = () => {
     const config = readyConfig();
     config.categories = config.categories.map((category) => ({ ...category, agent: null }));
@@ -324,6 +508,7 @@ describe('permission safety', () => {
     toolName: 'bash', actionType: 'bash_command', commandSummary: 'git push --force origin main',
     details: { command: 'git push --force origin main' }
   };
+<<<<<<< HEAD
   it('holds risky requests across reconciliation, and forgets them after resolution', async () => {
     const { runtime, jev, state } = await makeRuntime({ answers: { ask: { noul: 0.9 }, kind: { choice: 'git_history' } } });
     expect(await runtime.evaluatePermission(permission)).toEqual({ action: 'hold', score: 0.9, kind: 'git_history' });
@@ -333,6 +518,186 @@ describe('permission safety', () => {
       type: 'bash_command', toolName: 'bash',
       commandSummary: permission.commandSummary, details: permission.details
     });
+=======
+
+  it('sends a TypeSafe key to TypeSafe, a Zen key to the paid zen model, and the promotion keyless', async () => {
+    const keyed = await capture('typesafe', { typesafeKey: 'secret' });
+    expect(keyed.url).toBe('https://api.typesafe.ai/v1/systemone');
+    expect(keyed.headers.authorization).toBe('Bearer secret');
+    expect(keyed.body.model).toBe('jev-latest');
+
+    const zen = await capture('zen-key', { zenKey: 'zen-secret' });
+    expect(zen.url).toBe('https://opencode.ai/zen/v1/systemone');
+    expect(zen.headers.authorization).toBe('Bearer zen-secret');
+    expect(zen.headers['x-opencode-client']).toBe('openchamber');
+    expect(zen.body.model).toBe('jev-1.13');
+
+    const free = await capture('zen-promo');
+    expect(free.url).toBe('https://opencode.ai/zen/v1/systemone');
+    expect(free.headers.authorization).toBeUndefined();
+    // Zen counts our calls by this header, and does not know the `jev-latest` alias.
+    expect(free.headers['x-opencode-client']).toBe('openchamber');
+    expect(free.body.model).toBe('jev-1.13-free');
+  });
+
+  it('sends the OpenCode-saved OpenRouter and Vercel keys to their System One routes, without the zen header', async () => {
+    const openrouter = await capture('openrouter', { openrouterKey: 'or-secret' });
+    expect(openrouter.url).toBe('https://openrouter.ai/api/v1/systemone');
+    expect(openrouter.headers.authorization).toBe('Bearer or-secret');
+    expect(openrouter.headers['x-opencode-client']).toBeUndefined();
+    expect(openrouter.body.model).toBe('jev-latest');
+
+    const vercel = await capture('vercel', { vercelKey: 'gw-secret' });
+    expect(vercel.url).toBe('https://ai-gateway.vercel.sh/typesafe/v1/systemone');
+    expect(vercel.headers.authorization).toBe('Bearer gw-secret');
+    expect(vercel.headers['x-opencode-client']).toBeUndefined();
+    expect(vercel.body.model).toBe('typesafe-ai/jev');
+  });
+
+  it('sends a custom endpoint its own URL and model, with the key as a bearer only when one is saved', async () => {
+    const url = 'https://jev.example.com/v1/systemone';
+    const keyed = await capture('custom', { customEndpoint: { url, model: 'jev-1.13', key: 'own-secret' } });
+    expect(keyed.url).toBe(url);
+    expect(keyed.body.model).toBe('jev-1.13');
+    expect(keyed.headers.authorization).toBe('Bearer own-secret');
+    expect(keyed.headers['x-opencode-client']).toBeUndefined();
+
+    const keyless = await capture('custom', { customEndpoint: { url, model: 'jev-latest' } });
+    expect(keyless.headers.authorization).toBeUndefined();
+  });
+});
+
+describe('parseCustomEndpointUrl', () => {
+  it('keeps the pasted URL exactly, appending nothing to its path', () => {
+    expect(parseCustomEndpointUrl(' https://openrouter.ai/api/v1/systemone ')).toBe('https://openrouter.ai/api/v1/systemone');
+    expect(parseCustomEndpointUrl('https://proxy.company.internal/v1/decision')).toBe('https://proxy.company.internal/v1/decision');
+    expect(parseCustomEndpointUrl('https://jev.example.com/v1')).toBe('https://jev.example.com/v1');
+    expect(parseCustomEndpointUrl('http://127.0.0.1:8080/jev/?team=a#frag')).toBe('http://127.0.0.1:8080/jev/?team=a');
+  });
+
+  it('refuses other schemes, credentials in the URL and non-URLs', () => {
+    expect(() => parseCustomEndpointUrl('ftp://example.com')).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => parseCustomEndpointUrl('file:///etc/passwd')).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => parseCustomEndpointUrl('https://user:secret@example.com/v1')).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => parseCustomEndpointUrl('example.com/v1')).toThrow(expect.objectContaining({ status: 400 }));
+  });
+});
+
+describe('resolveClassifier', () => {
+  it('defaults to a saved TypeSafe key, else off', () => {
+    expect(resolveClassifier({ selected: null, typesafeKey: 'k', zenKey: null, zenPromotionActive: true })).toMatchObject({ selected: 'typesafe', effective: 'typesafe' });
+    expect(resolveClassifier({ selected: null, typesafeKey: null, zenKey: 'z', openrouterKey: 'o', zenPromotionActive: true })).toMatchObject({ selected: 'off', effective: null });
+  });
+
+  it('keeps off off, whatever is usable', () => {
+    expect(resolveClassifier({ selected: 'off', typesafeKey: 'k', zenKey: 'z', zenPromotionActive: true }).effective).toBeNull();
+  });
+
+  it('falls back to the first usable key when the pick cannot be used, never to the promotion', () => {
+    expect(resolveClassifier({ selected: 'zen-promo', typesafeKey: null, zenKey: 'z', zenPromotionActive: false }).effective).toBe('zen-key');
+    expect(resolveClassifier({ selected: 'typesafe', typesafeKey: null, zenKey: null, zenPromotionActive: true }).effective).toBeNull();
+    expect(resolveClassifier({ selected: 'zen-promo', typesafeKey: null, zenKey: null, zenPromotionActive: false }).effective).toBeNull();
+    expect(resolveClassifier({ selected: 'zen-promo', typesafeKey: null, zenKey: 'z', vercelKey: 'v', zenPromotionActive: false }).effective).toBe('vercel');
+    expect(resolveClassifier({ selected: 'vercel', typesafeKey: null, openrouterKey: 'o', zenPromotionActive: true }).effective).toBe('openrouter');
+  });
+
+  it('keeps a usable OpenRouter or Vercel pick', () => {
+    expect(resolveClassifier({ selected: 'openrouter', typesafeKey: 'k', openrouterKey: 'o', zenPromotionActive: true }).effective).toBe('openrouter');
+    expect(resolveClassifier({ selected: 'vercel', vercelKey: 'v', zenPromotionActive: true }).effective).toBe('vercel');
+  });
+
+  it('uses a saved custom endpoint when picked, and falls back to it after TypeSafe and before OpenCode keys', () => {
+    const customEndpoint = { url: 'https://jev.example.com/v1/systemone', model: 'jev-latest' };
+    expect(resolveClassifier({ selected: 'custom', customEndpoint, openrouterKey: 'o', zenPromotionActive: true }).effective).toBe('custom');
+    expect(resolveClassifier({ selected: 'custom', customEndpoint: null, vercelKey: 'v', zenPromotionActive: true }).effective).toBe('vercel');
+    expect(resolveClassifier({ selected: 'custom', customEndpoint: null, zenPromotionActive: true }).effective).toBeNull();
+    expect(resolveClassifier({ selected: 'openrouter', customEndpoint, vercelKey: 'v', zenPromotionActive: true }).effective).toBe('custom');
+    expect(resolveClassifier({ selected: 'zen-key', typesafeKey: 'k', customEndpoint, zenPromotionActive: true }).effective).toBe('typesafe');
+    expect(resolveClassifier({ selected: 'off', customEndpoint, zenPromotionActive: true }).effective).toBeNull();
+  });
+});
+
+describe('readOpenCodeKeys', () => {
+  const env = { OPENROUTER_API_KEY: 'or-env', AI_GATEWAY_API_KEY: ' gw-env ' };
+
+  it('prefers a key saved in OpenCode and falls back to the variable OpenCode reads', async () => {
+    const readAuth = () => ({
+      opencode: { type: 'api', key: 'zen' },
+      openrouter: { type: 'api', key: 'or-saved' },
+      vercel: { type: 'oauth', access: 'a', refresh: 'r', expires: 0 },
+    });
+    expect(await readOpenCodeKeys({ readAuth, env })).toEqual({ zenKey: 'zen', openrouterKey: 'or-saved', vercelKey: 'gw-env' });
+  });
+
+  it('keeps the variables when the credential store cannot be read, and ignores blank ones', async () => {
+    const readAuth = () => { throw new Error('locked'); };
+    expect(await readOpenCodeKeys({ readAuth, env })).toEqual({ zenKey: null, openrouterKey: 'or-env', vercelKey: 'gw-env' });
+    expect(await readOpenCodeKeys({ readAuth: () => ({}), env: { OPENROUTER_API_KEY: '  ' } })).toEqual({ zenKey: null, openrouterKey: null, vercelKey: null });
+  });
+});
+
+describe('routeSend', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('switches a form reply onto the routed model and agent, judged on the answer', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      const body = input instanceof Request ? await input.clone().text() : init?.body;
+      calls.push({ path: url.pathname, body: JSON.parse(body) });
+      return new Response(null, { status: 204 });
+    }));
+    const { runtime, jev } = makeRuntime({ answers: { category: { choice: 'hard', confidence: 0.97 } } });
+
+    await runtime.routeSend({ sessionId: 's1', directory: '/repo', body: { answer: { plan: 'rewrite the scheduler' } } });
+
+    expect(jev.ask.mock.calls[0][0].state.request).toBe('rewrite the scheduler');
+    expect(calls).toEqual([
+      { path: '/api/session/s1/model', body: { model: { providerID: 'openai', id: 'gpt-6-astra', variant: 'high' } } },
+      { path: '/api/session/s1/agent', body: { agent: 'plan' } },
+    ]);
+  });
+});
+
+describe('auto sessions', () => {
+  it('remembers the sentinel selection and forgets it when a real model is chosen', () => {
+    const { runtime } = makeRuntime({ answers: {} });
+    expect(runtime.isAutoSession('s1')).toBe(false);
+    expect(runtime.noteModelSelection('s1', AUTO, '/repo')).toBe(true);
+    expect(runtime.isAutoSession('s1')).toBe(true);
+    expect(runtime.noteModelSelection('s1', { providerID: 'anthropic', id: 'claude-opus-5' }, '/repo')).toBe(false);
+    expect(runtime.isAutoSession('s1')).toBe(false);
+  });
+});
+
+describe('evaluatePermission', () => {
+  // The v2 shape permission auto-accept hands over: `action` and `resources`.
+  const permission = { id: 'p1', sessionID: 's1', action: 'bash', resources: ['git push --force'], metadata: { command: 'git push --force origin main' } };
+
+  it('tells Jev what the request does and to what, with string instructions and boolean criteria (#6028)', async () => {
+    const { runtime, jev } = makeRuntime({ answers: { ask: { noul: 0.1 }, kind: { choice: 'read_only' } } });
+    await runtime.evaluatePermission(permission, '/repo');
+    const request = jev.ask.mock.calls[0][0];
+    expect(request.state.permission).toEqual({
+      type: 'bash',
+      patterns: ['git push --force'],
+      metadata: { command: 'git push --force origin main' },
+    });
+    expect(request.questions.ask).toEqual({
+      type: 'noul',
+      instructions: expect.any(String),
+      criteria: {
+        true: expect.any(String),
+        false: expect.any(String),
+      },
+    });
+  });
+
+  it('holds a risky permission and remembers the decision', async () => {
+    const { runtime, jev, events } = makeRuntime({ answers: { ask: { noul: 0.9 }, kind: { choice: 'git_history' } } });
+    expect(await runtime.evaluatePermission(permission, '/repo')).toEqual({ action: 'hold', score: 0.9, kind: 'git_history' });
+    expect(await runtime.evaluatePermission(permission, '/repo')).toEqual({ action: 'hold', score: 0.9, kind: 'git_history' });
+>>>>>>> bc50ba56a
     expect(jev.ask).toHaveBeenCalledTimes(1);
     expect(runtime.heldPermissions()).toEqual([{ permissionId: 'approval_a', score: 0.9, kind: 'git_history' }]);
     runtime.forgetPermission(permission.approvalId);

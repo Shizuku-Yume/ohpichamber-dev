@@ -89,6 +89,7 @@ const messageText = (message) => (Array.isArray(message?.parts) ? message.parts 
 
 const OUTCOME_STATES = { completed: 'completed', failed: 'error', cancelled: 'cancelled' };
 
+<<<<<<< HEAD
 export const readDispatchOutcome = (page, dispatchedAt, afterTurnId) => {
   if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
   const turns = page.turns.filter((turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled');
@@ -102,6 +103,48 @@ export const readDispatchOutcome = (page, dispatchedAt, afterTurnId) => {
     state: OUTCOME_STATES[turn.status],
     text: reply ? messageText(reply) : '',
     errorMessage: typeof turn.error === 'string' ? turn.error.trim() : '',
+=======
+/**
+ * How the dispatched turn ended, read from the newest page of the session's
+ * records (newest first), or null while it has not ended since the dispatch.
+ *
+ * OpenCode appends an `idle` record with the run's outcome when a run ends,
+ * so the outcome is authoritative and survives a restart of either server.
+ * The answer is the newest assistant reply of that turn.
+ *
+ * "Since the dispatch" is decided by record order against `afterIdleId`, the
+ * newest idle record before the prompt went out, so OpenChamber's clock never
+ * meets OpenCode's: a remote OpenCode whose clock lags would otherwise make a
+ * finished turn look older than its own dispatch. Only an entry stored
+ * without that baseline (`afterIdleId` undefined) falls back to `dispatchedAt`.
+ *
+ * `withText` takes the text from the newest reply of the turn that has any,
+ * for a caller that forwards the answer: a turn can end on a step that only
+ * ran tools. The error still comes from the newest reply.
+ */
+export const readDispatchOutcome = (records, dispatchedAt, afterIdleId, { withText = false } = {}) => {
+  const idleIndex = records.findIndex((record) => parse(recordTypeSchema, record)?.type === 'idle');
+  if (idleIndex === -1) return null;
+  // A malformed idle record proves nothing about the turn: keep waiting.
+  const idle = parse(idleRecordSchema, records[idleIndex]);
+  if (!idle) return null;
+  const byOrder = afterIdleId !== undefined;
+  if (byOrder ? idle.id === afterIdleId : idle.time.created < dispatchedAt) return null;
+  // The turn's records sit between its idle record and the baseline one.
+  const baselineIndex = byOrder && afterIdleId !== null
+    ? records.findIndex((record) => parse(recordIdSchema, record)?.id === afterIdleId)
+    : -1;
+  const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
+  const replies = turnRecords
+    .map((record) => parse(assistantRecordSchema, record))
+    .filter((assistant) => assistant !== null && (byOrder || assistant.time.created >= dispatchedAt));
+  const reply = replies[0];
+  const textReply = withText ? replies.find((assistant) => assistantText(assistant)) : reply;
+  return {
+    state: OUTCOME_STATES[idle.outcome],
+    text: textReply ? assistantText(textReply) : '',
+    errorMessage: reply?.error?.message?.trim() ?? '',
+>>>>>>> bc50ba56a
   };
 };
 
@@ -315,32 +358,56 @@ export function createDispatchResultsRuntime({
       if (watched.kind === 'subagents') return arm(sessionId, subagentRecheckMs);
 
       let waiting = false;
+      const ready = [];
       for (const entry of pendingFor(sessionId)) {
         const outcome = watched.kind === 'deleted'
           ? DELETED_OUTCOME
+<<<<<<< HEAD
           : readDispatchOutcome(watched.page, entry.dispatchedAt, entry.afterIdleId);
         if (!outcome) {
           waiting = true;
           continue;
+=======
+          : readDispatchOutcome(watched.records, entry.dispatchedAt, entry.afterIdleId);
+        if (outcome) ready.push({ entry, outcome });
+        else waiting = true;
+      }
+
+      // Every ready entry reports the session's newest run, so prompts a
+      // parent steered into one run share one message id and one result. An
+      // entry that already holds an id keeps it: that id may have landed with
+      // an earlier run, and sharing it would swallow this one.
+      const unsent = ready.filter(({ entry }) => !entry.messageId);
+      if (unsent.length > 0) {
+        const minted = new Map(); // parentSessionId → message id
+        for (const { entry } of unsent) {
+          if (!minted.has(entry.parentSessionId)) minted.set(entry.parentSessionId, createMessageId(now()));
+          entry.messageId = minted.get(entry.parentSessionId);
+>>>>>>> bc50ba56a
         }
-        if (!entry.messageId) {
-          // Persisted before the first attempt, so a retry reuses it.
-          entry.messageId = createMessageId(now());
-          try {
-            await persist();
-          } catch (error) {
-            // Unsaved, it could be minted again after a crash and deliver twice.
-            delete entry.messageId;
-            throw error;
-          }
+        // Persisted before the first attempt, so a retry reuses it.
+        try {
+          await persist();
+        } catch (error) {
+          // Unsaved, it could be minted again after a crash and deliver twice.
+          for (const { entry } of unsent) delete entry.messageId;
+          throw error;
         }
+      }
+
+      const deliveries = new Map(); // message id → ready entries
+      for (const item of ready) deliveries.set(item.entry.messageId, [...(deliveries.get(item.entry.messageId) ?? []), item]);
+      for (const group of deliveries.values()) {
+        // An entry without a baseline compares clocks and can miss a reply
+        // that began before its send; another entry of the run may have it.
+        const { entry, outcome } = group.find((item) => item.outcome.text) ?? group[0];
         const message = buildDispatchResultMessage({
           sessionId,
           title: watched.kind === 'ended' ? watched.title : '',
           outcome,
         });
         await deliver(entry, message);
-        entries.delete(entry.id);
+        for (const item of group) entries.delete(item.entry.id);
         await persist();
         console.log(`[dispatch-results] delivered the ${outcome.state} result of ${sessionId} to ${entry.parentSessionId}`);
       }

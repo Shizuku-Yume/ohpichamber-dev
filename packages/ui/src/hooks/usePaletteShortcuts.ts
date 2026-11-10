@@ -11,6 +11,10 @@ import {
   openTodos,
   pinCurrentSession,
   reloadUi,
+<<<<<<< HEAD
+=======
+  restartOpenCode,
+>>>>>>> bc50ba56a
   showContextUsage,
   showDiagnosticTimeline,
   toggleWorkCurrentSession,
@@ -33,6 +37,10 @@ export function usePaletteShortcuts(): void {
     open_archive: openArchive,
     open_notes: openNotes,
     open_todos: openTodos,
+<<<<<<< HEAD
+=======
+    restart_opencode: restartOpenCode(t),
+>>>>>>> bc50ba56a
     pin_current_session: pinCurrentSession(t),
     copy_current_session_id: copyCurrentSessionId(t),
     toggle_work_current_session: toggleWorkCurrentSession(t),

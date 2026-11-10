@@ -28,6 +28,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * rendered `<svg>` beside it, where the symbols' `url(#id)` still finds them.
  */
 const hideSpriteFromLayout = (root: HTMLElement): void => {
+<<<<<<< HEAD
  const sprite = root.querySelector('svg');
  if (!sprite) return;
  const paintServers = sprite.querySelectorAll('linearGradient, radialGradient, clipPath, mask, pattern, filter');
@@ -57,6 +58,37 @@ const mountFileTypeSprite = (spriteContent: string): void => {
  root.innerHTML = spriteContent;
  hideSpriteFromLayout(root);
  document.body.appendChild(root);
+=======
+  const sprite = root.querySelector('svg');
+  if (!sprite) return;
+  const paintServers = sprite.querySelectorAll('linearGradient, radialGradient, clipPath, mask, pattern, filter');
+  if (paintServers.length > 0) {
+    const holder = document.createElementNS(SVG_NS, 'svg');
+    holder.setAttribute('width', '0');
+    holder.setAttribute('height', '0');
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    for (const server of paintServers) defs.appendChild(server);
+    holder.appendChild(defs);
+    root.appendChild(holder);
+  }
+  sprite.style.display = 'none';
+};
+
+const mountFileTypeSprite = (spriteContent: string): void => {
+  if (!hasDocument() || document.getElementById(FILE_TYPE_SPRITE_ROOT_ID)) {
+    return;
+  }
+  const root = document.createElement('div');
+  root.id = FILE_TYPE_SPRITE_ROOT_ID;
+  root.setAttribute('aria-hidden', 'true');
+  root.style.position = 'absolute';
+  root.style.width = '0';
+  root.style.height = '0';
+  root.style.overflow = 'hidden';
+  root.innerHTML = spriteContent;
+  hideSpriteFromLayout(root);
+  document.body.appendChild(root);
+>>>>>>> bc50ba56a
 };
 
 const ensureFileTypeSprite = (): void => {

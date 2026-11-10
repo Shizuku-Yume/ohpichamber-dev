@@ -17,6 +17,26 @@ import type { ComposerEditorHandle } from '../editor/ComposerEditor';
 import type { AutocompleteKind } from '../language/triggers';
 import type { AutocompleteOverlayPosition } from '../ui/ComposerAutocompletePopups';
 
+<<<<<<< HEAD
+=======
+/** The `@` list's width, which also shows file paths; `/` shares it so command descriptions fit. */
+const MENTION_LIST_WIDTH = 560;
+
+/**
+ * Widths each picker asks for when placed at the caret; a narrower composer
+ * narrows them. One width for every list, so they read as one family; the
+ * mention and command lists are wider, and the emoji list, whose rows are a
+ * glyph and a short name, narrower.
+ */
+const CARET_PLACED_WIDTH = {
+    mention: MENTION_LIST_WIDTH,
+    command: MENTION_LIST_WIDTH,
+    snippet: 420,
+    skill: 420,
+    emoji: 280,
+} as const satisfies Record<AutocompleteKind, number>;
+
+>>>>>>> bc50ba56a
 export interface AutocompletePositionOptions {
     /** Only focus mode places popups at the caret. */
     enabled: boolean;

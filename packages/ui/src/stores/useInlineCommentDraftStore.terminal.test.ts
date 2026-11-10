@@ -66,7 +66,7 @@ describe('terminal context drafts', () => {
     const originalStringify = JSON.stringify;
     let envelopeSerializations = 0;
     JSON.stringify = ((value: unknown, ...rest: unknown[]) => {
-      if (value && typeof value === 'object' && 'drafts' in value && 'touchedAt' in value) {
+      if (value && typeof value === 'object' && 'drafts' in value) {
         envelopeSerializations += 1;
       }
       return originalStringify(value, ...(rest as [Parameters<typeof JSON.stringify>[1], Parameters<typeof JSON.stringify>[2]]));

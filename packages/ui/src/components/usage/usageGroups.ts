@@ -2,8 +2,12 @@ import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { formatWindowLabel } from '@/lib/quota';
 import { getDisplayModelName } from '@/lib/quota/model-families';
+<<<<<<< HEAD
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
+=======
+import { useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
+>>>>>>> bc50ba56a
 import type { QuotaProviderId, UsageWindow } from '@/types';
 
 export type UsageLimitRow = {
@@ -39,7 +43,11 @@ export const useUsageProviderGroups = (): UsageProviderGroup[] => {
   const refreshErrors = useQuotaStore((state) => state.refreshErrors);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const selectedQuotaModels = useQuotaStore((state) => state.selectedModels);
+<<<<<<< HEAD
   const providers = QUOTA_PROVIDERS;
+=======
+  const providers = useQuotaProviders();
+>>>>>>> bc50ba56a
 
   return React.useMemo<UsageProviderGroup[]>(() => {
     const resultsByProvider = new Map(quotaResults.map((result) => [result.providerId, result]));

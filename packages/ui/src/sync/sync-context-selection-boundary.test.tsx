@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { describe, expect, spyOn, test } from "bun:test"
 import React, { act } from "react"
 import { createRoot } from "react-dom/client"
@@ -14,6 +15,20 @@ import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
 import { fileTreeChanges, subscribeFileTreeChanges } from "@/lib/fileTreeChanges"
+=======
+import { describe, expect, spyOn, test } from 'bun:test'
+import React, { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { OpenCode } from '@opencode/client'
+import { opencodeClient } from '@/lib/opencode/client'
+import { SyncProvider, useChildStoreManager, useSyncDirectory } from './sync-context'
+import { usePrefetchSessionMessages } from './use-sync'
+import { installHookTestDom } from '../components/session/sidebar/test-utils/testDom'
+import { useSessionUIStore } from './session-ui-store'
+import { useProjectsStore } from '@/stores/useProjectsStore'
+import type { Message, Part, Session } from '@/lib/opencode/model'
+import type { SessionPage } from '@/lib/opencode/client'
+>>>>>>> bc50ba56a
 
 const workspace = (directory: string): Workspace => ({ workspaceId: `workspace-${directory.slice(1).replaceAll('/', '-')}`, projectId: 'project-1', name: 'Workspace', displayPath: '.' })
 const shellSnapshot = (workspaceId: string): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId }, epoch: 'shell-epoch', revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } })
@@ -35,8 +50,138 @@ const session = (sessionId: string, workspaceId: string): Session => ({
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 })
 
+<<<<<<< HEAD
 describe("SyncProvider native scope and selection boundaries", () => {
   test("keeps a selected native transcript whole after directory adoption", async () => {
+=======
+describe('SyncProvider selection boundary', () => {
+  for (const outcome of ['complete', 'failed'] as const) {
+    test(`publishes subagents before later history pages settle as ${outcome}`, async () => {
+      const dom = installHookTestDom()
+      const previousSurface = window.__OPENCHAMBER_SURFACE__
+      window.__OPENCHAMBER_SURFACE__ = 'desktop'
+      const root = createRoot(dom.container)
+      const directory = `/workspace/progressive-bootstrap-${outcome}`
+      let manager: ReturnType<typeof useChildStoreManager> | undefined
+      const Probe = () => { manager = useChildStoreManager(); return null }
+      const parent: Session = {
+        id: 'parent', title: 'Parent', projectID: 'project', directory, cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: 1, updated: 1 },
+      }
+      const child: Session = { ...parent, id: 'child', parentID: parent.id }
+      const older: Session = { ...parent, id: 'older' }
+      let finishPage!: (page: SessionPage) => void
+      const laterPage = new Promise<SessionPage>((resolve) => { finishPage = resolve })
+      let pageStarted!: () => void
+      const secondPageStarted = new Promise<void>((resolve) => { pageStarted = resolve })
+      const list = spyOn(opencodeClient, 'listSessionsPage').mockImplementation(async (options) => {
+        if (options?.directory !== directory) return { sessions: [], cursor: {} }
+        if (!options.cursor) return { sessions: [parent, child], cursor: { next: 'older' } }
+        pageStarted()
+        const page = await laterPage
+        if (outcome === 'failed') throw Object.assign(new Error('Later page unavailable'), { status: 503 })
+        return page
+      })
+      try {
+        await act(async () => {
+          root.render(<SyncProvider sdk={createSdk()} directory={directory}><Probe /></SyncProvider>)
+        })
+        await act(() => secondPageStarted)
+        if (!manager) throw new Error('Bootstrap manager was not mounted')
+        const mountedManager = manager
+        const store = mountedManager.getChild(directory)
+        if (!store) throw new Error('Directory store was not created')
+        expect(store.getState().session.map((session) => session.id)).toEqual(['child', 'parent'])
+        expect(store.getState().sessionListSource).not.toBe('authoritative')
+        expect(mountedManager.getBootstrapState(directory)).not.toBe('complete')
+        await act(async () => {
+          const completed = new Promise<void>((resolve) => {
+            const unsubscribe = mountedManager.subscribeBootstrap(() => {
+              if (mountedManager.getBootstrapState(directory) !== outcome) return
+              unsubscribe()
+              resolve()
+            })
+          })
+          finishPage({ sessions: [older], cursor: {} })
+          await completed
+        })
+        if (outcome === 'complete') {
+          expect(store.getState().session.map((session) => session.id)).toEqual(['child', 'older', 'parent'])
+          expect(store.getState().sessionListSource).toBe('authoritative')
+          expect(store.getState().sessionTotal).toBe(2)
+        } else {
+          expect(store.getState().session.map((session) => session.id)).toEqual(['child', 'parent'])
+          expect(store.getState().sessionListSource).not.toBe('authoritative')
+        }
+      } finally {
+        finishPage({ sessions: [], cursor: {} })
+        await act(async () => root.unmount())
+        list.mockRestore()
+        window.__OPENCHAMBER_SURFACE__ = previousSurface
+        dom.restore()
+      }
+    }, 15_000)
+  }
+
+  for (const mode of ['confirmed', 'adopted'] as const) {
+    test(`keeps the selected transcript whole after its directory is ${mode}`, async () => {
+      const dom = installHookTestDom()
+      const previousSurface = window.__OPENCHAMBER_SURFACE__
+      window.__OPENCHAMBER_SURFACE__ = 'desktop'
+      const root = createRoot(dom.container)
+      let manager: ReturnType<typeof useChildStoreManager> | undefined
+      const Probe = () => { manager = useChildStoreManager(); return null }
+      const sessionID = `selected-${mode}`
+      const directory = `/workspace/actual-${mode}`
+      const previousProjects = useProjectsStore.getState().projects
+      useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace' }] })
+      const detail = mode === 'adopted' ? spyOn(opencodeClient, 'getSession').mockResolvedValue({
+        id: sessionID, projectID: 'project', directory, title: sessionID, cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 },
+      }) : null
+      try {
+        await act(async () => root.render(<SyncProvider sdk={createSdk()} directory="/workspace/guess"><Probe /></SyncProvider>))
+        if (!manager) throw new Error('Directory manager was not mounted')
+        const store = manager.ensureChild(directory, { bootstrap: false })
+        const messages: Message[] = Array.from({ length: 10 }, (_, index) => ({
+          id: `${sessionID}-${index}`, sessionID, role: 'user', time: { created: index },
+        }))
+        const parts: { [id: string]: Part[] } = Object.fromEntries(messages.map((message) => [message.id, [{
+          id: `part-${message.id}`, sessionID, messageID: message.id, type: 'text', text: 'prompt',
+        }]]))
+        await act(async () => {
+          opencodeClient.setDirectory('/workspace/guess')
+          useSessionUIStore.getState().setCurrentSession(sessionID, mode === 'confirmed' ? '/workspace/guess' : undefined)
+          store.setState({
+            session: [{
+              id: sessionID, projectID: 'project', directory, title: sessionID, cost: 0,
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 },
+            }],
+            message: { [sessionID]: messages }, part: parts,
+          })
+          if (mode === 'confirmed') useSessionUIStore.getState().setSessionDirectory(sessionID, directory)
+          else useSessionUIStore.getState().adoptAuthoritativeSessionDirectory()
+          await Promise.resolve()
+        })
+        expect(useSessionUIStore.getState().currentSessionDirectory).toBe(directory)
+        expect(store.getState().message[sessionID]).toHaveLength(10)
+        // Leaving starts the idle grace; the transcript stays whole meanwhile.
+        await act(async () => { useSessionUIStore.getState().setCurrentSession(null); await Promise.resolve() })
+        expect(store.getState().message[sessionID]).toHaveLength(10)
+      } finally {
+        useSessionUIStore.getState().setCurrentSession(null)
+        useProjectsStore.setState({ projects: previousProjects })
+        detail?.mockRestore()
+        await act(async () => root.unmount())
+        window.__OPENCHAMBER_SURFACE__ = previousSurface
+        dom.restore()
+      }
+    })
+  }
+
+  test('bounds failed session-page retries and preserves the last directory snapshot', async () => {
+>>>>>>> bc50ba56a
     const dom = installHookTestDom()
     const root = createRoot(dom.container)
     let manager: ChildStoreManager | undefined

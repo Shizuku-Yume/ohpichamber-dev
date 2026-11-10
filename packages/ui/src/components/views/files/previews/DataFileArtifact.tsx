@@ -92,7 +92,11 @@ const SqliteView: React.FC<{ path: string; database: string; tables: string[]; s
             <ButtonTooltip label={t('contextTooltips.files.runQuery')}>
               <Button type="button" size="sm" onClick={() => void show(query)} disabled={!query.trim() || running}>{t('filesView.artifact.data.run')}</Button>
             </ButtonTooltip>
+<<<<<<< HEAD
             <span className="min-w-0 flex-1 truncate typography-meta text-[color:var(--status-error)]" title={error}>{error}</span>
+=======
+            <span dir="auto" className="oc-ui-start-align min-w-0 flex-1 truncate typography-meta text-[color:var(--status-error)]" title={error}>{error}</span>
+>>>>>>> bc50ba56a
             <ButtonTooltip label={t('contextTooltips.files.closeQuery')}>
               <Button type="button" variant="ghost" size="sm" onClick={closeQuery}>{t('settings.common.actions.cancel')}</Button>
             </ButtonTooltip>

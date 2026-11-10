@@ -4,6 +4,7 @@ import { createOutboundHandles } from '../source-control/outbound-handles.js';
 import { createExtensionNotificationChannels } from './extension-channels.js';
 import { createNotificationTriggerRuntime } from './runtime.js';
 
+<<<<<<< HEAD
 const validSnapshot = (id) => ({
   session: {
     sessionId: id, workspaceId: "ws_test", projectId: "p_1", displayPath: "repo", rootSessionId: id,
@@ -16,6 +17,8 @@ const validSnapshot = (id) => ({
   requestRecovery: { pendingSet: "replace", priorEpochs: "expired" },
 });
 
+=======
+>>>>>>> bc50ba56a
 const genericTitles = {
   ready: 'Agent response is ready',
   error: 'Agent hit an error',
@@ -62,6 +65,7 @@ const harness = async ({ settings = {}, visible = false } = {}) => {
     getOpenCodeAuthHeaders: () => ({}),
     getIsSessionAutoAccepting: async () => false,
     deliverToExtensionChannels: channels.deliver,
+<<<<<<< HEAD
     sessionService: {
       open: async (id) => validSnapshot(id),
       list: async () => ({ items: [], errors: {} }),
@@ -97,6 +101,17 @@ const harness = async ({ settings = {}, visible = false } = {}) => {
     if (kind.startsWith('goal_')) {
       await runtime.sendGoalSettlePush({ sessionId, directory, status: { goal_complete: 'complete', goal_blocked: 'blocked', goal_budget: 'budgetLimited' }[kind], title: 'Private goal', body: 'Private body' });
     }
+=======
+  });
+  const trigger = async (kind) => {
+    const properties = { sessionID: `ses_${kind}`, directory: '/private/repo' };
+    if (kind === 'ready') await runtime.maybeSendPushForTrigger({ type: 'session.idle', properties });
+    if (kind === 'error') await runtime.maybeSendPushForTrigger({ type: 'session.error', properties: { ...properties, error: { type: 'Error', message: 'Private error' } } });
+    if (kind === 'question') await runtime.maybeSendPushForTrigger({ type: 'form.created', properties: { ...properties, form: { id: 'form_1', sessionID: properties.sessionID, title: 'Private question', fields: [{ title: 'Private field' }] } } });
+    if (kind === 'permission') await runtime.maybeSendPushForTrigger({ type: 'permission.asked', properties: { ...properties, id: 'permission_1', action: 'bash', resources: ['private command'] } });
+    if (kind === 'review') await runtime.notifyAutoReviewEnded({ sessionId: properties.sessionID, directory: properties.directory, status: 'clean' });
+    if (kind.startsWith('goal_')) await runtime.sendGoalSettlePush({ sessionId: properties.sessionID, directory: properties.directory, status: { goal_complete: 'complete', goal_blocked: 'blocked', goal_budget: 'budgetLimited' }[kind], title: 'Private goal', body: 'Private body' });
+>>>>>>> bc50ba56a
     await vi.advanceTimersByTimeAsync(600);
   };
   return { delivered, trigger };

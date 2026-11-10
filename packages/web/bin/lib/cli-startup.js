@@ -6,6 +6,10 @@ import { DEFAULT_PORT } from './cli-args.js';
 import { EXIT_CODE, TunnelCliError } from './cli-errors.js';
 import { getDataDir } from './cli-paths.js';
 import { hasUiPasswordConfigured } from './cli-network.js';
+<<<<<<< HEAD
+=======
+import { searchPathFor } from './cli-executables.js';
+>>>>>>> bc50ba56a
 import { requestServerShutdown } from './cli-http.js';
 import { isProcessRunning, stopInstanceProcess } from './cli-process.js';
 import { injectedEnvKeys } from '../../server/lib/injected-env.js';

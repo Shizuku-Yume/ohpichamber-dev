@@ -48,7 +48,14 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
+<<<<<<< HEAD
     "engines": { "openchamber": ">=3.0.0" },
+=======
+    "engines": { "openchamber": ">=1.24.0" },
+    "id": "acme-hello",
+    "name": "Hello",
+    "icon": "window",
+>>>>>>> bc50ba56a
     "contributes": {
       "panel": { "entry": "panel/index.html" },
       "attach": "dialog",
@@ -75,8 +82,11 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
 
 SDK 3 用私有且带版本号的 `MessagePort` 引导流程取代 SDK 2 的父窗口传输。仍发送 M3 之前 v1 `hello` 的面板无法连接：OpenChamber 会在面板中显示版本不匹配信息，并且不会授予端口或主机状态。v1 引导通知会被丢弃且不授予任何内容。请使用 `@openchamber/sdk` 3 重新构建面板。由于清单架构未变，`apiVersion` 仍为 `1`。
 
+<<<<<<< HEAD
 `engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `3.0.0` 或 `>=3.0.0`。更旧的版本会拒绝安装，而不是之后才出错。
 
+=======
+>>>>>>> bc50ba56a
 `id`、`name` 和 `icon` 用来标识扩展。`id` 使用 kebab-case，且在已安装扩展中必须唯一。`icon` 是 Remixicon 图标名（`RiWindowLine` 写成 `window`），或者你文件夹内的 SVG 文件，如 `icon.svg`。`contributes.panel` 是扩展在侧栏中的面板：它的 `entry` 是你文件夹内的 HTML 文件。没有侧栏面板的扩展可以不写 `panel`。旧版包把 `id`、`name` 和 `icon` 放在 `panel` 内，这种写法仍然有效。
 
 `contributes.attach` 可选。它会把你的扩展加入聊天框旁的 + 菜单，用户可以从中挑选一个任务并附加到会话。
@@ -94,7 +104,11 @@ SDK 3 用私有且带版本号的 `MessagePort` 引导流程取代 SDK 2 的父�
 
 `contributes.integration` 可选。它会在 设置 → 集成 中添加一张卡片，用户在那里连接账户。见[账户与网络](#账户与网络)。
 
+<<<<<<< HEAD
 `contributes.service` 可选。它声明一个由 OpenChamber 在扩展旁启动的本地进程，用于网页无法访问的东西，比如 Docker socket。该进程以用户的完整权限运行，且没有沙箱隔离，因此批准对话框会对此发出警告；只有当网页无法完成这项工作时才声明它。见包内文件 `GUEST_SERVICES.md`。 带有 `provides: ["browser"]` 的服务还可以替代智能体的浏览器：它在服务器上响应 `browser.*` 动作，因此智能体无需打开桌面应用即可浏览，用户在设置 → OpenChamber 工具中选择它。这样的服务不需要面板。服务还可以得知用户会话中发生的事。在它旁边声明 `contributes.sessionEvents`，OpenChamber 就会把每一轮完成或失败的对话，以及智能体请求的每个权限和提出的每个问题，从每个项目发送给服务，无需打开窗口。见[会话事件](/sdk/host/#会话事件)。带有 `provides: ["notifications"]` 的服务则在桌面端和手机之外，把用户的通知投递到 Slack、Matrix 或你自己的服务器。用户在设置 → 集成中连接账户，令牌保留在 OpenChamber 中。见[通知渠道](/sdk/host/#通知渠道)。 带有 `provides: ["tracker"]` 的服务是 Linear 旁边的工作项跟踪器，它的账户卡片在扩展账户下；见[跟踪器](/sdk/host/#跟踪器)。而带有 `provides: ["quota"]` 的服务则在内置提供商旁边报告用量，读取 Host 为清单中列出的提供商保存的凭据；见[用量提供商](/sdk/host/#用量提供商)。
+=======
+`contributes.service` 可选。它声明一个由 OpenChamber 在扩展旁启动的本地进程，用于网页无法访问的东西，比如 Docker socket。该进程以用户的完整权限运行，且没有沙箱隔离，因此批准对话框会对此发出警告；只有当网页无法完成这项工作时才声明它。见包内文件 `GUEST_SERVICES.md`。 带有 `provides: ["browser"]` 的服务还可以替代智能体的浏览器：它在服务器上响应 `browser.*` 动作，因此智能体无需打开桌面应用即可浏览，用户在设置 → OpenChamber 工具中选择它。这样的服务不需要面板。服务还可以得知用户会话中发生的事。在它旁边声明 `contributes.sessionEvents`，OpenChamber 就会把每一轮完成或失败的对话，以及智能体请求的每个权限和提出的每个问题，从每个项目发送给服务，无需打开窗口。见[会话事件](/sdk/host/#会话事件)。带有 `provides: ["notifications"]` 的服务则在桌面端和手机之外，把用户的通知投递到 Slack、Matrix 或你自己的服务器。用户在设置 → 集成中连接账户，令牌保留在 OpenChamber 中。见[通知渠道](/sdk/host/#通知渠道)。 带有 `provides: ["tracker"]` 的服务是 Linear 旁边的工作项跟踪器，它的账户卡片在扩展账户下；见[跟踪器](/sdk/host/#跟踪器)。而带有 `provides: ["quota"]` 的服务则在内置提供商旁边报告用量，读取 OpenCode 为清单中列出的提供商保存的凭据；见[用量提供商](/sdk/host/#用量提供商)。
+>>>>>>> bc50ba56a
 
 ## 能力
 
@@ -108,10 +122,54 @@ SDK 3 用私有且带版本号的 `MessagePort` 引导流程取代 SDK 2 的父�
 | `model` | 使用用户的 Small Model 进行一次性文本生成（`generate`），不在任何会话中 |
 | `shells` | 观察 agent 在后台运行的 shell 命令、读取其输出并停止它们（`onRunningShells`、`readShellOutput`、`stopShell`） |
 
+<<<<<<< HEAD
 另有十项会自动为你加上：声明了 `integration` 时加上 `network`，声明了 `service` 时加上 `service`，声明了 `filesystem` 模式时加上 `filesystem`，声明了 `origins` 时加上 `origins`，会话操作请求消息时加上 `conversation`（见[操作、命令和徽标](#操作命令和徽标)），`sessionEvents` 或 `sessionControl` 请求 `content` 时加上 `transcript`（见[会话事件](/sdk/host/#会话事件)），服务操作会话时加上 `sessionControl`（见[调用 OpenChamber](/sdk/host/#从服务调用-openchamber)），补充智能体读取的内容时加上 `instructions`，声明了 `contributes.skills` 时加上 `skills`。`contributes.skills` 是包内的一个技能文件夹，扩展开启期间这些技能会提供给每个智能体。声明了 `contributes.
 
 用户在安装扩展时会看到完整列表一次，然后批准或移除扩展。如果新版本请求更多权限，对话框会再次出现。调用需要用户尚未批准的能力时，会以 `NOT_GRANTED` 失败。
 
+=======
+另有十二项会自动为你加上：声明了 `integration` 时加上 `network`，声明了 `service` 时加上 `service`，声明了 `filesystem` 模式时加上 `filesystem`，声明了 `origins` 时加上 `origins`，会话操作请求消息时加上 `conversation`（见[操作、命令和徽标](#操作命令和徽标)），`sessionEvents` 或 `sessionControl` 请求 `content` 时加上 `transcript`（见[会话事件](/sdk/host/#会话事件)），服务操作会话时加上 `sessionControl`（见[调用 OpenChamber](/sdk/host/#从服务调用-openchamber)），服务代用户回答智能体的权限请求和表单时加上 `sessionAnswers`（`sessionControl: { answers: true }`），补充智能体读取的内容时加上 `instructions`，声明了 `contributes.skills` 时加上 `skills`。`contributes.skills` 是包内的一个技能文件夹，扩展开启期间这些技能会提供给每个智能体。声明了 `contributes.opencodePlugin` 时加上 `opencodePlugin`（见下文），声明了 `contributes.links` 时加上 `links`（见[聊天消息中的链接](#聊天消息中的链接)）。
+
+用户在安装扩展时会看到完整列表一次，然后批准或移除扩展。如果新版本请求更多权限，对话框会再次出现。调用需要用户尚未批准的能力时，会以 `NOT_GRANTED` 失败。
+
+## 在你的包里带上一个 OpenCode 插件
+
+扩展可以自带一个 OpenCode 插件，这样用户只装一样东西而不是两样。声明 `"opencodePlugin": "plugin"`：包内的一个文件夹，其根目录下有 `index.js` 或 `server.js`。OpenCode 不读取 `main`，所以如果入口文件在别处，请在该文件夹的 `package.json` 中设置 `name` 和 `exports`。入口文件默认导出 `{ id, setup }`，也就是 OpenCode 加载的形状；它不导入任何东西，因为 OpenCode 用一个简单的 `import()` 从你的文件夹加载它，而那里什么都没有安装。工具的 `input` 是普通的 JSON Schema，它的 `execute` 返回 `{ content }`。
+
+```json
+{
+  "contributes": {
+    "panel": { "id": "teapot-tools", "name": "Teapot Tools", "icon": "cup" },
+    "opencodePlugin": "plugin"
+  }
+}
+```
+
+批准对话框会多出一行 **向 OpenCode 添加插件**，明确说明插件代码在 OpenCode 内部以用户的全部权限运行。允许之后，OpenChamber 会把你的文件夹写进它管理的 OpenCode 配置，也就是承载 `contributes.skills` 的同一个文件；它运行的 OpenCode 监视该文件，几秒内加载插件。停用或移除扩展会以同样的方式把插件拿掉。用户自己的 `opencode.json` 不会被写入任何内容：那是用户的文件，写在那里的插件会比你的扩展活得更久，并且在这台机器上的每个 OpenCode 中运行。
+
+当该文件无法到达 OpenCode 时，扩展的页面会说明情况并提供 **添加到全局配置**，它会把你的文件夹写入用户的全局 OpenCode 配置，成为从此由用户拥有的条目。这发生在 OpenChamber 没有启动它所对话的 OpenCode 时，或者服务器环境设置了自己的 `OPENCODE_CONFIG` 时（此时插件在 OpenCode 下次启动时加载）。另一台机器上的 OpenCode 无法加载这台机器上的文件夹；页面会说明这一点，不提供任何按钮。加载失败的插件，在设置 → 插件中有条目时由 OpenCode 报告；无论如何你的扩展都继续工作。插件文件夹不存在、或其 `package.json` 没有指定入口文件的包，安装会被拒绝。
+
+VS Code 和移动端应用不加载扩展，所以插件不会到达那里。隔离空间内的会话运行自己的 OpenCode，它从不读取宿主机的配置。企业模式把插件当作本地服务对待：只能从管理员列出的仓库安装。SDK 中有一个可运行的示例 `examples/opencode-plugin`。
+
+## 聊天消息中的链接
+
+扩展可以让自己的标识符和链接在聊天消息中变成可点击的，这样智能体回复中的 `DEMO-12` 会在你的扩展里打开那个任务，而不是打开浏览器标签页。声明要识别什么，以及点击后做什么：
+
+```json
+"links": {
+  "action": "open",
+  "identifier": { "keys": ["DEMO"] },
+  "urls": { "origin": "https://tasks.example.com", "identifier": "key-number", "item": ["/tasks/{id}"] }
+}
+```
+
+- `identifier.keys` 是最多 8 个固定的大写键。`DEMO` 只在 `DEMO-12` 作为完整单词出现时识别它；代码、链接、路径、`XDEMO-1` 这样的词和 `DEMO-1.5` 这样的版本号都保持为文本。
+- `urls` 识别某一个 https 源上的链接，源必须完全匹配。`item` 是按跟踪器自己的链接形式写的链接模板：`{id}` 只出现一次，在路径中或作为 `?name={id}`，会变化的部分用 `{segment}` 或 `{segments+}`。`identifier` 说明 `{id}` 的样子：`key-number`、`number` 或 `short-code`。你不需要写正则表达式；OpenChamber 会编译这些模板。
+- `action: "open"` 会打开你的扩展，并把 `ready.item`（或 `onItem`）设为 `{ kind: "link", identifier, url? }`：当 `attach` 为 `"dialog"` 时在你的对话框中打开，否则在侧栏面板中打开。用 `isGuestLinkItem` 收窄类型。它需要 `panel.entry`。`url` 是被点击的链接，去掉片段，并去掉模板自身以外的查询参数；对于文本中的标识符，如果你有不含 `{segment}` 的模板，并且标识符符合 `urls.identifier` 声明的形式，它就是其中第一个模板生成的链接（`DEMO-12` 永远不会填入 `number`）。
+- `action: "attach"` 则会在聊天框中放上一个带有该标识符的标签，它需要一个不含 `{segment}` 或 `{segments+}` 的模板，这样标签才能指明自己的链接；使用 `identifier.keys` 时，`urls.identifier` 不能是 `number`。
+
+识别在智能体回复和用户自己的消息中进行，不在推理、工具输出或 Files 视图中进行；复制消息时，文本保持原样。OpenChamber 自己会读取的链接，即跟踪器条目、仓库的 issue 或 pull request、提交，仍按原来的方式处理；按住修饰键点击时，保持浏览器原本的行为。声明 `links` 会加上 `links` 能力：批准对话框会列出你的键和源，并说明点击后做什么；更改其中任何一项的版本会再次请求批准。`examples/tasks-demo` 能识别 `DEMO-2` 和 `https://example.com/tasks/DEMO-2`。
+>>>>>>> bc50ba56a
 
 ## 生成文本
 
@@ -304,7 +362,19 @@ host.onResolve(async ({ command, args }) => {
 
 `match` 是运行时报告的工具名；末尾的 `*` 匹配前缀。`icon` 是 Remixicon 图标名或你包内的 `.svg` 文件，和 `panel.icon` 一样。`title` 和 `subtitle` 是基于这次调用的 `input`、`output` 和 `metadata` 的模板。`output` 决定正文怎么渲染：`text`、`json`（树形）、`markdown`、带 `language` 的 `code`、带 `columns` 的 `table`（行来自输出数组或 `output.items`），或者 `auto` 使用默认方式。精确的 `match` 优先于通配符，平局时先安装的扩展胜出。不需要任何权限：这只改变聊天里已有数据的绘制方式。
 
-只给工具定制样式的扩展根本不需要页面：不写 `panel.entry`，它就没有侧栏图标，只在 设置 → 扩展 里有一张卡片。没有页面时，它可以只声明 `tools`，别的什么都不写。另一个例外是带自己 `entry` 的 Work Status 分区或文件编辑器，见上文。
+只给工具定制样式的扩展根本不需要页面：不写 `panel.entry`，它就没有侧栏图标，只在 设置 → 扩展 里有一张卡片。没有页面时，它只能声明 `tools` 和 `providerLogos`，别的什么都不写。另一个例外是带自己 `entry` 的 Work Status 分区或文件编辑器，见上文。
+
+## 你的提供商的徽标
+
+当你的 OpenCode 插件注册模型提供商时，模型选择器和设置页通常显示一个通用标记。把徽标放进包里并写明提供商，不需要写代码：
+
+```json
+"providerLogos": {
+  "acme-cloud": "assets/acme-cloud.svg"
+}
+```
+
+键是 OpenCode 报告的提供商 ID。值是包内的 `.svg` 或 `.png` 文件，最大 1 MB。文件缺失、为空或更大时，安装会失败。一个包最多写 256 个提供商，两个 ID 可以指向同一个文件。徽标保留自己的颜色，SVG 中的 `currentColor` 跟随浅色或深色主题。它会替换应用为该 ID 自带的徽标。用户为该提供商设置的内容优先，出现冲突时先安装的扩展优先。不需要任何权限。VS Code 和手机不加载扩展，因此不显示这些徽标。
 
 ## 面板里的前几行代码
 

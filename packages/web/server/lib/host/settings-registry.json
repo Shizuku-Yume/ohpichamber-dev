@@ -82,6 +82,18 @@
     "homeDirectory": {
       "scope": "instance"
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
+=======
+    "opencodeBinary": {
+      "scope": "instance"
+    },
+    "serverUpdateChannel": {
+      "scope": "instance",
+      "surfaces": [
+        "web"
+      ]
+    },
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-registry.json
     "projects": {
       "scope": "instance"
     },
@@ -111,6 +123,12 @@
       ]
     },
     "desktopMinimizeToTrayEnabled": {
+      "scope": "instance",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "desktopUpdateChannel": {
       "scope": "instance",
       "surfaces": [
         "desktop"
@@ -214,6 +232,24 @@
     "agentNotifyToolEnabled": {
       "scope": "instance"
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
+=======
+    "agentRenderToolEnabled": {
+      "scope": "instance"
+    },
+    "agentUsageToolEnabled": {
+      "scope": "instance"
+    },
+    "agentImageToolEnabled": {
+      "scope": "instance"
+    },
+    "agentImageModel": {
+      "scope": "instance"
+    },
+    "agentSecretToolEnabled": {
+      "scope": "instance"
+    },
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-registry.json
     "agentMemoryToolEnabled": {
       "scope": "instance"
     },
@@ -248,6 +284,9 @@
     "sessionRetentionOnlyArchived": {
       "scope": "instance"
     },
+    "sessionRetentionIncludeInWork": {
+      "scope": "instance"
+    },
     "sessionRetentionAction": {
       "scope": "instance"
     },
@@ -266,10 +305,16 @@
     "dictationEnabled": {
       "scope": "profile"
     },
+    "dictationAutoSend": {
+      "scope": "profile"
+    },
     "sttProvider": {
       "scope": "instance"
     },
     "sttServerUrl": {
+      "scope": "instance"
+    },
+    "sttEndpointPath": {
       "scope": "instance"
     },
     "sttModel": {
@@ -279,6 +324,9 @@
       "scope": "instance"
     },
     "sttLanguage": {
+      "scope": "profile"
+    },
+    "sttCorrectTranscript": {
       "scope": "profile"
     },
     "tunnelProvider": {
@@ -354,7 +402,23 @@
       "scope": "profile",
       "perSurface": true
     },
+    "sidebarWorktreeNameByBranch": {
+      "scope": "profile"
+    },
+    "sidebarSections": {
+      "scope": "profile"
+    },
+    "sidebarPinLists": {
+      "scope": "profile"
+    },
+    "sidebarHiddenSections": {
+      "scope": "profile",
+      "perSurface": true
+    },
     "workStatusSectionOrder": {
+      "scope": "profile"
+    },
+    "workStatusSectionOrderExplicit": {
       "scope": "profile"
     },
     "workStatusPanelEnabled": {
@@ -424,6 +488,9 @@
     "copyMessagesAsPlainText": {
       "scope": "profile"
     },
+    "selectionApprovalText": {
+      "scope": "profile"
+    },
     "showTurnChangedFiles": {
       "scope": "profile"
     },
@@ -490,13 +557,68 @@
     "autoSaveEnabled": {
       "scope": "profile"
     },
+    "fileEditorWrapLines": {
+      "scope": "profile"
+    },
     "confirmFileTreeMove": {
       "scope": "profile"
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
+=======
+    "fileTreeSide": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "layoutAnimations": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "openLinksInBrowserPanel": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "liveBrowserTabLimit": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "openTrackerLinksOnBoard": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
+    },
+    "terminalCloseOnExit": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
+    },
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-registry.json
     "autoCreateWorktree": {
       "scope": "profile"
     },
     "sessionTabsEnabled": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "sessionTabsPerWorkspace": {
       "scope": "profile",
       "surfaces": [
         "web",
@@ -605,6 +727,9 @@
     "customProviderIcons": {
       "scope": "profile"
     },
+    "customProviderLogos": {
+      "scope": "profile"
+    },
     "recentModels": {
       "scope": "profile"
     },
@@ -618,6 +743,9 @@
       "scope": "profile"
     },
     "recentEfforts": {
+      "scope": "profile"
+    },
+    "lastUsedEfforts": {
       "scope": "profile"
     },
     "providerOrder": {
@@ -688,6 +816,9 @@
       "scope": "profile"
     },
     "notifyOnCompletion": {
+      "scope": "profile"
+    },
+    "notifyOnPullRequests": {
       "scope": "profile"
     },
     "notifyOnError": {
@@ -788,6 +919,17 @@
       "scope": "device",
       "local": true
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
+=======
+    "contextZoneSizes": {
+      "scope": "device",
+      "local": true
+    },
+    "contextZoneExpandedChatSizes": {
+      "scope": "device",
+      "local": true
+    },
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-registry.json
     "contextRailOrder": {
       "scope": "device",
       "local": true

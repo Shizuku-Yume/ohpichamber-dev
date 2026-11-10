@@ -10,6 +10,12 @@ export const buildKnownSessionDirectories = (
     const normalized = normalizePath(project.path);
     if (normalized) directories.add(normalized);
   }
+<<<<<<< HEAD
+=======
+  if (options?.includeWorktrees === false) {
+    return directories;
+  }
+>>>>>>> bc50ba56a
   const projectDirectories = new Set(directories);
   for (const [projectPath, worktrees] of availableWorktreesByProject) {
     const owner = normalizePath(projectPath);

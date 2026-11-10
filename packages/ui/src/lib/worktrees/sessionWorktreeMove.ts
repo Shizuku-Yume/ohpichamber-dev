@@ -1,7 +1,8 @@
 import type { Session, SessionMoveToWorktreeResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import { toast } from '@/components/ui';
-import { checkIsGitRepository, getGitStatus } from '@/lib/gitApi';
+import { checkIsGitRepository, getGitStatus, setGitWorktreeTitle } from '@/lib/gitApi';
+import { carriedWorkTitleOwner } from '@/lib/sessionWorkTitle';
 import { normalizePath } from '@/lib/pathNormalization';
 import { resolveFolderProjectRef, resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
@@ -11,7 +12,7 @@ import { checkoutHoldsDirectory, findWorktreeHoldingDirectory } from '@/lib/work
 import { resolveWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
 import { refreshGlobalSessionsForDirectories } from '@/stores/useGlobalSessionsStore';
 import { isAmbiguousSendFailure } from '@/sync/send-failure-classification';
-import { getSessionLiveActivity, isSessionBusyNow, moveSessionToDirectory } from '@/sync/session-actions';
+import { isSessionBusyNow, moveSessionToDirectory, readSessionsLiveActivity } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { create } from 'zustand';
@@ -57,8 +58,8 @@ export type SessionTreeMoveIntent =
       messages: SessionTreeMoveMessages;
     }
   | {
-      // A chat promoted into a project: the conversation moves to the
-      // project's root folder; files the chat wrote stay where they are.
+      // The conversation moves to a folder the user picked, usually a
+      // project's root; files the session wrote stay where they are.
       kind: 'project';
       root: Session;
       descendants: Session[];
@@ -114,6 +115,7 @@ const resolveSourceBranch = async (directory: string, projectDirectory: string):
   throw new Error('Unable to determine the current branch');
 };
 
+<<<<<<< HEAD
 // Scans every child store instead of the source directory's: a session's live
 // status can be reported by a directory other than the one that wins the
 // directory dedup, and a directory-scoped read would then see no status at all
@@ -124,6 +126,16 @@ const assertSessionsIdle = (sessions: Session[]): void => {
     if (activity === 'unknown') throw new Error('Session status is unavailable');
     if (activity === 'active') throw new Error('Session is not idle');
   }
+=======
+// A session's live status can be reported by a directory other than the one
+// that wins the directory dedup, so the answer covers every child store. The
+// source directory only picks the server asked when no store knows: the host,
+// or the isolated space that holds it.
+const assertSessionsIdle = async (sessions: Session[], sourceDirectory: string): Promise<void> => {
+  const activity = await readSessionsLiveActivity(sessions.map((session) => session.id), sourceDirectory);
+  if (activity === 'unknown') throw new Error('Session status is unavailable');
+  if (activity === 'active') throw new Error('Session is not idle');
+>>>>>>> bc50ba56a
 };
 
 type RollbackFailure = {
@@ -211,7 +223,7 @@ const moveSessionTreeTransaction = async (
         useSessionUIStore.getState().getWorktreeMetadata(session.sessionId),
       ]),
     );
-    assertSessionsIdle(sessions);
+    await assertSessionsIdle(sessions, input.sourceDirectory);
 
     let destination: Awaited<ReturnType<typeof prepareDestination>> | null = null;
     const moved: Session[] = [];
@@ -222,7 +234,7 @@ const moveSessionTreeTransaction = async (
         // Setup and earlier moves can take long enough for a not-yet-moved
         // session to start running, so re-check the remaining source tree
         // immediately before each move. The root moves last.
-        assertSessionsIdle(sessions.slice(index));
+        await assertSessionsIdle(sessions.slice(index), input.sourceDirectory);
         try {
           await moveSessionToDirectory(session, input.sourceDirectory, destination.directory);
         } catch (error) {
@@ -322,11 +334,19 @@ const moveSessionTreeToProject = async (input: {
 const moveSessionTreeToNewWorktree = async (input: {
   root: Session;
   sourceDirectory: string;
+<<<<<<< HEAD
   carry: readonly string[];
 }): Promise<SessionMoveToWorktreeResult> => {
   const project = resolveProjectRef(input.sourceDirectory);
   if (!project) throw new Error('Unable to find the project for this session');
   const run = async (): Promise<SessionMoveToWorktreeResult> => {
+=======
+}): Promise<string> => {
+  const directory = await moveSessionTreeTransaction(input, async () => {
+    const project = resolveProjectRef(input.sourceDirectory);
+    if (!project) throw new Error('Unable to find the project for this session');
+
+>>>>>>> bc50ba56a
     const sourceBranch = await checkIsGitRepository(input.sourceDirectory)
       ? await resolveSourceBranch(input.sourceDirectory, project.path)
       : null;
@@ -347,6 +367,7 @@ const moveSessionTreeToNewWorktree = async (input: {
       worktreeStatus: 'ready',
       worktreeSource: 'created-for-session',
     };
+<<<<<<< HEAD
     useSessionUIStore.getState().setWorktreeMetadata(input.root.sessionId, metadata, destinationDirectory);
     for (const moved of result.sessions ?? []) {
       if (moved.sessionId === input.root.sessionId) continue;
@@ -376,6 +397,18 @@ const moveSessionTreeToNewWorktree = async (input: {
   } finally {
     setSessionMovePending(input.root.sessionId, false);
   }
+=======
+  });
+  // Seed from the current session title. Generated titles stay agent-owned so
+  // work.name can replace them; an explicit user title keeps its ownership.
+  const taskTitle = input.root.title?.trim();
+  if (taskTitle) {
+    await setGitWorktreeTitle(directory, taskTitle, carriedWorkTitleOwner(input.root.metadata)).catch((error) => {
+      console.warn('[session-worktree-move] Failed to carry the task name into the new worktree', error);
+    });
+  }
+  return directory;
+>>>>>>> bc50ba56a
 };
 
 const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {

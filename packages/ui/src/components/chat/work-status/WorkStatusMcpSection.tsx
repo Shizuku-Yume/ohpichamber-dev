@@ -16,8 +16,7 @@ type Props = {
 const MCP_STATUS_MAX_AGE_MS = 60_000;
 
 /**
- * MCP servers with their connection switches, reusing the dropdown's own
- * connect/disconnect actions.
+ * MCP servers with their on/off switches, reusing the dropdown's own action.
  */
 export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
   const { t } = useI18n();
@@ -26,8 +25,7 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
     React.useCallback((state) => state.getStatusForDirectory(directory), [directory]),
   );
   const ensureMcpFresh = useMcpStore((state) => state.ensureFresh);
-  const connect = useMcpStore((state) => state.connect);
-  const disconnect = useMcpStore((state) => state.disconnect);
+  const setEnabled = useMcpStore((state) => state.setEnabled);
   const isConnected = useConfigStore((state) => state.isConnected);
   const [busyServer, setBusyServer] = React.useState<string | null>(null);
 
@@ -57,6 +55,7 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
 
     setBusyServer(name);
     try {
+<<<<<<< HEAD
       if (next) await connect(name, directory);
       else await disconnect(name, directory);
     } catch (error) {
@@ -65,6 +64,13 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
       setBusyServer((current) => (current === name ? null : current));
     }
   }, [connect, disconnect, directory, t]);
+=======
+      await setEnabled(name, next, directory);
+    } finally {
+      setBusyServer((current) => (current === name ? null : current));
+    }
+  }, [directory, mcpStatus, reportNeedsAuth, setEnabled]);
+>>>>>>> bc50ba56a
 
   useReportWorkStatusPresence('mcp', mcpServers.length > 0);
 
@@ -95,6 +101,7 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
               />
             )}
             label={name}
+            labelDir="auto"
             muted={!connected}
             value={failed ? (
               <WorkStatusRowAction

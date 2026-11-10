@@ -4,8 +4,14 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+<<<<<<< HEAD
 import * as layoutAnimation from '@/lib/layoutAnimation';
 import { beginLayoutAnimation, LAYOUT_ANIMATION_EASING, LAYOUT_ANIMATION_MS, runWhenLayoutSettled } from '@/lib/layoutAnimation';
+=======
+import { beginLayoutAnimation, holdLayoutAnimation, LAYOUT_ANIMATION_EASING, runWhenLayoutSettled } from '@/lib/layoutAnimation';
+import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
+import type { SidebarPeek } from './useSidebarPeek';
+>>>>>>> bc50ba56a
 
 const SIDEBAR_CONTENT_WIDTH = 280;
 // Wide enough for the toolbar's eight icons and a labelled titlebar button.
@@ -31,7 +37,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
     const resizingWidthRef = React.useRef<number | null>(null);
     const activeResizePointerIDRef = React.useRef<number | null>(null);
     const releaseResizeHoldRef = React.useRef<(() => void) | null>(null);
+<<<<<<< HEAD
     const sidebarRef = React.useRef<HTMLElement | null>(null);
+=======
+    const sidebarRef = React.useRef<HTMLDivElement | null>(null);
+    const titlebarOverlayRef = React.useRef<HTMLElement | null>(null);
+>>>>>>> bc50ba56a
 
     const clampSidebarWidth = React.useCallback((value: number) => {
         return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value));
@@ -63,8 +74,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
         if (!isResizing) {
             resizingWidthRef.current = null;
             activeResizePointerIDRef.current = null;
+            releaseResizeHoldRef.current?.();
+            releaseResizeHoldRef.current = null;
         }
     }, [isResizing]);
+
+    // Closing the sidebar mid-drag (its shortcut) takes the handle away with
+    // its pointer capture, so no pointerup ends the drag.
+    React.useEffect(() => {
+        if (!isOpen && isResizing) setIsResizing(false);
+    }, [isOpen, isResizing]);
+
+    React.useEffect(() => () => {
+        releaseResizeHoldRef.current?.();
+        releaseResizeHoldRef.current = null;
+    }, []);
 
     const openWidth = Math.min(
         SIDEBAR_MAX_WIDTH,
@@ -150,9 +174,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
         // The chat re-wraps on every pointer frame, as in a toggle: the work
         // that follows its width waits for the release (lib/layoutAnimation.ts).
         releaseResizeHoldRef.current?.();
+<<<<<<< HEAD
         // SAFETY: optional holdLayoutAnimation from layoutAnimation module
         const holdFn = (layoutAnimation as { holdLayoutAnimation?: () => () => void }).holdLayoutAnimation;
         releaseResizeHoldRef.current = holdFn ? holdFn() : null;
+=======
+        releaseResizeHoldRef.current = holdLayoutAnimation();
+>>>>>>> bc50ba56a
         event.preventDefault();
     };
 
@@ -196,7 +224,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
             ref={sidebarRef}
             data-left-sidebar=""
             className={cn(
+<<<<<<< HEAD
                 'relative flex h-full overflow-hidden',
+=======
+                'relative flex h-full',
+                !peeking && 'overflow-hidden',
+>>>>>>> bc50ba56a
                 // In the class, not the inline style: an inline transition
                 // outranked `motion-reduce:transition-none`, so the sidebar
                 // still animated for readers who asked for reduced motion.
@@ -217,6 +250,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
             aria-hidden={!isOpen || appliedWidth === 0}
         >
             {isOpen && (
+                // The edge toward the chat: a half-pixel hairline, drawn as a
+                // shadow above the content so it never takes width.
                 <div
                     className="pointer-events-none absolute inset-0 z-30 shadow-[inset_-0.5px_0_0_0_var(--oc-edge-strong)] rtl:shadow-[inset_0.5px_0_0_0_var(--oc-edge-strong)]"
                     aria-hidden="true"
@@ -240,7 +275,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
             )}
             <div
                 className={cn(
+<<<<<<< HEAD
                     'relative z-10 flex h-full shrink-0 flex-col transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
+=======
+                    'flex h-full shrink-0 flex-col',
+                    peeking
+                        // Above the chat, the header and the zones; under the
+                        // titlebar controls (z-30).
+                        ? 'absolute inset-s-0 top-0 z-[25] bg-sidebar shadow-xl'
+                        : 'relative z-10 transition-opacity ease-out motion-reduce:transition-none',
+>>>>>>> bc50ba56a
                     isResizing && 'pointer-events-none',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
@@ -253,6 +297,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
                 inert={!isOpen || undefined}
             >
                 {topBar}
+<<<<<<< HEAD
+=======
+                {/* A frame around the sidebar's own scrollers: it reserves no
+                    gutter, or the list's thumb would sit a second gutter in. */}
+>>>>>>> bc50ba56a
                 <ScrollableOverlay outerClassName="overlay-scrollbar-wrapper--no-gutter flex-1 min-h-0" disableHorizontal>
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </ScrollableOverlay>

@@ -54,12 +54,20 @@ const renderSections = (
 ): Sections => {
   let captured: Sections | null = null;
   const Harness = () => {
+    const sessionById = new Map((projectSessions ?? []).map((session) => [session.id, session]));
     const grouping = useSessionGrouping({
       homeDirectory: '/home/user',
       worktreeMetadata: new Map(),
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map(),
       gitBranches: new Map(),
+<<<<<<< HEAD
+=======
+      isVSCode: false,
+      sessionById,
+      childrenMap: new Map(),
+      nestedSessionIds: new Set(),
+>>>>>>> bc50ba56a
     });
     captured = useSessionSidebarSections({
       normalizedProjects: projectSessions ? [{ id: 'project', path: CHATS_ROOT, normalizedPath: CHATS_ROOT }] : [],
@@ -72,6 +80,7 @@ const renderSections = (
       sessionOrderRanks: new Map(),
       lastRepoStatus: false,
       buildGroupedSessions: grouping.buildGroupedSessions,
+      getGroupingSessions: grouping.getGroupingSessions,
       hasSessionSearchQuery: query.length > 0,
       normalizedSessionSearchQuery: query,
       filterSessionNodesForSearch: grouping.filterSessionNodesForSearch,

@@ -31,6 +31,7 @@ declare module "bun:test" {
     toBeGreaterThanOrEqual(expected: number): void;
     toBeLessThan(expected: number): void;
     toBeLessThanOrEqual(expected: number): void;
+<<<<<<< HEAD
     toBeCloseTo(expected: number, precision?: number): void;
     toHaveBeenCalled(): void;
     toHaveBeenCalledTimes(count: number): void;
@@ -52,6 +53,21 @@ declare module "bun:test" {
       toThrow(expected?: string | RegExp | (new (...args: never[]) => unknown)): Promise<void>;
       toBeInstanceOf(expected: new (...args: never[]) => object): Promise<void>;
       toBeGreaterThan(expected: number): Promise<void>;
+=======
+    toBeCloseTo(expected: number, numDigits?: number): void;
+    toHaveLength(expected: number): void;
+    toHaveBeenCalled(): void;
+    toHaveBeenCalledTimes(expected: number): void;
+    toBeInstanceOf(expected: unknown): void;
+    toHaveProperty(path: string): void;
+    not: {
+      toHaveBeenCalled(): void;
+      toEqual(expected: unknown): void;
+      toBe(expected: unknown): void;
+      toContain(expected: unknown): void;
+      toBeNull(): void;
+      toHaveProperty(path: string): void;
+>>>>>>> bc50ba56a
     };
     rejects: {
       toThrow(expected?: string | RegExp | (new (...args: never[]) => unknown)): Promise<void>;
@@ -93,6 +109,18 @@ declare module "bun:test" {
     mockRejectedValueOnce(value: unknown): Mock<T>;
     mockClear(): Mock<T>;
     mockReset(): Mock<T>;
+<<<<<<< HEAD
+=======
+  }
+  export interface Spy<T extends (...args: never[]) => void> extends Mock<T> {
+    mock: { calls: Parameters<T>[] };
+    mockImplementation(fn: T): Spy<T>;
+    mockImplementationOnce(fn: T): Spy<T>;
+    mockResolvedValue(value: Awaited<ReturnType<T>>): Spy<T>;
+    mockResolvedValueOnce(value: Awaited<ReturnType<T>>): Spy<T>;
+    mockRejectedValue(value: Error): Spy<T>;
+    mockRejectedValueOnce(value: Error): Spy<T>;
+>>>>>>> bc50ba56a
     mockRestore(): void;
   }
   export type Spy<T extends (...args: never[]) => unknown> = Mock<T>;

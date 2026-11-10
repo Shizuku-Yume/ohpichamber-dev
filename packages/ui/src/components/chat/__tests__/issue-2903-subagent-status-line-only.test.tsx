@@ -20,8 +20,18 @@ mock.module('sonner', () => ({
 mock.module('@/components/ui', () => ({
   toast: { info: () => undefined, error: () => undefined, success: () => undefined },
 }));
+<<<<<<< HEAD
 mock.module('@/lib/host-filesystem', () => ({
   hostFilesystem: {
+=======
+let mockIdCounter = 0;
+mock.module('@/lib/opencode/client', () => ({
+  isOpencodeNotFound: () => false,
+  OpencodeApiError: Error,
+  normalizeOpencodeError: (operation: string, error: unknown) => new Error(`${operation}: ${String(error)}`),
+  ascendingId: (prefix: string) => `${prefix}_${(mockIdCounter += 1).toString(16).padStart(12, '0')}`,
+  opencodeClient: {
+>>>>>>> bc50ba56a
     getDirectory: () => '/repo',
     setDirectory: () => undefined,
   },
@@ -32,6 +42,12 @@ mock.module('@/stores/permissionStore', () => ({
 }));
 mock.module('@/stores/useConfigStore', () => ({
   markConfigCatalogStale: () => undefined,
+<<<<<<< HEAD
+=======
+  selectCatalogLoadedForDirectory: () => false,
+  selectConfigAgentsForDirectory: () => [],
+  invalidateConfigAgentsLoad: () => undefined,
+>>>>>>> bc50ba56a
   useConfigStore: {
     getState: () => ({ isConnected: true, hasEverConnected: true, settingsMessageStreamTransport: 'auto' }),
     setState: () => undefined,

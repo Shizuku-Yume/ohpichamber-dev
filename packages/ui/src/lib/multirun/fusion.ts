@@ -1,6 +1,13 @@
+<<<<<<< HEAD
 import { canonicalClient } from '@/api/canonicalClient';
 import type { ModelSelection, Session } from '@openchamber/agent-contract';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
+=======
+import { opencodeClient } from '@/lib/opencode/client';
+import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
+import { syncSessionKnowledge } from '@/lib/sessionKnowledgeApi';
+import type { Session } from '@/lib/opencode/model';
+>>>>>>> bc50ba56a
 import type { GitWorktreeSnapshotResult } from '@/lib/api/types';
 import { getGitRangeDiff, snapshotGitWorktree } from '@/lib/gitApi';
 import { loadMagicPrompts, type MagicPromptSnapshot } from '@/lib/magicPrompts';
@@ -147,6 +154,8 @@ export async function startRunFusion(input: {
   const assertCurrent = () => {
     if (getRuntimeKey() !== runtimeKey || getRuntimeSwitchRevision() !== runtimeRevision) throw new Error('Runtime changed');
   };
+  const responseStyleInstruction = await fetchResponseStyleInstruction().catch(() => undefined);
+  assertCurrent();
 
   const sources = await loadFusionSources(run, input.sourceIds, input.sessionById, assertCurrent);
   if (sources.length === 0) throw new NoFusionOutputsError();
@@ -261,6 +270,7 @@ export async function startRunFusion(input: {
   }
 
   assertCurrent();
+<<<<<<< HEAD
   await observeLaneSession({ sessionId: fusionSession.sessionId, directory }, assertCurrent);
   const directoryOwner = resolveWorkspaceDirectory(fusionSession.workspaceId);
   const sessionOwner = useGlobalSessionsStore.getState().entityById.get(fusionSession.sessionId);
@@ -270,6 +280,10 @@ export async function startRunFusion(input: {
   const currentSession = useGlobalSessionsStore.getState().entityById.get(fusionSession.sessionId);
   if (sessionOwner && (!currentSession || currentSession.workspaceId !== sessionOwner.workspaceId || currentSession.epoch !== sessionOwner.epoch)) throw new Error('Fusion session changed');
   await sendMessage({
+=======
+  await syncSessionKnowledge(directory, fusionSession.id, responseStyleInstruction, runtimeKey);
+  await opencodeClient.sendMessage({
+>>>>>>> bc50ba56a
     runtimeKey,
     runtimeRevision,
     sessionId: fusionSession.sessionId,

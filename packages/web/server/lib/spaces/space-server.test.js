@@ -97,6 +97,41 @@ describe('space server channel: idle stop setting', () => {
   });
 });
 
+<<<<<<< HEAD
+=======
+describe('space server channel: default permission mode', () => {
+  it('delivers the user task name as stdin data with an atomic replacement', async () => {
+    const { channel, calls } = channelWith(ok());
+    await channel.writeUserTaskTitle(ID, { title: 'Name $(never a command)' });
+    expect(calls[0].options.stdin).toBe('{"title":"Name $(never a command)"}');
+    expect(calls[0].argv.join(' ')).not.toContain('never a command');
+    expect(calls[0].argv[2]).toContain('cat > /home/space/.openchamber-space/user-task-title.json.new && mv');
+  });
+  it('writes the mode on stdin through a temporary name, beside the token', async () => {
+    const { channel, calls } = channelWith(ok());
+    await channel.writePermissionDefault(ID, { mode: 'auto' });
+
+    expect(calls).toEqual([{
+      spaceId: ID,
+      argv: ['/bin/sh', '-c', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; umask 077; mkdir -p /home/space/.openchamber-space && chmod 700 /home/space/.openchamber-space && cat > /home/space/.openchamber-space/permission-default.json.new && mv /home/space/.openchamber-space/permission-default.json.new /home/space/.openchamber-space/permission-default.json'],
+      options: { stdin: '{"mode":"auto"}' },
+    }]);
+  });
+});
+
+describe('space server channel: plugin link', () => {
+  it('links only the plugin package, above every project of the space', async () => {
+    const { channel, calls } = channelWith(ok());
+    await channel.linkPlugin(ID);
+
+    expect(calls[0].argv).toEqual([
+      '/bin/sh', '-c', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; mkdir -p "$1/node_modules/@opencode" && ln -sfn "$2" "$1/node_modules/@opencode/plugin"',
+      'sh', `/spaces/${ID}`, '/opt/openchamber-tools/node_modules/@opencode/plugin',
+    ]);
+  });
+});
+
+>>>>>>> bc50ba56a
 describe('space server channel: request', () => {
   it('puts the whole request into a curl config on stdin, so nothing of it is in an argument', async () => {
     const { channel, calls } = channelWith(ok(http(200, '{"authenticated":true}', ['Set-Cookie: a=1; Path=/', 'Set-Cookie: b=2'])));

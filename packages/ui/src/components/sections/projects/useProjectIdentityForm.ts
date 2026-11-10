@@ -3,7 +3,7 @@ import { toast } from '@/components/ui';
 import { parseModelIdentifier, type ParsedModelIdentifier } from '@/lib/modelIdentifier';
 import { useI18n } from '@/lib/i18n';
 import type { ProjectEntry } from '@/lib/api/types';
-import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useProjectsStore, resolveUploadMime } from '@/stores/useProjectsStore';
 
 const resolveUploadMime = (file: File): 'image/png' | 'image/jpeg' | 'image/svg+xml' | null => {
   const rawType = typeof file.type === 'string' ? file.type.trim().toLowerCase() : '';

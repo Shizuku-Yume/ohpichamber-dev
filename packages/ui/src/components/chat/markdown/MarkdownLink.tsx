@@ -5,23 +5,43 @@ import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { getExternalFaviconUrl, isAppLinkUrl, isExternalHttpUrl, isLoopbackHttpUrl, openExternalUrl } from '@/lib/url';
 import { parseSessionLink } from '@/lib/sessionLinks';
+<<<<<<< HEAD
 import { sessionLinkKey } from '@/lib/sessionLinks';
+=======
+import { parseExtensionInstallLink } from '@/lib/guests/install-link';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
+import { requestGuestInstall } from '@/lib/guests/install-request';
+>>>>>>> bc50ba56a
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
 import { SessionMentionChipsContext } from '../message/parts/sessionMentionChips';
 import { SessionMentionChipButton } from '../message/parts/SessionMentionChipButton';
 import { useUIStore } from '@/stores/useUIStore';
+import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useI18n } from '@/lib/i18n';
 import { parseAgentHref, parseAttachmentHref, parseSkillHref, INLINE_REFERENCE_CHIP_CLASS, INTERACTIVE_REFERENCE_CHIP_CLASS, REFERENCE_CHIP_LABEL_CLASS, buildAgentMentionUrl } from '@/lib/messages/inlineMessageLinks';
 import { openAppLinkWithConfirmation } from '../appLinkConfirmation';
+<<<<<<< HEAD
 import { useMarkdownPresentation, type FileReferenceSource } from './MarkdownPresentationContext';
 import { activateMarkdownFile, resolveMarkdownFile, useOpenMarkdownFile, useOpenTappedMarkdownFile } from './markdownFileReferences';
+=======
+import { useOpenChatLink } from '../useOpenChatLink';
+import { useMarkdownPresentation, type FileReferenceSource } from './MarkdownPresentationContext';
+import { activateMarkdownFile, resolveMarkdownFile, useOpenMarkdownFile, useOpenTappedMarkdownFile, useRevealMarkdownPath } from './markdownFileReferences';
+import { localPathFromFileUrl } from '../fileReferenceParser';
+>>>>>>> bc50ba56a
 import { MarkdownMediaLinkContext, useMarkdownMedia } from './markdown-media-context';
 import { openMarkdownDocumentLink } from '@/components/views/files/previews/useMarkdownLocalAssets';
+import { claimGuestIdentifier, claimGuestUrl } from '@/lib/guests/links';
+import { useGuestsStore } from '@/lib/guests/store';
+import { isBuiltInLink, runGuestLink } from './guestLinkClick';
 
+<<<<<<< HEAD
 // A path in code text and a path in a link's href parse differently: an href
 // may percent-encode spaces and non-ASCII names, which are decoded first.
+=======
+>>>>>>> bc50ba56a
 function useConfirmedInlineFile(raw: string, inputKind: FileReferenceSource = 'path'): string | null {
   const { directory, fileReferences, confirmFile } = useMarkdownPresentation();
   const runtimeKey = getRuntimeKey();
@@ -43,6 +63,10 @@ export function MarkdownInlineCode({ children, node: _node, ...props }: React.Co
   const path = useConfirmedInlineFile(raw);
   const open = useOpenMarkdownFile();
   const openTapped = useOpenTappedMarkdownFile();
+<<<<<<< HEAD
+=======
+  const { directory, fileNavigation, fileReferences } = useMarkdownPresentation();
+>>>>>>> bc50ba56a
   const activate = (event: React.MouseEvent | React.KeyboardEvent) => {
     if (path) activateMarkdownFile(event, (external) => { void open(raw, path, external); });
   };
@@ -111,7 +135,49 @@ const textOf = (node: ExtraProps['node']): string => {
   return text.trim();
 };
 
+const modified = (event: React.MouseEvent | React.KeyboardEvent): boolean => event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+
+/**
+ * An identifier an active extension claims (`remarkGuestLinks`): drawn as a
+ * link with no address, so copying keeps the plain identifier and no file,
+ * anchor or browser route sees it; a click does what the extension declared.
+ * Text again once the extension stops claiming it.
+ */
+function GuestIdentifierLink({ identifier, className, children }: { identifier: string; className?: string; children: React.ReactNode }) {
+  const { guestLinks, directory } = useMarkdownPresentation();
+  const { t } = useI18n();
+  const claim = guestLinks ? claimGuestIdentifier(guestLinks, identifier) : null;
+  const name = useGuestsStore((state) => (claim ? state.guests.find((guest) => guest.id === claim.guestId)?.name : undefined));
+  if (!claim || !name) return <>{children}</>;
+  const activate = (event: React.MouseEvent | React.KeyboardEvent) => {
+    if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    runGuestLink(claim, 'identifier', directory, t);
+  };
+  const label = claim.action === 'open'
+    ? t('chat.guestLink.open', { identifier, name })
+    : t('chat.guestLink.attach', { identifier, name });
+  return (
+    <a
+      role="button"
+      tabIndex={0}
+      className={className ? `${className} cursor-pointer` : 'cursor-pointer'}
+      data-oc-guest-link={claim.guestId}
+      title={label}
+      aria-label={label}
+      onClick={activate}
+      onKeyDown={activate}
+    >
+      {children}
+    </a>
+  );
+}
+
 function ScreenMarkdownLink({ href, children: originalChildren, node, ...props }: React.ComponentProps<'a'> & ExtraProps) {
+  if (node?.properties.dataOcGuestLink !== undefined) {
+    return <GuestIdentifierLink identifier={textOf(node)} className={props.className}>{originalChildren}</GuestIdentifierLink>;
+  }
   // The policy dropped an unsafe or unsupported URL: the anchor stays inert,
   // as the old sanitizer left it, instead of opening the app in a new window.
   if (!href) {
@@ -134,23 +200,48 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
   const attachment = parseAttachmentHref(href);
   // VS Code keeps session links inert: its sessions live on its own OpenCode,
   // so a link to a web session opens in the browser like any other.
+<<<<<<< HEAD
   const session = parseSessionLink(href, appOwnOrigins());
+=======
+  const session = isVSCodeRuntime() ? null : parseSessionLink(href, appOwnOrigins());
+  const extensionInstall = isVSCodeRuntime() ? null : parseExtensionInstallLink(href);
+>>>>>>> bc50ba56a
   // A session or message the user's message mentioned draws as its chip.
   const mentionChips = React.useContext(SessionMentionChipsContext);
   const mentionChip = session ? mentionChips.get(sessionLinkKey(session)) : undefined;
   const app = isAppLinkUrl(href);
   const file = presentation.fileNavigation && resolveMarkdownFile(href, directory, 'click', 'href');
+<<<<<<< HEAD
   // A link whose URL is not a file but whose text is a path opens that file
   // once the file is confirmed, as the old annotation pass did.
   const probe = file || app || session || skill || agent || attachment ? href : text;
   const probeHref = Boolean(file) || (!app && !session && !skill && !agent && !attachment && Boolean(href));
   const path = useConfirmedInlineFile(probe, probeHref ? 'href' : 'path');
   const textFile = Boolean(path && probe !== href);
+=======
+  const revealPath = useRevealMarkdownPath();
+  const folder = presentation.fileNavigation && !file && revealPath ? localPathFromFileUrl(href) : null;
+  // A link whose URL is not a file but whose text is a path opens that file
+  // once the file is confirmed, as the old annotation pass did.
+  const probeHref = Boolean(file || folder || app || session || skill || agent || attachment);
+  const probe = probeHref ? href : text;
+  const path = useConfirmedInlineFile(probe, probeHref ? 'href' : 'path');
+  const textFile = Boolean(path && !probeHref);
+>>>>>>> bc50ba56a
   const external = isExternalHttpUrl(href);
   // A host's own reference (`#12`, a commit) reads as part of the text, without the site's mark.
   const reference = node?.properties.dataOcReference !== undefined;
   const favicon = external && !path && !reference ? getExternalFaviconUrl(href) : null;
+<<<<<<< HEAD
   const showPreview = presentation.loopbackPreview && isLoopbackHttpUrl(href) && directory;
+=======
+  const showPreview = presentation.loopbackPreview && isLoopbackHttpUrl(href) && directory
+    && !(isDesktopShell() && openLinksInBrowserPanel);
+  // A link an active extension claims, unless the app already reads it as something of its own.
+  const guestClaim = presentation.guestLinks && external && !session && !app && !file && !folder && !textFile && !skill && !agent && !attachment && !extensionInstall
+    ? claimGuestUrl(presentation.guestLinks, href)
+    : null;
+>>>>>>> bc50ba56a
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (media?.documentAssets && openMarkdownDocumentLink(event, media.documentAssets)) return;
     if (textFile && path) {
@@ -172,9 +263,17 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
     }
     if (skill) return;
     if (file) {
+<<<<<<< HEAD
       // The href's own parse rules, not the code-text ones: percent-encoded
       // spaces and non-ASCII names decode back to the path on disk.
       activateMarkdownFile(event, (external) => { void openFile(href, path ?? undefined, external, 'href'); });
+=======
+      activateMarkdownFile(event, (external) => { void openFile(href, path ?? undefined, external, 'href'); });
+      return;
+    }
+    if (folder && revealPath) {
+      activateMarkdownFile(event, () => revealPath(folder));
+>>>>>>> bc50ba56a
       return;
     }
     if (href.startsWith('#') && !media?.documentAssets) {
@@ -186,7 +285,14 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
       target?.scrollIntoView({ block: 'nearest' });
       return;
     }
-    if (external && !presentation.disableLinkSafety && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) {
+    // Before the browser routes, and for the user's own messages too; a modified click keeps the browser's meaning.
+    if (guestClaim && !modified(event) && !isBuiltInLink(href)
+      && runGuestLink(guestClaim, 'link', directory, t)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (external && !presentation.disableLinkSafety && !modified(event)) {
       event.preventDefault();
       event.stopPropagation();
       void openExternalUrl(href);
@@ -207,6 +313,24 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
       </span>
     );
   }
+  // A reply can offer the extension it built: a click is the go-ahead for a
+  // folder, and the approval dialog still decides what the package may do.
+  if (extensionInstall && isMobileSurfaceRuntime()) return <span>{children}</span>;
+  if (extensionInstall) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="my-1 align-middle"
+        onClick={() => requestGuestInstall({ source: extensionInstall.source, confirmed: extensionInstall.kind === 'path' })}
+      >
+        <Icon name="download" className="size-4" />
+        {children}
+      </Button>
+    );
+  }
+
   if (session && mentionChip) {
     return <SessionMentionChipButton chip={mentionChip} target={session} />;
   }

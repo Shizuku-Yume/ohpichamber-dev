@@ -18,8 +18,23 @@ import { NotesSection } from './NotesSection';
 import { PlansSection } from './PlansSection';
 import { TodosSection } from './TodosSection';
 import { useProjectTodoSend } from './useProjectTodoSend';
+<<<<<<< HEAD
+=======
+import { KnowledgeSearchBar } from './KnowledgeSearchBar';
+import { KnowledgeBackButton } from './KnowledgeEntryView';
+import { KnowledgeSplit } from './KnowledgeSplit';
+import { Button } from '@/components/ui/button';
+import { DelegatedTooltip } from '@/components/ui/row-tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { memoryDeleteKey, noteDeleteKey, planDeleteKey, usePendingKnowledgeDeletes } from './pendingKnowledgeDeletes';
+import { matchesRankQuery } from '@/lib/search/fuzzySearch';
+>>>>>>> bc50ba56a
 import { fetchSessionKnowledgeSummary, setSessionProjectContextPin, type SessionProjectContextPins } from '@/lib/sessionKnowledgeApi';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+
+/** Opens at once, the way a tooltip with no trigger of its own has to. */
+const ROW_TOOLTIP_CLASS = 'transition-none data-[starting-style]:opacity-100 data-[starting-style]:scale-100 data-[ending-style]:opacity-100 data-[ending-style]:scale-100';
 
 /** Lazy: the plan editor is a large view, and most panel visits never open it. */
 const PlanView = React.lazy(() => import('@/components/views/PlanView').then((module) => ({ default: module.PlanView })));
@@ -141,6 +156,62 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   );
 
   const isMobile = useUIStore((state) => state.isMobile);
+<<<<<<< HEAD
+=======
+  /**
+   * The panel's own width decides the layout, whether it got wide through the
+   * expand button or by being dragged: from SPLIT_MIN_WIDTH the list and the
+   * open entry sit side by side. Touch layouts always stack.
+   */
+  // A node in state rather than a ref: the panel first renders without its
+  // root while no project is selected, and must start measuring once it has one.
+  const [rootNode, setRootNode] = React.useState<HTMLDivElement | null>(null);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const attachRoot = React.useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    setRootNode(node);
+  }, []);
+  const [panelWidth, setPanelWidth] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const root = rootNode;
+    if (!root) return;
+    setPanelWidth(root.getBoundingClientRect().width);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (entry) setPanelWidth(entry.contentRect.width);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [rootNode]);
+  const wide = !isMobile && panelWidth >= SPLIT_MIN_WIDTH;
+  /**
+   * Tabs drop their labels as the strip narrows: first the inactive ones, then
+   * the active one too, so every tab stays in view as icon and count. Measured
+   * against invisible copies of the row, because the counts and the
+   * translated labels decide its width.
+   */
+  const [sectionsNode, setSectionsNode] = React.useState<HTMLElement | null>(null);
+  const [allLabelsMeasureNode, setAllLabelsMeasureNode] = React.useState<HTMLDivElement | null>(null);
+  const [activeLabelMeasureNode, setActiveLabelMeasureNode] = React.useState<HTMLDivElement | null>(null);
+  const [sectionLabels, setSectionLabels] = React.useState<'all' | 'active' | 'none'>('all');
+  React.useLayoutEffect(() => {
+    if (!sectionsNode || !allLabelsMeasureNode || !activeLabelMeasureNode) return;
+    const update = () => {
+      const available = sectionsNode.clientWidth;
+      setSectionLabels(
+        allLabelsMeasureNode.offsetWidth <= available ? 'all'
+          : activeLabelMeasureNode.offsetWidth <= available ? 'active'
+            : 'none',
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(sectionsNode);
+    observer.observe(allLabelsMeasureNode);
+    observer.observe(activeLabelMeasureNode);
+    return () => observer.disconnect();
+  }, [sectionsNode, allLabelsMeasureNode, activeLabelMeasureNode]);
+>>>>>>> bc50ba56a
   const storedTab = useUIStore((state) => state.projectContextTab);
   const setStoredTab = useUIStore((state) => state.setProjectContextTab);
   const requestedTab = TAB_ORDER.includes(storedTab as ProjectContextTab)
@@ -315,6 +386,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [projectRef, saveTodos, t]
   );
 
+<<<<<<< HEAD
   /**
    * The sidebar entries. Icons are worth their width here: a vertical list has
    * the room a horizontal strip did not, and they make the sections scannable
@@ -339,16 +411,30 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       label: t('rightSidebar.contextNotesTodo.tabs.plans'),
       count: String(counts.plans),
     },
+=======
+  const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; tooltip: string; count: number; unseen: number }> = React.useMemo(() => ([
+    { id: 'notes', icon: 'sticky-note', label: t('rightSidebar.contextNotesTodo.tabs.notes'), tooltip: t('contextTooltips.workspace.section.notes'), count: counts.notes, unseen: 0 },
+    { id: 'todos', icon: 'checkbox-circle', label: t('rightSidebar.contextNotesTodo.tabs.todos'), tooltip: t('contextTooltips.workspace.section.todos'), count: counts.todos, unseen: 0 },
+    { id: 'plans', icon: 'file-text', label: t('rightSidebar.contextNotesTodo.tabs.plans'), tooltip: t('contextTooltips.workspace.section.plans'), count: counts.plans, unseen: 0 },
+>>>>>>> bc50ba56a
     ...(memoryVisible ? [{
       id: 'memory' as const,
       icon: 'brain-4' as IconName,
       label: t('rightSidebar.contextNotesTodo.tabs.memory'),
+<<<<<<< HEAD
       // The new/changed count replaces the total when there is anything the
       // user has not seen: what the agent stored without asking is the number
       // that deserves the glance.
       count: highlightedMemoryCount > 0
         ? `${highlightedMemoryCount}/${counts.memory}`
         : String(counts.memory),
+=======
+      tooltip: t('contextTooltips.workspace.section.memory'),
+      count: counts.memory,
+      // What the agent stored without asking deserves the glance, so it gets
+      // its own mark beside the total instead of hiding inside it.
+      unseen: highlightedMemoryCount,
+>>>>>>> bc50ba56a
     }] : []),
   ]), [counts, highlightedMemoryCount, memoryVisible, t]);
 
@@ -366,6 +452,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     || projectRef.path.split('/').filter(Boolean).pop()
     || projectRef.path;
 
+<<<<<<< HEAD
   return (
     <div className={cn('flex h-full min-h-0 w-full min-w-0 flex-col', className)}>
       {/* Title and search share a row: search is a filter over what is already
@@ -462,6 +549,166 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         {/* The plan editor scrolls itself; nesting it in this scroller would
             give the panel two scrollbars for one document. */}
         <div className={cn('min-h-0 min-w-0 flex-1 p-3', openPlan ? 'overflow-hidden' : 'overflow-y-auto')}>
+=======
+  const renderSectionTab = (section: typeof sections[number], showLabel: boolean, interactive: boolean) => {
+    const isActive = activeTab === section.id;
+    const unseenTitle = t('rightSidebar.contextNotesTodo.memory.unseenTitle', { count: section.unseen });
+    const tab = (
+      <button
+        key={section.id}
+        type="button"
+        tabIndex={interactive ? undefined : -1}
+        onClick={interactive ? () => setStoredTab(section.id) : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        className={cn(
+          'flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md px-2 transition-colors',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          isActive
+            ? 'bg-interactive-selection text-interactive-selection-foreground'
+            : 'text-muted-foreground hover:text-foreground',
+        )}
+      >
+        <Icon name={section.icon} className="h-3.5 w-3.5 flex-shrink-0" />
+        {/* A hidden label stays for screen readers, which would hear only the count. */}
+        <span className={showLabel ? 'whitespace-nowrap typography-meta' : 'sr-only'}>{section.label}</span>
+        <span className="typography-micro opacity-70">{section.count}</span>
+        {section.unseen > 0 ? (
+          <span
+            className="rounded-full bg-[var(--status-success)]/15 px-1 typography-micro font-medium leading-4 text-[var(--status-success-text)]"
+            aria-label={unseenTitle}
+          >
+            {`+${section.unseen}`}
+          </span>
+        ) : null}
+      </button>
+    );
+    // The strip measured for fit is never shown, so it needs no tooltips.
+    if (!interactive) return tab;
+    return (
+      <Tooltip key={section.id}>
+        <TooltipTrigger asChild>{tab}</TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {section.tooltip}
+          {section.unseen > 0 ? <div className="text-muted-foreground">{unseenTitle}</div> : null}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
+  // Sections are the panel's header; the search is a toggle beside the
+  // panel's own buttons. In the mobile drawer, which has no panel header, the
+  // same row sits at the top of the panel.
+  const toolbar = (
+    <div className="relative flex min-w-0 flex-1 items-center gap-1 pe-1">
+      <nav
+        ref={setSectionsNode}
+        className="scrollbar-none flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+        aria-label={t('rightSidebar.contextNotesTodo.sections.label')}
+      >
+        {sections.map((section) => renderSectionTab(
+          section,
+          activeTab === section.id
+            ? sectionLabels !== 'none'
+            : !isMobile && sectionLabels === 'all',
+          true,
+        ))}
+      </nav>
+      {/* The row with every label and with the active label only, laid out
+          but never shown: their widths say which one fits the strip. */}
+      <div aria-hidden="true" className="pointer-events-none invisible absolute start-0 top-0 h-0 w-0 overflow-hidden">
+        <div ref={setAllLabelsMeasureNode} className="flex w-max items-center gap-1">
+          {sections.map((section) => renderSectionTab(section, true, false))}
+        </div>
+        <div ref={setActiveLabelMeasureNode} className="flex w-max items-center gap-1">
+          {sections.map((section) => renderSectionTab(section, activeTab === section.id, false))}
+        </div>
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleSearch}
+            aria-pressed={searchOpen}
+            className={cn('h-7 w-7 flex-shrink-0 p-0', searchOpen && 'bg-interactive-selection text-interactive-selection-foreground')}
+            aria-label={searchLabel}
+          >
+            <Icon name="search" className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>{searchOpen ? t('chat.search.close') : searchLabel}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+
+  const plansList = (
+    <PlansSection
+      projectRef={projectRef}
+      plans={contextEntry.plans}
+      query={query}
+      pinnedPlanIds={pinnedPlanIds}
+      onTogglePinned={(planId, pinned) => toggleSessionPin('plan', planId, pinned)}
+      selectedPlanId={split ? openPlanId : null}
+      // Hosts that own a fullscreen plan surface (mobile) keep it; on the
+      // desktop panel the plan opens here, in place of the list or beside it.
+      onOpenPlan={onOpenPlan ?? openPlan}
+    />
+  );
+
+  const planView = (planId: string, withBack: boolean) => (
+    <React.Suspense fallback={null}>
+      {/* The panel header belongs to this panel's tabs; the plan keeps its
+          own title row inside the panel body. */}
+      <ContextPanelHeaderSlotProvider value={null}>
+        <PlanView
+          visible={visible}
+          leading={withBack ? (
+            <KnowledgeBackButton
+              label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
+              onClick={() => setOpenEntry(null)}
+            />
+          ) : null}
+          savedProjectPlan={{ projectRef, planId }}
+          onNavigatedToChat={() => setOpenEntry(null)}
+        />
+      </ContextPanelHeaderSlotProvider>
+    </React.Suspense>
+  );
+
+  return (
+    <div ref={attachRoot} className={cn('flex h-full min-h-0 w-full min-w-0 flex-col', className)}>
+      {inPanelHeader ? (
+        <ContextPanelHeaderToolbar>{toolbar}</ContextPanelHeaderToolbar>
+      ) : (
+        <div className="flex flex-shrink-0 px-3 pt-2">{toolbar}</div>
+      )}
+
+      <div className="relative min-h-0 min-w-0 flex-1">
+      {showSearchBar ? (
+        // Over the list column in the split layout, so it never covers the
+        // open entry's toolbar.
+        <div className={cn('pointer-events-none absolute top-2 z-20', split ? 'inset-s-3' : 'inset-e-3')}>
+          <KnowledgeSearchBar
+            query={query}
+            onQueryChange={setQuery}
+            placeholder={searchLabel}
+            nothingFound={nothingFound}
+            focusRequest={searchFocusRequest}
+            onClose={closeSearch}
+          />
+        </div>
+      ) : null}
+      {/* An open entry scrolls itself; nesting it in this scroller would give
+          the panel two scrollbars for one document. In the split layout each
+          column scrolls itself. */}
+      <ScrollableOverlay
+        ref={listScrollerRef}
+        outerClassName="h-full min-w-0"
+        className={cn(split ? 'overflow-hidden' : cn('p-3', entryOpen && 'overflow-hidden'))}
+        disableHorizontal
+      >
+>>>>>>> bc50ba56a
         {activeTab === 'notes' ? (
           <NotesSection
             projectRef={projectRef}
@@ -490,6 +737,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         {activeTab === 'memory' && memoryVisible ? (
           <MemorySection projectPath={projectRef.path} query={query} />
         ) : null}
+<<<<<<< HEAD
 
         {activeTab === 'plans' && !openPlan ? (
           <PlansSection
@@ -559,6 +807,12 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         </nav>
         )}
       </div>
+=======
+      </ScrollableOverlay>
+      </div>
+
+      <DelegatedTooltip containerRef={rootRef} className={ROW_TOOLTIP_CLASS} />
+>>>>>>> bc50ba56a
 
       <TodoSendDialog
         open={send.pendingSendTarget !== null}

@@ -19,8 +19,11 @@ const RUNTIME_ENDPOINT_WILL_CHANGE_EVENT = 'openchamber:runtime-endpoint-will-ch
 let activeApiBaseUrl = '';
 let activeRuntimeKey = '';
 let instanceGeneration = 0;
+<<<<<<< HEAD
 let runtimeSwitchRevision = 0;
 export const getRuntimeSwitchRevision = (): number => runtimeSwitchRevision;
+=======
+>>>>>>> bc50ba56a
 // Null reads the native boot injection; an explicit switch replaces it, even when local.
 let activeSshForwarded: boolean | null = null;
 

@@ -1,5 +1,12 @@
 import { MessageSliceContext } from "./message/messageSliceContext";
 import React from 'react';
+<<<<<<< HEAD
+=======
+import { MessageSliceContext } from './message/messageSliceContext';
+import { modelVariantNames } from '@/lib/modelVariants';
+import { findCatalogModel, type Message, type Part } from '@/lib/opencode/model';
+import { readPromptOrigin } from '@/lib/opencode/prompt-origin';
+>>>>>>> bc50ba56a
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMessageEntry, TurnGroupingContext } from './lib/turns/types';
@@ -8,7 +15,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDeviceInfo } from '@/lib/device';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { cn } from '@/lib/utils';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 
@@ -30,6 +36,11 @@ import type { ReviewTransferDirection } from '@/lib/reviewFlow';
 import { toast } from '@/components/ui';
 import { useCopyMessageLink } from './message/useCopyMessageLink';
 import { useI18n } from '@/lib/i18n';
+<<<<<<< HEAD
+=======
+import { useSnippetsStore } from '@/stores/useSnippetsStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+>>>>>>> bc50ba56a
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
 import { useChatColumnActions } from './chatColumnSession';
@@ -111,8 +122,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const { t } = useI18n();
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const alwaysShowMessageActions = isMobile || isTablet;
+<<<<<<< HEAD
     const { currentTheme } = useThemeSystem();
+=======
+    const canPinIntoContext = !isVSCodeRuntime();
+>>>>>>> bc50ba56a
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
+    // A long answer's later rows draw the rest of this message; they carry its
+    // id for search and quotes, and name their slice so navigation and the
+    // message's anchor id stay on its first row.
+    const slice = React.useContext(MessageSliceContext);
+    const sliceName = slice?.from ? `${slice.from.partId}:${slice.from.offset}` : undefined;
 
     streamPerfCount('ui.chat_message.render');
     if (isInActiveTurn) {
@@ -276,6 +296,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
     }, [focusColumnInput, isPinnedIntoContext, isUser, message.messageId, message.role, messageCreatedAt, pinPending, sessionId, t]);
 
+<<<<<<< HEAD
     const themeVariant = currentTheme?.metadata.variant;
     const isDarkTheme = React.useMemo(() => {
         if (themeVariant) {
@@ -285,6 +306,20 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [themeVariant]);
 
     const nextRole = nextMessage?.role ?? null;
+=======
+    const shouldAnimateMessage = React.useMemo(() => {
+        if (isUser) return false;
+        const freshnessDetector = MessageFreshnessDetector.getInstance();
+        return freshnessDetector.shouldAnimateMessage(message.info, message.info.sessionID);
+    }, [message.info, isUser]);
+
+    const [hasStartedStreamingHeader, setHasStartedStreamingHeader] = React.useState(false);
+
+    const nextRole = React.useMemo(() => {
+        if (!nextMessage) return null;
+        return deriveMessageRole(nextMessage.info);
+    }, [nextMessage]);
+>>>>>>> bc50ba56a
 
     const hasTurnGrouping = Boolean(turnGroupingContext);
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
@@ -374,6 +409,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return true;
     }, [isUser, messageTextContent]);
 
+<<<<<<< HEAD
+=======
+    const handleSaveAsSnippet = React.useCallback(() => {
+        useSnippetsStore.getState().openQuickCreate({ content: messageTextContent });
+    }, [messageTextContent]);
+
+    const handleCopyTurn = React.useCallback(async () => {
+        const turnText = [...(earlierAssistantText ?? []), messageTextContent].filter((text) => text.length > 0).join('\n\n');
+        const result = await copyAssistantText(turnText);
+        return result.ok;
+    }, [earlierAssistantText, messageTextContent]);
+
+>>>>>>> bc50ba56a
     const handleRevert = React.useCallback(() => {
         if (!sessionId || !message.messageId) return;
         void useSessionUIStore.getState().revertToMessage(sessionId, message.messageId);
@@ -487,6 +535,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             <div
                 className={cn(
                     'group w-full',
+<<<<<<< HEAD
                     isUser ? (isMobile ? 'pt-2' : 'pt-4') : assistantTopPaddingClass,
                     isUser ? 'pb-0' : (isFollowedByAssistant || nextIsHiddenUserMessage) ? 'pb-0' : 'pb-2'
                 )}
@@ -494,11 +543,23 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 data-message-id={message.messageId}
                 data-message-slice={sliceName}
                 data-message-continues={slice?.to ? "" : undefined}
+=======
+                    isUser ? (isMobile ? 'pt-2' : 'pt-4') : 'pt-0',
+                    // In the transcript the gap under an answer is the
+                    // turn's (TurnItem gapBelow); only ungrouped lists (BTW) keep it here.
+                    isUser || hasTurnGrouping || isFollowedByAssistant || nextIsHiddenUserMessage ? 'pb-0' : 'pb-2'
+                )}
+                id={sliceName ? undefined : `message-${message.info.id}`}
+                data-message-id={message.info.id}
+                data-message-slice={sliceName}
+                data-message-continues={slice?.to ? '' : undefined}
+>>>>>>> bc50ba56a
                 data-message-row={slice ? `${slice.index}/${slice.count}` : undefined}
                 ref={messageContainerRef}
             >
                 <div className="chat-message-column relative">
                     {isUser ? (
+<<<<<<< HEAD
                         <FadeInOnReveal
                             forceAnimation
                             skipAnimation={!animateUserOnMount}
@@ -591,6 +652,102 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             extraActions={guestMessageActions}
                                         />
                                     ) : null}
+=======
+                        visibleParts.length === 0 ? null : (
+                            <FadeInOnReveal
+                                forceAnimation
+                                skipAnimation={!animateUserOnMount}
+                                ignoreContextDisabled
+                                respectReducedMotion
+                            >
+                                {/* In a sticky turn header (TurnItem) the desktop row keeps
+                                    the whole 44px gap to the reply, under the header's fade. */}
+                                <div className={cn('relative flex flex-col items-end', !isMobile ? 'group/user-shell in-data-[turn-sticky-header]:pb-3' : undefined)}>
+                                    {/* peek: the action row is suppressed, so reserve only its
+                                        gap to the next message, OUTSIDE the bubble background. */}
+                                    <div className={cn('max-w-[85%]', chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
+                                        <div
+                                            style={{
+                                                backgroundColor: 'var(--chat-user-message-bg)',
+                                                borderRadius: userMessageRadius,
+                                                borderBottomRightRadius: 'var(--radius-sm)',
+                                            }}
+                                            className="px-5 py-3 shadow-none border border-primary/5"
+                                            data-user-message-bubble=""
+                                        >
+                                            <MessageBody
+                                                messageId={message.info.id}
+                                                parts={visibleParts}
+                                                isUser={isUser}
+                                                isMessageCompleted={isMessageCompleted}
+                                                messageFinish={messageFinish}
+                                                messageCreatedAt={messageCreatedAt ?? undefined}
+                                                 isMobile={isMobile}
+                                                 alwaysShowActions={alwaysShowMessageActions}
+                                                 hasTouchInput={hasTouchInput}
+                                                copiedCode={copiedCode}
+                                                onCopyCode={handleCopyCode}
+                                                expandedTools={expandedTools}
+                                                onToggleTool={handleToggleTool}
+                                                onShowPopup={handleShowPopup}
+                                                streamPhase={streamPhase}
+                                                allowAnimation={allowAnimation}
+                                                shouldShowHeader={false}
+                                                hasTextContent={hasTextContent}
+                                                onCopyMessage={handleCopyMessage}
+                                                onCopyLink={handleCopyLink}
+                                                copiedMessage={copiedMessage}
+                                                onSaveAsSnippet={handleSaveAsSnippet}
+                                                showReasoningTraces={showReasoningTraces}
+                                                agentMention={agentMention}
+                                                onRevert={handleRevert}
+                                                onFork={isUser ? handleFork : undefined}
+                                                contextPinned={isPinnedIntoContext}
+                                                contextPinPending={pinPending}
+                                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
+                                                errorMessage={assistantErrorText}
+                                                errorResponseBody={assistantErrorResponseBody}
+                                                extraActions={guestMessageActions}
+                                                promptOrigin={promptOrigin}
+                                            />
+                                        </div>
+                                    </div>
+                                    <MessageBody
+                                        messageId={message.info.id}
+                                        parts={visibleParts}
+                                        isUser={isUser}
+                                        isMessageCompleted={isMessageCompleted}
+                                        messageFinish={messageFinish}
+                                        messageCreatedAt={messageCreatedAt ?? undefined}
+                                        isMobile={isMobile}
+                                        alwaysShowActions={alwaysShowMessageActions}
+                                        hasTouchInput={hasTouchInput}
+                                        copiedCode={copiedCode}
+                                        onCopyCode={handleCopyCode}
+                                        expandedTools={expandedTools}
+                                        onToggleTool={handleToggleTool}
+                                        onShowPopup={handleShowPopup}
+                                        streamPhase={streamPhase}
+                                        allowAnimation={allowAnimation}
+                                        shouldShowHeader={false}
+                                        hasTextContent={hasTextContent}
+                                        onCopyMessage={handleCopyMessage}
+                                        onCopyLink={handleCopyLink}
+                                        copiedMessage={copiedMessage}
+                                        onSaveAsSnippet={handleSaveAsSnippet}
+                                        showReasoningTraces={showReasoningTraces}
+                                        agentMention={agentMention}
+                                        onRevert={handleRevert}
+                                        onFork={isUser ? handleFork : undefined}
+                                        contextPinned={isPinnedIntoContext}
+                                        contextPinPending={pinPending}
+                                        onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
+                                        errorMessage={assistantErrorText}
+                                        errorResponseBody={assistantErrorResponseBody}
+                                        userMessagePart="actions"
+                                        extraActions={guestMessageActions}
+                                    />
+>>>>>>> bc50ba56a
                                 </div>
                             </div>
                         </FadeInOnReveal>
@@ -626,7 +783,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 reviewTransferDirection={reviewTransferDirection}
                                 footerProviderID={headerProviderID}
                                 footerModelName={headerModelName}
+<<<<<<< HEAD
                                 isDarkTheme={isDarkTheme}
+=======
+                                footerAgentName={headerAgentName}
+                                footerVariant={headerVariant}
+>>>>>>> bc50ba56a
                                 extraActions={guestMessageActions}
                             />
                         </div>

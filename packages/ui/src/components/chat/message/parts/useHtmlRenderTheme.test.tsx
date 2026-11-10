@@ -52,7 +52,11 @@ describe('a drawn page follows the interface settings', () => {
     let root: Root;
 
     beforeEach(async () => {
+<<<<<<< HEAD
         (useUIStore.setState as unknown as (s: unknown) => void)({ fontSize: 100, chatFontSize: 100, uiFont: 'custom', customUiFont: 'Inter' });
+=======
+        useUIStore.setState({ fontSize: 100, chatFontSize: 100, uiFont: 'custom', customUiFont: 'Inter' });
+>>>>>>> bc50ba56a
         root = createRoot(document.createElement('div'));
         await act(async () => root.render(<ThemeSystemProvider><AppRoot><Page /></AppRoot></ThemeSystemProvider>));
     });

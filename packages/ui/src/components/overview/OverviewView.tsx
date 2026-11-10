@@ -89,6 +89,10 @@ const ACTIVITY_KEY = {
   running: 'overview.activity.running',
   subagent: 'overview.activity.subagent',
   shell: 'overview.activity.shell',
+<<<<<<< HEAD
+=======
+  image: 'overview.activity.image',
+>>>>>>> bc50ba56a
   pullRequest: 'sessions.sidebar.session.status.waitingOnPullRequest',
 } satisfies Record<OverviewActivity, I18nKey>;
 

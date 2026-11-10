@@ -44,7 +44,11 @@ import { OpenChamberControlError, asControlError } from '../openchamber-control/
  * @param {(directory: string) => Promise<Array<{ ref: string, message: string, hash: string }>>} dependencies.listStashes
  * @param {(directory: string, options: { remote: 'local' }) => Promise<{ all: string[], defaultBranches: Record<string, string> }>} dependencies.getBranches
  * @param {(directory: string) => Promise<{ root: string }>} dependencies.resolvePrimaryWorktreeRoot
+<<<<<<< HEAD
  * @param {(sessionId: string, directory: string, context: { worktreeRoot: string, worktree: object }) => Promise<object[] | void>} dependencies.moveSession
+=======
+ * @param {(sessionId: string, directory: string) => Promise<void>} dependencies.moveSession
+>>>>>>> bc50ba56a
  * @param {(sourceDirectory: string) => Promise<{ startCommand: string, untrustedSkipped: string[] }>} [dependencies.resolveWorktreeSetup]
  *   The project's setup commands for the new worktree (`../projects/worktree-setup.js`); none without it.
  * @param {(message: string, error: unknown) => void} [dependencies.warn]
@@ -201,7 +205,11 @@ export const createSessionWorktreeMover = (dependencies) => {
       if (branchName) worktreeInput.branchName = branchName;
     }
     // The setup runs inside the bootstrap, so the session moves into a worktree it already prepared.
+<<<<<<< HEAD
     const setup = input.setup ?? await resolveWorktreeSetup(source);
+=======
+    const setup = await resolveWorktreeSetup(source);
+>>>>>>> bc50ba56a
     if (setup.startCommand) worktreeInput.startCommand = setup.startCommand;
 
     let worktree;
@@ -232,6 +240,7 @@ export const createSessionWorktreeMover = (dependencies) => {
     try {
       ({ setupStillRunning } = await waitForWorktreeReady(worktree.path));
       if (!setupStillRunning) {
+<<<<<<< HEAD
         start = input.startDirectory
           ? await input.startDirectory({ sourceDirectory: source, worktreeRoot: worktree.path })
           : await resolveStartDirectory({ sourceDirectory: source, worktreeRoot: worktree.path });
@@ -240,6 +249,11 @@ export const createSessionWorktreeMover = (dependencies) => {
         // needs the checkout, not only the start folder inside it.
         const relocate = input.moveSession ?? moveSession;
         movedSessions = await relocate(sessionId, start.directory, { worktreeRoot: worktree.path, worktree }) ?? null;
+=======
+        start = await resolveStartDirectory({ sourceDirectory: source, worktreeRoot: worktree.path });
+        if (paths.length > 0) stash = await carryChanges({ source, destination: worktree.path, sessionId, name, paths });
+        await moveSession(sessionId, start.directory);
+>>>>>>> bc50ba56a
       }
     } catch (error) {
       // The removal first stops the setup commands and waits for the bootstrap,

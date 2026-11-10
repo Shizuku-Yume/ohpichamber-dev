@@ -3,7 +3,11 @@ import { z } from 'zod';
 import type { FrameScrollDirection } from '@/components/chat/lib/scroll/timelineScrollIntent';
 import { PREVIEW_BRIDGE_CHANNEL } from '@/lib/browser/previewFrameHost';
 import type { ChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
+<<<<<<< HEAD
 import type { JsonValue } from '@openchamber/agent-contract';
+=======
+import type { JsonValue } from '@/lib/opencode/model';
+>>>>>>> bc50ba56a
 import { chartSeriesColors, KIT_SHARED_CSS, kitVariables } from '@/components/chat/lib/visualKit';
 import { getReadableThemeColors } from '@/lib/theme/readableColors';
 import type { Theme } from '@/types/theme';

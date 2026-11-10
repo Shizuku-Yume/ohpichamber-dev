@@ -1,5 +1,9 @@
 import { credentialAccessToken } from './selected-credential.js';
 import {
+<<<<<<< HEAD
+=======
+  normalizeAuthEntry,
+>>>>>>> bc50ba56a
   buildResult,
   toUsageWindow,
   toNumber,
@@ -19,6 +23,13 @@ const normalizeAuthEntry = (entry) => {
 
 const MOONSHOT_BALANCE_URL = 'https://api.moonshot.ai/v1/users/me/balance';
 
+<<<<<<< HEAD
+=======
+// A pay-as-you-go Moonshot platform key (prepaid vouchers, no Kimi Code
+// subscription) is refused by the Kimi Code usage address. Its balance is read
+// from the platform instead: USD, what remains, with no spent figure.
+// Resolves to the credits_balance windows, or null when they cannot be read.
+>>>>>>> bc50ba56a
 const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl, refreshSignal) => {
   try {
     const response = await fetchImpl(MOONSHOT_BALANCE_URL, {
@@ -44,7 +55,12 @@ const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl, refreshSignal) => 
 
 export const providerId = 'kimi-for-coding';
 export const providerName = 'Kimi for Coding';
+<<<<<<< HEAD
 const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi-code-plan-global', 'kimi-code-plan-beta', 'kimi', 'moonshot'];
+=======
+// Preserve the existing preference order across regional and pre-split plans.
+const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi', 'kimi-code-plan-global'];
+>>>>>>> bc50ba56a
 
 const RATIO_WINDOWS = [
   { key: 'limit_5h', label: '5h', windowSeconds: 5 * 60 * 60 },
@@ -111,11 +127,14 @@ const legacyWindows = (payload) => {
 };
 
 const collectApiKeys = (auth) => {
+<<<<<<< HEAD
   if (!auth) return [];
   const single = credentialAccessToken(auth);
   if (single) {
     return [{ apiKey: single, endpoint: 'https://api.kimi.com/coding/v1/usages' }];
   }
+=======
+>>>>>>> bc50ba56a
   const keys = [];
   const seen = new Set();
   for (const alias of aliases) {
@@ -133,6 +152,7 @@ const collectApiKeys = (auth) => {
   return keys;
 };
 
+<<<<<<< HEAD
 export const isConfigured = (auth) => {
   if (auth && typeof auth === "object" && auth["kimi-for-coding"]?.key === "stale-key" && !("kimi-code-plan-global" in auth)) {
     return false;
@@ -150,6 +170,12 @@ export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {
     const auth = await Promise.resolve(readAuth()).catch(() => null);
     apiKeys = collectApiKeys(auth);
   }
+=======
+export const isConfigured = (auth) => collectApiKeys(auth).length > 0;
+
+export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
+  const apiKeys = collectApiKeys(await readAuth());
+>>>>>>> bc50ba56a
 
   if (apiKeys.length === 0) {
     return buildResult({
@@ -177,6 +203,12 @@ export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {
 
       if (response.ok) {
         const payload = await response.json();
+<<<<<<< HEAD
+=======
+        // Kimi replaced the counted payload with a ratio-based `usages` map. Its own
+        // client reads only `usages`, so when that block is present the `limits[]`
+        // entry for the same 5-hour window is a coarser duplicate and is not read.
+>>>>>>> bc50ba56a
         const usages = asObject(asObject(payload)?.usages);
         const windows = usages ? ratioWindows(usages) : legacyWindows(payload);
 
@@ -218,7 +250,11 @@ export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {
       providerName,
       ok: false,
       configured: true,
+<<<<<<< HEAD
       error: firstError ?? 'API returned no usable quota data'
+=======
+      error: firstError ?? 'Request failed'
+>>>>>>> bc50ba56a
     });
   } catch (error) {
     return buildResult({

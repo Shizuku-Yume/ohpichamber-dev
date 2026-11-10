@@ -6,8 +6,10 @@ import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useInputStore } from '@/sync/input-store';
+import { attachmentWireName } from '@/lib/attachmentIdentity';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { CreateMultiRunParams } from '@/types/multirun';
 
@@ -192,6 +194,7 @@ export function useParallelComposer(input: {
 
     const title = runTitleFrom(variants[0].text) || t('chat.parallel.defaultTitle');
     const attachments = useInputStore.getState().attachedFiles;
+<<<<<<< HEAD
     const attachmentWorkspaceId = attachments.length > 0
       ? (await canonicalClient.resolveWorkspace(project.path)).workspaceId
       : undefined;
@@ -202,6 +205,10 @@ export function useParallelComposer(input: {
         file.dataUrl,
       )))
       : [];
+=======
+    const config = useConfigStore.getState();
+    const ui = useUIStore.getState();
+>>>>>>> bc50ba56a
     const params: CreateMultiRunParams = {
       name: title,
       title,
@@ -216,14 +223,23 @@ export function useParallelComposer(input: {
       })),
       isolateRuns: current.isolate,
       worktreeBaseBranch: current.isolate ? current.baseBranch || undefined : undefined,
+<<<<<<< HEAD
       files: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       attachmentWorkspaceId,
+=======
+      files: attachments.length > 0
+        ? attachments.map((file) => ({ mime: file.mimeType, filename: attachmentWireName(file), url: file.dataUrl }))
+        : undefined,
+>>>>>>> bc50ba56a
       setupCommands: current.isolate ? current.setupCommands?.filter((command) => command.trim()) : undefined,
       autoFusion: current.fuse
         ? { providerId: current.fuse.providerId, modelId: current.fuse.modelId, variant: current.fuse.variant }
         : undefined,
       goal: useSessionGoalArmStore.getState().armed
         ? { tokenBudget: useUIStore.getState().sessionGoalDefaultBudgetEnabled ? useUIStore.getState().sessionGoalDefaultBudget : null }
+        : undefined,
+      goal: useSessionGoalArmStore.getState().armed
+        ? { tokenBudget: ui.sessionGoalDefaultBudgetEnabled ? ui.sessionGoalDefaultBudget : null }
         : undefined,
     };
 
@@ -238,6 +254,10 @@ export function useParallelComposer(input: {
       setMessage('');
       useInputStore.getState().clearAttachedFiles();
       setState(null);
+<<<<<<< HEAD
+=======
+      // A launch that made no sessions keeps the arm, with the prompt, for the retry.
+>>>>>>> bc50ba56a
       if (params.goal) useSessionGoalArmStore.getState().setArmed(false);
       useUIStore.getState().setRunOverviewKey(result.groupKey);
     } finally {

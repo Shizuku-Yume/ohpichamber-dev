@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Session } from '@/lib/opencode/model';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { refreshGlobalSessions, refreshGlobalSessionsForDirectories, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useChildStoreManager } from '@/sync/sync-context';
@@ -10,7 +11,20 @@ import { buildSessionBootstrapDemands } from './sessionBootstrapDemands';
 import { buildKnownSessionDirectories } from './sessionListDirectories';
 import { useAuthoritativeSessionCleanup } from './useAuthoritativeSessionCleanup';
 
+<<<<<<< HEAD
 export const useSessionListSync = () => {
+=======
+const EMPTY_WORKTREES_BY_PROJECT = new Map();
+const EMPTY_SESSIONS: Session[] = [];
+
+type UseSessionListSyncOptions = {
+  isVSCode: boolean;
+};
+
+export const useSessionListSync = ({
+  isVSCode,
+}: UseSessionListSyncOptions) => {
+>>>>>>> bc50ba56a
   const childStores = useChildStoreManager();
   const projects = useProjectsStore((state) => state.projects);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -20,9 +34,7 @@ export const useSessionListSync = () => {
     () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
     [availableWorktreesByProject, projects],
   );
-  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
-  const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
-  const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
+  const authoritativeSessions = useGlobalSessionsStore((state) => state.authoritativeSessions);
   const bootstrapDemandOwner = `session-list-sync:${React.useId()}`;
 
   // The only bootstrap demand owner. Known projects and worktrees are not
@@ -75,15 +87,18 @@ export const useSessionListSync = () => {
     };
   }, []);
 
+<<<<<<< HEAD
   // The fork's global list is authoritative as a whole once its status is
   // ready; there is no separate snapshot to prefer.
   const cleanupSessions = React.useMemo(
     () => [...globalActiveSessions, ...archivedSessions],
     [archivedSessions, globalActiveSessions],
   );
+=======
+>>>>>>> bc50ba56a
   useAuthoritativeSessionCleanup({
     enabled: true,
-    hasAuthoritativeGlobalSessions,
-    sessions: cleanupSessions,
+    hasAuthoritativeGlobalSessions: authoritativeSessions != null,
+    sessions: authoritativeSessions ?? EMPTY_SESSIONS,
   });
 };

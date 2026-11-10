@@ -52,6 +52,12 @@ const session = (sessionId: string, directory: string | null): Session => {
 
 
 describe('projectSidebarActiveSessions', () => {
+  test('admits project descendants but not sibling prefixes or differently cased host paths', () => {
+    expect(projectSidebarActiveSessions({
+      globalActiveSessions: [session('child', '/Kept/subdir'), session('sibling', '/Kept-other'), session('case', '/kept')],
+      liveSessions: [], knownDirectories: new Set(['/Kept']), isVSCode: false,
+    }).map(entry => entry.id)).toEqual(['child']);
+  });
   test('keeps case-insensitive membership local to projection without rewriting request paths', () => {
     const knownDirectories = new Set(['/Users/Developer/Project']);
     const input = {
@@ -92,7 +98,7 @@ describe('projectSidebarActiveSessions', () => {
     }).map((entry) => entry.sessionId)).toEqual(['known']);
   });
 
-  test('allows missing or unknown directories for web when no directories are known', () => {
+  test('hides missing or unknown directories for web when no projects are registered', () => {
     const sessions = [session('unknown', '/workspace/unknown'), session('empty', null)];
 
     expect(projectSidebarActiveSessions({
@@ -100,10 +106,14 @@ describe('projectSidebarActiveSessions', () => {
       liveSessions: [],
       knownDirectories: new Set(),
       isVSCode: false,
+<<<<<<< HEAD
     }).map((entry) => entry.sessionId)).toEqual(['unknown', 'empty']);
+=======
+    }).map((entry) => entry.id)).toEqual([]);
+>>>>>>> bc50ba56a
   });
 
-  test('retains unknown active full-app records when topology directories are known', () => {
+  test('hides unknown active full-app records without removing raw input records', () => {
     const restored = { ...session('restored', '/deleted/worktrees/feature'), time: { created: 1, updated: 1 } };
 
     expect(projectSidebarActiveSessions({
@@ -111,10 +121,15 @@ describe('projectSidebarActiveSessions', () => {
       liveSessions: [],
       knownDirectories: new Set(['/workspace/known']),
       isVSCode: false,
+<<<<<<< HEAD
     }).map((entry) => entry.sessionId)).toEqual(['restored']);
+=======
+    }).map((entry) => entry.id)).toEqual([]);
+    expect(restored.id).toBe('restored');
+>>>>>>> bc50ba56a
   });
 
-  test('keeps archived sessions despite directory filtering', () => {
+  test('hides archived sessions in unregistered directories too', () => {
     const archived = session('archived', '/workspace/unknown');
     archived.archivedAt = 1;
 
@@ -123,7 +138,11 @@ describe('projectSidebarActiveSessions', () => {
       liveSessions: [],
       knownDirectories: new Set(['/workspace/known']),
       isVSCode: true,
+<<<<<<< HEAD
     }).map((entry) => entry.sessionId)).toEqual(['archived']);
+=======
+    }).map((entry) => entry.id)).toEqual([]);
+>>>>>>> bc50ba56a
   });
 
   test('does not replace a filtered global record with a live duplicate', () => {
@@ -209,6 +228,29 @@ describe('projectSidebarCollection', () => {
     expect(projection.orderedSessions.map(entry => entry.sessionId)).toContain('canonical-chat');
   });
 
+
+  test('keeps workflow agents in the hierarchy, where their requests count for the parent', () => {
+    const parent = { ...session('parent', '/workspace/a'), time: { created: 1, updated: 1 } };
+    const subagent = { ...session('subagent', '/workspace/a'), parentID: 'parent', time: { created: 2, updated: 2 } };
+    const agent = {
+      ...session('workflow-agent', '/workspace/a'),
+      parentID: 'parent',
+      time: { created: 3, updated: 3 },
+      metadata: { openchamber: { kind: 'workflow-agent' } },
+    };
+
+    const projection = buildSidebarSessionProjection({
+      globalActiveSessions: [parent, subagent, agent],
+      liveSessions: [],
+      knownDirectories: new Set(['/workspace/a']),
+      isVSCode: false,
+      pinnedSessionIds: new Set(),
+      sessionOrderRanks: new Map(),
+    });
+
+    // Their rows are left out where rows are listed (`listedChildren`).
+    expect(projection.childrenMap.get('parent')?.map((entry) => entry.id).sort()).toEqual(['subagent', 'workflow-agent']);
+  });
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
     const managedRoot = { ...session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root'), time: { created: 1, updated: 1 } };

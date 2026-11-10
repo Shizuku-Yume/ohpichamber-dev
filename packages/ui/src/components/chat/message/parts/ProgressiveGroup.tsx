@@ -1,6 +1,7 @@
 import { parseNativeReadPath, toolDescription, toolInputPath } from '@/lib/toolHelpers';
 import type { ToolCallPart } from '@openchamber/agent-contract';
 import React from 'react';
+import { ChatExternalLink } from './ChatExternalLink';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { cn } from '@/lib/utils';
 import type { TurnActivityRecord as TurnActivityPart } from '../../lib/turns/types';
@@ -15,11 +16,19 @@ import { Text } from '@/components/ui/text';
 import { Icon } from "@/components/icon/Icon";
 import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './toolPresentation';
+<<<<<<< HEAD
 import { getToolMetadata } from '@/lib/toolHelpers';
+=======
+import { getToolMetadata, isImageFile } from '@/lib/toolHelpers';
+import { Icon } from '@/components/icon/Icon';
+import { HoverTooltip } from '@/components/ui/row-tooltip';
+import { useI18n } from '@/lib/i18n';
+import { useDeviceInfo } from '@/lib/device';
+>>>>>>> bc50ba56a
 import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
 import { isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useUIStore } from '@/stores/useUIStore';
 
 import ReasoningPart from './ReasoningPart';
@@ -408,8 +417,13 @@ const StaticToolRowInner: React.FC<{
     const isReadGroup = toolName === 'read';
     const runtime = React.useContext(RuntimeAPIContext);
     const mobileActions = useMobileAppActions();
+<<<<<<< HEAD
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
+=======
+    const currentDirectory = useEffectiveDirectory() ?? '';
+    const skills = useSkillsStore((state) => state.skills);
+>>>>>>> bc50ba56a
     const hasRunningActivity = React.useMemo(() => activities.some((activity) => isActivityRunning(activity)), [activities]);
 
     const descriptions = React.useMemo(() => {
@@ -514,6 +528,7 @@ const StaticToolRowInner: React.FC<{
             </MinDurationShineText>
             {isReadGroup && readFileEntries.length > 0
                 ? readFileEntries.map((entry) => (
+<<<<<<< HEAD
                     <button
                         key={entry.path}
                         type="button"
@@ -529,6 +544,44 @@ const StaticToolRowInner: React.FC<{
                         {showToolFileIcons ? <FileTypeIcon filePath={entry.path} className="h-3.5 w-3.5" /> : null}
                         {renderReadFilePath(entry.displayPath, animateTailText)}
                     </button>
+=======
+                    <React.Fragment key={entry.path}>
+                        {canOpenImageExpanded && isImageFile(entry.path) ? (
+                            <HoverTooltip label={t('contextTooltips.chat.openImage')}>
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handleOpenImageExpanded(entry.path);
+                                    }}
+                                    className={cn(
+                                        'flex-shrink-0 inline-flex h-4 w-4 items-center justify-center rounded transition-opacity hover:bg-interactive-hover',
+                                        'opacity-60 hover:opacity-100 focus-visible:opacity-100',
+                                    )}
+                                    style={{ color: 'var(--tools-icon)' }}
+                                    aria-label={t('chat.toolPart.openImageExpanded')}
+                                >
+                                    <Icon name="fullscreen" className="h-3 w-3" />
+                                </button>
+                            </HoverTooltip>
+                        ) : null}
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleFileClick(entry.path, entry.offset);
+                            }}
+                            className={cn('inline-flex !min-h-0 items-center justify-start gap-1 min-w-0 flex-1 text-start hover:opacity-90', TOOL_ROW_DESCRIPTION_CLASS)}
+                            style={{ color: 'var(--tools-description)' }}
+                            title={entry.offset ? `${entry.displayPath}:${entry.offset}` : entry.displayPath}
+                        >
+                            {showToolFileIcons ? <FileTypeIcon filePath={entry.path} className="h-3.5 w-3.5" /> : null}
+                            {renderReadFilePath(entry.displayPath, animateTailText)}
+                        </button>
+                    </React.Fragment>
+>>>>>>> bc50ba56a
                 ))
                 : null}
             {isSearchGroup && descriptions.length > 0
@@ -547,11 +600,9 @@ const StaticToolRowInner: React.FC<{
                 : null}
             {isFetchGroup && descriptions.length > 0
                 ? descriptions.map((url, index) => (
-                    <a
+                    <ChatExternalLink
                         key={`${url}-${index}`}
                         href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className={cn(
                             'min-w-0 flex-1 inline-flex items-center gap-1.5 underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
                             'truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS
@@ -561,7 +612,7 @@ const StaticToolRowInner: React.FC<{
                     >
                         <ExternalLinkFavicon href={url} />
                         <span className="min-w-0 truncate">{url}</span>
-                    </a>
+                    </ChatExternalLink>
                 ))
                 : null}
             {!isReadGroup && !isSearchGroup && !isFetchGroup && descriptions.length > 0 ? (

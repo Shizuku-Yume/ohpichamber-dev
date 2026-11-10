@@ -2,14 +2,35 @@ import { createRipgrepResolver } from '../fs/ripgrep.js';
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerEnvironmentRoutes } from '../environment/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
+=======
+import { createExtensionQuotaProviders } from '../quota/extension-quotas.js';
+import { registerSmallModelRoutes } from '../small-model/routes.js';
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
 import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
 import { registerSourceControlRoutes } from '../source-control/routes.js';
 import { registerLinearRoutes } from '../linear/routes.js';
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
 import { registerGuestRoutes, settleGuestDeactivationListeners } from '../guests/routes.js';
 import { listInstalledGuests, registerBuiltInGuests } from '../guests/catalog.js';
 import { proxyGuestServiceRequest } from '../guests/service.js';
+=======
+import { registerTrackerRoutes } from '../trackers/routes.js';
+import { createExtensionTrackers } from '../trackers/extension-trackers.js';
+import { createTrackerAccounts, trackerAccountsPersistPath } from '../trackers/extension-accounts.js';
+import { createTrackerOAuth } from '../trackers/extension-oauth.js';
+import { registerGuestRoutes, settleGuestDeactivationListeners } from '../guests/routes.js';
+import { listInstalledGuests, registerBuiltInGuests } from '../guests/catalog.js';
+import { setHostCallbackRoute } from '../guests/host-callback.js';
+import { createGuestOpenCodeProvider } from '../guests/opencode-provider/index.js';
+import { configureGuestOpenCodeProvider } from '../guests/service.js';
+import { registerNotificationChannelRoutes } from '../notifications/channel-routes.js';
+import { createOutboundHandles } from '../source-control/outbound-handles.js';
+import { createExtensionProviders } from '../source-control/extension-providers.js';
+import { SOURCE_CONTROL_OUTBOUND_PATH, TRACKER_OUTBOUND_PATH } from '@openchamber/sdk';
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
 import { extensionsPersistPath } from '../guests/persist.js';
-import { registerGitRoutes } from '../git/routes.js';
+import { createWorktreeInstanceDisposer, registerGitRoutes } from '../git/routes.js';
 import { registerDevServerRoutes } from '../dev-servers/routes.js';
 import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
@@ -21,11 +42,21 @@ import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
 import { registerBehaviorRoutes } from './behavior-routes.js';
 import { registerMessageSearchRoutes } from '../message-search/routes.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
 import { registerRoutingRoutes } from '../routing/routes.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
+=======
+import { registerAutoReviewRoutes } from '../auto-review/runtime.js';
+import { registerPrWatchRoutes } from '../pr-watch/runtime.js';
+import { registerWorkflowRoutes } from '../workflows/routes.js';
+import { registerRoutingPromptRewrite, registerRoutingRoutes } from '../routing/routes.js';
+import { registerConfigEntityRoutes } from './config-entity-routes.js';
+import { createThemeFolderWatch } from './theme-watch.js';
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { createThemeFolderWatch } from './theme-watch.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
+import { registerProviderLogoRoutes } from './provider-logo-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { fillScheduledWorktreeBridge } from '../scheduled-tasks/worktree-bridge.js';
 import { createTrackedItemsService } from '../tracked-items/service.js';
@@ -36,8 +67,46 @@ import { registerTrackedItemsRoutes } from '../tracked-items/routes.js';
 import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes.js';
 import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
 import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
 import { createSkillRepositoryIdentityResolver } from './skill-repository-identity.js';
 import fs from 'node:fs';
+=======
+import { registerSkillRoutes } from './skill-routes.js';
+import { registerPluginRoutes } from './plugin-routes.js';
+import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
+import { parseNpmSpec, parsePathSpec, isExactSemver } from './plugin-spec.js';
+import { registerOpenCodeRoutes } from './routes.js';
+import { getProviderSources, removeProviderConfig, upsertProviderConfig } from './providers.js';
+import { getAgentSources, getAgentConfig, getAgentPermissions, createAgent, updateAgent, deleteAgent, listDisabledAgents } from './agents.js';
+import { getCommandSources, getCommandConfig, createCommand, updateCommand, deleteCommand } from './commands.js';
+import { listMcpConfigs, getMcpConfig, createMcpConfig, updateMcpConfig, deleteMcpConfig } from './mcp.js';
+import { listSnippets, getSnippet, createSnippet, updateSnippet, deleteSnippet, expandSnippets, previewSnippet } from './snippets.js';
+import {
+  listPluginEntries,
+  getPluginEntry,
+  readGlobalPluginEntries,
+  addGlobalPluginEntry,
+  createPluginEntry,
+  updatePluginEntry,
+  deletePluginEntry,
+  setPluginEntryEnabled,
+  setPluginFileEnabled,
+  listPluginDirFiles,
+  readPluginDirFile,
+  writePluginDirFile,
+  deletePluginDirFile,
+  encodePluginId,
+  decodePluginId,
+} from './plugins.js';
+import { SKILL_DIR, SKILL_SCOPE, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile } from './shared.js';
+import { getSkillSources, discoverSkills, mergeDiscoveredSkills, createSkill, updateSkill, deleteSkill, renameSkill, isManagedSkillPath } from './skills.js';
+import { getCuratedSkillsSources } from '../skills-catalog/curated-sources.js';
+import { getCacheKey, scanWithCache } from '../skills-catalog/cache.js';
+import { parseSkillRepoSource } from '../skills-catalog/source.js';
+import { scanSkillsRepository } from '../skills-catalog/scan.js';
+import { installSkillsFromRepository } from '../skills-catalog/install.js';
+import { fetchGitHubRepoMetas } from '../skills-catalog/github-meta.js';
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
 import crypto from 'node:crypto';
 import { createSourceControlAuthStore } from '../source-control/auth-storage.js';
 import { createSourceControlProviders } from '../source-control/provider-registry.js';
@@ -53,9 +122,12 @@ import { managedSshCommand } from '../git/network-operations.js';
 import { createNetworkOperations, createTrustedDirectoriesConfig } from '../git/network-operations.js';
 import { createManagedSshCredentialStore } from '../git/ssh-credential-storage.js';
 import { createManagedSshInventory } from '../git/credentials.js';
+import { createSshPassphraseStore } from '../git/ssh-passphrases.js';
+import { openCodeCredentialSource } from './auth.js';
 import { createContributorProvenanceStore } from '../git/contributor-provenance-storage.js';
 import { createGitNetworkOperationStore } from '../git/network-operation-storage.js';
 import { readEffectiveGitTransportRevision } from '../git/transport-config.js';
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
 import {
   completeWorktreeCheckoutHydration, configureRepositoryTransport,
   deleteBranch as deleteBranchService, isGitRepository as isGitRepositoryService,
@@ -73,11 +145,32 @@ import { createSourceControlAuditStore } from '../source-control/audit-storage.j
 export const createFeatureRoutesRuntime = () => {
   let skillRepositoryDependencies = null;
   let themeFolderWatch = null;
+=======
+import { completeWorktreeCheckoutHydration, configureRepositoryTransport, deleteBranch as deleteBranchService, isGitRepository as isGitRepositoryService, removeWorktree as removeWorktreeService, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel } from '../git/service.js';
+import { createPrivateRepositoryIdentityResolver, resolveRepositoryId } from '../source-control/repository-identity.js';
+import { createSourceControlAuditStore } from '../source-control/audit-storage.js';
+
+export const createFeatureRoutesRuntime = (dependencies) => {
+  // `trackers` is the tracker registry the server builds once (`index.js`):
+  // routes, tracked-item readers, the read cache and guest host access.
+  // `trackerSessionStatus` is its session-comment fan-out, told when an
+  // extension's tracker leaves.
+  const {
+    clientReloadDelayMs,
+    trackers,
+    trackerSessionStatus,
+    pluginSwitchStore,
+    isPluginSwitchAvailable,
+    refreshPluginSwitches,
+  } = dependencies;
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
     platform: process.env.OPENCHAMBER_RUNTIME === 'desktop' ? 'desktop' : 'web',
   });
 
+  let themeFolderWatch = null;
+  let stopGuestPackageWatch = () => {};
   let quotaProviders = null;
   const getQuotaProviders = async () => {
     if (!quotaProviders) {
@@ -122,10 +215,11 @@ export const createFeatureRoutesRuntime = () => {
             readChangeRequestPatch: walkthroughBindingService?.readChangeRequestPatch,
           },
         ),
-        getPullRequestFileContents: (directory, number, readContext, { path, previousPath, status, sourceRepo, revision }) => pullRequest.getPullRequestFileContents(
+        getPullRequestFileContents: (directory, number, readContext, { path, previousPath, status, sourceRepo, revision, binary }) => pullRequest.getPullRequestFileContents(
           directory,
           number,
           readContext,
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
           {
             path,
             previousPath,
@@ -135,6 +229,9 @@ export const createFeatureRoutesRuntime = () => {
             onAccountUnavailable: walkthroughBindingService?.accountUnavailable,
             readChangeRequestFile: walkthroughBindingService?.readChangeRequestFile,
           },
+=======
+          { path, previousPath, status, sourceRepo, revision, binary, readChangeRequestFile: walkthroughBindingService?.readChangeRequestFile },
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
         ),
         readWalkthroughInstructions: async (directory) => {
           if (!magicPromptOverridesForDirectory) throw new Error('Magic prompt reader is unavailable');
@@ -146,6 +243,58 @@ export const createFeatureRoutesRuntime = () => {
     return walkthroughService;
   };
 
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
+=======
+  const hydrateBoundCheckout = async ({ directory, parentDirectory, parentRemoteName }) => {
+    if (!(networkOperations?.hydrateBoundCheckout instanceof Function)
+      || !(walkthroughBindingService?.get instanceof Function)) {
+      throw Object.assign(new Error('Worktree checkout hydration is unavailable'), {
+        code: 'RUNTIME_UNSUPPORTED',
+      });
+    }
+    // An unbound repository hydrates through the machine's own Git for every
+    // remote, the same way it pushes; its authority is the unbound revision.
+    const bindingRead = await walkthroughBindingService.get(parentDirectory);
+    const repositoryAuthority = {
+      repositoryId: bindingRead.repository.repositoryId,
+      bindingRevision: bindingRead.revision,
+      configRevision: bindingRead.repository.configRevision,
+    };
+    return networkOperations.hydrateBoundCheckout({
+      directory,
+      parentRemoteName,
+      repositoryAuthority,
+    });
+  };
+
+  /**
+   * A worktree from a pull or merge request given by number, the same kind
+   * the New worktree dialog makes: the server reads the change request with
+   * the project's own account and creates the worktree through the Git
+   * routes' contributor pipeline. `name` and `branchName` default to the
+   * change request's head branch. `startCommand` holds the project's setup
+   * commands, as the dialog sends them; a contributor fork's worktree
+   * records them without running them (`../git/DOCUMENTATION.md`).
+   */
+  const createChangeRequestWorktree = async ({ directory, number, name, branchName, startCommand }) => {
+    if (!(gitWorktreeCreation?.createWorktree instanceof Function)
+      || !(walkthroughBindingService?.resolveChangeRequestWorktreeSource instanceof Function)) {
+      throw Object.assign(new Error('Worktrees from pull requests are unavailable'), {
+        code: 'RUNTIME_UNSUPPORTED', status: 501,
+      });
+    }
+    const { headBranch, sourceRequest } = await walkthroughBindingService.resolveChangeRequestWorktreeSource({ directory, number });
+    const branch = branchName || headBranch;
+    const input = {
+      mode: 'existing',
+      branchName: branch,
+      worktreeName: name || branch,
+      changeRequestSource: sourceRequest,
+    };
+    if (startCommand) input.startCommand = startCommand;
+    return gitWorktreeCreation.createWorktree(directory, input);
+  };
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
 
   const registerRoutes = async (app, routeDependencies) => {
     const {
@@ -159,19 +308,26 @@ export const createFeatureRoutesRuntime = () => {
       createFsSearchRuntime,
       openchamberDataDir,
       onGuestDeactivated,
+      onExtensionSessionEventsChanged = () => {},
+      extensionNotificationChannels = null,
       surfaceViewerHeaders,
+      // How an extension's OpenCode plugin reaches OpenCode right now (`guests/opencode-plugin.js`).
+      getOpenCodePluginDelivery = () => 'file',
       openchamberUserConfigRoot,
       managedChatsRoot,
       normalizeDirectoryPath,
       resolveProjectDirectory,
       resolveOptionalProjectDirectory,
       validateDirectoryPath,
+      // Absent in tests; without it the themes folder is not watched.
+      customThemesDir = null,
       readCustomThemesFromDisk,
       saveImportedTheme,
       deleteImportedTheme,
       readSettingsFromDisk,
       readSettingsFromDiskMigrated,
       persistSettings,
+      persistResolvedSettings,
       sanitizeProjects,
       sanitizeSkillCatalogs,
       getOwnPorts,
@@ -193,6 +349,9 @@ export const createFeatureRoutesRuntime = () => {
       writeSseEvent,
       worktreeBootstrapStore,
       messageQueueRuntime,
+      autoReviewRuntime,
+      prWatchRuntime = null,
+      mergeFollowRuntime = null,
       routingRuntime,
       permissionAutoAcceptRuntime,
       globalEventHub,
@@ -218,6 +377,7 @@ export const createFeatureRoutesRuntime = () => {
       deleteImportedTheme,
     });
 
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
     const customThemesDir = routeDependencies.themesDir ?? (openchamberUserConfigRoot ? path.join(openchamberUserConfigRoot, 'themes') : null);
     themeFolderWatch?.stop();
     themeFolderWatch = customThemesDir
@@ -239,6 +399,12 @@ export const createFeatureRoutesRuntime = () => {
       : null;
 
     registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
+=======
+    registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
+    registerMessageQueueRoutes(app, messageQueueRuntime);
+    registerAutoReviewRoutes(app, autoReviewRuntime);
+    if (prWatchRuntime) registerPrWatchRoutes(app, prWatchRuntime);
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
     registerRoutingRoutes(app, routingRuntime);
     registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
 
@@ -251,9 +417,19 @@ export const createFeatureRoutesRuntime = () => {
       sanitizeProjects,
       readSettingsFromDiskMigrated,
       persistSettings,
+      persistResolvedSettings,
       createFsSearchRuntime,
       spawn,
       resolveGitBinaryForSpawn,
+    });
+
+    registerProviderLogoRoutes(app, {
+      fsPromises,
+      path,
+      crypto,
+      openchamberDataDir,
+      readSettingsFromDiskMigrated,
+      persistResolvedSettings,
     });
 
     registerScheduledTaskRoutes(app, {
@@ -285,6 +461,7 @@ export const createFeatureRoutesRuntime = () => {
       approvedTempRoot: os.tmpdir(),
     });
 
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
 
 
     const { getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
@@ -318,6 +495,70 @@ export const createFeatureRoutesRuntime = () => {
         ...params,
       }),
     });
+=======
+    registerConfigEntityRoutes(app, {
+      resolveProjectDirectory,
+      resolveOptionalProjectDirectory,
+      refreshOpenCodeAfterConfigChange,
+      clientReloadDelayMs,
+      getAgentSources,
+      getAgentConfig,
+      getAgentPermissions,
+      listDisabledAgents,
+      createAgent,
+      updateAgent,
+      deleteAgent,
+      getCommandSources,
+      getCommandConfig,
+      createCommand,
+      updateCommand,
+      deleteCommand,
+      listMcpConfigs,
+      getMcpConfig,
+      createMcpConfig,
+      updateMcpConfig,
+      deleteMcpConfig,
+      listSnippets,
+      getSnippet,
+      createSnippet,
+      updateSnippet,
+      deleteSnippet,
+      expandSnippets,
+      previewSnippet,
+    });
+
+    registerPluginRoutes(app, {
+      resolveOptionalProjectDirectory,
+      refreshOpenCodeAfterConfigChange,
+      clientReloadDelayMs,
+      listPluginEntries,
+      getPluginEntry,
+      createPluginEntry,
+      updatePluginEntry,
+      deletePluginEntry,
+      setPluginEntryEnabled,
+      setPluginFileEnabled,
+      listPluginDirFiles,
+      readPluginDirFile,
+      writePluginDirFile,
+      deletePluginDirFile,
+      encodePluginId,
+      decodePluginId,
+      getNpmInfo,
+      parseNpmSpec,
+      parsePathSpec,
+      isExactSemver,
+      pluginSwitchStore,
+      isPluginSwitchAvailable,
+      refreshPluginSwitches,
+    });
+
+    const { getProfiles, getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
+
+    registerQuotaRoutes(app, { getQuotaProviders });
+    registerSmallModelRoutes(app, { getSmallModelService });
+    registerSessionGoalRoutes(app);
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
     const gitBinary = resolveGitBinaryForSpawn();
     // One server token store for every provider. OAuth tokens that expire
     // (GitLab's live two hours) are renewed before they lapse, through the
@@ -372,9 +613,12 @@ export const createFeatureRoutesRuntime = () => {
     const resolveTransportRepository = createPrivateRepositoryIdentityResolver({
       getTransportRevision: (directory) => readEffectiveGitTransportRevision(directory, { gitBinary }),
     });
+    // A provenance record is keyed by the repository ID alone, so its reads
+    // take the ID-only resolver: the remote and transport Git processes a
+    // binding read needs answer nothing here (#6084).
     const contributorProvenance = createContributorProvenanceStore({
       filePath: path.join(openchamberDataDir, 'git-contributor-provenance.json'),
-      resolveRepositoryIdentity: resolveTransportRepository,
+      resolveRepositoryIdentity: resolveRepositoryId,
       resolveGitPaths: resolveRepositoryGitPaths,
       fsImpl: fsPromises,
     });
@@ -386,7 +630,9 @@ export const createFeatureRoutesRuntime = () => {
       filePath: path.join(openchamberDataDir, 'git-ssh-credentials.json'),
       fsImpl: fsPromises,
     });
+    const sshPassphrases = createSshPassphraseStore(openCodeCredentialSource({ buildOpenCodeUrl, getOpenCodeAuthHeaders }));
     const managedSshInventory = createManagedSshInventory({
+      passphrases: sshPassphrases,
       store: sshCredentialStore,
       snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
       discoveryRoot: path.join(os.homedir(), '.ssh'),
@@ -418,12 +664,15 @@ export const createFeatureRoutesRuntime = () => {
     let trackedItemsService = null;
     const providerReadCache = createProviderReadCache({
       sourceControlProviderIds: sourceControlProviders.list().map((descriptor) => descriptor.id),
-      trackerIds: trackers.list(),
+      // Extension trackers attach and detach while the server runs.
+      trackerIds: () => trackers.list(),
       onChange: (provider) => trackedItemsService?.refreshProvider(provider),
       onItemRefresh: (provider, item) => trackedItemsService?.refreshItem(provider, item),
     });
     app.use(providerReadCache.middleware);
     walkthroughBindingService = registerSourceControlRoutes(app, {
+      onMutationSucceeded: (mutation) => mergeFollowRuntime?.onMutationSucceeded(mutation),
+      onMutationStarting: (mutation) => mergeFollowRuntime?.onMutationStarting(mutation) ?? null,
       onRepositoryTransportChanged: syncRepositoryTransport,
       validateManagedSshCredential: managedSshInventory.assertAvailable,
       readManagedSshCredentialPresentation: managedSshInventory.presentation,
@@ -455,8 +704,9 @@ export const createFeatureRoutesRuntime = () => {
       }
       return null;
     };
+    const trackedItemReaders = createTrackedItemReaders({ readLiveSummaries: walkthroughBindingService.readLiveSummaries, trackers });
     trackedItemsService = createTrackedItemsService({
-      readers: createTrackedItemReaders({ readLiveSummaries: walkthroughBindingService.readLiveSummaries, trackers }),
+      readers: trackedItemReaders,
       persistence: createTrackedItemsPersistence({ dataDir: openchamberDataDir }),
       isConnectionOpen: (connectionId) => findEventClient(connectionId) !== null,
       send: (connectionId, event) => {
@@ -503,6 +753,9 @@ export const createFeatureRoutesRuntime = () => {
       }
     });
     registerTrackedItemsRoutes(app, { service: trackedItemsService });
+    // An agent waiting on its pull request reads it through the same service.
+    prWatchRuntime?.attach({ trackedItems: trackedItemsService, readers: trackedItemReaders });
+    void mergeFollowRuntime?.attach(trackedItemsService).catch((error) => console.warn('[merge-follow] attach failed:', error.message));
     const resolveGitIdentity = async (identityId) => {
       if (identityId === 'global') {
         const identity = await getGlobalIdentity();
@@ -521,6 +774,7 @@ export const createFeatureRoutesRuntime = () => {
       fsImpl: fsPromises,
     });
     const gitCredentialResolver = createGitCredentialResolver({
+      passphrases: sshPassphrases,
       readTransportCredential: sourceControlProviders.readTransportCredential,
       describeProvider: sourceControlProviders.describe,
       lookupManagedSshKey: sshCredentialStore.lookup,
@@ -556,6 +810,7 @@ export const createFeatureRoutesRuntime = () => {
       operationStore: networkOperationStore,
       onCheckoutHydrated: (directory) => completeWorktreeCheckoutHydration(directory, {
         bootstrapStore: worktreeBootstrapStore,
+        disposeInstance: createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders }),
       }),
       spawnImpl: spawn,
       fsImpl: fsPromises,
@@ -566,6 +821,27 @@ export const createFeatureRoutesRuntime = () => {
       trustedDirectoriesConfig: createTrustedDirectoriesConfig({ gitBinary }),
     });
     await registerBuiltInGuests({ persistPath: extensionsPersistPath(openchamberDataDir), root: routeDependencies.builtInExtensionsDir });
+    // A change every client reads again from the server; the event carries nothing.
+    const announceChange = (type) => {
+      const clients = getOpenChamberEventClients();
+      for (const client of clients) {
+        try {
+          writeSseEvent(client, { type, properties: {} });
+        } catch {
+          clients.delete(client);
+        }
+      }
+    };
+    // Theme files edited by hand or by an agent reach every client without a reload.
+    themeFolderWatch?.stop();
+    themeFolderWatch = customThemesDir
+      ? createThemeFolderWatch({
+        fsPromises,
+        path,
+        themesDir: customThemesDir,
+        onChange: () => announceChange('openchamber:themes-changed'),
+      })
+      : null;
     // Extensions that act as a Git host, kept in step with the catalog; every
     // client re-reads the provider list when the set changes.
     const extensionSourceControlProviders = createExtensionProviders({
@@ -573,17 +849,9 @@ export const createFeatureRoutesRuntime = () => {
       register: walkthroughBindingService.registerExtensionProvider,
       unregister: walkthroughBindingService.unregisterExtensionProvider,
       dropSection: (id) => sourceControlAuthStore.dropSection(id),
-      emitChanged: () => {
-        const clients = getOpenChamberEventClients();
-        for (const client of clients) {
-          try {
-            writeSseEvent(client, { type: 'openchamber:source-control-providers-changed', properties: {} });
-          } catch {
-            clients.delete(client);
-          }
-        }
-      },
+      emitChanged: () => announceChange('openchamber:source-control-providers-changed'),
     });
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
     registerGuestRoutes(app, {
       openchamberDataDir,
       openchamberVersion,
@@ -593,10 +861,60 @@ export const createFeatureRoutesRuntime = () => {
       resolveWorkspaceScope,
       // One failing listener never skips the other: a browser role that fails
       // to hand back still lets the Git host be withdrawn.
+=======
+    // Extensions that act as a tracker, attached to the registry beside Linear
+    // and kept in step with the catalog; their accounts live in their own
+    // store, and their services reach the tracker's server only through these
+    // handles on the callback listener.
+    const trackerOutboundHandles = createOutboundHandles();
+    setHostCallbackRoute(TRACKER_OUTBOUND_PATH, {
+      refusal: trackerOutboundHandles.refusal,
+      serve: trackerOutboundHandles.serve,
+    });
+    const extensionTrackers = createExtensionTrackers({
+      listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }),
+      currentGuest: async (guestId) => (await listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }))
+        .find((guest) => guest.id === guestId) ?? null,
+      registry: trackers,
+      accounts: createTrackerAccounts({ persistPath: trackerAccountsPersistPath(openchamberDataDir) }),
+      handles: trackerOutboundHandles,
+      oauth: createTrackerOAuth(),
+      sessionStatus: trackerSessionStatus ?? { forget: () => {} },
+      persistPath: extensionsPersistPath(openchamberDataDir),
+      emitChanged: () => announceChange('openchamber:tracker-providers-changed'),
+    });
+    // Extensions that report usage, attached to the quota registry beside the
+    // built-ins and kept in step with the catalog. The quota module stays
+    // unloaded until a request or such an extension needs it.
+    const extensionQuotaProviders = createExtensionQuotaProviders({
+      listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }),
+      currentGuest: async (guestId) => (await listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }))
+        .find((guest) => guest.id === guestId) ?? null,
+      loadRegistry: getQuotaProviders,
+      persistPath: extensionsPersistPath(openchamberDataDir),
+      emitChanged: () => announceChange('openchamber:quota-providers-changed'),
+    });
+    configureGuestOpenCodeProvider(createGuestOpenCodeProvider({
+      currentGuest: async (guestId) => (await listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }))
+        .find((guest) => guest.id === guestId) ?? null,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+    }));
+    stopGuestPackageWatch();
+    ({ stopPackageWatch: stopGuestPackageWatch } = registerGuestRoutes(app, {
+      openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn, resolveOptionalProjectDirectory, getSmallModelService,
+      // One failing listener never skips the other: a browser role that
+      // fails to hand back still lets the Git host be withdrawn.
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
       onGuestDeactivated: settleGuestDeactivationListeners([
         { name: 'hand back an extension role', listener: onGuestDeactivated },
         { name: 'withdraw an extension Git host', listener: (event) => extensionSourceControlProviders.deactivated(event) },
+        { name: 'drop an extension\'s session event subscription', listener: () => onExtensionSessionEventsChanged() },
+        { name: 'withdraw an extension notification channel', listener: (event) => extensionNotificationChannels?.deactivated(event) },
+        { name: 'withdraw an extension tracker', listener: (event) => extensionTrackers.deactivated(event) },
+        { name: 'withdraw an extension usage provider', listener: () => extensionQuotaProviders.deactivated() },
       ]),
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
       onGuestActivated: () => extensionSourceControlProviders.reconcile(),
       onGuestsChanged: () => {
         const clients = getOpenChamberEventClients();
@@ -611,10 +929,41 @@ export const createFeatureRoutesRuntime = () => {
       surfaceViewerHeaders,
       trackers,
     });
+=======
+      // One failing reconcile never skips another; each failure is logged by the route.
+      onGuestActivated: async () => {
+        const results = await Promise.allSettled([
+          extensionSourceControlProviders.reconcile(),
+          onExtensionSessionEventsChanged(),
+          extensionNotificationChannels?.reconcile(),
+          extensionTrackers.reconcile(),
+          extensionQuotaProviders.reconcile(),
+        ]);
+        const failed = results.find((result) => result.status === 'rejected');
+        if (failed) throw failed.reason;
+      },
+      onGuestsChanged: () => announceChange('openchamber:guests-changed'),
+      watchFolderInstalls: true,
+      surfaceViewerHeaders, trackers,
+      opencodePlugins: { delivery: getOpenCodePluginDelivery, readGlobalEntries: readGlobalPluginEntries, addGlobalEntry: addGlobalPluginEntry },
+    }));
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
     // The providers extensions served before the restart, before any request reads the list.
     await extensionSourceControlProviders.reconcile().catch((error) => {
       console.warn('Failed to load extension Git hosts:', error?.message ?? error);
     });
+    await extensionTrackers.reconcile().catch((error) => {
+      console.warn('Failed to load extension trackers:', error?.message ?? error);
+    });
+    await extensionQuotaProviders.reconcile().catch((error) => {
+      console.warn('Failed to load extension usage providers:', error?.message ?? error);
+    });
+    if (extensionNotificationChannels) {
+      registerNotificationChannelRoutes(app, { channels: extensionNotificationChannels });
+      await extensionNotificationChannels.reconcile().catch((error) => {
+        console.warn('Failed to load extension notification channels:', error?.message ?? error);
+      });
+    }
     gitWorktreeCreation = registerGitRoutes(app, {
       // Identities for accounts connected before identities carried one are
       // made the first time identities are listed: a moment someone asked for,
@@ -649,6 +998,7 @@ export const createFeatureRoutesRuntime = () => {
       },
     });
     registerLinearRoutes(app);
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
     registerTrackerRoutes(app, { registry: trackers });
     // The session service was built before Git routes: fill the move bridge
     // with the same creation pipeline and stash operations the dialog uses.
@@ -693,6 +1043,19 @@ export const createFeatureRoutesRuntime = () => {
         bootstrapStore: worktreeBootstrapStore,
       });
     }
+=======
+    // Register scheduled isolation with the dialog's worktree pipeline.
+    fillScheduledWorktreeBridge(routeDependencies.scheduledWorktreeBridge, {
+      createWorktree: gitWorktreeCreation?.createWorktree,
+      createWorktreeInstanceDisposer: gitWorktreeCreation?.createWorktreeInstanceDisposer,
+      removeWorktree: removeWorktreeService,
+      deleteBranch: deleteBranchService,
+      isGitRepository: isGitRepositoryService,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+      bootstrapStore: worktreeBootstrapStore,
+    });
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     ({ overridesForDirectory: magicPromptOverridesForDirectory } = registerMagicPromptRoutes(app, {
       fsPromises,
@@ -739,6 +1102,9 @@ export const createFeatureRoutesRuntime = () => {
       cloneRepository: networkOperations.cloneRepository,
       managedChatsRoot,
       environmentRuntime,
+      projectRealpath: (target) => new Promise((resolve, reject) => {
+        fs.realpath(target, (error, resolved) => (error ? reject(error) : resolve(resolved)));
+      }),
     });
     registerEnvironmentRoutes(app, { store: environmentStore, runtime: environmentRuntime, listProjects: listConfiguredProjects });
   };
@@ -751,6 +1117,7 @@ export const createFeatureRoutesRuntime = () => {
     },
     /** Writes the Git credential helper's endpoint file; a no-op until the Git routes are registered. */
     publishRepositoryCredentialEndpoint: async () => { await gitRepositoryCredentialRuntime?.publish(); },
+<<<<<<< HEAD:packages/web/server/lib/host/feature-routes-runtime.js
     dispose() {
       themeFolderWatch?.stop();
       themeFolderWatch = null;
@@ -758,6 +1125,14 @@ export const createFeatureRoutesRuntime = () => {
     stopThemeWatch() {
       themeFolderWatch?.stop();
       themeFolderWatch = null;
+=======
+    /** Both folder watches: the themes folder and the extensions installed from a folder. */
+    stopFolderWatches: () => {
+      themeFolderWatch?.stop();
+      themeFolderWatch = null;
+      stopGuestPackageWatch();
+      stopGuestPackageWatch = () => {};
+>>>>>>> bc50ba56a:packages/web/server/lib/opencode/feature-routes-runtime.js
     },
   };
 };

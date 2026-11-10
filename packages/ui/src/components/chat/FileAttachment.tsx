@@ -12,13 +12,27 @@ import { useUIStore } from '@/stores/useUIStore';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/fileSize';
+<<<<<<< HEAD
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+=======
+import { getLanguageFromExtension, isDrawioFile, isExcalidrawFile } from '@/lib/toolHelpers';
+import { trackerPresentation } from '@/lib/trackers/presentation';
+import { decodeDataUrlText, getIssueLinkKind, getRepositoryIssueLinkProvider, getTrackerItemLinkProvider, isTextLikeFile, resolveAttachmentOpenTarget, type IssueLinkKind } from '@/lib/messages/attachmentPreview';
+import { ProviderIcon } from '@/components/sourceControl/ProviderIcon';
+import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
+import { useOpenAttachment } from './message/useOpenAttachment';
+import { INLINE_SERVER_ATTACHMENT_ID_PREFIX } from './composer/attachments/inlineMentionAttachments';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { StatusImage } from '@/components/ui/status-image';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+>>>>>>> bc50ba56a
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 
 import type { ToolPopupContent } from './message/types';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 const FileAttachmentButton = memo(() => {
   const { t } = useI18n();
@@ -172,12 +186,15 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
       className="relative h-16 w-16 rounded-lg border border-edge bg-background overflow-hidden flex-shrink-0 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={displayName}
     >
-      <img
+      <StatusImage
         src={imageUrl}
         alt={displayName}
-        className="h-full w-full object-cover"
-        loading="lazy"
+        variant="thumbnail"
+        className="h-full w-full"
+        imgClassName="h-full w-full object-cover"
+        lazy
       />
+<<<<<<< HEAD
       <button
         onClick={(event) => {
           event.stopPropagation();
@@ -192,6 +209,26 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
       >
         <Icon name="close" className="h-3.5 w-3.5" />
       </button>
+=======
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove();
+            }}
+            className="absolute top-1 inset-e-1 h-5 w-5 rounded-md bg-background/80 text-foreground hover:bg-background flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            // Inline: the mobile stylesheet floors every button at 36px, which
+            // would swallow a 64px thumbnail; the thumbnail itself is the target.
+            style={{ width: 20, height: 20, minWidth: 0, minHeight: 0 }}
+            aria-label={t('chat.fileAttachment.actions.removeNamed', { name: displayName })}
+          >
+            <Icon name="close" className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.actions.removeImage')}</TooltipContent>
+      </Tooltip>
+>>>>>>> bc50ba56a
     </div>
   );
 });
@@ -230,29 +267,92 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   return (
     <button
       type="button"
+<<<<<<< HEAD
       className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-edge bg-background pl-2 pr-1 text-xs text-foreground text-left hover:opacity-90 transition-opacity"
       title={displayName}
+=======
+      onClick={(e) => {
+        // Prevent click from bubbling if clicking the remove button
+        if ((e.target as HTMLElement).closest('[data-remove-button]')) {
+          return;
+        }
+      }}
+      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-edge bg-background ps-2 pe-1 text-xs text-foreground text-start hover:opacity-90 transition-opacity"
+>>>>>>> bc50ba56a
     >
       <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4 flex-shrink-0" />
-      <span className="truncate max-w-[200px]">{displayName}</span>
+      <span className="truncate max-w-[200px]" title={displayName}>{displayName}</span>
       {fileSize && <span className="text-muted-foreground flex-shrink-0">{fileSize}</span>}
-      <span
-        data-remove-button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-md transition-colors cursor-pointer"
-        aria-label={t('chat.fileAttachment.actions.removeNamed', { name: displayName })}
-      >
-        <Icon name="close" className="h-3.5 w-3.5 text-muted-foreground" />
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            data-remove-button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-md transition-colors cursor-pointer"
+            aria-label={t('chat.fileAttachment.actions.removeNamed', { name: displayName })}
+          >
+            <Icon name="close" className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.actions.removeNamed', { name: displayName })}</TooltipContent>
+      </Tooltip>
     </button>
   );
 });
 
 FileChip.displayName = 'FileChip';
 
+<<<<<<< HEAD
+=======
+const VSCodeFileChip = memo(({ file, onRemove }: FileChipProps) => {
+  const { t } = useI18n();
+  const { displayName, extension } = useFileDetails(file);
+
+  // Detect selection-style attachments: ends with ":N" or ":N-M"
+  const isSelectionAttachment = /:\d+(?:-\d+)?$/.test(displayName);
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        // Prevent click from bubbling if clicking the remove button
+        if ((e.target as HTMLElement).closest('[data-remove-button]')) {
+          return;
+        }
+      }}
+      className="inline-flex items-center gap-1 text-xs pe-1 rounded-sm border border-solid bg-transparent text-foreground not-italic hover:opacity-90 transition-colors text-start"
+      style={{ borderColor: 'var(--interactive-border)' }}
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            data-remove-button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
+            aria-label={t('chat.fileAttachment.activeEditor.remove')}
+          >
+            <Icon name="close" className="h-4 w-4 text-muted-foreground" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.activeEditor.remove')}</TooltipContent>
+      </Tooltip>
+        <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4" />
+        <span className={cn('text-foreground', isSelectionAttachment ? 'whitespace-nowrap' : 'truncate max-w-[200px]')} title={file.vscodePath}>
+          {displayName}
+        </span>
+    </button>
+  );
+});
+
+VSCodeFileChip.displayName = 'VSCodeFileChip';
+
+>>>>>>> bc50ba56a
 interface AttachedFilesListProps {
   onShowPopup?: (content: ToolPopupContent) => void;
   className?: string;
@@ -264,12 +364,19 @@ export const AttachedFilesList = memo(({ onShowPopup, className, draftIdentity }
   const attachedFiles = useDraftAttachedFiles(draftIdentity);
   const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
 
+<<<<<<< HEAD
   const localFiles = attachedFiles.filter((file) => file.source !== 'server' && !file.id.startsWith(INLINE_SERVER_ATTACHMENT_ID_PREFIX));
+=======
+  // An @-mention a failed send put back is shown by its mention in the text,
+  // which decides whether it goes.
+  const files = attachedFiles.filter((file) => file.source !== 'vscode'
+    && !file.id.startsWith(INLINE_SERVER_ATTACHMENT_ID_PREFIX));
+>>>>>>> bc50ba56a
 
-  if (localFiles.length === 0) return null;
+  if (files.length === 0) return null;
 
-  const images = localFiles.filter((f) => f.mimeType.startsWith('image/'));
-  const otherFiles = localFiles.filter((f) => !f.mimeType.startsWith('image/'));
+  const images = files.filter((f) => f.mimeType.startsWith('image/'));
+  const otherFiles = files.filter((f) => !f.mimeType.startsWith('image/'));
   const imageGallery = images.map((file) => ({
     url: file.dataUrl || file.serverPath || '',
     mimeType: file.mimeType,
@@ -465,6 +572,7 @@ const NativeAttachmentChip = memo(({ part, compact, onOpen, onDownload }: {
       </div>
     );
   }
+<<<<<<< HEAD
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/10 text-left text-sm transition-colors hover:bg-muted/20">
@@ -501,6 +609,88 @@ const NativeAttachmentChip = memo(({ part, compact, onOpen, onDownload }: {
       >
         <Icon name="download" className="h-4 w-4" />
       </button>
+=======
+  const selectionLabel = selection ? `${relativePath}:${selectionRange}` : ''
+  const isSelectionAttached = !!selectionLabel && attachedFiles.some(
+    (f) => f.source === 'vscode' && f.vscodeSource === 'selection' && f.filename === selectionLabel && f.vscodePath === filePath
+  )
+
+  // Nothing to show — file is already attached and there's no (or already-attached) selection
+  if (isFileAttached && (!selection || isSelectionAttached)) return null;
+
+  const ext = fileName.split('.').pop() || '';
+  // Always show only the filename in the suggestion UI
+  const displayName = fileName;
+
+  const handleAddFile = () => {
+    try {
+      addVSCodeFileAttachment(filePath, fileName, fileSize);
+    } catch (error) {
+      // The store names the cause (a file too large to send).
+      if (error instanceof Error) toast.error(error.message);
+    }
+  };
+
+  const handlePinSelection = async () => {
+    if (!selection) return;
+    const blob = new Blob([selection.text], { type: 'text/plain' });
+    const file = new File([blob], selectionLabel, { type: 'text/plain' });
+    await addVSCodeSelectionAttachment(filePath, file);
+  };
+
+  // If there is a selection, prefer showing the pin-selection UI only.
+  const showSelectionPin = !!selection && !isSelectionAttached;
+  const showFileAdd = !showSelectionPin && !isFileAttached;
+
+  if (!showSelectionPin && !showFileAdd) return null;
+
+  return (
+    <div className="inline-flex items-center">
+      {showSelectionPin && (
+        <div
+          className="inline-flex items-center gap-1 text-xs pe-1 rounded-sm italic text-muted-foreground border border-dashed bg-transparent"
+          style={{ borderColor: 'var(--interactive-border)' }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('chat.fileAttachment.activeEditor.pinSelection')}
+                onClick={() => { void handlePinSelection(); }}
+                className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
+              >
+                <Icon name="pushpin-2" className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.activeEditor.pinSelection')}</TooltipContent>
+          </Tooltip>
+          <FileTypeIcon filePath={fileName} extension={ext} className="h-4 w-4 flex-shrink-0" />
+          <span className="text-xs whitespace-nowrap" title={relativePath}>{`${displayName}:${selectionRange}`}</span>
+        </div>
+      )}
+      {showFileAdd && (
+        <div
+          className="inline-flex items-center gap-1 text-xs pe-1 rounded-sm italic text-muted-foreground border border-dashed bg-transparent"
+          style={{ borderColor: 'var(--interactive-border)' }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('chat.fileAttachment.activeEditor.addFile', { name: displayName })}
+                onClick={handleAddFile}
+                className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
+              >
+                <Icon name="add" className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t('chat.fileAttachment.activeEditor.addFile', { name: displayName })}</TooltipContent>
+          </Tooltip>
+          <FileTypeIcon filePath={fileName} extension={ext} className="h-4 w-4 flex-shrink-0" />
+          <span className="text-xs truncate max-w-[220px]" title={relativePath}>{displayName}</span>
+        </div>
+      )}
+>>>>>>> bc50ba56a
     </div>
   );
 });
@@ -654,6 +844,7 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
       <div className={cn('space-y-1.5', className ?? 'mt-1.5')}>
         {fileAttachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
+<<<<<<< HEAD
             {fileAttachments.map(renderChip)}
           </div>
         )}
@@ -661,20 +852,311 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
           <div className="overflow-x-auto -mx-1 px-1 py-0.5 scrollbar-thin">
             <div className="flex snap-x snap-mandatory gap-2">
               {imageAttachments.map(renderThumbnail)}
-            </div>
+=======
+            {otherFiles.map((file, index) => {
+              const fileName = resolveDisplayName(file);
+              const ext = fileName.split('.').pop() || '';
+              const sizeText = formatFileSize(file.size);
+              const issueLinkKind = getIssueLinkKind(file);
+              const openTarget = resolveOpenTarget(file);
+              return (
+                <Tooltip key={`file-${file.url || file.filename || index}`}>
+                  <TooltipTrigger asChild>
+                    {issueLinkKind && openTarget ? (
+                      <button
+                        type="button"
+                        onClick={() => openAttachment(openTarget)}
+                        className="inline-flex items-center bg-muted/30 border border-edge-muted typography-meta gap-1 px-2 py-0.5 rounded-lg text-foreground hover:text-primary transition-colors"
+                      >
+                        <IssueLinkIcon file={file} kind={issueLinkKind} className="text-muted-foreground h-3.5 w-3.5" />
+                        <div className="overflow-hidden max-w-[220px]">
+                          <span className="truncate block">{fileName}</span>
+                        </div>
+                      </button>
+                    ) : openTarget ? (
+                      <button
+                        type="button"
+                        onClick={() => openAttachment(openTarget)}
+                        className="inline-flex items-center bg-muted/30 border border-edge-muted typography-meta gap-1 px-2 py-0.5 rounded-lg text-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
+                      >
+                        <FileTypeIcon filePath={fileName} extension={ext} className="text-muted-foreground h-3.5 w-3.5" />
+                        <div className="overflow-hidden max-w-[140px]">
+                          <span className="truncate block">{fileName}</span>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="inline-flex items-center bg-muted/30 border border-edge-muted typography-meta gap-1 px-2 py-0.5 rounded-lg">
+                        {file.mime?.includes('pdf') ? (
+                          <Icon name="file-pdf" className="text-muted-foreground h-3.5 w-3.5" />
+                        ) : (
+                          <FileTypeIcon filePath={fileName} extension={ext} className="text-muted-foreground h-3.5 w-3.5" />
+                        )}
+                        <div className="overflow-hidden max-w-[140px]">
+                          <span className="truncate block">{fileName}</span>
+                        </div>
+                      </div>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
           </div>
+        )}
+
+        {imageFiles.length > 0 && (
+          <ScrollableOverlay outerClassName="overlay-scrollbar-wrapper--no-gutter -mx-1 w-auto" className="px-1 py-0.5" fillContainer={false}>
+            <div className="flex snap-x snap-mandatory gap-2">
+              {imageFiles.map((file, index) => {
+                const filename = resolveDisplayName(file) || 'Image';
+                const openTarget = resolveOpenTarget(file);
+
+                return (
+                  <Tooltip key={`img-${file.url || file.filename || index}`}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (openTarget) openAttachment(openTarget);
+                        }}
+                        className="relative flex-none border border-edge-muted bg-muted/10 overflow-hidden snap-start h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
+                        aria-label={filename}
+                      >
+                        {file.url ? (
+                          <StatusImage
+                            src={file.url}
+                            alt={filename}
+                            variant="thumbnail"
+                            className="h-full w-full"
+                            imgClassName="h-full w-full object-cover"
+                            lazy
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
+                            <Icon name="file-image" className="h-6 w-6" />
+                          </div>
+                        )}
+                        <span className="sr-only">{filename}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
+                      {filename}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+>>>>>>> bc50ba56a
+            </div>
+          </ScrollableOverlay>
         )}
       </div>
     );
   }
 
   return (
+<<<<<<< HEAD
     <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-2', className)}>
       {attachments.map((part) => (
         part.mediaType.startsWith('image/') ? renderThumbnail(part) : renderChip(part)
       ))}
+=======
+    <div className={cn(
+      "grid gap-2",
+      compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
+    )}>
+      {fileItems.map((file, index) => {
+        const fileName = resolveDisplayName(file);
+        const isImage = file.mime?.startsWith('image/');
+        const sizeText = formatFileSize(file.size);
+        const issueLinkKind = getIssueLinkKind(file);
+
+        if (isImage && file.url) {
+          return (
+            <div
+              key={file.url || `${fileName}-${index}`}
+              className="relative aspect-video rounded-lg border border-edge-muted bg-muted/10 overflow-hidden group"
+            >
+              <StatusImage
+                src={file.url}
+                alt={fileName}
+                variant="thumbnail"
+                className="h-full w-full"
+                imgClassName="h-full w-full object-cover"
+                lazy
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute bottom-0 inset-s-0 inset-e-0 p-2 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="text-xs font-medium truncate">{fileName}</p>
+                {sizeText && <p className="text-xs opacity-80">{sizeText}</p>}
+              </div>
+            </div>
+          );
+        }
+
+        if (issueLinkKind && file.url) {
+          return (
+            <Tooltip key={file.url || `${fileName}-${index}`}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openExternalUrl(file.url || '');
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 p-2 rounded-lg oc-tile oc-tile-hover text-start",
+                    compact ? "text-xs" : "text-sm"
+                  )}
+                >
+                  <div className="flex-shrink-0">
+                    <IssueLinkIcon file={file} kind={issueLinkKind} className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{fileName}</p>
+                    {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
+                  </div>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
+
+        const source = file.source;
+        const sourceType = typeof source?.type === 'string' ? source.type : undefined;
+        const sourcePath = source && typeof (source as Record<string, unknown>).path === 'string' ? (source as Record<string, unknown>).path as string : undefined;
+        const filePath = sourceType === 'file' && sourcePath ? sourcePath : (file.url || '');
+        const opensInDiagramEditor = filePath && (isDrawioFile(filePath) || isExcalidrawFile(filePath));
+
+        if (opensInDiagramEditor) {
+          return (
+            <Tooltip key={file.url || `${fileName}-${index}`}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const directory = useDirectoryStore.getState().currentDirectory;
+                    if (directory) {
+                      useUIStore.getState().openContextFile(directory, filePath);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 p-2 rounded-lg oc-tile oc-tile-hover text-start cursor-pointer",
+                    compact ? "text-xs" : "text-sm"
+                  )}
+                >
+                  <Icon name="file" className={cn("text-muted-foreground shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{fileName}</p>
+                    <p className="text-xs text-status-info">{t('chat.fileAttachment.openInDiagram')}</p>
+                  </div>
+                  <Icon name="external-link" className={cn("text-muted-foreground shrink-0", compact ? "h-3 w-3" : "h-3.5 w-3.5")} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('chat.fileAttachment.openInDiagram')}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
+
+        return (
+          <Tooltip key={file.url || `${fileName}-${index}`}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => {
+                  showFilePopup(file, fileName);
+                }}
+                className={cn(
+                  "flex items-center gap-2 p-2 rounded-lg oc-tile oc-tile-hover text-start",
+                  compact ? "text-xs" : "text-sm"
+                )}
+              >
+                <div className="flex-shrink-0">
+                  {file.mime?.startsWith('image/') ? (
+                    <Icon name="file-image" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                  ) : file.mime?.includes('pdf') ? (
+                    <Icon name="file-pdf" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                  ) : (
+                    <Icon name="file" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{fileName}</p>
+                  {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
+                </div>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
+>>>>>>> bc50ba56a
     </div>
   );
 });
 
 MessageFilesDisplay.displayName = 'MessageFilesDisplay';
+<<<<<<< HEAD
+=======
+
+interface ImageGalleryProps {
+  urls: string[];
+  caption?: string;
+  onShowPopup?: (content: ToolPopupContent) => void;
+}
+
+const ImageGallery = memo(({ urls, caption, onShowPopup }: ImageGalleryProps) => {
+  if (urls.length === 0) return null;
+
+  const getGridCols = () => {
+    if (urls.length === 1) return 'grid-cols-1';
+    if (urls.length === 2) return 'grid-cols-2';
+    if (urls.length <= 4) return 'grid-cols-2';
+    return 'grid-cols-3';
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className={cn("grid gap-2", getGridCols())}>
+        {urls.map((url, index) => (
+          <button
+            key={url}
+            type="button"
+            onClick={() => onShowPopup?.({
+              open: true,
+              title: caption || `Image ${index + 1} of ${urls.length}`,
+              content: '',
+              image: {
+                url,
+                gallery: urls.map(u => ({ url: u })),
+                index,
+              },
+            })}
+            className="relative aspect-square rounded-lg border border-edge-muted bg-muted/10 overflow-hidden group"
+          >
+            <img
+              src={url}
+              alt={caption || `Image ${index + 1}`}
+              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+          </button>
+        ))}
+      </div>
+      {caption && (
+        <p className="text-sm text-muted-foreground italic">{caption}</p>
+      )}
+    </div>
+  );
+});
+
+ImageGallery.displayName = 'ImageGallery';
+>>>>>>> bc50ba56a

@@ -2,6 +2,11 @@ import { useCallback, useState } from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { Button } from '@/components/ui/button';
+<<<<<<< HEAD
+=======
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCallableModelProviders } from '@/hooks/useCallableModelProviders';
+>>>>>>> bc50ba56a
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -139,6 +144,7 @@ export const WalkthroughBlocker = ({
             }}
             allowedProviderIds={allowedProviderIds ?? []}
             isModelAllowed={isStructuredOutputCapable}
+            triggerTooltip={t('contextTooltips.panel.chooseWalkthroughModel')}
           />
         </div>
       )}
@@ -146,9 +152,14 @@ export const WalkthroughBlocker = ({
       {/* Retry is the whole remedy once the server is updated, so it stays in
           reach rather than sending the user back through the panel header. */}
       {(reason === 'empty-diff' || reason === 'only-generated' || reason === 'server-unsupported') && (
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          {t('walkthrough.action.refresh')}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+              {t('walkthrough.action.refresh')}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>{t('contextTooltips.walkthrough.checkAgain')}</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

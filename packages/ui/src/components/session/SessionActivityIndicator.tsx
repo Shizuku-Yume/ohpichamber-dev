@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * What a session row or aggregate is showing: its own turn running
+<<<<<<< HEAD
  * (busy/retry), a pause kept open by a background subagent or a background
  * command, or a finished turn the user has not seen.
  */
@@ -18,17 +19,41 @@ const PRESENTATION = {
   shell: { icon: 'terminal', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.backgroundCommand' },
   // Waiting on a pull request shares the running circle: the row's linked pull
   // request already puts that icon there, and the tooltip names the wait.
+=======
+ * (busy/retry), a pause kept open by a workflow run, a background subagent, a
+ * background command or image, an agent waiting on its pull request, or a
+ * finished turn the user has not seen.
+ */
+type SessionActivityIndicatorState = 'running' | 'workflow' | 'subagent' | 'shell' | 'image' | 'pullRequest' | 'unread';
+
+const PRESENTATION = {
+  running: { icon: 'circle', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.active' },
+  workflow: { icon: 'flow-chart', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.workflowRunning' },
+  subagent: { icon: 'robot-2', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.backgroundSubagent' },
+  shell: { icon: 'terminal', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.backgroundCommand' },
+  image: { icon: 'image', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.backgroundImage' },
+>>>>>>> bc50ba56a
   pullRequest: { icon: 'circle', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.waitingOnPullRequest' },
   unread: { icon: 'checkbox-circle', colorClass: 'text-status-success', labelKey: 'sessions.sidebar.session.status.unread' },
 } as const satisfies Record<SessionActivityIndicatorState, { icon: IconName; colorClass: string; labelKey: string }>;
 
 /**
+<<<<<<< HEAD
  * Live-activity marker for one session row or aggregate. Each state has its
  * own static icon, so a row says why it is busy without motion; motion lives
  * in the 1 Hz elapsed counter (see faa9c243). The opt-in
  * `animatedActivityIndicators` preference replaces every running kind with a
  * `loader-4` spinner stepped to 20 fps (`.activity-spinner`, VS Code's
  * steps() throttling); the unread icon stays.
+=======
+ * Live-activity marker for one session row or aggregate. Each state has a
+ * static icon, so a row says why it is busy without motion; motion lives in
+ * the 1 Hz elapsed counter (see faa9c243). Waiting on a pull request shares
+ * the running circle: a linked pull request already puts that icon on the row,
+ * and the tooltip names the wait. The opt-in
+ * `animatedActivityIndicators` preference replaces every running kind with the
+ * shared `Spinner` (four steps a second); the unread icon stays.
+>>>>>>> bc50ba56a
  */
 export const SessionActivityIndicator: React.FC<{
   state: SessionActivityIndicatorState;

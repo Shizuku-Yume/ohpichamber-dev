@@ -29,20 +29,30 @@ type Props = {
   branchLabel: string | null;
   /** Set when the branch label is an isolated space's name: the second line
       then carries the space's container mark, with this as its accessible
-      name, where a branch shows the branch icon. */
+      name; a branch name shows no icon. */
   spaceMark?: string | null;
   /** Replaces the branch on the second line (a run row puts its mark and
       lane count there). */
   metaLineLead?: React.ReactNode;
   /** The chevron of a row with something nested under it: it takes the place
-      of the second line's first icon (the project's, else the branch's or the
-      space's) while the row is hovered, so a two-line row needs no column of
+      of the second line's first icon (the project's, else the space's or the
+      row's own) while the row is hovered, so a two-line row needs no column of
       its own for it. It positions itself over that icon (`absolute inset-0`)
+<<<<<<< HEAD
       and shows on hover; `leadIconClassName` hides the icon in step. */
+=======
+      and shows on hover; `leadIconClassName` hides the icon in step. A line
+      that opens with a branch name has no icon: see `leadMaskClassName`. */
+>>>>>>> bc50ba56a
   leadToggle?: React.ReactNode;
   leadIconClassName?: string;
-  /** The second line's first icon where no project opens it, in place of the
-      branch's: a run's mark, which has no branch. */
+  /** For a second line that opens with a branch name and no icon: classes
+      that fade the name's start while the chevron shows over it on hover.
+      Without them (touch layouts, whose chevron always shows) the chevron
+      takes its own place before the name. */
+  leadMaskClassName?: string;
+  /** The second line's first icon where no project opens it: a run's mark,
+      which has no branch, or a draft's pen. */
   leadIcon?: React.ReactNode;
   statusDot: React.ReactNode;
   /** Pin glyph shown in the meta cluster while the row is pinned. */
@@ -118,6 +128,7 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
   metaLineLead = null,
   leadToggle = null,
   leadIconClassName,
+  leadMaskClassName,
   leadIcon: leadIconOverride = null,
   statusDot,
   pinnedMarker,
@@ -146,7 +157,14 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
     {statusDot}
     {timeSlot ? <span className="typography-micro leading-none text-muted-foreground tabular-nums">{timeSlot}</span> : null}
   </span>;
+  // A branch name reads as one without an icon of its own, so only a space's
+  // name carries a mark: it is what says the row lives in a space.
+  // `Icon` hides itself from assistive tech; the space's mark is the row's only word for "space", so it speaks.
+  const spaceIcon = spaceMark
+    ? <Icon name="instance" className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden={false} role="img" aria-label={spaceMark} />
+    : null;
   // The second line's first icon: the project's where projects mix, else the
+<<<<<<< HEAD
   // branch's (or the space's) in front of its name.
   const branchIcon = spaceMark
     // `Icon` hides itself from assistive tech; the space's mark is the row's only word for "space", so it speaks.
@@ -154,9 +172,29 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
     : <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />;
   const branchText = <span className="min-w-0 truncate typography-micro text-muted-foreground">{branchLabel}</span>;
   const branchLine = metaLineLead ?? (branchLabel ? <>{branchIcon}{branchText}</> : null);
+=======
+  // space's or the row's own (a run's, a draft's).
+>>>>>>> bc50ba56a
   const leadIcon = project
     ? <TimelineProjectIcon project={project} label={projectLabel} />
-    : leadIconOverride ?? (!metaLineLead && branchLabel ? branchIcon : null);
+    : leadIconOverride ?? (!metaLineLead && branchLabel ? spaceIcon : null);
+  // With no icon to stand on, the hover chevron sits over the name's start
+  // and the name fades under it.
+  const maskedLead = Boolean(leadToggle && !leadIcon && leadMaskClassName);
+  const branchText = (
+    <span className={cn('min-w-0 truncate typography-micro text-muted-foreground', maskedLead && leadMaskClassName)}>{branchLabel}</span>
+  );
+  const branchLine = metaLineLead ?? (branchLabel ? <>{project ? spaceIcon : null}{branchText}</> : null);
+  const leadSlot = leadToggle && (leadIcon || !maskedLead) ? (
+    <span className="relative inline-flex size-3 flex-shrink-0 items-center justify-center">
+      {leadIcon ? <span className={cn('inline-flex', leadIconClassName)}>{leadIcon}</span> : null}
+      {leadToggle}
+    </span>
+  ) : maskedLead ? (
+    // Above the name: its mask makes it a layer of its own, which would
+    // otherwise paint over the chevron and take its clicks.
+    <span className="absolute inset-y-0 start-0 z-10 inline-flex w-3 items-center justify-center">{leadToggle}</span>
+  ) : leadIcon;
   const titleLine = (
     <div dir="auto" className={cn('oc-ui-start-align min-w-0 flex-1 truncate typography-ui-label font-normal', actionsMaskClass, titleClassName)}>{title}</div>
   );
@@ -173,6 +211,7 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
       {titleLine}
       {meta}
     </div>
+<<<<<<< HEAD
     {leadToggle || leadIcon || branchLine || goal || zombieIndicator || prBadge || badges ? <div className="flex h-4 w-full min-w-0 items-center gap-1">
       {leadToggle ? (
         <span className="relative inline-flex size-3 flex-shrink-0 items-center justify-center">
@@ -180,6 +219,10 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
           {leadToggle}
         </span>
       ) : leadIcon}
+=======
+    {leadToggle || leadIcon || branchLine || goal || zombieIndicator || prBadge || badges ? <div className="relative flex h-4 w-full min-w-0 items-center gap-1">
+      {leadSlot}
+>>>>>>> bc50ba56a
       {project ? branchLine : metaLineLead ?? (branchLabel ? branchText : null)}
       <span className="ms-auto flex flex-shrink-0 items-center gap-1">
         {goal}

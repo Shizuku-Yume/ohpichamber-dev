@@ -53,12 +53,24 @@ const LOCAL_STT_MODELS = [
         speed: 5,
         size: '460 MB',
         languageHint: false,
+<<<<<<< HEAD
+=======
+    },
+    {
+        id: 'parakeet-ultra-int8',
+        labelKey: 'settings.voice.page.stt.model.parakeetUltra',
+        badgeKey: 'settings.voice.page.stt.badge.bestForMultilingual',
+        accuracy: 5,
+        speed: 4,
+        size: '485 MB',
+        languageHint: false,
+>>>>>>> bc50ba56a
     },
     {
         id: 'parakeet-tdt-0.6b-v3-int8',
         labelKey: 'settings.voice.page.stt.model.parakeetV3',
-        badgeKey: 'settings.voice.page.stt.badge.bestForMultilingual',
-        accuracy: 5,
+        badgeKey: null,
+        accuracy: 4,
         speed: 4,
         size: '465 MB',
         languageHint: false,

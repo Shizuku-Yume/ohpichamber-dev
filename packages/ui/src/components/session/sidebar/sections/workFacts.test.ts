@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
 import { buildSidebarWorkFacts, EMPTY_SIDEBAR_LIVE_FACTS } from './workFacts';
 
@@ -7,6 +8,15 @@ const session = (metadata: unknown): Session => ({
   title: 'Nightly triage', createdAt: 1, updatedAt: 2, epoch: 'epoch-1', headSequence: '0',
   runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: (metadata ?? null) as Session['metadata'], metadataRevision: metadata ? '1' : '0', archiveRevision: '0',
+=======
+import type { Session } from '@/lib/opencode/model';
+import { buildSidebarWorkFacts, EMPTY_SIDEBAR_LIVE_FACTS } from './workFacts';
+
+const session = (metadata: Session['metadata']): Session => ({
+  id: 's1', projectID: 'p', directory: '/p', title: 'Nightly triage', cost: 0,
+  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  time: { created: 1, updated: 2 }, metadata,
+>>>>>>> bc50ba56a
 });
 
 const factsFor = (record: Session) => buildSidebarWorkFacts(

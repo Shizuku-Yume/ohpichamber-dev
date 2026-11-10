@@ -529,6 +529,7 @@ export const NotificationSettings: React.FC = () => {
                   label={t('settings.notifications.page.events.completionLabel')}
                   ariaLabel={t('settings.notifications.page.events.completionAria')}
                 />
+<<<<<<< HEAD
                 <SettingsCheckboxRow
                   settingsItem="notifications.pullRequests"
                   checked={notifyOnPullRequests}
@@ -536,6 +537,17 @@ export const NotificationSettings: React.FC = () => {
                   label={t('settings.notifications.pullRequests.label')}
                   info={t('settings.notifications.pullRequests.info')}
                 />
+=======
+                {!isVSCode && (
+                  <SettingsCheckboxRow
+                    settingsItem="notifications.pullRequests"
+                    checked={notifyOnPullRequests}
+                    onChange={setNotifyOnPullRequests}
+                    label={t('settings.notifications.pullRequests.label')}
+                    info={t('settings.notifications.pullRequests.info')}
+                  />
+                )}
+>>>>>>> bc50ba56a
 
                 <SettingsCheckboxRow
                   checked={notifyOnSubtasks}

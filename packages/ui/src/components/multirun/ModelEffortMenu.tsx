@@ -12,14 +12,23 @@ import { useConfigStore } from '@/stores/useConfigStore';
  * models without variants. `inline` sits inside a model chip, `trigger` stands
  * next to a model picker button.
  */
+<<<<<<< HEAD
 export function ModelEffortMenu({ providerId, modelId, variant, onChange, appearance = 'inline', disabled = false, tooltip }: {
   providerId: string;
   modelId: string;
+=======
+export function ModelEffortMenu({ providerID, modelID, variant, onChange, appearance = 'inline', disabled = false, tooltip }: {
+  providerID: string;
+  modelID: string;
+>>>>>>> bc50ba56a
   variant: string | undefined;
   onChange: (variant: string | undefined) => void;
   appearance?: 'inline' | 'trigger';
   disabled?: boolean;
+<<<<<<< HEAD
   /** Tooltip over the trigger; absent leaves the aria name to stand alone. */
+=======
+>>>>>>> bc50ba56a
   tooltip?: string;
 }): React.ReactNode {
   const { t } = useI18n();
@@ -30,6 +39,7 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
   if (!variants) return null;
   const label = variant ?? t('multirun.modelMultiSelect.variant.default');
   const trigger = (
+<<<<<<< HEAD
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -44,6 +54,22 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
           {appearance === 'trigger' ? <Icon name="arrow-down-s" /> : null}
         </button>
       </DropdownMenuTrigger>
+=======
+    <DropdownMenuTrigger asChild>
+      <button
+        type="button"
+        disabled={disabled}
+        className={appearance === 'trigger'
+          ? cn(dropdownTriggerVariants({ size: 'default' }), 'w-fit gap-1.5')
+          : 'inline-flex h-4 items-center gap-0.5 rounded px-0.5 text-muted-foreground hover:text-foreground disabled:opacity-50'}
+        aria-label={t('chat.parallel.models.effortAria', { effort: label })}
+      >
+        <Icon name="brain-ai-3" className={cn(appearance === 'trigger' ? 'size-3.5' : 'size-3', variant && 'text-[var(--status-info)]')} />
+        <span className="max-w-[6rem] truncate">{label}</span>
+        {appearance === 'trigger' ? <Icon name="arrow-down-s" /> : null}
+      </button>
+    </DropdownMenuTrigger>
+>>>>>>> bc50ba56a
   );
   return (
     <DropdownMenu>

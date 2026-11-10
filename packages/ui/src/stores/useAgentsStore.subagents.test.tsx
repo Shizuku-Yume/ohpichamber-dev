@@ -2,9 +2,14 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test, type Mo
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
+<<<<<<< HEAD
 import type { Agent } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import type { CanonicalClient } from '@/api/canonicalClient';
+=======
+import type { AgentWithExtras } from './useAgentsStore';
+import { createProjectIdFromPath } from '@/lib/projectId';
+>>>>>>> bc50ba56a
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -21,11 +26,38 @@ Object.assign(globalThis, {
 });
 
 const DIRECTORY = '/workspace/project';
+<<<<<<< HEAD
 const SETTINGS_DIRECTORY = '/workspace/settings';
 const agent = (name: string): Agent => ({
   agentId: `profile-${name}`, name, description: `Native ${name} profile`,
   model: { providerId: 'provider', modelId: 'model' }, allowedTools: ['read', 'edit'],
   systemPromptOverride: 'Stored instructions', permissionPresetId: 'preset',
+=======
+const PROJECT_ID = createProjectIdFromPath(DIRECTORY);
+const agent = (name: string, hidden = false, native = false): AgentWithExtras => ({
+  id: name, name, displayName: name, mode: 'subagent', hidden, native,
+  request: { settings: {}, headers: {}, body: {} }, permissions: [],
+});
+let listedAgents: AgentWithExtras[] = [];
+let failingConfigLookups = new Set<string>();
+const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  const path = new URL(input instanceof Request ? input.url : String(input), 'http://localhost').pathname;
+  if (path === '/api/config/settings') return Response.json({ projects: [{ id: PROJECT_ID, path: DIRECTORY }], activeProjectId: PROJECT_ID });
+  if (path.endsWith('/agent')) return Response.json({ data: listedAgents });
+  if (path.startsWith('/api/config/agents/')) {
+    const name = decodeURIComponent(path.slice('/api/config/agents/'.length).replace(/\/config$/, ''));
+    const current = listedAgents.find((entry) => entry.name === name);
+    if (failingConfigLookups.has(name)) return new Response('boom', { status: 500 });
+    if (path.endsWith('/config')) {
+      return Response.json({ source: 'md', scope: 'user', path: `/config/agents/${name}.md`, legacy: false,
+        config: { hidden: current?.hidden, mode: 'subagent', system: 'Stored instructions' } });
+    }
+    return Response.json({ isBuiltIn: current?.native === true, scope: current?.native ? null : 'user',
+      sources: { md: { exists: !current?.native, scope: 'user', path: `/config/agents/${name}.md` } } });
+  }
+  if (path.includes('/location')) return Response.json({ directory: DIRECTORY, project: { directory: DIRECTORY } });
+  return Response.json({ data: [] });
+>>>>>>> bc50ba56a
 });
 let listedAgents: Agent[] = [];
 let resolveWorkspace: Mock<CanonicalClient['resolveWorkspace']>;
@@ -49,6 +81,7 @@ let root: Root;
 let container: HTMLElement;
 
 beforeEach(() => {
+<<<<<<< HEAD
   fetchSpy.mockClear();
   listedAgents = [agent('build'), agent('title'), agent('custom')];
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
@@ -59,6 +92,12 @@ beforeEach(() => {
   updateAgent = spyOn(canonicalClient, 'updateAgent').mockImplementation(async (_workspaceId, input) => ({ revision: '3', agentId: input.agent.agentId, agent: input.agent }));
   deleteAgent = spyOn(canonicalClient, 'deleteAgent').mockImplementation(async (_workspaceId, input) => ({ revision: '3', agentId: input.agentId, agent: null }));
   useProjectsStore.setState({ projects: [{ id: 'project', path: DIRECTORY }, { id: 'settings', path: SETTINGS_DIRECTORY }], activeProjectId: 'project' });
+=======
+  listedAgents = [agent('build', false, true), agent('title', true, true),
+    agent('visible-custom'), agent('hidden-custom', true)];
+  failingConfigLookups = new Set();
+  useProjectsStore.setState({ projects: [{ id: PROJECT_ID, path: DIRECTORY }], activeProjectId: PROJECT_ID });
+>>>>>>> bc50ba56a
   useUIStore.setState({ settingsProjectPath: null });
   useAgentsStore.getState().resetForRuntimeSwitch();
   useAgentsStore.setState({ selectedAgentName: null });

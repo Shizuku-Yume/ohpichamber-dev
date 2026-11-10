@@ -3,6 +3,7 @@ import { appendFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+<<<<<<< HEAD
 // packages/sdk/src/bootstrap.ts
 var GUEST_BOOTSTRAP_CHANNEL = "openchamber.guest-bootstrap";
 var GUEST_BOOTSTRAP_API_VERSION = 2;
@@ -76,6 +77,8 @@ var bootstrap = (channelName, apiVersion, eventName) => {
   } catch {}
 };
 var GUEST_BOOTSTRAP_SCRIPT = `(${bootstrap.toString()})(${JSON.stringify(GUEST_BOOTSTRAP_CHANNEL)}, ${GUEST_BOOTSTRAP_API_VERSION}, ${JSON.stringify(GUEST_BOOTSTRAP_EVENT)});`;
+=======
+>>>>>>> bc50ba56a
 // packages/sdk/src/scrollbar-style.ts
 var GUEST_SCROLLING_ATTRIBUTE = "data-oc-scrolling";
 var GUEST_SCROLLBAR_CSS = `
@@ -136,6 +139,10 @@ function installGuestScrollbarActivity(doc) {
 }
 var GUEST_SCROLLBAR_SCRIPT = `(${installGuestScrollbarActivity.toString()})(document);`;
 // packages/sdk/src/manifest.ts
+<<<<<<< HEAD
+=======
+var GUEST_PROVIDER_LOGO_BYTES_MAX = 1024 * 1024;
+>>>>>>> bc50ba56a
 var TRACKER_URL_TOKENS = ["{id}", "{segment}", "{segments+}"];
 var TRACKER_URL_TOKEN_SET = new Set(TRACKER_URL_TOKENS);
 // packages/sdk/src/session-events.ts
@@ -171,7 +178,11 @@ var readSessionEventRequest = (body) => {
     return null;
   if (Object(event) !== event || event === undefined)
     return null;
+<<<<<<< HEAD
   const { id, type, at, session, project, linked, permission } = event;
+=======
+  const { id, type, at, session, project, linked, permission, question } = event;
+>>>>>>> bc50ba56a
   if (String(id) !== id || id.length === 0)
     return null;
   if (String(type) !== type || !isGuestSessionEventType(type))
@@ -206,6 +217,19 @@ var readSessionEventRequest = (body) => {
       return null;
     request.event.permission = { requestId: permissionRequestId };
   }
+<<<<<<< HEAD
+=======
+  if (question !== undefined) {
+    if (Object(question) !== question)
+      return null;
+    const { kind, id: questionId } = question;
+    if (kind !== "form" && kind !== "page")
+      return null;
+    if (String(questionId) !== questionId || questionId.length === 0)
+      return null;
+    request.event.question = { kind, id: questionId };
+  }
+>>>>>>> bc50ba56a
   if (content !== undefined) {
     if (Object(content) !== content || content.type !== type)
       return null;

@@ -47,7 +47,10 @@ const setupWith = (options: {
     setupWorktree: options.personalCommands ?? [],
     setupWorktreeWait: null,
     setupWorktreeMode: options.replace ? 'replace' : 'append',
+<<<<<<< HEAD
     worktreeDirectory: null,
+=======
+>>>>>>> bc50ba56a
     teardownWorktree: options.personalTeardown ?? [],
     projectActions: options.personal ?? [],
     projectActionsPrimaryId: null,

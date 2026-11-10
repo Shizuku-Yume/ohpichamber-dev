@@ -67,6 +67,7 @@ const nativeSession = (sessionId: string, workspaceId = "workspace-issue-2039"):
   archiveRevision: "0",
 })
 
+<<<<<<< HEAD
 beforeEach(async () => {
   switchRuntimeEndpoint({ apiBaseUrl: "https://issue-2039.test", runtimeKey: `issue-2039-${++runtimeNumber}` })
   storage.removeItem(draftTargetKey)
@@ -150,6 +151,321 @@ beforeEach(async () => {
   spyOn(openchamberConfig, "getWorktreeSetupWaitEnabled").mockResolvedValue(false)
   spyOn(trustConfirmation, "resolveWorktreeSetupCommands").mockResolvedValue([])
   spyOn(worktreeCreate, "createWorktreeWithDefaults").mockImplementation(async project => {
+=======
+const deferredStorage: Storage = {
+  getItem: (key: string) => storage.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    storage.set(key, value)
+  },
+  removeItem: (key: string) => {
+    storage.delete(key)
+  },
+  clear: () => {
+    storage.clear()
+  },
+  key: (index: number) => Array.from(storage.keys())[index] ?? null,
+  get length() {
+    return storage.size
+  },
+}
+
+mock.module("@/stores/utils/safeStorage", () => ({
+  getDeferredSafeStorage: () => deferredStorage,
+  getSafeSessionStorage: () => deferredStorage,
+  createDeferredSafeJSONStorage: () => ({
+    getItem: async () => null,
+    setItem: async () => undefined,
+    removeItem: async () => undefined,
+  }),
+}))
+
+mock.module("@/lib/opencode/client", () => ({
+  opencodeClient: {
+    getDirectory: () => null,
+    getFilesystemHome: mock(async () => "/home/test"),
+    getFilesystemHomeInfo: async () => ({ home: "/home/test" }),
+    createDirectory: mock(async (path: string) => ({ success: true, path })),
+    setDirectory: mock(() => undefined),
+  },
+}))
+
+mock.module("@/stores/permissionStore", () => ({
+  usePermissionStore: {
+    getState: () => ({
+      setSessionMode: mock(async (sessionId: string, mode: string) => {
+        permissionAutoAcceptCalls.push([sessionId, mode])
+      }),
+    }),
+  },
+}))
+
+mock.module("@/stores/useConfigStore", () => ({
+  selectCatalogLoadedForDirectory: () => false,
+  selectConfigAgentsForDirectory: () => [],
+  useConfigStore: {
+    getState: () => ({
+      currentAgentName: "agent-default",
+      currentProviderId: "provider",
+      currentModelId: "model",
+      currentVariantSelection: { override: configVariantOverride, inherited: "high" },
+      selectionSource,
+      agents: [],
+      activateDirectory: mock(async (directory: string | null | undefined, options?: { preserveManualModel?: boolean }) => {
+        activateDirectoryCalls.push(directory)
+        activationOptions.push(options)
+        await activationPending
+      }),
+      applyDefaultModelAgentSelection: mock((selection: {
+        projectDefaultAgent?: string | null
+        projectDefaultModel?: string | null
+        projectDefaultVariant?: string | null
+      }) => {
+        applyDefaultModelAgentSelectionCalls.push(selection)
+      }),
+    }),
+  },
+}))
+
+mock.module("@/stores/useProjectsStore", () => ({
+  useProjectsStore: {
+    getState: () => projectsState,
+  },
+}))
+
+mock.module("@/stores/useDirectoryStore", () => ({
+  isDirectoryUnknown: () => false,
+  useDirectoryStore: {
+    getState: () => ({
+      currentDirectory: null,
+      setDirectory: mock(() => undefined),
+    }),
+  },
+}))
+
+mock.module("@/stores/useSessionGoalArmStore", () => ({
+  useSessionGoalArmStore: {
+    getState: () => ({ setArmed: () => undefined }),
+  },
+}))
+
+mock.module("@/stores/useGlobalSessionsStore", () => ({
+  useGlobalSessionsStore: {
+    getState: () => ({
+      activeSessions: [],
+      archivedSessions: [],
+      entityById: new Map(),
+    }),
+  },
+  resolveGlobalSessionDirectory: () => null,
+}))
+
+mock.module("@/stores/useSessionFoldersStore", () => ({
+  useSessionFoldersStore: {
+    getState: () => ({
+      addSessionToFolder: mock(() => undefined),
+    }),
+  },
+}))
+
+mock.module("@/stores/useCommandsStore", () => ({
+  useCommandsStore: {
+    getState: () => ({
+      commands: [],
+      commandsByDirectory: {},
+    }),
+  },
+  selectCommandsForDirectory: () => [],
+}))
+
+mock.module("@/stores/useSkillsStore", () => ({
+  useSkillsStore: {
+    getState: () => ({
+      skills: [],
+      skillsByDirectory: {},
+    }),
+  },
+  selectSkillsForDirectory: () => [],
+  selectAvailableSkillsForDirectory: () => [],
+}))
+
+mock.module("@/components/ui", () => ({
+  toast: {
+    error: () => undefined,
+    info: () => undefined,
+    success: () => undefined,
+    warning: () => undefined,
+  },
+}))
+
+mock.module("../selection-store", () => ({
+  useSelectionStore: {
+    getState: () => ({
+      saveSessionModelSelection: () => undefined,
+      saveSessionAgentSelection: () => undefined,
+      saveAgentModelForSession: (sessionId: string, agent: string, provider: string, model: string) => {
+        savedAgentModelCalls.push([sessionId, agent, provider, model])
+      },
+      saveAgentModelVariantForSession: (_sessionId: string, _agent: string, _provider: string, _model: string, variant: string | undefined) => {
+        savedVariantCalls.push(variant)
+      },
+      getSessionAgentSelection: () => null,
+      getSessionModelSelection: () => null,
+      getAgentModelForSession: () => null,
+      getAgentModelVariantForSession: () => undefined,
+    }),
+  },
+}))
+
+// Spread the real module so the stub stays a patch: anything else importing
+// runtime-switch in this process still gets its remaining exports.
+const runtimeSwitchModule = await import("@/lib/runtime-switch")
+mock.module("@/lib/runtime-switch", () => ({
+  ...runtimeSwitchModule,
+  getRuntimeApiBaseUrl: () => "",
+  getRuntimeKey: () => "test-runtime",
+  initializeRuntimeEndpoint: () => undefined,
+  subscribeRuntimeEndpointChanged: () => () => undefined,
+  switchRuntimeEndpoint: () => undefined,
+}))
+
+mock.module("@/lib/userSendAnimation", () => ({
+  markPendingUserSendAnimation: () => undefined,
+}))
+
+mock.module("../sync-context", () => ({
+  setActiveSession: () => undefined,
+}))
+
+mock.module("../notification-store", () => ({
+  markSessionViewed: () => undefined,
+}))
+
+mock.module("../session-navigation", () => ({
+  setSessionOpener: () => undefined,
+}))
+
+mock.module("../session-worktree-contract", () => ({
+  getAttachedSessionDirectory: () => null,
+}))
+
+mock.module("../session-worktree-store", () => ({
+  useSessionWorktreeStore: {
+    getState: () => ({
+      getAttachment: () => undefined,
+      setAttachment: () => undefined,
+      clearAttachment: () => undefined,
+    }),
+  },
+}))
+
+mock.module("../viewport-store", () => ({
+  getViewportSessionMemory: () => null,
+  viewportSessionKey: (sessionId: string) => sessionId,
+  useViewportStore: {
+    getState: () => ({
+      updateViewportAnchor: mock(() => undefined),
+    }),
+    setState: () => undefined,
+  },
+}))
+
+mock.module("../input-store", () => ({
+  useInputStore: {
+    getState: () => ({
+      clearAttachedFiles: () => undefined,
+      setPendingInputText: () => undefined,
+      addRestoredAttachment: () => undefined,
+    }),
+  },
+}))
+
+mock.module("../sync-refs", () => ({
+  getDirectoryState: () => null,
+  getSyncSessions: () => [],
+  getSyncMessages: () => [],
+  getSyncParts: () => [],
+  getAllSyncSessions: () => [],
+  getSyncSessionDirectory: (sessionId: string) => sessionDirectoryRegistry.get(sessionId) ?? null,
+  registerSessionDirectory: (sessionId: string, directory: string) => {
+    sessionDirectoryRegistry.set(sessionId, directory)
+  },
+}))
+
+mock.module("../session-actions", () => ({
+  // Mirrors the real action's authoritative steps: the created session becomes
+  // current under the directory the server confirmed, and that directory enters
+  // the routing index. Everything these tests assert about routing depends on
+  // those two, so a mock without them tests nothing.
+  createSession: mock(async (
+    title: string | undefined,
+    directory: string | null,
+    metadata?: unknown,
+    selectionTransition?: "submitted-draft",
+  ) => {
+    createSessionCalls.push({ title, directory, metadata })
+    const session = { id: "ses_issue_2039", directory: createdSessionDirectory ?? directory }
+    const sessionDirectory = session.directory ?? null
+    if (sessionDirectory) {
+      sessionDirectoryRegistry.set(session.id, sessionDirectory)
+    }
+    const { useSessionUIStore: store } = await import("../session-ui-store")
+    store.getState().setCurrentSession(session.id, sessionDirectory, { transition: selectionTransition })
+    store.getState().markSessionAsOpenChamberCreated(session.id)
+    return session
+  }),
+  forkAfterMessage: mock(async () => undefined),
+  adoptSessionMove: () => undefined,
+  markSessionStatus: () => undefined,
+  openPendingSessionTranscript: () => undefined,
+  deleteSession: mock(async () => true),
+  deleteSessions: mock(async () => ({ deletedIds: [], failedIds: [] })),
+  archiveSession: mock(async () => true),
+  archiveSessions: mock(async () => ({ archivedIds: [], failedIds: [] })),
+  unarchiveSession: mock(async () => true),
+  unarchiveSessions: mock(async () => ({ restoredIds: [], failedIds: [] })),
+  updateSessionTitle: mock(async () => undefined),
+  shareSession: mock(async () => undefined),
+  unshareSession: mock(async () => undefined),
+  optimisticSend: mock(async () => undefined),
+  commitStagedRevert: mock(async () => undefined),
+  refetchSessionMessages: mock(async () => undefined),
+  revertToMessage: mock(async () => undefined),
+  unrevertSession: mock(async () => undefined),
+  forkFromMessage: mock(async () => undefined),
+  fetchMessagesForSession: mock(async () => undefined),
+  getSessionLastAssistantModel: () => null,
+  patchSessionMetadata: mock(async () => undefined),
+  abortCurrentOperation: mock(async () => undefined),
+}))
+
+mock.module("@/lib/git/branchNameGenerator", () => ({
+  generateBranchName: () => "generated-branch",
+  generatedBranchPrefix: (name: string) => (name === "generated-branch" ? "" : null),
+}))
+
+mock.module("@/lib/openchamberConfig", () => ({
+  getWorktreeSetupCommands: async () => [],
+  getWorktreeSetupWaitEnabled: async () => false,
+  substituteCommandVariables: (command: string) => command,
+}))
+mock.module("@/lib/sharedTrustConfirmation", () => ({
+  resolveWorktreeSetupCommands: async () => [],
+  resolveWorktreeTeardownCommands: async () => [],
+}))
+
+mock.module("@/lib/worktrees/worktreeBootstrap", () => ({
+  waitForWorktreeBootstrap: async () => undefined,
+  clearWorktreeBootstrapState: () => undefined,
+  getWorktreeBootstrapState: () => null,
+  markWorktreeBootstrapPending: () => undefined,
+  setWorktreeBootstrapState: () => undefined,
+  startWorktreeBootstrapWatcher: () => undefined,
+  waitForWorktreeGitReady: async (directory: string) => waitForCheckoutImplementation(directory),
+}))
+
+mock.module("@/lib/worktrees/worktreeCreate", () => ({
+  createWorktreeWithDefaults: async (project: { id: string; path: string }) => {
+>>>>>>> bc50ba56a
     createdWorktreeProjects.push(project)
     return { source: "sdk", name: "generated-branch", path: "/worktrees/generated-branch",
       projectDirectory: project.path, branch: "generated-branch", label: "generated-branch" }
@@ -415,13 +731,14 @@ describe("issue 2039 draft auto-accept", () => {
     useSessionUIStore.getState().openNewSessionDraft()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(activateDirectoryCalls).toEqual([null])
+    expect(activateDirectoryCalls).toEqual(["/home/test/.config/openchamber/chats"])
     expect(applyDefaultModelAgentSelectionCalls.at(-1)).toEqual({
       projectDefaultAgent: undefined,
       projectDefaultModel: undefined,
       projectDefaultVariant: undefined,
     })
   })
+
 
   test("restores project defaults when the next draft restores the previous project target", async () => {
     const project = {
@@ -498,8 +815,14 @@ describe("issue 2039 draft auto-accept", () => {
     expect(createSessionCalls[1]?.metadata?.openchamber?.project_context_pins).toBeUndefined()
   })
 
+<<<<<<< HEAD
   test("uses the admitted Host directory after worktree session creation", async () => {
     registerWorkspaceDirectory("workspace-issue-2039", "/canonical/worktree")
+=======
+  test("uses the server-authoritative directory after worktree session creation", async () => {
+    projectsState.projects = [{ id: "canonical", path: "/canonical/worktree" }]
+    createdSessionDirectory = "/canonical/worktree"
+>>>>>>> bc50ba56a
     useSessionUIStore.getState().openNewSessionDraft({
       directoryOverride: "/canonical/worktree",
     })

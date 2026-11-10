@@ -269,11 +269,116 @@ export const createSessionAssistRuntime = ({
      return;
     }
     gates.delete(sessionId);
+<<<<<<< HEAD
     const fields = allowed ?? ALL_FIELDS;
     if (!fields.recap && !fields.suggestion) {
      settled.add(sessionId);
      onTurnSettled?.(sessionId);
      return;
+=======
+    ready.delete(sessionId);
+    inflight.get(sessionId)?.controller.abort();
+    announce(sessionId);
+  };
+
+  // A new turn makes the stored recap and suggestion describe an older turn:
+  // delete them so "has a suggestion" in metadata means the same everywhere.
+  const retireStored = (sessionId, directory) => {
+    if (!persisted.has(sessionId)) return;
+    const storedDirectory = persisted.get(sessionId);
+    persisted.delete(sessionId);
+    Promise.resolve(persistSessionAssist(sessionId, directory || storedDirectory, null))
+      .catch(() => console.warn('[session-assist] failed to retire a stale assist'));
+  };
+
+  // A loopback host does not prove that no model runs here: CLIProxyAPI,
+  // LiteLLM and one-api all listen on 127.0.0.1 and forward to a hosted
+  // vendor, where a side request evicts nothing. The skip stays on the safe
+  // side of that ambiguity, but it used to return without a word, which made
+  // an enabled toggle look broken (#6173). One line per model pair keeps a
+  // genuine local server from repeating it every turn.
+  const localSkipNotices = new Set();
+  const reportLocalSkip = (providerID, modelID) => {
+    const key = `${providerID}/${modelID}`;
+    if (localSkipNotices.has(key)) return;
+    localSkipNotices.add(key);
+    console.log(`[session-assist] skipped: ${key} is served from a local endpoint and is the session's own model, so a side request would evict its prompt cache. Set a different Small Model to get a recap or a suggestion`);
+  };
+
+  const generateAssist = async (sessionId, directory, signal, allowed) => {
+    const enabledTargets = getTargets();
+    const targets = {
+      recap: enabledTargets.recap && allowed.recap,
+      suggestion: enabledTargets.suggestion && allowed.suggestion,
+    };
+    if (!targets.recap && !targets.suggestion) return;
+    const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
+    const client = OpenCode.make({
+      baseUrl,
+      headers: {
+        ...getOpenCodeAuthHeaders(),
+        // v2 scopes by header and rejects non-ASCII header values.
+        ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
+      },
+    });
+    const requestOptions = () => ({ signal: AbortSignal.any([signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)]) });
+    const checkCurrent = () => {
+      signal.throwIfAborted();
+      if (buildOpenCodeUrl('/', '').replace(/\/$/, '') !== baseUrl) throw new Error('Session assist runtime changed');
+    };
+    const session = await client.session.get({ sessionID: sessionId }, requestOptions());
+    checkCurrent();
+    // Reverted history is not the active conversation. A new prompt clears
+    // the revert boundary before its next idle event.
+    if (session?.id === sessionId) lineage?.remember(sessionId, session.parentID ?? null);
+    if (session?.id !== sessionId || session.parentID || session.revert?.messageID) return;
+    // An archived session is put away: no recap or suggestion is generated for it.
+    if (await isSessionArchived(sessionId)) return;
+    const context = await loadAssistContext({
+      signal,
+      readPage: ({ limit, cursor }) => client.message.list(
+        { sessionID: sessionId, limit, ...(cursor ? { cursor } : { order: 'desc' }) },
+        requestOptions(),
+      ),
+    });
+    checkCurrent();
+    if (!context) return;
+    const { last, turns } = context;
+    const { describeSmallModel, generateSmallModelText } = await getSmallModelService();
+    const preferredProviderID = last.providerID;
+    const preferredModelID = last.modelID;
+    const described = await describeSmallModel({ directory, preferredProviderID, preferredModelID });
+    checkCurrent();
+    if (!described) return;
+    // A local server keeps one prompt cache per slot: a side request on the
+    // session's own model evicts it, and the next turn reprocesses the whole
+    // history. There only a different model may write the assist, however the
+    // session's model was picked (fallback or an explicit Small Model).
+    if (described.localEndpoint
+      && described.providerID === preferredProviderID
+      && described.modelID === preferredModelID) {
+      reportLocalSkip(preferredProviderID, preferredModelID);
+      return;
+    }
+    const system = buildAssistSystemPrompt(targets);
+    const prompt = buildAssistPrompt(turns, targets, described.inputCharBudget - system.length - 512);
+    if (!prompt) return;
+    let generated;
+    try {
+      generated = await generateSmallModelText({
+        prompt: prompt.text, system, directory,
+        preferredProviderID, preferredModelID,
+        onOverflow: 'error', timeoutMs: GENERATION_TIMEOUT_MS, signal,
+      });
+    } catch (error) {
+      if (!signal.aborted && Number(error?.statusCode) !== 404 && !QUIET_FAILURE_CODES.has(error?.code)) {
+        // Keep the cause: a bare "generation failed" hides whether this was a
+        // cold-start 503, a provider rejection, or a bug, which is exactly what
+        // the operator needs to tell a transient startup from a permanent one.
+        console.warn('[session-assist] generation failed', describeGenerationFailure(error));
+      }
+      return;
+>>>>>>> bc50ba56a
     }
     armTimer(sessionId, directory, armedAt, fields);
    });

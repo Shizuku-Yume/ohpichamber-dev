@@ -8,7 +8,11 @@ import { loadMagicPrompts } from './magicPrompts';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+<<<<<<< HEAD
 import { getRuntimeSwitchRevision } from './runtime-switch';
+=======
+import { GitNetworkOperationRequestError } from './api/types';
+>>>>>>> bc50ba56a
 import { notifyGitStatusInvalidated } from './gitStatusInvalidation';
 export type ChangeRequestProviderWords = {
   label: string;
@@ -27,7 +31,16 @@ const getRuntimeGit = () => {
   return getRegisteredRuntimeAPIs()?.git ?? null;
 };
 
+<<<<<<< HEAD
 // Runtime git adapters do not necessarily go through the HTTP
+=======
+// A registered runtime that omits an operation does not have it. Falling back
+// to the HTTP adapter would call a server that runtime does not run.
+const unsupportedByRuntime = (operation: string): Promise<never> =>
+  Promise.reject(new GitNetworkOperationRequestError('RUNTIME_UNSUPPORTED', `${operation} is not supported in this runtime`, 501));
+
+// Runtime git adapters (the VS Code bridge today) do not go through the HTTP
+>>>>>>> bc50ba56a
 // adapter's cache, so the invalidation signal `useGitStore` relies on has to be
 // emitted here, at the dispatch layer, once a runtime mutation succeeds. The
 // HTTP adapter keeps emitting it itself when it clears its own cache, so a
@@ -100,7 +113,7 @@ export async function getGitRangeDiff(
   options: import('./api/types').GetGitRangeDiffOptions
 ): Promise<import('./api/types').GitDiffResponse> {
   const runtime = getRuntimeGit();
-  if (runtime?.getGitRangeDiff) return runtime.getGitRangeDiff(directory, options);
+  if (runtime) return runtime.getGitRangeDiff ? runtime.getGitRangeDiff(directory, options) : unsupportedByRuntime('getGitRangeDiff');
   return gitHttp.getGitRangeDiff(directory, options);
 }
 
@@ -109,7 +122,7 @@ export async function getGitRangeFiles(
   options: import('./api/types').GetGitRangeFilesOptions
 ): Promise<import('./api/types').GitRangeFileEntry[]> {
   const runtime = getRuntimeGit();
-  if (runtime?.getGitRangeFiles) return runtime.getGitRangeFiles(directory, options);
+  if (runtime) return runtime.getGitRangeFiles ? runtime.getGitRangeFiles(directory, options) : unsupportedByRuntime('getGitRangeFiles');
   return gitHttp.getGitRangeFiles(directory, options);
 }
 
@@ -118,7 +131,7 @@ export async function getBranchBase(
   branch: string
 ): Promise<import('./api/types').GitBranchBaseResponse> {
   const runtime = getRuntimeGit();
-  if (runtime?.getBranchBase) return runtime.getBranchBase(directory, branch);
+  if (runtime) return runtime.getBranchBase ? runtime.getBranchBase(directory, branch) : unsupportedByRuntime('getBranchBase');
   return gitHttp.getBranchBase(directory, branch);
 }
 
@@ -555,9 +568,13 @@ async function teardownGitWorktree(
   if (runtime?.worktree?.teardown) {
     return runtime.worktree.teardown(directory, payload);
   }
+<<<<<<< HEAD
   if (runtime?.teardownGitWorktree) {
     return runtime.teardownGitWorktree(directory, payload);
   }
+=======
+  if (runtime) throw new Error('Running teardown commands alone is not available here');
+>>>>>>> bc50ba56a
   return gitHttp.teardownGitWorktree(directory, payload);
 }
 
@@ -565,13 +582,31 @@ async function teardownGitWorktree(
 export async function setGitWorktreeTitle(
   directory: string,
   title: string,
+  by: 'user' | 'agent' = 'user',
 ): Promise<import('./api/types').GitWorktreeTitleResult> {
   const runtime = getRuntimeGit();
   if (runtime?.worktree?.setTitle) {
-    return runtime.worktree.setTitle(directory, title);
+    return runtime.worktree.setTitle(directory, title, by);
   }
   if (runtime) throw new Error('Renaming a worktree task is not available here');
-  return gitHttp.setGitWorktreeTitle(directory, title);
+  return gitHttp.setGitWorktreeTitle(directory, title, by);
+}
+
+/**
+ * Pins the task of the worktree at `directory` to the top of the sidebar, or
+ * unpins it. `list` files the pin in one of the user's pin lists; null is Pinned.
+ */
+export async function setGitWorktreePinned(
+  directory: string,
+  pinned: boolean,
+  list: string | null = null,
+): Promise<import('./api/types').GitWorktreePinResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.setPinned) {
+    return runtime.worktree.setPinned(directory, pinned, list);
+  }
+  if (runtime) throw new Error('Pinning a worktree task is not available here');
+  return gitHttp.setGitWorktreePinned(directory, pinned, list);
 }
 
 export async function snapshotGitWorktree(
@@ -675,7 +710,7 @@ export async function getGitLog(
   options: import('./api/types').GitLogOptions = {}
 ): Promise<import('./api/types').GitLogResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtime.getGitLog(directory, options);
+  if (runtime) return runtime.getGitLog ? runtime.getGitLog(directory, options) : unsupportedByRuntime('getGitLog');
   return gitHttp.getGitLog(directory, options);
 }
 
@@ -684,7 +719,7 @@ export async function getCommitFiles(
   hash: string
 ): Promise<import('./api/types').GitCommitFilesResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtime.getCommitFiles(directory, hash);
+  if (runtime) return runtime.getCommitFiles ? runtime.getCommitFiles(directory, hash) : unsupportedByRuntime('getCommitFiles');
   return gitHttp.getCommitFiles(directory, hash);
 }
 
@@ -697,15 +732,25 @@ export async function getGitCommitDiff(directory: string, options: import('./api
   return gitHttp.getGitCommitDiff(directory, options);
 }
 
+/** Goes straight to the server: only OpenChamber's own git routes hand out both versions of a file. */
+export const getGitRangeFileVersions = gitHttp.getGitRangeFileVersions;
+
 export async function getCommitFileDiff(
   directory: string,
   hash: string,
   filePath: string,
   isBinary: boolean,
+<<<<<<< HEAD
   previousPath?: string
 ): Promise<import('./api/types').CommitFileDiffResponse> {
   const runtime = getRuntimeGit();
   if (runtime?.getCommitFileDiff) return runtime.getCommitFileDiff(directory, hash, filePath, isBinary);
+=======
+  previousPath?: string,
+): Promise<import('./api/types').CommitFileDiffResponse> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getCommitFileDiff ? runtime.getCommitFileDiff(directory, hash, filePath, isBinary) : unsupportedByRuntime('getCommitFileDiff');
+>>>>>>> bc50ba56a
   return gitHttp.getCommitFileDiff(directory, hash, filePath, isBinary, previousPath);
 }
 
@@ -735,7 +780,7 @@ export async function deleteGitIdentity(id: string): Promise<void> {
 
 export async function getGlobalGitIdentity(): Promise<import('./api/types').GitIdentitySummary | null> {
   const runtime = getRuntimeGit();
-  if (runtime?.getGlobalGitIdentity) return runtime.getGlobalGitIdentity();
+  if (runtime) return runtime.getGlobalGitIdentity ? runtime.getGlobalGitIdentity() : unsupportedByRuntime('getGlobalGitIdentity');
   return gitHttp.getGlobalGitIdentity();
 }
 
@@ -744,7 +789,7 @@ export async function rebase(
   options: { onto: string }
 ): Promise<import('./api/types').GitRebaseResult> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtimeStatusMutation(directory, runtime.rebase(directory, options));
+  if (runtime) return runtime.rebase ? runtimeStatusMutation(directory, runtime.rebase(directory, options)) : unsupportedByRuntime('rebase');
   return gitHttp.rebase(directory, options);
 }
 
@@ -753,7 +798,7 @@ export async function merge(
   options: { branch: string }
 ): Promise<import('./api/types').GitMergeResult> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtimeStatusMutation(directory, runtime.merge(directory, options));
+  if (runtime) return runtime.merge ? runtimeStatusMutation(directory, runtime.merge(directory, options)) : unsupportedByRuntime('merge');
   return gitHttp.merge(directory, options);
 }
 
@@ -762,7 +807,7 @@ export async function checkoutCommit(
   hash: string
 ): Promise<import('./api/types').CheckoutCommitResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtimeStatusMutation(directory, runtime.checkoutCommit(directory, hash));
+  if (runtime) return runtime.checkoutCommit ? runtimeStatusMutation(directory, runtime.checkoutCommit(directory, hash)) : unsupportedByRuntime('checkoutCommit');
   return gitHttp.checkoutCommit(directory, hash);
 }
 
@@ -771,7 +816,7 @@ export async function cherryPick(
   hash: string
 ): Promise<import('./api/types').CherryPickResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtimeStatusMutation(directory, runtime.cherryPick(directory, hash));
+  if (runtime) return runtime.cherryPick ? runtimeStatusMutation(directory, runtime.cherryPick(directory, hash)) : unsupportedByRuntime('cherryPick');
   return gitHttp.cherryPick(directory, hash);
 }
 
@@ -780,7 +825,7 @@ export async function revertCommit(
   hash: string
 ): Promise<import('./api/types').RevertCommitResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtimeStatusMutation(directory, runtime.revertCommit(directory, hash));
+  if (runtime) return runtime.revertCommit ? runtimeStatusMutation(directory, runtime.revertCommit(directory, hash)) : unsupportedByRuntime('revertCommit');
   return gitHttp.revertCommit(directory, hash);
 }
 
@@ -791,7 +836,7 @@ export async function resetToCommit(
   force?: boolean
 ): Promise<import('./api/types').ResetToCommitResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtimeStatusMutation(directory, runtime.resetToCommit(directory, hash, mode, force));
+  if (runtime) return runtime.resetToCommit ? runtimeStatusMutation(directory, runtime.resetToCommit(directory, hash, mode, force)) : unsupportedByRuntime('resetToCommit');
   return gitHttp.resetToCommit(directory, hash, mode, force);
 }
 
@@ -826,6 +871,6 @@ export async function validateWorktreeDirectory(directory: string, worktreeRoot:
 
 export async function getConflictDetails(directory: string): Promise<import('./api/types').MergeConflictDetails> {
   const runtime = getRuntimeGit();
-  if (runtime?.getConflictDetails) return runtime.getConflictDetails(directory);
+  if (runtime) return runtime.getConflictDetails ? runtime.getConflictDetails(directory) : unsupportedByRuntime('getConflictDetails');
   return gitHttp.getConflictDetails(directory);
 }

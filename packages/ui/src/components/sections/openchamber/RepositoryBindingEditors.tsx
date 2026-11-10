@@ -1,7 +1,9 @@
 import React from 'react';
 import {
+  gitRemoteHost,
   identityAccountConnected,
   instanceHost,
+  instanceSshHostsFrom,
   remoteTraits,
   selectableIdentities,
   type RemoteTraits,

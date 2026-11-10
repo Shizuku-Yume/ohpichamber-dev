@@ -42,7 +42,18 @@ const SERVICE_STATUS_CHANGES_PER_MINUTE = 30;
 /**
  * @param {{
  *   listGuests: () => Promise<object[]>,
+<<<<<<< HEAD
  *   control: { execute: (action: string, input: object, directory?: string, options?: object) => Promise<any> },
+=======
+ *   control: {
+ *     execute: (action: string, input: object, directory?: string, options?: object) => Promise<any>,
+ *     resolveSessionDirectory: (sessionId: string) => Promise<string | null>,
+ *     stopSession: (sessionId: string) => Promise<boolean>,
+ *     answerPermission: (input: { sessionID: string, requestID: string, decision: 'once' | 'reject', message?: string }) => Promise<void>,
+ *     answerForm: (input: { sessionID: string, formID: string, answer: Record<string, unknown> | null, message?: string }) => Promise<void>,
+ *     dismissOpenForms: (sessionId: string) => Promise<void>,
+ *   },
+>>>>>>> bc50ba56a
  *   instructions: { set: (guestId: string, directory: string | null, text: string) => Promise<void> },
  *   readSettings: (guest: object) => Promise<Record<string, string>>,
  *   emitToFrames: (guestId: string, topic: string, data: unknown) => void,
@@ -71,6 +82,20 @@ export const createServiceHostApi = ({ listGuests, control, instructions, readSe
     ? null
     : fail(403, 'NOT_GRANTED', `This call needs the "${capability}" approval. Ask the user to approve the extension in Settings → Extensions.`));
 
+<<<<<<< HEAD
+=======
+  /**
+   * Answering for the user is its own approval line. A grant left over from a
+   * version that asked for it no longer counts once the manifest stops asking.
+   */
+  const mayAnswer = (guest) => {
+    const refused = needs(guest, 'sessionControl') ?? needs(guest, 'sessionAnswers');
+    if (refused) return refused;
+    if (guest.sessionControl?.answers !== true) return fail(403, 'NOT_GRANTED', 'Answering the agent needs sessionControl.answers in the manifest.');
+    return null;
+  };
+
+>>>>>>> bc50ba56a
   /** A counter per guest over a sliding window; what it refuses does not count. */
   const budget = (limit, windowMs) => {
     const spent = new Map();
@@ -102,6 +127,10 @@ export const createServiceHostApi = ({ listGuests, control, instructions, readSe
         const refused = needs(guest, 'sessionControl');
         if (refused) return refused;
         if (!mayPrompt(guest.id)) return tooManyPrompts();
+<<<<<<< HEAD
+=======
+        await control.dismissOpenForms(input.sessionId);
+>>>>>>> bc50ba56a
         await control.execute('session.send', input);
         return ok({ sent: true });
       }
@@ -128,6 +157,31 @@ export const createServiceHostApi = ({ listGuests, control, instructions, readSe
         const { messages } = await readSession(control, 'session.messages', { sessionId: input.sessionId, role: 'assistant', limit: 1 });
         return ok({ reply: messages?.[0]?.text ?? null });
       }
+<<<<<<< HEAD
+=======
+      case 'sessions.stop': {
+        const refused = needs(guest, 'sessionControl');
+        if (refused) return refused;
+        return ok({ stopped: await control.stopSession(input.sessionId) });
+      }
+      case 'sessions.answerPermission': {
+        const refused = mayAnswer(guest);
+        if (refused) return refused;
+        await control.answerPermission({
+          sessionID: input.sessionId,
+          requestID: input.requestId,
+          decision: input.decision === 'allow' ? 'once' : 'reject',
+          message: input.decision === 'deny' ? input.message : undefined,
+        });
+        return ok({ answered: true });
+      }
+      case 'sessions.answerForm': {
+        const refused = mayAnswer(guest);
+        if (refused) return refused;
+        await control.answerForm({ sessionID: input.sessionId, formID: input.formId, answer: input.values, message: input.message });
+        return ok({ answered: true });
+      }
+>>>>>>> bc50ba56a
       case 'instructions.set': {
         const refused = needs(guest, 'instructions');
         if (refused) return refused;

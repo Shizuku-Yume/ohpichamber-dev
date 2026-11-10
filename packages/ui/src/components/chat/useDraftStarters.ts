@@ -2,12 +2,24 @@ import React from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
+<<<<<<< HEAD
 import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getProjectDraftStarters, saveProjectDraftStarters, updateSharedProjectSetup, type ProjectDraftStarter } from '@/lib/openchamberConfig';
+=======
+import { isCommandOfferedInComposer, selectCommandsForComposer, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useComposerConfigDirectory } from '@/hooks/useComposerConfigDirectory';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { updateDesktopSettings } from '@/lib/persistence';
+import { getProjectDraftStarters, saveProjectDraftStarters, updateSharedProjectSetup, type ProjectDraftStarter } from '@/lib/openchamberConfig';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
+>>>>>>> bc50ba56a
 import type { IconName } from '@/components/icon/icons';
 import {
     BUILTIN_STARTERS,
@@ -47,6 +59,7 @@ export type PinnableItem = {
 };
 
 const chipId = (group: StarterGroup, ref: DraftStarterRef): string => `${group}:${starterKey(ref)}`;
+const EMPTY_SKILLS: [] = [];
 
 export type UseDraftStartersResult = {
     global: ResolvedStarter[];
@@ -66,9 +79,18 @@ export type UseDraftStartersResult = {
 export function useDraftStarters(): UseDraftStartersResult {
     const { t } = useI18n();
     const globalRaw = useUIStore((s) => s.globalDraftStarters);
+<<<<<<< HEAD
     const directory = useEffectiveDirectory();
     const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
     const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
+=======
+    const target = useComposerConfigDirectory(useEffectiveDirectory());
+    const directory = target.status === 'resolved' ? target.directory : null;
+    const commands = useCommandsStore((s) => selectCommandsForComposer(s, target));
+    const skills = useSkillsStore((s) => target.status === 'pending'
+        ? EMPTY_SKILLS
+        : selectAvailableSkillsForDirectory(s, target.directory));
+>>>>>>> bc50ba56a
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
     const projects = useProjectsStore((s) => s.projects);
 
@@ -103,6 +125,10 @@ export function useDraftStarters(): UseDraftStartersResult {
     }, [projectRef?.id]);
 
     const ensureLoaded = React.useCallback(() => {
+<<<<<<< HEAD
+=======
+        if (!directory) return;
+>>>>>>> bc50ba56a
         void useCommandsStore.getState().loadCommands(directory);
         void useSkillsStore.getState().loadSkills(directory);
     }, [directory]);
@@ -118,7 +144,15 @@ export function useDraftStarters(): UseDraftStartersResult {
     const commandNames = React.useMemo(() => new Set(commands.map((c) => c.name)), [commands]);
     const skillNames = React.useMemo(() => new Set(skills.map((s) => s.name)), [skills]);
 
+    // Only a managed OpenCode has this command, and only where extensions load.
+    const offersNewExtension = !isVSCode && !isMobileSurfaceRuntime() && commandNames.has('new-extension');
+
     const resolve = React.useCallback((ref: DraftStarterRef, group: StarterGroup, shared = false): ResolvedStarter | null => {
+<<<<<<< HEAD
+=======
+        if (isVSCode && ref.type === 'command' && (ref.name === 'craft-goal' || ref.name === 'schedule-task')) return null;
+        if (ref.type === 'command' && ref.name === 'new-extension' && !offersNewExtension) return null;
+>>>>>>> bc50ba56a
         const plain: DraftStarterRef = { type: ref.type, name: ref.name };
         if (ref.type === 'command') {
             const builtin = getBuiltInStarter(ref.name);
@@ -130,7 +164,11 @@ export function useDraftStarters(): UseDraftStartersResult {
         }
         if (!skillNames.has(ref.name)) return null;
         return { id: chipId(group, plain), ref: plain, group, label: normalizeStarterLabel(ref.name), icon: SKILL_FALLBACK_ICON, submitText: `$${ref.name}`, shared };
+<<<<<<< HEAD
     }, [t, commandNames, skillNames]);
+=======
+    }, [t, commandNames, skillNames, isVSCode, offersNewExtension]);
+>>>>>>> bc50ba56a
 
     const globalRefs = React.useMemo<readonly DraftStarterRef[]>(
         () => globalRaw ?? DEFAULT_GLOBAL_STARTERS,
@@ -156,11 +194,21 @@ export function useDraftStarters(): UseDraftStartersResult {
     const pinnable = React.useMemo<PinnableItem[]>(() => {
         const items: PinnableItem[] = [];
         for (const b of BUILTIN_STARTERS) {
+<<<<<<< HEAD
             items.push({ type: 'command', name: b.name, label: t(b.labelKey), icon: b.icon, section: 'built-in', scope: 'user' });
         }
         for (const c of commands) {
             if (c.source === 'skill' || getBuiltInStarter(c.name)) continue;
             items.push({ type: 'command', name: c.name, label: normalizeStarterLabel(c.name), icon: COMMAND_FALLBACK_ICON, section: 'command', scope: c.scope === 'workspace' ? 'project' : 'user' });
+=======
+            if (isVSCode && (b.name === 'craft-goal' || b.name === 'schedule-task')) continue;
+            if (b.name === 'new-extension' && !offersNewExtension) continue;
+            items.push({ type: 'command', name: b.name, label: t(b.labelKey), icon: b.icon, section: 'built-in', scope: 'user' });
+        }
+        for (const c of commands) {
+            if (c.isBuiltIn || c.source === 'skill' || getBuiltInStarter(c.name) || !isCommandOfferedInComposer(c)) continue;
+            items.push({ type: 'command', name: c.name, label: normalizeStarterLabel(c.name), icon: COMMAND_FALLBACK_ICON, section: 'command', scope: c.scope === 'project' ? 'project' : 'user' });
+>>>>>>> bc50ba56a
         }
         for (const sk of skills) {
             items.push({ type: 'skill', name: sk.name, label: normalizeStarterLabel(sk.name), icon: SKILL_FALLBACK_ICON, section: 'skill', scope: sk.scope === 'workspace' ? 'project' : 'user' });

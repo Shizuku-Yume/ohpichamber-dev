@@ -317,7 +317,11 @@ export const renderWebSearchOutput = (output: JsonValue | undefined, options?: {
                 )}
                 style={typography.tool.popup}
             >
+<<<<<<< HEAD
                 <SimpleMarkdownRenderer content={coerceToText(output)} variant="tool" />
+=======
+                <SimpleMarkdownRenderer content={output} singleTilde={false} variant="tool" />
+>>>>>>> bc50ba56a
             </div>
         );
     } catch {

@@ -43,18 +43,27 @@ afterEach(async () => {
 });
 
 test('a session running or holding a running subagent is found', async () => {
+<<<<<<< HEAD
   await act(async () => replaceGlobalSessionStatusById(new Map([['second', { directory: '/repo', status: 'running' }]])));
+=======
+  await act(async () => replaceGlobalSessionStatusById(new Map([['second', { directory: '/repo', status: { type: 'busy' } }]])));
+>>>>>>> bc50ba56a
   expect(found).toBe('second');
 
   await act(async () => {
     setSessionParentResolver((id) => (id === 'child' ? 'first' : undefined));
+<<<<<<< HEAD
     replaceGlobalSessionStatusById(new Map([['child', { directory: '/repo', status: 'running' }]]));
+=======
+    replaceGlobalSessionStatusById(new Map([['child', { directory: '/repo', status: { type: 'busy' } }]]));
+>>>>>>> bc50ba56a
   });
   expect(found).toBe('first');
 });
 
 test('an idle session waiting on a command, a workflow or a pull request is found', async () => {
   await act(async () => applyBackgroundShellEvents('/repo', [{
+<<<<<<< HEAD
     sessionId: 'second',
     epoch: 'epoch_1',
     sequence: '1',
@@ -73,6 +82,10 @@ test('an idle session waiting on a command, a workflow or a pull request is foun
       outputCursor: '0',
       status: 'running',
     },
+=======
+    type: 'shell.started',
+    properties: { shell: { id: 'sh_1', sessionID: 'second', command: 'sleep 300', file: '/tmp/sh_1.out', startedAt: 1 } },
+>>>>>>> bc50ba56a
   }]));
   expect(found).toBe('second');
   await act(async () => resetBackgroundShells());

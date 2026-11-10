@@ -24,6 +24,7 @@ export function CollapsedActivityIndicator({
       ? t('sessions.sidebar.session.status.permissionRequired')
       : t('sessions.sidebar.session.status.questionPending');
     return (
+<<<<<<< HEAD
       <span
         className={cn('inline-flex shrink-0 items-center text-status-warning', className)}
         aria-label={label}
@@ -31,6 +32,16 @@ export function CollapsedActivityIndicator({
       >
         <Icon name={state === 'permission' ? 'shield' : 'question'} className="h-3 w-3" />
       </span>
+=======
+      <RowMarkTooltip label={label}>
+        <span
+          className={cn('inline-flex shrink-0 items-center text-status-warning', className)}
+          aria-label={label}
+        >
+          <Icon name={state === 'permission' ? 'shield' : 'question'} className="h-3 w-3" />
+        </span>
+      </RowMarkTooltip>
+>>>>>>> bc50ba56a
     );
   }
   return <SessionActivityIndicator state={state === 'active' ? 'running' : 'unread'} className={className} />;

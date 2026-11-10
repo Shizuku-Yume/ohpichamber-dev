@@ -1,11 +1,21 @@
 {
   "name": "@openchamber/electron",
+<<<<<<< HEAD
   "version": "3.0.0",
+=======
+  "version": "2.7.0",
+>>>>>>> bc50ba56a
   "private": true,
   "description": "Electron desktop runtime for OpenChamber",
   "author": "OpenChamber",
   "type": "module",
   "main": "./dist-bundle/entry.mjs",
+<<<<<<< HEAD
+=======
+  "opencodeCli": {
+    "version": "2.2.6"
+  },
+>>>>>>> bc50ba56a
   "dependencies": {
     "@openchamber/web": "workspace:*",
     "electron-context-menu": "^4.1.2",
@@ -15,9 +25,9 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
-    "electron": "^44.9.3",
+    "electron": "^45.0.0",
     "electron-builder": "^26.0.0",
-    "node-abi": "^4.33.0"
+    "node-abi": "^4.40.0"
   },
   "trustedDependencies": [
     "electron"
@@ -75,7 +85,13 @@
       "!node_modules/@openchamber/web/server/**/*.test.js",
       "!**/node_modules/7zip-bin/{linux,mac}{,/**}",
       "!**/node_modules/7zip-bin/!(${os})/**/*",
+<<<<<<< HEAD
       "!**/node_modules/7zip-bin/win/!(${arch}){,/**}"
+=======
+      "!**/node_modules/7zip-bin/win/!(${arch}){,/**}",
+      "!node_modules/node-pty/prebuilds/!(${platform}-${arch}){,/**}",
+      "!**/node_modules/@vscode/ripgrep-*{,/**}"
+>>>>>>> bc50ba56a
     ],
     "extraResources": [
       {

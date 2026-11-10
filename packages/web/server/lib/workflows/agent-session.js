@@ -48,6 +48,7 @@ export class WorkflowAgentStopped extends Error {
 }
 
 /**
+<<<<<<< HEAD
  * Workflow agents run as canonical Host sessions on the Agent Service. One
  * agent is one session and one prompt; a JSON answer that does not match its
  * schema gets a follow-up prompt in the same session.
@@ -57,6 +58,20 @@ export class WorkflowAgentStopped extends Error {
  * writes `parentSessionId` only for sessions its own subagent tool opens.
  * The run record links every agent's session, and the report goes back into
  * the session that proposed the run.
+=======
+ * The mark on every workflow agent's session. A run can start a hundred
+ * agents, so the sidebar leaves sessions with this kind out of its subagent
+ * rows (`packages/ui/src/lib/sessionWorkflowMetadata.ts`); the run's card and
+ * the Workflows panel list them instead.
+ */
+const WORKFLOW_AGENT_METADATA = Object.freeze({ openchamber: Object.freeze({ kind: 'workflow-agent' }) });
+
+/**
+ * Workflow agents are OpenCode child sessions of the session that started the
+ * run, so the user can open any of them from the run's card. One agent is one
+ * session and one turn; a JSON answer that does not match its schema gets a
+ * follow-up prompt in the same session.
+>>>>>>> bc50ba56a
  */
 export const createWorkflowAgentSessions = ({
   sessionService,
@@ -149,6 +164,7 @@ export const createWorkflowAgentSessions = ({
   /**
    * Creates the agent's session in the run's workspace and prompts it once.
    * `onSession(sessionId)` hears the id as soon as the session exists, so a
+<<<<<<< HEAD
    * stop can interrupt it. Resolves to `{ sessionId, outcome }`.
    */
   const start = async ({ directory, parentSessionId, title, agent: _agent, model, text, signal, onSession }) => {
@@ -167,6 +183,38 @@ export const createWorkflowAgentSessions = ({
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
     onSession(sessionId);
+=======
+   * stop can interrupt it. Its checkpoint must resolve before any prompt; a
+   * rejected checkpoint leaves the already-created empty child in OpenCode.
+   * Resolves to `{ sessionId, outcome }`, where outcome
+   * is dispatch-results' `{ state, text, errorMessage }`.
+   */
+  const start = async ({ directory, parentSessionId, title, agent, model, allowTools = [], text, signal, onSession }) => {
+    const client = await getClient(directory);
+    let modelRef = model ? parseModelRef(model) : null;
+    if (model && !modelRef) throw new Error(`model must be provider/model or provider/model#variant, got ${model}`);
+    const parent = modelRef && allowTools.length === 0
+      ? null
+      : sessionSchema.safeParse(await client.session.get({ sessionID: parentSessionId }).catch(() => null));
+    // Like a subagent: without a model of its own the agent runs on the
+    // session that started the run.
+    if (!modelRef && parent?.success && parent.data.model) modelRef = parent.data.model;
+    const request = { parentID: parentSessionId, title, metadata: WORKFLOW_AGENT_METADATA };
+    if (agent) request.agent = agent;
+    if (modelRef) request.model = modelRef;
+    // A child given permissions of its own no longer inherits its parent's, so
+    // they come first and the allows, read last, win. Without the parent's
+    // rules nothing is set: the agent keeps them and answers in plain text,
+    // which the prompt allows for.
+    if (allowTools.length > 0 && parent?.success) {
+      request.permissions = [
+        ...(parent.data.permissions ?? []),
+        ...allowTools.map((tool) => ({ action: tool, resource: '*', effect: 'allow' })),
+      ];
+    }
+    const created = sessionSchema.parse(await client.session.create(request));
+    await onSession(created.id);
+>>>>>>> bc50ba56a
     if (signal.aborted) throw new WorkflowAgentStopped();
     const sent = await sessionService.send(sessionId, promptRequest(text, options));
     if (signal.aborted) {

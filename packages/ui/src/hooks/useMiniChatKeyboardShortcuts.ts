@@ -1,12 +1,20 @@
 import React from 'react';
 import { focusChatInput } from '@/components/chat/composer/editor/dom';
+<<<<<<< HEAD
 import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
+=======
+import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop } from '@/lib/desktop';
+import { getNextFavoriteModel } from '@/lib/modelRefs';
+>>>>>>> bc50ba56a
 import { ShortcutDispatcher, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSelectionStore } from '@/sync/selection-store';
 import { useKeybinds } from './useKeybind';
 import { hasActiveBtwComposer, isEditableEventTarget } from './keyboard-shortcut-dom';
+import { dispatchPromptHistorySearch } from '@/components/chat/composer/state/promptHistorySearchRoute';
 
 export const useMiniChatKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
@@ -25,21 +33,26 @@ export const useMiniChatKeyboardShortcuts = () => {
 
   const cycleFavoriteModel = (delta: number): boolean | void => {
     if (hasActiveBtwComposer()) return false;
-    const { favoriteModels, addRecentModel, setLastSelectedModel } = useUIStore.getState();
-    if (favoriteModels.length === 0) return false;
-
+    const { favoriteModels, hiddenModels, addRecentModel, setLastSelectedModel } = useUIStore.getState();
     const {
+      providers,
       currentProviderId,
       currentModelId,
       setProvider,
       setModel,
     } = useConfigStore.getState();
-    const currentIndex = favoriteModels.findIndex(
-      (favorite) => favorite.providerID === currentProviderId && favorite.modelID === currentModelId,
+    const next = getNextFavoriteModel(
+      favoriteModels,
+      providers,
+      hiddenModels,
+      { providerID: currentProviderId, modelID: currentModelId },
+      delta,
     );
-    const next = favoriteModels[(currentIndex + delta + favoriteModels.length) % favoriteModels.length];
+    if (!next) return false;
     setProvider(next.providerID);
     setModel(next.modelID);
+    const sessionId = useSessionUIStore.getState().currentSessionId;
+    if (sessionId) useSelectionStore.getState().pickSessionModel(sessionId, next.providerID, next.modelID);
     addRecentModel(next.providerID, next.modelID);
     setLastSelectedModel(next.providerID, next.modelID);
   };
@@ -48,6 +61,7 @@ export const useMiniChatKeyboardShortcuts = () => {
     focus_input: () => {
       focusChatInput();
     },
+    search_prompt_history: (event) => dispatchPromptHistorySearch(event),
     new_mini_chat: () => {
       if (!canUseElectronDesktopIPC()) return false;
       void invokeDesktop('desktop_open_draft_mini_chat_window', {
@@ -71,10 +85,14 @@ export const useMiniChatKeyboardShortcuts = () => {
     },
     cycle_thinking_variant: () => {
       if (hasActiveBtwComposer()) return false;
+<<<<<<< HEAD
       const configState = useConfigStore.getState();
       if (configState.getCurrentModelVariants().length === 0) return false;
 
       configState.cycleCurrentVariant();
+=======
+      if (!cycleThinkingVariant(useSessionUIStore.getState().currentSessionId)) return false;
+>>>>>>> bc50ba56a
     },
     cycle_favorite_model_forward: () => cycleFavoriteModel(1),
     cycle_favorite_model_backward: () => cycleFavoriteModel(-1),

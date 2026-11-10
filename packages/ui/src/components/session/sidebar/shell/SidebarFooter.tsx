@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useDesktopRemoteHostActive } from '@/hooks/useDesktopRemoteHostActive';
 import { DesktopInstanceMenu } from '@/components/desktop/DesktopInstanceMenu';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
+import { useUIStore } from '@/stores/useUIStore';
 
 type Props = {
   onOpenSettings: () => void;
@@ -26,6 +29,7 @@ export function SidebarFooter({
   showUpdateButton = true,
 }: Props): React.ReactNode {
   const { t } = useI18n();
+  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   // On a remote host the button updates this app, not the server it shows.
   const isDesktopRemote = useDesktopRemoteHostActive();
 
@@ -44,7 +48,11 @@ export function SidebarFooter({
               <Icon name="settings-3" className="h-4 w-4" />
             </button>
           </TooltipTrigger>
+<<<<<<< HEAD
           <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.settings')}</p></TooltipContent>
+=======
+          <TooltipContent side="top" sideOffset={4}><TooltipLabelWithShortcut label={t('sessions.sidebar.footer.actions.settings')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_settings', shortcutOverrides), '')} /></TooltipContent>
+>>>>>>> bc50ba56a
         </Tooltip>
       ) : null}
       {showUpdateButton ? (

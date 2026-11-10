@@ -26,6 +26,7 @@ interface CustomProviderModelRowProps {
   onChange: (key: ModelTextField, value: string) => void;
   onToggleModality: (modality: Model['modalities'][number]) => void;
   onToolsChange: (tools: boolean) => void;
+  onImageGenerationChange: (imageGeneration: boolean) => void;
   onRemove?: () => void;
   disabled?: boolean;
 }
@@ -48,6 +49,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   onChange,
   onToggleModality,
   onToolsChange,
+  onImageGenerationChange,
   onRemove,
   disabled = false,
 }) => {
@@ -71,7 +73,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   );
 
   return (
-    <div className="border-b border-border/50 last:border-b-0">
+    <div className="border-b border-edge last:border-b-0">
       <div className="flex items-center gap-1 py-1">
         <button
           type="button"
@@ -190,7 +192,18 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
           </div>
 
           <SettingsCheckboxRow
+<<<<<<< HEAD
             checked={model.toolsSupported === true}
+=======
+            checked={model.type === 'image'}
+            onChange={onImageGenerationChange}
+            label={t('settings.providers.page.custom.models.imageGeneration')}
+            ariaLabel={t('settings.providers.page.custom.models.imageGeneration')}
+          />
+
+          <SettingsCheckboxRow
+            checked={model.tools}
+>>>>>>> bc50ba56a
             onChange={onToolsChange}
             disabled={disabled}
             label={t('settings.providers.page.custom.models.tools')}

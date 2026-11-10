@@ -33,6 +33,7 @@ const hasSurfaceUrlOverride = (): boolean => {
 
 /** Viewport half of the surface decision; re-evaluated on resize by the watcher. */
 const isPhoneViewport = (): boolean => {
+<<<<<<< HEAD
  if (typeof window === 'undefined') return false;
  const screenWidth = window.screen?.width;
  const screenHeight = window.screen?.height;
@@ -52,6 +53,27 @@ const isPhoneViewport = (): boolean => {
   && Math.min(screenWidth, screenHeight) < TABLET_LAYOUT_MIN_SHORT_SIDE_PX
   && window.matchMedia?.('(pointer: coarse)')?.matches === true;
  return viewportWidthMatches || screenShortSideMatches;
+=======
+  if (typeof window === 'undefined') return false;
+  const screenWidth = window.screen?.width;
+  const screenHeight = window.screen?.height;
+  const width = Math.min(
+    window.innerWidth || Number.POSITIVE_INFINITY,
+    screenWidth || Number.POSITIVE_INFINITY,
+  );
+  const viewportWidthMatches = Number.isFinite(width)
+    && width <= MOBILE_SURFACE_MAX_WIDTH
+    && isTouchOrCoarsePointer();
+  // Rotation swaps the viewport width, so a phone is recognized by its short
+  // screen side. Tablets and fine-pointer touch desktops keep the width rule.
+  const screenShortSideMatches = Number.isFinite(screenWidth)
+    && screenWidth > 0
+    && Number.isFinite(screenHeight)
+    && screenHeight > 0
+    && Math.min(screenWidth, screenHeight) < TABLET_LAYOUT_MIN_SHORT_SIDE_PX
+    && window.matchMedia?.('(pointer: coarse)')?.matches === true;
+  return viewportWidthMatches || screenShortSideMatches;
+>>>>>>> bc50ba56a
 };
 
 /**

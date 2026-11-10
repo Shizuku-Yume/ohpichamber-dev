@@ -70,7 +70,7 @@ import { useSourceBoardChoice, useSourceBoardStore, type SourceBoardTab } from '
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
-import { SourceBoardActions, SourceBoardPullLinks, SourceBoardStateMenuItems, type SourceBoardProject } from './SourceBoardActions';
+import { SourceBoardActions, SourceBoardPullLinks, SourceBoardReviewDraft, SourceBoardStateMenuItems, type SourceBoardProject } from './SourceBoardActions';
 import { SourceBoardTrackerStatus } from './SourceBoardTrackerStatus';
 import { SourceBoardReply } from './SourceBoardReply';
 import { SourceBoardAcrossNote } from './SourceBoardAcrossNote';
@@ -82,6 +82,7 @@ import { isSameRepositoryItemLink } from './openTrackerItem';
 import { usePullAttachments } from './pullAttachments';
 import { useThreadActions } from './threadActions';
 import { useBoardRevalidation } from './useBoardRevalidation';
+import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS } from '@/components/ui/mobileHeader';
 
 const NO_REPOSITORIES: readonly string[] = [];
 const NO_FOLLOWED: TrackedItem[] = [];
@@ -165,16 +166,16 @@ const MobileBoardHeader: React.FC<{ onClose?: () => void; onBack?: () => void; c
     const { t } = useI18n();
     const action = onBack ?? onClose;
     return (
-        <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 border-b border-border/70 px-3">
+        <header className={cn(MOBILE_HEADER_CLASS, 'border-b border-edge')}>
             {action ? (
                 <button
                     type="button"
-                    className="-ms-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className={MOBILE_HEADER_BUTTON_CLASS}
                     aria-label={onBack ? t('references.picker.actions.back') : t('mobile.surface.closeAria')}
                     onClick={action}
                     style={{ touchAction: 'manipulation' }}
                 >
-                    <Icon name={onBack ? 'arrow-left-s' : 'close'} className="size-5" />
+                    <Icon name={onBack ? 'arrow-left' : 'close'} className="size-5" />
                 </button>
             ) : null}
             <div className="flex min-w-0 flex-1 items-center">{children}</div>
@@ -189,7 +190,6 @@ type SourceBoardKind = RepositoryReferenceKind | `tracker:${string}`;
 
 const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; onClose?: () => void }> = ({ layout, onLeave, onClose }) => {
     const { t } = useI18n();
-    const { sourceControl } = useRuntimeAPIs();
     // Only signed-in trackers get a tab; connecting one happens in Settings.
     const trackerTabs = useTrackerSources();
     const trackersPending = useTrackerSourcesPending();
@@ -248,20 +248,24 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
         <SourceBoardProjectPicker
             projects={projects}
             selected={project}
-            onSelect={(projectId) => updateChoice({ projectId, tab: 'repository' })}
+            onSelect={(projectId) => {
+                useSourceBoardStore.getState().clearRepositoryFocus();
+                updateChoice({ projectId, tab: 'repository' });
+            }}
             ariaLabel={t('sourceBoard.project.label')}
             size="toolbar"
             sheet={layout === 'mobile'}
         />
     ) : null;
-    const repositoryPicker = projectRoot && directory && repository.repositories.length > 0 ? (
+    const repositoryPicker = projectRoot && directory && repository.choosable ? (
         <SourceBoardRepositoryPicker
             repositories={repository.repositories}
             selected={allRepositories ? null : directory}
             root={projectRoot}
-            allAvailable={Boolean(sourceControl.referencesAcross)}
+            allAvailable={repository.allAvailable}
             onSelect={(repositoryPath) => {
                 if (!project) return;
+                useSourceBoardStore.getState().clearRepositoryFocus();
                 updateChoice(repositoryPath === null
                     ? { allRepositoriesByProject: { [project.id]: true }, tab: 'repository' }
                     : { repositoryByProject: { [project.id]: repositoryPath }, allRepositoriesByProject: { [project.id]: false }, tab: 'repository' });
@@ -301,7 +305,7 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
                 {layout === 'mobile' ? (
                     <MobileBoardHeader onClose={onClose}>{projectScope}</MobileBoardHeader>
                 ) : (
-                    <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border/60 px-2">{projectScope}</div>
+                    <div className="flex h-12 shrink-0 items-center gap-1 border-b border-edge px-2">{projectScope}</div>
                 )}
                 {repository.status === 'ready' && !trackersPending ? (
                     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center typography-meta text-muted-foreground">
@@ -338,6 +342,7 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
                     <Button size="sm" variant="outline" onClick={repository.retry}>{t('gitView.empty.retryDiscovery')}</Button>
                 </div>
             ) : null}
+<<<<<<< HEAD
             {/* Remounted per source and project: a new list starts with an empty search. */}
             <SourceBoardBody
             key={`${tab}:${tab === 'repository' ? `${allRepositories ? 'all:' : ''}${directory}` : containerId ?? ''}`}
@@ -358,6 +363,28 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
             onScreen={onScreen}
             onLeave={onLeave}
             onClose={onClose}
+=======
+            {/* Remounted per source and project: a new list starts with an empty search.
+                Repository focus stays in the store until shown, including across discovery. */}
+            <SourceBoardBody
+                key={`${tab}:${tab === 'repository' ? `${allRepositories ? 'all:' : ''}${directory}` : containerId ?? ''}`}
+                tab={tab}
+                project={project}
+                directory={directory}
+                repositoryDiscoveryPending={repository.discoveryPending}
+                allRepositories={allRepositories}
+                trackerContainerId={containerId}
+                mapping={mapping}
+                projects={projects}
+                scopePicker={scopePicker}
+                kinds={{ repository: hasRepository ? { provider: allRepositories || hostProvider === 'none' ? null : hostProvider } : null, trackers: trackerTabs }}
+                initialRepositoryKind={repositoryKind}
+                onSelectKind={selectKind}
+                layout={layout}
+                onScreen={onScreen}
+                onLeave={onLeave}
+                onClose={onClose}
+>>>>>>> bc50ba56a
             />
         </>
     );
@@ -370,8 +397,11 @@ const SourceBoardBody: React.FC<{
     directory: string | null;
     /** A remembered repository can still change the body's directory and key. */
     repositoryDiscoveryPending: boolean;
+<<<<<<< HEAD
     /** The project's root, which a pinned link's repository is looked up under. */
     projectRoot: string | null;
+=======
+>>>>>>> bc50ba56a
     /** The repositories listed together, or null while one folder is read. */
     allRepositories: readonly string[] | null;
     /** The tracker container (Linear team) a tracker tab lists; null lists every one. */
@@ -393,11 +423,16 @@ const SourceBoardBody: React.FC<{
     onLeave?: () => void;
     /** The phone page's close button. */
     onClose?: () => void;
+<<<<<<< HEAD
 }> = ({ tab, project, directory, repositoryDiscoveryPending, projectRoot, allRepositories, trackerContainerId, mapping, projects, scopePicker, kinds, initialRepositoryKind, onSelectKind, layout, onScreen, onLeave, onClose }) => {
+=======
+}> = ({ tab, project, directory, repositoryDiscoveryPending, allRepositories, trackerContainerId, mapping, projects, scopePicker, kinds, initialRepositoryKind, onSelectKind, layout, onScreen, onLeave, onClose }) => {
+>>>>>>> bc50ba56a
     const isMobile = layout === 'mobile';
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
     const tracker = trackerOfSource(tab);
+    const repositoryFocus = useSourceBoardStore((state) => (tab === 'repository' ? state.repositoryFocus : null));
     // An item another surface asked to show: an issue or PR by its link, a
     // tracker item by its identifier. It is read on its own, not typed into the
     // search: the list stays as it was, and the preview opens on the item.
@@ -409,6 +444,10 @@ const SourceBoardBody: React.FC<{
     // The item is read through the repository its link names, which under an
     // established root may be a submodule the list does not read: opened from
     // there, its labels, comments and Changes links belong to that repository.
+<<<<<<< HEAD
+=======
+    const projectRoot = project ? normalizeProjectPath(project.path) : null;
+>>>>>>> bc50ba56a
     const pinnedLinkFolder = useLinkRepository(projectRoot ?? '', pinnedLink?.url ?? '', {
         enabled: Boolean(projectRoot && pinnedLink && tab === 'repository'),
     });
@@ -428,17 +467,28 @@ const SourceBoardBody: React.FC<{
         query: pinnedLink?.url ?? '',
     });
     const pinnedLookup = allRepositories ? pinnedAcross : pinnedSingle;
+<<<<<<< HEAD
 
     const urls = useRepositoryUrlMatcher();
     // Past the project's fork network a link is read with the project's account
     // where that account's host is the link's, and only read.
+=======
+    // Past the project's fork network a link is read with the project's account
+    // where that account's host is the link's, and only read (`TrackerItemView`).
+    const urls = useRepositoryUrlMatcher();
+>>>>>>> bc50ba56a
     const outsideDirectory = allRepositories?.[0] ?? pinnedDirectory;
     const pinnedFolderValue = useRepositoryReadContext(pinnedLink ? outsideDirectory : null);
     const pinnedFolderContext = pinnedFolderValue && pinnedFolderValue !== 'missing' ? pinnedFolderValue : null;
     const pinnedHost = pinnedLink ? urls.match(pinnedLink.url) : null;
     const namesPinnedLink = (item: RepositoryReference) => pinnedLink !== null && isSameRepositoryItemLink(item.url, pinnedLink.url, urls);
+<<<<<<< HEAD
     const pinnedAcrossItem = tab === 'repository' && allRepositories ? pinnedAcross.items.find(namesPinnedLink) ?? null : null;
     const pinnedAskedItem = allRepositories ? pinnedAcrossItem : (tab === 'repository' ? pinnedSingle.items.find(namesPinnedLink) ?? null : null);
+=======
+    const pinnedAcrossItem = allRepositories ? pinnedAcross.items.find(namesPinnedLink) ?? null : null;
+    const pinnedAskedItem = allRepositories ? pinnedAcrossItem : pinnedSingle.items.find(namesPinnedLink) ?? null;
+>>>>>>> bc50ba56a
     const asksOutside = tab === 'repository' && pinnedLink !== null && (allRepositories !== null || pinnedLinkFolder.status === 'ready')
         && !pinnedAskedItem
         && (pinnedLookup.status === 'ready' || pinnedLookup.status === 'unavailable' || (pinnedLookup.status === 'error' && !pinnedLinkFolder.owned))
@@ -480,10 +530,11 @@ const SourceBoardBody: React.FC<{
     });
     // The item a link asked to show is followed like a listed one; a lookup
     // that fell back to a search lists others, which are not.
+    const pinnedLinkFollowed = pinnedOutsideItem ? pinnedOutside.followed : pinnedLookup.followed;
     const pinnedFollowed = React.useMemo(() => (pinnedItem?.source === 'tracker'
         ? pinnedTrackerFollowed
-        : pinnedLookup.followed.filter((item) => !isTrackedWorkItem(item) && item.number === pinnedReference?.number)
-    ), [pinnedItem, pinnedTrackerFollowed, pinnedLookup.followed, pinnedReference]);
+        : pinnedLinkFollowed.filter((item) => !isTrackedWorkItem(item) && item.number === pinnedReference?.number)
+    ), [pinnedItem, pinnedTrackerFollowed, pinnedLinkFollowed, pinnedReference]);
     useTrackedItems(onScreen && pinnedItem ? pinnedFollowed : NO_FOLLOWED);
     const { previewItem, setQuery, selectRepositoryKind, showItem } = browser;
     const shownPinRequestRef = React.useRef(0);
@@ -497,9 +548,12 @@ const SourceBoardBody: React.FC<{
         setPinnedTrackerId(trackerFocus);
         useSourceBoardStore.getState().clearTrackerFocus();
     }, [trackerFocus, setQuery]);
+<<<<<<< HEAD
     const repositoryFocus = useSourceBoardStore((state) => (tab === 'repository' ? state.repositoryFocus : null));
     // Taken once per request: a remount after discovery re-pins the same item,
     // while the store keeps it until it has actually been shown.
+=======
+>>>>>>> bc50ba56a
     const takenRepositoryFocusRef = React.useRef<typeof repositoryFocus>(null);
     React.useEffect(() => {
         if (!repositoryFocus || takenRepositoryFocusRef.current === repositoryFocus) return;
@@ -523,7 +577,7 @@ const SourceBoardBody: React.FC<{
     }, [pinRequest, pinnedItem, pinnedLink, repositoryDiscoveryPending, showItem]);
     // Not found: a link the project's host does not know opens in the browser;
     // a tracker identifier is searched for instead.
-    const pinnedLinkStatus = pinnedLookup.status;
+    const pinnedLinkStatus = asksOutside ? pinnedOutside.status : pinnedLookup.status;
     React.useEffect(() => {
         if (allRepositories === null && pinnedLinkFolder.status !== 'ready') return;
         if (!pinnedLink || pinnedLinkStatus === 'loading' || pinnedReference) return;
@@ -564,16 +618,20 @@ const SourceBoardBody: React.FC<{
         : project;
     const actionPath = actionProjectEntry ? normalizeProjectPath(actionProjectEntry.path) : null;
     const actionProject: SourceBoardProject | null = actionProjectEntry && actionPath ? { id: actionProjectEntry.id, path: actionPath } : null;
-    // A tracker item is read nowhere; an issue or PR is acted on in the repository it was listed from.
-    // An item of a repository under a root that is not one: the project itself is no repository to branch from.
-    const readsNestedRepository = tab === 'repository'
-        && (allRepositories !== null || (actionPath !== null && directory !== null && directory !== actionPath));
     // An item is read and acted on through the folder it came from: its repository's, across several.
     const readFolder = tracker
         ? actionProject?.path ?? null
-        : allRepositories ? itemDirectory(previewItem, null) : directory;
+        : itemDirectory(previewItem, directory);
+    // A tracker item is read nowhere; an issue or PR is acted on in the repository it was listed from.
+    // An item of a repository under the project root — a submodule, or another checkout — keeps the project itself out of worktrees.
+    const readsNestedRepository = tab === 'repository'
+        && (allRepositories !== null || (actionPath !== null && readFolder !== null && readFolder !== actionPath));
     const actionContext = useRepositoryReadContext(readFolder);
-    const context: SourceControlReadContext | null = actionContext && actionContext !== 'missing' ? actionContext : null;
+    const boundContext: SourceControlReadContext | null = actionContext && actionContext !== 'missing' ? actionContext : null;
+    // A linked item is only read: `readContext` reads it, and nothing acts on it through `context`.
+    const previewLinked = previewItem?.source === 'repository' && previewItem.reference.linked === true;
+    const readContext = React.useMemo(() => (boundContext && previewLinked ? { ...boundContext, linked: true as const } : boundContext), [boundContext, previewLinked]);
+    const context = previewLinked ? null : boundContext;
 
     const projectOwnsDirectory = React.useCallback((candidate: string | undefined) => {
         if (!candidate || !actionProjectEntry) return false;
@@ -616,14 +674,14 @@ const SourceBoardBody: React.FC<{
         <SourceBoardActions
             item={previewItem}
             project={actionProject}
-            context={context}
+            context={readContext}
             onStartWorktree={(target, selection) => setWorktreeRequest({ project: target, selection })}
             onChanged={browser.list.retry}
             startIn={startIn}
             onLeave={onLeave}
-            worktreeAvailable={!readsNestedRepository}
+            worktreeAvailable={!readsNestedRepository && !previewLinked}
             stack={previewItem?.source === 'repository' && browser.repositoryDetail.status === 'ready' ? browser.repositoryDetail.value.pull?.stack ?? null : null}
-            onStartOnTop={actionProject ? (pull) => setWorktreeRequest({ project: actionProject, onTopOf: pull.head }) : undefined}
+            onStartOnTop={actionProject && !previewLinked ? (pull) => setWorktreeRequest({ project: actionProject, onTopOf: pull.head }) : undefined}
             submitRequirements={latestPull?.submitRequirements}
             submitRequirementsUnreadable={previewItem?.source === 'repository' && browser.repositoryLatestDetail.status === 'error'}
             mergeable={previewPullStatus?.mergeable ?? null}
@@ -636,10 +694,10 @@ const SourceBoardBody: React.FC<{
     const [checksOpenFor, setChecksOpenFor] = React.useState<string | null>(null);
     const previewPull = previewItem?.source === 'repository' && previewItem.reference.kind === 'pull' ? previewItem.reference : null;
     const previewKey = previewItem ? referencePickerItemKey(previewItem) : null;
-    const checksDialog = previewPull && context ? (
+    const checksDialog = previewPull && readContext ? (
         <SourceBoardChecksDialog
             pull={previewPull}
-            context={context}
+            context={readContext}
             open={checksOpenFor !== null && checksOpenFor === previewKey}
             onOpenChange={(open) => setChecksOpenFor(open ? previewKey : null)}
             onAttachFailed={attachments.attachFailedChecks}
@@ -731,8 +789,8 @@ const SourceBoardBody: React.FC<{
             onOpenTrackerItem={(item) => browser.openItem({ source: 'tracker', provider: item.provider, item })}
             onOpenStackLayer={openStackLayer}
             revisionChoice={latestPull?.revisions ? { revisions: latestPull.revisions, selected: browser.previewRevision, onSelect: browser.selectPreviewRevision } : undefined}
-            onOpenChecks={previewPull && context ? () => setChecksOpenFor(previewKey) : undefined}
-            onRefresh={previewItem?.source === 'repository' && context ? refreshFromHost : undefined}
+            onOpenChecks={previewPull && readContext ? () => setChecksOpenFor(previewKey) : undefined}
+            onRefresh={previewItem?.source === 'repository' && readContext ? refreshFromHost : undefined}
             threadActions={threadActions}
             stateMenu={previewItem?.source === 'repository' && previewItem.reference.state !== 'merged' && context
                 && (previewItem.reference.kind !== 'discussion' || canChangeDiscussionState(previewItem.reference, previewDiscussion)) ? (
@@ -745,13 +803,27 @@ const SourceBoardBody: React.FC<{
                 <SourceBoardLabels key={referencePickerItemKey(previewItem)} reference={previewItem.reference} context={context} onChanged={refreshRepositoryItem} />
             ) : undefined}
             reviewersControl={previewItem?.source === 'repository' && previewItem.reference.kind === 'pull' && context ? (
-                <SourceBoardReviewers
-                    key={referencePickerItemKey(previewItem)}
-                    pull={previewItem.reference}
-                    detail={browser.repositoryDetail}
-                    context={context}
-                    onChanged={refreshRepositoryItem}
-                />
+                <span className="inline-flex flex-wrap items-center gap-2">
+                    <SourceBoardReviewers
+                        key={referencePickerItemKey(previewItem)}
+                        pull={previewItem.reference}
+                        detail={browser.repositoryDetail}
+                        context={context}
+                        onChanged={refreshRepositoryItem}
+                    />
+                    {actionProject ? (
+                        <SourceBoardReviewDraft
+                            key={`draft-${referencePickerItemKey(previewItem)}`}
+                            pull={previewItem.reference}
+                            project={actionProject}
+                            repository={tab === 'repository' ? readFolder : null}
+                            context={context}
+                            projectOwnsDirectory={projectOwnsDirectory}
+                            currentDirectory={currentDirectory}
+                            onLeave={onLeave}
+                        />
+                    ) : null}
+                </span>
             ) : undefined}
             // Keyed by the item: a draft never carries over to another one.
             // A locked discussion takes no comment from someone who may not update it.
@@ -766,12 +838,12 @@ const SourceBoardBody: React.FC<{
                     onLatestRevision={browser.previewRevision === null}
                 />
             ) : undefined}
-            pullLinks={previewItem?.source === 'repository' && previewItem.reference.kind === 'pull' && actionProject && context ? (
+            pullLinks={previewItem?.source === 'repository' && previewItem.reference.kind === 'pull' && actionProject && readContext ? (
                 <SourceBoardPullLinks
                     pull={previewItem.reference}
                     project={actionProject}
                     repository={tab === 'repository' ? readFolder : null}
-                    context={context}
+                    context={readContext}
                     projectOwnsDirectory={projectOwnsDirectory}
                     currentDirectory={currentDirectory}
                     onLeave={onLeave}
@@ -943,12 +1015,13 @@ const SourceBoardBody: React.FC<{
                 ) : (
                     <>
                         <MobileBoardHeader onClose={onClose}>{scopePicker}</MobileBoardHeader>
-                        <div className="flex shrink-0 flex-col gap-2 border-b border-border/60 px-3 py-2">
+                        <div className="flex shrink-0 flex-col gap-2 border-b border-edge px-3 py-2">
                             {kindSwitch}
                             {search}
                         </div>
                     </>
                 )}
+                {pinnedDiscoveryError && !inPreview ? pinnedDiscoveryError : null}
                 {/* A crash below keeps the header, the only way to close the page on iOS. */}
                 <ErrorBoundary>
                     <ScrollableOverlay outerClassName="min-h-0 flex-1" className={inPreview ? 'px-4 py-3' : undefined} disableHorizontal>
@@ -966,7 +1039,7 @@ const SourceBoardBody: React.FC<{
     // follows the chosen name and would push the switch around.
     return (
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-2 py-2.5">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge px-2 py-2.5">
                 {kindSwitch}
                 {scopePicker}
                 {narrow ? itemTrigger : null}
@@ -1005,7 +1078,7 @@ const SourceBoardBody: React.FC<{
                     onPointerDown={startResize}
                     onKeyDown={resizeWithKeys}
                     className={cn(
-                        'relative w-px shrink-0 cursor-col-resize bg-border/60',
+                        'relative w-px shrink-0 cursor-col-resize bg-edge',
                         "before:absolute before:inset-y-0 before:-inset-s-1.5 before:-inset-e-1.5 before:content-['']",
                         'hover:bg-interactive-selection focus-visible:bg-interactive-selection focus-visible:outline-none',
                         resizing && 'bg-interactive-selection',

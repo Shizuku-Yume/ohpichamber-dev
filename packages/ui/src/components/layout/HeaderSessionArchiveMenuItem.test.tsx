@@ -17,9 +17,12 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { toast } = await import('@/components/ui');
 const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
+const { useUIStore } = await import('@/stores/useUIStore');
+const { formatShortcutForDisplay } = await import('@/lib/shortcuts');
 const { HeaderSessionArchiveMenuItem } = await import('./HeaderSessionArchiveMenuItem');
 const initialSessions = useGlobalSessionsStore.getState();
 const initialUI = useSessionUIStore.getState();
+const initialShortcutOverrides = useUIStore.getState().shortcutOverrides;
 const Item: SessionTabMenuComponents['Item'] = (props) => <button {...props} />;
 const session = (sessionId: string, archivedAt?: number): Session => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
@@ -56,6 +59,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   useGlobalSessionsStore.setState(initialSessions);
   useSessionUIStore.setState(initialUI);
+  useUIStore.setState({ shortcutOverrides: initialShortcutOverrides });
   document.body.replaceChildren();
 });
 
@@ -80,9 +84,35 @@ const renderMenuItem = async () => {
   return button;
 };
 
+<<<<<<< HEAD
 for (const archivedAt of [undefined]) {
   test(`active sessions with archive timestamp ${archivedAt} keep archive confirmation`, async () => {
     useGlobalSessionsStore.getState().upsertSession(session('target', archivedAt));
+=======
+test('archive hint follows rebindings and appears only for the current active session', async () => {
+  useGlobalSessionsStore.getState().upsertSession(session('target'));
+  useSessionUIStore.setState({ currentSessionId: 'target' });
+  useUIStore.setState({ shortcutOverrides: { archive_current_session: 'mod+shift+x' } });
+  const button = await renderMenuItem();
+  expect(button.querySelector('span')?.textContent).toBe(formatShortcutForDisplay('mod+shift+x'));
+  await act(async () => useUIStore.setState({ shortcutOverrides: { archive_current_session: 'alt+a' } }));
+  expect(button.querySelector('span')?.textContent).toBe(formatShortcutForDisplay('alt+a'));
+  await act(async () => useUIStore.setState({ shortcutOverrides: { archive_current_session: '__unassigned__' } }));
+  expect(button.textContent).toBe('Archive');
+  expect(button.querySelector('span')).toBeNull();
+  await act(async () => useSessionUIStore.setState({ currentSessionId: 'another-session' }));
+  expect(button.textContent).toBe('Archive');
+  await act(async () => {
+    useSessionUIStore.setState({ currentSessionId: 'target' });
+    useGlobalSessionsStore.getState().upsertSession(session('target', 2));
+  });
+  expect(button.textContent).toBe('Restore');
+});
+
+for (const archived of [undefined, 0]) {
+  test(`active sessions with archive timestamp ${archived} keep archive confirmation`, async () => {
+    useGlobalSessionsStore.getState().upsertSession(session('target', archived));
+>>>>>>> bc50ba56a
     const button = await renderMenuItem();
     expect(button.textContent).toBe('Archive');
     expect(button.querySelector('use')?.getAttribute('href')).toBe('#oc-inbox-archive');

@@ -26,6 +26,10 @@ const DAEMON_READY_TIMEOUT_MS = 30000;
 
 function createServeCommand({
   serverPath,
+<<<<<<< HEAD
+=======
+  checkOpenCodeCLI,
+>>>>>>> bc50ba56a
   getServerRuntimeBinary,
   setForegroundServerActive,
   setForegroundShutdown,
@@ -99,6 +103,10 @@ async function serveCommand(options) {
       }
     }
 
+<<<<<<< HEAD
+=======
+    const opencodeBinary = await checkOpenCodeCLI(emitNotice);
+>>>>>>> bc50ba56a
     const runtimeBin = getServerRuntimeBinary();
 
     ensureLogsDir();
@@ -151,8 +159,19 @@ async function serveCommand(options) {
         );
       }
 
+<<<<<<< HEAD
       // Started from a shell OpenChamber opened, this is a server of its own:
       // the other instance's web assets and runtime go.
+=======
+      // Propagate resolved values into env before importing the server module.
+      // The binary path is left unmarked: a startup service enabled from this
+      // server's terminal wants the same OpenCode.
+      if (opencodeBinary) {
+        process.env.OPENCODE_BINARY = opencodeBinary;
+      }
+      // Started from a shell OpenChamber opened, this is a server of its own:
+      // the other instance's web assets, runtime and OpenCode wiring go.
+>>>>>>> bc50ba56a
       for (const key of injectedEnvKeys(process.env)) delete process.env[key];
       assignInjectedEnv(process.env, {
         OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
@@ -276,8 +295,15 @@ async function serveCommand(options) {
       detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd, 'ipc'],
+<<<<<<< HEAD
       // Record injected Host settings while dropping previous instance injections.
       env: assignInjectedEnv({ ...withoutInjectedEnv(process.env) }, {
+=======
+      // Same as the foreground path above: what the shell's own OpenChamber
+      // put there goes, the server's own settings are recorded as
+      // OpenChamber's, the binary path is not.
+      env: assignInjectedEnv({ ...withoutInjectedEnv(process.env), OPENCODE_BINARY: opencodeBinary }, {
+>>>>>>> bc50ba56a
         OPENCHAMBER_PORT: String(targetPort),
         OPENCHAMBER_RUNTIME: 'web',
         OPENCHAMBER_HOST: effectiveHost,

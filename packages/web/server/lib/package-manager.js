@@ -91,9 +91,17 @@ function normalizeArch(value) {
   return mapArch(process.arch);
 }
 
+<<<<<<< HEAD
 // The Android APK the Canary workflow puts in the canary pre-release.
 const CANARY_ANDROID_APK_RE = /^OpenChamber-(\d+\.\d+\.\d+-canary\.\d+\.\d+)-\d+-android\.apk$/;
 
+=======
+const CANARY_MIRROR_URL = 'https://downloads.openchamber.dev/desktop/canary/';
+
+// The Android APK the Canary workflow puts in the canary pre-release.
+const CANARY_ANDROID_APK_RE = /^OpenChamber-(\d+\.\d+\.\d+-canary\.\d+\.\d+)-\d+-android\.apk$/;
+
+>>>>>>> bc50ba56a
 /**
  * The newest Android APK in the canary pre-release: `{ newest }`, where
  * newest is null when none is published, or null when GitHub could not be read.
@@ -116,10 +124,22 @@ async function fetchCanaryAndroidApk() {
       const match = typeof asset?.name === 'string' ? CANARY_ANDROID_APK_RE.exec(asset.name) : null;
       if (!match || typeof asset.browser_download_url !== 'string') continue;
       if (!newest || compareVersions(match[1], newest.version) > 0) {
+<<<<<<< HEAD
         newest = { version: match[1], url: asset.browser_download_url };
       }
     }
     return { newest };
+=======
+        newest = { version: match[1], name: asset.name, url: asset.browser_download_url };
+      }
+    }
+    if (!newest) return { newest: null };
+    // The R2 mirror (canary.yml) once it has the file: it stays up when
+    // GitHub's release downloads fail, and downloads faster.
+    const mirrorUrl = `${CANARY_MIRROR_URL}${newest.name}`;
+    const mirrored = await fetch(mirrorUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) }).then((head) => head.ok, () => false);
+    return { newest: { version: newest.version, url: mirrored ? mirrorUrl : newest.url } };
+>>>>>>> bc50ba56a
   } catch {
     return null;
   }
@@ -757,8 +777,35 @@ async function fetchDistTags() {
 }
 
 /**
+<<<<<<< HEAD
  * Fetch latest version from npm registry
  */
+=======
+ * The oldest OpenCode a published release runs against, from `engines.opencode`
+ * (">=2.2.4") in its package.json, or null when the registry could not be read
+ * or the release does not say.
+ */
+export async function fetchRequiredOpenCodeVersion(version) {
+  const target = normalizeTargetVersion(version);
+  if (!target) return null;
+  try {
+    const request = resolveNpmRegistryRequest(PACKAGE_NAME, target);
+    const response = await fetch(request.url, {
+      headers: { Accept: 'application/json', ...request.headers },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return /^>=\s*v?(\d+\.\d+\.\d+)$/.exec(String(data?.engines?.opencode ?? '').trim())?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch latest version from npm registry
+ */
+>>>>>>> bc50ba56a
 async function getLatestVersion() {
   return (await fetchDistTags())?.latest || null;
 }

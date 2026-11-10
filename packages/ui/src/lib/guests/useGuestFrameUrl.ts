@@ -1,9 +1,11 @@
 import React from 'react';
 
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { resolveGuestFrameUrl, type GuestFrameUrl } from './frame-url';
+import { FRAME_LOAD_TIMEOUT_MS, resolveGuestFrameUrl, type GuestFrameUrl } from './frame-url';
 
 type GuestFrameOptions = {
+  /** A read over the relay may be kept and shared by frames with one `instanceKey`. */
+  reuseDocument?: boolean;
   guestId: string;
   entry: string | null;
   instanceKey: string;
@@ -12,12 +14,13 @@ type GuestFrameOptions = {
   origins: readonly string[];
 };
 
+
 type FrameState =
   | { key: string; status: 'loading' | 'error' | 'incompatible' }
   | { key: string; status: 'ready'; source: GuestFrameUrl };
 
 /** Keep a loaded document alive; renew scoped auth only when it navigates again. */
-export const useGuestFrameUrl = ({ guestId, entry, instanceKey, enabled, origins }: GuestFrameOptions) => {
+export const useGuestFrameUrl = ({ guestId, entry, instanceKey, enabled, origins, reuseDocument = false }: GuestFrameOptions) => {
   // `instanceKey` changes with the list, so the effect re-runs; the ref only avoids an array dependency.
   const originsRef = React.useRef(origins);
   originsRef.current = origins;
@@ -40,15 +43,22 @@ export const useGuestFrameUrl = ({ guestId, entry, instanceKey, enabled, origins
     if (!entry || !enabled) return;
     let cancelled = false;
     const abort = new AbortController();
-    void resolveGuestFrameUrl(guestId, entry, abort.signal, originsRef.current)
+    const deadline = setTimeout(() => {
+      if (cancelled) return;
+      cancelled = true;
+      abort.abort();
+      setState({ key, status: 'error' });
+    }, FRAME_LOAD_TIMEOUT_MS);
+    void resolveGuestFrameUrl(guestId, entry, abort.signal, originsRef.current, reuseDocument ? key : undefined)
       .then((next) => {
         if (!cancelled) setState({ key, status: 'ready', source: next });
       })
       .catch(() => {
         if (!cancelled) setState({ key, status: 'error' });
-      });
-    return () => { cancelled = true; abort.abort(); };
-  }, [enabled, entry, guestId, key, reloadGeneration]);
+      })
+      .finally(() => clearTimeout(deadline));
+    return () => { cancelled = true; clearTimeout(deadline); abort.abort(); };
+  }, [enabled, entry, guestId, key, reloadGeneration, reuseDocument]);
 
   const current = state?.key === key && state.status === 'ready' ? state.source : null;
   const recoverExpiredNavigation = (): boolean => {
@@ -69,14 +79,19 @@ export const useGuestFrameUrl = ({ guestId, entry, instanceKey, enabled, origins
     recoveryAttempted.current = false;
   }, []);
 
+<<<<<<< HEAD
   // The pre-M3 SDK posts `hello` to the parent window. Its pane must not wait
   // for a timeout the old client cannot report; name the incompatible SDK in
   // the host frame instead and stop loading the document.
   const rejectSdkVersion = React.useCallback(() => {
     setState({ key, status: 'incompatible' });
   }, [key]);
+=======
+  const retry = React.useCallback(() => setReloadGeneration((generation) => generation + 1), []);
+>>>>>>> bc50ba56a
 
   return {
+    retry,
     src: current?.kind === 'url' ? current.url : '',
     srcDoc: current?.kind === 'document' ? current.html : undefined,
     status: state?.key === key ? state.status : 'loading',

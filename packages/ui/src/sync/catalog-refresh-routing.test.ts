@@ -1,7 +1,25 @@
+<<<<<<< HEAD
 import { describe, expect, test } from "bun:test"
 import type { CanonicalEvent, CatalogUpdate, SessionSnapshot } from "@openchamber/agent-contract"
 import { applyDirectoryEvent, installSessionSnapshot } from "./event-reducer"
 import { INITIAL_STATE, type State } from "./types"
+=======
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { Project } from '@/lib/opencode/model';
+import { opencodeClient } from '@/lib/opencode/client';
+import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { useAgentsStore } from '@/stores/useAgentsStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
+import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { usePluginsStore } from '@/stores/usePluginsStore';
+import { ChildStoreManager } from './child-store';
+import { useGlobalSyncStore } from './global-sync-store';
+import { createEventRoutingIndex, handleEvent } from './sync-context';
+>>>>>>> bc50ba56a
 
 const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
   session: {
@@ -41,6 +59,7 @@ const event = (sequence: string, catalogUpdate: CatalogFixture): CanonicalEvent 
   sessionId: "session-1", epoch: "epoch-1", sequence, timestamp: Number(sequence), type: "catalog.updated", catalog: catalogUpdate,
 })
 
+<<<<<<< HEAD
 describe("canonical catalog updates", () => {
   test("publishes only native MCP and skills catalog kinds", () => {
     let current = installSessionSnapshot(state(), snapshot())
@@ -52,6 +71,37 @@ describe("canonical catalog updates", () => {
     expect(skills.state.catalog["session-1\nmcp"]?.kind).toBe("mcp")
     expect(skills.state.catalog["session-1\nskills"]?.kind).toBe("skills")
   })
+=======
+describe('catalog refresh routing', () => {
+  test('one config burst refreshes each Settings resource once across derived events', async () => {
+    const config = spyOn(opencodeClient, 'getConfig').mockResolvedValue({});
+    const providers = spyOn(useConfigStore.getState(), 'loadProviders').mockResolvedValue(undefined);
+    const commands = spyOn(useCommandsStore.getState(), 'loadCommands').mockResolvedValue(true);
+    const skills = spyOn(useSkillsStore.getState(), 'loadSkills').mockResolvedValue(true);
+    const catalog = spyOn(useSkillsCatalogStore.getState(), 'loadCatalog').mockResolvedValue(true);
+    const mcp = spyOn(useMcpConfigStore.getState(), 'loadMcpConfigs').mockResolvedValue(true);
+    const plugins = spyOn(usePluginsStore.getState(), 'loadPlugins').mockResolvedValue(true);
+    const spies = [config, providers, commands, skills, catalog, mcp, plugins];
+    try {
+      for (const kind of ['config', 'agent', 'provider', 'model', 'plugin', 'skill', 'command'] as const) {
+        handleEvent('/workspace/project', { type: 'catalog.updated', properties: { kind } }, childStores, createEventRoutingIndex(), getRuntimeKey());
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(agentLoads.sort()).toEqual(['/workspace/ambient', '/workspace/project']);
+      for (const resource of spies) expect(resource).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
+  test('an open-directory event refreshes its Settings list without reading unrelated locations', async () => {
+    handleEvent('/workspace/project', { type: 'catalog.updated', properties: { kind: 'agent' } }, childStores, createEventRoutingIndex(), getRuntimeKey());
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(agentLoads).toContain('/workspace/project');
+    expect(agentLoads).not.toContain('/workspace/unrelated');
+    expect(sdkReads).toEqual([]);
+  });
+>>>>>>> bc50ba56a
 
   test("rejects a catalog update from another workspace for snapshot recovery", () => {
     const base = installSessionSnapshot(state(), snapshot())

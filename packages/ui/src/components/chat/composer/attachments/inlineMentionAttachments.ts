@@ -44,9 +44,17 @@ export function isMentionAlreadyAttached(
 ): boolean {
     const mentionPath = comparablePath(mention.serverPath);
     if (!mentionPath) return false;
+<<<<<<< HEAD
     // The retired VS Code webview's native paths are not part of this fork's
     // attachments, so a file's own server path is the only identity to match.
     return attachments.some((attachment) => comparablePath(attachment.serverPath) === mentionPath);
+=======
+    return attachments.some((attachment) => {
+        if (attachment.vscodeSource === 'selection') return false;
+        const attachedPath = comparablePath(attachment.serverPath) ?? comparablePath(attachment.vscodePath);
+        return attachedPath === mentionPath;
+    });
+>>>>>>> bc50ba56a
 }
 
 export interface FilteredInlineAttachments {

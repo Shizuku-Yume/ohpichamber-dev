@@ -297,8 +297,13 @@ export function parseUiBlock(source: string, complete: boolean, salvage = false,
   // A fold with nothing inside loses nothing by not drawing, and the parser
   // has already left it out of the tree.
   const errors = result.meta.errors
+<<<<<<< HEAD
     .filter((error: { component?: string; path?: string; code?: string; message: string }) => !(error.component === 'Details' && error.path === '/children' && error.code === 'missing-required'))
     .map((error: { component?: string; path?: string; code?: string; message: string }) => [error.component, error.path].filter(Boolean).join(' ') + `: ${error.message}`);
+=======
+    .filter((error) => !(error.component === 'Details' && error.path === '/children' && error.code === 'missing-required'))
+    .map((error) => [error.component, error.path].filter(Boolean).join(' ') + `: ${error.message}`);
+>>>>>>> bc50ba56a
   // A key shifts every argument after it, so the other errors of such a block mislead.
   const namedError = complete ? namedArgumentError(source, result.meta) : null;
   if (complete) {
@@ -360,10 +365,17 @@ const OPENER_OF = new Map([[tokenKind(')'), CALL_OPEN], [tokenKind(']'), ARRAY_O
  * that starts after its `?`, so neither counts.
  */
 function namedArguments(source: string): string[] {
+<<<<<<< HEAD
   const tokens = tokenize(source).filter((token: { t: number; v?: unknown }) => token.t !== NEWLINE);
   const open: (typeof CALL_OPEN)[] = [];
   const names = new Set<string>();
   tokens.forEach((token: { t: number; v?: unknown }, index: number) => {
+=======
+  const tokens = tokenize(source).filter((token) => token.t !== NEWLINE);
+  const open: (typeof CALL_OPEN)[] = [];
+  const names = new Set<string>();
+  tokens.forEach((token, index) => {
+>>>>>>> bc50ba56a
     if (OPENERS.has(token.t)) open.push(token.t);
     else if (OPENER_OF.has(token.t)) {
       if (OPENER_OF.get(token.t) === open.at(-1)) open.pop();
@@ -381,7 +393,11 @@ function namedArguments(source: string): string[] {
  * excess argument, or a key it took for an undefined name.
  */
 function namedArgumentError(source: string, meta: ParseResult['meta']): string | null {
+<<<<<<< HEAD
   const excess = meta.errors.some((error: { code?: string }) => error.code === 'excess-args');
+=======
+  const excess = meta.errors.some((error) => error.code === 'excess-args');
+>>>>>>> bc50ba56a
   if (!excess && !meta.unresolved.length) return null;
   const named = namedArguments(source);
   if (!excess && !named.some((name) => meta.unresolved.includes(name))) return null;

@@ -27,7 +27,11 @@ const host = connectHost();
 | `theme.tokens` | 应用的颜色（表面、文本、交互状态、primary、success/warning/error/info），以及 `font`、`mono` 和 `radius`。在挂载 UI 之前把它传给 `applyHostReady`。 |
 | `locale` | 应用的语言标签 |
 | `directory` | 当前项目目录，或 `null` |
+<<<<<<< HEAD
 | `session` | `{ id, title, busy }` 或 `null`。没有标题时回退为会话 id。`busy` 是实时状态。会话有 `model` 和 `agent`（Host 的 agent）时也会出现。 |
+=======
+| `session` | `{ id, title, busy }` 或 `null`。没有标题时回退为会话 id。`busy` 是实时状态。会话有 `model` 和 `agent`（OpenCode 的 agent）时也会出现。 |
+>>>>>>> bc50ba56a
 | `surface` | 侧栏为 `panel`，附加窗口为 `dialog`，全屏为 `page`，Work Status 面板中为 `status`，Files 中的文件编辑器为 `file`，聊天的 UI 块中为 `block` |
 | `item` | 此界面因何而打开，或 `null`：用户点击的已附加条目（与你传给 `attach` 的字段相同，包括 `data`）、来自你声明的某个操作的消息（`kind: "message"`）或会话（`kind: "session"`）。见[操作](/sdk/#操作命令和徽标)。 |
 | `connection` | 你的集成的 `{ connected, account }` |
@@ -247,7 +251,15 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
+<<<<<<< HEAD
 `sessions.start`、`sessions.send`、`sessions.retry` 和 `sessions.status` 需要 `contributes.sessionControl`，用户会把它作为单独一行批准。`sessions.lastReply` 需要 `sessionControl: { content: true }`。`setInstructions` 需要 `contributes.instructions`，用于补充智能体读取的内容，范围是一个文件夹，或者传 `null` 时覆盖所有位置。
+=======
+`sessions.start`、`sessions.send`、`sessions.retry`、`sessions.status` 和 `sessions.stop` 需要 `contributes.sessionControl`，用户会把它作为单独一行批准。`sessions.lastReply` 需要 `sessionControl: { content: true }`。通过 `sessions.send` 发送的消息会关闭智能体在该会话中等待的表单或页面，效果和在聊天中输入的消息一样。
+
+要把智能体的请求转到别处，比如聊天应用，加上 `answers: true`。用户会把它作为又一行批准，之后服务可以在任何会话中代用户回答：对 `permission-asked` 事件调用 `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })`（或带上智能体会读取的 `message` 的 `'deny'`），对 `event.question.kind` 为 `form` 的 `question-asked` 事件调用 `sessions.answerForm(sessionId, formId, values)`。事件内容列出表单的字段及其 `key` 和选项。用 `null` 代替值会直接关闭表单。一次允许只对这一个请求有效。
+
+`setInstructions` 需要 `contributes.instructions`，用于补充智能体读取的内容，范围是一个文件夹，或者传 `null` 时覆盖所有位置。
+>>>>>>> bc50ba56a
 
 `emit` 通过 `host.onServiceEvent` 到达你打开的框架，因此面板不必再轮询。事件不会重放，所以之后才打开的框架要先读取当前状态。`readSettings` 把集成的设置交给服务，包括 `secret` 字段，`needsConfiguration` 则在扩展的卡片上显示一条消息。
 
@@ -382,14 +394,22 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 
 ## 用量提供商
 
+<<<<<<< HEAD
 服务可以在内置提供商旁边报告用量：声明 `provides: ["quota"]`，并在 `contributes.quota.providers` 中列出它需要凭据的 model providers。OpenChamber 把这个提供商命名为 `ext-<panel.id>`，用扩展的名称和图标绘制它的卡片，并像询问内置提供商那样询问它。
+=======
+服务可以在内置提供商旁边报告用量：声明 `provides: ["quota"]`，并在 `contributes.quota.providers` 中列出它需要凭据的 OpenCode 提供商。OpenChamber 把这个提供商命名为 `ext-<panel.id>`，用扩展的名称和图标绘制它的卡片，并像询问内置提供商那样询问它。
+>>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
+<<<<<<< HEAD
 批准对话框会列出这些提供商，更改列表的版本会再次询问。每次刷新时，OpenChamber 向 `POST /quota` 发送一次 `usage.read` 调用，`input.credentials` 中带有 Host 为每个已列出且持有凭据的提供商保存的凭据（API 密钥，或浏览器登录的令牌），此外不带存储中的任何内容。Host 未保存凭据的已列出提供商显示为未配置，服务不会被调用；允许空列表，用于密钥保存在扩展自身设置中的提供商。
+=======
+批准对话框会列出这些提供商，更改列表的版本会再次询问。每次刷新时，OpenChamber 向 `POST /quota` 发送一次 `usage.read` 调用，`input.credentials` 中带有 OpenCode 为每个已列出且持有凭据的提供商保存的凭据（API 密钥，或浏览器登录的令牌），此外不带存储中的任何内容。OpenCode 未保存凭据的已列出提供商显示为未配置，服务不会被调用；允许空列表，用于密钥保存在扩展自身设置中的提供商。
+>>>>>>> bc50ba56a
 
 用 `readQuotaProviderRequest` 读取请求体，并以 `{ ok: true, data }` 回答内置提供商计算出的结果：`ok`、`configured`、`error`、`planLabel`，以及按窗口名称键控的 `usage.windows`，每个窗口带有 `usedPercent`、`windowSeconds`、`resetAt`（纪元毫秒）和可选的 `valueLabel` 或 `value`，另有按模型划分窗口的 `usage.models`。剩余份额、重置倒计时和格式化字符串由 OpenChamber 推导，因此卡片与内置提供商的卡片一致。
 

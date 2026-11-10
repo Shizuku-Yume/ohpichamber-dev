@@ -10,6 +10,20 @@
 
 React components use `useRuntimeAPIs()` or `useRuntimeAPI()`. Non-React modules use `getRegisteredRuntimeAPIs()` only when hooks are impossible. Do not introduce direct reads of `window.__OPENCHAMBER_RUNTIME_APIS__` in feature code.
 
+<<<<<<< HEAD
+=======
+## VS Code Route Decisions
+
+| Route type | VS Code behavior |
+|---|---|
+| OpenChamber local route | Handle in the webview and bridge to extension host when needed |
+| Official OpenCode route | Forward through the generic OpenCode proxy |
+| SSE | Use the dedicated SSE bridge, never generic proxy |
+| Session message POST | Use the dedicated session-message path |
+| Unsupported native feature | Return stable explicit unsupported behavior, normally 501 JSON |
+
+Silent empty fallback is not parity.
+>>>>>>> bc50ba56a
 
 ## Electron Boundary
 
@@ -19,7 +33,6 @@ Electron normally reuses the web runtime/server implementation. Keep privileged 
 - Client tokens, home paths, filesystem/shell access, and privileged IPC remain local-page gated.
 - Do not trust arbitrary loopback, `file://`, or `about:blank` origins as packaged UI.
 - Remote pages and preview iframes must not gain local host privileges.
-- Deep links that import hosts, store credentials, or switch runtimes require explicit in-app confirmation before mutation.
 
 ## Shared Contract Rule
 

@@ -1,13 +1,14 @@
 import type { SessionSidebarRenderContext } from '../sessionSidebarRowModel';
 import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { matchesRankQuery } from '@/lib/search/fuzzySearch';
+import { matchesRankQuery, SIDEBAR_SEARCH } from '@/lib/search/fuzzySearch';
 import { normalizePath } from '@/lib/pathNormalization';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SessionNode } from '../types';
+import { isWorkflowAgentSession } from '@/lib/sessionWorkflowMetadata';
 
 /**
  * Per-row render extras precomputed once per group render and threaded down to
@@ -113,15 +114,17 @@ export const getSessionWorktreeMenuDisabled = ({
 
 /**
  * Choose which (directory, sessionIDs) scopes a sidebar row's blocking-request
- * badges should count. An expanded row counts only its own session; a collapsed
- * parent row additionally rolls up the hidden descendants of its subtree,
- * grouped by the directory store each descendant actually lives in.
+ * badges should count. An expanded row counts its own session and the workflow
+ * agents under it, which have no rows; a collapsed parent row additionally
+ * rolls up the hidden descendants of its subtree, grouped by the directory
+ * store each descendant actually lives in.
  */
 export const selectBlockingBadgeSessionScopes = (
  node: SessionNode,
  isExpanded: boolean,
  fallbackDirectory: string | null,
 ): BlockingBadgeSessionScope[] => {
+<<<<<<< HEAD
  const sessionIDsByDirectory = new Map<string, string[]>();
  const visit = (current: SessionNode): void => {
   const directory = resolveGlobalSessionDirectory(current.session)
@@ -139,6 +142,25 @@ export const selectBlockingBadgeSessionScopes = (
  };
  visit(node);
  return [...sessionIDsByDirectory].map(([directory, sessionIDs]) => ({ directory, sessionIDs }));
+=======
+  const sessionIDsByDirectory = new Map<string, string[]>();
+  const visit = (current: SessionNode): void => {
+    const directory = resolveGlobalSessionDirectory(current.session)
+      ?? normalizePath(current.worktree?.path)
+      ?? fallbackDirectory;
+    if (directory) {
+      const sessionIDs = sessionIDsByDirectory.get(directory) ?? [];
+      sessionIDs.push(current.session.id);
+      sessionIDsByDirectory.set(directory, sessionIDs);
+    }
+    for (const child of current.children) {
+      if (current === node && isExpanded && !isWorkflowAgentSession(child.session)) continue;
+      visit(child);
+    }
+  };
+  visit(node);
+  return [...sessionIDsByDirectory].map(([directory, sessionIDs]) => ({ directory, sessionIDs }));
+>>>>>>> bc50ba56a
 };
 
 export const selectFolderRootNodes = (
@@ -251,9 +273,22 @@ export const selectFolderIdsForProjection = (
   if (keptIds.has(folderId)) return true;
   if (visitingIds.has(folderId)) return false;
 
+<<<<<<< HEAD
   const entry = entryById.get(folderId);
   if (!entry) return false;
   visitingIds.add(folderId);
+=======
+    let keep = malformedIds.has(folderId);
+    if (!keep && options.archivedBucket && entry.nodeCount === 0) {
+      // Preserve the archived empty-folder rule: search does not make an
+      // empty folder visible unless a descendant has archived content.
+      keep = (childIdsByParentId.get(folderId) ?? []).some(shouldKeep);
+    } else {
+      if (!keep && !options.searchQuery) keep = true;
+      if (!keep && (entry.nodeCount > 0 || (!isIdQuery && matchesRankQuery([entry.name], options.searchQuery, SIDEBAR_SEARCH)))) keep = true;
+      if (!keep) keep = (childIdsByParentId.get(folderId) ?? []).some(shouldKeep);
+    }
+>>>>>>> bc50ba56a
 
   let keep = malformedIds.has(folderId);
   if (!keep && options.archivedBucket && entry.nodeCount === 0) {

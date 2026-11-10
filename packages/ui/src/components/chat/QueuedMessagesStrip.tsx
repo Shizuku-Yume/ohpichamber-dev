@@ -26,6 +26,7 @@ import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { getQueuedMessagePreview } from '@/lib/messages/queuedMessagePreview';
 import { withAttachmentChips } from './message/parts/attachmentCitationChips';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 const ROW_ACTION_CLASS = 'shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground';
 

@@ -21,7 +21,11 @@ import { MobileFilesSurface } from './MobileFilesSurface';
 import { MobileStatusPane } from './MobileStatusPane';
 import { useEdgeSwipe } from './useEdgeSwipe';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
+<<<<<<< HEAD
 import { registerBackLayer } from '@/lib/mobileBackLayers';
+=======
+import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS } from '@/components/ui/mobileHeader';
+>>>>>>> bc50ba56a
 
 const DRAWER_ROOT_ID = 'mobile-surface-root';
 const ENTER_DELAY_MS = 16;
@@ -104,6 +108,7 @@ const McpWorkspacePane: React.FC<{ onOpenMcpSettings: () => void; active: boolea
     mirror of the gesture that opened it), Escape (unless the terminal tab owns
     the keys), or the Android back button (handled by MobileShell). */
 export const MobileWorkspaceDrawer: React.FC<{
+<<<<<<< HEAD
  open: boolean;
  onClose: () => void;
  tab: MobileWorkspaceTab;
@@ -130,6 +135,37 @@ export const MobileWorkspaceDrawer: React.FC<{
  React.useEffect(() => {
   tabRef.current = tab;
  }, [tab]);
+=======
+  open: boolean;
+  onClose: () => void;
+  tab: MobileWorkspaceTab;
+  onTabChange: (tab: MobileWorkspaceTab) => void;
+  /** When set, the Changes tab opens directly into the per-file diff. */
+  pendingChangesDiff: { path: string; staged: boolean; scope?: 'turn' } | null;
+  /** Notes tab: opens a plan fullscreen (layered above the drawer). */
+  onOpenPlan: (plan: { id: string; title: string; projectRef: ProjectRef }) => void;
+  variant?: 'drawer' | 'panel';
+}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer' }) => {
+  const { t, direction } = useI18n();
+  const rootRef = React.useRef<HTMLElement | null>(null);
+  const drawerRef = React.useRef<HTMLElement>(null);
+  const [entered, setEntered] = React.useState(false);
+  // Kept visible through the exit slide; flipped to hidden once it finishes.
+  const [visible, setVisible] = React.useState(open);
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  const tabOrder = useUIStore((state) => state.mobileWorkspaceTabOrder);
+  const hiddenTabs = useUIStore((state) => state.mobileWorkspaceHiddenTabs);
+  const setTabOrder = useUIStore((state) => state.setMobileWorkspaceTabOrder);
+  // The Status tab's section picker opens from the tab row, beside the close button.
+  const [statusSectionsOpen, setStatusSectionsOpen] = React.useState(false);
+  const tabRef = React.useRef(tab);
+  React.useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
+>>>>>>> bc50ba56a
 
  // Swipe from the drawer's left edge back toward the right = close, the
  // reverse of the right-edge swipe that opened it from the chat. Only the
@@ -211,6 +247,7 @@ export const MobileWorkspaceDrawer: React.FC<{
   };
  }, [open, variant]);
 
+<<<<<<< HEAD
  if (variant === 'drawer' && !rootRef.current) return null;
 
  const tabItems: SortableTabsStripItem[] = [
@@ -267,6 +304,63 @@ export const MobileWorkspaceDrawer: React.FC<{
    </div>
    <div className="min-h-0 flex-1 overflow-hidden">
     {/* Panes stay MOUNTED once visited (hidden when inactive/closed), so
+=======
+  const body = (
+    <>
+      <div className={MOBILE_HEADER_CLASS}>
+        <div className="flex h-9 min-w-0 flex-1 items-center">
+          {/* Mounted only while shown; nonCompositedIndicator keeps the active
+              pill off its own compositing layer — creating one inside the
+              drawer's slide flickers in WKWebView. */}
+          {/* One tab has nothing to switch to: it is named, not offered. */}
+          {soleTab ? (
+            <h2 className="flex min-w-0 items-center gap-2 px-1 typography-ui-label font-medium text-foreground">
+              <span className="flex shrink-0 text-muted-foreground">{soleTab.icon}</span>
+              <span className="truncate">{soleTab.label}</span>
+            </h2>
+          ) : visible ? (
+            <SortableTabsStrip
+              items={tabItems}
+              activeId={tab}
+              onSelect={(id) => {
+                const next = stripTabs.find((entry) => entry === id);
+                if (next) onTabChange(next);
+              }}
+              onReorder={reorderTabs}
+              layoutMode="fit"
+              variant="active-pill"
+              nonCompositedIndicator
+              // More than three tabs don't fit with labels: the active tab
+              // keeps icon + label, the rest collapse to icons.
+              inactiveTabsIconOnly={tabItems.length > 3}
+              className="h-full"
+            />
+          ) : null}
+        </div>
+        {tab === 'status' ? (
+          <button
+            type="button"
+            className={MOBILE_HEADER_BUTTON_CLASS}
+            aria-label={t('chat.workStatus.sections.open')}
+            onClick={() => setStatusSectionsOpen(true)}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <Icon name="equalizer-2" className="size-5" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={MOBILE_HEADER_BUTTON_CLASS}
+          aria-label={t('mobile.surface.closeAria')}
+          onClick={onClose}
+          style={{ touchAction: 'manipulation' }}
+        >
+          <Icon name="close" className="size-5" />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {/* Panes stay MOUNTED once visited (hidden when inactive/closed), so
+>>>>>>> bc50ba56a
             reopening the drawer lands exactly where the user left off — an
             open diff, an edited file, an attached terminal. */}
     {visitedTabs.has('status') ? (
@@ -347,6 +441,7 @@ export const MobileWorkspaceDrawer: React.FC<{
   return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{body}</div>;
  }
 
+<<<<<<< HEAD
  return createPortal(
   <section
    ref={drawerRef}
@@ -369,4 +464,28 @@ export const MobileWorkspaceDrawer: React.FC<{
   </section>,
   rootRef.current as HTMLElement,
  );
+=======
+  return createPortal(
+    <section
+      ref={drawerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('mobile.header.openWorkspaceAria')}
+      aria-hidden={!open}
+      className="oc-keyboard-inset-surface oc-bottom-safe-surface oc-side-safe-area fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+      style={{
+        paddingTop: 'var(--oc-safe-area-top, 0px)',
+        // Settled state drops the transform entirely so the drawer isn't kept
+        // on a compositing layer (iOS clips those to the safe-area viewport).
+        transform: entered ? 'none' : direction === 'rtl' ? 'translateX(-100%)' : 'translateX(100%)',
+        transition: `transform ${ENTER_DURATION_MS}ms ${DRAWER_EASING}`,
+        visibility: visible ? 'visible' : 'hidden',
+        pointerEvents: open ? 'auto' : 'none',
+      }}
+    >
+      {body}
+    </section>,
+    rootRef.current as HTMLElement,
+  );
+>>>>>>> bc50ba56a
 };

@@ -79,6 +79,17 @@ const capabilityScopeSchema = z.object({
     quota: z.object({
       providers: z.array(z.string().min(1)),
     }).optional(),
+<<<<<<< HEAD
+=======
+  }).optional(),
+  // The identifiers and links in chat messages the extension claims, and what a click does (`grant-scope.js`).
+  links: z.object({
+    action: z.string().min(1),
+    keys: z.array(z.string().min(1)),
+    origin: z.string().min(1).nullable(),
+    identifier: z.string().min(1).nullable(),
+    urls: z.array(z.string().min(1)),
+>>>>>>> bc50ba56a
   }).optional(),
 });
 

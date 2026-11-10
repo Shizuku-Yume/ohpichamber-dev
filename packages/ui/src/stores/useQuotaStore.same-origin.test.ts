@@ -29,7 +29,15 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
     if (path === '/api/config/settings?surface=desktop') {
       return Response.json({ usageDropdownProviders: ['codex'] });
     }
+<<<<<<< HEAD
     if (path === '/api/quota/codex?workspaceId=workspace-local') {
+=======
+    if (path === '/api/quota/extensions') {
+      return Response.json({ extensions: [] });
+    }
+    if (path === '/api/quota/providers') return Response.json({ providers: ['codex'] });
+    if (path === '/api/quota/codex') {
+>>>>>>> bc50ba56a
       return Response.json({
         providerId: 'codex', providerName: 'Codex', ok: true, configured: true, fetchedAt: 123,
         usage: {
@@ -52,7 +60,11 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
     useQuotaStore.getState().resetForRuntimeSwitch();
     await useQuotaStore.getState().ensureLoadedForRuntime();
 
+<<<<<<< HEAD
     expect(requests).toEqual(['/api/quota/extensions', '/api/config/settings?surface=desktop', '/api/quota/codex?workspaceId=workspace-local']);
+=======
+    expect(requests).toEqual(['/api/config/settings?surface=desktop', '/api/quota/extensions', '/api/quota/providers', '/api/quota/codex']);
+>>>>>>> bc50ba56a
     expect(getRuntimeKey()).toBe('local');
     expect(getRuntimeApiBaseUrl()).toBe('');
     expect(useQuotaStore.getState().loadedRuntimeKey).toBe('local');
@@ -62,7 +74,11 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
     // A second ask for the loaded instance fetches nothing more: these are
     // still the three reads of the first load (providers, settings, quotas).
     await useQuotaStore.getState().ensureLoadedForRuntime();
+<<<<<<< HEAD
     expect(requests).toHaveLength(3);
+=======
+    expect(requests).toHaveLength(4);
+>>>>>>> bc50ba56a
   } finally {
     useQuotaStore.getState().resetForRuntimeSwitch();
     useConfigStore.setState({ isInitialized: previousInitialized, workspaceId: previousWorkspaceId });

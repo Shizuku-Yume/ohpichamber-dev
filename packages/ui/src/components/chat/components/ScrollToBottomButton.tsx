@@ -4,7 +4,9 @@ import React from 'react';
 
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
+import { useAgentStatusLabel } from '@/hooks/useAgentStatusLabel';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
@@ -16,13 +18,28 @@ const ScrollAction: React.FC<{ onClick: () => void; children?: React.ReactNode }
     return (
         <Tooltip>
             <TooltipTrigger asChild>
+<<<<<<< HEAD
+=======
+                {/* Sits inside the pill's hairline border, so the pill as a whole is
+                    28px like the status row it takes over from. */}
+>>>>>>> bc50ba56a
                 <button
                     type="button"
                     onClick={onClick}
                     aria-label={t('chat.scrollToBottom.aria')}
+<<<<<<< HEAD
                     className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-full [corner-shape:round] text-left"
                 >
                     <span className="flex h-8 w-8 flex-1 shrink-0 basis-8 items-center justify-center text-muted-foreground">
+=======
+                    className="inline-flex h-[calc(1.75rem-2px)] min-w-0 max-w-full flex-1 items-center rounded-full [corner-shape:round] text-start"
+                >
+                    {/* flex-1 so the icon stays centred when the mobile
+                        touch-target floor widens the bare button past 28px;
+                        with the status label present it collapses back to
+                        its 28px basis. */}
+                    <span className="flex h-full w-7 flex-1 shrink-0 basis-7 items-center justify-center text-muted-foreground">
+>>>>>>> bc50ba56a
                         <Icon name="arrow-down" className="h-4 w-4" />
                     </span>
                     {children}

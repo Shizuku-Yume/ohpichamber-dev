@@ -17,6 +17,7 @@ afterEach(() => {
   while (tempDirs.length > 0) fs.rmSync(tempDirs.pop(), { recursive: true, force: true });
 });
 
+<<<<<<< HEAD
 const setup = ({
   settings = { agentImageToolEnabled: true, agentImageModel: 'openrouter/openai/gpt-image-2' },
   workspaceScope = { workspaceId: 'ws-123' },
@@ -44,21 +45,49 @@ const setup = ({
   const generate = createImageGenerationAction({
     service,
     resolveWorkspaceScope: async () => workspaceScope,
+=======
+const tagged = (tag, message = tag) => Object.assign(new Error(message), { _tag: tag });
+
+const setup = ({ settings = { agentImageToolEnabled: true, agentImageModel: 'openrouter/openai/gpt-image-2' }, answer } = {}) => {
+  const requests = [];
+  const client = {
+    experimental: {
+      generate: {
+        image: async (request, options) => {
+          requests.push({ request, options });
+          if (answer) return answer(request);
+          return { images: Array.from({ length: request.n ?? 1 }, () => ({ type: 'image', data: PNG.toString('base64'), mime: 'image/png' })), cost: 0.04 };
+        },
+      },
+    },
+  };
+  const generate = createImageGenerationAction({
+    getClient: async () => client,
+>>>>>>> bc50ba56a
     readSettings: async () => settings,
     fsPromises: fs.promises,
     // Local time: the file is named by the clock the user sees.
     now: () => new Date(2026, 9, 27, 17, 10, 25, 942),
   });
+<<<<<<< HEAD
   return { generate, requests, service };
 };
 
 describe('image.generate', () => {
   it('asks the canonical Agent Service with the chosen model and saves the image where the agent said', async () => {
+=======
+  return { generate, requests };
+};
+
+describe('image.generate', () => {
+  it('asks OpenCode with the chosen model and saves the image where the agent said', async () => {
+>>>>>>> bc50ba56a
     const directory = makeDir();
     const { generate, requests } = setup();
 
     const result = await generate({ prompt: 'a lighthouse', aspect: '16:9', resolution: '2K', path: 'art/hero' }, { directory });
 
+<<<<<<< HEAD
     expect(requests).toHaveLength(1);
     expect(requests[0].path).toBe('/api/agent/v1/workspaces/ws-123/images/generate');
     expect(requests[0].body).toEqual({
@@ -72,6 +101,10 @@ describe('image.generate', () => {
       model: 'openrouter/openai/gpt-image-2',
       images: [{ path: path.join(directory, 'art', 'hero.png'), mime: 'image/png' }],
     });
+=======
+    expect(requests[0].request).toEqual({ model: { providerID: 'openrouter', id: 'openai/gpt-image-2' }, prompt: 'a lighthouse', aspect: '16:9', resolution: '2K' });
+    expect(result).toEqual({ model: 'openrouter/openai/gpt-image-2', images: [{ path: path.join(directory, 'art', 'hero.png'), mime: 'image/png' }], cost: 0.04 });
+>>>>>>> bc50ba56a
     expect(fs.readFileSync(path.join(directory, 'art', 'hero.png'))).toEqual(PNG);
   });
 
@@ -84,7 +117,11 @@ describe('image.generate', () => {
 
     const unnamed = await generate({ prompt: 'one', count: '1' }, { directory });
     expect(path.dirname(unnamed.images[0].path)).toBe(GENERATED_IMAGE_DIRECTORY);
+<<<<<<< HEAD
     expect(path.basename(unnamed.images[0].path)).toBe('omp-image-2026-10-27T17-10-25-942.png');
+=======
+    expect(path.basename(unnamed.images[0].path)).toBe('image-2026-10-27T17-10-25-942.png');
+>>>>>>> bc50ba56a
     fs.rmSync(unnamed.images[0].path, { force: true });
   });
 
@@ -95,13 +132,21 @@ describe('image.generate', () => {
     const { generate, requests } = setup();
 
     await generate({ prompt: 'make it blue', images: ['ref.png'], path: 'out.png' }, { directory });
+<<<<<<< HEAD
     expect(requests[0].body.inputImages).toEqual([{ data: PNG.toString('base64'), mimeType: 'image/png' }]);
+=======
+    expect(requests[0].request.images).toEqual([{ data: PNG.toString('base64'), mime: 'image/png', name: 'ref.png' }]);
+>>>>>>> bc50ba56a
 
     await expect(generate({ prompt: 'x', images: ['notes.txt'] }, { directory })).rejects.toMatchObject({ statusCode: 400 });
     await expect(generate({ prompt: 'x', images: ['missing.png'] }, { directory })).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining('Image not found') });
   });
 
+<<<<<<< HEAD
   it('refuses while the tool is off or no model is chosen, before calling Agent Service', async () => {
+=======
+  it('refuses while the tool is off or no model is chosen, before calling OpenCode', async () => {
+>>>>>>> bc50ba56a
     const off = setup({ settings: { agentImageToolEnabled: false, agentImageModel: 'a/b' } });
     await expect(off.generate({ prompt: 'x' }, {})).rejects.toMatchObject({ statusCode: 403 });
     const unset = setup({ settings: { agentImageToolEnabled: true } });
@@ -123,6 +168,7 @@ describe('image.generate', () => {
     await expect(generate({ prompt: 'x', images: Array(9).fill('a.png') }, {})).rejects.toMatchObject({ statusCode: 400 });
   });
 
+<<<<<<< HEAD
   it('maps canonical problem details correctly from Agent Service', async () => {
     const modelUnavailable = setup({
       handler: async () => ({
@@ -190,6 +236,14 @@ describe('image.generate', () => {
     await expect(emptyImages.generate({ prompt: 'x' }, { directory: makeDir() })).rejects.toMatchObject({
       statusCode: 502,
     });
+=======
+  it('tells the agent what OpenCode refused', async () => {
+    const failing = (error) => setup({ answer: () => { throw error; } }).generate({ prompt: 'x', path: '/tmp/never.png' }, {});
+    await expect(failing(tagged('UnsupportedModelError'))).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('cannot generate images') });
+    await expect(failing(tagged('ModelNotFoundError'))).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('no longer available') });
+    await expect(failing(tagged('ProviderRequestError', 'insufficient credits'))).rejects.toMatchObject({ statusCode: 502, message: 'The provider refused: insufficient credits' });
+    await expect(setup({ answer: () => ({ images: [] }) }).generate({ prompt: 'x' }, {})).rejects.toMatchObject({ statusCode: 502 });
+>>>>>>> bc50ba56a
   });
 });
 

@@ -93,8 +93,21 @@ export async function requestSessionUnarchiveBatch(
   return { outcome: 'restored', restored: parsed.data.restored.map((entry) => entry.id), failedIds: parsed.data.failedIds };
 }
 
+<<<<<<< HEAD
 export type SessionMetadataUpdateResult =
   | { outcome: 'updated'; metadata: SessionMetadata | null; revision: string }
+=======
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(z.string(), jsonValueSchema)]),
+);
+
+const metadataResponseSchema = z.object({
+  metadata: z.record(z.string(), jsonValueSchema),
+});
+
+export type SessionMetadataUpdateResult =
+  | { outcome: 'updated'; metadata: Metadata }
+>>>>>>> bc50ba56a
   | { outcome: 'unavailable'; reason: string };
 
 /** Applies a native SessionMetadataPatch through the OpenChamber Host route. */
@@ -108,6 +121,27 @@ export async function requestSessionMetadataUpdate(
   } catch (error) {
     return { outcome: 'unavailable', reason: error instanceof Error ? error.message : 'metadata request failed' };
   }
+<<<<<<< HEAD
+=======
+
+  if (!response.ok) {
+    return { outcome: 'unavailable', reason: `metadata request failed with ${response.status}` };
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    return { outcome: 'unavailable', reason: error instanceof Error ? error.message : 'metadata response was not JSON' };
+  }
+
+  const parsed = metadataResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    return { outcome: 'unavailable', reason: `malformed metadata response: ${parsed.error.issues[0]?.message ?? 'unknown shape'}` };
+  }
+
+  return { outcome: 'updated', metadata: parsed.data.metadata };
+>>>>>>> bc50ba56a
 }
 
 export type SessionLinksUpdateResult =

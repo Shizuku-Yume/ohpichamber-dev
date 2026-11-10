@@ -1,4 +1,8 @@
 import React from 'react';
+<<<<<<< HEAD
+=======
+import { defaultRangeExtractor, measureElement, useVirtualizer, type Range } from '@tanstack/react-virtual';
+>>>>>>> bc50ba56a
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
 import { toast } from '@/components/ui';
@@ -29,14 +33,28 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+<<<<<<< HEAD
 import { GitignoredToggleButton } from './GitignoredToggleButton';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import type { GuestActionEntry } from '@/lib/guests/actions';
 import { runGuestAction } from '@/lib/guests/run-action';
+=======
+import { ActionToolbar } from '@/components/ui/action-toolbar';
+>>>>>>> bc50ba56a
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { GuestIcon } from '@/components/layout/GuestRailIcon';
+import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+<<<<<<< HEAD
+=======
+import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
+import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
+import { SpacePreparing } from '@/components/session/spaces/SpacePreparing';
+import { guestActionsWhere, type GuestActionEntry } from '@/lib/guests/actions';
+import { runGuestAction } from '@/lib/guests/run-action';
+>>>>>>> bc50ba56a
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -44,15 +62,32 @@ import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 import { DirectoryRequests } from '@/components/views/files/directoryRequests';
 import { areDirectoryNodesEqual } from '@/components/views/files/fileTreeStatus';
 import { useFileTreeUpload } from '@/components/views/files/useFileTreeUpload';
+import { useFileTreeDisclosure } from '@/components/views/files/useFileTreeDisclosure';
 import { moveWorkspacePath } from '@/components/views/files/moveWorkspacePath';
 import { INTERNAL_FILE_PATH_TYPE } from '@/components/chat/composer/attachments/dataTransfer';
 import { AUTO_RELIST_MAX_ENTRIES, useFileTreeChanges, type FileTreeChangeBatch } from '@/components/views/files/useFileTreeChanges';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
-import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
+import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn, getRevealLabelKey } from '@/lib/utils';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+<<<<<<< HEAD
+=======
+import {
+  FileTreeChevron,
+  FileTreeFileMarkers,
+  FileTreeFolderBadge,
+  FileTreeIndentGuides,
+  FileTreeRowEnd,
+} from '@/components/views/files/FileTreeRowParts';
+import {
+  fileTreeRowMenuFillClassName,
+  fileTreeRowPaddingLeft,
+  fileTreeRowStateClassName,
+  type FileTreeGitStatus,
+} from '@/components/views/files/fileTreeRow';
+>>>>>>> bc50ba56a
 import { Icon } from "@/components/icon/Icon";
 import { toastContextFileOpenFailure, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { isBrowserClientRuntime, isDesktopLocalOriginActive, openDesktopPath } from '@/lib/desktop';
@@ -79,6 +114,14 @@ type FileNode = {
  relativePath?: string;
 };
 
+<<<<<<< HEAD
+=======
+// A row is one meta line plus its padding (FileRow's block size); rows are
+// measured once mounted, and every file and folder row then estimates at the
+// measured height.
+const FILE_TREE_ROW_ESTIMATE_PX = 28;
+
+>>>>>>> bc50ba56a
 const hasExternalFiles = (dataTransfer: DataTransfer): boolean => (
  Array.from(dataTransfer.types).includes('Files')
 );
@@ -252,6 +295,7 @@ const FileStatusDot: React.FC<{ status: FileStatus }> = ({ status }) => {
 // --- FileRow with context menu (matching FilesView) ---
 
 interface FileRowProps {
+<<<<<<< HEAD
  node: FileNode;
  root: string;
  isExpanded: boolean;
@@ -311,6 +355,72 @@ const FileRow: React.FC<FileRowProps> = ({
  onMoveDragChange,
  onSetMoveDropTarget,
  onMoveDrop,
+=======
+  node: FileNode;
+  root: string;
+  isExpanded: boolean;
+  isActive: boolean;
+  isBrowserClient: boolean;
+  depth: number;
+  /** Open in a context panel tab. */
+  isOpen: boolean;
+  status?: FileTreeGitStatus | null;
+  badge?: { modified: number; added: number } | null;
+  isDropTarget: boolean;
+  /** The row being dragged to move it; it is dimmed. */
+  isDragSource: boolean;
+  canUpload: boolean;
+  canMove: boolean;
+  permissions: {
+    canRename: boolean;
+    canCreateFile: boolean;
+    canCreateFolder: boolean;
+    canDelete: boolean;
+    canReveal: boolean;
+  };
+  downloadFile?: (path: string) => Promise<void>;
+  /** A plain click opens a preview tab; `pin` (double-click) keeps it. */
+  onSelect: (node: FileNode, options?: { pin?: boolean }) => void;
+  onToggle: (path: string) => void;
+  onRevealPath: (path: string) => void;
+  onOpenDialog: (type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => void;
+  onSetDropTarget: (path: string | null) => void;
+  onDropFiles: (directory: string, dataTransfer: DataTransfer) => void;
+  onPickFiles: (directory: string) => void;
+  onMoveDragChange: (source: FileTreeEntry | null) => void;
+  onSetMoveDropTarget: (path: string | null) => void;
+  onMoveDrop: (source: FileTreeEntry, targetDirectory: string) => void;
+  guestActions: GuestActionEntry[];
+}
+
+const FileRow: React.FC<FileRowProps> = ({
+  guestActions,
+  node,
+  root,
+  isExpanded,
+  isActive,
+  isBrowserClient,
+  depth,
+  isOpen,
+  status,
+  badge,
+  isDropTarget,
+  isDragSource,
+  canUpload,
+  canMove,
+  permissions,
+  downloadFile,
+  onSelect,
+  onToggle,
+  onRevealPath,
+  onOpenDialog,
+  onSetDropTarget,
+  onDropFiles,
+  onPickFiles,
+  onMoveDragChange,
+  onSetMoveDropTarget,
+  onMoveDrop,
+>>>>>>> bc50ba56a
 }) => {
  const { t } = useI18n();
  const isDir = node.type === 'directory';
@@ -351,6 +461,7 @@ const FileRow: React.FC<FileRowProps> = ({
   setContextMenuOpen(true);
  }, []);
 
+<<<<<<< HEAD
  const fileActions = guestActionsWhere(guestActions, 'file');
  const renderMenuItems = ({
   Item,
@@ -434,6 +545,105 @@ const FileRow: React.FC<FileRowProps> = ({
        <Icon name="upload-2" className="mr-2 h-4 w-4" /> {t('sidebarFilesTree.menu.uploadFiles')}
       </Item>
      )}
+=======
+  const fileActions = guestActionsWhere(guestActions, 'file');
+
+  const renderMenuItems = ({
+    Item,
+    Separator,
+  }: {
+    Item: React.ElementType;
+    Separator: React.ElementType;
+  }) => (
+    <>
+      {canRename && (
+        <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onOpenDialog('rename', node); }}>
+          <Icon name="edit" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.rename')}
+        </Item>
+      )}
+      <Item onClick={(e: React.MouseEvent) => {
+        e.stopPropagation();
+        void copyTextToClipboard(node.path).then((result) => {
+          if (result.ok) {
+            toast.success(t('sidebarFilesTree.toast.pathCopied'));
+            return;
+          }
+          toast.error(t('sidebarFilesTree.toast.copyFailed'));
+        });
+      }}>
+        <Icon name="link" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.copyPath')}
+      </Item>
+      {!isDir && downloadFile && (
+        <Item onClick={(e: React.MouseEvent) => {
+          e.stopPropagation();
+          void downloadFile(node.path).catch((error) => {
+            console.error('Download failed:', error);
+            toast.error(t('sidebarFilesTree.toast.operationFailed'));
+          });
+        }}>
+          <Icon name="download" className="me-2 h-4 w-4" /> {t(isBrowserClient ? 'sidebarFilesTree.menu.download' : 'sidebarFilesTree.menu.save')}
+        </Item>
+      )}
+      {canRevealPath && (
+        <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRevealPath(node.path); }}>
+          <Icon name="folder-received" className="me-2 h-4 w-4" /> {t(getRevealLabelKey())}
+        </Item>
+      )}
+      {/* The OS opens it with whatever app owns the type: Word for a .docx, Typora for a .md. */}
+      {!isDir && canRevealPath && isDesktopLocalOriginActive() && (
+        <Item onClick={(e: React.MouseEvent) => {
+          e.stopPropagation();
+          void openDesktopPath(node.path).then((opened) => {
+            if (!opened) toast.error(t('sidebarFilesTree.toast.operationFailed'));
+          });
+        }}>
+          <Icon name="external-link" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.openInDefaultApp')}
+        </Item>
+      )}
+      {fileActions.length > 0 && <Separator />}
+      {fileActions.map((entry) => (
+        <Item
+          key={`${entry.guest.id}:${entry.action.id}`}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            void runGuestAction(entry, { kind: 'file', action: entry.action.id, directory: root || null, path: node.path, isDirectory: isDir }, t);
+          }}
+        >
+          <GuestIcon icon={entry.icon} iconSrc={entry.iconSrc} className="me-2 h-4 w-4" /> {entry.action.label}
+        </Item>
+      ))}
+      {isDir && (canCreateFile || canCreateFolder || canUploadHere) && (
+        <>
+          <Separator />
+          {canCreateFile && (
+            <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onOpenDialog('createFile', node); }}>
+              <Icon name="file-add" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.newFile')}
+            </Item>
+          )}
+          {canCreateFolder && (
+            <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onOpenDialog('createFolder', node); }}>
+              <Icon name="folder-add" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.newFolder')}
+            </Item>
+          )}
+          {canUploadHere && (
+            <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onPickFiles(node.path); }}>
+              <Icon name="upload-2" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.uploadFiles')}
+            </Item>
+          )}
+        </>
+      )}
+      {canDelete && (
+        <>
+          <Separator />
+          <Item
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onOpenDialog('delete', node); }}
+            className="text-destructive focus:text-destructive"
+          >
+            <Icon name="delete-bin" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.delete')}
+          </Item>
+        </>
+      )}
+>>>>>>> bc50ba56a
     </>
    )}
    {canDelete && (
@@ -526,6 +736,7 @@ const FileRow: React.FC<FileRowProps> = ({
   if (target && isDropOfMoveSource(event.dataTransfer, root, source)) onMoveDrop(source, target);
  }, [canMove, getMoveTarget, handleExternalDrop, onMoveDrop, onSetMoveDropTarget, root]);
 
+<<<<<<< HEAD
  return (
   <ContextMenu open={rightClickOpen} onOpenChange={setRightClickOpen}>
    <ContextMenuTrigger render={(
@@ -644,6 +855,120 @@ const areFileRowPropsEqual = (prev: FileRowProps, next: FileRowProps): boolean =
  && prev.onSetMoveDropTarget === next.onSetMoveDropTarget
  && prev.onMoveDrop === next.onMoveDrop
  && prev.guestActions === next.guestActions
+=======
+  return (
+    <ContextMenu open={rightClickOpen} onOpenChange={setRightClickOpen}>
+      <ContextMenuTrigger render={(
+        <div
+          className="group relative flex items-center typography-meta"
+          style={{ blockSize: 'calc(max(1lh, 1rem) + 0.5rem)' }}
+          onContextMenu={handleContextMenu}
+          onDragEnter={handleRowDragOver}
+          onDragOver={handleRowDragOver}
+          onDragLeave={handleExternalDragLeave}
+          onDrop={handleRowDrop}
+        />
+      )}>
+      <FileTreeIndentGuides depth={depth} />
+      <button
+        type="button"
+        onClick={handleInteraction}
+        onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        className={cn(
+          'oc-file-tree-row flex w-full items-center gap-1.5 rounded-md py-1 text-start select-none',
+          isDropTarget
+            ? 'bg-interactive-selection text-interactive-selection-foreground ring-2 ring-inset ring-primary [--oc-file-tree-row-fill:var(--interactive-selection)] [--oc-file-tree-row-ring:var(--primary)]'
+            : fileTreeRowStateClassName(isActive),
+          isDragSource && 'opacity-50'
+        )}
+        style={{ paddingInlineStart: fileTreeRowPaddingLeft(depth) }}
+      >
+        {isDir ? (
+          <FileTreeChevron expanded={isExpanded} />
+        ) : (
+          <FileTypeIcon filePath={node.path} extension={node.extension} className="ms-0.5 size-3.5" />
+        )}
+        <span className="oc-file-tree-row-name typography-meta" title={node.path}>
+          {node.name}
+        </span>
+        <FileTreeRowEnd className="pe-2">
+          {!isDir && <FileTreeFileMarkers isOpen={isOpen} status={status} />}
+          {isDir && badge && <FileTreeFolderBadge badge={badge} />}
+        </FileTreeRowEnd>
+      </button>
+      {hasMenuActions && (
+        // Takes no width and fades in over the row's end lane, with its own fade over the name.
+        // Only on touch screens: with a mouse the row's menu is its right click
+        // (Shift+F10 from the keyboard).
+        <div className={cn('oc-file-tree-row-end -ms-7 w-7 pe-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 pointer-fine:hidden', fileTreeRowMenuFillClassName(isActive || isDropTarget))}>
+          <DropdownMenu
+            open={contextMenuOpen}
+            onOpenChange={setContextMenuOpen}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={handleMenuButtonClick}
+                      aria-label={t('diffView.actions.moreActions')}
+                    >
+                      <Icon name="more-2-fill" className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>{t('diffView.actions.moreActions')}</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" side="bottom" onCloseAutoFocus={() => setContextMenuOpen(false)}>
+              {renderMenuItems({ Item: DropdownMenuItem, Separator: DropdownMenuSeparator })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-[180px]">
+        {renderMenuItems({ Item: ContextMenuItem, Separator: ContextMenuSeparator })}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+};
+
+const areFileRowPropsEqual = (prev: FileRowProps, next: FileRowProps): boolean => (
+  prev.node === next.node
+  && prev.root === next.root
+  && prev.isExpanded === next.isExpanded
+  && prev.isActive === next.isActive
+  && prev.isBrowserClient === next.isBrowserClient
+  && prev.depth === next.depth
+  && prev.isOpen === next.isOpen
+  && prev.status === next.status
+  && prev.badge === next.badge
+  && prev.isDropTarget === next.isDropTarget
+  && prev.isDragSource === next.isDragSource
+  && prev.canUpload === next.canUpload
+  && prev.canMove === next.canMove
+  && prev.permissions === next.permissions
+  && prev.downloadFile === next.downloadFile
+  && prev.onSelect === next.onSelect
+  && prev.onToggle === next.onToggle
+  && prev.onRevealPath === next.onRevealPath
+  && prev.onOpenDialog === next.onOpenDialog
+  && prev.onSetDropTarget === next.onSetDropTarget
+  && prev.onDropFiles === next.onDropFiles
+  && prev.onPickFiles === next.onPickFiles
+  && prev.onMoveDragChange === next.onMoveDragChange
+  && prev.onSetMoveDropTarget === next.onSetMoveDropTarget
+  && prev.onMoveDrop === next.onMoveDrop
+  && prev.guestActions === next.guestActions
+>>>>>>> bc50ba56a
 );
 
 const MemoizedFileRow = React.memo(FileRow, areFileRowPropsEqual);
@@ -656,6 +981,7 @@ export const SidebarFilesTree: React.FC<{ visible?: boolean }> = ({ visible = tr
  return <SidebarFilesTreeContent key={JSON.stringify([runtimeKey, directory])} visible={visible} />;
 };
 
+<<<<<<< HEAD
 const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) => {
  const visibleRef = React.useRef(visible);
  visibleRef.current = visible;
@@ -671,6 +997,27 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
  const searchFiles = useFileSearchStore((state) => state.searchFiles);
  const openContextFile = useUIStore((state) => state.openContextFile);
  const gitStatus = useGitStatus(visible ? currentDirectory : null);
+=======
+/**
+ * `currentDirectory` is the folder listed; `panelDirectory` is the one the panel's tabs belong to,
+ * the same folder except in a draft waiting for a space.
+ */
+const SidebarFilesTreeContent: React.FC<{ visible: boolean; currentDirectory: string; panelDirectory: string }> = ({ visible, currentDirectory, panelDirectory }) => {
+  const visibleRef = React.useRef(visible);
+  visibleRef.current = visible;
+  const { t } = useI18n();
+  const { files, runtime } = useRuntimeAPIs();
+  const guestActions = useGuestActions();
+  const isBrowserClient = isBrowserClientRuntime(runtime.platform);
+  const root = normalizePath(currentDirectory.trim());
+  const panelRoot = normalizePath(panelDirectory.trim());
+  const cacheKey = fileTreeCacheKey(root);
+  const showHidden = useDirectoryShowHidden();
+  const showGitignored = useFilesViewShowGitignored();
+  const searchFiles = useFileSearchStore((state) => state.searchFiles);
+  const openContextFile = useUIStore((state) => state.openContextFile);
+  const gitStatus = useGitStatus(visible ? currentDirectory : null);
+>>>>>>> bc50ba56a
 
  const [searchQuery, setSearchQuery] = React.useState('');
  const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
@@ -863,12 +1210,328 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
     entryCountByDirRef.current.set(normalizedDir, entries.length);
     const mapped = mapDirectoryEntries(normalizedDir, entries);
     loadedDirsRef.current = new Set(loadedDirsRef.current);
+<<<<<<< HEAD
     loadedDirsRef.current.add(normalizedDir);
     setLoadErrorsByDir((prev) => {
      if (!prev[normalizedDir]) return prev;
      const next = { ...prev };
      delete next[normalizedDir];
      return next;
+=======
+    loadedDirsRef.current.delete(normalized);
+    await loadDirectory(normalized, undefined, true);
+  }, [loadDirectory, refreshRoot]);
+
+  React.useEffect(() => {
+    if (!root) return;
+
+    // Cancel any pending refresh so stale directory listings don't land after
+    // the user switches projects or toggles showHidden / showGitignored.
+    refreshAbortRef.current?.abort();
+    loadedDirsRef.current = new Set();
+    directoryRequests.clear();
+    setLoadErrorsByDir({});
+    setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+    void loadDirectory(root);
+  }, [directoryRequests, loadDirectory, root, showHidden, showGitignored]);
+
+  React.useEffect(() => {
+    if (!visible || !root || expandedPaths.length === 0) return;
+
+    // Sort by depth so parent dirs load before children
+    const toLoad = expandedPaths
+      .map((p) => normalizePath(p))
+      .filter((normalized): normalized is string =>
+        !!normalized &&
+        normalized !== root &&
+        normalized.startsWith(`${root}/`) &&
+        !loadedDirsRef.current.has(normalized) &&
+          !directoryRequests.has(normalized),
+      )
+      .sort((a, b) => a.split('/').length - b.split('/').length);
+
+    if (toLoad.length === 0) return;
+
+    // Load with concurrency limit to avoid API stampede on startup.
+    // Cancellation stops queued batches. Already-started, shared reads still
+    // populate the same-scope cache; scope changes and unmount invalidate them.
+    let cancelled = false;
+    const isCancelled = () => cancelled;
+    void (async () => {
+      for (let i = 0; i < toLoad.length && !cancelled; i += 3) {
+        const batch = toLoad.slice(i, i + 3);
+        await Promise.all(batch.map((dir) => loadDirectory(dir, isCancelled)));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [directoryRequests, expandedPaths, loadDirectory, root, visible]);
+
+  const wasVisibleRef = React.useRef(visible);
+  React.useEffect(() => {
+    const resumed = visible && !wasVisibleRef.current;
+    wasVisibleRef.current = visible;
+    if (resumed) void refreshRoot();
+  }, [refreshRoot, visible]);
+
+  // Agent and app file changes re-list only what they touched. A listing on
+  // screen reloads now, unless it is too large to resend; a loaded one out of
+  // sight (collapsed, or inside a collapsed folder) is only forgotten, so
+  // expanding it reads it again.
+  const applyFileTreeChanges = React.useCallback(({ directories }: FileTreeChangeBatch) => {
+    if (!root) return;
+    const expanded = new Set(
+      (useFilesViewTabsStore.getState().byRoot[root]?.expandedPaths ?? []).map((path) => normalizePath(path)),
+    );
+    const rootPrefix = root === '/' ? '/' : `${root}/`;
+    const isOnScreen = (dir: string): boolean => {
+      for (let current = dir; current !== root; current = getParentPath(current)) {
+        if (!current.startsWith(rootPrefix) || !expanded.has(current)) return false;
+      }
+      return true;
+    };
+    const nearestLoaded = (dir: string): string | null => {
+      for (let current = dir; current === root || current.startsWith(rootPrefix); current = getParentPath(current)) {
+        if (loadedDirsRef.current.has(current)) return current;
+        if (current === root) break;
+      }
+      return null;
+    };
+
+    const toLoad = new Set<string>();
+    const toForget = new Set<string>();
+    for (const changed of directories ?? loadedDirsRef.current) {
+      const loaded = nearestLoaded(normalizePath(changed));
+      if (!loaded) continue;
+      (isOnScreen(loaded) ? toLoad : toForget).add(loaded);
+    }
+    if (toForget.size > 0) {
+      loadedDirsRef.current = new Set([...loadedDirsRef.current].filter((dir) => !toForget.has(dir)));
+    }
+    const queue = [...toLoad].filter(
+      (dir) => (entryCountByDirRef.current.get(dir) ?? 0) <= AUTO_RELIST_MAX_ENTRIES,
+    );
+    void (async () => {
+      for (let i = 0; i < queue.length; i += 3) {
+        await Promise.all(queue.slice(i, i + 3).map((dir) => loadDirectory(dir, undefined, true)));
+      }
+    })();
+  }, [loadDirectory, root]);
+
+  useFileTreeChanges({ root, active: visible, whileInactive: 'drop', onChanges: applyFileTreeChanges });
+
+  // --- Fuzzy search scoring (matching FilesView) ---
+
+  React.useEffect(() => {
+    if (!visible) return;
+    if (!currentDirectory || contentSearchActive) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    const trimmedQuery = debouncedSearchQuery.trim();
+    if (!trimmedQuery) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearching(true);
+
+    searchFiles(currentDirectory, trimmedQuery, 150, {
+      includeHidden: showHidden,
+      respectGitignore: !showGitignored,
+      type: 'file',
+    })
+      .then((hits) => {
+        if (cancelled) return;
+
+        const filtered = hits.filter((hit) => showGitignored || !shouldIgnorePath(hit.path));
+
+        const mapped: FileNode[] = filtered.map((hit) => ({
+          name: hit.name,
+          path: normalizePath(hit.path),
+          type: 'file',
+          extension: hit.extension,
+          relativePath: hit.relativePath,
+        }));
+
+        setSearchResults(mapped);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSearchResults([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSearching(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contentSearchActive, currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored, visible]);
+
+  // --- Git status helpers (matching FilesView) ---
+  //
+  // statusByPath / badgeByDir are precomputed once per gitStatus change so the
+  // tree render is O(1) per node instead of O(N) per node. Without these
+  // maps, a deep tree with 200 files and 40 directories would do ~8000
+  // string comparisons on every render.
+
+  const statusByPath = React.useMemo(() => {
+    const map = new Map<string, FileTreeGitStatus>();
+    if (!gitStatus?.files) return map;
+    for (const file of gitStatus.files) {
+      if (file.index === 'A' || file.working_dir === '?') {
+        map.set(file.path, 'git-added');
+      } else if (file.index === 'D') {
+        map.set(file.path, 'git-deleted');
+      } else if (file.index === 'M' || file.working_dir === 'M') {
+        map.set(file.path, 'git-modified');
+      }
+    }
+    return map;
+  }, [gitStatus]);
+
+  const badgeByDir = React.useMemo(() => {
+    const map = new Map<string, { modified: number; added: number }>();
+    if (!gitStatus?.files || !root) return map;
+    for (const file of gitStatus.files) {
+      const isModified = file.index === 'M' || file.working_dir === 'M';
+      const isAdded = file.index === 'A' || file.working_dir === '?';
+      if (!isModified && !isAdded) continue;
+      const segments = file.path.split('/');
+      if (segments.length <= 1) continue;
+      let currentDir = root;
+      for (let i = 0; i < segments.length - 1; i++) {
+        currentDir = `${currentDir}/${segments[i]}`;
+        let entry = map.get(currentDir);
+        if (!entry) {
+          entry = { modified: 0, added: 0 };
+          map.set(currentDir, entry);
+        }
+        if (isModified) entry.modified++;
+        if (isAdded) entry.added++;
+      }
+    }
+    return map;
+  }, [gitStatus, root]);
+
+  const getFileStatus = React.useCallback((path: string): FileTreeGitStatus | null => {
+    if (statusByPath.size === 0) return null;
+    const relative = path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
+    return statusByPath.get(relative) ?? null;
+  }, [statusByPath, root]);
+
+  const getFolderBadge = React.useCallback((dirPath: string): { modified: number; added: number } | null => {
+    if (badgeByDir.size === 0) return null;
+    const entry = badgeByDir.get(dirPath);
+    if (!entry) return null;
+    return entry.modified + entry.added > 0 ? entry : null;
+  }, [badgeByDir]);
+
+  // --- File operations ---
+
+  const handleOpenFile = React.useCallback(async (node: FileNode, options?: { pin?: boolean }) => {
+    if (!root) return;
+
+    const openValidation = await validateContextFileOpen(files, node.path, { directory: root });
+    if (!openValidation.ok) {
+      toastContextFileOpenFailure(node.path, openValidation);
+      return;
+    }
+
+    setSelectedPath(root, node.path);
+    addOpenPath(root, node.path);
+    // Touch has no double-click to keep a preview, so it opens tabs outright.
+    openContextFile(panelRoot, node.path, { preview: !options?.pin && !useUIStore.getState().isMobile });
+  }, [addOpenPath, files, openContextFile, panelRoot, root, setSelectedPath]);
+
+  // A find-in-files result opens its file at the matching line, as a preview
+  // on a click and as a pinned tab on a double-click, like a tree row.
+  const handleOpenMatch = React.useCallback(async (match: FileContentSearchMatch, options?: { pin?: boolean }) => {
+    if (!root) return;
+
+    const openValidation = await validateContextFileOpen(files, match.path, { directory: root });
+    if (!openValidation.ok) {
+      toastContextFileOpenFailure(match.path, openValidation);
+      return;
+    }
+
+    setSelectedPath(root, match.path);
+    addOpenPath(root, match.path);
+    setOpenedMatch({ path: match.path, key: fileContentMatchKey(match) });
+    openContextFileAtLine(panelRoot, match.path, match.line, match.column, { preview: !options?.pin && !useUIStore.getState().isMobile });
+  }, [addOpenPath, files, openContextFileAtLine, panelRoot, root, setSelectedPath]);
+
+  const handleMatchDragStart = React.useCallback((event: React.DragEvent<HTMLButtonElement>, match: FileContentSearchMatch) => {
+    recordFileTreeDragStart(event);
+    // Search results attach to the chat only; they never move.
+    setFileTreeDragSource(null);
+    event.dataTransfer.setData(INTERNAL_FILE_PATH_TYPE, match.relativePath);
+    event.dataTransfer.effectAllowed = 'copy';
+  }, []);
+
+  const handleMatchDragEnd = React.useCallback((event: React.DragEvent<HTMLButtonElement>, match: FileContentSearchMatch) => {
+    // A micro-drag suppressed the click this gesture was meant to be (#2368).
+    if (shouldTreatFileTreeDragEndAsClick(event)) {
+      void handleOpenMatch(match);
+    }
+  }, [handleOpenMatch]);
+
+  // Rows on screen below a folder that opens stay mounted while they slide
+  // down past the virtual range, so the list under the folder does not blank.
+  const [slidingRowPaths, setSlidingRowPaths] = React.useState<readonly string[] | null>(null);
+  const clearSlidingRowPaths = React.useCallback(() => setSlidingRowPaths(null), []);
+  const treeListRef = React.useRef<HTMLUListElement | null>(null);
+  const toggleWithMotion = useFileTreeDisclosure(treeListRef, { onSettled: clearSlidingRowPaths });
+  const toggleDirectory = React.useCallback(async (dirPath: string) => {
+    const normalized = normalizePath(dirPath);
+    if (!root) return;
+
+    const expanded = useFilesViewTabsStore.getState().byRoot[root]?.expandedPaths.includes(normalized) ?? false;
+    toggleWithMotion(dirPath, expanded, () => {
+      const mountedPaths = Array.from(treeListRef.current?.querySelectorAll<HTMLElement>('[data-tree-disclosure-path]') ?? [], (row) => row.dataset.treeDisclosurePath ?? '');
+      setSlidingRowPaths(expanded ? null : mountedPaths.slice(mountedPaths.indexOf(dirPath) + 1));
+      toggleExpandedPath(root, normalized);
+    });
+    if (!loadedDirsRef.current.has(normalized)) {
+      await loadDirectory(normalized);
+    }
+  }, [loadDirectory, root, toggleExpandedPath, toggleWithMotion]);
+
+  const {
+    canUpload,
+    uploadingDirectory,
+    uploadFiles,
+    pickFiles,
+    uploadElements,
+  } = useFileTreeUpload({ root, refreshDirectory });
+  const isUploading = uploadingDirectory !== null;
+  const dropIndicatorTarget = uploadingDirectory ?? dropTarget;
+
+  const handleDropFiles = React.useCallback((directory: string, dataTransfer: DataTransfer) => {
+    const droppedFiles = getExternalFiles(dataTransfer);
+    if (droppedFiles.length === 0) return;
+    setDropTarget(null);
+    void uploadFiles(directory, droppedFiles);
+  }, [uploadFiles]);
+
+  const handleMoveDragChange = React.useCallback((source: FileTreeEntry | null) => {
+    setFileTreeDragSource(source);
+    if (!source) {
+      setMoveDragPath(null);
+      setMoveDropTarget(null);
+      return;
+    }
+    // Dim the row only after the browser has taken the drag image from it.
+    requestAnimationFrame(() => {
+      if (getFileTreeDragSource()?.path === source.path) setMoveDragPath(source.path);
+>>>>>>> bc50ba56a
     });
     setChildrenByDir((prev) => prev[normalizedDir] && areDirectoryNodesEqual(prev[normalizedDir], mapped)
      ? prev : { ...prev, [normalizedDir]: mapped });
@@ -891,6 +1554,7 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
   refreshAbortRef.current = controller;
   directoryRequests.clear();
 
+<<<<<<< HEAD
   try {
    // Refresh root and every expanded directory under it, but keep the
    // cached children visible while re-fetching so the tree stays expanded
@@ -901,6 +1565,354 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
     .map((p) => normalizePath(p))
     .filter((normalized): normalized is string =>
      Boolean(normalized) && normalized !== root && normalized.startsWith(`${root}/`),
+=======
+  const handleConfirmMove = React.useCallback(() => {
+    if (!pendingMove) return;
+    setPendingMove(null);
+    void moveEntry(pendingMove.source, pendingMove.targetDirectory);
+  }, [moveEntry, pendingMove]);
+
+  const getRootMoveTarget = React.useCallback((event: React.DragEvent, source: FileTreeEntry): string | null => {
+    if (!canMove || isFileTreeDragWithinClickSlop(event)) return null;
+    return getFileTreeMoveTarget(source, null, root);
+  }, [canMove, root]);
+
+  const handleRootDragOver = React.useCallback((event: React.DragEvent) => {
+    const moveSource = getMoveDragSource(event.dataTransfer);
+    if (moveSource) {
+      const target = getRootMoveTarget(event, moveSource);
+      setMoveDropTarget(target);
+      if (!target) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      return;
+    }
+    if (!canUpload || isUploading || !root || !hasExternalFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDropTarget(root);
+  }, [canUpload, getRootMoveTarget, isUploading, root]);
+
+  const handleRootDragLeave = React.useCallback((event: React.DragEvent) => {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+    if (getMoveDragSource(event.dataTransfer)) {
+      setMoveDropTarget(null);
+      return;
+    }
+    if (!hasExternalFiles(event.dataTransfer)) return;
+    setDropTarget(null);
+  }, []);
+
+  const handleRootDrop = React.useCallback((event: React.DragEvent) => {
+    const moveSource = getMoveDragSource(event.dataTransfer);
+    if (moveSource) {
+      event.preventDefault();
+      setMoveDropTarget(null);
+      const target = getRootMoveTarget(event, moveSource);
+      if (target && isDropOfMoveSource(event.dataTransfer, root, moveSource)) handleMoveDrop(moveSource, target);
+      return;
+    }
+    if (!canUpload || isUploading || !root || !hasExternalFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    handleDropFiles(root, event.dataTransfer);
+  }, [canUpload, getRootMoveTarget, handleDropFiles, handleMoveDrop, isUploading, root]);
+
+  // --- Dialog submit (matching FilesView) ---
+
+  const handleDialogSubmit = React.useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!dialogData || !activeDialog) return;
+
+    setIsDialogSubmitting(true);
+    const done = () => setIsDialogSubmitting(false);
+    const closeDialog = () => setActiveDialog(null);
+
+    if (activeDialog === 'createFile') {
+      if (!dialogInputValue.trim()) {
+        toast.error(t('sidebarFilesTree.toast.filenameRequired'));
+        done();
+        return;
+      }
+      if (!files.writeFile) {
+        toast.error(t('sidebarFilesTree.toast.writeNotSupported'));
+        done();
+        return;
+      }
+
+      const parentPath = dialogData.path;
+      const prefix = parentPath ? `${parentPath}/` : '';
+      const newPath = normalizePath(`${prefix}${dialogInputValue.trim()}`);
+
+      await files.writeFile(newPath, '')
+        .then(async (result) => {
+          if (result.success) {
+            toast.success(t('sidebarFilesTree.toast.fileCreated'));
+            await refreshDirectory(parentPath);
+          }
+          closeDialog();
+        })
+        .catch(() => toast.error(t('sidebarFilesTree.toast.operationFailed')))
+        .finally(done);
+      return;
+    }
+
+    if (activeDialog === 'createFolder') {
+      if (!dialogInputValue.trim()) {
+        toast.error(t('sidebarFilesTree.toast.folderNameRequired'));
+        done();
+        return;
+      }
+
+      const parentPath = dialogData.path;
+      const prefix = parentPath ? `${parentPath}/` : '';
+      const newPath = normalizePath(`${prefix}${dialogInputValue.trim()}`);
+
+      await files.createDirectory(newPath)
+        .then(async (result) => {
+          if (result.success) {
+            toast.success(t('sidebarFilesTree.toast.folderCreated'));
+            await refreshDirectory(parentPath);
+          }
+          closeDialog();
+        })
+        .catch(() => toast.error(t('sidebarFilesTree.toast.operationFailed')))
+        .finally(done);
+      return;
+    }
+
+    if (activeDialog === 'rename') {
+      if (!dialogInputValue.trim()) {
+        toast.error(t('sidebarFilesTree.toast.nameRequired'));
+        done();
+        return;
+      }
+      if (!files.rename) {
+        toast.error(t('sidebarFilesTree.toast.renameNotSupported'));
+        done();
+        return;
+      }
+
+      const oldPath = dialogData.path;
+      const parentDir = oldPath.split('/').slice(0, -1).join('/');
+      const prefix = parentDir ? `${parentDir}/` : '';
+      const newName = dialogInputValue.trim();
+      const newPath = normalizePath(`${prefix}${newName}`);
+
+      // Open tabs and the editor, unsaved edits included, follow the new name.
+      try {
+        const result = await moveWorkspacePath(files, { tabs: panelRoot, files: root }, oldPath, newPath);
+        if (result === 'moved') {
+          toast.success(t('sidebarFilesTree.toast.renamedSuccessfully'));
+          await refreshDirectory(parentDir);
+          closeDialog();
+        } else if (result === 'conflict') {
+          toast.error(t('sidebarFilesTree.toast.nameTaken', { name: newName, folder: getDropTargetLabel(root, parentDir) }));
+        } else {
+          toast.error(t('sidebarFilesTree.toast.operationFailed'));
+        }
+      } catch {
+        toast.error(t('sidebarFilesTree.toast.operationFailed'));
+      } finally {
+        done();
+      }
+      return;
+    }
+
+    if (activeDialog === 'delete') {
+      if (!files.delete) {
+        toast.error(t('sidebarFilesTree.toast.deleteNotSupported'));
+        done();
+        return;
+      }
+
+      const deletedPath = dialogData.path;
+      const parentDir = deletedPath.split('/').slice(0, -1).join('/');
+      await files.delete(deletedPath)
+        .then(async (result) => {
+          if (result.success) {
+            toast.success(t('sidebarFilesTree.toast.deletedSuccessfully'));
+            await refreshDirectory(parentDir);
+            if (root) {
+              removeOpenPathsByPrefix(root, deletedPath);
+            }
+            if (selectedPath === deletedPath || (selectedPath && selectedPath.startsWith(deletedPath + '/'))) {
+              setSelectedPath(root, null);
+            }
+          }
+          closeDialog();
+        })
+        .catch(() => toast.error(t('sidebarFilesTree.toast.operationFailed')))
+        .finally(done);
+      return;
+    }
+
+    done();
+  }, [activeDialog, dialogData, dialogInputValue, files, panelRoot, refreshDirectory, removeOpenPathsByPrefix, root, selectedPath, setSelectedPath, t]);
+
+  // --- Tree rendering (matching FilesView with indent guides) ---
+
+  // Virtualized: only the rows in and near view are in the document. With
+  // every expanded folder mounted, a large repository put thousands of
+  // elements under the context panel, and each open restyled all of them and
+  // added them to the accessibility tree inside the opening animation.
+  const treeRows = React.useMemo(
+    () => (root ? buildFileTreeRows({ root, childrenByDir, expandedPaths: expandedPathSet, loadErrorsByDir }) : []),
+    [childrenByDir, expandedPathSet, loadErrorsByDir, root],
+  );
+  const treeRowIndexByPath = React.useMemo(
+    () => new Map(treeRows.flatMap((row, index) => (row.kind === 'node' ? [[row.node.path, index] as const] : []))),
+    [treeRows],
+  );
+  const [treeScrollElement, setTreeScrollElement] = React.useState<HTMLElement | null>(null);
+  const [treeListElement, setTreeListElement] = React.useState<HTMLUListElement | null>(null);
+  const attachTreeList = React.useCallback((element: HTMLUListElement | null) => {
+    treeListRef.current = element;
+    setTreeListElement(element);
+  }, []);
+  const [focusedRowPath, setFocusedRowPath] = React.useState<string | null>(null);
+  const pinnedRowIndexes = React.useMemo(
+    () => [moveDragPath, focusedRowPath, ...(slidingRowPaths ?? [])].flatMap((path) => (path ? [treeRowIndexByPath.get(path) ?? -1] : [])),
+    [focusedRowPath, moveDragPath, slidingRowPaths, treeRowIndexByPath],
+  );
+  const rangeExtractor = React.useCallback(
+    (range: Range) => withPinnedRowIndexes(defaultRangeExtractor(range), pinnedRowIndexes, treeRows.length),
+    [pinnedRowIndexes, treeRows.length],
+  );
+  // The list starts below the scroller's own padding.
+  const [treeListOffset, setTreeListOffset] = React.useState(0);
+  React.useLayoutEffect(() => {
+    if (!treeScrollElement || !treeListElement) return;
+    const offset = treeListElement.getBoundingClientRect().top - treeScrollElement.getBoundingClientRect().top + treeScrollElement.scrollTop;
+    setTreeListOffset(Math.max(0, Math.round(offset)));
+  }, [treeListElement, treeScrollElement]);
+  const measuredRowHeightRef = React.useRef<number | null>(null);
+  // Only some rows are mounted, so the list keeps the width of every row seen
+  // wider than the pane, by path: every row's fill and end lane then span the
+  // scrolled width, and a wide row out of view keeps the list wide, or the
+  // sideways scroll would snap back. A row is as wide as the list or its whole
+  // name, so only a row wider than the list tells its own width. Mounted rows
+  // report it through the virtualizer's resize observer; the write waits a
+  // frame so it never resizes observed rows inside that observer's callback.
+  const treeRowWidthsRef = React.useRef(new Map<string, number>());
+  const treeWidthFrameRef = React.useRef<number | null>(null);
+  const writeTreeWidth = React.useCallback((list: HTMLElement) => {
+    const widest = Math.max(0, ...treeRowWidthsRef.current.values());
+    list.style.setProperty('--oc-file-tree-width', `${widest}px`);
+  }, []);
+  const recordTreeRowWidth = React.useCallback((element: HTMLElement, width: number) => {
+    const path = element.dataset.treeRowPath;
+    const list = treeListRef.current;
+    if (!path || !list || width <= list.clientWidth + 0.5) return;
+    if (treeRowWidthsRef.current.get(path) === width) return;
+    treeRowWidthsRef.current.set(path, width);
+    if (treeWidthFrameRef.current !== null) return;
+    treeWidthFrameRef.current = requestAnimationFrame(() => {
+      treeWidthFrameRef.current = null;
+      if (treeListRef.current) writeTreeWidth(treeListRef.current);
+    });
+  }, [writeTreeWidth]);
+  React.useEffect(() => () => {
+    if (treeWidthFrameRef.current !== null) cancelAnimationFrame(treeWidthFrameRef.current);
+  }, []);
+  // When the rows change, rows that left the tree drop out, and mounted rows
+  // measure again from the pane's width, so a name that got shorter narrows
+  // the list. Measuring lays the list out narrower for a moment, which clamps
+  // the sideways scroll; it is restored before paint.
+  React.useLayoutEffect(() => {
+    if (!treeListElement) return;
+    const widths = treeRowWidthsRef.current;
+    for (const path of widths.keys()) {
+      if (!treeRowIndexByPath.has(path)) widths.delete(path);
+    }
+    const scrollLeft = treeScrollElement?.scrollLeft ?? 0;
+    treeListElement.style.removeProperty('--oc-file-tree-width');
+    const listWidth = treeListElement.clientWidth;
+    for (const row of treeListElement.children) {
+      const path = row instanceof HTMLElement ? row.dataset.treeRowPath : undefined;
+      if (!path) continue;
+      const width = row.getBoundingClientRect().width;
+      if (width > listWidth + 0.5) widths.set(path, width);
+      else widths.delete(path);
+    }
+    writeTreeWidth(treeListElement);
+    if (treeScrollElement) treeScrollElement.scrollLeft = scrollLeft;
+  }, [treeListElement, treeRowIndexByPath, treeScrollElement, writeTreeWidth]);
+  const treeVirtualizer = useVirtualizer<HTMLElement, HTMLLIElement>({
+    count: treeRows.length,
+    // Enabled before the scroller exists, the virtualizer would cache offset 0.
+    enabled: treeScrollElement !== null,
+    getScrollElement: () => treeScrollElement,
+    // Rows a folder just showed start at their real height: with a guess they
+    // moved once measured, and the rows sliding under an opening folder jumped
+    // at the end of the motion.
+    estimateSize: (index) => (treeRows[index]?.kind === 'node' ? measuredRowHeightRef.current : null) ?? FILE_TREE_ROW_ESTIMATE_PX,
+    measureElement: (element, entry, instance) => {
+      const size = measureElement(element, entry, instance);
+      if (element.dataset.treeRowPath) measuredRowHeightRef.current = size;
+      if (entry) recordTreeRowWidth(element, entry.borderBoxSize?.[0]?.inlineSize ?? element.getBoundingClientRect().width);
+      return size;
+    },
+    getItemKey: (index) => treeRows[index]?.key ?? index,
+    overscan: 12,
+    scrollMargin: treeListOffset,
+    rangeExtractor,
+  });
+
+  const renderTreeRow = (row: FileTreeRow<FileNode>): React.ReactNode => {
+    if (row.kind === 'error') {
+      return (
+        // As wide as the pane and held at its start, so a tree widened by a long
+        // name keeps the message and its button on screen.
+        <div
+          className="sticky inset-s-0 flex w-[100cqw] items-center gap-2 py-1 pe-2 typography-meta text-muted-foreground"
+          style={{ paddingInlineStart: fileTreeRowPaddingLeft(row.depth) }}
+        >
+          <FileTreeIndentGuides depth={row.depth} />
+          <span className="min-w-0 flex-1 truncate text-[var(--status-error)]" title={row.message}>{row.message}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="xs" className="h-6 gap-1" onClick={() => void refreshDirectory(row.directory)}>
+                <Icon name="refresh" className="h-3.5 w-3.5" />
+                {t('sidebarFilesTree.actions.refreshTitle')}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent sideOffset={6}>{t('contextTooltips.files.retryFolder')}</TooltipContent>
+          </Tooltip>
+        </div>
+      );
+    }
+    const { node, depth, isExpanded } = row;
+    const isDir = node.type === 'directory';
+    return (
+      <MemoizedFileRow
+        node={node}
+        root={root}
+        isExpanded={isExpanded}
+        isActive={selectedPath === node.path}
+        isBrowserClient={isBrowserClient}
+        depth={depth}
+        isOpen={!isDir && openContextFilePaths.has(node.path)}
+        status={!isDir ? getFileStatus(node.path) : undefined}
+        badge={isDir ? getFolderBadge(node.path) : undefined}
+        isDropTarget={isDir && (dropIndicatorTarget === node.path || moveDropTarget === node.path)}
+        isDragSource={moveDragPath === node.path}
+        canUpload={canUpload && !isUploading}
+        canMove={canMove}
+        permissions={fileRowPermissions}
+        downloadFile={files.downloadFile}
+        onSelect={handleOpenFile}
+        onToggle={toggleDirectory}
+        onRevealPath={handleRevealPath}
+        onOpenDialog={handleOpenDialog}
+        onSetDropTarget={setDropTarget}
+        onDropFiles={handleDropFiles}
+        onPickFiles={pickFiles}
+        onMoveDragChange={handleMoveDragChange}
+        onSetMoveDropTarget={setMoveDropTarget}
+        onMoveDrop={handleMoveDrop}
+        guestActions={guestActions}
+      />
+>>>>>>> bc50ba56a
     );
    const pathsToRefresh = [root, ...normalizedExpanded];
 
@@ -1032,6 +2044,7 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
    return null;
   };
 
+<<<<<<< HEAD
   const toLoad = new Set<string>();
   const toForget = new Set<string>();
   for (const changed of directories ?? loadedDirsRef.current) {
@@ -1044,6 +2057,418 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
   }
   const queue = [...toLoad].filter(
    (dir) => (entryCountByDirRef.current.get(dir) ?? 0) <= AUTO_RELIST_MAX_ENTRIES,
+=======
+  // Follows focus inside the tree, so the focused row stays mounted.
+  const handleTreeFocus = React.useCallback((event: React.FocusEvent<HTMLUListElement>) => {
+    const row = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-tree-row-path]') : null;
+    setFocusedRowPath(row?.dataset.treeRowPath ?? null);
+  }, []);
+  const handleTreeBlur = React.useCallback((event: React.FocusEvent<HTMLUListElement>) => {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+    setFocusedRowPath(null);
+  }, []);
+
+  React.useEffect(() => {
+    const path = pendingRevealPathRef.current;
+    // Only the tree's own list: search results take its place while a query runs.
+    if (!path || !treeScrollElement || !treeListElement) return;
+    const index = treeRowIndexByPath.get(path);
+    // A hidden tree has no layout to scroll; reveal once it is shown.
+    if (index === undefined || treeScrollElement.offsetParent === null) return;
+    pendingRevealPathRef.current = null;
+    treeVirtualizer.scrollToIndex(index, { align: 'auto' });
+  });
+
+  const hasTree = Boolean(root && childrenByDir[root]);
+  const rootLoadError = root ? loadErrorsByDir[root] : null;
+  const isSearchActive = debouncedSearchQuery.trim().length > 0;
+  // The same order of cases as the list below: the tree shows only when no
+  // search, search result or root error takes its place.
+  const showsTree = !searching && !isSearchActive && searchResults.length === 0 && !rootLoadError && hasTree && Boolean(root);
+  const dropTargetLabel = dropIndicatorTarget ? getDropTargetLabel(root, dropIndicatorTarget) : '';
+  const moveDropTargetLabel = moveDropTarget ? getDropTargetLabel(root, moveDropTarget) : '';
+  const pendingMoveName = pendingMove ? pendingMove.source.path.slice(pendingMove.source.path.lastIndexOf('/') + 1) : '';
+
+  return (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* The action band matches the file editor's docked toolbar (40px,
+          24px buttons) so the two read as one row across the panel. */}
+      <div className="flex flex-col border-b border-edge-muted">
+        <div className="flex h-8 shrink-0 items-center border-t border-edge-muted px-2">
+        {/* New file, new folder and upload share one "+" menu, so the band
+            keeps four buttons and fits even the narrowest tree. */}
+        <ActionToolbar
+          className="flex-1"
+          start={null}
+          groups={[[
+            (canCreateFile || canCreateFolder || canUpload) && {
+              id: 'add',
+              label: t('sidebarFilesTree.actions.addMenuTitle'),
+              icon: isUploading ? 'loader-4' : 'add',
+              iconClassName: isUploading ? 'animate-spin' : undefined,
+              menu: (
+                <>
+                  {canCreateFile ? (
+                    <DropdownMenuItem onClick={() => handleOpenDialog('createFile', { path: currentDirectory, type: 'directory' })}>
+                      <Icon name="file-add" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.newFile')}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canCreateFolder ? (
+                    <DropdownMenuItem onClick={() => handleOpenDialog('createFolder', { path: currentDirectory, type: 'directory' })}>
+                      <Icon name="folder-add" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.newFolder')}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canUpload ? (
+                    <DropdownMenuItem disabled={!root || isUploading} onClick={() => pickFiles(root)}>
+                      <Icon name="upload-2" className="me-2 h-4 w-4" /> {t('sidebarFilesTree.menu.uploadFiles')}
+                    </DropdownMenuItem>
+                  ) : null}
+                </>
+              ),
+            },
+            {
+              id: 'gitignored',
+              label: t('filesView.tree.actions.showGitignored'),
+              icon: 'file-forbid',
+              pressed: showGitignored,
+              onSelect: () => setFilesViewShowGitignored(!showGitignored),
+            },
+            {
+              id: 'refresh',
+              label: t('sidebarFilesTree.actions.refreshTitle'),
+              icon: 'refresh',
+              onSelect: () => void refreshRoot(),
+            },
+            {
+              id: 'collapse-all',
+              label: t('sidebarFilesTree.actions.collapseAllTitle'),
+              icon: 'collapse-vertical',
+              onSelect: () => {
+                if (root) collapseAllExpandedPaths(root);
+              },
+            },
+          ]]}
+        />
+        </div>
+        <div className="relative min-w-0 px-2 py-2">
+          {canSearchContents ? (
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* The field sits in flow, so the span carries the placement the tooltip anchors to. */}
+                  <span className="absolute inset-s-3 top-3 inline-flex">
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="relative size-6 p-0 text-muted-foreground hover:text-foreground"
+                        aria-label={t('sidebarFilesTree.search.mode.aria')}
+                      >
+                        <Icon name={contentSearchActive ? 'file-search' : 'search'} className="h-4 w-4" />
+                        {/* The corner marks the icon as a menu. */}
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute bottom-0.5 end-0.5 size-0 border-[3px] border-b-current border-e-current border-s-transparent border-t-transparent opacity-70"
+                        />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>{t('sidebarFilesTree.search.mode.aria')}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="start" side="bottom">
+                <DropdownMenuRadioGroup
+                  value={searchMode}
+                  onValueChange={(value) => setSearchMode(value === 'contents' ? 'contents' : 'names')}
+                >
+                  <DropdownMenuRadioItem value="names" closeOnClick className="items-center">
+                    <Icon name="search" className="size-3.5" />
+                    {t('sidebarFilesTree.search.mode.names')}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="contents" closeOnClick className="items-center">
+                    <Icon name="file-search" className="size-3.5" />
+                    {t('sidebarFilesTree.search.mode.contents')}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Icon name="search" className="pointer-events-none absolute inset-s-4 top-4 h-4 w-4 text-muted-foreground" />
+          )}
+          <Input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t(contentSearchActive ? 'sidebarFilesTree.search.contentsPlaceholder' : 'sidebarFilesTree.search.placeholder')}
+            className={cn('h-8 ps-8 typography-meta', contentSearchActive ? 'pe-16' : 'pe-8')}
+          />
+          {contentSearchActive ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="chip"
+                  size="xs"
+                  aria-pressed={regexSearch}
+                  onClick={() => {
+                    setRegexSearch((value) => !value);
+                    searchInputRef.current?.focus();
+                  }}
+                  aria-label={t('sidebarFilesTree.search.regexTitle')}
+                  className="absolute inset-e-3 top-3.5 h-5 min-w-0 px-1 font-mono typography-micro"
+                >
+                  .*
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>{t(regexSearch ? 'contextTooltips.files.searchPlainText' : 'sidebarFilesTree.search.regexTitle')}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {searchQuery.trim().length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('sidebarFilesTree.search.clearAria')}
+                  className={cn('absolute top-4 inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground', contentSearchActive ? 'inset-e-10' : 'inset-e-4')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <Icon name="close" className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>{t('sidebarFilesTree.search.clearAria')}</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="relative flex-1 min-h-0">
+        <ScrollableOverlay
+          ref={setTreeScrollElement}
+          outerClassName="h-full min-h-0"
+          // The virtualizer keeps rows in place itself; browser scroll
+          // anchoring would fight it.
+          // A container, so an error row can take the pane's width in a wider tree.
+          className={cn('@container px-1.5 py-1.5 [overflow-anchor:none]', (dropIndicatorTarget === root || moveDropTarget === root) && 'bg-interactive-selection/10')}
+          onDragEnter={handleRootDragOver}
+          onDragOver={handleRootDragOver}
+          onDragLeave={handleRootDragLeave}
+          onDrop={handleRootDrop}
+        >
+        <ul className="flex flex-col">
+          {contentSearchActive && contentSearch.status !== 'idle' ? (
+            <FileContentSearchResults
+              state={contentSearch}
+              activeMatchKey={openedMatch && openedMatch.path === selectedPath ? openedMatch.key : null}
+              onOpen={handleOpenMatch}
+              onDragStart={handleMatchDragStart}
+              onDragEnd={handleMatchDragEnd}
+            />
+          ) : searching ? (
+            <li className="flex items-center gap-1.5 px-2 py-1 typography-meta text-muted-foreground">
+              <Icon name="loader-4" className="h-4 w-4 animate-spin" />
+              {t('sidebarFilesTree.state.searching')}
+            </li>
+          ) : isSearchActive && searchResults.length === 0 ? (
+            <li className="px-2 py-1 typography-meta text-muted-foreground">{t('mobile.files.search.empty')}</li>
+          ) : searchResults.length > 0 ? (
+            searchResults.map((node) => {
+              const isActive = selectedPath === node.path;
+              return (
+                <li key={node.path} data-file-tree-path={node.path}>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenFile(node)}
+                    onDoubleClick={() => handleOpenFile(node, { pin: true })}
+                    draggable
+                    onDragStart={(e) => {
+                      recordFileTreeDragStart(e);
+                      // Search results attach to the chat only; they never move.
+                      setFileTreeDragSource(null);
+                      const path = node.relativePath || getRelativePath(root ?? '', node.path);
+                      if (!path || path === '.') return;
+                      e.dataTransfer.setData(INTERNAL_FILE_PATH_TYPE, path);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    onDragEnd={(e) => {
+                      // A micro-drag suppressed the click this gesture was meant to be (#2368).
+                      if (shouldTreatFileTreeDragEndAsClick(e)) {
+                        void handleOpenFile(node);
+                      }
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-start transition-colors',
+                      fileTreeRowStateClassName(isActive)
+                    )}
+                    title={node.path}
+                  >
+                    <FileTypeIcon filePath={node.path} extension={node.extension} className="size-3.5" />
+                    <span
+                      className="oc-ui-start-align min-w-0 flex-1 truncate typography-meta"
+                      style={{ direction: 'rtl' }}
+                    >
+                      {/* Left-to-right marks keep a leading "." in place inside the rtl box. */}
+                      {`\u200E${node.relativePath ?? node.path}\u200E`}
+                    </span>
+                  </button>
+                </li>
+              );
+            })
+          ) : rootLoadError ? (
+            <li className="flex flex-col gap-2 px-2 py-1 typography-meta text-muted-foreground">
+              <span>{rootLoadError}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="xs" className="w-fit gap-1.5" onClick={() => void refreshRoot()}>
+                    <Icon name="refresh" className="h-3.5 w-3.5" />
+                    {t('sidebarFilesTree.actions.refreshTitle')}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>{t('contextTooltips.files.retryFileList')}</TooltipContent>
+              </Tooltip>
+            </li>
+          ) : hasTree && root ? null : (
+            <li className="px-2 py-1 typography-meta text-muted-foreground">{t('sidebarFilesTree.state.loading')}</li>
+          )}
+        </ul>
+        {showsTree ? (
+          <ul
+            ref={attachTreeList}
+            className="relative min-w-[max(100%,var(--oc-file-tree-width,0px))]"
+            style={{ height: treeVirtualizer.getTotalSize() }}
+            onFocus={handleTreeFocus}
+            onBlur={handleTreeBlur}
+          >
+            {treeVirtualizer.getVirtualItems().map((item) => {
+              const row = treeRows[item.index];
+              if (!row) return null;
+              const path = row.kind === 'node' ? row.node.path : undefined;
+              return (
+                <li
+                  key={item.key}
+                  ref={treeVirtualizer.measureElement}
+                  data-index={item.index}
+                  data-tree-row-path={path}
+                  data-tree-disclosure-path={row.kind === 'node' ? path : `${row.directory}/`}
+                  data-file-tree-path={row.kind === 'node' && row.node.type === 'file' ? path : undefined}
+                  // A node row grows past the list to its whole name; an error row truncates.
+                  className={cn('absolute inset-x-0 top-0', row.kind === 'node' && 'min-w-max')}
+                  style={{ transform: `translateY(${item.start - treeListOffset}px)` }}
+                >
+                  {renderTreeRow(row)}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        </ScrollableOverlay>
+        {dropIndicatorTarget ? (
+          <div className="pointer-events-none absolute inset-s-2 inset-e-2 top-2 z-50 flex items-center gap-2 rounded-md border border-primary bg-background/95 px-2 py-1.5 shadow-sm">
+            <Icon name={isUploading ? 'loader-4' : 'folder-received'} className={cn('size-4 flex-shrink-0', isUploading && 'animate-spin')} />
+            <span className="min-w-0 truncate typography-meta" title={dropTargetLabel}>
+              {t(isUploading ? 'sidebarFilesTree.drop.uploading' : 'sidebarFilesTree.drop.target', { path: dropTargetLabel })}
+            </span>
+          </div>
+        ) : moveDropTarget ? (
+          <div className="pointer-events-none absolute inset-s-2 inset-e-2 top-2 z-50 flex items-center gap-2 rounded-md border border-primary bg-background/95 px-2 py-1.5 shadow-sm">
+            <Icon name="folder-received" className="size-4 flex-shrink-0" />
+            <span className="min-w-0 truncate typography-meta" title={moveDropTargetLabel}>
+              {t('sidebarFilesTree.drop.moveTarget', { path: moveDropTargetLabel })}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {uploadElements}
+
+      {/* CRUD dialogs (matching FilesView) */}
+      <Dialog open={!!activeDialog} onOpenChange={(open) => !open && setActiveDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {activeDialog === 'createFile' && t('sidebarFilesTree.dialog.createFile.title')}
+              {activeDialog === 'createFolder' && t('sidebarFilesTree.dialog.createFolder.title')}
+              {activeDialog === 'rename' && t('sidebarFilesTree.dialog.rename.title')}
+              {activeDialog === 'delete' && t('sidebarFilesTree.dialog.delete.title')}
+            </DialogTitle>
+            <DialogDescription>
+              {activeDialog === 'createFile' && t('sidebarFilesTree.dialog.createFile.description', { path: dialogData?.path ?? t('sidebarFilesTree.dialog.rootFallback') })}
+              {activeDialog === 'createFolder' && t('sidebarFilesTree.dialog.createFolder.description', { path: dialogData?.path ?? t('sidebarFilesTree.dialog.rootFallback') })}
+              {activeDialog === 'rename' && t('sidebarFilesTree.dialog.rename.description', { name: dialogData?.name ?? '' })}
+              {activeDialog === 'delete' && t('sidebarFilesTree.dialog.delete.description', { name: dialogData?.name ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {activeDialog !== 'delete' && (
+            <div className="py-4">
+              <Input
+                value={dialogInputValue}
+                onChange={(e) => setDialogInputValue(e.target.value)}
+                placeholder={activeDialog === 'rename' ? t('sidebarFilesTree.dialog.rename.placeholder') : t('sidebarFilesTree.dialog.namePlaceholder')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    void handleDialogSubmit();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActiveDialog(null)} disabled={isDialogSubmitting}>
+              {t('sidebarFilesTree.dialog.cancel')}
+            </Button>
+            <Button
+              variant={activeDialog === 'delete' ? 'destructive' : 'default'}
+              onClick={() => void handleDialogSubmit()}
+              disabled={isDialogSubmitting || (activeDialog !== 'delete' && !dialogInputValue.trim())}
+            >
+              {isDialogSubmitting ? <Icon name="loader-4" className="size-4 animate-spin" /> : (
+                activeDialog === 'delete' ? t('sidebarFilesTree.dialog.delete.confirm') : t('sidebarFilesTree.dialog.confirm')
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingMove !== null} onOpenChange={(open) => { if (!open) setPendingMove(null); }}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>{t('sidebarFilesTree.dialog.move.title')}</DialogTitle>
+            <DialogDescription>
+              {pendingMove ? t('sidebarFilesTree.dialog.move.description', {
+                name: pendingMoveName,
+                folder: getDropTargetLabel(root, pendingMove.targetDirectory),
+              }) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="w-full sm:items-center sm:justify-between">
+            <div
+              className="flex cursor-pointer items-center gap-2 typography-meta text-muted-foreground"
+              onClick={() => setConfirmFileTreeMove(!confirmFileTreeMove)}
+            >
+              <Checkbox
+                checked={!confirmFileTreeMove}
+                onChange={(checked) => setConfirmFileTreeMove(!checked)}
+                ariaLabel={t('sidebarFilesTree.dialog.move.neverAsk')}
+              />
+              <span>{t('sidebarFilesTree.dialog.move.neverAsk')}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setPendingMove(null)}>
+                {t('sidebarFilesTree.dialog.cancel')}
+              </Button>
+              <Button onClick={handleConfirmMove}>
+                {t('sidebarFilesTree.dialog.move.confirm')}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+>>>>>>> bc50ba56a
   );
   void (async () => {
    for (let i = 0; i < queue.length; i += 3) {

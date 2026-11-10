@@ -3,6 +3,9 @@ import type { Session } from '@openchamber/agent-contract';
 import { navigateSessionHistory } from './sessionNavigationHistory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+
+useProjectsStore.setState({ projects: [{ id: 'p1', path: '/repo' }] });
 
 const session = (sessionId: string): Session => ({
   sessionId,

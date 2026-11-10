@@ -257,7 +257,7 @@ describe("server-owned message queue", () => {
       content: "hi @reviewer",
       text: "hi",
       agentMention: "reviewer",
-      attachments: [attachment],
+      attachments: [{ ...attachment, agentPath: '/Users/me/Documents/note.txt' }],
       sendConfig: { providerID: "p", modelID: "m", agent: "build" },
     })
     expect(useMessageQueueStore.getState().queuedMessages[key]).toHaveLength(1)
@@ -268,6 +268,7 @@ describe("server-owned message queue", () => {
       path: "/api/message-queue/sessions/session-1/items",
       directory: "/repo",
       body: {
+<<<<<<< HEAD
         expectedRevision: "0",
         content: "hi @reviewer",
         request: {
@@ -284,6 +285,16 @@ describe("server-owned message queue", () => {
             variant: null,
             reasoningEffort: null,
           },
+=======
+        directory: "/repo",
+        item: {
+          content: "hi @reviewer",
+          text: "hi",
+          agentMention: "reviewer",
+          attachments: [{ id: "att-1", filename: "note.txt", mimeType: "text/plain", size: 2, source: "local", dataUrl: attachment.dataUrl, agentPath: '/Users/me/Documents/note.txt' }],
+          context: [],
+          sendConfig: { providerID: "p", modelID: "m", agent: "build" },
+>>>>>>> bc50ba56a
         },
       },
     })
@@ -399,11 +410,21 @@ describe("server-owned message queue", () => {
     expect(calls).toHaveLength(0)
   })
 
+<<<<<<< HEAD
   test("takeForSend brings the full message back and removes it from the server", async () => {
     useMessageQueueStore.setState({
       queuedMessages: {
         [key]: [{ id: "q1", content: "with file", text: "with file", createdAt: 1, attachments: [attachment] }],
       },
+=======
+  test("takeForSend brings the full message back, attachments included", async () => {
+    respond = () => json({
+      revision: 7,
+      session: session([]),
+      item: serverItem("q1", "with file", {
+        attachments: [{ id: "att-1", filename: "note.txt", mimeType: "text/plain", size: 2, source: "local", dataUrl: "data:text/plain;base64,aGk=", agentPath: '/Users/me/Documents/note.txt' }],
+      }),
+>>>>>>> bc50ba56a
     })
     respond = () => json(queueState([]))
     const [taken] = await useMessageQueueStore.getState().takeForSend(target, "q1")
@@ -412,7 +433,13 @@ describe("server-owned message queue", () => {
     expect(calls[0]?.method).toBe("DELETE")
     expect(calls[0]?.body).toEqual({ expectedRevision: "0", queueItemId: "q1" })
     expect(taken?.content).toBe("with file")
+<<<<<<< HEAD
     expect(taken?.attachments?.[0]?.serverPath).toBe("attachment://att-1")
+=======
+    expect(taken?.attachments?.[0]?.dataUrl).toBe("data:text/plain;base64,aGk=")
+    expect(taken?.attachments?.[0]?.agentPath).toBe('/Users/me/Documents/note.txt')
+    expect(taken?.attachments?.[0]?.file.size).toBe(2)
+>>>>>>> bc50ba56a
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
   })
 

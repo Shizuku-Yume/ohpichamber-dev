@@ -178,8 +178,7 @@ export const writeCachedCatalog = (runtimeKey: string, directoryKey: string, upd
 
 /**
  * How long a loaded catalog must go without a newer catalog event before it is
- * stored. OpenCode announces a starting location's full catalog about two
- * seconds after its first, partial answer.
+ * stored, so a catalog a config edit or plugin reload replaced at once is not.
  */
 export const CATALOG_PERSIST_SETTLE_MS = 3_000;
 
@@ -308,7 +307,10 @@ const pruneCachedCatalogs = (database: IDBDatabase): Promise<void> => new Promis
   };
 });
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> bc50ba56a
 export const resetCatalogCacheForTests = (): void => {
   databasePromise = null;
   writeChain = Promise.resolve();

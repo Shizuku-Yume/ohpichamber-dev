@@ -215,6 +215,7 @@ const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
  * chain decides (`../small-model/DOCUMENTATION.md`, *Free tier and the
  * session fallback*).
  */
+<<<<<<< HEAD
 const resolveModel = (workspaceId, explicitModel, providerID, modelID) => describeSmallModel({
   workspaceId,
   outputReserveTokens: walkthroughOutputTokens,
@@ -226,6 +227,34 @@ const resolveModel = (workspaceId, explicitModel, providerID, modelID) => descri
   preferredModelID: modelID || undefined,
   role: 'slow',
 });
+=======
+/**
+ * Resolve the model for this feature. An explicit per-review choice outranks the
+ * saved setting, which in turn outranks the small-model chain — the user picking
+ * a roomier model for a risky change is the most specific intent there is.
+ * A free zen model without a login counts as unset here, and the small-model
+ * chain decides (`../small-model/DOCUMENTATION.md`, *Free tier and the
+ * session fallback*).
+ */
+// `providerID` / `modelID` are the user's composer: without a model of its
+// own choosing, the walkthrough stays on that provider rather than on
+// whichever provider happens to be connected, and on that model when the
+// provider has no small one.
+// The saved thinking level goes with the saved model only: a model picked for
+// one review runs at its own default level.
+const resolveModel = (directory, explicitModel, providerID, modelID) => {
+  const savedModel = readWalkthroughModelOverride();
+  const overrideModel = explicitModel || savedModel;
+  return describeSmallModel({
+    directory,
+    outputReserveTokens: walkthroughOutputTokens,
+    overrideModel,
+    overrideVariant: overrideModel && overrideModel === savedModel ? readWalkthroughModelVariant() : undefined,
+    preferredProviderID: providerID || undefined,
+    preferredModelID: modelID || undefined,
+  });
+};
+>>>>>>> bc50ba56a
 
 export const __testing = { generationTimeoutMs, walkthroughOutputTokens };
 

@@ -101,6 +101,7 @@ function LaunchSettingsDialog({
             <SettingsColumnBlock title={t('chat.parallel.settings.setupTitle')}>
               <p className="typography-micro text-muted-foreground">{t('chat.parallel.setup.dialogDescription')}</p>
               <Textarea
+                dir="ltr"
                 value={setupDraft}
                 onChange={(event) => setSetupDraft(event.target.value)}
                 disabled={!state.isolate}
@@ -305,12 +306,20 @@ export function ParallelComposerStrip({
                   type="button"
                   onClick={() => parallel.incrementModel(index)}
                   className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+<<<<<<< HEAD
                   aria-label={t('chat.parallel.models.increment', { model: model.displayName || model.modelId })}
+=======
+                  aria-label={t('chat.parallel.models.increment', { model: model.displayName || model.modelID })}
+>>>>>>> bc50ba56a
                 >
                   <Icon name="add" className="size-3" />
                 </button>
               </TooltipTrigger>
+<<<<<<< HEAD
               <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.models.increment', { model: model.displayName || model.modelId })}</TooltipContent>
+=======
+              <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.models.increment', { model: model.displayName || model.modelID })}</TooltipContent>
+>>>>>>> bc50ba56a
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -318,12 +327,20 @@ export function ParallelComposerStrip({
                   type="button"
                   onClick={() => parallel.decrementModel(index)}
                   className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+<<<<<<< HEAD
                   aria-label={t('chat.parallel.models.decrement', { model: model.displayName || model.modelId })}
+=======
+                  aria-label={t('chat.parallel.models.decrement', { model: model.displayName || model.modelID })}
+>>>>>>> bc50ba56a
                 >
                   <Icon name="close" className="size-3" />
                 </button>
               </TooltipTrigger>
+<<<<<<< HEAD
               <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.models.decrement', { model: model.displayName || model.modelId })}</TooltipContent>
+=======
+              <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.models.decrement', { model: model.displayName || model.modelID })}</TooltipContent>
+>>>>>>> bc50ba56a
             </Tooltip>
           </span>
         ))}

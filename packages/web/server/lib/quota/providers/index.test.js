@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 import { fetchQuotaForProvider, listConfiguredQuotaProviders } from './index.js';
 
@@ -70,6 +74,7 @@ describe('selected quota dispatcher', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 
+<<<<<<< HEAD
   it('never projects resolver errors that echo credential material', async () => {
     const result = await fetchQuotaForProvider('cline-pass', { ...selection, resolveCredential: async () => { throw new Error('private-key-material'); } });
     expect(JSON.stringify(result)).not.toContain('private-key-material');
@@ -79,5 +84,28 @@ describe('selected quota dispatcher', () => {
     const result = await fetchQuotaForProvider('codex', { ...selection, providerId: undefined, resolveCredential });
     expect(result.ok).toBe(false);
     expect(resolveCredential).not.toHaveBeenCalled();
+=======
+  it('lists ZenMux from its managed credential, whatever the OpenCode auth holds', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'quota-list-'));
+    vi.stubEnv('OPENCHAMBER_DATA_DIR', dataDir);
+    try {
+      await expect(listConfiguredQuotaProviders()).resolves.not.toContain('zenmux');
+      mkdirSync(join(dataDir, 'quota'), { recursive: true });
+      writeFileSync(join(dataDir, 'quota', 'zenmux.json'), JSON.stringify({ platformApiKey: 'key' }));
+      await expect(listConfiguredQuotaProviders()).resolves.toContain('zenmux');
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('coalesces concurrent refreshes by provider ID', async () => {
+    const first = fetchQuotaForProvider('unsupported-test-provider');
+    const second = fetchQuotaForProvider('unsupported-test-provider');
+
+    expect(first).toBe(second);
+    await first;
+    expect(fetchQuotaForProvider('unsupported-test-provider')).not.toBe(first);
+>>>>>>> bc50ba56a
   });
 });

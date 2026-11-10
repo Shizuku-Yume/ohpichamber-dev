@@ -15,9 +15,11 @@ import {
 } from '@/lib/overview/overviewModel';
 
 import { useWorktreeChangeRequests } from './useWorktreeChangeRequests';
-import { readOverviewWorktreeGit, sessionsInWorktree, type OverviewWorktreeGit, type OverviewWorktreeTarget } from './overviewActions';
+import { sessionsInWorktree } from '@/lib/worktrees/worktreeUse';
+import { readOverviewWorktreeGit, type OverviewWorktreeGit, type OverviewWorktreeTarget } from './overviewActions';
 import { normalizePath } from '@/lib/pathNormalization';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
+import { spaceProjectDirectoryIn, useSpacesStore } from '@/lib/spaces/spaces-store';
 import { resolveProjectColor } from '@/lib/projectMeta';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
@@ -32,6 +34,8 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ProjectEntry } from '@/lib/api/types';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
+import { useBackgroundImagesStore } from '@/sync/background-images';
+import { usePrWatchStore } from '@/sync/pr-watch';
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { usePrWatchStore } from '@/sync/pr-watch';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
@@ -187,8 +191,12 @@ export function useOverviewData(): OverviewData {
   const hasLoaded = useGlobalSessionsStore((state) => state.hasLoaded);
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
   const shellSessionIds = useBackgroundShellsStore((state) => state.sessionIds);
+<<<<<<< HEAD
   // A session the user asked the host to watch a pull request for is waiting
   // on it, so its row says so while nothing else on it is running.
+=======
+  const imageSessionIds = useBackgroundImagesStore((state) => state.sessionIds);
+>>>>>>> bc50ba56a
   const prWatches = usePrWatchStore((state) => state.bySession);
   const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
@@ -259,12 +267,23 @@ export function useOverviewData(): OverviewData {
       const root = rootOf(id, entityById);
       if (!map.has(root)) map.set(root, 'shell');
     }
+<<<<<<< HEAD
+=======
+    for (const id of imageSessionIds) {
+      const root = rootOf(id, entityById);
+      if (!map.has(root)) map.set(root, 'image');
+    }
+>>>>>>> bc50ba56a
     for (const id of prWatches.keys()) {
       const root = rootOf(id, entityById);
       if (!map.has(root)) map.set(root, 'pullRequest');
     }
     return map;
+<<<<<<< HEAD
   }, [activeSessionIds, entityById, prWatches, shellSessionIds]);
+=======
+  }, [activeSessionIds, entityById, imageSessionIds, prWatches, shellSessionIds]);
+>>>>>>> bc50ba56a
 
   const blockingByRoot = React.useMemo(() => {
     const map = new Map<string, OverviewBlocking>();
@@ -348,11 +367,20 @@ export function useOverviewData(): OverviewData {
     return rows;
   }, [gitOf, isWorktreeInUse, now, sessionsIn, workEnabled, worktrees]);
 
+  // A space's session belongs to the project the space was made from, once the space list names it.
+  const spaceMarks = useSpacesStore((state) => state.spaces);
+  const spacesJourney = useSpacesStore((state) => state.journey);
   const projectOf = React.useCallback((session: Session) => {
+<<<<<<< HEAD
     const directory = resolveGlobalSessionDirectory(session) ?? session.displayPath;
     const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);
+=======
+    const directory = resolveGlobalSessionDirectory(session) ?? session.directory;
+    const spaceProject = spaceProjectDirectoryIn({ spaces: spaceMarks, journey: spacesJourney }, directory);
+    const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory, spaceProject);
+>>>>>>> bc50ba56a
     return { label: projectLabel(project, directory), color: resolveProjectColor(project?.color) };
-  }, [projects, worktreesByProject]);
+  }, [projects, spaceMarks, spacesJourney, worktreesByProject]);
 
   return {
     ready: hasLoaded || sessionsStatus === 'ready',

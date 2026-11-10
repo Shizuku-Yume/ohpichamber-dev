@@ -262,6 +262,7 @@ export const AgentsPage: React.FC = () => {
     </div>;
   }
 
+<<<<<<< HEAD
   return <SettingsPageLayout
     title={isNewAgent ? t('settings.agents.page.title.new') : selectedAgentName}
     description={isNewAgent ? t('settings.agents.page.subtitle.new') : t('settings.agents.page.subtitle.edit')}
@@ -281,6 +282,117 @@ export const AgentsPage: React.FC = () => {
           <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}
             placeholder={t('settings.agents.page.field.descriptionPlaceholder')} rows={2}
             className="w-full resize-none min-h-[60px] bg-transparent" />
+=======
+  return (
+    <SettingsPageLayout
+      title={isNewAgent ? t('settings.agents.page.title.new') : selectedAgentName}
+      description={isNewAgent ? t('settings.agents.page.subtitle.new') : t('settings.agents.page.subtitle.edit')}
+      onBlurCapture={autosave.onBlurCapture}
+    >
+      {!isNewAgent && storedAt && (
+        <SettingsLegacyFormatNote legacy={storedAt.legacy} path={storedAt.path} />
+      )}
+      {!isNewAgent && storedAt?.source === 'none' && (
+        <p className={`mb-4 flex items-start gap-1.5 ${SETTINGS_HELPER_CLASS}`}>
+          <Icon name="information" className="mt-[0.2em] h-3.5 w-3.5 shrink-0 opacity-70" />
+          <span>{t('settings.agents.page.runtimeProvided.note')}</span>
+        </p>
+      )}
+      <SettingsSection
+        title={t('settings.agents.page.section.identityRole')}
+        divider={false}
+        contentClassName="space-y-3"
+      >
+        {isNewAgent && (
+          <SettingsFieldRow
+            settingsItem="agents.name"
+            label={t('settings.agents.page.field.agentName')}
+          >
+            <div className="flex items-center">
+              <span className="typography-ui-label text-muted-foreground me-1">@</span>
+              <Input
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                placeholder={t('settings.agents.page.field.agentNamePlaceholder')}
+                className="h-7 w-40 px-2"
+              />
+            </div>
+            <Select value={draftScope} onValueChange={(v) => setDraftScope(v as AgentScope)}>
+              <SelectTrigger className="w-fit min-w-[100px]">
+                <SelectValue>
+                  {draftScope === 'project' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="user">
+                  <div className="flex items-center gap-2">
+                    <Icon name="user-3" className="h-3.5 w-3.5" />
+                    <span>{t('settings.common.scope.global')}</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="project">
+                  <div className="flex items-center gap-2">
+                    <Icon name="folder" className="h-3.5 w-3.5" />
+                    <span>{t('settings.common.scope.project')}</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingsFieldRow>
+        )}
+
+        <SettingsStackedField
+          label={t('settings.common.field.description')}
+          controlClassName="w-full max-w-none"
+        >
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={runtimeDescription || t('settings.agents.page.field.descriptionPlaceholder')}
+            rows={2}
+            className="w-full resize-none min-h-[60px] bg-transparent"
+          />
+        </SettingsStackedField>
+
+        <SettingsStackedField
+          settingsItem="agents.mode"
+          label={t('settings.agents.page.field.mode')}
+          info={t('settings.agents.page.field.modeTooltip')}
+        >
+          <SettingsChipGroup
+            aria-label={t('settings.agents.page.field.mode')}
+            value={mode}
+            onChange={(next) => {
+              setMode(next);
+              requestSave();
+            }}
+            options={[
+              { value: 'primary', label: t('settings.agents.page.mode.primary') },
+              { value: 'subagent', label: t('settings.agents.page.mode.subagent') },
+              { value: 'all', label: t('settings.agents.page.mode.all') },
+            ]}
+          />
+        </SettingsStackedField>
+
+        <SettingsStackedField
+          settingsItem="agents.color"
+          label={t('settings.agents.page.field.color')}
+          info={t('settings.agents.page.field.colorTooltip')}
+        >
+          <SettingsColorField
+            value={color}
+            labels={{
+              empty: t('settings.agents.page.field.colorAutomatic'),
+              swatch: (swatch) => t('settings.agents.page.field.colorSwatchAria', { color: swatch }),
+              custom: t('settings.agents.page.field.colorCustomAria'),
+              hex: t('settings.agents.page.field.colorHexAria'),
+            }}
+            onChange={(next) => {
+              setColor(next);
+              requestSave();
+            }}
+          />
+>>>>>>> bc50ba56a
         </SettingsStackedField>
       </SettingsSection>
       <SettingsSection title={t('settings.agents.page.section.modelParameters')} contentClassName="space-y-3">

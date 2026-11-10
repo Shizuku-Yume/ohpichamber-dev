@@ -76,9 +76,15 @@ export const PROJECT_ACTION_ICONS: Array<{
   { key: 'robot', label: 'Robot', Icon: 'robot-2' },
   { key: 'command', label: 'Command', Icon: 'command' },
   { key: 'file', label: 'File', Icon: 'file-text' },
+<<<<<<< HEAD
   { key: 'deploy', label: 'Deploy', Icon: 'upload-2' },
   { key: 'download', label: 'Download', Icon: 'download-cloud' },
   { key: 'test', label: 'Test', Icon: 'flask' },
+=======
+  { key: 'deploy', label: 'Deploy', Icon: 'upload-cloud-2' },
+  { key: 'download', label: 'Download', Icon: 'download-cloud-2' },
+  { key: 'test', label: 'Test', Icon: 'test-tube' },
+>>>>>>> bc50ba56a
   { key: 'database', label: 'Database', Icon: 'database-2' },
   { key: 'mobile', label: 'Mobile', Icon: 'smartphone' },
   { key: 'desktop', label: 'Desktop', Icon: 'computer' },
@@ -86,22 +92,40 @@ export const PROJECT_ACTION_ICONS: Array<{
   { key: 'package', label: 'Package', Icon: 'box-3' },
   { key: 'cloud', label: 'Cloud', Icon: 'cloud' },
   { key: 'security', label: 'Security', Icon: 'shield-check' },
+<<<<<<< HEAD
   { key: 'speed', label: 'Benchmark', Icon: 'pulse' },
   { key: 'notify', label: 'Notify', Icon: 'notification-3' },
   { key: 'format', label: 'Format', Icon: 'palette' },
   { key: 'clean', label: 'Clean', Icon: 'delete-bin' },
   { key: 'watch', label: 'Watch', Icon: 'eye' },
   { key: 'loop', label: 'Loop', Icon: 'loop-right' },
+=======
+  { key: 'speed', label: 'Benchmark', Icon: 'speed-up' },
+  { key: 'notify', label: 'Notify', Icon: 'notification-3' },
+  { key: 'format', label: 'Format', Icon: 'brush' },
+  { key: 'clean', label: 'Clean', Icon: 'delete-bin-2' },
+  { key: 'watch', label: 'Watch', Icon: 'eye' },
+  { key: 'loop', label: 'Loop', Icon: 'loop-left' },
+>>>>>>> bc50ba56a
   { key: 'timer', label: 'Timer', Icon: 'timer' },
   { key: 'merge', label: 'Merge', Icon: 'git-merge' },
   { key: 'lock', label: 'Lock', Icon: 'lock' },
   { key: 'archive', label: 'Archive', Icon: 'archive' },
+<<<<<<< HEAD
   { key: 'sparkle', label: 'Sparkle', Icon: 'sparkling' },
   { key: 'npm', label: 'npm', Icon: 'box-3' },
   { key: 'apple', label: 'Apple', Icon: 'apple' },
   { key: 'android', label: 'Android', Icon: 'smartphone' },
   { key: 'windows', label: 'Windows', Icon: 'computer' },
   { key: 'linux', label: 'Linux', Icon: 'computer' },
+=======
+  { key: 'sparkle', label: 'Sparkle', Icon: 'sparkling-2' },
+  { key: 'npm', label: 'npm', Icon: 'npmjs' },
+  { key: 'apple', label: 'Apple', Icon: 'apple' },
+  { key: 'android', label: 'Android', Icon: 'android' },
+  { key: 'windows', label: 'Windows', Icon: 'windows' },
+  { key: 'linux', label: 'Linux', Icon: 'ubuntu' },
+>>>>>>> bc50ba56a
 ];
 
 export const PROJECT_ACTION_ICON_MAP = Object.fromEntries(

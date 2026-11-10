@@ -10,7 +10,43 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
+<<<<<<< HEAD
 import { useUIStore } from '@/stores/useUIStore';
+=======
+import { KnowledgeComposer } from './KnowledgeComposer';
+import { KNOWLEDGE_ICON_BUTTON_CLASS } from './knowledgeRowStyle';
+import { KnowledgeMenu, KnowledgePinToggle, KnowledgeRowContextMenu } from './KnowledgeActions';
+import { ButtonTooltip } from '@/components/ui/action-toolbar';
+import { formatKnowledgeDate } from './knowledgeFormat';
+import { planDeleteKey, scheduleKnowledgeDelete, usePendingKnowledgeDeletes } from './pendingKnowledgeDeletes';
+
+/**
+ * Agents tick plan steps with their own file tools, which announce nothing,
+ * so the list re-reads while it is on screen. The server answers with each
+ * plan's step counts, never its text, and re-reads only files that changed.
+ */
+const PLAN_LIST_REFRESH_MS = 10_000;
+
+/** Ticked steps of the plan's `## Steps` checklist, or Done once all are. */
+const PlanProgressLabel: React.FC<{ progress: ProjectPlanProgress }> = ({ progress }) => {
+  const { t } = useI18n();
+  if (progress.done >= progress.total) {
+    return (
+      <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-success)] bg-[var(--status-success)]/15">
+        {t('rightSidebar.contextNotesTodo.plans.progress.done')}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 typography-micro tabular-nums text-muted-foreground"
+      title={t('rightSidebar.contextNotesTodo.plans.progress.title', { done: progress.done, total: progress.total })}
+    >
+      {`${progress.done}/${progress.total}`}
+    </span>
+  );
+};
+>>>>>>> bc50ba56a
 
 /**
  * Saved plan markdown for the project.
@@ -103,8 +139,8 @@ export const PlansSection: React.FC<{
     const result = await requestFileAccess({
       defaultPath: projectRef.path,
       filters: [
-        { name: 'Plan files', extensions: ['md', 'markdown', 'txt'] },
-        { name: 'All files', extensions: ['*'] },
+        { name: t('contextTooltips.workspace.plans.filterPlanFiles'), extensions: ['md', 'markdown', 'txt'] },
+        { name: t('contextTooltips.workspace.plans.filterAllFiles'), extensions: ['*'] },
       ],
     });
 
@@ -191,6 +227,7 @@ export const PlansSection: React.FC<{
 
   return (
     <div className="space-y-2">
+<<<<<<< HEAD
       <div className="flex items-center justify-end gap-2">
         <input
           ref={fileInputRef}
@@ -214,8 +251,41 @@ export const PlansSection: React.FC<{
           <Icon name="add" className="h-3.5 w-3.5" />
         </button>
       </div>
+=======
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".md,.markdown,.txt,text/markdown,text/plain"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0] ?? null;
+          void handleUploadFile(file);
+          event.currentTarget.value = '';
+        }}
+      />
+      <KnowledgeComposer
+        placeholder={t('rightSidebar.contextNotesTodo.plans.newPlaceholder')}
+        addLabel={t('rightSidebar.contextNotesTodo.plans.create')}
+        maxLength={PROJECT_PLAN_TITLE_MAX_LENGTH}
+        dictation={false}
+        onSubmit={handleCreatePlan}
+        extraActions={(
+          <ButtonTooltip label={t('rightSidebar.contextNotesTodo.plans.importFromFile')} className="shrink-0">
+            <button
+              type="button"
+              onClick={handleTriggerImport}
+              disabled={isImporting}
+              className={KNOWLEDGE_ICON_BUTTON_CLASS}
+              aria-label={t('rightSidebar.contextNotesTodo.plans.importFromFile')}
+            >
+              <Icon name="upload-2" className="h-3.5 w-3.5" />
+            </button>
+          </ButtonTooltip>
+        )}
+      />
+>>>>>>> bc50ba56a
 
-      <div className="rounded-lg border border-border/60 bg-background/40">
+      <div className="rounded-lg border border-edge bg-background/40">
         {visiblePlans.length === 0 ? (
           <p className="px-3 py-3 typography-meta text-muted-foreground">
             {query.trim()
@@ -223,6 +293,7 @@ export const PlansSection: React.FC<{
               : t('rightSidebar.contextNotesTodo.plans.empty')}
           </p>
         ) : (
+<<<<<<< HEAD
           <ul className="divide-y divide-border/50">
             {visiblePlans.map((plan) => (
               <li key={plan.id} className="flex items-center gap-1.5 px-2.5 py-1.5">
@@ -230,6 +301,43 @@ export const PlansSection: React.FC<{
                   type="button"
                   onClick={() => handleOpenPlan(plan)}
                   className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-1.5 py-1 text-left hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+=======
+          <ul className="divide-y divide-edge">
+            {visiblePlans.map((plan) => {
+              const pinned = pinnedPlanIds.has(plan.id);
+              const shared = plan.source === 'shared';
+              const sessionId = plan.session?.sessionId;
+              const menuItems = [
+                {
+                  id: 'move',
+                  label: shared
+                    ? t('rightSidebar.contextNotesTodo.plans.menu.makePersonal')
+                    : t('rightSidebar.contextNotesTodo.plans.menu.share'),
+                  hint: shared
+                    ? t('rightSidebar.contextNotesTodo.plans.makePersonal')
+                    : t('rightSidebar.contextNotesTodo.plans.share'),
+                  onSelect: () => void handleMovePlan(plan),
+                },
+                {
+                  id: 'delete',
+                  label: t('rightSidebar.contextNotesTodo.plans.deletePlan'),
+                  destructive: true,
+                  onSelect: () => handleDeletePlan(plan.id),
+                },
+              ];
+              return (
+                <KnowledgeRowContextMenu
+                  key={plan.id}
+                  items={menuItems}
+                  disabled={movingPlanId === plan.id}
+                  render={(
+                    <li
+                      data-knowledge-entry-id={plan.id}
+                      aria-current={plan.id === selectedPlanId ? 'true' : undefined}
+                      className={cn('group/knowledge flex items-center gap-1 py-1 pe-1.5 ps-1', plan.id === selectedPlanId && 'bg-interactive-selection/40')}
+                    />
+                  )}
+>>>>>>> bc50ba56a
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="min-w-0 truncate typography-ui-label text-foreground">{plan.title}</span>
@@ -238,6 +346,7 @@ export const PlansSection: React.FC<{
                         {t('rightSidebar.contextNotesTodo.plans.sharedBadge')}
                       </span>
                     ) : null}
+<<<<<<< HEAD
                   </span>
                   <span className="flex-shrink-0 typography-micro text-muted-foreground">
                     {new Date(plan.createdAt).toLocaleDateString(getCurrentIntlLocale())}
@@ -286,6 +395,32 @@ export const PlansSection: React.FC<{
                 </button>
               </li>
             ))}
+=======
+                    {plan.progress ? <PlanProgressLabel progress={plan.progress} /> : null}
+                    <span className="ms-auto flex-shrink-0 typography-micro text-muted-foreground">
+                      {formatKnowledgeDate(plan.createdAt)}
+                    </span>
+                  </button>
+                  {sessionId ? (
+                    <button
+                      type="button"
+                      onClick={() => void openSessionLink(sessionId, null)}
+                      className={KNOWLEDGE_ICON_BUTTON_CLASS}
+                      aria-label={t('rightSidebar.contextNotesTodo.plans.session.open')}
+                      data-row-tooltip={t('rightSidebar.contextNotesTodo.plans.session.open')}
+                    >
+                      <Icon name="chat-3" className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                  <KnowledgePinToggle
+                    pinned={pinned}
+                    onToggle={() => void handleTogglePinned(plan.id, !pinned)}
+                  />
+                  <KnowledgeMenu disabled={movingPlanId === plan.id} items={menuItems} />
+                </KnowledgeRowContextMenu>
+              );
+            })}
+>>>>>>> bc50ba56a
           </ul>
         )}
       </div>

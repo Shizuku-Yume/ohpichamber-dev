@@ -31,7 +31,11 @@ export function WorktreesView(): React.ReactNode {
                 setNewWorktreeDialogOpen(true);
               }}
             >
+<<<<<<< HEAD
               <Icon name="git-branch" className="me-1 h-3.5 w-3.5" />
+=======
+              <Icon name="worktree" className="me-1 h-3.5 w-3.5" />
+>>>>>>> bc50ba56a
               {t('sessions.sidebar.project.actions.newWorktree')}
             </Button>
           </div>

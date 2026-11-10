@@ -30,7 +30,11 @@ const TONE_UNION = tones.map((tone) => `"${tone}"`).join(' | ');
 // A child list such as (Text | Badge | ...)[]; the rules name what nests where.
 const CHILD_LIST = /\((?:[A-Z]\w* \| )+[A-Z]\w*\)\[\]/g;
 
+<<<<<<< HEAD
 const componentLines = (): string => (Object.values(uiBlockLibrary.toSpec().components) as Array<{ signature: string; description?: string }>)
+=======
+const componentLines = (): string => Object.values(uiBlockLibrary.toSpec().components)
+>>>>>>> bc50ba56a
   .map((component) => {
     const signature = component.signature.replaceAll(TONE_UNION, 'Tone').replace(CHILD_LIST, 'Item[]');
     return component.description ? `${signature}: ${component.description}` : signature;

@@ -10,9 +10,18 @@ import type { Part } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { clearStagedRevert } from '@/sync/session-actions';
+import { attachmentBasename } from '@/lib/attachmentIdentity';
 import { useDirectorySync } from '@/sync/sync-context';
+<<<<<<< HEAD
+=======
+import { readSubagentRun } from '@/lib/opencode/subagent-run';
+import { attachSyntheticContext } from './lib/attachSyntheticContext';
+import { getPromptPreviewText } from './lib/messagePreview';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+>>>>>>> bc50ba56a
 import {
     EMPTY_REVERTED_MESSAGE_DOCK_STATE,
     buildRevertedMessageDockState,
@@ -33,8 +42,13 @@ const getRevertedPreview = (parts: Part[], fallback: string): string => {
         .trim();
 
     if (text) return text;
+<<<<<<< HEAD
     const filePart = parts.find((part) => part.type === 'attachment');
     return filePart?.name ? `[${attachmentBasename(filePart.name)}]` : fallback;
+=======
+    const filePart = parts.find((part) => part.type === 'file');
+    return filePart?.filename ? `[${attachmentBasename(filePart.filename)}]` : fallback;
+>>>>>>> bc50ba56a
 };
 
 const ROW_CLASS = 'flex h-10 min-w-0 items-center gap-2 pl-3 pr-1.5';
@@ -92,6 +106,7 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
     const restoreButton = (
         <Tooltip>
             <TooltipTrigger asChild>
+<<<<<<< HEAD
                 <Button
                     type="button"
                     variant="ghost"
@@ -106,6 +121,24 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
                 </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>{restoreLabel}</TooltipContent>
+=======
+                <span className="inline-flex shrink-0">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={restoring}
+                        onClick={() => { void restore(); }}
+                        onMouseDown={(event) => event.preventDefault()}
+                        className="shrink-0 text-primary/80 hover:bg-transparent hover:text-primary"
+                    >
+                        {restoring ? <Icon name="loader-4" className="size-3 animate-spin" aria-hidden="true" /> : null}
+                        {items.length === 1 ? t('chat.revertPopover.restore') : t('chat.revertPopover.restoreAll')}
+                    </Button>
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t(items.length === 1 ? 'contextTooltips.chat.restoreOne' : 'contextTooltips.chat.restoreAll')}</TooltipContent>
+>>>>>>> bc50ba56a
         </Tooltip>
     );
 
@@ -126,6 +159,7 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
     // Restore stays on it, so the decision never hides behind the toggle.
     return (
         <div role="group" className="border-b border-edge" aria-label={t('chat.revertPopover.title')}>
+<<<<<<< HEAD
             <div className="flex h-10 items-center gap-2 pl-3 pr-1.5">
                 <Button
                     type="button"
@@ -147,6 +181,34 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
             </div>
             {expanded ? (
                 <ScrollableOverlay id={listId} outerClassName="max-h-40" className="overscroll-contain">
+=======
+            <div className="flex oc-composer-row items-center gap-2 ps-3 pe-1.5">
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExpandedFor(expanded ? null : expansionKey)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            aria-expanded={expanded}
+                            aria-controls={expanded ? listId : undefined}
+                            className="min-w-0 flex-1 shrink justify-start gap-2 px-0 text-sm font-normal normal-case text-muted-foreground hover:!bg-transparent hover:text-foreground has-[>svg]:px-0"
+                        >
+                            <Icon name="arrow-go-back" className="size-3.5 shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 truncate text-start">
+                                {t('chat.revertPopover.staged', { count: items.length })}
+                            </span>
+                            <Icon name={expanded ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" aria-hidden="true" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6}>{t(expanded ? 'contextTooltips.chat.revertedHide' : 'contextTooltips.chat.revertedShow')}</TooltipContent>
+                </Tooltip>
+                {restoreButton}
+            </div>
+            {expanded ? (
+                <ScrollableOverlay id={listId} outerClassName="max-h-40" className="overscroll-contain" disableHorizontal>
+>>>>>>> bc50ba56a
                     {items.map((item) => (
                         <div key={item.id} className={ROW_CLASS}>
                             <span className="size-3.5 shrink-0" aria-hidden="true" />

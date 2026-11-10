@@ -130,6 +130,12 @@ type RowProps = {
   ariaLabel?: string;
   tooltip?: React.ReactNode;
   className?: string;
+  /**
+   * Direction of a label that is not a translated string: `auto` for names and
+   * titles people or agents wrote, `ltr` for branches and paths. A translated
+   * label keeps the interface's direction.
+   */
+  labelDir?: 'auto' | 'ltr';
 };
 
 /**
@@ -147,10 +153,12 @@ export const WorkStatusRow: React.FC<RowProps> = ({
   ariaLabel,
   tooltip,
   className,
+  labelDir,
 }) => {
   const labelId = React.useId();
   const body = (
     <>
+<<<<<<< HEAD
       {leading ?? (icon ? (
         <Icon
           name={icon}
@@ -159,6 +167,14 @@ export const WorkStatusRow: React.FC<RowProps> = ({
         />
       ) : null)}
       <span id={labelId} className={cn('min-w-0 flex-1 truncate text-[13px]', muted && 'text-muted-foreground')}>
+=======
+      {touch && leadingNode ? (
+        // The phone's icon column: 20px wide, every glyph in it at 16px, so
+        // the status glyphs sections centre in a 14px slot line up as well.
+        <span className="flex size-5 shrink-0 items-center justify-center [&>span]:size-5 [&_svg]:size-4">{leadingNode}</span>
+      ) : leadingNode}
+      <span id={labelId} dir={labelDir} className={cn('min-w-0 flex-1 truncate', labelDir && 'oc-ui-start-align', touch ? 'typography-ui-label' : 'text-[0.8125rem]', muted && 'text-muted-foreground')}>
+>>>>>>> bc50ba56a
         {label}
       </span>
       {value !== undefined && value !== null ? (
@@ -176,7 +192,7 @@ export const WorkStatusRow: React.FC<RowProps> = ({
   // a row action). The row's button is stretched under the content instead:
   // the whole row still answers a press, and controls inside it sit above.
   const row = onClick ? (
-    <div className={cn(shared, 'oc-ref-tint-scope relative transition-colors hover:text-foreground')}>
+    <div className={cn(shared, 'relative transition-colors hover:text-foreground')}>
       <button
         type="button"
         onClick={onClick}
@@ -297,6 +313,7 @@ export const WorkStatusCallout: React.FC<{ children: React.ReactNode }> = ({ chi
 );
 
 /** Context-window fill, drawn under its row rather than inside it. */
+<<<<<<< HEAD
 export const WorkStatusMeter: React.FC<{ percent: number; color: string }> = ({ percent, color }) => (
   <div className="mx-1 mb-1 h-1 overflow-hidden rounded-full bg-[var(--chat-divider)]">
     <div
@@ -305,3 +322,35 @@ export const WorkStatusMeter: React.FC<{ percent: number; color: string }> = ({ 
     />
   </div>
 );
+=======
+export const WorkStatusMeter: React.FC<{ percent: number; color: string }> = ({ percent, color }) => {
+  const touch = React.useContext(WorkStatusTouchContext);
+  return (
+    <div className={cn('h-1 overflow-hidden rounded-full bg-[var(--chat-divider)]', touch ? 'mx-2.5 mb-2' : 'mx-1 mb-1')}>
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${Math.max(0, Math.min(100, percent))}%`, backgroundColor: color }}
+      />
+    </div>
+  );
+};
+
+/**
+ * A line explaining the readout above it (a cost split, a compaction note):
+ * no icon and no label column, since it reports nothing of its own.
+ */
+export const WorkStatusNote: React.FC<{ children: React.ReactNode; truncate?: boolean }> = ({ children, truncate }) => {
+  const touch = React.useContext(WorkStatusTouchContext);
+  return (
+    <p
+      className={cn(
+        'text-muted-foreground tabular-nums',
+        touch ? 'mb-2 ms-[2.625rem] me-2.5 typography-meta' : 'mx-1 mb-1 text-[0.6875rem] leading-4',
+        truncate && 'truncate',
+      )}
+    >
+      {children}
+    </p>
+  );
+};
+>>>>>>> bc50ba56a

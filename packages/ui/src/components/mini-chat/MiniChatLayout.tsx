@@ -226,11 +226,15 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
           <span dir="auto" className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
             {title}
           </span>
+<<<<<<< HEAD
           {!isChatContext ? <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
+=======
+          {!isChatContext ? <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[0.65625rem] font-normal leading-tight text-muted-foreground">
+>>>>>>> bc50ba56a
             <span className="truncate">{projectLabel}</span>
             {branchLabel ? (
               <span className="inline-flex min-w-0 items-center gap-0.5">
-                <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                 <span className="truncate">{branchLabel}</span>
               </span>
             ) : null}

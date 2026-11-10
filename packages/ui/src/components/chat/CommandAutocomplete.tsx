@@ -3,7 +3,12 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatSessionSelection } from './chatColumnSession';
+<<<<<<< HEAD
 import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+=======
+import { isCommandOfferedInComposer, selectCommandsForComposer, useCommandsStore } from '@/stores/useCommandsStore';
+import { useComposerConfigDirectory } from '@/hooks/useComposerConfigDirectory';
+>>>>>>> bc50ba56a
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useI18n, type I18nKey } from '@/lib/i18n';
@@ -14,6 +19,7 @@ import { mergeCommandAutocompleteItems, rankCommandAutocompleteItems } from './c
 import { useGuestCommands } from '@/hooks/useGuestSurfaces';
 import { AutocompleteRowDetail } from './composer/ui/AutocompleteRowParts';
 import { useAutocompleteSelectionScroll } from './composer/ui/useAutocompleteSelectionScroll';
+import { useHeightMorph } from '@/lib/motion/useSizeMorph';
 
 // Skills are not here: they have their own `$` picker.
 type CommandSource = 'openchamber' | 'native' | 'extension';
@@ -95,15 +101,30 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   // own directory, or the Chats root for a chat draft — not to the project
   // the app was on last.
   const effectiveDirectory = useEffectiveDirectory();
+<<<<<<< HEAD
   const commandsWithMetadata = useCommandsStore((s) => selectCommandsForDirectory(s, effectiveDirectory));
   const builtinCommandNames = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, effectiveDirectory));
+=======
+  const commandsTarget = useComposerConfigDirectory(effectiveDirectory);
+  const commandsWithMetadata = useCommandsStore((s) => selectCommandsForComposer(s, commandsTarget));
+>>>>>>> bc50ba56a
   const loadCommandsForDirectory = useCommandsStore((s) => s.loadCommands);
-  const refreshCommands = React.useCallback(() => loadCommandsForDirectory(effectiveDirectory), [effectiveDirectory, loadCommandsForDirectory]);
+  const refreshCommands = React.useCallback(() => {
+    if (commandsTarget.status === 'pending') return;
+    return loadCommandsForDirectory(commandsTarget.directory);
+  }, [commandsTarget, loadCommandsForDirectory]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const { listRef, onKeyboardNavigate } = useAutocompleteSelectionScroll(selectedIndex, itemRefs);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+<<<<<<< HEAD
+=======
+  // Narrowing as the user types, the box eases into its new height; the
+  // edge it is anchored to stays put.
+  useHeightMorph(containerRef);
+  // A caret placement brings its own max-height.
+>>>>>>> bc50ba56a
   const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined);
   const ignoreClickRef = React.useRef(false);
   const pointerStartRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -143,14 +164,21 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   // The list depends on the registries, not on what is typed: it is built
   // once per registry change, and only the ranking follows the query.
   const allCommands = React.useMemo<CommandInfo[]>(() => {
+<<<<<<< HEAD
     const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
       id: cmd.commandId ?? `cmd:${cmd.scope ?? 'global'}:${cmd.name}:${index}`,
+=======
+    const customCommands: CommandInfo[] = commandsWithMetadata.filter(isCommandOfferedInComposer).map((cmd, index) => ({
+      id: `opencode:${cmd.scope ?? 'global'}:${cmd.name}:${cmd.agent ?? ''}:${cmd.model ?? ''}:${index}`,
+>>>>>>> bc50ba56a
       name: cmd.name,
       source: 'native',
       description: cmd.description,
       agentId: cmd.agentId,
       modelSelection: cmd.modelSelection,
       isBuiltIn: cmd.name === 'init' || cmd.name === 'review',
+      // It reaches OpenCode through our managed config, but it is ours.
+      isOpenChamber: cmd.name === 'new-extension',
       scope: cmd.scope,
     }));
 

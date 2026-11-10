@@ -14,8 +14,36 @@ describe('selected native OpenCode Go quota', () => {
     expect(windows.monthly.usedPercent).toBe(60);
     for (const window of Object.values(windows)) expect(window.resetAt).toBe(Date.parse(resetsAt));
   });
+<<<<<<< HEAD
   it('preserves valid siblings when another window is malformed', () => {
     const windows = parseOpenCodeGoUsage({ usage: { rolling: { percent: 25, resetsAt: 'invalid' }, weekly: { percent: 40, resetsAt }, monthly: { percent: 60, resetsAt: null } } });
+=======
+
+  it.each(['go-plus', 'go-teams'])('supports the %s plan', async (product) => {
+    const result = await fetchQuota({
+      readAuth: async () => consoleAuth(),
+      fetchImpl: async () => new Response(JSON.stringify(consolePayload({ product }))),
+    });
+    expect(result.ok).toBe(true);
+    expect(result.usage.windows['5h'].usedPercent).toBe(25);
+  });
+
+  it('skips only the unusable meters and keeps the rest', () => {
+    const windows = parseConsoleGoUsage(consolePayload({ meters: {
+      fiveHour: { resetsAt: '2026-08-12T12:00:00.000Z', limitMicroCents: '0', usedMicroCents: '10' },
+      week: { resetsAt: '2026-08-19T12:00:00.000Z', limitMicroCents: 'not-a-number', usedMicroCents: '10' },
+      month: { resetsAt: '2026-09-01T00:00:00.000Z', limitMicroCents: '1000', usedMicroCents: '250' },
+    } }));
+    expect(Object.keys(windows)).toEqual(['monthly']);
+    expect(windows.monthly.usedPercent).toBe(25);
+  });
+
+  it('skips a window with an invalid reset timestamp and handles missing meters', () => {
+    const windows = parseConsoleGoUsage(consolePayload({ meters: {
+      fiveHour: { resetsAt: 'not-a-date', limitMicroCents: '1000', usedMicroCents: '250' },
+      week: { resetsAt: '2026-08-19T12:00:00.000Z', limitMicroCents: '1000', usedMicroCents: '250' },
+    } }));
+>>>>>>> bc50ba56a
     expect(Object.keys(windows)).toEqual(['weekly']);
     expect(windows.weekly.resetAt).toBe(Date.parse(resetsAt));
     expect(parseOpenCodeGoUsage(null)).toEqual({});

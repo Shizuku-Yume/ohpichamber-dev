@@ -3,6 +3,8 @@ import { computeCacheHitRate } from '@/stores/utils/tokenUtils';
 
 export type CompletedTurnStats = {
   lastAssistantMessageId: string;
+  /** A newer prompt has already started the next turn; these numbers are from the turn before it. */
+  previousTurn: boolean;
   stepsCount: number;
   elapsedDurationMs: number | null;
   totalLlmDurationMs: number | null;
@@ -194,3 +196,140 @@ export function getLatestCompletedTurnStats(
     cost,
   };
 }
+<<<<<<< HEAD
+=======
+
+const lastConversationIndex = (records: readonly SessionMessageRecord[], end: number): number => {
+  for (let i = end - 1; i >= 0; i -= 1) {
+    if (isConversationRole(records[i].info.role)) return i;
+  }
+  return -1;
+};
+
+/**
+ * Calculates telemetry metrics for the latest completed turn in the session.
+ * A turn encompasses all assistant steps since the preceding user message up to the final completed assistant step.
+ */
+export function getLatestCompletedTurnStats(
+  records: readonly SessionMessageRecord[] | null | undefined,
+): CompletedTurnStats | null {
+  if (!records || records.length === 0) return null;
+
+  // v2 plumbing roles can trail the final assistant step, so the turn ends at
+  // the newest conversation record rather than the newest record.
+  const newestIdx = lastConversationIndex(records, records.length);
+  if (newestIdx < 0) return null;
+  // A prompt that has no reply yet lands before the session reports busy. The
+  // turn before it is the latest finished one, and is flagged as such.
+  if (records[newestIdx].info.role === 'user') {
+    const previousIdx = lastConversationIndex(records, newestIdx);
+    return previousIdx < 0 ? null : calculateTurnStats(records, previousIdx, true);
+  }
+  return calculateTurnStats(records, newestIdx, false);
+}
+
+/** Excludes the entire newest user-bounded turn, including its completed tool steps. */
+export function getPreviousCompletedTurnStats(records: readonly SessionMessageRecord[]): CompletedTurnStats | null {
+  for (let i = records.length - 1; i >= 0; i -= 1) {
+    if (records[i].info.role !== 'user') continue;
+    const previousIdx = lastConversationIndex(records, i);
+    return previousIdx < 0 ? null : calculateTurnStats(records, previousIdx, true);
+  }
+  return null;
+}
+
+/**
+ * Stats for the turn whose final step is `lastCompletedAssistantIdx`. A partial
+ * turn must not be published as complete or silently replaced with an older
+ * turn's stats.
+ */
+function calculateTurnStats(
+  records: readonly SessionMessageRecord[],
+  lastCompletedAssistantIdx: number,
+  previousTurn: boolean,
+): CompletedTurnStats | null {
+  const lastAssistantInfo = records[lastCompletedAssistantIdx].info;
+  if (lastAssistantInfo.role !== 'assistant') return null;
+  let turnStartIdx = -1;
+  for (let i = lastCompletedAssistantIdx - 1; i >= 0; i -= 1) {
+    const record = records[i];
+    if (record.info.role === 'user') {
+      turnStartIdx = i + 1;
+      break;
+    }
+  }
+
+  if (turnStartIdx === -1) return null;
+
+  const turnStartMs = nonnegative(records[turnStartIdx - 1].info.time.created);
+  const turnEndMs = nonnegative(lastAssistantInfo.time.completed);
+  const elapsedDurationMs =
+    turnStartMs !== null && turnEndMs !== null && turnEndMs >= turnStartMs
+      ? turnEndMs - turnStartMs
+      : null;
+
+  const stepStatsList: CompletedStepStats[] = [];
+  for (let i = turnStartIdx; i <= lastCompletedAssistantIdx; i += 1) {
+    const record = records[i];
+    if (record.info.role === 'assistant') {
+      const stepStats = calculateCompletedStepStats(record);
+      if (!stepStats) return null;
+      stepStatsList.push(stepStats);
+    }
+  }
+
+  if (stepStatsList.length === 0) return null;
+
+  let totalLlmDurationMs: number | null = 0;
+  let totalToolDurationMs: number | null = 0;
+  let totalInputTokens: number | null = 0;
+  let totalOutputTokens: number | null = 0;
+  let totalReasoningTokens: number | null = 0;
+  let totalCacheReadTokens: number | null = 0;
+  let totalCacheWriteTokens: number | null = 0;
+  let totalCost: number | null = 0;
+  let totalTtft: number | null = 0;
+
+  for (const step of stepStatsList) {
+    totalLlmDurationMs = add(totalLlmDurationMs, step.adjustedLlmDurationMs);
+    totalToolDurationMs = add(totalToolDurationMs, step.toolDurationMs);
+    totalInputTokens = add(totalInputTokens, step.inputTokens);
+    totalOutputTokens = add(totalOutputTokens, step.outputTokens);
+    totalReasoningTokens = add(totalReasoningTokens, step.reasoningTokens);
+    totalCacheReadTokens = add(totalCacheReadTokens, step.cacheReadTokens);
+    totalCacheWriteTokens = add(totalCacheWriteTokens, step.cacheWriteTokens);
+    totalCost = add(totalCost, step.cost);
+    totalTtft = add(totalTtft, step.ttftMs);
+  }
+
+  const avgTtftMs = totalTtft === null ? null : totalTtft / stepStatsList.length;
+
+  const totalGeneratedTokens = add(totalOutputTokens, totalReasoningTokens);
+  const tokensPerSecond = totalGeneratedTokens !== null && totalLlmDurationMs !== null
+    ? tokenRate(totalGeneratedTokens, totalLlmDurationMs)
+    : null;
+
+  const cacheHit = totalInputTokens !== null && totalCacheReadTokens !== null && totalCacheWriteTokens !== null ? computeCacheHitRate({
+    input: totalInputTokens,
+    cache: { read: totalCacheReadTokens, write: totalCacheWriteTokens },
+  }) : null;
+
+  return {
+    lastAssistantMessageId: records[lastCompletedAssistantIdx].info.id,
+    previousTurn,
+    stepsCount: stepStatsList.length,
+    elapsedDurationMs,
+    totalLlmDurationMs,
+    totalToolDurationMs,
+    avgTtftMs,
+    tokensPerSecond,
+    responseTokensPerSecond: calculateResponseTokenRate(records[lastCompletedAssistantIdx]),
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+    reasoningTokens: totalReasoningTokens,
+    totalGeneratedTokens,
+    cacheHitPercent: cacheHit?.hasInput ? Math.round(cacheHit.percent) : null,
+    cost: totalCost,
+  };
+}
+>>>>>>> bc50ba56a

@@ -29,7 +29,11 @@ export type SidebarRefLink = {
 // The tooltip is portaled, but React events still bubble through the row or
 // header that owns it: each link keeps its pointer and clicks to itself, so
 // opening it never selects, toggles or drags what sits underneath.
+<<<<<<< HEAD
 // A click opens the item on the board in `directory`'s project; Cmd or Ctrl opens the link.
+=======
+// A click opens the item in the Tracker, read through `directory`'s project; Cmd or Ctrl opens the link.
+>>>>>>> bc50ba56a
 const SidebarRefLinkHeading: React.FC<{ item: SidebarRefLink; directory: string | null }> = ({ item, directory }) => {
   const repository = useOutsideRepository(item.url, directory);
   return (
@@ -69,7 +73,11 @@ export const SidebarRefLinks: React.FC<{ items: readonly SidebarRefLink[]; direc
         >
           <SidebarRefLinkHeading item={item} directory={directory} />
           {item.title ? (
+<<<<<<< HEAD
             <span className="min-w-0 truncate pl-[18px] text-muted-foreground">{item.title}</span>
+=======
+            <span dir="auto" className="oc-ui-start-align min-w-0 truncate ps-[18px] text-muted-foreground">{item.title}</span>
+>>>>>>> bc50ba56a
           ) : null}
         </button>
       ))}

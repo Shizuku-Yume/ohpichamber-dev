@@ -39,12 +39,72 @@ const OPENCHAMBER_KEYS = new Set([
   'reviewSessionID', 'kind', 'originalSessionID', 'multirun',
 ]);
 
+<<<<<<< HEAD
 /** Sole durable authority for operational metadata; never reads an execution endpoint. */
 export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, path: nodePath = path, database = null, closeDatabase = database === null } = {}) => {
   const opened = database ? { db: database, filePath: nodePath.join(dataDir, 'host-metadata.sqlite') } : openHostMetadataDatabase({ dataDir, path: nodePath });
   const { db, filePath } = opened;
   if (database) ensureHostMetadataSchema(db);
   const lifecycle = createMetadataLifecycle(db, closeDatabase);
+=======
+/**
+ * Reads and writes one session's metadata on OpenCode. `read` resolves `null`
+ * when OpenCode does not know the session; any other failure throws, because
+ * "could not ask" must not become "empty".
+ */
+export const createOpenCodeSessionMetadata = ({
+  buildOpenCodeUrl,
+  getOpenCodeAuthHeaders,
+  createOpenCodeClient = createOpenCodeClientDefault,
+}) => {
+  const clientFor = (directory) => createOpenCodeClient({
+    baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
+    headers: getOpenCodeAuthHeaders(),
+    directory,
+  });
+  return {
+    read: async (sessionID, { directory = '', signal } = {}) => {
+      let session;
+      try {
+        // The 2.x client unwraps the `{ data }` envelope: this is the record itself.
+        session = await clientFor(directory).session.get({ sessionID }, { signal });
+      } catch (error) {
+        if (isSessionNotFound(error)) return null;
+        throw error;
+      }
+      return isPlainObject(session?.metadata) ? session.metadata : {};
+    },
+    write: (sessionID, metadata, { directory = '' } = {}) =>
+      clientFor(directory).session.update({ sessionID, metadata }),
+  };
+};
+
+/**
+ * @param {object} options
+ * @param {string} options.dataDir OpenChamber data directory; holds the legacy file.
+ * @param {{ read: Function, write: Function }} options.openCode See {@link createOpenCodeSessionMetadata}.
+ * @param {typeof fsDefault.promises} [options.fsPromises]
+ * @param {typeof pathDefault} [options.path]
+ * @param {() => number} [options.now]
+ */
+export const createSessionMetadataStore = ({
+  dataDir,
+  openCode,
+  fsPromises = fsDefault.promises,
+  path = pathDefault,
+  now = Date.now,
+}) => {
+  const legacyPath = path.join(dataDir, LEGACY_FILE_NAME);
+
+  /** sessionID → metadata from the legacy file that OpenCode does not hold yet. */
+  const unmigrated = new Map();
+  let legacyLoad = null;
+
+  /**
+   * One chain per session: read, merge and write cannot interleave with another
+   * write to the same session. Different sessions proceed in parallel.
+   */
+>>>>>>> bc50ba56a
   const sessionChains = new Map();
   const runForSession = (id, work) => {
     const previous = sessionChains.get(id) ?? Promise.resolve();
@@ -157,6 +217,7 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
    * A caller supplies session list/detail projections, not transcript records.
    * SQLite rows always win; no ongoing OpenCode accessor or fallback exists.
    */
+<<<<<<< HEAD
   const importOperationalSessions = (sessions, source) => lifecycle.run(async () => {
     const selection = SelectionSchema.safeParse({ sessions, source });
     if (!selection.success) throw new MetadataWriteError('A selected metadata source and session projections are required');
@@ -175,6 +236,116 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
       if (operational) metadata.openchamber = Object.fromEntries(Object.entries(operational).filter(([key]) => OPENCHAMBER_KEYS.has(key)));
       for (const key of ['directory', 'projectID', 'folder', 'isPinned', 'color', 'icon', 'notes']) {
         if (session.metadata?.[key] !== undefined) metadata[key] = session.metadata[key];
+=======
+  const forgetLegacy = async (id) => {
+    unmigrated.delete(id);
+    await persistLegacy().catch((error) => {
+      console.warn('[openchamber-sessions] could not update the legacy session metadata file:', error?.message ?? error);
+    });
+  };
+
+  // Cancelling one reader must not cancel the shared legacy load for others.
+  const loadLegacyForReader = async (signal) => {
+    if (!signal) return loadLegacy();
+    signal.throwIfAborted();
+    let onAbort;
+    const cancelled = new Promise((_, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      await Promise.race([loadLegacy(), cancelled]);
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+    }
+  };
+
+  /**
+   * The session's full metadata: the legacy entry while it is still waiting to
+   * be migrated, OpenCode's record otherwise. `{}` for a session OpenCode does
+   * not know. Throws when OpenCode could not be asked. A caller's signal cancels
+   * its legacy-load wait and travels to the SDK read, leaving other readers alone.
+   */
+  const get = async (sessionID, { directory = '', signal } = {}) => {
+    signal?.throwIfAborted();
+    const id = asNonEmptyString(sessionID);
+    if (!id) return {};
+    await loadLegacyForReader(signal);
+    signal?.throwIfAborted();
+    if (unmigrated.has(id)) return unmigrated.get(id);
+    return (await openCode.read(id, { directory, signal })) ?? {};
+  };
+
+  /**
+   * Applies a merge patch on OpenCode and returns the full metadata afterwards.
+   * Nothing is written when the current record cannot be read, so a patch never
+   * replaces fields it could not see.
+   */
+  const setSessionMetadata = async (sessionID, patch, { directory = '' } = {}) => {
+    const id = asNonEmptyString(sessionID);
+    if (!id) throw new Error('a session id is required to store session metadata');
+    if (!isPlainObject(patch)) throw new Error('a session metadata patch must be an object');
+    await loadLegacy();
+
+    return runForSession(id, async () => {
+      const fromLegacy = unmigrated.has(id);
+      const current = fromLegacy ? unmigrated.get(id) : await openCode.read(id, { directory });
+      if (current === null) throw new Error(`session ${id} was not found`);
+      const merged = mergeMetadataPatch(current, patch);
+      await openCode.write(id, merged, { directory });
+      if (fromLegacy) await forgetLegacy(id);
+      return merged;
+    });
+  };
+
+  /**
+   * Like `setSessionMetadata`, but the patch is decided from the record as it
+   * is when this session's turn in the write queue comes: `decide(current)`
+   * returns a merge patch, or null to leave the record alone. A writer whose
+   * change depends on the current value (open only when not closed after the
+   * request) cannot be overtaken between its read and its write this way.
+   * Resolves `{ metadata, changed }`.
+   */
+  const updateSessionMetadata = async (sessionID, decide, { directory = '' } = {}) => {
+    const id = asNonEmptyString(sessionID);
+    if (!id) throw new Error('a session id is required to store session metadata');
+    await loadLegacy();
+
+    return runForSession(id, async () => {
+      const fromLegacy = unmigrated.has(id);
+      const current = fromLegacy ? unmigrated.get(id) : await openCode.read(id, { directory });
+      if (current === null) throw new Error(`session ${id} was not found`);
+      const patch = decide(current);
+      if (!isPlainObject(patch)) return { metadata: current, changed: false };
+      const merged = mergeMetadataPatch(current, patch);
+      await openCode.write(id, merged, { directory });
+      if (fromLegacy) await forgetLegacy(id);
+      return { metadata: merged, changed: true };
+    });
+  };
+
+  /**
+   * Pushes every legacy entry to OpenCode. A session OpenCode no longer knows
+   * has nothing to receive its metadata, so its entry is dropped. Any other
+   * failure keeps the entry for the next sweep. Resolves the number of entries
+   * still waiting.
+   */
+  const migrateLegacy = async () => {
+    await loadLegacy();
+    const pending = [...unmigrated.keys()];
+    if (pending.length === 0) return 0;
+    let changed = false;
+    await Promise.all(pending.map((id) => runForSession(id, async () => {
+      // A write that ran first already migrated it.
+      if (!unmigrated.has(id)) return;
+      try {
+        await openCode.write(id, unmigrated.get(id));
+      } catch (error) {
+        if (!isSessionNotFound(error)) {
+          console.warn(`[openchamber-sessions] could not migrate metadata for ${id}:`, error?.message ?? error);
+          return;
+        }
+>>>>>>> bc50ba56a
       }
       entries.push([id, metadata]);
     }

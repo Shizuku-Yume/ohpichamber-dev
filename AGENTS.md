@@ -84,9 +84,23 @@ Apply the migration precedence above when these sources conflict; resolve any re
 Do not start editing when a matching skill or required reference has not been
 read. Skill loading is a required part of the task, not optional guidance.
 
+<<<<<<< HEAD
 ## Runtime boundaries
 
 The existing package layout is a migration starting point, not the target support matrix:
+=======
+## Working a Change
+
+Every fix and feature goes through these steps, in order. What counts as proof, and where to run each kind of change, is in `openchamber-change-discipline` (*Proof*, *Where to run it*).
+
+1. **Reproduce.** Make the failure happen the way a user hits it, in the runtime that runs the code; for a feature, see what that runtime does today where the feature goes. Unreproduced goes to the report with what you tried before any fix.
+2. **Fix the cause.** The smallest change that removes it. A correctness problem you trip over is fixed in the same change when the fix is small, wherever it sits; one that would visibly grow the change or needs a maintainer decision goes to the report or its own pull request.
+3. **Prove it.** Run the same reproduction and watch it pass. Report what the proof covered and what it did not.
+4. **Second look.** The `review-changes` agent on the diff (`.opencode/agent/review-changes.md`), or a reviewer on another model where your tool has no such agent; one-line and text-only edits go without. Answer findings per `openchamber-change-discipline` (*Answering Review Findings*).
+5. **Hand off.** The working tree for the person you work with, or a pull request (*Pull Request Handoff*).
+
+## Runtime Boundaries
+>>>>>>> bc50ba56a
 
 - `packages/ui`: shared React UI, state, sync, and runtime contracts.
 - `packages/web`: web surfaces, host server, and CLI. Replace its inherited OpenCode lifecycle integration while preserving host-owned services.
@@ -96,9 +110,13 @@ The existing package layout is a migration starting point, not the target suppor
 - `packages/sdk`: guest contract for third-party panels. Manifest parse, iframe envelope, `connectHost`. Host and guest import from here; do not copy these types into `packages/ui`.
 - `packages/extensions`: app-owned SDK extensions and their build registry, not a Bun workspace. See its `DOCUMENTATION.md` for trust, packaging, and migration rules.
 
+<<<<<<< HEAD
 Retained UI uses the Canonical Client through the Host Gateway; legacy OpenCode names in historical documents describe the inherited baseline, not the API for new agent functionality. Host-owned capabilities keep `RuntimeAPIs`, `runtimeFetch`, and shared browser/realtime transport helpers. `packages/sdk` remains the Guest contract, not the canonical agent contract. Use the architecture for implemented boundaries; later-milestone paths remain design targets rather than assumed source.
 
 Electron keeps the Node.js Host Gateway in-process. The target Bun Agent Service and SDK workers are separate processes; the inherited prohibition on a backend sidecar applies to the host, not the Agent Service. Development may load loopback/HMR UI; packaged builds load staged assets through `openchamber-ui://` while the loopback host remains the API entrypoint. Keep domain backends in their owning host or agent modules unless behavior is inherently native.
+=======
+Shared UI data access and OpenCode calls: `ui-api-decoupling`.
+>>>>>>> bc50ba56a
 
 Shared contracts must define intentional behavior for every retained surface listed in the scope matrix. Mobile connects to the host and does not run local Agent Service or Guest service processes.
 
@@ -108,11 +126,19 @@ Shared contracts must define intentional behavior for every retained surface lis
 - Do not run GitHub commands unless the user explicitly asks.
 - Do not add dependencies unless explicitly requested.
 - Never add or log secrets, bearer tokens, pairing credentials, or sensitive user data.
+<<<<<<< HEAD
 - Keep changes minimal and preserve unrelated worktree changes.
 - Release notes are the maintainer's release-time work: they get written once, as one story, in `changelog/unreleased.md` when the maintainer asks to update the changelog. Until that request, treat `changelog/` as read-only — a fix, feature, or merged PR lands without a changelog line. `changelog/index.json` is generated from `changelog/*.md` by `oc-dev create-release`, and `CHANGELOG.md` is a legacy copy for older installs: never edit or regenerate either; an agent's only changelog output is `changelog/unreleased.md`. Preserve historical extension release sections without restoring an extension output.
 - Enforce security and correctness in core/runtime logic, not only UI visibility or prompts.
 - Keep entrypoints and bridges thin; place domain logic in focused owning modules.
 - Update owning documentation when module ownership, contracts, or invariants change, following the development-memory rules above.
+=======
+- Launch Google Chrome for automation with `--disable-features=MacAppCodeSignClone` (`scripts/perf/cdp.mjs` does). Without it each launch on macOS copies the 1.4 GB app into `$TMPDIR`, and a killed browser leaves the copy.
+- Preserve unrelated worktree changes.
+- Several agent sessions often work in the same checkout at once. Never `git stash` to compare against a clean tree or to test something: a stash takes every session's uncommitted work, and a session writing to a stashed file meanwhile makes the pop fail. Compare in a detached worktree instead (`git worktree add --detach /tmp/<name> HEAD`, with `node_modules` symlinked).
+- `changelog/` is read-only, and a fix, feature, or merged PR lands without a changelog line. Release notes are written only when the maintainer asks to update the changelog, through the `update-changelog` skill.
+- Enforce security and correctness in core/runtime logic, not only UI visibility or prompts.
+>>>>>>> bc50ba56a
 
 ## Correctness Invariants
 
@@ -122,10 +148,10 @@ Shared contracts must define intentional behavior for every retained surface lis
 - Never let fetch failure masquerade as authoritative empty success.
 - Make partial results, rollback, cleanup, and stale-data behavior explicit.
 - One failed entity must not erase or block unrelated complete entities.
-- Runtime-specific differences must be intentional and visible in code.
 
 ## Communication
 
+<<<<<<< HEAD
 You and the maintainer are two people solving a problem together — talk like a trusted colleague, not a report generator. Plain words, short sentences, mechanisms explained through what the user experiences. Warm and direct, never familiar. A reply is something read in minutes, not a separate reading task: put the conclusion first and stand behind it. Answer in the language the maintainer addressed you in; code, comments, and docs stay in English.
 
 ## Documentation Discovery
@@ -155,6 +181,9 @@ for the affected branch; do not bulk-load the six guides or their reference pack
 | Explicit maintainer request to update release notes; the changelog write gate above still applies | [Release notes authoring](.workflow/references/release-notes.md) |
 | Optional help structuring/pruning skills, agent guidance or context pointers | [Writing for agents](.workflow/references/writing-for-agents.md) |
 | Diagnosing, preserving or retiring inherited OpenCode integration; not new OMP functionality | [Inherited runtime notes](packages/web/server/lib/opencode/RUNTIME_NOTES.md) |
+=======
+Answer in the language you were addressed in; code, comments, and docs stay in English.
+>>>>>>> bc50ba56a
 
 
 ## Project Skills
@@ -204,6 +233,7 @@ Module documents own styling and Settings composition/search; the optional autho
 
 ## Validation
 
+<<<<<<< HEAD
 - Use `package.json` scripts as the command source of truth.
 - Prefer focused tests and package-scoped type-check/lint for executable source changes.
 - Use workspace-wide checks for cross-workspace contracts, root tooling, dependencies, or shared generated assets.
@@ -212,6 +242,36 @@ Module documents own styling and Settings composition/search; the optional autho
 - Do not assume TypeScript/lint covers server JS, CLI JS, Electron helpers, or native behavior; run focused tests, syntax checks, builds, or runtime validation for the touched surface.
 - For docs-only or isolated config changes, run the narrowest relevant validation.
 - Report exactly what was and was not validated. Static checks alone do not prove runtime, relay, performance, or platform correctness.
+=======
+- Use `package.json` scripts as the command source of truth. Which checks a change needs is in `openchamber-change-discipline`.
+- Before every commit of source changes, `bun run check:changed` passes (`scripts/check-changed.mjs` says what it runs). Fix the new findings; the pre-existing backlog stays out of scope unless the task is that cleanup. Never silence a rule, weaken severity, or launder types to make a check pass.
+>>>>>>> bc50ba56a
 
 
+<<<<<<< HEAD
 
+=======
+Before creating or updating a pull request, read `CONTRIBUTING.md` (*Pull Requests*) and fill `.github/PULL_REQUEST_TEMPLATE.md` with evidence for the final HEAD.
+
+A **product decision** belongs to the maintainer and is settled before the code,
+never inside the diff. A product decision is anything where two reasonable people
+could disagree about whether it should exist or how it should behave: a new
+button, panel, setting or command; a changed default; a shortcut or gesture that
+now does something else; different wording, ordering or grouping in the UI;
+anything that turns existing behavior on or off for everyone. Removing or
+bypassing behavior the code marks as deliberate is one too, and there the first
+question is whether it is a defect at all. A crash, wrong data, wrong text or
+terminology, behavior that contradicts what it plainly claims, or a performance
+fix that keeps behavior identical is a bug, not a product decision.
+
+Where that decision is settled depends on who is working:
+
+- **Working with the maintainer or a team member** (anyone with repository
+  access): raise the product question in the session and get an answer there.
+  The decision already happened off GitHub; no discussion thread and no link is
+  expected on the pull request.
+- **Working as an outside contributor**: open a feature request and build only after the maintainer marks it `accepted`, as `CONTRIBUTING.md` (*Before you start*) describes; the pull request links it with `Fixes #N` or `Part of #N`. A pull request without that link is closed automatically.
+
+When the call is unclear, ask before building. Deciding it silently is the one
+thing that is always wrong.
+>>>>>>> bc50ba56a

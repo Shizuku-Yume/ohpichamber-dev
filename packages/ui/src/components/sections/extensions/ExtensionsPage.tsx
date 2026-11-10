@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { GuestApprovalDialog } from './GuestApprovalDialog';
+import { OpenCodePluginBanner } from './OpenCodePluginBanner';
 import { toast } from '@/components/ui';
 import { loadGuestServiceFailure, setGuestServiceSocketPath } from '@/lib/guests/service';
 import { guestNeedsApproval } from '@/lib/guests/capabilities';
@@ -42,6 +43,10 @@ import { approveGuestCapabilities, installGuest, setGuestEnabled, uninstallGuest
 import { errorToastKey, updateErrorToastKey } from './extensionToasts';
 import { closeGuestTabsById } from '@/lib/guests/tabs';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
+<<<<<<< HEAD
+=======
+import { openCodePluginNotice } from '@/lib/guests/opencode-plugin';
+>>>>>>> bc50ba56a
 import { useGuestInstallRequestStore } from '@/lib/guests/install-request';
 import { describeGuestRequestFailure } from '@/lib/guests/request-failure';
 import { getGitIdentities, getGlobalGitIdentity } from '@/lib/gitApi';
@@ -366,7 +371,21 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
   }, [guest.id, guest.revision, watchesService]);
   const location = guest.path || guest.id;
   const hasPermissions = Boolean(permissions) || Boolean(guest.service);
+<<<<<<< HEAD
   const hasNotices = state.enterpriseBlocked || state.needsApproval || Boolean(state.update);
+=======
+  const opencodePlugins = useGuestsStore((store) => store.opencodePlugins);
+  // The file the button wrote, shown on this screen until the user leaves it.
+  const [pluginAdded, setPluginAdded] = React.useState<string | null>(null);
+  React.useEffect(() => { setPluginAdded(null); }, [guest.id]);
+  const pluginNotice = openCodePluginNotice({
+    guest,
+    plugins: opencodePlugins,
+    active: state.enabled && !state.needsApproval && !state.enterpriseBlocked,
+    added: pluginAdded,
+  });
+  const hasNotices = state.enterpriseBlocked || state.needsApproval || Boolean(state.update) || pluginNotice !== null;
+>>>>>>> bc50ba56a
 
   return (
     <SettingsPageLayout
@@ -448,6 +467,9 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
               </Button>
             </div>
           ) : null}
+          {pluginNotice ? (
+            <OpenCodePluginBanner guest={guest} notice={pluginNotice} busy={busy} onAdded={setPluginAdded} />
+          ) : null}
         </SettingsSection>
       ) : null}
 
@@ -472,7 +494,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
             </SettingsFieldRow>
           ) : null}
           <SettingsFieldRow label={t('settings.extensions.detail.field.location')} alignEnd={false} controlClassName="min-w-0 @xl:flex-1">
-            <span className="typography-meta min-w-0 truncate font-mono text-muted-foreground" title={location}>{location}</span>
+            <span dir="ltr" className="typography-meta min-w-0 truncate font-mono text-muted-foreground" title={location}>{location}</span>
           </SettingsFieldRow>
         </div>
         {state.builtIn ? <p className={SETTINGS_HELPER_CLASS}>{t('settings.extensions.builtIn.info')}</p> : null}
@@ -524,6 +546,12 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
                 : t('settings.extensions.service.providesQuota.none')}
             </p>
           ) : null}
+<<<<<<< HEAD
+=======
+          {guest.capabilities.requested.includes('opencode') ? (
+            <p className="typography-meta text-foreground">{t('settings.extensions.capability.opencode.detail')}</p>
+          ) : null}
+>>>>>>> bc50ba56a
           {guest.service ? (
             // A security warning: stays visible.
             <p className="typography-meta text-[var(--status-warning)]">{t('settings.extensions.service.warning')}</p>
@@ -1161,7 +1189,7 @@ export const ExtensionsPage: React.FC = () => {
     <>
       <SettingsPageLayout
         title={t('settings.page.extensions.title')}
-        description={t('settings.page.extensions.description')}
+        namedBySidebar
         headerEnd={unsupported ? null : (
           <div className="flex items-center gap-2">
             {/* Enterprise mode installs only from approved repositories, so the public list stays out of it. */}

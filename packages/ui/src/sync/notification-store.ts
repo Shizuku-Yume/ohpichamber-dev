@@ -6,7 +6,13 @@
 // ---------------------------------------------------------------------------
 
 import { create } from "zustand"
+<<<<<<< HEAD
 import { markSessionUnreadSeen } from "./session-unread"
+=======
+import { clearDesktopSessionNotifications } from "@/lib/desktop"
+import { runtimeFetch } from "@/lib/runtime-fetch"
+import { getUnreadSessionIds, markSessionsUnreadSeen, markSessionUnreadSeen } from "./session-unread"
+>>>>>>> bc50ba56a
 
 // ---------------------------------------------------------------------------
 // Types
@@ -156,6 +162,7 @@ export function markSessionViewed(sessionId: string) {
   markSessionUnreadSeen(sessionId)
 }
 
+<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // React hooks for fine-grained subscriptions
 // ---------------------------------------------------------------------------
@@ -165,6 +172,19 @@ export function useSessionUnseenCount(sessionId: string): number {
 }
 
 /** The newest error OpenCode reported for this session, viewed or not. */
+=======
+/** Every unread session the client knows of is marked seen, the same way opening each would. */
+export function markAllSessionsViewed() {
+  const marked = markSessionsUnreadSeen(getUnreadSessionIds())
+  if (marked.length === 0) return
+  for (const sessionId of marked) clearDesktopSessionNotifications(sessionId)
+  // The route only resets the push badge, so one call covers them all.
+  runtimeFetch(`/api/sessions/${encodeURIComponent(marked[0])}/view`, { method: "POST" })
+    .catch(() => { /* the badge resets on the next engagement signal */ })
+}
+
+/** The newest error OpenCode reported for this session. */
+>>>>>>> bc50ba56a
 export function useLatestSessionError(sessionId: string): ErrorNotification | null {
   return useNotificationStore((s) => {
     if (!sessionId) return null

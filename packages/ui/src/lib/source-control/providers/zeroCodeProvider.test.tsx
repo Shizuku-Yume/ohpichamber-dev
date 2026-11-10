@@ -76,6 +76,7 @@ let providerReads = 0;
 
 /** The connected server: it serves acme and lists its items through the neutral reads. */
 const sourceControl: SourceControlAPI = {
+<<<<<<< HEAD
  authSetSshUrl: async () => ({ sshUrl: null }),
  providers: async () => { providerReads += 1; return [acme]; },
  references: async (_context, query): Promise<RepositoryReferencePage> => ({
@@ -98,6 +99,30 @@ const sourceControl: SourceControlAPI = {
  issuesList: unexpected, issueGet: unexpected, issueComments: unexpected, projectUpstream: unexpected,
  projectBranches: unexpected, referenceDetail: unexpected, changeRequestListStatuses: unexpected,
  changeRequestReviewState: unexpected, changeRequestReviewComment: unexpected, changeRequestReviewCommentUpdate: unexpected, changeRequestReviewCommentDelete: unexpected, changeRequestReviewDiscard: unexpected,
+=======
+  providers: async () => { providerReads += 1; return [acme]; },
+  references: async (_context, query): Promise<RepositoryReferencePage> => ({
+    connected: true, repo: null, items: servedReferences[query.kind], cursor: null, hasMore: false, total: servedReferences[query.kind].length,
+  }),
+  // The binding of the dialog's project never answers: nothing about the repository is known yet.
+  repositoryBinding: () => new Promise(() => {}),
+  repositoryContext: unexpected, resetRepositoryBinding: unexpected, repositoryProviderBindingMutate: unexpected,
+  authInstances: unexpected, capabilities: unexpected, authStatus: unexpected, authStart: unexpected,
+  authComplete: unexpected, authSetToken: unexpected, authSetSshUrl: unexpected, authDisconnect: unexpected, authActivate: unexpected,
+  authSetCliDisabled: unexpected,
+  changeRequestStatus: unexpected, changeRequestCreate: unexpected, changeRequestUpdate: unexpected,
+  changeRequestMerge: unexpected, changeRequestReady: unexpected, changeRequestComment: unexpected,
+  changeRequestStartThread: unexpected, changeRequestReplyToThread: unexpected, changeRequestResolveThread: unexpected,
+  changeRequestReview: unexpected, issueComment: unexpected, changeRequestSetState: unexpected,
+  issueSetState: unexpected, changeRequestSetLabels: unexpected, issueSetLabels: unexpected,
+  discussionComment: unexpected, discussionSetState: unexpected, discussionSetAnswer: unexpected, discussionSetLabels: unexpected,
+  changeRequestReviewState: unexpected, changeRequestReviewComment: unexpected, changeRequestReviewCommentUpdate: unexpected,
+  changeRequestReviewCommentDelete: unexpected, changeRequestReviewDiscard: unexpected,
+  changeRequestSetReviewers: unexpected, refreshProviderReads: unexpected, referenceLabels: unexpected,
+  referenceReviewers: unexpected, changeRequestsList: unexpected, changeRequestContext: unexpected,
+  issuesList: unexpected, issueGet: unexpected, issueComments: unexpected, projectUpstream: unexpected,
+  projectBranches: unexpected, referenceDetail: unexpected, changeRequestListStatuses: unexpected,
+>>>>>>> bc50ba56a
 };
 
 const readContext = {

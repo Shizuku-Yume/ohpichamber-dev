@@ -59,16 +59,27 @@ test('quote reveal opens real folded Activity, including a source prepended from
         Node: dom.Node, localStorage: dom.localStorage, sessionStorage: dom.sessionStorage,
         getComputedStyle: dom.getComputedStyle.bind(dom), ResizeObserver: dom.ResizeObserver, MutationObserver: dom.MutationObserver,
         requestAnimationFrame, cancelAnimationFrame, Highlight: TestHighlight,
+<<<<<<< HEAD
         customElements: dom.customElements,
+=======
+>>>>>>> bc50ba56a
         CSS: { highlights, escape: (value: string) => value }, IS_REACT_ACT_ENVIRONMENT: true,
     };
     const previous = Object.keys(values).map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
     for (const [name, value] of Object.entries(values)) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
     const originalFetch = globalThis.fetch;
+<<<<<<< HEAD
     globalThis.fetch = () => new Promise(() => { });
     const unavailable = (): never => { throw new Error('Quote navigation must not call runtime APIs'); };
     const runtime: RuntimeAPIs = {
         runtime: { platform: 'web', isDesktop: false },
+=======
+    globalThis.fetch = () => new Promise(() => {});
+    const sdk = OpenCode.make({ baseUrl: 'https://timeline.test', fetch: () => new Promise<Response>(() => {}) });
+    const unavailable = (): never => { throw new Error('Quote navigation must not call runtime APIs'); };
+    const runtime: RuntimeAPIs = {
+        runtime: { platform: 'web', isDesktop: false, isVSCode: false },
+>>>>>>> bc50ba56a
         get terminal() { return unavailable(); }, get git() { return unavailable(); },
         get files() { return unavailable(); }, get settings() { return unavailable(); },
         get permissions() { return unavailable(); }, get notifications() { return unavailable(); },
@@ -80,6 +91,7 @@ test('quote reveal opens real folded Activity, including a source prepended from
     const turn = (prefix: string, created: number): ChatMessageEntry[] => {
         const userId = `${prefix}-user`;
         return [
+<<<<<<< HEAD
             {
                 messageId: userId,
                 sessionId: 'quote-navigation',
@@ -101,6 +113,18 @@ test('quote reveal opens real folded Activity, including a source prepended from
                     parts: [
                         ...(index === 0 ? [{ type: 'reasoning' as const, partId: `${id}-reasoning`, content: 'Checking.' }] : []),
                         { type: 'text', partId: `${id}-text`, content: index === 0 ? `Earlier **${prefix} quoted text** here.` : 'Done.' },
+=======
+            { info: { id: userId, sessionID: 'quote-navigation', role: 'user', time: { created } }, parts: [
+                { id: `${prefix}-prompt`, sessionID: 'quote-navigation', messageID: userId, type: 'text', text: 'Check this.' },
+            ] },
+            ...['source', 'answer'].map((kind, index): ChatMessageEntry => {
+                const id = `${prefix}-${kind}`;
+                return {
+                    info: { id, sessionID: 'quote-navigation', role: 'assistant', agent: 'build', providerID: 'mock', modelID: 'mock', finish: index === 0 ? 'tool-calls' : 'stop', time: { created: created + index + 1, completed: created + index + 2 } },
+                    parts: [
+                        ...(index === 0 ? [{ id: `${id}-reasoning`, sessionID: 'quote-navigation', messageID: id, type: 'reasoning' as const, text: 'Checking.', time: { start: created, end: created + 1 } }] : []),
+                        { id: `${id}-text`, sessionID: 'quote-navigation', messageID: id, type: 'text', text: index === 0 ? `Earlier **${prefix} quoted text** here.` : 'Done.' },
+>>>>>>> bc50ba56a
                     ],
                 };
             }),
@@ -121,6 +145,7 @@ test('quote reveal opens real folded Activity, including a source prepended from
         const register = React.useCallback((list: TimelineListHandle | null) => { setScrollNode(list?.getScrollableNode() ?? null); }, []);
         return <>
             <MessageList ref={ref} sessionKey="quote-navigation" messages={messages} isLoadingOlder={false} registerList={register} scrollContainerProps={{ 'data-scrollbar': 'chat' }} />
+<<<<<<< HEAD
             <ChatQuoteHighlightLayer
                 store={quoteStore}
                 scrollNode={scrollNode}
@@ -131,13 +156,22 @@ test('quote reveal opens real folded Activity, including a source prepended from
                     : new Promise<boolean>((resolve) => { finishLoad = resolve; }))}
                 scrollToMessage={async (id, options) => ref.current?.scrollToMessageId(id, options) ?? false}
             />
+=======
+            <ChatQuoteHighlightLayer store={quoteStore} scrollNode={scrollNode}
+                loadHistoryUntilMessage={async (id) => messages.some((message) => message.info.id === id) || new Promise<boolean>((resolve) => { finishLoad = resolve; })}
+                scrollToMessage={async (id, options) => ref.current?.scrollToMessageId(id, options) ?? false} />
+>>>>>>> bc50ba56a
         </>;
     }
     const render = () => act(async () => {
         root.render(
             <RuntimeAPIContext.Provider value={runtime}>
                 <ThemeSystemProvider>
+<<<<<<< HEAD
                     <SyncProvider directory="/repo">
+=======
+                    <SyncProvider sdk={sdk} directory="/repo">
+>>>>>>> bc50ba56a
                         <I18nProvider>
                             <ChatColumnSessionContext.Provider value={{ sessionId: 'quote-navigation', directory: '/repo' }}>
                                 <Harness />

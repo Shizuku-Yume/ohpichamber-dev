@@ -19,6 +19,7 @@ import {
   GUEST_FILESYSTEM_PATTERN_MAX,
   GUEST_MENTIONS_LABEL_MAX,
   GUEST_ORIGINS_MAX,
+  GUEST_PROVIDER_LOGOS_MAX,
   GUEST_SERVICE_PROVIDES,
   GUEST_TOOLS_MAX,
   GUEST_TOOL_COLUMNS_MAX,
@@ -33,6 +34,7 @@ import {
   hasGuestPage,
   isGuestFilesystemPattern,
   isGuestPackageSvgIcon,
+  isGuestProviderLogoPath,
   isSafeAssetPath,
   resolveIntegrationAuth,
   type ServicePermissions,
@@ -64,6 +66,13 @@ import {
   TRACKER_URL_TEMPLATES_MAX,
   TRACKER_URL_TOKENS,
   isTrackerUrlTemplate,
+<<<<<<< HEAD
+=======
+  GUEST_LINK_ACTIONS,
+  GUEST_LINK_KEY,
+  GUEST_LINK_KEYS_MAX,
+  isBuildableLinkTemplate,
+>>>>>>> bc50ba56a
 } from './manifest.ts';
 import { isGuestRequestPath } from './contract.ts';
 import { GUEST_SESSION_EVENT_TYPES } from './session-events.ts';
@@ -330,6 +339,12 @@ const FIXED_USERNAME = /^[A-Za-z0-9._-]{1,64}$/;
 
 const urlTemplatesSchema = z.array(z.string().trim().min(1)).max(SOURCE_CONTROL_URL_TEMPLATES_MAX);
 
+/** Shared service-login shape for manifests and public provider descriptors. */
+export const sourceControlServiceLoginSchema = z.object({
+  kind: z.literal('service'),
+  hint: z.string().min(1).max(2_000),
+});
+
 const sourceControlSchema = z.object({
   wire: z.literal(1),
   label: literalSchema,
@@ -352,6 +367,9 @@ const sourceControlSchema = z.object({
     { message: 'without custom instances, defaultInstances names at least one' },
   ),
   capabilities: sourceControlCapabilitiesSchema,
+  login: sourceControlServiceLoginSchema.extend({
+    hint: z.string().trim().pipe(sourceControlServiceLoginSchema.shape.hint),
+  }).strict().optional(),
   token: z.object({
     header: z.enum(['authorization', 'private-token']),
     scheme: z.enum(['bearer', 'token', 'basic', 'none']),
@@ -365,7 +383,7 @@ const sourceControlSchema = z.object({
     // Basic sends `login:token`, so Settings must ask for the login; no other scheme uses one.
     (token) => (token.scheme === 'basic') === (token.username === true),
     { message: 'the basic scheme needs username: true, and username is only for the basic scheme' },
-  ),
+  ).optional(),
   transport: z.object({
     httpsUsername: z.union([
       z.object({ kind: z.literal('login') }).strict(),
@@ -396,6 +414,9 @@ const sourceControlSchema = z.object({
     })).max(8),
   }).strict(),
 }).strict().superRefine((value, ctx) => {
+  if (!value.login && !value.token) {
+    ctx.addIssue({ code: 'custom', path: ['login'], message: 'at least login or token is required' });
+  }
   for (const kind of ['changeRequest', 'issue'] as const) {
     value.presentation.urls[kind].forEach((template, index) => {
       if (isUrlTemplate(template, value.repositoryPath)) return;
@@ -568,6 +589,12 @@ const toolSchema = z.object({
 
 const toolsSchema = z.array(toolSchema).min(1).max(GUEST_TOOLS_MAX);
 
+const providerLogosSchema = z.record(z.string().refine(isOpenCodeProviderId), z.string().trim().refine(isGuestProviderLogoPath))
+  .refine((logos) => {
+    const count = Object.keys(logos).length;
+    return count >= 1 && count <= GUEST_PROVIDER_LOGOS_MAX;
+  });
+
 const fileEditorSchema = z.object({
   id: z.string().trim().regex(PANEL_ID),
   title: z.string().trim().min(1).max(GUEST_FILE_EDITOR_TITLE_MAX),
@@ -589,6 +616,57 @@ const blockSchema = z.object({
   answers: z.boolean().optional(),
 }).strict();
 
+<<<<<<< HEAD
+=======
+// A link origin: a public https origin with a literal hostname, never an IP
+// literal or loopback, so an extension cannot claim links to the app itself.
+const IPV4_HOSTNAME = /^\d+(?:\.\d+){3}$/;
+const isLinkOrigin = (value: string): boolean => (
+  isApprovableOrigin(value) && !IPV4_HOSTNAME.test(new URL(value).hostname)
+);
+
+const linksSchema = z.object({
+  action: z.enum(GUEST_LINK_ACTIONS),
+  identifier: z.object({
+    keys: z.array(z.string().trim().regex(GUEST_LINK_KEY)).min(1).max(GUEST_LINK_KEYS_MAX)
+      .refine((keys) => new Set(keys).size === keys.length, { message: 'keys must be unique' }),
+  }).strict().optional(),
+  urls: z.object({
+    origin: z.string().trim().refine(isLinkOrigin, { message: 'must be a public https origin with no path, like https://tasks.example.com' }),
+    identifier: z.enum(TRACKER_IDENTIFIER_KINDS),
+    item: z.array(z.string().trim().min(1)).min(1).max(TRACKER_URL_TEMPLATES_MAX)
+      .refine((templates) => new Set(templates).size === templates.length, { message: 'link templates must be unique' }),
+  }).strict().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.identifier && !value.urls) {
+    ctx.addIssue({ code: 'custom', path: [], message: 'declare identifier, urls or both' });
+    return;
+  }
+  value.urls?.item.forEach((template, index) => {
+    if (isTrackerUrlTemplate(template)) return;
+    ctx.addIssue({
+      code: 'custom', path: ['urls', 'item', index],
+      message: `templates start with "/" and use literal segments and ${TRACKER_URL_TOKENS.join(', ')}, with {id} once, in the path or as "?name={id}".`,
+    });
+  });
+  // A chip names its link: an identifier alone has to fill a template.
+  if (value.action === 'attach' && !value.urls?.item.some(isBuildableLinkTemplate)) {
+    ctx.addIssue({
+      code: 'custom', path: ['urls'],
+      message: 'action "attach" needs urls with at least one template without {segment} or {segments+}, so a chip can name its link.',
+    });
+    return;
+  }
+  // `PROJ-12` in text never has the shape of a number, so it could name no link.
+  if (value.action === 'attach' && value.identifier && value.urls?.identifier === 'number') {
+    ctx.addIssue({
+      code: 'custom', path: ['urls', 'identifier'],
+      message: 'action "attach" with identifier keys needs urls.identifier "key-number" or "short-code": a key like PROJ-12 cannot fill a "number" {id}, so its chip would have no link.',
+    });
+  }
+});
+
+>>>>>>> bc50ba56a
 const blocksSchema = z.array(blockSchema).min(1).max(GUEST_BLOCKS_MAX)
   .refine((blocks) => uniqueBy(blocks, (block) => block.name), { message: 'block names must be unique' });
 
@@ -625,6 +703,7 @@ const contributesSchema = z.object({
   actions: actionsSchema.optional(),
   commands: commandsSchema.optional(),
   tools: toolsSchema.optional(),
+  providerLogos: providerLogosSchema.optional(),
   fileEditors: fileEditorsSchema.optional(),
   sourceControl: sourceControlSchema.optional(),
   sessionEvents: z.object({
@@ -635,11 +714,22 @@ const contributesSchema = z.object({
   notifications: notificationsSchema.optional(),
   tracker: trackerSchema.optional(),
   quota: quotaSchema.optional(),
+<<<<<<< HEAD
   sessionControl: z.object({ content: z.literal(true).optional() }).strict().optional(),
   instructions: z.literal(true).optional(),
   skills: z.string().trim().refine(isSafeAssetPath).optional(),
   mentions: z.object({ label: z.string().trim().min(1).max(GUEST_MENTIONS_LABEL_MAX) }).strict().optional(),
   blocks: blocksSchema.optional(),
+=======
+  sessionControl: z.object({ content: z.literal(true).optional(), answers: z.literal(true).optional() }).strict().optional(),
+  instructions: z.literal(true).optional(),
+  skills: z.string().trim().refine(isSafeAssetPath).optional(),
+  // The value becomes a filesystem path OpenCode executes code from, so only a folder inside the package.
+  opencodePlugin: z.string().trim().refine(isSafeAssetPath).optional(),
+  mentions: z.object({ label: z.string().trim().min(1).max(GUEST_MENTIONS_LABEL_MAX) }).strict().optional(),
+  blocks: blocksSchema.optional(),
+  links: linksSchema.optional(),
+>>>>>>> bc50ba56a
 });
 
 /**
@@ -789,6 +879,17 @@ export const openChamberManifestSchema = z.object({
       });
       return;
     }
+<<<<<<< HEAD
+=======
+    // `open` hands the link to the extension's page; without one there is nothing to open.
+    if (contributes.links?.action === 'open' && !hasGuestPage(contributes)) {
+      ctx.addIssue({
+        code: 'custom', path: ['links', 'action'],
+        message: 'contributes.links action "open" opens panel.entry with the link; declare panel.entry, or use action "attach".',
+      });
+      return;
+    }
+>>>>>>> bc50ba56a
     for (const key of ['sessionControl', 'instructions', 'mentions'] as const) {
       if (contributes[key] !== undefined && !contributes.service) {
         ctx.addIssue({
@@ -830,7 +931,7 @@ export const openChamberManifestSchema = z.object({
     ctx.addIssue({
       code: 'custom',
       path: ['panel'],
-      message: `${needsRuntime.map((key) => `contributes.${key}`).join(', ')} needs panel.entry or background.entry; an extension without either may only declare tools.`,
+      message: `${needsRuntime.map((key) => `contributes.${key}`).join(', ')} needs panel.entry or background.entry; an extension without either may only declare tools and provider logos.`,
     });
   }),
 });
@@ -991,6 +1092,12 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       'contributes.tools lists up to 16 entries with a match of 1 to 128 characters ([A-Za-z0-9_.:-], "*" only at the end), optional name (1 to 40), icon (Remixicon name or package .svg path), title and subtitle templates (1 to 200), output "auto" | "text" | "json" | "markdown" | "code" | "table", language (code only), and columns (table only, 1 to 16).',
     );
   }
+  if (path.startsWith('contributes.providerLogos')) {
+    return fail(
+      'invalid-provider-logos',
+      `contributes.providerLogos maps 1 to ${GUEST_PROVIDER_LOGOS_MAX} OpenCode provider ids, like "openrouter", to a .svg or .png file inside the package.`,
+    );
+  }
   if (path.startsWith('contributes.fileEditors')) {
     return fail(
       'invalid-file-editors',
@@ -1003,7 +1110,11 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       : `contributes.sessionEvents is { events: [1 to ${GUEST_SESSION_EVENT_TYPES.length} distinct of ${GUEST_SESSION_EVENT_TYPES.map((type) => `"${type}"`).join(', ')}], content?: true }.`);
   }
   if (path === 'contributes.sessionControl' || path.startsWith('contributes.sessionControl.')) {
+<<<<<<< HEAD
     return fail('invalid-session-control', issue.code === 'custom' ? issue.message : 'contributes.sessionControl is { content?: true }.');
+=======
+    return fail('invalid-session-control', issue.code === 'custom' ? issue.message : 'contributes.sessionControl is { content?: true, answers?: true }.');
+>>>>>>> bc50ba56a
   }
   if (path === 'contributes.instructions') {
     return fail('invalid-instructions', issue.code === 'custom' ? issue.message : 'contributes.instructions is true.');
@@ -1011,6 +1122,12 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
   if (path === 'contributes.skills') {
     return fail('invalid-skills', 'contributes.skills is a folder inside the package.');
   }
+<<<<<<< HEAD
+=======
+  if (path === 'contributes.opencodePlugin') {
+    return fail('invalid-opencode-plugin', 'contributes.opencodePlugin is a plugin folder inside the package: a directory with a package.json whose entry OpenCode loads.');
+  }
+>>>>>>> bc50ba56a
   if (path === 'contributes.mentions' || path.startsWith('contributes.mentions.')) {
     return fail('invalid-mentions', issue.code === 'custom' ? issue.message : `contributes.mentions is { label: 1 to ${GUEST_MENTIONS_LABEL_MAX} characters }.`);
   }
@@ -1020,6 +1137,15 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       `contributes.blocks lists 1 to ${GUEST_BLOCKS_MAX} components, each with a unique PascalCase name, a description of 1 to ${GUEST_BLOCK_DESCRIPTION_MAX} characters, up to ${GUEST_BLOCK_ARGS_MAX} unique camelCase args, an entry ending in .html inside the package, and an optional height.`,
     );
   }
+<<<<<<< HEAD
+=======
+  if (path === 'contributes.links' || path.startsWith('contributes.links.')) {
+    const field = fieldPath(issue.path);
+    return fail('invalid-links', issue.code === 'custom'
+      ? `${field}: ${issue.message}`
+      : `${field} is invalid: contributes.links is { action: "open" | "attach", identifier?: { keys: 1 to ${GUEST_LINK_KEYS_MAX} upper-case keys like "PROJ" }, urls?: { origin: "https://...", identifier: ${TRACKER_IDENTIFIER_KINDS.map((kind) => `"${kind}"`).join(' | ')}, item: link templates } }.`);
+  }
+>>>>>>> bc50ba56a
   if (path.startsWith('contributes.integration')) {
     return fail(
       'invalid-integration',
@@ -1054,7 +1180,11 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
   if (path.startsWith('contributes.service')) {
     return fail('invalid-service', issue.code === 'custom'
       ? issue.message
+<<<<<<< HEAD
       : 'contributes.service needs entry, runtime "host", optional permissions, optional provides ("browser", "source-control", "notifications", "tracker", "quota"), optional surface (true), optional keepRunning (true), and optional schedule (up to 8 of { id, cron, timezone? }).');
+=======
+      : 'contributes.service needs entry, runtime "host", optional permissions, optional provides ("browser", "source-control", "notifications", "tracker", "quota", "opencode"), optional surface (true), optional keepRunning (true), and optional schedule (up to 8 of { id, cron, timezone? }).');
+>>>>>>> bc50ba56a
   }
   return fail('missing-panel', 'The manifest needs id, name and icon.');
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+<<<<<<< HEAD
 import { ThemeImportButton } from './ThemeImportButton';
 import { ThemePicker } from './ThemePicker';
 import { MessageSearchSettings } from './MessageSearchSettings';
@@ -7,8 +8,12 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ThemeMode } from '@/types/theme';
 import { useUIStore, type LargeTextPasteBehavior } from '@/stores/useUIStore';
 import { useMessageQueueStore, type FollowUpBehavior } from '@/stores/messageQueueStore';
+=======
+import { ThemeAppearancePicker } from './ThemeAppearancePicker';
+
+import { useUIStore } from '@/stores/useUIStore';
+>>>>>>> bc50ba56a
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
 import { Input } from '@/components/ui/input';
@@ -32,7 +37,7 @@ import {
 import { useDeviceInfo } from '@/lib/device';
 import { usePwaDetection } from '@/hooks/usePwaDetection';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
-import { CODE_FONT_OPTIONS, CUSTOM_FONT_ID, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTIONS, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
+import { CODE_FONT_OPTIONS, CUSTOM_FONT_ID, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTIONS, UI_FONT_WEIGHT_OPTIONS, type MonoFontOption, type UiFontOption, type UiFontWeight } from '@/lib/fontOptions';
 import { useI18n } from '@/lib/i18n';
 import { parseVimMappings } from '@/lib/codemirror/vimMappings';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -42,6 +47,7 @@ import { JevAccessNote } from '@/components/sections/classification/JevAccessNot
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { normalizeMobileKeyboardMode, supportsMobileKeyboardResizeContent, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import {
+<<<<<<< HEAD
  setDirectoryShowHidden,
  useDirectoryShowHidden,
 } from '@/lib/directoryShowHidden';
@@ -79,6 +85,24 @@ import { isTerminalShell } from '@/lib/terminalShell';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
+=======
+    SettingsSection,
+    SettingsTwoColumn,
+    SettingsStackedField,
+    SettingsFieldRow,
+    SettingsCheckboxRow,
+    SettingsChipGroup,
+    SETTINGS_SELECT_TRIGGER_CLASS,
+    SETTINGS_ICON_BUTTON_CLASS,
+    SETTINGS_CONTROL_CLUSTER_CLASS,
+    SETTINGS_NUMBER_STEPPER_ROW_CLASS,
+    SETTINGS_NUMBER_UNIT_CLASS,
+    SETTINGS_NUMBER_INPUT_CLASS,
+    SETTINGS_FIELDS_STACK_CLASS,
+    SETTINGS_OPTION_STACK_CLASS,
+    SETTINGS_HELPER_CLASS,
+} from '@/components/sections/shared/SettingsSection';
+>>>>>>> bc50ba56a
 
 interface Option<T extends string> {
  id: T;
@@ -86,6 +110,7 @@ interface Option<T extends string> {
  descriptionKey?: string;
 }
 
+<<<<<<< HEAD
 const THEME_MODE_OPTIONS: Array<{ value: ThemeMode; labelKey: string; descriptionKey: string }> = [
  {
   value: 'system',
@@ -135,6 +160,8 @@ const MERMAID_RENDERING_OPTIONS: Option<'svg' | 'ascii'>[] = [
  },
 ];
 
+=======
+>>>>>>> bc50ba56a
 const DEFAULT_PWA_INSTALL_NAME = 'OpenChamber - AI Coding Assistant';
 const PWA_ORIENTATION_OPTIONS: Option<'system' | 'portrait' | 'landscape'>[] = [
  {
@@ -324,6 +351,12 @@ const UI_FONT_WEIGHT_LABEL_KEYS = {
  strong: 'settings.openchamber.visual.option.uiFontWeight.strong',
 } as const satisfies Record<UiFontWeight, string>;
 
+const UI_FONT_WEIGHT_LABEL_KEYS = {
+    regular: 'settings.openchamber.visual.option.uiFontWeight.regular',
+    balanced: 'settings.openchamber.visual.option.uiFontWeight.balanced',
+    strong: 'settings.openchamber.visual.option.uiFontWeight.strong',
+} as const satisfies Record<UiFontWeight, string>;
+
 const WINDOW_CONTROLS_POSITION_OPTIONS: Array<{ id: DesktopWindowControlsPosition; labelKey: string }> = [
  { id: 'left', labelKey: 'settings.openchamber.desktopNetwork.option.windowControlsLeft' },
  { id: 'right', labelKey: 'settings.openchamber.desktopNetwork.option.windowControlsRight' },
@@ -370,6 +403,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
  const animatedActivityIndicators = useSessionDisplayStore((s) => s.animatedActivityIndicators);
  const setAnimatedActivityIndicators = useSessionDisplayStore((s) => s.setAnimatedActivityIndicators);
 
+<<<<<<< HEAD
  const mermaidRenderingMode = useUIStore(state => state.mermaidRenderingMode);
  const setMermaidRenderingMode = useUIStore(state => state.setMermaidRenderingMode);
  const userMessageRenderingMode = useUIStore(state => state.userMessageRenderingMode);
@@ -517,6 +551,45 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
  const [chatRenderPreviewTick, setChatRenderPreviewTick] = React.useState(0);
  const reportUsage = useUIStore(state => state.reportUsage);
  const setReportUsage = useUIStore(state => state.setReportUsage);
+=======
+    const fontSize = useUIStore(state => state.fontSize);
+    const setFontSize = useUIStore(state => state.setFontSize);
+    const chatFontSize = useUIStore(state => state.chatFontSize);
+    const setChatFontSize = useUIStore(state => state.setChatFontSize);
+    const terminalFontSize = useUIStore(state => state.terminalFontSize);
+    const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
+    const editorFontSize = useUIStore(state => state.editorFontSize);
+    const setEditorFontSize = useUIStore(state => state.setEditorFontSize);
+    // The fonts in effect: enterprise mode shows the system font where the
+    // stored choice would load from a CDN (useFontPreferences).
+    const { uiFont, monoFont } = useFontPreferences();
+    const setUiFont = useUIStore(state => state.setUiFont);
+    const setMonoFont = useUIStore(state => state.setMonoFont);
+    const customUiFont = useUIStore(state => state.customUiFont);
+    const customMonoFont = useUIStore(state => state.customMonoFont);
+    const setCustomUiFont = useUIStore(state => state.setCustomUiFont);
+    const setCustomMonoFont = useUIStore(state => state.setCustomMonoFont);
+    const uiFontWeight = useUIStore(state => state.uiFontWeight);
+    const setUiFontWeight = useUIStore(state => state.setUiFontWeight);
+    const webFontsBlocked = useEnterpriseMode();
+    const padding = useUIStore(state => state.padding);
+    const setPadding = useUIStore(state => state.setPadding);
+    const inputBarOffset = useUIStore(state => state.inputBarOffset);
+    const setInputBarOffset = useUIStore(state => state.setInputBarOffset);
+    const mobileKeyboardMode = useUIStore(state => state.mobileKeyboardMode);
+    const setMobileKeyboardMode = useUIStore(state => state.setMobileKeyboardMode);
+    const timeFormatPreference = useUIStore(state => state.timeFormatPreference);
+    const setTimeFormatPreference = useUIStore(state => state.setTimeFormatPreference);
+    const weekStartPreference = useUIStore(state => state.weekStartPreference);
+    const setWeekStartPreference = useUIStore(state => state.setWeekStartPreference);
+    const alwaysShowScrollbars = useUIStore(state => state.alwaysShowScrollbars === true);
+    const setAlwaysShowScrollbars = useUIStore(state => state.setAlwaysShowScrollbars);
+    const showWindowControlsPosition = usesFramelessElectronChrome();
+    const desktopWindowControlsPosition = useUIStore((state) => state.desktopWindowControlsPosition);
+    const setDesktopWindowControlsPosition = useUIStore((state) => state.setDesktopWindowControlsPosition);
+    const desktopWindowControlsStyle = useUIStore((state) => state.desktopWindowControlsStyle);
+    const setDesktopWindowControlsStyle = useUIStore((state) => state.setDesktopWindowControlsStyle);
+>>>>>>> bc50ba56a
 
  // Sync reportUsage changes to server settings
  const handleReportUsageChange = React.useCallback((enabled: boolean) => {
@@ -551,6 +624,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
    return;
   }
 
+<<<<<<< HEAD
   // Use requestAnimationFrame for smoother animation without setInterval overhead
   let rafId: number | null = null;
   let lastTime = Date.now();
@@ -598,6 +672,12 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
   setStickyUserHeader(enabled);
   void updateDesktopSettings({ stickyUserHeader: enabled });
  }, [setStickyUserHeader]);
+=======
+    const shouldShow = (setting: VisibleSetting): boolean => {
+        if (!visibleSettings) return true;
+        return visibleSettings.includes(setting);
+    };
+>>>>>>> bc50ba56a
 
  const handlePromptNavigatorEnabledChange = React.useCallback((enabled: boolean) => {
   setPromptNavigatorEnabled(enabled);
@@ -700,6 +780,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
   void updateDesktopSettings({ timeFormatPreference: value });
  }, [setTimeFormatPreference]);
 
+<<<<<<< HEAD
  const handleWeekStartPreferenceChange = React.useCallback((value: 'auto' | 'monday' | 'sunday') => {
   setWeekStartPreference(value);
   void updateDesktopSettings({ weekStartPreference: value });
@@ -1785,6 +1866,17 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
          className={SETTINGS_NUMBER_INPUT_CLASS}
          deferExternalValueWhileFocused
          aria-label={t('settings.openchamber.visual.field.liveBrowserTabs')}
+=======
+    // General's "Panels and links" holds this checkbox; VS Code has no such
+    // section, so there it stays with the layout settings here.
+    const scrollbarSetting = shouldShow('scrollbars') && !hasThemeSettings ? (
+        <SettingsCheckboxRow
+            checked={alwaysShowScrollbars}
+            onChange={setAlwaysShowScrollbars}
+            label={t('settings.openchamber.visual.field.alwaysShowScrollbars')}
+            info={t('settings.openchamber.visual.field.alwaysShowScrollbarsHint')}
+            settingsItem="appearance.scrollbars-vscode"
+>>>>>>> bc50ba56a
         />
         <span className={SETTINGS_NUMBER_UNIT_CLASS}>
          {t('settings.openchamber.visual.field.liveBrowserTabsUnit')}
@@ -1889,6 +1981,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         </SettingsControlGroup>
        )}
 
+<<<<<<< HEAD
        {shouldShow('activityRenderMode') && (
         <SettingsControlGroup title={t('settings.openchamber.visual.section.activityDefault')} settingsItem="chat.activity-default">
          <SettingsRadioGroup aria-label={t('settings.openchamber.visual.section.activityDefaultAria')}>
@@ -1988,6 +2081,14 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
           </SettingsRadioGroup>
          </SettingsControlGroup>
         )}
+=======
+                {/* --- Appearance & Themes --- */}
+                {hasAppearanceSettings && (
+                    <div className="space-y-0">
+                        {hasThemeSettings && (
+                            <ThemeAppearancePicker />
+                        )}
+>>>>>>> bc50ba56a
 
         {shouldShow('followUpBehavior') && (
          <SettingsControlGroup
@@ -2235,6 +2336,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
           />
          )}
 
+<<<<<<< HEAD
          {shouldShow('stickyUserHeader') && (
           <SettingsCheckboxRow
            checked={stickyUserHeader}
@@ -2254,6 +2356,103 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
            settingsItem="chat.prompt-navigator"
           />
          )}
+=======
+                            {showPwaOrientationSetting && (
+                                <SettingsFieldRow
+                                    label={t('settings.openchamber.visual.field.installOrientation')}
+                                    description={t('settings.openchamber.visual.field.installOrientationHint')}
+                                    settingsItem="appearance.pwa-orientation"
+                                    alignEnd={false}
+                                    controlClassName={SETTINGS_CONTROL_CLUSTER_CLASS}
+                                >
+                                    <Select
+                                        value={pwaOrientation}
+                                        onValueChange={(value) => {
+                                            const orientation = normalizePwaOrientation(value);
+                                            setPwaOrientation(orientation);
+                                            void applyPwaOrientation(orientation);
+                                        }}
+                                    >
+                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.pwaInstallOrientationAria')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+                                            <SelectValue placeholder={t('settings.openchamber.visual.field.selectOrientationPlaceholder')}>
+                                                {selectedPwaOrientationLabel}
+                                            </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {PWA_ORIENTATION_OPTIONS.map((option) => (
+                                                <SelectItem key={option.id} value={option.id}>
+                                                    {tUnsafe(option.labelKey)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button size="sm"
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setPwaOrientation('system');
+                                            void applyPwaOrientation('system');
+                                        }}
+                                        disabled={pwaOrientation === 'system'}
+                                        className={SETTINGS_ICON_BUTTON_CLASS}
+                                        aria-label={t('settings.openchamber.visual.actions.resetInstallOrientationAria')}
+                                        title={t('settings.common.actions.reset')}
+                                    >
+                                        <Icon name="restart" className="h-3.5 w-3.5" />
+                                    </Button>
+                                </SettingsFieldRow>
+                            )}
+
+                            {showMobileKeyboardModeSetting && (
+                                <SettingsFieldRow
+                                    label={t('settings.openchamber.visual.field.mobileKeyboardMode')}
+                                    info={t('settings.openchamber.visual.field.mobileKeyboardModeHint')}
+                                    settingsItem="appearance.mobile-keyboard-mode"
+                                    alignEnd={false}
+                                    controlClassName={SETTINGS_CONTROL_CLUSTER_CLASS}
+                                >
+                                    <Select
+                                        value={mobileKeyboardMode}
+                                        onValueChange={(value) => {
+                                            const mode = normalizeMobileKeyboardMode(value);
+                                            setMobileKeyboardMode(mode);
+                                            void updateDesktopSettings({ mobileKeyboardMode: mode });
+                                        }}
+                                    >
+                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.mobileKeyboardModeAria')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+                                            <SelectValue placeholder={t('settings.openchamber.visual.field.selectMobileKeyboardModePlaceholder')}>
+                                                {selectedMobileKeyboardModeLabel}
+                                            </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {MOBILE_KEYBOARD_MODE_OPTIONS.map((option) => (
+                                                <SelectItem key={option.id} value={option.id}>
+                                                    {tUnsafe(option.labelKey)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button size="sm"
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setMobileKeyboardMode('native');
+                                            void updateDesktopSettings({ mobileKeyboardMode: 'native' });
+                                        }}
+                                        disabled={mobileKeyboardMode === 'native'}
+                                        className={SETTINGS_ICON_BUTTON_CLASS}
+                                        aria-label={t('settings.openchamber.visual.actions.resetMobileKeyboardModeAria')}
+                                        title={t('settings.common.actions.reset')}
+                                    >
+                                        <Icon name="restart" className="h-3.5 w-3.5" />
+                                    </Button>
+                                </SettingsFieldRow>
+                            )}
+                            </SettingsSection>
+                        )}
+                    </div>
+                )}
+>>>>>>> bc50ba56a
 
          {shouldShow('wideChatLayout') && (
           <SettingsCheckboxRow
@@ -2265,6 +2464,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
           />
          )}
 
+<<<<<<< HEAD
          {shouldShow('splitAssistantMessageActions') && (
           <SettingsCheckboxRow
            checked={showSplitAssistantMessageActions}
@@ -2285,6 +2485,220 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
            settingsItem="chat.code-block-line-wrap"
           />
          )}
+=======
+                        {(shouldShow('fontSize') && !isMobile) || shouldShow('terminalFontSize') || shouldShow('editorFontSize') ? (
+                            <SettingsTwoColumn>
+                                {shouldShow('fontSize') && !isMobile && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.interfaceFontSize')}
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={fontSize}
+                                                onValueChange={setFontSize}
+                                                min={50}
+                                                max={200}
+                                                step={5}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                aria-label={t('settings.openchamber.visual.field.fontSizePercentageAria')}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setFontSize(100)}
+                                                disabled={fontSize === 100}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetFontSizeAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('fontSize') && !isMobile && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.chatFontSize')}
+                                        settingsItem="appearance.chat-font-size"
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={chatFontSize}
+                                                onValueChange={setChatFontSize}
+                                                min={50}
+                                                max={200}
+                                                step={5}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                aria-label={t('settings.openchamber.visual.field.chatFontSizePercentageAria')}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setChatFontSize(100)}
+                                                disabled={chatFontSize === 100}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetChatFontSizeAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('fontSize') && !isMobile && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.interfaceFontWeight')}
+                                        info={t('settings.openchamber.visual.field.interfaceFontWeightInfo')}
+                                        settingsItem="appearance.interface-font-weight"
+                                        controlClassName="w-full"
+                                    >
+                                        <SettingsChipGroup
+                                            value={uiFontWeight}
+                                            onChange={setUiFontWeight}
+                                            aria-label={t('settings.openchamber.visual.field.interfaceFontWeight')}
+                                            options={UI_FONT_WEIGHT_OPTIONS.map((weight) => ({
+                                                value: weight,
+                                                label: t(UI_FONT_WEIGHT_LABEL_KEYS[weight]),
+                                            }))}
+                                        />
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('terminalFontSize') && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.terminalFontSize')}
+                                        settingsItem="appearance.terminal-font-size"
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={terminalFontSize}
+                                                onValueChange={setTerminalFontSize}
+                                                min={9}
+                                                max={52}
+                                                step={1}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setTerminalFontSize(13)}
+                                                disabled={terminalFontSize === 13}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetTerminalFontSizeAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('editorFontSize') && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.editorFontSize')}
+                                        settingsItem="appearance.editor-font-size"
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={editorFontSize}
+                                                onValueChange={setEditorFontSize}
+                                                min={9}
+                                                max={32}
+                                                step={1}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setEditorFontSize(13)}
+                                                disabled={editorFontSize === 13}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetEditorFontSizeAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                            </SettingsTwoColumn>
+                        ) : null}
+
+                        {shouldShow('spacing') || (shouldShow('inputBarOffset') && isMobile) ? (
+                            <SettingsTwoColumn>
+                                {shouldShow('spacing') && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.spacingDensity')}
+                                        settingsItem="appearance.spacing-density"
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={padding}
+                                                onValueChange={setPadding}
+                                                min={50}
+                                                max={200}
+                                                step={5}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setPadding(100)}
+                                                disabled={padding === 100}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetSpacingAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('inputBarOffset') && isMobile && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.inputBarOffset')}
+                                        info={t('settings.openchamber.visual.field.inputBarOffsetTooltip')}
+                                        settingsItem="appearance.input-bar-offset"
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={inputBarOffset}
+                                                onValueChange={setInputBarOffset}
+                                                min={0}
+                                                max={100}
+                                                step={5}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setInputBarOffset(0)}
+                                                disabled={inputBarOffset === 0}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetInputBarOffsetAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                            </SettingsTwoColumn>
+                        ) : null}
+                        {scrollbarSetting}
+                    </SettingsSection>
+                )}
+>>>>>>> bc50ba56a
 
          {shouldShow('tableCellWrap') && (
           <SettingsCheckboxRow

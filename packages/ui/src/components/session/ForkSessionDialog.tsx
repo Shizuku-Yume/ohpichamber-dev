@@ -16,6 +16,11 @@ import { useI18n } from '@/lib/i18n';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+<<<<<<< HEAD
+=======
+import { isSpaceDirectory } from '@/lib/spaces/space-route';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
+>>>>>>> bc50ba56a
 
 export type ForkSessionExecution = {
   providerID: string;
@@ -59,7 +64,15 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const [instructions, setInstructions] = React.useState(EXECUTION_FORK_DEFAULT_INSTRUCTIONS);
   const [createWorktree, setCreateWorktree] = React.useState(false);
   const [runAsGoal, setRunAsGoal] = React.useState(false);
+<<<<<<< HEAD
   const showCreateWorktree = isGitRepository === true;
+=======
+  // A worktree is the host project's: one made from a space's session would hold none of the
+  // space's changes, so a fork there stays in the space.
+  const showCreateWorktree = !isVSCodeRuntime() && isGitRepository === true && !isSpaceDirectory(projectDirectory) && !isSpaceDirectory(resolvedWorktreeProjectDirectory);
+  // The goal loop lives in the web server; VS Code only renders goal state.
+  const showRunAsGoal = React.useMemo(() => !isVSCodeRuntime(), []);
+>>>>>>> bc50ba56a
 
   // Toggling goal mode swaps the prefilled instructions between the
   // report-back default and the assertive execute-to-completion variant —

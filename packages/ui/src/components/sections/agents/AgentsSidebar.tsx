@@ -131,6 +131,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
             <p className="typography-ui-label font-medium">{t('settings.agents.sidebar.empty.title')}</p>
             <p className="typography-meta mt-1 opacity-75">{t('settings.agents.sidebar.empty.description')}</p>
           </div>
+<<<<<<< HEAD
         ) : agents.length > 0 && shownAgents.length === 0 ? <SettingsSidebarNoMatches query={query} /> : shownAgents.map((agent) => (
           <AgentListItem
             key={agent.agentId} agent={agent} isSelected={selectedAgentName === agent.name}
@@ -145,6 +146,124 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
             onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.agentId : null)}
           />
         ))}
+=======
+        ) : shownAgents.length === 0 ? (
+          <SettingsSidebarNoMatches query={query} />
+        ) : (
+          <>
+            {builtInAgents.length > 0 && (
+              <>
+                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('settings.agents.sidebar.section.builtIn')}
+                </div>
+                {builtInAgents.map((agent) => (
+                  <AgentListItem
+                    key={agent.name}
+                    agent={agent}
+                    isSelected={selectedAgentName === agent.name}
+                    onSelect={() => {
+                      setSelectedAgent(agent.name);
+                      onItemSelect?.();
+
+                    }}
+                    onDuplicate={() => void handleDuplicateAgent(agent)}
+                    onDisable={canDisable(agent) ? () => void setAgentDisabled(agent.name, true) : undefined}
+                    getAgentModeIcon={getAgentModeIcon}
+                    isMenuOpen={openMenuAgent === agent.name}
+                    onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.name : null)}
+                  />
+                ))}
+              </>
+            )}
+
+            {customAgents.length > 0 && (
+              <>
+                <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('settings.agents.sidebar.section.custom')}
+                </div>
+
+                {/* Grouped agents by subfolder */}
+                {groupedCustomAgents.map(({ name: groupName, agents: groupAgents }) => (
+                  <SidebarGroup
+                    key={groupName}
+                    label={groupName}
+                    count={groupAgents.length}
+                    storageKey="agents"
+                  >
+                    {groupAgents.map((agent) => (
+                      <AgentListItem
+                        key={agent.name}
+                        agent={agent}
+                        isSelected={selectedAgentName === agent.name}
+                        onSelect={() => {
+                          setSelectedAgent(agent.name);
+                          onItemSelect?.();
+
+                        }}
+                        onRename={() => handleOpenRenameDialog(agent)}
+                        onDelete={() => handleDeleteAgent(agent)}
+                        onDuplicate={() => void handleDuplicateAgent(agent)}
+                        onDisable={canDisable(agent) ? () => void setAgentDisabled(agent.name, true) : undefined}
+                        getAgentModeIcon={getAgentModeIcon}
+                        isMenuOpen={openMenuAgent === agent.name}
+                        onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.name : null)}
+                      />
+                    ))}
+                  </SidebarGroup>
+                ))}
+
+                {/* Ungrouped agents (flat in root agents dir) */}
+                {ungroupedCustomAgents.map((agent) => (
+                  <AgentListItem
+                    key={agent.name}
+                    agent={agent}
+                    isSelected={selectedAgentName === agent.name}
+                    onSelect={() => {
+                      setSelectedAgent(agent.name);
+                      onItemSelect?.();
+
+                    }}
+                    onRename={() => handleOpenRenameDialog(agent)}
+                    onDelete={() => handleDeleteAgent(agent)}
+                    onDuplicate={() => void handleDuplicateAgent(agent)}
+                    onDisable={canDisable(agent) ? () => void setAgentDisabled(agent.name, true) : undefined}
+                    getAgentModeIcon={getAgentModeIcon}
+                    isMenuOpen={openMenuAgent === agent.name}
+                    onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.name : null)}
+                  />
+                ))}
+              </>
+            )}
+          </>
+        )}
+
+        {shownDisabledAgents.length > 0 && (
+          <>
+            <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('settings.agents.sidebar.section.disabled')}
+            </div>
+            {shownDisabledAgents.map((agent) => (
+              <div key={agent.name} className="flex items-center gap-2 rounded-md px-1.5 py-1">
+                <div className="min-w-0 flex-1">
+                  <div className="typography-ui-label truncate text-muted-foreground">{agent.name}</div>
+                  {agent.description ? (
+                    <div className="typography-micro truncate leading-tight text-muted-foreground">{agent.description}</div>
+                  ) : null}
+                </div>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={pendingToggleAgent === agent.name}
+                  onClick={() => void setAgentDisabled(agent.name, false)}
+                  aria-label={t('settings.agents.sidebar.actions.enableAria', { name: agent.name })}
+                >
+                  {t('settings.agents.sidebar.actions.enable')}
+                </Button>
+              </div>
+            ))}
+          </>
+        )}
+>>>>>>> bc50ba56a
       </ScrollableOverlay>
       <Dialog open={deleteAction !== null} onOpenChange={(open) => { if (!open && !pendingAction) setDeleteAction(null); }}>
         <DialogContent className="max-w-md">
@@ -199,6 +318,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ agent, isSelected, onSele
   );
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+<<<<<<< HEAD
       <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (event) => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
         <div className="flex min-w-0 flex-1 items-center">
           <button
@@ -224,6 +344,48 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ agent, isSelected, onSele
             <DropdownMenuContent align="end" className="w-fit min-w-20">{renderMenuItems(DropdownMenuItem)}</DropdownMenuContent>
           </DropdownMenu>
         </div>
+=======
+      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (e) => { e.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
+      <div className="flex min-w-0 flex-1 items-center">
+        <button
+          onClick={onSelect}
+          className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          tabIndex={0}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="typography-ui-label font-normal truncate text-foreground">
+              {agent.name}
+            </span>
+            {getAgentModeIcon(agent.mode)}
+            {(extAgent.scope || isAgentBuiltIn(agent)) && (
+              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-edge">
+                {isAgentBuiltIn(agent) ? t('settings.agents.sidebar.badge.system') : extAgent.scope}
+              </span>
+            )}
+          </div>
+
+          {agent.description && (
+            <div className="typography-micro text-muted-foreground truncate leading-tight">
+              {agent.description}
+            </div>
+          )}
+        </button>
+
+        <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm"
+              variant="ghost"
+              className="h-6 w-6 px-0 flex-shrink-0 -me-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 pointer-fine:hidden"
+            >
+              <Icon name="more" className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-fit min-w-20">
+            {renderMenuItems(DropdownMenuItem)}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+>>>>>>> bc50ba56a
       </ContextMenuTrigger>
       <ContextMenuContent className="w-fit min-w-20">{renderMenuItems(ContextMenuItem)}</ContextMenuContent>
     </ContextMenu>

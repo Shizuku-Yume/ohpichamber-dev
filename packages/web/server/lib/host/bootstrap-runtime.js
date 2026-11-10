@@ -30,6 +30,7 @@ export const createBootstrapRuntime = (dependencies) => {
       clientPairingRuntime,
       getRelayPairingCandidate,
       reconcileRelay,
+      removeClientPushDevices,
       getPairingTransports,
       getDirectCandidateUrls,
       getServerId,
@@ -67,6 +68,7 @@ export const createBootstrapRuntime = (dependencies) => {
       setAutoAcceptSession,
       pluginNotificationEmitter,
       desktopUpdater,
+      getOpenCodeCompatibility,
       skipBodyParsing,
       isRequestOriginAllowed,
     } = options;
@@ -119,6 +121,7 @@ export const createBootstrapRuntime = (dependencies) => {
       clientPairingRuntime,
       getRelayPairingCandidate,
       reconcileRelay,
+      removeClientPushDevices,
       getPairingTransports,
       getDirectCandidateUrls,
       getServerId,
@@ -168,6 +171,7 @@ export const createBootstrapRuntime = (dependencies) => {
       modelsMetadataCacheTtl,
       readSettingsFromDiskMigrated,
       desktopUpdater,
+      getOpenCodeCompatibility,
     });
 
     return {

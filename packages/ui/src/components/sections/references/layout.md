@@ -10,7 +10,7 @@ instead of reaching into their private classes or declaring local equivalents.
 ```tsx
 <SettingsPageLayout
   title={t('settings.page.x.title')}
-  description={t('settings.page.x.description')}
+  namedBySidebar
   showSaveStatus
 >
   <SettingsSection title={t('...sectionA')} divider={false}>…</SettingsSection>
@@ -18,7 +18,12 @@ instead of reaching into their private classes or declaring local equivalents.
 </SettingsPageLayout>
 ```
 
+<<<<<<< HEAD:packages/ui/src/components/sections/references/layout.md
 - `SettingsPageLayout` owns scrolling, page padding and the `@container` context. Enable its quiet indicator (`showSaveStatus`) only for the ordinary persistence flow described in [save feedback](../PATTERNS.md#save-feedback); the [OpenCode config autosave pages](../DOCUMENTATION.md#autosave-on-the-opencode-configuration-pages) use failure toasts and no indicator.
+=======
+- `SettingsPageLayout` owns scrolling, page padding, the `@container` context, and the quiet save indicator (`showSaveStatus`).
+- A page opened from the settings sidebar passes `namedBySidebar` and no `description`: the sidebar already names it, so the title stays only for screen readers and focus, and only `headerEnd` actions show. A detail page (one agent, provider, server) keeps its visible title. A line the user must read (a consequence, a warning) goes into the content, not the page description.
+>>>>>>> bc50ba56a:.agents/skills/settings-ui-patterns/references/layout.md
 - Sections separate with a top border (`divider`, default true); the first section under the page header passes `divider={false}`.
 - Section titles are real headers (L2). Do not nest an umbrella section around a list of `SettingsControlGroup`s when each group deserves its own header — promote groups to sections instead (see the Chat page precedent).
 
@@ -36,12 +41,7 @@ The skeleton above is for ordinary settings. Omit `showSaveStatus` on OpenCode c
 
 ## Navigation Placement
 
-Sidebar groups (`packages/ui/src/lib/settings/metadata.ts`, order in `SettingsView.tsx`):
-
-- **OpenChamber** (`general` group): General, Appearance, Chat, Notifications, Sessions, Shortcuts, Voice, Usage, About.
-- **Workspace** (`projects`): Projects, Remote Instances, External Tunnel, Git.
-- **OpenCode** (`opencode`): Providers, Agents, Behavior, Commands, MCP, Plugins.
-- **Library** (`content`): Magic Prompts, Snippets, Skills, Skills Catalog.
+Sidebar groups are defined in `packages/ui/src/lib/settings/metadata.ts`; `pageOrder` in `SettingsView.tsx` sets their order.
 
 Placement rules:
 

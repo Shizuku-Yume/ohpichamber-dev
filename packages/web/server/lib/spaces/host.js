@@ -144,6 +144,68 @@ export function createSpacesHost({
     logger,
   });
 
+<<<<<<< HEAD
+=======
+  /** One space's whole session list, page by page, or as much of it as the page cap allows. */
+  const readSpaceSessions = async (spaceId) => {
+    const records = [];
+    let cursor = null;
+    for (let page = 0; page < SESSION_MAX_PAGES; page += 1) {
+      const query = new URLSearchParams({ limit: String(SESSION_PAGE_LIMIT) });
+      if (cursor !== null) query.set('cursor', cursor);
+      const response = await dispatcher.requestInside(spaceId, { path: `/api/session?${query}`, headers: { accept: 'application/json' }, timeoutMs: SESSION_LIST_TIMEOUT_MS });
+      if (response.statusCode !== 200) { response.resume(); throw new Error(`status ${response.statusCode}`); }
+      const payload = JSON.parse(await readBody(response, MAX_SESSION_LIST_BYTES));
+      const data = Array.isArray(payload) ? payload : payload?.data;
+      if (!Array.isArray(data)) throw new Error('the list is not a list');
+      records.push(...data);
+      const next = nextCursorSchema.safeParse(payload?.cursor?.next);
+      if (!next.success || data.length === 0) return { records, complete: true };
+      cursor = next.data;
+    }
+    return { records, complete: false };
+  };
+
+  /**
+   * The host's session list with every space's after it. Each reachable space is asked once,
+   * all of them at the same time; one that does not answer keeps its last known list, marked
+   * stale. A host list without spaces goes back exactly as it came.
+   */
+  const mergeSessionList = async (hostPayload) => {
+    const hostRecords = Array.isArray(hostPayload) ? hostPayload : hostPayload?.data;
+    if (Array.isArray(hostRecords)) index.observeHostRecords(hostRecords);
+    const spaces = await knownSpaces();
+    if (spaces.length === 0) return hostPayload;
+    await Promise.all(spaces.map(async ({ id: spaceId, state }) => {
+      // A space whose place cannot be asked keeps its last list, stale, with no attempt made.
+      if (state === 'unreachable') {
+        index.markUnreachable(spaceId);
+        listReadAt.delete(spaceId);
+        return;
+      }
+      if (now() - (listReadAt.get(spaceId) ?? -Infinity) < LIST_TTL_MS) return;
+      try {
+        const { records, complete } = await readSpaceSessions(spaceId);
+        index.acceptSpaceList(spaceId, records, { complete });
+        listReadAt.set(spaceId, now());
+      } catch (error) {
+        logger.warn?.(`[spaces] the session list of space ${spaceId} did not come: ${error?.code ?? error?.message ?? error}`);
+        index.markUnreachable(spaceId);
+        // The next merge asks the space again whatever the last good read's age: a space that
+        // did not answer during its own restart is otherwise listed as not answering until the
+        // read's time runs out, after the restart has long gone through.
+        listReadAt.delete(spaceId);
+      }
+    }));
+    // In the place's order, so the merged list reads the same from one call to the next.
+    const answers = new Map(index.snapshot().map((entry) => [entry.spaceId, entry]));
+    return mergeSessionLists(hostPayload, spaces.flatMap((space) => {
+      const answer = answers.get(space.id);
+      return answer === undefined ? [] : [{ ...answer, name: space.name, taskTitle: records.read(space.id).record?.taskTitle ?? null, projectDirectory: space.projectDirectory, directory: space.directory }];
+    }));
+  };
+
+>>>>>>> bc50ba56a
   let sockets = null;
 
   return {
@@ -168,10 +230,31 @@ export function createSpacesHost({
      */
     start: (globalEventHub) => {
       hub = globalEventHub;
+<<<<<<< HEAD
       // A closed gate makes the restore refuse; a start must not turn that into an unhandled rejection.
       void journey.restoreLostGrants().catch((error) => {
         logger.warn?.(`[spaces] the grants of running spaces were not restored: ${error?.code ?? error?.message ?? error}`);
       });
+=======
+      events = createSpaceEventSources({ requestInside: dispatcher.requestInside, index, hub: globalEventHub, broadcastUiEvent, broadcastGlobalUiEvent, logger, now,
+        onTaskTitle: (spaceId, title) => {
+          try {
+            const result = records.setTaskTitle(spaceId, { title, by: 'agent' });
+            if (result.applied) globalEventHub.injectEvent({ payload: { type: 'openchamber:space-task-title.updated', properties: { spaceId, taskTitle: result.taskTitle } }, directory: 'global', spaceId });
+          } catch (error) {
+            logger.warn?.(`[spaces] could not save the task title of space ${spaceId}: ${error?.code ?? error?.message ?? error}`);
+          }
+        },
+      });
+      unsubscribeHostEvents = globalEventHub.subscribeEvent((event) => { if (event.spaceId === null) index.observeHostEvent(event.payload); });
+      followTimer = setTimer(() => { void follow(); }, FOLLOW_INTERVAL_MS);
+      followTimer?.unref?.();
+      keepTimer = setTimer(() => { void keeper.tick(); }, KEEP_INTERVAL_MS);
+      keepTimer?.unref?.();
+      // A running space whose gatekeeper lost its grants, from a start cut short, gets them again.
+      void journey.restoreLostGrants();
+      return follow();
+>>>>>>> bc50ba56a
     },
     /** For the body parsers: a request to a space keeps its body for the space. */
     skipsBodyParsing: (req) => dispatcher.isSpaceRequestPath(req.path),

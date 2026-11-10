@@ -60,6 +60,23 @@ function materializeHistoryAttachment(attachment: HistoryAttachmentWithPath): At
       source: 'local',
       serverPath: attachment.path ?? attachment.reference,
       agentPath: attachment.path,
+<<<<<<< HEAD
+=======
+    };
+  }
+
+  if (attachment.source === 'vscode-file') {
+    return {
+      id: `history-${attachment.key}`,
+      file: new File([], attachment.filename, { type: attachment.mimeType }),
+      dataUrl: toServerFileUrl(attachment.reference),
+      mimeType: attachment.mimeType,
+      filename: attachment.filename,
+      size: attachment.size,
+      source: 'vscode',
+      vscodePath: attachment.reference,
+      vscodeSource: 'file',
+>>>>>>> bc50ba56a
     };
   }
 

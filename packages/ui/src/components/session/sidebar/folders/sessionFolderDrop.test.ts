@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
+<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
+=======
+import type { Session } from '@/lib/opencode/model';
+>>>>>>> bc50ba56a
 import type { SessionSidebarFolderTarget, SessionSidebarRow } from '../sessionSidebarRowModel';
 import { getSessionDragId, getSessionFolderDropId } from '../sessions/sessionFolderIdentity';
 import { applySessionFolderDrop, resolveCurrentSessionFolderDropSource, resolveCurrentSessionFolderDropTarget } from './sessionFolderDrop';
@@ -8,6 +12,7 @@ type SessionRow = Extract<SessionSidebarRow, { kind: 'session' }>;
 
 const sessionRow = (ownerKey: string | null, archived = false): SessionRow => {
   const session: Session = {
+<<<<<<< HEAD
     sessionId: 'child-b',
     projectId: 'project',
     workspaceId: 'workspace',
@@ -24,6 +29,15 @@ const sessionRow = (ownerKey: string | null, archived = false): SessionRow => {
     metadata: null,
     metadataRevision: '0',
     archiveRevision: '0',
+=======
+    id: 'child-b',
+    projectID: 'project',
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    title: 'Child',
+    directory: '/b-worktree',
+    time: { created: 1, updated: 1 },
+>>>>>>> bc50ba56a
   };
   return {
     kind: 'session',
@@ -31,9 +45,15 @@ const sessionRow = (ownerKey: string | null, archived = false): SessionRow => {
     estimateSize: 28,
     node: { session, children: [], worktree: null },
     depth: 1,
+<<<<<<< HEAD
     ownsWork: true,
     projectId: 'project-a',
     ownerProjectId: 'project-a',
+=======
+    ownsWork: false,
+    projectId: 'project-a',
+    ownerProjectId: ownerKey,
+>>>>>>> bc50ba56a
     groupDirectory: '/a',
     ownerKey,
     selectionScopeKey: ownerKey,

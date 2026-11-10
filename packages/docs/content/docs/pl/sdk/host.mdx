@@ -27,7 +27,11 @@ To nie jest jednorazowy callback montowania. Zamontuj UI i zarejestruj subskrypc
 | `theme.tokens` | kolory aplikacji (powierzchnie, tekst, stany interakcji, primary, success/warning/error/info), `font`, `mono` i `radius`. Przekaż to do `applyHostReady` przed zamontowaniem UI. |
 | `locale` | tag języka aplikacji |
 | `directory` | katalog bieżącego projektu albo `null` |
+<<<<<<< HEAD
 | `session` | `{ id, title, busy }` albo `null`. Tytuł wraca do id sesji, gdy go brak. `busy` to status na żywo. `model` i `agent` (agent Host) pojawiają się, gdy sesja je ma. |
+=======
+| `session` | `{ id, title, busy }` albo `null`. Tytuł wraca do id sesji, gdy go brak. `busy` to status na żywo. `model` i `agent` (agent OpenCode) pojawiają się, gdy sesja je ma. |
+>>>>>>> bc50ba56a
 | `surface` | `panel` na pasku bocznym, `dialog` w oknie dołączania, `page` na pełnym ekranie, `status` w panelu Work Status, `file` jako edytor plików w Files, `block` w bloku UI na czacie |
 | `item` | to, dla czego otwarto tę powierzchnię, albo `null`: dołączony element, który użytkownik kliknął (te same pola, które przekazałeś do `attach`, łącznie z `data`), wiadomość (`kind: "message"`) albo sesja (`kind: "session"`) z jednej z zadeklarowanych przez Ciebie akcji. Zobacz [Akcje](/sdk/#akcje-polecenia-i-odznaka). |
 | `connection` | `{ connected, account }` dla Twojej integracji |
@@ -247,7 +251,15 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
+<<<<<<< HEAD
 `sessions.start`, `sessions.send`, `sessions.retry` i `sessions.status` wymagają `contributes.sessionControl`, które użytkownik zatwierdza jako osobny wiersz. `sessions.lastReply` wymaga `sessionControl: { content: true }`. `setInstructions` wymaga `contributes.instructions` i uzupełnia to, co czytają agenci, w jednym folderze albo, z `null`, wszędzie.
+=======
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` i `sessions.stop` wymagają `contributes.sessionControl`, które użytkownik zatwierdza jako osobny wiersz. `sessions.lastReply` wymaga `sessionControl: { content: true }`. Wiadomość z `sessions.send` zamyka formularz lub stronę, na które agent czeka w tej sesji, tak samo jak wiadomość wpisana w czacie.
+
+Aby przenosić żądania agenta gdzie indziej, na przykład do komunikatora, dodaj `answers: true`. Użytkownik zatwierdza to jako kolejny wiersz, a usługa może wtedy odpowiadać w imieniu użytkownika w dowolnej sesji: `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (lub `'deny'` z `message`, którą czyta agent) na zdarzenie `permission-asked` oraz `sessions.answerForm(sessionId, formId, values)` na zdarzenie `question-asked`, którego `event.question.kind` to `form`. Treść zdarzenia wymienia pola formularza z ich `key` i opcjami wyboru. `null` zamiast wartości odrzuca formularz. Zgoda obejmuje tylko to jedno żądanie.
+
+`setInstructions` wymaga `contributes.instructions` i uzupełnia to, co czytają agenci, w jednym folderze albo, z `null`, wszędzie.
+>>>>>>> bc50ba56a
 
 `emit` dociera do Twoich otwartych ramek przez `host.onServiceEvent`, więc panel nie musi już odpytywać usługi. Nic nie jest wysyłane ponownie, dlatego ramka otwarta później najpierw odczytuje bieżący stan. `readSettings` daje usłudze ustawienia integracji razem z polami `secret`, a `needsConfiguration` pokazuje komunikat na karcie rozszerzenia.
 
@@ -382,14 +394,22 @@ Gdy użytkownik włączy komentarze sesji, OpenChamber wywołuje `comments.creat
 
 ## Dostawcy zużycia
 
+<<<<<<< HEAD
 Usługa może raportować zużycie obok wbudowanych dostawców: zadeklaruj `provides: ["quota"]` i wymień w `contributes.quota.providers` dostawców Host, których danych logowania potrzebuje. OpenChamber nazywa dostawcę `ext-<panel.id>`, rysuje jego kartę z nazwą i ikoną rozszerzenia i pyta go tak, jak pyta wbudowanego dostawcę.
+=======
+Usługa może raportować zużycie obok wbudowanych dostawców: zadeklaruj `provides: ["quota"]` i wymień w `contributes.quota.providers` dostawców OpenCode, których danych logowania potrzebuje. OpenChamber nazywa dostawcę `ext-<panel.id>`, rysuje jego kartę z nazwą i ikoną rozszerzenia i pyta go tak, jak pyta wbudowanego dostawcę.
+>>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
+<<<<<<< HEAD
 Okno zatwierdzania wymienia tych dostawców, a wersja, która zmienia listę, pyta ponownie. Przy każdym odświeżeniu OpenChamber wysyła jedno wywołanie, `usage.read`, na `POST /quota`, z `input.credentials` zawierającym dane logowania, które Host przechowuje dla każdego wymienionego dostawcy, dla którego je ma (klucz API albo tokeny logowania w przeglądarce), i nic więcej z magazynu. Wymieniony dostawca, dla którego Host nie ma danych logowania, jest pokazywany jako nieskonfigurowany, a usługa nie jest wywoływana; pusta lista jest dozwolona, dla dostawcy, którego klucz leży we własnych ustawieniach rozszerzenia.
+=======
+Okno zatwierdzania wymienia tych dostawców, a wersja, która zmienia listę, pyta ponownie. Przy każdym odświeżeniu OpenChamber wysyła jedno wywołanie, `usage.read`, na `POST /quota`, z `input.credentials` zawierającym dane logowania, które OpenCode przechowuje dla każdego wymienionego dostawcy, dla którego je ma (klucz API albo tokeny logowania w przeglądarce), i nic więcej z magazynu. Wymieniony dostawca, dla którego OpenCode nie ma danych logowania, jest pokazywany jako nieskonfigurowany, a usługa nie jest wywoływana; pusta lista jest dozwolona, dla dostawcy, którego klucz leży we własnych ustawieniach rozszerzenia.
+>>>>>>> bc50ba56a
 
 Odczytaj treść przez `readQuotaProviderRequest` i odpowiedz `{ ok: true, data }` z wynikiem, jaki oblicza wbudowany dostawca: `ok`, `configured`, `error`, `planLabel` oraz `usage.windows` po nazwie okna, każde z `usedPercent`, `windowSeconds`, `resetAt` (epoka w milisekundach) i opcjonalnym `valueLabel` lub `value`, plus `usage.models` dla okien per model. OpenChamber wyprowadza pozostałą część, odliczanie do resetu i sformatowane napisy, więc karta zgadza się z kartą wbudowanego dostawcy.
 

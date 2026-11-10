@@ -111,4 +111,16 @@ describe('native agent catalog refresh', () => {
     expect(selectAgentsForDirectory(useAgentsStore.getState(), DIRECTORY).map((entry) => entry.name)).toEqual(['new-runtime-agent']);
     expect(useAgentsStore.getState().revisionsByDirectory[DIRECTORY]).toBe('2');
   });
+
+  test('a retired agent list never starts metadata reads on the replacement runtime', async () => {
+    const response = deferred<Agent[]>();
+    opencodeClient.listAgents = () => response.promise;
+    const fetch = spyOn(globalThis, 'fetch');
+    const stale = useAgentsStore.getState().loadAgents(DIRECTORY);
+    useAgentsStore.getState().resetForRuntimeSwitch();
+    const callsBefore = fetch.mock.calls.length;
+    response.resolve([agent('obsolete')]);
+    expect(await stale).toBe(false);
+    expect(fetch.mock.calls).toHaveLength(callsBefore);
+  });
 });

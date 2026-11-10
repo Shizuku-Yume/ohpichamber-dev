@@ -27,7 +27,11 @@ It is not a one-time mount callback. Mount your UI and register subscriptions on
 | `theme.tokens` | the app's colours (surfaces, text, interaction states, primary, success/warning/error/info), `font`, `mono`, and `radius`. Pass this to `applyHostReady` before you mount UI. |
 | `locale` | the app language tag |
 | `directory` | current project directory, or `null` |
+<<<<<<< HEAD
 | `session` | `{ id, title, busy }` or `null`. Title falls back to the session id. `busy` is the live status. `model` and `agent` (the session agent) appear when the session has them. |
+=======
+| `session` | `{ id, title, busy }` or `null`. Title falls back to the session id. `busy` is the live status. `model` and `agent` (the OpenCode agent) appear when the session has them. |
+>>>>>>> bc50ba56a
 | `surface` | `panel` on the rail, `dialog` in the attach window, `page` full-screen, `status` in the Work Status panel, `file` as a file editor in Files, `block` in a UI block in the chat |
 | `item` | what this surface was opened for, or `null`: the attached item the user clicked (the same fields you passed to `attach`, including `data`), a message (`kind: "message"`), or a session (`kind: "session"`) from one of your declared actions. See [Actions](/sdk/#actions-commands-and-the-badge). |
 | `connection` | `{ connected, account }` for your integration |
@@ -271,7 +275,15 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
+<<<<<<< HEAD
 `sessions.start`, `sessions.send`, `sessions.retry` and `sessions.status` need `contributes.sessionControl`, which the user approves as its own line. `sessions.lastReply` needs `sessionControl: { content: true }`. `setInstructions` needs `contributes.instructions` and adds to what agents read, in one folder or, with `null`, everywhere.
+=======
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` and `sessions.stop` need `contributes.sessionControl`, which the user approves as its own line. `sessions.lastReply` needs `sessionControl: { content: true }`. A message from `sessions.send` closes a form or page the agent waits on in that session, as a message typed in the chat does.
+
+To carry the agent's requests somewhere else, such as a chat app, add `answers: true`. The user approves it as one more line, and the service can then answer for them in any session: `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (or `'deny'` with a `message` the agent reads) for a `permission-asked` event, and `sessions.answerForm(sessionId, formId, values)` for a `question-asked` event whose `event.question.kind` is `form`. The event's content lists the form's fields with their `key` and choices. `null` instead of values dismisses the form. An allow covers that one request.
+
+`setInstructions` needs `contributes.instructions` and adds to what agents read, in one folder or, with `null`, everywhere.
+>>>>>>> bc50ba56a
 
 `emit` reaches your open frames through `host.onServiceEvent`, so a panel stops polling. Nothing replays, so a frame that opens later reads the current state first. `readSettings` gives the service the integration's settings, `secret` fields included, and `needsConfiguration` shows a message on the extension's card.
 
@@ -406,14 +418,22 @@ When the user turns session comments on, OpenChamber calls `comments.create` wit
 
 ## Usage providers
 
+<<<<<<< HEAD
 A service can report usage next to the built-in providers: declare `provides: ["quota"]` and list in `contributes.quota.providers` the model providers whose credentials it needs. OpenChamber names the provider `ext-<panel.id>`, draws its card with the extension's name and icon, and asks it the way it asks a built-in.
+=======
+A service can report usage next to the built-in providers: declare `provides: ["quota"]` and list in `contributes.quota.providers` the OpenCode providers whose credentials it needs. OpenChamber names the provider `ext-<panel.id>`, draws its card with the extension's name and icon, and asks it the way it asks a built-in.
+>>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
+<<<<<<< HEAD
 The approval dialog lists those providers, and a version that changes the list asks again. On every refresh OpenChamber posts one call, `usage.read`, to `POST /quota`, with `input.credentials` holding the credential Host stores for each listed provider it has one for (an API key, or a browser login's tokens) and nothing else of the store. A listed provider Host holds no credential for is shown as not configured and the service is not called; an empty list is allowed, for a provider whose key lives in the extension's own settings.
+=======
+The approval dialog lists those providers, and a version that changes the list asks again. On every refresh OpenChamber posts one call, `usage.read`, to `POST /quota`, with `input.credentials` holding the credential OpenCode stores for each listed provider it has one for (an API key, or a browser login's tokens) and nothing else of the store. A listed provider OpenCode holds no credential for is shown as not configured and the service is not called; an empty list is allowed, for a provider whose key lives in the extension's own settings.
+>>>>>>> bc50ba56a
 
 Read the body with `readQuotaProviderRequest` and answer `{ ok: true, data }` with the result a built-in computes: `ok`, `configured`, `error`, `planLabel`, and `usage.windows` keyed by window name, each with `usedPercent`, `windowSeconds`, `resetAt` (epoch milliseconds) and an optional `valueLabel` or `value`, plus `usage.models` for per-model windows. OpenChamber derives the remaining share, the reset countdown and the formatted strings, so the card matches a built-in's.
 

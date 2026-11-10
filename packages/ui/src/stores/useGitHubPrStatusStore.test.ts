@@ -9,8 +9,11 @@ import type {
 import { getBoundSourceControlReadContexts } from "@/lib/source-control/identity"
 
 let runtimeKey = "runtime-a"
+<<<<<<< HEAD
 // The real module, with only the runtime key and its per-instance guard faked:
 // the store and its dependencies import other exports from it.
+=======
+>>>>>>> bc50ba56a
 const runtimeSwitch = await import("@/lib/runtime-switch")
 mock.module("@/lib/runtime-switch", () => ({
   ...runtimeSwitch,
@@ -23,6 +26,7 @@ mock.module("@/lib/runtime-switch", () => ({
 
 const { trackedItemKey } = await import("@/lib/trackedItems/model")
 const {
+  getBoundStatusKeysForBranches,
   getBranchTrackedPull,
   getFreshestActiveSourceControlStatusForBranch,
   getFreshestBranchStatusForDirectory,
@@ -241,6 +245,7 @@ describe("GitHub PR status cache ownership", () => {
     expect(useGitHubPrStatusStore.getState().entries[key]?.status).toBeNull()
   })
 
+<<<<<<< HEAD
   test("a directory with no registration trusts only its sole binding", () => {
     const currentContext = readContext({ accountId: "github.com#1", bindingRevision: 1 })
     const changeRequestOf = (context: ReturnType<typeof readContext>, title: string) => ({
@@ -264,10 +269,22 @@ describe("GitHub PR status cache ownership", () => {
         project: null,
         branch: "feature",
         changeRequest: changeRequestOf(context, title),
+=======
+  test("background branch readers trust the registered contexts, else only a sole binding", () => {
+    const staleContext = readContext({ accountId: "github.com#1", bindingRevision: 1 })
+    const currentContext = readContext({ accountId: "github.com#2", bindingRevision: 2 })
+    const write = (context: ReturnType<typeof readContext>, state: ChangeRequest["state"], at: number) => {
+      const key = getSourceControlStatusKey(context, "feature")
+      useGitHubPrStatusStore.getState().ensureEntry(key)
+      useGitHubPrStatusStore.getState().updateStatus(key, () => ({
+        connected: true, identity: context, project: ACME_APP, branch: "feature",
+        changeRequest: changeRequest({ number: 7, title: "t", url: "u7", state }),
+>>>>>>> bc50ba56a
       }))
       useGitHubPrStatusStore.setState((store) => ({
         entries: { ...store.entries, [key]: { ...store.entries[key], lastRefreshAt: at } },
       }))
+<<<<<<< HEAD
       return key
     }
 
@@ -285,6 +302,34 @@ describe("GitHub PR status cache ownership", () => {
     useGitHubPrStatusStore.getState().commitActiveContexts("runtime-a", "/repo", "sidebar", request, contexts)
     expect(getFreshestBranchStatusForDirectory(useGitHubPrStatusStore.getState(), "/repo", "feature")?.changeRequest?.title).toBe("current")
     expect(first).toContain("/repo")
+=======
+    }
+    const state = () => useGitHubPrStatusStore.getState()
+    const feature = [{ directory: "/repo", branch: "feature" }]
+    write(currentContext, "merged", 1)
+
+    // Nothing registered (the project is collapsed) and one binding: it answers and is followed.
+    expect(getFreshestBranchStatusForDirectory(state(), "/repo", "feature")?.changeRequest?.state).toBe("merged")
+    expect(getBoundStatusKeysForBranches(state(), feature)).toEqual([getSourceControlStatusKey(currentContext, "feature")])
+    expect(getBoundStatusKeysForBranches(state(), [{ directory: "/repo", branch: "other" }])).toEqual([])
+
+    // Two bindings and no registration: freshness cannot pick the current one, so neither is trusted.
+    write(staleContext, "open", 2)
+    expect(getFreshestBranchStatusForDirectory(state(), "/repo", "feature")).toBeNull()
+    expect(getBoundStatusKeysForBranches(state(), feature)).toEqual([])
+
+    const store = useGitHubPrStatusStore.getState()
+    const request = store.beginActiveContextsLoad("runtime-a", "/repo", "row")
+    store.commitActiveContexts("runtime-a", "/repo", "row", request, [currentContext])
+    expect(getFreshestBranchStatusForDirectory(useGitHubPrStatusStore.getState(), "/repo", "feature")?.changeRequest?.state).toBe("merged")
+    expect(getBoundStatusKeysForBranches(state(), feature)).toEqual([getSourceControlStatusKey(currentContext, "feature")])
+    expect(getFreshestBranchStatusForDirectory(useGitHubPrStatusStore.getState(), "/repo", "other")).toBeNull()
+
+    // An empty registration means no binding is authorized now: no cached answer is trusted.
+    const empty = store.beginActiveContextsLoad("runtime-a", "/repo", "row")
+    store.commitActiveContexts("runtime-a", "/repo", "row", empty, [])
+    expect(getFreshestBranchStatusForDirectory(useGitHubPrStatusStore.getState(), "/repo", "feature")).toBeNull()
+>>>>>>> bc50ba56a
   })
 
   test("provider-neutral branch readers return GitLab status", () => {
@@ -1318,6 +1363,22 @@ describe("branch PR live state pushed by the server", () => {
     expect(status?.pr?.state).toBe("merged")
     expect(status?.checks).toBe(null)
     expect(status?.canMerge).toBe(false)
+  })
+
+  test("queue and auto-merge changes propagate even when checks are unchanged", () => {
+    const key = boundKey("feature")
+    seed(key, openStatus())
+    const mergeQueueEntry = { state: "AWAITING_CHECKS", position: 3 }
+    pushFor(key, liveSummary({ isInMergeQueue: true, mergeQueueEntry }))
+    expect(useGitHubPrStatusStore.getState().entries[key]?.status?.pr).toMatchObject({ isInMergeQueue: true, mergeQueueEntry })
+    const before = useGitHubPrStatusStore.getState().entries
+    pushFor(key, liveSummary({ isInMergeQueue: true, mergeQueueEntry }))
+    expect(useGitHubPrStatusStore.getState().entries).toBe(before)
+    const autoMergeRequest = { enabledAt: "2026-11-03T12:00:00Z", mergeMethod: "SQUASH" }
+    pushFor(key, liveSummary({ isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest }))
+    expect(useGitHubPrStatusStore.getState().entries[key]?.status?.pr).toMatchObject({ isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest })
+    pushFor(key, liveSummary({ isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest: null }))
+    expect(useGitHubPrStatusStore.getState().entries[key]?.status?.pr?.autoMergeRequest).toBeNull()
   })
 
   test("failing checks reach the entry, and an unchanged state leaves the store untouched", () => {

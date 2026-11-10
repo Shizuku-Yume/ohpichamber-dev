@@ -11,7 +11,10 @@ import type { PublicTracker } from '@openchamber/sdk';
 import type { InstalledGuest } from '@/lib/guests/types';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+<<<<<<< HEAD
 import { subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
+=======
+>>>>>>> bc50ba56a
 import { trackerPresentation } from '@/lib/trackers/presentation';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { openExternalUrl } from '@/lib/url';

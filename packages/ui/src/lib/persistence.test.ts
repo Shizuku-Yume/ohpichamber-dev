@@ -487,6 +487,19 @@ describe('updateDesktopSettings', () => {
     });
   });
 
+  test('mirrors a custom stt endpoint path into local storage', async () => {
+    getWindow();
+    localStorage.clear();
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://endpoint-path.example', runtimeKey: 'endpoint-path' });
+    registerSettingsApi(async () => ({}), async () => ({
+      settings: { sttEndpointPath: '/speech_to_text' },
+      source: 'web',
+    }));
+    await syncDesktopSettings();
+
+    expect(localStorage.getItem('sttEndpointPath')).toBe('/speech_to_text');
+  });
+
   test('keeps in-memory preferences that an authoritative runtime snapshot omits', async () => {
     getWindow();
     switchRuntimeEndpoint({ apiBaseUrl: 'https://preferences-a.example', runtimeKey: 'preferences-a' });
@@ -872,6 +885,7 @@ describe('updateDesktopSettings', () => {
         recentAgents: ['build'],
         favoriteAgents: ['plan'],
         recentEfforts: { 'openai/gpt-5': ['low'] },
+        lastUsedEfforts: { 'openai/gpt-5': 'low', 'openai/gpt-5-mini': null },
       });
 
       await delay(1500);
@@ -885,7 +899,11 @@ describe('updateDesktopSettings', () => {
         recentAgents: ['build'],
         favoriteAgents: ['plan'],
         recentEfforts: { 'openai/gpt-5': ['low'] },
+<<<<<<< HEAD
         lastUsedEfforts: {},
+=======
+        lastUsedEfforts: { 'openai/gpt-5': 'low', 'openai/gpt-5-mini': null },
+>>>>>>> bc50ba56a
         customProviderIcons: {},
       });
     } finally {

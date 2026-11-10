@@ -22,9 +22,15 @@
 import { captureRuntimeInstance, subscribeRuntimeEndpointWillChange } from './runtime-switch'
 
 type NetworkLane = {
+<<<<<<< HEAD
  active: number
  waiters: Array<(admitted: boolean) => void>
  activeSessionWaiters: Array<(admitted: boolean) => void>
+=======
+  active: number
+  waiters: Array<(admitted: boolean) => void>
+  activeSessionWaiters: Array<(admitted: boolean) => void>
+>>>>>>> bc50ba56a
 }
 const createLane = (): NetworkLane => ({ active: 0, waiters: [], activeSessionWaiters: [] })
 let background = createLane()
@@ -34,6 +40,7 @@ const LANE_LIMIT = 2
 
 // Retire before changed listeners can enqueue the replacement instance's reads.
 subscribeRuntimeEndpointWillChange(({ runtimeKey, previousRuntimeKey }) => {
+<<<<<<< HEAD
  if (runtimeKey === previousRuntimeKey) return
  const retired = [background, sessionLists]
  background = createLane()
@@ -80,6 +87,52 @@ async function run<T>(lane: NetworkLane, task: () => Promise<T>, priority: "norm
   lane.active -= 1
   pump()
  }
+=======
+  if (runtimeKey === previousRuntimeKey) return
+  const retired = [background, sessionLists]
+  background = createLane()
+  sessionLists = createLane()
+  for (const lane of retired) {
+    for (const waiter of [...lane.activeSessionWaiters, ...lane.waiters]) waiter(false)
+    lane.activeSessionWaiters.length = 0
+    lane.waiters.length = 0
+  }
+})
+
+const pump = () => {
+  while (background.active + sessionLists.active < TOTAL_LIMIT) {
+    // Background reads never occupy the reserved list slot. Either lane may
+    // use a second slot, without serializing independent background queries.
+    const lane = sessionLists.active < LANE_LIMIT && sessionLists.waiters.length > 0
+      ? sessionLists
+      : background.active < LANE_LIMIT && (background.activeSessionWaiters.length > 0 || background.waiters.length > 0)
+        ? background
+        : null
+    if (!lane) return
+    const next = lane.activeSessionWaiters.shift() ?? lane.waiters.shift()
+    if (!next) return
+    lane.active += 1
+    next(true)
+  }
+}
+
+async function run<T>(lane: NetworkLane, task: () => Promise<T>, priority: "normal" | "active-session"): Promise<T | undefined> {
+  const isCurrent = captureRuntimeInstance()
+  const admitted = await new Promise<boolean>((resolve) => {
+    if (priority === "active-session") lane.activeSessionWaiters.push(resolve)
+    else lane.waiters.push(resolve)
+    pump()
+  })
+  if (!admitted) return undefined
+  try {
+    if (!isCurrent()) return undefined
+    const result = await task()
+    return isCurrent() ? result : undefined
+  } finally {
+    lane.active -= 1
+    pump()
+  }
+>>>>>>> bc50ba56a
 }
 
 /** Undefined means retired work, never a successful empty response. */

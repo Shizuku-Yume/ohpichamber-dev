@@ -2,7 +2,6 @@
 export const mcpGridI18n = {
   en: {
     'settings.mcp.grid.actionsAria': 'Actions for {name}',
-    'settings.mcp.grid.description': 'Tool servers your agents can call. Open one to see its status and settings.',
     'settings.mcp.grid.searchPlaceholder': 'Search servers',
     'settings.mcp.grid.addHint': 'Local command or remote URL',
     'settings.mcp.grid.noMatches': 'No servers match “{query}”.',
@@ -12,12 +11,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Blocked by policy',
     'settings.mcp.grid.status.readOnly': 'Read-only',
     'settings.mcp.grid.scope.project': 'Project',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Back to MCP servers',
     'settings.mcp.page.unmanagedNotice': 'This server is configured in an unmanaged native MCP configuration file and is read-only.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Provided by OpenCode',
+    'settings.mcp.page.back': 'All servers',
+>>>>>>> bc50ba56a
   },
   nl: {
     'settings.mcp.grid.actionsAria': 'Acties voor {name}',
-    'settings.mcp.grid.description': 'Toolservers die uw agents kunnen aanroepen. Open er een om de status en instellingen te zien.',
     'settings.mcp.grid.searchPlaceholder': 'Servers zoeken',
     'settings.mcp.grid.addHint': 'Lokale opdracht of remote-URL',
     'settings.mcp.grid.noMatches': 'Geen servers komen overeen met “{query}”.',
@@ -27,12 +30,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Geblokkeerd door beleid',
     'settings.mcp.grid.status.readOnly': 'Alleen-lezen',
     'settings.mcp.grid.scope.project': 'Project',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Terug naar MCP-servers',
     'settings.mcp.page.unmanagedNotice': 'Deze server is geconfigureerd in een niet-beheerd native MCP-configuratiebestand en is alleen-lezen.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Geleverd door OpenCode',
+    'settings.mcp.page.back': 'Alle servers',
+>>>>>>> bc50ba56a
   },
   uk: {
     'settings.mcp.grid.actionsAria': 'Дії для {name}',
-    'settings.mcp.grid.description': 'Сервери інструментів, які можуть викликати ваші агенти. Відкрийте сервер, щоб побачити його стан і налаштування.',
     'settings.mcp.grid.searchPlaceholder': 'Пошук серверів',
     'settings.mcp.grid.addHint': 'Локальна команда або віддалений URL',
     'settings.mcp.grid.noMatches': 'Немає серверів за запитом «{query}».',
@@ -42,12 +49,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Заблоковано політикою',
     'settings.mcp.grid.status.readOnly': 'Тільки для читання',
     'settings.mcp.grid.scope.project': 'Проєкт',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Назад до MCP-серверів',
     'settings.mcp.page.unmanagedNotice': 'Цей сервер налаштовано в некерованому нативному файлі конфігурації MCP і доступний лише для читання.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Надається OpenCode',
+    'settings.mcp.page.back': 'Усі сервери',
+>>>>>>> bc50ba56a
   },
   de: {
     'settings.mcp.grid.actionsAria': 'Aktionen für {name}',
-    'settings.mcp.grid.description': 'Tool-Server, die deine Agenten aufrufen können. Öffne einen, um Status und Einstellungen zu sehen.',
     'settings.mcp.grid.searchPlaceholder': 'Server suchen',
     'settings.mcp.grid.addHint': 'Lokaler Befehl oder Remote-URL',
     'settings.mcp.grid.noMatches': 'Keine Server passen zu „{query}“.',
@@ -57,12 +68,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Durch Richtlinie blockiert',
     'settings.mcp.grid.status.readOnly': 'Schreibgeschützt',
     'settings.mcp.grid.scope.project': 'Projekt',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Zurück zu MCP-Servern',
     'settings.mcp.page.unmanagedNotice': 'Dieser Server ist in einer nicht verwalteten nativen MCP-Konfigurationsdatei konfiguriert und ist schreibgeschützt.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Von OpenCode bereitgestellt',
+    'settings.mcp.page.back': 'Alle Server',
+>>>>>>> bc50ba56a
   },
   es: {
     'settings.mcp.grid.actionsAria': 'Acciones de {name}',
-    'settings.mcp.grid.description': 'Servidores de herramientas que tus agentes pueden usar. Abre uno para ver su estado y ajustes.',
     'settings.mcp.grid.searchPlaceholder': 'Buscar servidores',
     'settings.mcp.grid.addHint': 'Comando local o URL remota',
     'settings.mcp.grid.noMatches': 'Ningún servidor coincide con «{query}».',
@@ -72,12 +87,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Bloqueado por política',
     'settings.mcp.grid.status.readOnly': 'Solo lectura',
     'settings.mcp.grid.scope.project': 'Proyecto',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Volver a servidores MCP',
     'settings.mcp.page.unmanagedNotice': 'Este servidor está configurado en un archivo nativo de configuración MCP no administrado y es de solo lectura.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Proporcionado por OpenCode',
+    'settings.mcp.page.back': 'Todos los servidores',
+>>>>>>> bc50ba56a
   },
   fr: {
     'settings.mcp.grid.actionsAria': 'Actions pour {name}',
-    'settings.mcp.grid.description': 'Les serveurs d’outils que vos agents peuvent appeler. Ouvrez-en un pour voir son état et ses réglages.',
     'settings.mcp.grid.searchPlaceholder': 'Rechercher des serveurs',
     'settings.mcp.grid.addHint': 'Commande locale ou URL distante',
     'settings.mcp.grid.noMatches': 'Aucun serveur ne correspond à « {query} ».',
@@ -87,12 +106,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Bloqué par une règle',
     'settings.mcp.grid.status.readOnly': 'Lecture seule',
     'settings.mcp.grid.scope.project': 'Projet',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Retour aux serveurs MCP',
     'settings.mcp.page.unmanagedNotice': 'Ce serveur est configuré dans un fichier de configuration MCP natif non géré et est en lecture seule.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Fourni par OpenCode',
+    'settings.mcp.page.back': 'Tous les serveurs',
+>>>>>>> bc50ba56a
   },
   ja: {
     'settings.mcp.grid.actionsAria': '{name} の操作',
-    'settings.mcp.grid.description': 'エージェントが呼び出せるツールサーバーです。開くと状態と設定を確認できます。',
     'settings.mcp.grid.searchPlaceholder': 'サーバーを検索',
     'settings.mcp.grid.addHint': 'ローカルコマンドまたはリモート URL',
     'settings.mcp.grid.noMatches': '「{query}」に一致するサーバーはありません。',
@@ -102,12 +125,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'ポリシーでブロック',
     'settings.mcp.grid.status.readOnly': '読み取り専用',
     'settings.mcp.grid.scope.project': 'プロジェクト',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'MCP サーバーに戻る',
     'settings.mcp.page.unmanagedNotice': 'このサーバーは非管理のネイティブ MCP 設定ファイルで構成されており、読み取り専用です。',
+=======
+    'settings.mcp.grid.runtimeProvided': 'OpenCode が提供',
+    'settings.mcp.page.back': 'すべてのサーバー',
+>>>>>>> bc50ba56a
   },
   ko: {
     'settings.mcp.grid.actionsAria': '{name} 작업',
-    'settings.mcp.grid.description': '에이전트가 호출할 수 있는 도구 서버입니다. 열어서 상태와 설정을 확인하세요.',
     'settings.mcp.grid.searchPlaceholder': '서버 검색',
     'settings.mcp.grid.addHint': '로컬 명령 또는 원격 URL',
     'settings.mcp.grid.noMatches': '“{query}”와 일치하는 서버가 없습니다.',
@@ -117,12 +144,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': '정책으로 차단됨',
     'settings.mcp.grid.status.readOnly': '읽기 전용',
     'settings.mcp.grid.scope.project': '프로젝트',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'MCP 서버로 돌아가기',
     'settings.mcp.page.unmanagedNotice': '이 서버는 비관리형 네이티브 MCP 구성 파일에 설정되어 있으며 읽기 전용입니다.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'OpenCode에서 제공',
+    'settings.mcp.page.back': '모든 서버',
+>>>>>>> bc50ba56a
   },
   pl: {
     'settings.mcp.grid.actionsAria': 'Działania dla {name}',
-    'settings.mcp.grid.description': 'Serwery narzędzi, z których mogą korzystać agenci. Otwórz serwer, aby zobaczyć jego stan i ustawienia.',
     'settings.mcp.grid.searchPlaceholder': 'Szukaj serwerów',
     'settings.mcp.grid.addHint': 'Polecenie lokalne lub zdalny URL',
     'settings.mcp.grid.noMatches': 'Brak serwerów pasujących do „{query}”.',
@@ -132,12 +163,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Zablokowane przez zasadę',
     'settings.mcp.grid.status.readOnly': 'Tylko do odczytu',
     'settings.mcp.grid.scope.project': 'Projekt',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Wróć do serwerów MCP',
     'settings.mcp.page.unmanagedNotice': 'Ten serwer jest skonfigurowany w niezarządzanym natywnym pliku konfiguracji MCP i jest tylko do odczytu.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Zapewniane przez OpenCode',
+    'settings.mcp.page.back': 'Wszystkie serwery',
+>>>>>>> bc50ba56a
   },
   'pt-BR': {
     'settings.mcp.grid.actionsAria': 'Ações para {name}',
-    'settings.mcp.grid.description': 'Servidores de ferramentas que seus agentes podem chamar. Abra um para ver o status e as configurações.',
     'settings.mcp.grid.searchPlaceholder': 'Buscar servidores',
     'settings.mcp.grid.addHint': 'Comando local ou URL remota',
     'settings.mcp.grid.noMatches': 'Nenhum servidor corresponde a “{query}”.',
@@ -147,12 +182,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'Bloqueado por política',
     'settings.mcp.grid.status.readOnly': 'Somente leitura',
     'settings.mcp.grid.scope.project': 'Projeto',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'Voltar aos servidores MCP',
     'settings.mcp.page.unmanagedNotice': 'Este servidor está configurado em um arquivo de configuração MCP nativo não gerenciado e é somente leitura.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'Fornecido pelo OpenCode',
+    'settings.mcp.page.back': 'Todos os servidores',
+>>>>>>> bc50ba56a
   },
   tr: {
     'settings.mcp.grid.actionsAria': '{name} için işlemler',
-    'settings.mcp.grid.description': 'Ajanlarınızın çağırabileceği araç sunucuları. Durumunu ve ayarlarını görmek için birini açın.',
     'settings.mcp.grid.searchPlaceholder': 'Sunucu ara',
     'settings.mcp.grid.addHint': 'Yerel komut veya uzak URL',
     'settings.mcp.grid.noMatches': '“{query}” ile eşleşen sunucu yok.',
@@ -162,12 +201,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'İlkeyle engellendi',
     'settings.mcp.grid.status.readOnly': 'Salt okunur',
     'settings.mcp.grid.scope.project': 'Proje',
+<<<<<<< HEAD
     'settings.mcp.page.back': 'MCP sunucularına dön',
     'settings.mcp.page.unmanagedNotice': 'Bu sunucu yönetilmeyen bir yerel MCP yapılandırma dosyasında yapılandırılmıştır ve salt okunurdur.',
+=======
+    'settings.mcp.grid.runtimeProvided': 'OpenCode tarafından sağlanır',
+    'settings.mcp.page.back': 'Tüm sunucular',
+>>>>>>> bc50ba56a
   },
   'zh-CN': {
     'settings.mcp.grid.actionsAria': '{name} 的操作',
-    'settings.mcp.grid.description': '智能体可以调用的工具服务器。打开一个即可查看状态和设置。',
     'settings.mcp.grid.searchPlaceholder': '搜索服务器',
     'settings.mcp.grid.addHint': '本地命令或远程 URL',
     'settings.mcp.grid.noMatches': '没有与“{query}”匹配的服务器。',
@@ -177,12 +220,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': '已被策略阻止',
     'settings.mcp.grid.status.readOnly': '只读',
     'settings.mcp.grid.scope.project': '项目',
+<<<<<<< HEAD
     'settings.mcp.page.back': '返回 MCP 服务器',
     'settings.mcp.page.unmanagedNotice': '该服务器配置在非托管的原生 MCP 配置文件中，处于只读状态。',
+=======
+    'settings.mcp.grid.runtimeProvided': '由 OpenCode 提供',
+    'settings.mcp.page.back': '所有服务器',
+>>>>>>> bc50ba56a
   },
   'zh-TW': {
     'settings.mcp.grid.actionsAria': '{name} 的操作',
-    'settings.mcp.grid.description': '代理可以呼叫的工具伺服器。開啟一個即可查看狀態和設定。',
     'settings.mcp.grid.searchPlaceholder': '搜尋伺服器',
     'settings.mcp.grid.addHint': '本機命令或遠端 URL',
     'settings.mcp.grid.noMatches': '沒有符合「{query}」的伺服器。',
@@ -192,12 +239,16 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': '已被原則封鎖',
     'settings.mcp.grid.status.readOnly': '唯讀',
     'settings.mcp.grid.scope.project': '專案',
+<<<<<<< HEAD
     'settings.mcp.page.back': '返回 MCP 伺服器',
     'settings.mcp.page.unmanagedNotice': '此伺服器設定在非受管的原生 MCP 設定檔中，處於唯讀狀態。',
+=======
+    'settings.mcp.grid.runtimeProvided': '由 OpenCode 提供',
+    'settings.mcp.page.back': '所有伺服器',
+>>>>>>> bc50ba56a
   },
   ar: {
     'settings.mcp.grid.actionsAria': 'إجراءات {name}',
-    'settings.mcp.grid.description': 'خوادم أدوات يمكن لوكلائك استدعاؤها. افتح أحدها لترى حالته وإعداداته.',
     'settings.mcp.grid.searchPlaceholder': 'البحث في الخوادم',
     'settings.mcp.grid.addHint': 'أمر محلي أو URL بعيد',
     'settings.mcp.grid.noMatches': 'لا توجد خوادم تطابق “{query}”.',
@@ -207,12 +258,12 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'محظور بموجب السياسة',
     'settings.mcp.grid.status.readOnly': 'للقراءة فقط',
     'settings.mcp.grid.scope.project': 'المشروع',
+    'settings.mcp.grid.runtimeProvided': 'يوفّره OpenCode',
     'settings.mcp.page.back': 'كل الخوادم',
     'settings.mcp.page.unmanagedNotice': 'تم تكوين هذا الخادم في ملف تكوين MCP أصلي غير مُدار وهو للقراءة فقط.',
   },
   he: {
     'settings.mcp.grid.actionsAria': 'פעולות עבור {name}',
-    'settings.mcp.grid.description': 'שרתי כלים שהסוכנים יכולים לקרוא להם. אפשר לפתוח שרת כדי לראות את הסטטוס וההגדרות שלו.',
     'settings.mcp.grid.searchPlaceholder': 'חיפוש שרתים',
     'settings.mcp.grid.addHint': 'פקודה מקומית או URL מרוחק',
     'settings.mcp.grid.noMatches': 'אין שרתים שתואמים ל-“{query}”.',
@@ -222,6 +273,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.blockedByPolicy': 'חסום על ידי מדיניות',
     'settings.mcp.grid.status.readOnly': 'לקריאה בלבד',
     'settings.mcp.grid.scope.project': 'פרויקט',
+    'settings.mcp.grid.runtimeProvided': 'מסופק על ידי OpenCode',
     'settings.mcp.page.back': 'כל השרתים',
     'settings.mcp.page.unmanagedNotice': 'שרת זה מוגדר בקובץ תצורת MCP מקורי שאינו מנוהל והוא לקריאה בלבד.',
   },

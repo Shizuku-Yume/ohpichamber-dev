@@ -7,6 +7,7 @@ import {
   closestCenter,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
@@ -25,6 +26,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import {
+  contextSurfaceGroup,
   getVisibleContextRailSurfaces,
   sortContextSurfaces,
   type ContextSurfaceDescriptor,
@@ -34,6 +36,7 @@ import {
   getEffectiveShortcutCombo,
   getEffectiveShortcutPrefix,
   isShortcutPrefixHeld,
+  UNASSIGNED_SHORTCUT,
 } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 import { useGitStatus } from '@/stores/useGitStore';
@@ -44,6 +47,16 @@ import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUISto
 import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
+<<<<<<< HEAD
+=======
+import { shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
+import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
+import { ContextRailTooltipDetails } from './ContextRailUsage';
+import { ZoneMoveMenuItems } from './ZoneMoveMenuItems';
+import { startZoneDragGesture, type ZoneDragGesture } from './zoneDrag';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+>>>>>>> bc50ba56a
 import { useWorkflowsSurfaceShown } from '@/lib/workflows/panel';
 import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
 import { shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
@@ -63,7 +76,7 @@ type RailItemProps = {
   showActivityDot: boolean;
   label: string;
   description: string;
-  /** Numeric badge (e.g. the Git changed-files count); takes precedence over the activity dot. */
+  /** A count behind the icon (e.g. the Git changed-files count): drawn as a dot, read in the tooltip and label. */
   badgeCount?: number | null;
   /** Accessible label that includes the badge count; falls back to `label`. */
   badgeAriaLabel?: string | null;
@@ -73,10 +86,6 @@ type RailItemProps = {
   showOrderNumber?: boolean;
   onSelect: (surface: ContextSurfaceDescriptor) => void;
 };
-
-// The badge corner is 16px tall; cap large counts so the pill stays compact
-// on the 36px rail button (matching the order-number badge's footprint).
-const formatRailBadgeCount = (count: number): string => (count > 99 ? '99+' : String(count));
 
 const ContextPanelRailItem: React.FC<RailItemProps> = ({
   surface,
@@ -93,19 +102,26 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
 }) => {
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const surfacePrefix = getEffectiveShortcutPrefix('switch_context_surface', shortcutOverrides);
+<<<<<<< HEAD
   const surfaceShortcut = surface.id === 'terminal'
     ? formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_terminal', shortcutOverrides), '')
     : (surfacePrefix && orderNumber != null && orderNumber <= 10
       ? formatShortcutForDisplay(`${surfacePrefix}+${orderNumber === 10 ? '0' : orderNumber}`)
       : undefined);
+=======
+  const surfaceShortcut = surfacePrefix && surfacePrefix !== UNASSIGNED_SHORTCUT && orderNumber != null && orderNumber <= 10
+    ? formatShortcutForDisplay(`${surfacePrefix}+${orderNumber === 10 ? '0' : orderNumber}`)
+    : undefined;
+>>>>>>> bc50ba56a
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: surface.id,
   });
 
-  const displayBadgeCount = badgeCount != null && badgeCount > 0 ? formatRailBadgeCount(badgeCount) : null;
+  const hasBadge = badgeCount != null && badgeCount > 0;
 
   return (
     <ContextMenu>
+<<<<<<< HEAD
       <ContextMenuTrigger
         render={(
           <div
@@ -185,6 +201,74 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
         {/* Placement is per surface: the same menu the panel's own tab strip offers. */}
         <ZoneMoveMenuItems mode={surface.mode} />
       </ContextMenuContent>
+=======
+    <ContextMenuTrigger render={<div />}>
+      <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            onClick={() => onSelect(surface)}
+            aria-label={badgeAriaLabel ?? label}
+            aria-pressed={isActive}
+            data-context-surface={surface.id}
+            className={cn(
+              'flex h-7 w-7 touch-none select-none items-center justify-center rounded-md transition-colors',
+              isActive
+                ? 'text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {surface.id === 'diff' ? (
+              <DiffViewIcon className="h-[17px] w-[17px]" />
+            ) : (
+              <GuestIcon
+                icon={surface.icon}
+                iconSrc={surface.iconSrc}
+                className="h-[17px] w-[17px]"
+              />
+            )}
+            {showOrderNumber && orderNumber != null ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-e-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-muted px-1 text-[0.625rem] font-medium leading-none text-muted-foreground"
+              >
+                {orderNumber === 10 ? '0' : orderNumber}
+              </span>
+            ) : hasBadge ? (
+              // A dot says there is something; the count is in the tooltip
+              // and, for Git, in words on the work-status panel.
+              <span
+                aria-hidden="true"
+                className="absolute inset-e-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
+              />
+            ) : showActivityDot ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-e-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
+              />
+            ) : null}
+          </button>
+        </TooltipTrigger>
+        {/* Descriptions run long, and extensions bring their own: cap the
+            width so they wrap instead of stretching across the chat. */}
+        <TooltipContent side="left" sideOffset={8} className="max-w-72 break-words">
+          <div className="flex flex-col gap-0.5">
+            <TooltipLabelWithShortcut label={label} shortcut={surface.id === 'terminal' ? formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_terminal', shortcutOverrides), '') : surfaceShortcut} />
+            <span className="typography-micro text-muted-foreground">{description}</span>
+            {badgeDescription ? (
+              <span className="typography-micro text-muted-foreground">{badgeDescription}</span>
+            ) : null}
+            {surface.id === 'context' ? <ContextRailTooltipDetails /> : null}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </ContextMenuTrigger>
+    <ContextMenuContent>
+      <ZoneMoveMenuItems mode={surface.mode} />
+    </ContextMenuContent>
+>>>>>>> bc50ba56a
     </ContextMenu>
   );
 };
@@ -334,10 +418,25 @@ export const ContextPanelRail: React.FC = () => {
       return;
     }
 
+<<<<<<< HEAD
     // dnd-kit hands back its own id type; the registry ids are the strings it was given.
     const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces).map((surface) => surface.id);
     const fromIndex = orderedIds.findIndex((id) => id === String(active.id));
     const toIndex = orderedIds.findIndex((id) => id === String(over.id));
+=======
+    const ordered = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces);
+    // An icon moves only among its own group; the groups' order is the dialog's.
+    const groupOf = (id: string | number) => {
+      const surface = ordered.find((entry) => entry.id === id);
+      return surface ? contextSurfaceGroup(surface) : null;
+    };
+    if (groupOf(active.id) !== groupOf(over.id)) {
+      return;
+    }
+    const orderedIds = ordered.map((surface) => surface.id);
+    const fromIndex = orderedIds.indexOf(active.id as (typeof orderedIds)[number]);
+    const toIndex = orderedIds.indexOf(over.id as (typeof orderedIds)[number]);
+>>>>>>> bc50ba56a
     if (fromIndex === -1 || toIndex === -1) {
       return;
     }
@@ -345,19 +444,56 @@ export const ContextPanelRail: React.FC = () => {
     setContextRailOrder(arrayMove(orderedIds, fromIndex, toIndex));
   }, [guestSurfaces, setContextRailOrder]);
 
+  // Runs of the visible surfaces that share a group, in rail order.
+  const groups = React.useMemo(() => {
+    const runs: ContextSurfaceDescriptor[][] = [];
+    for (const surface of surfaces) {
+      const last = runs.at(-1);
+      if (last && contextSurfaceGroup(last[0]) === contextSurfaceGroup(surface)) last.push(surface);
+      else runs.push([surface]);
+    }
+    return runs;
+  }, [surfaces]);
+  // A dragged icon only finds targets in its own group, so nothing outside it shifts.
+  const collisionDetection = React.useCallback<CollisionDetection>((args) => {
+    const activeSurface = surfaces.find((surface) => surface.id === args.active.id);
+    if (!activeSurface) return closestCenter(args);
+    const activeGroup = contextSurfaceGroup(activeSurface);
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((container) => {
+        const surface = surfaces.find((entry) => entry.id === container.id);
+        return surface !== undefined && contextSurfaceGroup(surface) === activeGroup;
+      }),
+    });
+  }, [surfaces]);
+
   if (!directoryKey) {
     return null;
   }
+
+  let orderNumber = 0;
 
   return (
     <nav
       aria-label={t('contextRail.aria.rail')}
       className="flex h-full w-11 flex-shrink-0 flex-col items-center gap-1 bg-background py-2"
     >
+<<<<<<< HEAD
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={surfaces.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
           {surfaces.map((surface, index) => {
             const label = surface.label ?? t(changeRequestCopy(surface.labelKey, repositoryProvider));
+=======
+      <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd}>
+        {groups.map((group, groupIndex) => (
+          <React.Fragment key={contextSurfaceGroup(group[0])}>
+          {groupIndex > 0 ? <div aria-hidden="true" className="h-px w-4 shrink-0 bg-edge-strong" /> : null}
+          <SortableContext items={group.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
+          {group.map((surface) => {
+            orderNumber += 1;
+            const label = surface.label ?? t(changeRequestCopy(surface.labelKey, changeRequestTerm));
+>>>>>>> bc50ba56a
             // Git shows a numeric badge instead of the old activity dot.
             // Other surfaces never inherit git's changed-files signal.
             // The work-status panel reports the same count in words a few
@@ -395,7 +531,7 @@ export const ContextPanelRail: React.FC = () => {
                     { count: badgeCount },
                   )
                   : null}
-                orderNumber={index + 1}
+                orderNumber={orderNumber}
                 showOrderNumber={revealNumbers}
                 onSelect={(selected) => {
                   if (isPluginContextPanelMode(selected.mode)) clearGuestBadge(pluginIdFromMode(selected.mode));
@@ -404,7 +540,9 @@ export const ContextPanelRail: React.FC = () => {
               />
             );
           })}
-        </SortableContext>
+          </SortableContext>
+          </React.Fragment>
+        ))}
       </DndContext>
       {/* Outside the sortable list on purpose: this button takes no digit,
           cannot be dragged, and configures the rail rather than living on it. */}
@@ -414,9 +552,13 @@ export const ContextPanelRail: React.FC = () => {
             type="button"
             aria-label={t('contextRail.configure.open')}
             onClick={() => setIsSurfacesDialogOpen(true)}
+<<<<<<< HEAD
             className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:text-foreground"
+=======
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+>>>>>>> bc50ba56a
           >
-            <Icon name="equalizer-2" className="h-[18px] w-[18px]" />
+            <Icon name="equalizer-2" className="h-[17px] w-[17px]" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={8}>

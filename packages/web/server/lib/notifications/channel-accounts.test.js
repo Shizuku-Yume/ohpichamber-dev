@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { describe, expect, test } from 'vitest';
+=======
+import { describe, expect, test } from 'bun:test';
+>>>>>>> bc50ba56a
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

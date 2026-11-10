@@ -18,6 +18,7 @@ import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 
 import { MobileDeleteWorktreeDialog } from './MobileDeleteWorktreeDialog';
 import { MobileFullscreenSurface } from './MobileFullscreenSurface';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type MobileEditableProject = {
   id: string;
@@ -68,7 +69,11 @@ const WorktreeRow: React.FC<{
   return (
     <div
       className={cn(
+<<<<<<< HEAD
         'flex items-center gap-1 rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-1.5 py-1.5 transition-colors',
+=======
+        'flex items-center gap-2 rounded-2xl border border-edge bg-[var(--surface-elevated)] py-1.5 ps-3 pe-1.5 transition-colors',
+>>>>>>> bc50ba56a
         removing && 'opacity-60',
       )}
       aria-busy={removing || undefined}
@@ -78,7 +83,7 @@ const WorktreeRow: React.FC<{
           <Icon name="loader-4" className="size-4 animate-spin" />
         </span>
       ) : (
-        <Icon name="node-tree" className="size-4 shrink-0 text-muted-foreground" />
+        <Icon name="git-branch" className="size-4 shrink-0 text-muted-foreground" />
       )}
       <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">{label}</span>
       {removing ? null : (
@@ -201,12 +206,12 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
         }
       >
         {project ? (
-          <div className="h-full space-y-6 overflow-y-auto px-4 pb-8 pt-2">
+          <ScrollableOverlay outerClassName="h-full" className="space-y-6 px-4 pb-8 pt-2" disableHorizontal>
             {/* Icon preview */}
             <div className="flex justify-center pt-2">
               <span
                 className="flex size-16 items-center justify-center overflow-hidden rounded-2xl bg-[var(--surface-muted)] text-muted-foreground"
-                style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+                style={hasImageIcon && project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
               >
                 {hasImageIcon ? (
                   <ProjectIconImage
@@ -254,7 +259,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                   aria-label={t('projectEditDialog.option.none')}
                   className={cn(
                     'flex size-9 items-center justify-center rounded-xl border-2 transition-all',
-                    color === null ? 'border-foreground' : 'border-border/70 hover:border-border/70',
+                    color === null ? 'border-foreground' : 'border-edge hover:border-edge',
                   )}
                   style={{ touchAction: 'manipulation' }}
                 >
@@ -269,7 +274,11 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                     title={c.label}
                     className={cn(
                       'size-9 rounded-xl border-2 transition-all',
+<<<<<<< HEAD
                       color === c.key ? 'border-foreground' : 'border-transparent hover:border-border/70',
+=======
+                      color === preset ? 'border-foreground' : 'border-transparent hover:border-edge',
+>>>>>>> bc50ba56a
                     )}
                     style={{ backgroundColor: c.cssVar, touchAction: 'manipulation' }}
                   />
@@ -289,7 +298,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                   aria-label={t('projectEditDialog.option.none')}
                   className={cn(
                     'flex size-9 items-center justify-center rounded-xl border-2 transition-all',
-                    icon === null ? 'border-foreground bg-[var(--surface-elevated)]' : 'border-border/70 hover:border-border/70',
+                    icon === null ? 'border-foreground bg-[var(--surface-elevated)]' : 'border-edge hover:border-edge',
                   )}
                   style={{ touchAction: 'manipulation' }}
                 >
@@ -301,10 +310,9 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                     type="button"
                     onClick={() => setIcon(i.key)}
                     aria-label={i.label}
-                    title={i.label}
                     className={cn(
                       'flex size-9 items-center justify-center rounded-xl border-2 transition-all',
-                      icon === i.key ? 'border-foreground bg-[var(--surface-elevated)]' : 'border-border/70 hover:border-border/70',
+                      icon === i.key ? 'border-foreground bg-[var(--surface-elevated)]' : 'border-edge hover:border-edge',
                     )}
                     style={{ touchAction: 'manipulation' }}
                   >
@@ -350,9 +358,15 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
               </div>
             ) : null}
 
+<<<<<<< HEAD
             {/* Isolated spaces: while the feature's switch is on. */}
             {project.isGitRepo && isolatedSpacesEnabled ? <MobileProjectSpaces projectPath={project.path} /> : null}
           </div>
+=======
+            {/* Isolated spaces: while the feature's switch is on; the phone is never VS Code. */}
+            {isGitRepo && isolatedSpacesEnabled ? <MobileProjectSpaces projectPath={project.path} /> : null}
+          </ScrollableOverlay>
+>>>>>>> bc50ba56a
         ) : null}
       </MobileFullscreenSurface>
 

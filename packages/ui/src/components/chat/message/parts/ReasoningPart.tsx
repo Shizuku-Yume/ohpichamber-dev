@@ -6,7 +6,11 @@ import { isInvisibleText } from '@/lib/invisibleText';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
+<<<<<<< HEAD
 import { BusyDots } from './BusyDots';
+=======
+import { BusyDots } from '@/components/ui/busy-dots';
+>>>>>>> bc50ba56a
 import { BlockBody } from './BlockLine';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';

@@ -24,7 +24,11 @@ type InstanceService = {
  * distinguishable in the UI without reading terminal output.
  *
  * Nothing renders, `label` included, when the endpoint is unavailable or
+<<<<<<< HEAD
  * reports no port/tunnel so a failed fetch never
+=======
+ * reports no port/tunnel (e.g. VS Code runtime), so a failed fetch never
+>>>>>>> bc50ba56a
  * renders stale or wrong URLs and no label is left without a value.
  */
 export const InstanceServiceUrls: React.FC<{ label?: string }> = ({ label }) => {

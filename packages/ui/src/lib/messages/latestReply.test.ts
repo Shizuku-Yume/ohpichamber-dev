@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message, Turn } from '@openchamber/agent-contract';
 
+<<<<<<< HEAD
 import { findLatestCompletedReply, turnMessageIds } from './latestReply';
+=======
+import { findCompletedReplyIds, findLatestCompletedReply, type LatestReplyRecord } from './latestReply';
+>>>>>>> bc50ba56a
 
 const userMessage = (messageId: string, turnId: string): Message => ({
   messageId,
@@ -147,4 +151,30 @@ describe('turnMessageIds', () => {
 
     expect(turnMessageIds(value)).toEqual(['user_2', 'assistant_1', 'assistant_2']);
   });
+});
+
+describe('findCompletedReplyIds', () => {
+    test('returns every finished answer in history, across turns', () => {
+        const ids = findCompletedReplyIds([
+            userMessage('user_1'),
+            assistantMessage('assistant_1', 'First answer', { finish: 'stop', completed: 10 }),
+            userMessage('user_2'),
+            assistantMessage('assistant_2', 'Progress note', { finish: 'tool-calls', completed: 20 }),
+            assistantMessage('assistant_3', 'Second answer', { finish: 'stop', completed: 30 }),
+        ]);
+
+        expect(ids).toEqual(['assistant_1', 'assistant_3']);
+    });
+
+    test('leaves out unfinished, aborted, and empty messages', () => {
+        const ids = findCompletedReplyIds([
+            userMessage('user_1'),
+            assistantMessage('assistant_1', 'Still streaming', { finish: 'stop' }),
+            assistantMessage('assistant_2', 'Partial text', { finish: 'error', completed: 10 }),
+            assistantMessage('assistant_3', '', { finish: 'stop', completed: 20 }),
+            assistantMessage('assistant_4', 'The answer', { finish: 'stop', completed: 30 }),
+        ]);
+
+        expect(ids).toEqual(['assistant_4']);
+    });
 });

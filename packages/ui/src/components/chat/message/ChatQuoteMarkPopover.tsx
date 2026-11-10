@@ -29,7 +29,11 @@ export interface ChatQuoteMarkPopoverProps {
     comment: string;
     editing: boolean;
     onEditingChange: (editing: boolean) => void;
+<<<<<<< HEAD
     onSave: (text: string) => boolean | void;
+=======
+    onSave: (text: string) => boolean;
+>>>>>>> bc50ba56a
     onRemove: () => void;
     /** Where to render: the open modal dialog for a quote in a full-screen page; the body otherwise. */
     portalTarget?: HTMLElement | null;
@@ -73,7 +77,11 @@ export function ChatQuoteMarkPopover({
     }, [editing]);
 
     const save = () => {
+<<<<<<< HEAD
         if (onSave(draft.trim()) === false) {
+=======
+        if (!onSave(draft.trim())) {
+>>>>>>> bc50ba56a
             toast.error(t('inlineComment.toast.noRoom'));
             return;
         }

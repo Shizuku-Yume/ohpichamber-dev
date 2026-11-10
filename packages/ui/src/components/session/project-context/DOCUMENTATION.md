@@ -8,12 +8,30 @@ drawer.
 
 | File | Owns |
 |---|---|
+<<<<<<< HEAD
 | `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, section sidebar, search query, the todo write |
 | `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
 | `PlansSection.tsx` | plan list, import, pin, delete, open |
 | `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, edit, forget |
 | `KnowledgeCard.tsx` | the shared card shell and expand interaction every entry list uses |
+=======
+| `ProjectNotesTodoPanel.tsx` | container: store subscription, visible-owner observation, failure toast, header tabs and search toggle, open entry, the todo write |
+| `KnowledgeSearchBar.tsx` | the floating search bar |
+| `NotesSection.tsx` | note list, per-note title/preview, the open note, pin, delete |
+| `NoteEditor.tsx` | the note editor: Markdown that reads formatted while you type |
+| `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder |
+| `PlansSection.tsx` | plan list, create, import, pin, share, delete, open |
+| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, edit, forget, the Tidy up button |
+| `memoryTidy.ts` | starting the tidy-up session: the store as prompt text, the default model, the send |
+| `KnowledgeCard.tsx` | the list card for notes and memory: fixed height, opens on click |
+| `KnowledgeSplit.tsx` | the wide layout: list column and open entry side by side |
+| `KnowledgeEntryView.tsx` | the shell an opened note or memory renders in, in place of the list |
+| `KnowledgeComposer.tsx` | the add field every section except memory uses |
+| `KnowledgeActions.tsx` | the row actions: pin toggle, the ⋯ menu, the row's right-click menu, hover reveal |
+| `pendingKnowledgeDeletes.ts` | deletes that wait out an undo window |
+| `knowledgeFormat.ts` | note title from the first line, entry dates |
+>>>>>>> bc50ba56a
 | `useProjectTodoSend.ts` | sending a todo to a current/new/worktree session |
 
 ## Layout
@@ -26,9 +44,32 @@ width from the rest, while a vertical list grows downwards where there is room.
 The surface's default width matches the files surface for the same reason; at a
 third of the window the content column is too narrow to read a note in.
 
+<<<<<<< HEAD
 Search shares the title row rather than owning one of its own: it filters what
 is already on screen, and a full-width field read as the panel's primary control.
 It stays above both columns. Sections divide, and search is the one thing
+=======
+When the labelled tabs do not fit, the active tab keeps its label and the
+others show an icon and their count; the mobile drawer always does this. When
+even that does not fit, the active tab drops its label too, so every tab stays
+in view. The row compares its width with invisible copies of itself in the
+first two forms. A
+fixed width threshold it replaced went stale as tabs, counts and translations
+grew, and the row scrolled sideways between the threshold and the real width.
+
+Search is a toggle. The button opens a bar floating over the top of the list,
+the way the chat's search floats over the conversation; opening it moves
+nothing underneath. An earlier version pushed the list down to make room, and
+the whole panel jumped each time search opened. Escape or the close button closes
+it and clears the query, so a list never stays filtered by text nobody can see.
+The bar hides while an entry is open and comes back with the list.
+
+The project has no title row. The search names it ("Search openchamber",
+"Search Chats") in the button's tooltip and the bar's placeholder, which is
+where the panel says whose knowledge it shows.
+
+One search covers every section. Sections divide, and search is the one thing
+>>>>>>> bc50ba56a
 that division would hurt — you do not always remember whether something was
 written as a note or lives in a plan — so each sidebar entry carries its own
 match count.
@@ -41,9 +82,107 @@ clicking the text, the other a bordered card opened by a chevron — which is th
 kind of split that makes a panel feel unfinished regardless of how either half
 behaves.
 
+<<<<<<< HEAD
 A collapsed card opens on a click anywhere on it. An expanded card closes only
 through its collapse action, because its body is editable and a stray click in
 the text must not throw the editor away.
+=======
+Opened notes and memories keep a readable line length (`max-w-3xl`) at any
+width. Todos open nothing, so a wide panel shows them as one centred column of
+the same width. Touch layouts always stack.
+
+The single column stretched to an expanded panel ran note lines 1500px long and
+still swapped the whole list away to open one entry.
+
+## Adding entries
+
+Notes, todos and plans add through the same `KnowledgeComposer`: one line that
+grows with its text, Enter to add, the add button at its end. Notes follow the
+chat composer: Shift+Enter starts a new line on desktop, and on a phone, whose
+keyboard has no Shift+Enter, Return starts a new line and the add button adds.
+Todos and plan titles are one line, and pasted line breaks become spaces. The length counter appears
+only near the limit. An empty, always-open 3000-character box used to take a
+third of the panel above notes that are read far more often than written.
+
+The field clears as soon as an entry is sent and stays enabled while it saves,
+so the next entry can be typed right away; a failed add puts the text back if
+nothing new was typed. Disabling the field during the save dropped its focus,
+and an entry typed straight after the first one went nowhere.
+
+With no notes yet, the notes tab shows only the field: its placeholder already
+says what goes there, and a second line repeating it was noise.
+
+A plan is created from its title and opens straight away in the editor. Import
+from a file is a button inside the same field.
+
+## Row actions
+
+Every row has the same actions in the same place: at most one direct control
+(pin for notes and plans, send for todos), then a menu with the rest (share,
+delete). With a mouse the menu is the row's right click (Shift+F10 from the
+keyboard, `KnowledgeRowContextMenu`), and the direct control appears on hover
+or keyboard focus; touch screens show it always, with a ⋯ button for the menu.
+An opened entry keeps its ⋯ in the toolbar. A pinned entry keeps its filled
+pin visible.
+
+The pin attaches a note or plan to the current session's context, and a pinned
+note says so in its footer. The icon alone read as "pin to the top of the
+list".
+
+## Delete with undo
+
+Deleting a note, plan or memory hides it at once and shows a toast with Undo.
+The delete is sent only when the undo window ends (`pendingKnowledgeDeletes`).
+The window is a timer, not the toast: Sonner pauses a hovered toast and never
+closes one without a mounted Toaster. When the delete goes out the toast is
+dismissed, so Undo never outlives it. A project memory delete carries the
+project it was asked in, because the panel may have moved to another project
+before it runs.
+Waiting beats re-creating on undo: a re-created note or plan gets a new id and
+loses its pins and its origin. The pending set is module state, so the delete
+still goes out if the panel unmounts; if the app closes inside the window the
+delete is never sent and the entry stays. A failed delete brings the entry back
+with an error toast.
+
+## Lists never move; entries open in place
+
+Every section works the same way: the list shows fixed-height cards, and in a
+narrow panel a click opens the entry in place of the list, with the back control at the start
+of the entry's own toolbar, so the tabs above never shift. Plans open
+`PlanView`, which takes the control as `leading` in its title row; notes and
+memories open in `KnowledgeEntryView`. The panel owns which entry is open
+(`openEntry`); leaving the section or the project closes it.
+Escape goes back too.
+
+Notes and memories used to expand inside the list instead. Every open and close
+pushed every card below it down and back up, and an expanded 3000-character note
+turned the list into a wall of text. Nothing in a list changes height now.
+
+A note card has a header line with the title and the row actions, a rendered
+Markdown preview of the rest that fades out where it is cut, and a footer with
+the source ("From chat" links to the message the note came from), the date and
+the pin state. A note's title is its first non-empty line with Markdown markers
+dropped. A link in a preview opens the link.
+
+An open note is `NoteEditor`, a CodeMirror editor that is always editable and
+always reads as formatted text: headings, emphasis, code and links keep their
+look while you type, and Markdown markers (`#`, `**`, backticks, link targets)
+are hidden except on the lines the cursor is on. List markers show as bullets.
+Without focus every line is formatted. An earlier version opened the note
+rendered and swapped it for a plain textarea on click, so the same note looked
+like two different things depending on whether you were touching it. Escape
+leaves the note; the toolbar carries the source, date, pin and menu. The stored
+text is plain Markdown either way. The editor loads lazily, since it brings
+CodeMirror and most visits never open a note.
+
+An open memory has its title and text as plain fields that save on blur and
+when the entry is left. The toolbar shows the new/changed badge, the scope and
+the type. `MemorySection` stays mounted while one is open, so the "last looked"
+mark is not advanced by opening a single entry.
+
+An entry deleted elsewhere while open (an agent, another window) closes, and a
+delete from the open entry's menu closes it before the undo toast appears.
+>>>>>>> bc50ba56a
 
 ## Plans open in place
 
@@ -227,6 +366,15 @@ matched the old project would silently hide everything in the new one.
   the user dragged.
 - **Plan creation is not optimistic.** The id and file name come from the
   server, and a row that cannot be opened is worse than a brief wait.
+
+## Why list rows share one tooltip
+
+The lists are not virtualized and every row keeps its buttons mounted, so a
+tooltip per button would mount several tooltip roots per row. A control in a
+list carries its text in `data-row-tooltip`, and `DelegatedTooltip`
+(`ui/row-tooltip.tsx`) listens on the panel and anchors one tooltip to it. That also covers the same
+controls in an open entry's toolbar. It answers a mouse or the keyboard; a touch
+gets no tooltip on these controls.
 
 ## Pinned context
 

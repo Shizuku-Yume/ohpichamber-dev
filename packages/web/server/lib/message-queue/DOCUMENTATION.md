@@ -12,7 +12,7 @@ renders a projection.
 
 - `runtime.js` — `createMessageQueueRuntime(...)` (state, persistence,
   dispatch loop, event handling) and `registerMessageQueueRoutes(app, runtime)`.
-- `runtime.test.js` — delivery, idleness gates, retries, holds, persistence,
+- `runtime.test.js` — delivery, idleness gates, retries, held delivery, persistence,
   concurrency with in-flight sends, slash commands, and project knowledge.
 
 Wiring: created in `server/index.js` after the global event hub and the
@@ -79,13 +79,19 @@ send never re-resolves mutable UI state:
   contextPreview?, // bounded display-only summary captured by the UI
   text,           // text to deliver (agent mention stripped, file mentions resolved); defaults to content
   agentMention?,  // delivered as an `agent` part
-  attachments: [{ id, filename, mimeType, size, source, serverPath?, dataUrl }],
+  attachments: [{ id, filename, mimeType, size, source, serverPath?, agentPath?, dataUrl }],
   context: [      // what the composer had attached, in send order
     { kind: 'context', text, metadata, instructions? },  // a draft chip or linked issue/PR; metadata is the UI's structured payload
     { kind: 'instruction', text },                       // derived from the text (skill instruction)
     { kind: 'synthetic', text },                         // handed to the composer by another surface
   ],
+<<<<<<< HEAD
   sendConfig: { providerID, modelID, agent?, variant?, reasoningEffort? } // required; captured at queue time
+=======
+  sendConfig: { providerID, modelID, agent?, variant? },  // required
+  goal?: { objective?, tokenBudget },  // queued with "run as goal" armed
+  syntheticIds?   // minted by the first delivery attempt, one per record admitted ahead of the message
+>>>>>>> bc50ba56a
 }
 ```
 
@@ -96,11 +102,19 @@ before it and its `metadata` riding the part verbatim so the timeline renders
 the context block back. The payload inside `metadata` is the UI's contract
 (`lib/messages/contextParts.ts`), parsed by the UI on the way back.
 
+An attachment's `agentPath` — the file's on-disk location the desktop client
+resolved at intake — travels to OpenCode as the prompt file's `name`, the
+field the model reads as the file identity, falling back to `filename` when
+absent. `filename` itself still rides the attachment unchanged for the UI's
+own display.
+
 `parseQueuedItemInput` rejects anything the server could not deliver later
 (no text, attachments, or context; missing model; malformed attachment or
 context entry). Public snapshots and broadcasts strip the payloads —
 attachment `dataUrl` (megabytes of base64) and `context` (a PR diff, say) —
 so they do not ride every update; the only way to get them back is a `take`.
+`syntheticIds` comes only from the queue file: `parseQueuedItemInput` drops it
+from client input, and snapshots leave it out.
 
 Snapshots retain `contextPreview`, capped at 100 characters plus an ellipsis.
 It carries the attached comment or context label when `content` is empty and
@@ -121,7 +135,7 @@ disabled until a later load succeeds. `revision` is a global monotonic counter
 bumped on every mutation; clients use it to reject stale snapshots.
 
 In-memory only, deliberately: the in-flight item (`sendingId`), retry
-backoff, abort timestamps, and holds. A restart has no in-flight sends; a
+backoff, and abort timestamps. A restart has no in-flight sends; a
 persisted "sending" flag would strand a message forever.
 
 ## Delivery loop
@@ -148,6 +162,7 @@ persisted "sending" flag would strand a message forever.
    will never complete, so a restored queue would wait on it forever. A reply
    with no `created` time still blocks. A failed fetch is unknown, never idle:
    the tick re-arms with backoff.
+<<<<<<< HEAD
 5. The head is marked in flight (broadcast), then sent:
    - text starting with `/` that names a command in OpenCode's `/command`
      list (skills included) and carries no captured context goes to
@@ -165,17 +180,73 @@ persisted "sending" flag would strand a message forever.
      as delivered only after the prompt is accepted), then the agent mention.
    Success removes the item, persists, broadcasts, and marks the user
    message sent for notifications. Failure keeps the item, backs off
+=======
+   The turn must also be over for the session's subagents: a parent idles
+   while a background subagent works and runs again when OpenCode hands the
+   result back. While `../opencode/session-activity.js` finds a running descendant
+   the head waits (the rerun's idle event re-arms it, a 5 s recheck covers a
+   missed one); a failed check is unknown and backs off like the rest.
+   The descendant check follows live active sessions through at most 8 parent
+   links, including idle intermediate subagents; a deeper chain counts as
+   unrelated, as in the UI. Unreadable lineage, cycles and the shared fetch
+   deadline keep the queue held with the existing retry policy. It does not scan historical child pages.
+5. The head is marked in flight (broadcast), then sent. The captured model and
+   agent are switched onto the session first (`POST /session/:id/model`,
+   `/agent`), because v2 holds both on the session rather than in the body; a
+   captured `openchamber/auto` is resolved into a real pair by the routing
+   runtime beforehand. The session's project knowledge is written into its
+   instruction entries (`sessionKnowledgeRuntime.sync`, which never fails the
+   send). Then the captured context goes ahead as synthetic messages
+   (`POST /session/:id/synthetic` with `resume: false`, an attached item's
+   metadata riding along). An item with a `goal` starts it the way a
+   scheduled goal does: `createSessionGoal` (`../session-goal/create.js`)
+   saves the goal through the injected `persistSessionGoal` before anything is
+   admitted, so a failed save leaves nothing for the retry to duplicate, and
+   the goal briefing goes as the last synthetic message. Before the goal save
+   and the first synthetic message, the item's `syntheticIds` are minted and
+   saved, and a revert staged on the session (`revert` on its record) is
+   committed (`POST /session/:id/revert/commit`): OpenCode's commit deletes
+   everything admitted past the revert's boundary, so committing at the prompt
+   would delete the context admitted just before it. An item with nothing to
+   admit ahead of its message mints no ids and reads no record; a failed save
+   or an unreadable record fails the send. Then the message itself:
+   - text starting with `/` that names a command in OpenCode's `/command`
+     list (skills included) goes to `POST /session/:id/command` (body fields
+     `name` and `text` since OpenCode 2.0.8) with its file attachments. The
+     command route takes files only, which is why the context went ahead of
+     it; sending "/name args" as a prompt instead would skip the template
+     OpenCode expands only on that route. The command lookup runs before
+     anything is admitted, so a failed lookup fails the send with nothing in
+     the session;
+   - otherwise `POST /session/:id/prompt` with the user's text, files and
+     agent mention.
+   Success removes the item, persists, broadcasts, and calls `onPromptSent`.
+   Failure keeps the item, backs off
+>>>>>>> bc50ba56a
    2 s → 60 s (doubling per consecutive failure of that item), and re-arms.
+   A retry, also after a restart, reuses the `syntheticIds`: OpenCode answers a
+   second admission of an id with the first one, so a failure between the
+   context and the message leaves each synthetic record in the session once.
+   The ids end at the mint time, one millisecond apart, so they sort in
+   admission order and ahead of the message, whose id OpenCode assigns.
 6. The next item goes out after the next busy → idle cycle.
 
+<<<<<<< HEAD
 ## Holds
+=======
+A 2xx HTML app-shell response is a failed dispatch, not acceptance. The queued item stays persisted and uses the existing retry backoff.
 
-Auto-review is driven from the UI and bounces the original session through
-idle between iterations; the UI tells the server to hold that session's queue
-(`PUT .../hold { held: true, ttlMs? }`) while a run is going and releases it
-when the run ends. A hold expires on its own (default 5 min, cap 10 min)
-because the UI that asserted it may be gone; the UI re-asserts it every two
-minutes while the run continues. Releasing arms a dispatch.
+## Held delivery
+>>>>>>> bc50ba56a
+
+An auto-review run (`../auto-review`) bounces the reviewed session through
+idle between its steps, and a queued follow-up must not land in the middle.
+The runtime takes `isDeliveryHeld(sessionId)`, the auto-review runtime's
+`holdsDelivery`, and the tick delivers nothing while it is true. The run calls
+`release(sessionId)` when it ends, which arms a dispatch. `deliveryHoldReady`
+(the auto-review's `startupLoad`) gates the first `reconcileAll` after start:
+until the auto-review has loaded its runs every session is held, and a tick
+that bailed then has nothing to re-arm it.
 
 ## Routes (`/api/message-queue`)
 
@@ -191,7 +262,6 @@ allowlists.
 | `POST .../sessions/:id/take` | Remove and return every item not in flight, in order |
 | `PUT .../sessions/:id/order` | `{ itemIds }` must be a complete permutation |
 | `DELETE .../sessions/:id` | Clear; the in-flight item stays |
-| `PUT .../sessions/:id/hold` | `{ held, ttlMs? }` |
 
 Every mutation broadcasts `openchamber:message-queue.updated` with
 `{ revision, session }` to all connected clients (SSE and WS), so several

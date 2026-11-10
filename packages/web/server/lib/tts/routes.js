@@ -1,5 +1,10 @@
 import express from 'express';
+<<<<<<< HEAD
 import { normalizeCustomOpenAIBaseURL, normalizeSelectedOpenAIBaseURL } from './base-url.js';
+=======
+import { normalizeCustomOpenAIBaseURL } from './base-url.js';
+import { normalizeEndpointPath } from './endpoint-path.js';
+>>>>>>> bc50ba56a
 import { summarizeText, sanitizeForTTS, sanitizeForNote } from '../text/summarization.js';
 
 import { detectTextLanguage, languageOfLocale, pickVoiceForLanguage } from './language-detect.js';
@@ -49,6 +54,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
   // Server-side TTS endpoint - streams audio from OpenAI TTS API
   app.post('/api/tts/speak', async (req, res) => {
     try {
+<<<<<<< HEAD
       const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, baseURL } = req.body || {};
       if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Text is required' });
       const requested = normalizeCustomOpenAIBaseURL(baseURL);
@@ -59,6 +65,71 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
       if (requested.value && requested.value !== normalized.value) return res.status(400).json({ error: 'TTS endpoint must match the selected provider' });
       if (isEnterpriseMode() && !normalized.value) return res.status(403).json({ error: ENTERPRISE_MODE_ERROR });
       const result = await ttsService.generateSpeechStream({ ...selection, text: text.trim(), voice, model, speed, instructions, baseURL: normalized.value });
+=======
+      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, providerId, modelId, apiKey, baseURL, endpointPath } = req.body || {};
+
+      const normalizedBaseURLResult = normalizeCustomOpenAIBaseURL(baseURL);
+      if (normalizedBaseURLResult.error) {
+        return res.status(400).json({ error: normalizedBaseURLResult.error });
+      }
+      const normalizedBaseURL = normalizedBaseURLResult.value;
+
+      const endpointPathResult = normalizeEndpointPath(endpointPath);
+      if (endpointPathResult.error) {
+        return res.status(400).json({ error: endpointPathResult.error });
+      }
+      const normalizedEndpointPath = endpointPathResult.value;
+      if (normalizedEndpointPath && !normalizedBaseURL) {
+        return res.status(400).json({ error: 'A custom endpoint path needs a custom server URL' });
+      }
+
+      console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey, hasBaseURL: !!baseURL });
+
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      // Without a custom server this is OpenAI's cloud; a custom one has
+      // already been held to this machine by the URL check above.
+      if (isEnterpriseMode() && !normalizedBaseURL) {
+        return res.status(403).json({ error: ENTERPRISE_MODE_ERROR });
+      }
+
+      // Dynamically import the TTS service (ESM)
+      const { ttsService } = await getTtsModule();
+
+      // Check availability - server-configured key, client-provided key, or custom server URL
+      const hasServerKey = await ttsService.isAvailable();
+      const hasCustomBaseURL = typeof normalizedBaseURL === 'string' && normalizedBaseURL.length > 0;
+      // The key stored for this kind of server; a key in the body is what
+      // clients from before the server kept them sent, and still wins.
+      const requestKey = typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : undefined;
+      const clientKey = requestKey ?? readVoiceKey(hasCustomBaseURL ? 'openaiCompatible' : 'openai');
+      const hasClientKey = Boolean(clientKey);
+
+      if (!hasServerKey && !hasClientKey && !hasCustomBaseURL) {
+        return res.status(503).json({ 
+          error: 'TTS service not available. Please configure OpenAI in OpenCode, provide an API key, or set a custom server URL in settings.' 
+        });
+      }
+
+      let textToSpeak = text.trim();
+
+      // Historical summarize request fields are intentionally ignored. The
+      // model-backed summarization provider is retired.
+
+      const result = await ttsService.generateSpeechStream({
+        text: textToSpeak,
+        voice,
+        model,
+        speed,
+        instructions,
+        apiKey: clientKey,
+        baseURL: hasCustomBaseURL ? normalizedBaseURL : undefined,
+        endpointPath: hasCustomBaseURL ? normalizedEndpointPath : undefined,
+      });
+
+>>>>>>> bc50ba56a
       res.setHeader('Content-Type', result.contentType);
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Content-Length', result.buffer.length);
@@ -201,6 +272,11 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
         const language = typeof req.headers['x-language'] === 'string' && req.headers['x-language'].trim().length > 0
           ? req.headers['x-language'].trim()
           : undefined;
+        const endpointPathResult = normalizeEndpointPath(req.headers['x-endpoint-path']);
+        if (endpointPathResult.error) {
+          return res.status(400).json({ error: endpointPathResult.error });
+        }
+        const endpointPath = endpointPathResult.value;
         const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
         const apiKey = (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) || readVoiceKey('stt');
 
@@ -228,6 +304,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
           baseURL,
           apiKey,
           language,
+          endpointPath,
         });
 
         console.log('[STT] Transcript:', transcript?.slice(0, 120));

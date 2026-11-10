@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
-import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,6 +18,19 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
+<<<<<<< HEAD
+=======
+import { fetchEligibleScheduledTaskTargets } from '@/lib/scheduledTasksApi';
+import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
+// Draft shape and payload building live in scheduledTaskEditorDraft.ts so they
+// can be unit-tested without mounting the dialog.
+import {
+  buildScheduledTaskPayload,
+  toDraft,
+  validateDraft,
+  type ScheduledTaskDraft,
+} from './scheduledTaskEditorDraft';
+>>>>>>> bc50ba56a
 import { useI18n } from '@/lib/i18n';
 import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
@@ -28,8 +39,9 @@ import { useAllLiveSessions } from '@/sync/sync-context';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { CHAT_DRAFT_PROJECT_ID, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { SettingsStackedField } from '@/components/sections/shared/SettingsSection';
-
-const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
+import { DatePicker, TimePill } from '@/components/ui/date-time';
+import { useCalendarPreferences } from '@/components/ui/useCalendarPreferences';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 // Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton and
 // the permission controls) so the state reads the same in both places.
@@ -50,213 +62,6 @@ const TIMEZONE_OPTIONS = (() => {
   ];
 })();
 
-const getLocalDateISO = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const parseISODateToLocal = (value: string): Date | null => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) {
-    return null;
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(year, month - 1, day);
-  if (
-    Number.isNaN(date.getTime())
-    || date.getFullYear() !== year
-    || date.getMonth() !== month - 1
-    || date.getDate() !== day
-  ) {
-    return null;
-  }
-  return date;
-};
-
-const formatLocalDateISO = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const formatDateLabel = (isoDate: string, fallbackLabel: string, locale: string): string => {
-  const date = parseISODateToLocal(isoDate);
-  if (!date) {
-    return fallbackLabel;
-  }
-  return new Intl.DateTimeFormat(locale, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
-};
-
-const shiftMonth = (date: Date, delta: number): Date => {
-  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
-};
-
-const getCalendarCells = (monthDate: Date, weekStartsOn: number): Array<{ date: Date; inCurrentMonth: boolean }> => {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const firstWeekday = firstDay.getDay();
-  const leadDays = (firstWeekday - weekStartsOn + 7) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-  const cells: Array<{ date: Date; inCurrentMonth: boolean }> = [];
-  for (let index = 0; index < 42; index += 1) {
-    const dayOffset = index - leadDays + 1;
-    if (dayOffset <= 0) {
-      const day = daysInPrevMonth + dayOffset;
-      cells.push({ date: new Date(year, month - 1, day), inCurrentMonth: false });
-      continue;
-    }
-    if (dayOffset > daysInMonth) {
-      cells.push({ date: new Date(year, month + 1, dayOffset - daysInMonth), inCurrentMonth: false });
-      continue;
-    }
-    cells.push({ date: new Date(year, month, dayOffset), inCurrentMonth: true });
-  }
-  return cells;
-};
-
-const parse24hTime = (value: string): { hour24: string; hour12: string; minute: string; meridiem: 'AM' | 'PM' } => {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
-  if (!match) {
-    return { hour24: '00', hour12: '12', minute: '00', meridiem: 'AM' };
-  }
-  const hour24 = Number(match[1]);
-  const minute = match[2];
-  const meridiem = hour24 >= 12 ? 'PM' : 'AM';
-  const rawHour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return {
-    hour24: String(hour24).padStart(2, '0'),
-    hour12: String(rawHour12).padStart(2, '0'),
-    minute,
-    meridiem,
-  };
-};
-
-const to24hTime = (hour12: string, minute: string, meridiem: 'AM' | 'PM'): string => {
-  const hourNumRaw = Number(hour12);
-  const minuteNumRaw = Number(minute);
-  const hourNum = Number.isFinite(hourNumRaw) ? Math.min(12, Math.max(1, hourNumRaw)) : 12;
-  const minuteNum = Number.isFinite(minuteNumRaw) ? Math.min(59, Math.max(0, minuteNumRaw)) : 0;
-
-  let hour24 = hourNum % 12;
-  if (meridiem === 'PM') {
-    hour24 += 12;
-  }
-  return `${String(hour24).padStart(2, '0')}:${String(minuteNum).padStart(2, '0')}`;
-};
-
-const getValidNumber = (value: string, config: { max: number; min?: number; loop?: boolean }) => {
-  const { max, min = 0, loop = false } = config;
-  let numericValue = Number.parseInt(value, 10);
-
-  if (Number.isFinite(numericValue)) {
-    if (!loop) {
-      if (numericValue > max) {
-        numericValue = max;
-      }
-      if (numericValue < min) {
-        numericValue = min;
-      }
-    } else {
-      if (numericValue > max) {
-        numericValue = min;
-      }
-      if (numericValue < min) {
-        numericValue = max;
-      }
-    }
-    return String(numericValue).padStart(2, '0');
-  }
-
-  return '00';
-};
-
-const getValid12Hour = (value: string) => {
-  if (/^(0[1-9]|1[0-2])$/.test(value)) {
-    return value;
-  }
-  return getValidNumber(value, { min: 1, max: 12 });
-};
-
-const getValidMinute = (value: string) => {
-  if (/^[0-5][0-9]$/.test(value)) {
-    return value;
-  }
-  return getValidNumber(value, { max: 59 });
-};
-
-const getArrowHour = (value: string, step: number) => {
-  return getValidNumber(String(Number.parseInt(value, 10) + step), { min: 1, max: 12, loop: true });
-};
-
-const getArrowMinute = (value: string, step: number) => {
-  return getValidNumber(String(Number.parseInt(value, 10) + step), { min: 0, max: 59, loop: true });
-};
-
-const getWeekStartsOn = (locale: string): number => {
-  try {
-    const localeApi = (Intl as unknown as {
-      Locale?: new (tag: string) => { weekInfo?: { firstDay?: number } };
-    }).Locale;
-    if (typeof localeApi !== 'function') {
-      return 1;
-    }
-    const weekInfo = new localeApi(locale).weekInfo;
-    const firstDayRaw = weekInfo?.firstDay;
-    if (typeof firstDayRaw !== 'number') {
-      return 1;
-    }
-    return firstDayRaw % 7;
-  } catch {
-    return 1;
-  }
-};
-
-const getUses24Hour = (locale: string): boolean => {
-  try {
-    const options = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions();
-    if (typeof options.hour12 === 'boolean') {
-      return !options.hour12;
-    }
-    return options.hourCycle === 'h23' || options.hourCycle === 'h24';
-  } catch {
-    return true;
-  }
-};
-
-const getLocalizedWeekdayLabels = (locale: string): string[] => {
-  const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
-  const sundayBase = new Date(2023, 0, 1);
-  return WEEKDAY_INDEXES.map((offset) => formatter.format(new Date(sundayBase.getFullYear(), sundayBase.getMonth(), sundayBase.getDate() + offset)));
-};
-
-const rotateWeekdays = <T,>(items: T[], weekStartsOn: number): T[] => {
-  return [...items.slice(weekStartsOn), ...items.slice(0, weekStartsOn)];
-};
-
-interface TimePillProps {
-  value: string;
-  onChange: (next: string) => void;
-  use24Hour: boolean;
-  hourAriaLabel: string;
-  minuteAriaLabel: string;
-  periodAriaLabel: string;
-  amLabel: string;
-  pmLabel: string;
-}
-
 const FieldLabel: React.FC<{
   htmlFor?: string;
   required?: boolean;
@@ -270,6 +75,7 @@ const FieldLabel: React.FC<{
   </div>
 );
 
+<<<<<<< HEAD
 const TimePill: React.FC<TimePillProps> = ({
   value,
   onChange,
@@ -632,6 +438,8 @@ const dedupeSortTimes = (times: string[]) => {
   return Array.from(new Set(filtered)).sort((a, b) => a.localeCompare(b));
 };
 
+=======
+>>>>>>> bc50ba56a
 const CronScheduleSection: React.FC<{
   draft: ScheduledTaskDraft;
   setDraft: React.Dispatch<React.SetStateAction<ScheduledTaskDraft>>;
@@ -734,17 +542,27 @@ const CronScheduleSection: React.FC<{
   );
 };
 
+export type ScheduledTaskScopeOption = { id: string; label: React.ReactNode };
+
 export function ScheduledTaskEditorDialog(props: {
   open: boolean;
   task: ScheduledTask | null;
   projectId: string;
+  /** Where a task can run: the chats scope and every project. */
+  scopes: ScheduledTaskScopeOption[];
   onOpenChange: (open: boolean) => void;
-  onSave: (draft: Partial<ScheduledTask>) => Promise<void>;
+  /** `projectId` is where the task is saved; for an existing task it may differ from its owner, which moves it. */
+  onSave: (draft: Partial<ScheduledTask>, projectId: string) => Promise<void>;
 }) {
-  const { open, task, onOpenChange, onSave } = props;
+  const { open, task, scopes, onOpenChange, onSave } = props;
   const { t, locale } = useI18n();
+  const [projectId, setProjectId] = React.useState(props.projectId);
+  React.useEffect(() => {
+    if (open) setProjectId(props.projectId);
+  }, [open, props.projectId]);
   const globalSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const liveSessions = useAllLiveSessions();
+<<<<<<< HEAD
   const projects = useProjectsStore((state) => state.projects);
   const worktrees = useSessionUIStore((state) => state.availableWorktreesByProject);
   const sessions = React.useMemo(() => {
@@ -758,6 +576,53 @@ export function ScheduledTaskEditorDialog(props: {
         : roots.some((root) => resolveGlobalSessionDirectory(session) === root || resolveGlobalSessionDirectory(session)?.startsWith(`${root}/`))
     ));
   }, [globalSessions, liveSessions, projects, worktrees, props.projectId]);
+=======
+  // Candidates only. Whether one belongs to the task is the scheduler's own
+  // membership rule, fetched below, so this list never re-implements the
+  // policy the backend enforces on save and run (#4757).
+  const candidates = React.useMemo(() => {
+    const merged = new Map(globalSessions.map((session) => [session.id, session]));
+    for (const session of liveSessions) merged.set(session.id, session);
+    return [...merged.values()].filter((session) => !session.time?.archived);
+  }, [globalSessions, liveSessions]);
+  // The eligibility request depends on which sessions sit in which directory,
+  // never on the session objects, which change on every step an agent takes.
+  const candidatesKey = React.useMemo(
+    () => candidates.map((session) => `${session.id}:${session.directory ?? ''}`).sort().join('\n'),
+    [candidates],
+  );
+  const candidatesRef = React.useRef(candidates);
+  candidatesRef.current = candidates;
+  const [eligibility, setEligibility] = React.useState<
+    { status: 'idle' | 'loading' | 'error' } | { status: 'ready'; ids: ReadonlySet<string> }
+  >({ status: 'idle' });
+  const [eligibilityAttempt, setEligibilityAttempt] = React.useState(0);
+  React.useEffect(() => {
+    if (!open || !projectId || !candidatesKey) {
+      setEligibility({ status: 'idle' });
+      return undefined;
+    }
+    const controller = new AbortController();
+    setEligibility((current) => (current.status === 'ready' ? current : { status: 'loading' }));
+    fetchEligibleScheduledTaskTargets(
+      projectId,
+      candidatesRef.current.map((session) => ({ sessionId: session.id, directory: session.directory ?? '' })),
+      controller.signal,
+    ).then(
+      (ids) => setEligibility({ status: 'ready', ids }),
+      () => {
+        // A failed read is an error, never an empty list: the picker would
+        // otherwise read as "this project has no sessions".
+        if (!controller.signal.aborted) setEligibility({ status: 'error' });
+      },
+    );
+    return () => controller.abort();
+  }, [open, projectId, candidatesKey, eligibilityAttempt]);
+  const sessions = React.useMemo(
+    () => (eligibility.status === 'ready' ? candidates.filter((session) => eligibility.ids.has(session.id)) : []),
+    [candidates, eligibility],
+  );
+>>>>>>> bc50ba56a
   React.useEffect(() => {
     if (open) void refreshGlobalSessions().catch(() => undefined);
   }, [open]);
@@ -767,9 +632,19 @@ export function ScheduledTaskEditorDialog(props: {
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
   const currentVariant = useConfigStore((state) => state.currentVariant || '');
+<<<<<<< HEAD
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const weekStartPreference = useUIStore((state) => state.weekStartPreference);
+=======
+  const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
+>>>>>>> bc50ba56a
   const isMobile = useUIStore((state) => state.isMobile);
+  // The project the run works in: the base-branch picker reads its branches
+  // from here, the same way the New worktree dialog and multi-run do.
+  const projectPath = useProjectsStore((state) => state.projects.find((entry) => entry.id === projectId)?.path ?? null);
+  // Same hook `BranchSelector` uses; calling it here only reads the store's
+  // answer so the editor can say when the folder is not a repository.
+  const branchOptions = useBranchOptions(projectPath);
 
   const [draft, setDraft] = React.useState<ScheduledTaskDraft>(() =>
     toDraft(task, {
@@ -779,11 +654,11 @@ export function ScheduledTaskEditorDialog(props: {
     })
   );
   const [saving, setSaving] = React.useState(false);
-  const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [showFileMention, setShowFileMention] = React.useState(false);
   const [mentionQuery, setMentionQuery] = React.useState('');
   const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
+<<<<<<< HEAD
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(() => {
     const initialDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
     return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
@@ -819,6 +694,15 @@ export function ScheduledTaskEditorDialog(props: {
       weekStartsOn,
     );
   }, [locale, weekStartsOn]);
+=======
+  const [showSnippetAutocomplete, setShowSnippetAutocomplete] = React.useState(false);
+  const [snippetQuery, setSnippetQuery] = React.useState('');
+  const promptTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const mentionRef = React.useRef<FileMentionHandle>(null);
+  const commandRef = React.useRef<CommandAutocompleteHandle>(null);
+  const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
+  const { use24Hour, weekdays: orderedWeekdays } = useCalendarPreferences();
+>>>>>>> bc50ba56a
 
   React.useEffect(() => {
     if (!open) {
@@ -838,14 +722,12 @@ export function ScheduledTaskEditorDialog(props: {
         variant: currentVariant,
       })
     );
-    const sourceDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
-    setCalendarMonth(new Date(sourceDate.getFullYear(), sourceDate.getMonth(), 1));
-    setIsDatePickerOpen(false);
     setShowCommandAutocomplete(false);
     setShowFileMention(false);
     setCommandQuery('');
     setMentionQuery('');
 
+<<<<<<< HEAD
   }, [open, task, currentProviderID, currentModelID, currentVariant]);
   React.useEffect(() => {
     if (!isDatePickerOpen) {
@@ -864,6 +746,8 @@ export function ScheduledTaskEditorDialog(props: {
     };
   }, [isDatePickerOpen]);
 
+=======
+>>>>>>> bc50ba56a
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.providerId === draft.execution.providerID);
     const model = provider?.models?.find((item) => item.modelId === draft.execution.modelID);
@@ -947,27 +831,6 @@ export function ScheduledTaskEditorDialog(props: {
       },
     }));
   }, []);
-
-  const todayDate = React.useMemo(() => startOfToday(), []);
-  const currentMonthStart = React.useMemo(() => startOfMonth(todayDate), [todayDate]);
-  const selectedDateLabel = React.useMemo(() => {
-    const selectedDate = parseISODateToLocal(draft.schedule.onceDate);
-    if (!selectedDate) {
-      return null;
-    }
-    if (isSameCalendarDay(selectedDate, todayDate)) {
-      return t('sessions.scheduledTasks.editor.date.today');
-    }
-    return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(selectedDate);
-  }, [draft.schedule.onceDate, locale, t, todayDate]);
-  const isAtCurrentMonth = React.useMemo(
-    () => startOfMonth(calendarMonth).getTime() <= currentMonthStart.getTime(),
-    [calendarMonth, currentMonthStart],
-  );
-  const calendarWeekdayLabels = React.useMemo(
-    () => orderedWeekdays.map((weekday) => weekday.label),
-    [orderedWeekdays],
-  );
 
   const setOneTimeDate = React.useCallback((isoDate: string) => {
     setDraft((prev) => ({
@@ -1100,6 +963,7 @@ export function ScheduledTaskEditorDialog(props: {
       return;
     }
 
+<<<<<<< HEAD
     const payload: Partial<ScheduledTask> = {
       ...(draft.id ? { id: draft.id } : {}),
       name: draft.name.trim(),
@@ -1133,18 +997,36 @@ export function ScheduledTaskEditorDialog(props: {
           : {}),
       },
     };
+=======
+    const payload = buildScheduledTaskPayload(draft);
+>>>>>>> bc50ba56a
     if (draft.state && draft.sessionMode === 'new') payload.state = draft.state;
+    // A non-git project has nothing to branch from: keep the field honest even
+    // when the stored task still asks for isolation. The runtime also falls
+    // back to an in-directory run, so this only keeps the record truthful.
+    if (draft.sessionMode === 'new' && branchOptions.isGitRepository === false) {
+      payload.runInWorktree = false;
+    }
 
     setSaving(true);
     try {
-      await onSave(payload);
+      await onSave(payload, projectId);
       onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.editor.toast.saveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [draft, onOpenChange, onSave, t]);
+  }, [branchOptions.isGitRepository, draft, onOpenChange, onSave, projectId, t]);
+
+  // A target session and a base branch belong to the project they were picked
+  // in; another project starts without them.
+  const changeProject = React.useCallback((nextProjectId: string) => {
+    if (nextProjectId === projectId) return;
+    setProjectId(nextProjectId);
+    setEligibility({ status: 'loading' });
+    setDraft((prev) => ({ ...prev, targetSessionId: '', baseBranch: '' }));
+  }, [projectId]);
 
   const descriptionId = React.useId();
   const hasOpenFloatingMenu = React.useCallback(() => {
@@ -1161,6 +1043,20 @@ export function ScheduledTaskEditorDialog(props: {
 
   const formBody = (
     <div className="flex flex-col gap-5">
+      {scopes.length > 1 ? (
+        <SettingsStackedField label={t('sessions.scheduledTasks.dialog.project.label')}>
+          <Select value={projectId} onValueChange={changeProject}>
+            <SelectTrigger>
+              <SelectValue>{scopes.find((scope) => scope.id === projectId)?.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {scopes.map((scope) => (
+                <SelectItem key={scope.id} value={scope.id}>{scope.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsStackedField>
+      ) : null}
       <SettingsStackedField label={t('sessions.scheduledTasks.editor.sessionMode')}>
         <Select value={draft.sessionMode} onValueChange={(value: 'new' | 'existing') => setDraft((prev) => ({
           ...prev, sessionMode: value,
@@ -1280,6 +1176,7 @@ export function ScheduledTaskEditorDialog(props: {
                     </button>
                   </div>
 
+<<<<<<< HEAD
                   <div className="mb-1 grid grid-cols-7 gap-1 px-1">
                     {calendarWeekdayLabels.map((weekday, index) => (
                       <div key={`${weekday}-${index}`} className="py-1 text-center typography-micro text-muted-foreground">
@@ -1301,6 +1198,69 @@ export function ScheduledTaskEditorDialog(props: {
                           : (inCurrentMonth
                             ? 'text-foreground hover:bg-interactive-hover'
                             : 'text-muted-foreground/60 hover:bg-interactive-hover'));
+=======
+                </div>
+
+          {draft.schedule.kind === 'cron' ? (
+            <CronScheduleSection draft={draft} setDraft={setDraft} locale={locale} t={t} />
+          ) : draft.schedule.kind === 'once' ? (
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <FieldLabel>{t('sessions.scheduledTasks.editor.date.label')}</FieldLabel>
+                <DatePicker
+                  value={draft.schedule.onceDate}
+                  onChange={setOneTimeDate}
+                  placeholder={t('sessions.scheduledTasks.editor.date.placeholder')}
+                  disablePast
+                />
+              </div>
+
+              <div className="flex min-w-0 flex-col gap-1">
+                <FieldLabel>{t('sessions.scheduledTasks.editor.time.label')}</FieldLabel>
+                <TimePill
+                  value={draft.schedule.onceTime}
+                  use24Hour={use24Hour}
+                  hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
+                  minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
+                  periodAriaLabel={t('sessions.scheduledTasks.editor.time.periodAria')}
+                  amLabel={t('sessions.scheduledTasks.editor.time.period.am')}
+                  pmLabel={t('sessions.scheduledTasks.editor.time.period.pm')}
+                  onChange={(next) => setDraft((prev) => ({
+                    ...prev,
+                    schedule: { ...prev.schedule, onceTime: next },
+                  }))}
+                />
+
+                <div className="mt-2 flex flex-col gap-1">
+                  <FieldLabel>{t('sessions.scheduledTasks.editor.timezone.label')}</FieldLabel>
+                  <Select
+                    value={draft.schedule.timezone}
+                    onValueChange={(timezone) => {
+                      setDraft((prev) => ({
+                        ...prev,
+                        schedule: { ...prev.schedule, timezone },
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="w-fit max-w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONE_OPTIONS.map((timezone) => (
+                        <SelectItem key={timezone} value={timezone}>{timezone}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+              {draft.schedule.kind === 'weekly' ? (
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <FieldLabel>{t('sessions.scheduledTasks.editor.weekdays.label')}</FieldLabel>
+                  <div className="flex flex-wrap gap-x-3 gap-y-2">
+                    {orderedWeekdays.map((weekday) => {
+                      const checked = draft.schedule.weekdays.includes(weekday.value);
+>>>>>>> bc50ba56a
                       return (
                         <button
                           key={isoDate}
@@ -1415,6 +1375,7 @@ export function ScheduledTaskEditorDialog(props: {
             </div>
           ) : null}
 
+<<<<<<< HEAD
           <div className="flex flex-col gap-2">
             <FieldLabel>{t('sessions.scheduledTasks.editor.times.label')}</FieldLabel>
             <div className="flex flex-col gap-2">
@@ -1450,6 +1411,64 @@ export function ScheduledTaskEditorDialog(props: {
               </Button>
             </div>
           </div>
+=======
+          {draft.sessionMode === 'new' && projectPath?.trim() ? (
+            <div className="flex flex-col gap-1">
+              <label className="inline-flex cursor-pointer items-center gap-2">
+                <Checkbox
+                  checked={draft.runInWorktree}
+                  onChange={(runInWorktree) => setDraft((prev) => ({ ...prev, runInWorktree }))}
+                  ariaLabel={t('sessions.scheduledTasks.editor.worktree.label')}
+                />
+                <span className="typography-meta">{t('sessions.scheduledTasks.editor.worktree.label')}</span>
+              </label>
+              <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.worktree.hint')}</p>
+              {/* The picker belongs to isolation, so it is absent while the
+                  switch is off rather than sitting there greyed out. */}
+              {draft.runInWorktree ? (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <FieldLabel>{t('sessions.scheduledTasks.editor.worktree.baseBranch.label')}</FieldLabel>
+                    <BranchSelector
+                      directory={projectPath}
+                      value={draft.baseBranch}
+                      onChange={(branch) => setDraft((prev) => ({ ...prev, baseBranch: branch }))}
+                      className="w-fit"
+                    />
+                    {branchOptions.isGitRepository === false ? (
+                      <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.worktree.notRepo')}</p>
+                    ) : null}
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2">
+                    <Checkbox
+                      checked={draft.cleanupWorktree}
+                      onChange={(cleanupWorktree) => setDraft((prev) => ({ ...prev, cleanupWorktree }))}
+                      ariaLabel={t('sessions.scheduledTasks.editor.worktree.cleanup.label')}
+                    />
+                    <span className="typography-meta">{t('sessions.scheduledTasks.editor.worktree.cleanup.label')}</span>
+                  </label>
+                  <p className="typography-meta text-muted-foreground">
+                    {draft.cleanupWorktree
+                      ? t('sessions.scheduledTasks.editor.worktree.cleanup.hint')
+                      : t('sessions.scheduledTasks.editor.worktree.cleanup.keepHint')}
+                  </p>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <Checkbox
+              checked={draft.execution.useDefaults}
+              onChange={(useDefaults) => setDraft((prev) => ({
+                ...prev,
+                execution: { ...prev.execution, useDefaults },
+              }))}
+              ariaLabel={t('sessions.scheduledTasks.editor.useDefaults.label')}
+            />
+            <span className="typography-meta">{t('sessions.scheduledTasks.editor.useDefaults.label')}</span>
+          </label>
+>>>>>>> bc50ba56a
 
           <div className="flex flex-col gap-1">
             <FieldLabel>{t('sessions.scheduledTasks.editor.timezone.label')}</FieldLabel>
@@ -1706,7 +1725,7 @@ export function ScheduledTaskEditorDialog(props: {
         onClose={() => onOpenChange(false)}
         contentMaxHeightClassName="max-h-[min(80vh,640px)]"
         renderHeader={(closeButton) => (
-          <div className="flex flex-col gap-1 border-b border-border/40 px-3 py-2">
+          <div className="flex flex-col gap-1 border-b border-edge-muted px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
               {closeButton}
@@ -1748,13 +1767,14 @@ export function ScheduledTaskEditorDialog(props: {
           </div>
         </header>
 
-        <ScrollShadow
-          className="flex-1 min-h-0 overflow-auto [scrollbar-gutter:stable_both-edges]"
-          size={64}
-          hideTopShadow
+        <ScrollableOverlay
+          outerClassName="flex-1 min-h-0"
+          useScrollShadow
+          scrollShadowSize={64}
+          hideTopScrollShadow
         >
           <div className="mx-auto w-full max-w-2xl px-4 sm:px-6 pb-5">{formBody}</div>
-        </ScrollShadow>
+        </ScrollableOverlay>
 
         <div className="shrink-0 px-4 sm:px-6 py-3">
           <div className="mx-auto w-full max-w-2xl">{footerRow}</div>
