@@ -1,14 +1,9 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n, getCurrentIntlLocale } from '@/lib/i18n';
-<<<<<<< HEAD
 import type { NativeSearchOutput, NativeSearchSource } from '@/lib/native-web-search';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { openExternalUrl } from '@/lib/url';
-=======
-import type { WebSearchOutput, WebSearchResult } from '@/lib/opencode/websearch';
-import { ChatExternalLink } from './ChatExternalLink';
->>>>>>> bc50ba56a
 import { useWebSearchStore } from '@/stores/useWebSearchStore';
 
 /**
@@ -52,7 +47,6 @@ const SiteIcon: React.FC<{ url: string }> = ({ url }) => {
     );
 };
 
-<<<<<<< HEAD
 const ResultCard: React.FC<{ result: NativeSearchSource }> = ({ result }) => {
     const published = result.publishedDate ? formatPublished(result.publishedDate) ?? result.publishedDate : null;
     const host = new URL(result.url).hostname;
@@ -67,16 +61,13 @@ const ResultCard: React.FC<{ result: NativeSearchSource }> = ({ result }) => {
         void openExternalUrl(result.url);
     };
 
-=======
-const ResultCard: React.FC<{ result: WebSearchResult }> = ({ result }) => {
-    const published = result.published ? formatPublished(result.published) : null;
-    const snippet = result.snippet?.replace(/\s+/g, ' ').trim() ?? '';
-
->>>>>>> bc50ba56a
     return (
         <li>
-            <ChatExternalLink
+            <a
                 href={result.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleClick}
                 className="group flex min-w-0 gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-interactive-hover/30"
             >
                 <span className="mt-1 flex size-3.5 shrink-0 items-center justify-center">
@@ -94,7 +85,7 @@ const ResultCard: React.FC<{ result: WebSearchResult }> = ({ result }) => {
                         <span className="mt-0.5 line-clamp-2 break-words typography-meta text-muted-foreground">{snippet}</span>
                     ) : null}
                 </span>
-            </ChatExternalLink>
+            </a>
         </li>
     );
 };
@@ -127,7 +118,7 @@ export const WebSearchResults: React.FC<{ output: NativeSearchOutput }> = ({ out
             {response.citations?.map((citation, index) => <a key={`${index}:${citation.url}`} href={citation.url} target="_blank" rel="noopener noreferrer" className="block typography-meta underline">{citation.title || citation.url}{citation.citedText ? ` — ${citation.citedText}` : ''}</a>)}
             {output.content.length > 0 ? <details className="typography-meta"><summary>{t('chat.toolPart.output')}</summary><SimpleMarkdownRenderer content={output.content.map((part) => part.text).join('\n')} variant="tool" /></details> : null}
             {providerName ? (
-                <div className="px-2 typography-micro text-muted-foreground">
+                <div className="px-2 typography-micro text-muted-foreground/80">
                     {t('chat.webSearch.provider', { provider: providerName })}
                 </div>
             ) : null}

@@ -108,10 +108,7 @@ mock.module('@/contexts/useThemeSystem', () => ({
 mock.module('@/hooks/useFontPreferences', () => ({ useFontPreferences: () => ({ monoFont: 'geist-mono' }) }));
 mock.module('@/lib/device', () => ({
   useDeviceInfo: () => deviceInfo,
-<<<<<<< HEAD
-=======
   // Dialogs ask whether to lay out as a tablet; these tests run on a phone or a desktop.
->>>>>>> bc50ba56a
   useTabletLayout: () => ({ enabled: false, roomyForPanels: false }),
 }));
 mock.module('@/stores/useUIStore', () => ({ useUIStore: useUiStoreMock }));
@@ -224,8 +221,8 @@ describe('TerminalView project action tab indicator', () => {
       KeyboardEvent: windowInstance.KeyboardEvent,
       MouseEvent: windowInstance.MouseEvent,
       ResizeObserver: class {
-        observe() { }
-        disconnect() { }
+        observe() {}
+        disconnect() {}
       },
       IS_REACT_ACT_ENVIRONMENT: true,
     });
@@ -266,10 +263,10 @@ describe('TerminalView project action tab indicator', () => {
 
   test('a draft waiting for a new space opens no shell until the space runs, then opens it in the space', async () => {
     const space: SpaceEntry = {
-      id: 'a1b2c3d4e5f6', name: 'Fix login', placeId: 'docker',
+      id: 'a1b2c3d4e5f6', name: 'Fix login', placeId: 'docker', machine: null,
       projectDirectory: '/repo', projectFolder: { path: '/repo', found: null }, directory: '/spaces/a1b2c3d4e5f6/repo',
       state: 'preparing', stoppedIdle: false, step: 'creating', failure: null, network: { mode: 'allowlist', domains: [] },
-      grants: [], access: null, needsAccess: [], damage: null, setup: null,
+      grants: [], access: null, needsAccess: [], accessFailures: [], damage: null, setup: null,
     };
     // The draft stays on the project's folder while its chip names the space.
     sessionUiState.currentSessionId = null;
@@ -405,7 +402,7 @@ describe('TerminalView project action tab indicator', () => {
 
     const tab = (label: string) => tabs.find((entry) => entry.querySelector('[data-tab-label]')?.textContent === label);
 
-    expect(tab('Interactive')?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('terminal-box');
+    expect(tab('Interactive')?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('terminal');
     expect(tab('Build')?.querySelector('[data-spinner]')).not.toBeNull();
     expect(tab('Deploy')?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('play');
     expect(host.querySelectorAll('.animate-spin').length).toBe(0);

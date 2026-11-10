@@ -4,13 +4,10 @@
 
 Button, icon, color and visual-state rules belong to [UI styling](../../lib/theme/STYLING.md). Visible and accessible strings follow the existing [localization contract](../../../../../.agents/skills/locale-ui-patterns/SKILL.md).
 
-<<<<<<< HEAD:packages/ui/src/components/sections/PATTERNS.md
 For settings that read/write runtime data or change a reachable capability, consult the [runtime boundary and surface contract](../../../../../.agents/skills/ui-api-decoupling/SKILL.md#name-the-surfaces-before-editing). Name the retained surfaces before adding or moving a page so desktop and phone reachability are deliberate. The [settings registry](../../lib/settings/DOCUMENTATION.md) owns keys, scope and persistence.
 
 Shared component/theme and localization contracts take precedence over examples; resolve material conflicts before changing the UI.
 
-=======
->>>>>>> bc50ba56a:.agents/skills/settings-ui-patterns/SKILL.md
 ## Canonical Direction
 
 Settings are built from the shared primitives in
@@ -56,10 +53,7 @@ Do not introduce raw `<Tooltip>`-based info icons.
 ## Description Policy (info hints)
 
 - Explanatory prose goes behind the info icon via the `info` prop by default.
-<<<<<<< HEAD:packages/ui/src/components/sections/PATTERNS.md
-=======
 - An info hint is one or two short sentences that add what the label or summary does not say. It names no list of every action and carries no caveat that stopped being true.
->>>>>>> bc50ba56a:.agents/skills/settings-ui-patterns/SKILL.md
 - When labels alone cannot explain the differences, consequences, or conditions needed to choose a setting, use a title, a visible description, then checkbox or radio controls. Option lists whose labels already read as complete choices (large-text paste modes, send shortcut) keep the explanation behind `info` even when it carries an exception. Having multiple options or a group title alone does not require a description; see `references/controls.md` for composition.
 - Stays visible: security/data-loss warnings, destructive consequences, required syntax/placeholder lists the user reads while typing, dynamic status, empty states, validation errors, active-flow wizard instructions.
 - Mixed text: keep the warning sentence visible, move the explanation to `info`.

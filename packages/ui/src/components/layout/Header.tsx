@@ -16,79 +16,43 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
-import { useContextWindowLimits } from '@/hooks/useContextWindowLimits';
+import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
-import { useGlobalSessionStatus, useSessionMessagesResolved, useSessionMessagesSelector } from '@/sync/sync-context';
-import type { Message } from '@openchamber/agent-contract';
-import { useConfigStore } from '@/stores/useConfigStore';
+import { useGlobalSessionStatus } from '@/sync/sync-context';
 import { useDirectoryStore as useAppDirectoryStore } from '@/stores/useDirectoryStore';
 import { isChatDirectoryForHome } from '@/lib/chatDirectories';
 import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
-import { archiveUndoToastOptions, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
+import { archiveUndoToastOptions, collectSessionMoveDescendants, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
-import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
-import { toContextUsageReading } from '@/components/ui/contextUsageReading';
 import { WindowsWindowControls } from '@/components/desktop/WindowsWindowControls';
-import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { useDeviceInfo, useTabletStandalonePwaRuntime } from '@/lib/device';
 import { cn } from '@/lib/utils';
-import { formatShortcutForDisplay, getEffectiveShortcutCombo, type ShortcutActionId } from '@/lib/shortcuts';
 import { useKeybinds } from '@/hooks/useKeybind';
 import {
 } from '@/lib/quota/model-families';
 
 import {
 } from '@/components/ui/collapsible';
-<<<<<<< HEAD
-import type { SessionContextUsage } from '@/stores/types/sessionTypes';
-import { buildSessionContextUsage, isSameContextUsage } from '@/stores/utils/tokenUtils';
-import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
-import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
-import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
-import { HeaderTerminalAction } from '@/components/layout/HeaderTerminalAction';
-import { SpaceAccessButton } from '@/components/session/spaces/SpaceAccessButton';
-import { SpaceApplyButton } from '@/components/session/spaces/SpaceApplyButton';
-import { useProjectActionsContext } from '@/hooks/useProjectActionsContext';
-=======
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
-import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
->>>>>>> bc50ba56a
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { SessionTabsStrip, type SessionTabMenuArgs } from './SessionTabsStrip';
 import { SessionMenuItemHint } from '@/components/session/SessionMenuItemHint';
 import { MoveSessionDialog } from '@/components/session/MoveSessionDialog';
-import { isSpaceDirectory } from '@/lib/spaces/space-route';
 import { HeaderSessionArchiveMenuItem } from './HeaderSessionArchiveMenuItem';
-<<<<<<< HEAD
-import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive, isDesktopShell, startDesktopWindowDrag, type UpdateInfo } from '@/lib/desktop';
-import { desktopHostsGet, redactSensitiveUrl } from '@/lib/desktopHosts';
-import {
-  LOCAL_HOST_ID,
-  buildLocalDesktopHost,
-  getLocalDesktopOrigin,
-  resolveCurrentDesktopHost,
-} from '@/lib/desktopCurrentHost';
-=======
 import { HeaderSessionMarkDoneMenuItem } from './HeaderSessionMarkDoneMenuItem';
 import { HeaderContextUsage } from './HeaderContextUsage';
 import { HeaderProjectControls } from './HeaderProjectControls';
+import { HeaderTerminalAction } from './HeaderTerminalAction';
 import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag } from '@/lib/desktop';
->>>>>>> bc50ba56a
 import { Icon } from "@/components/icon/Icon";
-import { useI18n } from '@/lib/i18n';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
-import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { getInlineStartSide, useI18n } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
-import type { IconName } from "@/components/icon/icons";
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
@@ -104,168 +68,14 @@ import { Button } from '@/components/ui/button';
 import { useMultiRunTitle } from '@/lib/multirun/useMultiRuns';
 import { buildSessionTreeMoveMessages, requestSessionTreeMove, useIsSessionWorktreeMovePending } from '@/lib/worktrees/sessionWorktreeMove';
 import { titlebarControlsWidthReaderRef } from './titlebarControlsWidth';
+import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
+import { LAYOUT_ANIMATION_EASING } from '@/lib/layoutAnimation';
+import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
 
-const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors';
+// Like the icon rail: muted at rest, full strength on hover, while its menu is
+// open or while what it controls is on, and no hover fill.
+const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-6 w-6 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-muted-foreground hover:text-foreground data-[popup-open]:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 transition-colors';
 
-type HeaderIconActionButtonProps = {
-  visible?: boolean;
-  title: string;
-  ariaLabel: string;
-  onClick: React.MouseEventHandler<HTMLButtonElement>;
-  className?: string;
-  Icon: IconName;
-  iconClassName?: string;
-  pressed?: boolean;
-};
-
-const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
-  visible = true,
-  title,
-  ariaLabel,
-  onClick,
-  className,
-  Icon: iconName,
-  iconClassName,
-  pressed = false,
-}: HeaderIconActionButtonProps) {
-  if (!visible) {
-    return null;
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={onClick}
-          aria-label={ariaLabel}
-          aria-pressed={pressed}
-          className={cn(
-            className ?? DESKTOP_HEADER_ICON_BUTTON_CLASS,
-            pressed && 'bg-interactive-selection text-interactive-selection-foreground'
-          )}
-        >
-          <Icon name={iconName} className={iconClassName ?? 'h-[18px] w-[18px]'} />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{title}</p>
-      </TooltipContent>
-    </Tooltip>
-  );
-});
-
-type DesktopServicesMenuProps = {
-  isDesktopApp: boolean;
-  currentInstanceLabel: string;
-  currentInstanceIsLocal: boolean;
-  isDesktopServicesOpen: boolean;
-  setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  refreshCurrentInstanceLabel: () => Promise<void>;
-  shortcutLabel: (actionId: ShortcutActionId) => string;
-  remoteUpdateInfo: UpdateInfo | null;
-  remoteUpdateChecking: boolean;
-  remoteUpdateError: string | null;
-  onOpenRemoteUpdate: () => void;
-};
-
-const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
-  isDesktopApp,
-  currentInstanceLabel,
-  currentInstanceIsLocal,
-  isDesktopServicesOpen,
-  setIsDesktopServicesOpen,
-  refreshCurrentInstanceLabel,
-  shortcutLabel,
-  remoteUpdateInfo,
-  remoteUpdateChecking,
-  remoteUpdateError,
-  onOpenRemoteUpdate,
-}: DesktopServicesMenuProps) {
-  const { t } = useI18n();
-  return (
-    <DropdownMenu
-      open={isDesktopServicesOpen}
-      onOpenChange={(open) => {
-        setIsDesktopServicesOpen(open);
-        if (open) {
-          void refreshCurrentInstanceLabel();
-        }
-      }}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={isDesktopApp
-                ? t('header.services.openWithCurrent', { current: currentInstanceLabel })
-                : t('header.services.open')}
-              className={cn(
-                DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                isDesktopApp ? 'w-auto max-w-[20rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
-              )}
-            >
-              <Icon name="server" className="h-[18px] w-[18px]" />
-              {isDesktopApp ? (
-                <span className="truncate typography-ui-label font-medium text-foreground">{currentInstanceLabel}</span>
-              ) : null}
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>
-            {t('header.services.tooltip.currentInstance', {
-              current: currentInstanceLabel,
-              toggle: shortcutLabel('toggle_services_menu'),
-            })}
-          </p>
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        align="end"
-        className="w-[min(27rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto p-0"
-      >
-        {isDesktopApp ? (
-          <div>
-            {!currentInstanceIsLocal ? (
-              <div className="border-b border-[var(--interactive-border)] px-4 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="typography-ui-label font-medium text-foreground">{t('header.services.remoteUpdate.title')}</div>
-                    <div className="typography-micro text-muted-foreground">
-                      {remoteUpdateInfo?.available
-                        ? t('header.services.remoteUpdate.available', { version: remoteUpdateInfo.version || '' })
-                        : remoteUpdateChecking
-                          ? t('header.services.remoteUpdate.checking')
-                          : remoteUpdateError || t('header.services.remoteUpdate.upToDate')}
-                    </div>
-                  </div>
-                  {remoteUpdateInfo?.available ? (
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md bg-[var(--primary-base)] px-3 py-1.5 typography-ui-label font-medium text-[var(--primary-foreground)] hover:opacity-90"
-                      onClick={onOpenRemoteUpdate}
-                    >
-                      {t('header.services.remoteUpdate.actions.open')}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-            <DesktopHostSwitcherDialog
-              embedded
-              open={isDesktopServicesOpen}
-              onOpenChange={() => { }}
-              onHostSwitched={() => setIsDesktopServicesOpen(false)}
-            />
-          </div>
-        ) : null}
-
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-});
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -273,18 +83,6 @@ const normalize = (value: string): string => {
   return replaced === '/' ? '/' : replaced.replace(/\/+$/, '');
 };
 
-const getActiveContextMode = (panelState: {
-  isOpen: boolean;
-  activeTabId: string | null;
-  tabs: Array<{ id: string; mode: ContextPanelMode }>;
-} | undefined): ContextPanelMode | null => {
-  if (!panelState?.isOpen || !Array.isArray(panelState.tabs) || panelState.tabs.length === 0) {
-    return null;
-  }
-
-  const activeTab = panelState.tabs.find((tab) => tab.id === panelState.activeTabId) ?? panelState.tabs[panelState.tabs.length - 1];
-  return activeTab?.mode ?? null;
-};
 
 
 type HeaderSessionSnapshot = {
@@ -298,21 +96,19 @@ type HeaderSessionSnapshot = {
 
 // A subsession moves with its parent; a space's sessions stay inside its container.
 const canMoveSessionOutOf = (session: HeaderSessionSnapshot): boolean => (
-  !session.parentId && !session.archived && !isSpaceDirectory(session.directory)
+  !session.parentId && !session.archived
 );
 
 export const Header: React.FC = () => {
   streamPerfCount('ui.header.render');
-  const { t } = useI18n();
+  const { t, direction } = useI18n();
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
-  const openContextOverview = useUIStore((state) => state.openContextOverview);
-  const closeContextPanel = useUIStore((state) => state.closeContextPanel);
-  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+  // The spacers move with the sidebar, so they follow its animation setting.
+  const layoutAnimationMs = useLayoutAnimationMs();
   const sessionTabsEnabled = useUIStore((state) => state.sessionTabsEnabled);
 
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
   const currentSessionStatus = useGlobalSessionStatus(currentSessionId ?? '');
   const isCurrentSessionMovingToWorktree = useIsSessionWorktreeMovePending(currentSessionId ?? '');
   const currentGlobalSession = useGlobalSessionsStore(useShallow(React.useCallback(
@@ -323,18 +119,11 @@ export const Header: React.FC = () => {
       if (!session) return null;
       return {
         title: session.title ?? null,
-<<<<<<< HEAD
-        directory: resolveGlobalSessionDirectory(session),
-        created: session.createdAt,
+        directory: resolveGlobalSessionDirectory(session) || null,
+        created: session.createdAt ?? null,
         slug: null,
         parentId: session.parentSessionId ?? null,
-=======
-        directory: record.directory ?? null,
-        created: session.time?.created ?? null,
-        slug: record.slug ?? null,
-        parentId: session.parentID ?? null,
-        archived: Boolean(session.time?.archived),
->>>>>>> bc50ba56a
+        archived: session.archivedAt !== undefined,
       };
     },
     [currentSessionId],
@@ -415,19 +204,6 @@ export const Header: React.FC = () => {
     setIsDesktopApp(isDesktopShell());
   }, []);
 
-<<<<<<< HEAD
-  const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
-  const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
-  const [currentInstanceIsLocal, setCurrentInstanceIsLocal] = React.useState(true);
-  const [remoteUpdateDialogOpen, setRemoteUpdateDialogOpen] = React.useState(false);
-  const [remoteUpdateInfo, setRemoteUpdateInfo] = React.useState<UpdateInfo | null>(null);
-  const [remoteUpdateChecking, setRemoteUpdateChecking] = React.useState(false);
-  const [remoteUpdateError, setRemoteUpdateError] = React.useState<string | null>(null);
-  // While the work-status panel is on screen it already reports the project,
-  // the branch and the context fill — three paces away in the same window.
-  // These yield to it rather than saying the same thing twice, and return the
-  // moment the panel is switched off or squeezed out by a narrow chat.
-=======
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   // While the work-status panel is on screen it already reports the project
   // and the branch — three paces away in the same window. The meta row under
@@ -435,47 +211,12 @@ export const Header: React.FC = () => {
   // returns the moment the panel is switched off or squeezed out.
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const renameShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('rename_current_session', shortcutOverrides), '');
->>>>>>> bc50ba56a
   const workStatusPanelVisible = useUIStore((state) => state.workStatusPanelVisible);
   const workStatusPanelEnabled = useUIStore((state) => state.workStatusPanelEnabled);
   const setWorkStatusPanelEnabled = useUIStore((state) => state.setWorkStatusPanelEnabled);
   const workStatusPanelFits = useUIStore((state) => state.workStatusPanelFits);
   const workStatusOverlayOpen = useUIStore((state) => state.workStatusOverlayOpen);
   const setWorkStatusOverlayOpen = useUIStore((state) => state.setWorkStatusOverlayOpen);
-
-  const { context: contextLimit, output: outputLimit } = useContextWindowLimits(currentSessionId);
-  // The readout follows the session's messages through a subscription that
-  // re-renders the header only when the reading changes, and reads nothing
-  // while the readout cannot show (work status panel open, draft).
-  const headerContextUsageEnabled = !workStatusPanelVisible && !isNewSessionDraftOpen;
-  const selectContextUsage = React.useCallback(
-    (messages: Message[]) => buildSessionContextUsage(messages, contextLimit, outputLimit),
-    [contextLimit, outputLimit],
-  );
-  const contextUsage = useSessionMessagesSelector(
-    headerContextUsageEnabled ? currentSessionId ?? '' : '',
-    undefined,
-    selectContextUsage,
-    isSameContextUsage,
-  );
-  const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null);
-  const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
-
-  useEffect(() => {
-    if (!currentSessionId) {
-      setStableDesktopContextUsage((prev) => (prev === null ? prev : null));
-      return;
-    }
-
-    if (contextUsage) {
-      setStableDesktopContextUsage((prev) => (isSameContextUsage(prev, contextUsage) ? prev : contextUsage));
-      return;
-    }
-
-    if (isContextUsageResolvedForSession) {
-      setStableDesktopContextUsage((prev) => (prev === null ? prev : null));
-    }
-  }, [contextUsage, currentSessionId, isContextUsageResolvedForSession]);
 
   // Two meanings for one button. With room beside the chat it switches the
   // panel on and off. Without room it cannot be shown inline at all, so it
@@ -491,149 +232,6 @@ export const Header: React.FC = () => {
     }
     setWorkStatusPanelEnabled(!workStatusPanelEnabled);
   }, [setWorkStatusOverlayOpen, setWorkStatusPanelEnabled, workStatusOverlayOpen, workStatusPanelEnabled, workStatusPanelFits]);
-  const showDesktopHeaderContextUsage = !workStatusPanelVisible && !!stableDesktopContextUsage;
-  const compactionThresholdPercent = useConfigStore((state) => {
-    const val = state.ompSettings?.settings?.find((s) => s.id === 'compaction.thresholdPercent')?.value;
-    return typeof val === 'number' && val > 0 ? val : null;
-  });
-  const compactionAsyncEnabled = useConfigStore((state) => {
-    const asyncSetting = state.ompSettings?.settings?.find((s) => s.id === 'compaction.asyncEnabled')?.value;
-    return asyncSetting !== false;
-  });
-  const compactionSpeculationPercent = React.useMemo(() => {
-    if (!compactionAsyncEnabled || compactionThresholdPercent === null || typeof contextLimit !== 'number' || contextLimit <= 0) {
-      return null;
-    }
-    const thresholdTokens = (compactionThresholdPercent / 100) * contextLimit;
-    const leadTokens = Math.min(32000, Math.max(8192, Math.floor(thresholdTokens * 0.125)));
-    const speculationTokens = thresholdTokens - leadTokens;
-    return Math.max(0, Math.round((speculationTokens / contextLimit) * 100));
-  }, [compactionAsyncEnabled, compactionThresholdPercent, contextLimit]);
-  const refreshCurrentInstanceLabel = React.useCallback(async () => {
-    if (typeof window === 'undefined' || !isDesktopApp) {
-      return;
-    }
-
-    try {
-      if (isDesktopLocalOriginActive()) {
-        setCurrentInstanceLabel('Local');
-        setCurrentInstanceIsLocal(true);
-        return;
-      }
-      setCurrentInstanceIsLocal(false);
-
-      // Same resolution the host switcher's own header uses, so the button and
-      // the panel it opens can never disagree about which instance this is.
-      const cfg = await desktopHostsGet();
-      const localOrigin = getLocalDesktopOrigin();
-      const resolved = resolveCurrentDesktopHost([buildLocalDesktopHost(localOrigin), ...cfg.hosts]);
-
-      if (resolved.id === LOCAL_HOST_ID) {
-        setCurrentInstanceLabel('Local');
-        setCurrentInstanceIsLocal(true);
-        return;
-      }
-
-      setCurrentInstanceLabel(redactSensitiveUrl(resolved.label.trim() || 'Instance'));
-    } catch {
-      setCurrentInstanceLabel('Local');
-      setCurrentInstanceIsLocal(true);
-    }
-  }, [isDesktopApp]);
-
-  useEffect(() => {
-    void refreshCurrentInstanceLabel();
-    // Switching instances does not remount the header, so without this the
-    // button would keep naming the instance the window left behind.
-    return subscribeRuntimeEndpointChanged(() => {
-      void refreshCurrentInstanceLabel();
-    });
-  }, [refreshCurrentInstanceLabel]);
-
-  const checkRemoteInstanceUpdate = React.useCallback(async () => {
-    if (currentInstanceIsLocal) {
-      setRemoteUpdateInfo(null);
-      setRemoteUpdateError(null);
-      return;
-    }
-
-    setRemoteUpdateChecking(true);
-    setRemoteUpdateError(null);
-    try {
-      // Status-only poll: must not count as usage on the remote server's install id.
-      const params = new URLSearchParams({ appType: 'web', instanceMode: 'remote', reportUsage: 'false' });
-      const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
-      }
-      const data = await response.json();
-      setRemoteUpdateInfo({
-        available: data.available ?? false,
-        version: data.version,
-        currentVersion: data.currentVersion ?? 'unknown',
-        body: data.body,
-        nextSuggestedCheckInSec: typeof data.nextSuggestedCheckInSec === 'number' ? data.nextSuggestedCheckInSec : undefined,
-        packageManager: data.packageManager,
-        updateCommand: data.updateCommand,
-      });
-    } catch (error) {
-      setRemoteUpdateInfo(null);
-      setRemoteUpdateError(error instanceof Error ? error.message : t('header.services.remoteUpdate.error'));
-    } finally {
-      setRemoteUpdateChecking(false);
-    }
-  }, [currentInstanceIsLocal, t]);
-
-  React.useEffect(() => {
-    setRemoteUpdateInfo(null);
-    setRemoteUpdateError(null);
-    setRemoteUpdateDialogOpen(false);
-  }, [currentInstanceIsLocal, currentInstanceLabel]);
-
-  React.useEffect(() => {
-    if (!isDesktopApp || currentInstanceIsLocal) {
-      return;
-    }
-
-    const initialDelayMs = 3000;
-    const intervalMs = 60 * 60 * 1000;
-    let disposed = false;
-    let timer: number | null = null;
-
-    const schedule = (delayMs: number) => {
-      timer = window.setTimeout(() => {
-        if (disposed || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) {
-          schedule(intervalMs);
-          return;
-        }
-        void checkRemoteInstanceUpdate().finally(() => {
-          if (!disposed) {
-            schedule(intervalMs);
-          }
-        });
-      }, delayMs);
-    };
-
-    schedule(initialDelayMs);
-
-    return () => {
-      disposed = true;
-      if (timer !== null) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [checkRemoteInstanceUpdate, currentInstanceIsLocal, currentInstanceLabel, isDesktopApp]);
-
-  const openRemoteInstanceUpdate = React.useCallback(() => {
-    if (remoteUpdateInfo?.available) {
-      setRemoteUpdateDialogOpen(true);
-      return;
-    }
-    void checkRemoteInstanceUpdate();
-  }, [checkRemoteInstanceUpdate, remoteUpdateInfo?.available]);
 
 
 
@@ -745,9 +343,8 @@ export const Header: React.FC = () => {
   }, [worktreePath]);
 
   const sessionDirectory = React.useMemo(() => {
-    const raw = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
-    return normalize(raw || '');
-  }, [currentSession?.directory]);
+    return normalize((currentSession ? resolveGlobalSessionDirectory(currentSession) : '') || '');
+  }, [currentSession]);
   const isCurrentSessionAiRenaming = useIsSessionAiRenamePending(currentSessionId ?? '', sessionDirectory);
 
   const draftDirectory = useSessionUIStore((state) => {
@@ -761,13 +358,12 @@ export const Header: React.FC = () => {
   const selectedSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
   const homeDirectory = useAppDirectoryStore((state) => state.homeDirectory);
 
+  // A draft waiting for a new space shows the space's branch and actions once it runs, and none
+  // of this computer's while it is made.
+
   const openDirectory = React.useMemo(() => {
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
-  const activeContextMode = useUIStore(React.useCallback((state) => {
-    const directory = normalize(openDirectory || '');
-    return directory ? getActiveContextMode(state.contextPanelByDirectory[directory]) : null;
-  }, [openDirectory]));
 
   const catalogWorktreeBranch = useSessionUIStore((state) => {
     const candidateDirectory = normalize(worktreeDirectory || sessionDirectory || '');
@@ -776,7 +372,7 @@ export const Header: React.FC = () => {
     }
 
     for (const worktrees of state.availableWorktreesByProject.values()) {
-      const match = worktrees.find((worktree) => normalize(worktree.path) === candidateDirectory);
+      const match = findWorktreeHoldingDirectory(worktrees, candidateDirectory);
       const branch = match?.branch?.trim();
       if (branch) {
         return branch;
@@ -798,13 +394,14 @@ export const Header: React.FC = () => {
     && Boolean(activeProjectLabel || currentBranchLabel || (!isNewSessionDraftOpen && worktreeBadgeKind));
 
 
+
   const currentSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
       return activeProjectLabel ?? 'OpenChamber';
     }
     const trimmedTitle = currentSession?.title?.trim();
-    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : t('sessions.sidebar.session.untitled');
-  }, [activeProjectLabel, currentSession?.title, currentSessionId, t]);
+    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : 'Untitled Session';
+  }, [activeProjectLabel, currentSession?.title, currentSessionId]);
   const loadSessionRecords = useSessionMessageRecordsForExport();
   const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
   const archiveSessions = useSessionUIStore((state) => state.archiveSessions);
@@ -892,7 +489,7 @@ export const Header: React.FC = () => {
       toast.error(t('sessions.sidebar.session.export.nothingToExport'));
       return;
     }
-    const records = await loadSessionRecords({ sessionId: currentSessionId, directory: openDirectory }).catch(() => null);
+    const records = await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory }).catch(() => null);
     if (!records) {
       toast.error(t('sessions.sidebar.session.export.failedLoadHistory'));
       return;
@@ -921,7 +518,7 @@ export const Header: React.FC = () => {
       loadRecords: async () => {
         if (!openDirectory) return null;
         try {
-          return await loadSessionRecords({ sessionId: currentSessionId, directory: openDirectory });
+          return await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory });
         } catch {
           return null;
         }
@@ -931,32 +528,21 @@ export const Header: React.FC = () => {
   }, [currentSession?.title, currentSessionId, loadSessionRecords, openDirectory, sessionDirectory, t]);
   const renderGuestSessionActionItems = React.useCallback((Item: React.ElementType) => guestSessionActionEntries.map((entry) => (
     <Item key={`${entry.guest.id}:${entry.action.id}`} onClick={() => runCurrentSessionGuestAction(entry)}>
-      <GuestIcon icon={entry.icon} iconSrc={entry.iconSrc} className="mr-1 size-4" />{entry.action.label}
+      <GuestIcon icon={entry.icon} iconSrc={entry.iconSrc} className="me-1 size-4" />{entry.action.label}
     </Item>
   )), [guestSessionActionEntries, runCurrentSessionGuestAction]);
 
-  const isCurrentSessionActive = currentSessionStatus === 'running' || currentSessionStatus === 'awaiting_approval' || currentSessionStatus === 'awaiting_input';
+  const isCurrentSessionActive = currentSessionStatus?.type === 'busy' || currentSessionStatus?.type === 'retry';
   const moveCurrentSessionToWorktree = React.useCallback(() => {
     if (!currentSessionId || !sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree) return;
     const sessions = useGlobalSessionsStore.getState().activeSessions;
     const root = sessions.find((session) => session.sessionId === currentSessionId);
     if (!root) return;
 
-    const descendants: typeof sessions = [];
-    const pendingParentIds = [currentSessionId];
-    for (let index = 0; index < pendingParentIds.length; index += 1) {
-      const parentId = pendingParentIds[index];
-      for (const session of sessions) {
-        if (session.parentSessionId !== parentId) continue;
-        descendants.push(session);
-        pendingParentIds.push(session.sessionId);
-      }
-    }
-
     requestSessionTreeMove({
       kind: 'quick',
       root,
-      descendants,
+      descendants: collectSessionMoveDescendants(root, []),
       sourceDirectory: sessionDirectory,
       messages: buildSessionTreeMoveMessages(t, {
         success: 'sessions.sidebar.session.moveToWorktree.success',
@@ -965,38 +551,6 @@ export const Header: React.FC = () => {
     });
   }, [currentSessionId, isCurrentSessionActive, isCurrentSessionMovingToWorktree, sessionDirectory, t]);
 
-<<<<<<< HEAD
-  // A chat promoted into a project: the same tree move as "Move to worktree",
-  // with the project's root folder as the destination.
-  const moveCurrentChatToProject = React.useCallback((projectDirectory: string) => {
-    if (!currentSessionId || !sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree) return;
-    const sessions = useGlobalSessionsStore.getState().activeSessions;
-    const root = sessions.find((session) => session.sessionId === currentSessionId);
-    if (!root) return;
-    const descendants: typeof sessions = [];
-    const pendingParentIds = [currentSessionId];
-    for (let index = 0; index < pendingParentIds.length; index += 1) {
-      for (const session of sessions) {
-        if (session.parentSessionId !== pendingParentIds[index]) continue;
-        descendants.push(session);
-        pendingParentIds.push(session.sessionId);
-      }
-    }
-    requestSessionTreeMove({
-      kind: 'project',
-      root,
-      descendants,
-      sourceDirectory: sessionDirectory,
-      projectDirectory,
-      messages: buildSessionTreeMoveMessages(t, {
-        success: 'sessions.moveChatToProject.success',
-        failure: 'sessions.moveChatToProject.failed',
-      }),
-    });
-  }, [currentSessionId, isCurrentSessionActive, isCurrentSessionMovingToWorktree, sessionDirectory, t]);
-
-=======
->>>>>>> bc50ba56a
   const runHeaderRetentionAction = React.useCallback(async (action: 'archive' | 'delete', sessionId: string) => {
     const ids = [sessionId, ...collectSessionSubtreeIds(sessionId, [], action === 'delete')];
     const reopenId = useSessionUIStore.getState().currentSessionId === sessionId ? sessionId : null;
@@ -1027,8 +581,10 @@ export const Header: React.FC = () => {
   const guestPage = useGuestsStore((state) => state.guests.find((guest) => guest.id === openGuestPageId));
   const isScheduledSurfaceOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
   const isArchiveSurfaceOpen = useUIStore((state) => state.isArchivePageOpen);
+  const isIntegrationsCatalogSurfaceOpen = useUIStore((state) => state.isIntegrationsCatalogOpen);
   const isUsageStatsSurfaceOpen = useUIStore((state) => state.isUsageStatsPageOpen);
   const isSourceBoardSurfaceOpen = useUIStore((state) => state.isSourceBoardOpen);
+  const isOverviewSurfaceOpen = useUIStore((state) => state.isOverviewOpen);
   const worktreesSurfaceProjectId = useUIStore((state) => state.worktreesPageProjectId);
   const spacesSurfaceProjectId = useUIStore((state) => (state.isolatedSpacesEnabled ? state.spacesPageProjectId : null));
   const runOverviewKey = useUIStore((state) => state.runOverviewKey);
@@ -1047,11 +603,17 @@ export const Header: React.FC = () => {
     if (isArchiveSurfaceOpen) {
       return { title: t('sessions.archivePage.title'), subtitle: null };
     }
+    if (isIntegrationsCatalogSurfaceOpen) {
+      return { title: t('integrationsCatalog.page.title'), subtitle: null };
+    }
     if (isUsageStatsSurfaceOpen) {
       return { title: t('usageStats.title'), subtitle: null };
     }
     if (isSourceBoardSurfaceOpen) {
       return { title: t('sourceBoard.title'), subtitle: null };
+    }
+    if (isOverviewSurfaceOpen) {
+      return { title: t('overview.title'), subtitle: null };
     }
     if (worktreesSurfaceProjectId) {
       return {
@@ -1066,47 +628,18 @@ export const Header: React.FC = () => {
       return { title: overviewRunTitle ?? t('multirun.overview.headerTitle'), subtitle: t('multirun.overview.headerTitle') };
     }
     return null;
-  }, [guestPage, isArchiveSurfaceOpen, overviewRunTitle, runOverviewKey, isScheduledSurfaceOpen, isSourceBoardSurfaceOpen, isUsageStatsSurfaceOpen, spacesSurfaceProjectId, surfaceProjectLabel, t, worktreesSurfaceProjectId]);
+  }, [guestPage, isArchiveSurfaceOpen, isIntegrationsCatalogSurfaceOpen, overviewRunTitle, runOverviewKey, isScheduledSurfaceOpen, isSourceBoardSurfaceOpen, isOverviewSurfaceOpen, isUsageStatsSurfaceOpen, spacesSurfaceProjectId, surfaceProjectLabel, t, worktreesSurfaceProjectId]);
 
 
-  const actionDirectory = React.useMemo(() => {
-    return normalize(openDirectory || activeProject?.path || '');
-  }, [activeProject?.path, openDirectory]);
+  const currentSessionOpenDirectory = sessionDirectory || normalize(selectedSessionDirectory || '') || worktreeDirectory;
 
-  // Same resolution the titlebar overlay used to own: worktree → session →
-  // draft → project path, sticky across session switches.
-  const projectActionsContext = useProjectActionsContext();
-
-
-  const isSessionPlanAvailable = useSessionUIStore((state) => state.isSessionPlanAvailable);
-  const planTabAvailable = currentSessionId ? isSessionPlanAvailable(currentSessionId) : false;
-  const lastPlanSessionKeyRef = React.useRef<string>('');
-
-  // Reset plan tab availability when session changes
-  React.useEffect(() => {
-    if (!currentSessionId) return;
-
-    const sessionKey = `${currentSessionId || 'none'}:${sessionDirectory || 'none'}:${currentSession?.created || 0}:${currentSession?.slug || 'none'}`;
-    if (lastPlanSessionKeyRef.current !== sessionKey) {
-      lastPlanSessionKeyRef.current = sessionKey;
-    }
-  }, [
-    planTabAvailable,
-    currentSession?.slug,
-    currentSession?.created,
-    currentSessionId,
-    sessionDirectory,
-  ]);
-
+  // The header's Mini Chat button opens whatever is on screen: the new-session
+  // draft as a new Mini Chat, or the current session.
   const handleOpenDraftMiniChat = React.useCallback(() => {
     void invokeDesktop('desktop_open_draft_mini_chat_window', {
       directory: isChatContext ? '' : draftDirectory,
       projectId: isChatContext ? null : draftProjectId,
-      apiBaseUrl: getRuntimeApiBaseUrl(),
-      clientToken: getRuntimeBearerTokenSync(),
-      // The window reopens this instance; a relay-capable host has no HTTP
-      // base to inject, so the key names the host, not a URL.
-      runtimeKey: getRuntimeKey(),
+      ...getMiniChatRuntimeArgs(),
     }).catch((error) => {
       console.warn('[header] failed to open draft mini chat window', error);
     });
@@ -1117,46 +650,37 @@ export const Header: React.FC = () => {
       handleOpenDraftMiniChat();
       return;
     }
-
     if (!currentSessionId) {
       return;
     }
     void invokeDesktop('desktop_open_session_mini_chat_window', {
       sessionId: currentSessionId,
       directory: sessionDirectory || normalize(selectedSessionDirectory || '') || worktreeDirectory,
-      apiBaseUrl: getRuntimeApiBaseUrl(),
-      clientToken: getRuntimeBearerTokenSync(),
-      runtimeKey: getRuntimeKey(),
+      ...getMiniChatRuntimeArgs(),
     }).catch((error) => {
       console.warn('[header] failed to open session mini chat window', error);
     });
   }, [currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, selectedSessionDirectory, sessionDirectory, worktreeDirectory]);
+  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
 
-  const handleOpenContextPanel = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
-    if (!directory) {
-      return;
-    }
+  const openSessionInMiniChat = React.useCallback((sessionId: string, directory: string) => {
+    void invokeDesktop('desktop_open_session_mini_chat_window', {
+      sessionId,
+      directory,
+      ...getMiniChatRuntimeArgs(),
+    }).catch((error) => {
+      console.warn('[header] failed to open session mini chat window', error);
+    });
+  }, []);
 
-    const panelState = useUIStore.getState().contextPanelByDirectory[directory];
-    if (getActiveContextMode(panelState) === 'context') {
-      closeContextPanel(directory);
-      return;
-    }
-
-    openContextOverview(directory);
-  }, [closeContextPanel, openContextOverview, openDirectory]);
-
-  const isContextPanelActive = activeContextMode === 'context';
 
 
 
   const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS;
-  // Left padding the header needs to clear the OS window controls (macOS
-  // traffic lights / window-controls-overlay). When the sidebar is open this
-  // space is owned by the sidebar's top strip instead, so the header drops back
-  // to its normal content padding. The full value is published as
-  // `--oc-titlebar-left-inset` so the sidebar strip can mirror it.
+  // Clearance for the OS window controls (macOS traffic lights /
+  // window-controls-overlay) on each physical edge of the window. Those
+  // controls never mirror, while the layout does: in a right-to-left locale the
+  // sidebar sits on the right, so the left clearance moves to the header's end.
   const titlebarLeftInset = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
       // Native traffic lights have a fixed physical footprint. Keep this
@@ -1166,27 +690,45 @@ export const Header: React.FC = () => {
     if (isTabletStandalonePwa) {
       return 'max(calc(0.75rem + var(--oc-wco-left-inset, 0px)), 5.5rem)';
     }
-    if (!isDesktopApp || usesFramelessChrome) {
+    if ((!isDesktopApp || usesFramelessChrome) && !isVSCode) {
       return 'calc(0.75rem + var(--oc-wco-left-inset, 0px))';
     }
     return '0.75rem';
-  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform, isTabletStandalonePwa, usesFramelessChrome]);
+  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform, isTabletStandalonePwa, isVSCode, usesFramelessChrome]);
+  const titlebarRightInset = (!isDesktopApp || usesFramelessChrome) && !isVSCode
+    ? 'calc(0.75rem + var(--oc-wco-right-inset, 0px))'
+    : '0.75rem';
+  const isRtl = direction === 'rtl';
+  // The edge the persistent TitlebarLeftControls overlay starts from. When the
+  // sidebar is open this space is owned by the sidebar's top strip, so the header
+  // drops back to its normal content padding there. Published as
+  // `--oc-titlebar-start-inset` so the overlay and the sidebar strip share it.
+  const titlebarStartInset = isRtl ? titlebarRightInset : titlebarLeftInset;
+  const titlebarEndInset = isRtl ? titlebarLeftInset : titlebarRightInset;
+  // Frameless in-window controls render on their physical side: in the overlay
+  // cluster when that side is where the line starts, at the header's end otherwise.
+  const endEdgeOwnedByInWindowControls = usesFramelessChrome && windowControlsSide !== getInlineStartSide(direction);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
       return;
     }
+    // `--oc-titlebar-start-inset` is the logical edge the titlebar line starts
+    // from; `--oc-titlebar-left-inset` is the physical left clearance that the
+    // sidebar's top strip and the persistent overlay still read, since they keep
+    // their physical props until the RTL conversion lands.
+    document.documentElement.style.setProperty('--oc-titlebar-start-inset', titlebarStartInset);
     document.documentElement.style.setProperty('--oc-titlebar-left-inset', titlebarLeftInset);
-  }, [titlebarLeftInset]);
+  }, [titlebarLeftInset, titlebarStartInset]);
 
-  // Space reserved on the header's left for the persistent overlay when the
+  // Space reserved at the header's start for the persistent overlay when the
   // sidebar is collapsed (the overlay sits over the header then). Split into two
   // spacers so the strip stays a window drag area while the buttons stay
   // clickable: a drag region for the window-controls inset (traffic lights) and
   // a no-drag carve under the control cluster. Both animate so the session title
   // slides in/out in lockstep with the sidebar. When the sidebar is open the
   // overlay is over the sidebar, so the header only keeps normal content padding.
-  const headerInsetSpacerWidth = isSidebarOpen ? '0.75rem' : 'var(--oc-titlebar-left-inset, 0.75rem)';
+  const headerInsetSpacerWidth = isSidebarOpen ? '0.75rem' : 'var(--oc-titlebar-start-inset, 0.75rem)';
   const headerControlsSpacerWidth = isSidebarOpen
     ? '0px'
     : 'calc(var(--oc-titlebar-controls-width, 5.5rem) + 0.5rem)';
@@ -1230,7 +772,7 @@ export const Header: React.FC = () => {
       return '';
     }
     if (macosMajorVersion >= 26) {
-      return 'h-12';
+      return 'h-11';
     }
     if (macosMajorVersion <= 15) {
       return 'h-14';
@@ -1242,11 +784,12 @@ export const Header: React.FC = () => {
   // must be expressed in pixels. The interface font-size setting scales the
   // root rem unit, so a rem-based height floor collapses with it and lets
   // sidebar content slide underneath the macOS traffic lights. Mirrors the
-  // pixel `--oc-titlebar-left-inset` above. macOS <= 15 uses the taller 56px
-  // titlebar that `macosHeaderSizeClass` also encodes.
+  // pixel left inset above. macOS 26 centres its window
+  // controls in 44px and macOS <= 15 in 56px (`macTrafficLightPosition` in the
+  // Electron shell); `macosHeaderSizeClass` encodes the same heights.
   const titlebarMinHeight = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
-      return macosMajorVersion !== null && macosMajorVersion <= 15 ? '56px' : '48px';
+      return macosMajorVersion !== null && macosMajorVersion <= 15 ? '56px' : '44px';
     }
     return '0px';
   }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform, macosMajorVersion]);
@@ -1255,26 +798,29 @@ export const Header: React.FC = () => {
     // Height is owned by the native chrome floor plus the browser's
     // window-controls overlay. The rem term keeps the header growing with the
     // interface scale on runtimes that have no native controls to clear.
-    const height = `max(3rem, ${titlebarMinHeight}, var(--oc-wco-titlebar-height, 0px))`;
+    // The macOS floor is a little lower so the 44px titlebar is not lifted
+    // back to 3rem; it still grows with the interface scale past that.
+    const remFloor = isDesktopApp && isMacPlatform ? '2.75rem' : '3rem';
+    const height = `max(${remFloor}, ${titlebarMinHeight}, var(--oc-wco-titlebar-height, 0px))`;
 
-    // Non-frameless desktop sizes its own header, and frameless Electron with
-    // right-side controls keeps no inline padding so the close button sits
-    // flush with the window corner.
-    const sizesItsOwnHeader = isDesktopApp && !usesFramelessChrome;
-    const rightEdgeOwnedByInWindowControls = usesFramelessChrome && windowControlsSide === 'right';
+    // VS Code and non-frameless desktop size their own header, and frameless
+    // Electron with controls at the header's end keeps the pe-0 class and no
+    // inline padding so the close button sits flush with the window corner.
+    const sizesItsOwnHeader = (isDesktopApp && !usesFramelessChrome) || isVSCode;
 
     if (sizesItsOwnHeader && titlebarMinHeight === '0px') {
       return {};
     }
 
     const style: React.CSSProperties = { minHeight: height, height };
-    if (!sizesItsOwnHeader && !rightEdgeOwnedByInWindowControls) {
-      // Left inset is handled by the no-drag spacer (see renderDesktop); only
-      // the right inset is owned by the window-controls overlay.
-      style.paddingRight = 'calc(0.75rem + var(--oc-wco-right-inset, 0px))';
+    // The start inset is handled by the no-drag spacer (see renderDesktop). The
+    // end inset clears the window-controls overlay, and in a right-to-left
+    // layout also the macOS traffic lights, which stay on the left.
+    if (!endEdgeOwnedByInWindowControls && (!sizesItsOwnHeader || isRtl)) {
+      style.paddingInlineEnd = titlebarEndInset;
     }
     return style;
-  }, [isDesktopApp, titlebarMinHeight, usesFramelessChrome, windowControlsSide]);
+  }, [endEdgeOwnedByInWindowControls, isDesktopApp, isMacPlatform, isRtl, isVSCode, titlebarEndInset, titlebarMinHeight, usesFramelessChrome]);
 
   // Written on the root, where every element inherits it: written only when
   // the height changed, since a new value restyles the whole document.
@@ -1353,9 +899,6 @@ export const Header: React.FC = () => {
     }
   }, [isDesktopApp]);
 
-  const shortcutLabel = React.useCallback((actionId: ShortcutActionId) => {
-    return formatShortcutForDisplay(getEffectiveShortcutCombo(actionId, shortcutOverrides));
-  }, [shortcutOverrides]);
 
 
 
@@ -1366,74 +909,11 @@ export const Header: React.FC = () => {
     },
     archive_current_session: () => {
       if (!currentSessionId || isMobile) return false;
-<<<<<<< HEAD
       if (useGlobalSessionsStore.getState().entityById.get(currentSessionId)?.archivedAt !== undefined) return false;
-      if (useUIStore.getState().showDeletionDialog) {
-        setPendingHeaderRetentionAction({ action: 'archive', sessionId: currentSessionId });
-        return;
-      }
-=======
-      if (useGlobalSessionsStore.getState().entityById.get(currentSessionId)?.time.archived) return false;
->>>>>>> bc50ba56a
       void runHeaderRetentionAction('archive', currentSessionId);
-    },
-    toggle_services_menu: () => {
-      if (isDesktopServicesOpen) {
-        setIsDesktopServicesOpen(false);
-        return;
-      }
-      setIsDesktopServicesOpen(true);
-      void refreshCurrentInstanceLabel();
     },
   });
 
-<<<<<<< HEAD
-  const desktopSidebarActions = (
-    <>
-      <HeaderTerminalAction directory={openDirectory} className="mr-1" />
-      {projectActionsContext ? (
-        <ProjectActionsButton
-          projectRef={projectActionsContext.projectRef}
-          directory={projectActionsContext.directory}
-          className="mr-2"
-        />
-      ) : null}
-      <SpaceApplyButton directory={openDirectory} className={cn(DESKTOP_HEADER_ICON_BUTTON_CLASS, 'mr-1 text-muted-foreground hover:text-foreground')} iconClassName="h-[18px] w-[18px]" />
-      <SpaceAccessButton directory={openDirectory} className={cn(DESKTOP_HEADER_ICON_BUTTON_CLASS, 'mr-1 text-muted-foreground hover:text-foreground')} iconClassName="h-[18px] w-[18px]" />
-      <OpenInAppButton directory={actionDirectory} className="mr-1" />
-      {/* Instances only exist in the desktop app. On web the menu was left
-          holding a single dev-only shutdown action, which is not a reason to
-          keep a dropdown in the header. */}
-      {isDesktopApp ? (
-        <DesktopServicesMenu
-          isDesktopApp={isDesktopApp}
-          currentInstanceLabel={currentInstanceLabel}
-          currentInstanceIsLocal={currentInstanceIsLocal}
-          isDesktopServicesOpen={isDesktopServicesOpen}
-          setIsDesktopServicesOpen={setIsDesktopServicesOpen}
-          refreshCurrentInstanceLabel={refreshCurrentInstanceLabel}
-          shortcutLabel={shortcutLabel}
-          remoteUpdateInfo={remoteUpdateInfo}
-          remoteUpdateChecking={remoteUpdateChecking}
-          remoteUpdateError={remoteUpdateError}
-          onOpenRemoteUpdate={openRemoteInstanceUpdate}
-        />
-      ) : null}
-    </>
-  );
-
-  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
-
-  const renderSessionTabMenu = React.useCallback(({ session, open, isActive, select, closeOtherTabs, components }: SessionTabMenuArgs) => {
-    const { Item, Separator } = components;
-    const canMoveToWorktree = isActive && !isChatContext && currentSession && !currentSession.parentId;
-    const canMoveToProject = isActive && isChatContext && currentSession && !currentSession.parentId && hasProjects;
-    return (
-      <>
-        <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
-          <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.sessionId; }}>
-            <Icon name="pencil-ai" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.rename')}
-=======
 
   const renderSessionTabMenu = React.useCallback(({ session, open, isActive, select, closeOtherTabs, components }: SessionTabMenuArgs) => {
     const { Item, Separator } = components;
@@ -1442,25 +922,29 @@ export const Header: React.FC = () => {
     return (
       <>
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
-          <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.id; }}>
+          <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.sessionId; }}>
             <Icon name="pencil-ai" className="me-1 size-4" />{t('sessions.sidebar.session.menu.rename')}
             {isActive && renameShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{renameShortcut}</span> : null}
->>>>>>> bc50ba56a
           </Item>
         </SessionMenuItemHint>
-        <SessionAiRenameMenuItem sessionID={session.sessionId} directory={resolveGlobalSessionDirectory(session) ?? undefined} open={open} Item={Item} />
+        <SessionAiRenameMenuItem sessionID={session.sessionId} directory={resolveGlobalSessionDirectory(session)} open={open} Item={Item} />
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.copyId')}>
           <Item onClick={() => copySessionIdFor(session.sessionId)}>
-            <Icon name="file-copy" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.copyId')}
+            <Icon name="file-copy" className="me-1 size-4" />{t('sessions.sidebar.session.menu.copyId')}
           </Item>
         </SessionMenuItemHint>
         <Separator />
         {isActive ? (
           <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.exportMarkdown')}>
             <Item onClick={() => void exportCurrentSession()}>
-              <Icon name="download" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.exportMarkdown')}
+              <Icon name="download" className="me-1 size-4" />{t('sessions.sidebar.session.menu.exportMarkdown')}
             </Item>
           </SessionMenuItemHint>
+        ) : null}
+        {hasElectronDesktopIPC ? (
+          <Item onClick={() => openSessionInMiniChat(session.sessionId, isActive ? currentSessionOpenDirectory : resolveGlobalSessionDirectory(session))}>
+            <Icon name="picture-in-picture-2" className="me-1 size-4" />{t('sessions.sidebar.session.menu.openInMiniChat')}
+          </Item>
         ) : null}
         {isActive ? renderGuestSessionActionItems(Item) : null}
         {canMoveToWorktree ? (
@@ -1475,7 +959,7 @@ export const Header: React.FC = () => {
                 onClick={moveCurrentSessionToWorktree}
                 className="w-full"
               >
-                <Icon name="folder-shared" className="mr-1 size-4" />
+                <Icon name="folder-shared" className="me-1 size-4" />
                 {t('sessions.sidebar.session.menu.moveToWorktree')}
               </Item>
             </span>
@@ -1491,13 +975,8 @@ export const Header: React.FC = () => {
                 onClick={() => setMoveSessionDialogOpen(true)}
                 className="w-full"
               >
-<<<<<<< HEAD
-                <Icon name="folder-shared" className="mr-1 size-4" />
-                {t('sessions.moveChatToProject.menu')}
-=======
                 <Icon name="folder-shared" className="me-1 size-4" />
                 {t('sessions.moveSession.menu')}
->>>>>>> bc50ba56a
               </Item>
             </span>
           </SessionMenuItemHint>
@@ -1505,7 +984,7 @@ export const Header: React.FC = () => {
         <Separator />
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.closeOtherTabs')}>
           <Item onClick={closeOtherTabs}>
-            <Icon name="close-circle" className="mr-1 size-4" />{t('header.sessionTabs.closeOtherTabs')}
+            <Icon name="close-circle" className="me-1 size-4" />{t('header.sessionTabs.closeOtherTabs')}
           </Item>
         </SessionMenuItemHint>
         <Separator />
@@ -1513,47 +992,37 @@ export const Header: React.FC = () => {
         <HeaderSessionArchiveMenuItem
           sessionId={session.sessionId}
           Item={Item}
-<<<<<<< HEAD
-          onArchive={() => setPendingHeaderRetentionAction({ action: 'archive', sessionId: session.sessionId })}
+          onArchive={() => void runHeaderRetentionAction('archive', session.sessionId)}
         />
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
-          <Item className="text-destructive focus:text-destructive" onClick={() => setPendingHeaderRetentionAction({ action: 'delete', sessionId: session.sessionId })}>
-            <Icon name="delete-bin" className="mr-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}
-=======
-          onArchive={() => void runHeaderRetentionAction('archive', session.id)}
-        />
-        <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
-          <Item className="text-destructive focus:text-destructive" onClick={() => setPendingDeleteSessionId(session.id)}>
+          <Item className="text-destructive focus:text-destructive" onClick={() => setPendingDeleteSessionId(session.sessionId)}>
             <Icon name="delete-bin" className="me-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}
->>>>>>> bc50ba56a
           </Item>
         </SessionMenuItemHint>
       </>
     );
-<<<<<<< HEAD
-  }, [copySessionIdFor, currentSession, exportCurrentSession, hasProjects, isChatContext, isCurrentSessionActive, isCurrentSessionMovingToWorktree, moveCurrentSessionToWorktree, renderGuestSessionActionItems, sessionDirectory, t]);
-=======
   }, [copySessionIdFor, currentSession, currentSessionOpenDirectory, exportCurrentSession, hasElectronDesktopIPC, isChatContext, isCurrentSessionActive, isCurrentSessionMovingToWorktree, isVSCode, moveCurrentSessionToWorktree, openSessionInMiniChat, renderGuestSessionActionItems, renameShortcut, runHeaderRetentionAction, sessionDirectory, t]);
->>>>>>> bc50ba56a
 
   const renderDesktop = () => (
     <div
       onMouseDown={handleDragStart}
       className={cn(
         'app-region-drag relative flex h-12 select-none items-center',
-        usesFramelessChrome && windowControlsSide === 'right' ? 'pr-0' : 'pr-3',
+        // 10 px puts the last 24 px button's centre 22 px from the window edge,
+        // on the axis of the 44 px icon rail below it.
+        endEdgeOwnedByInWindowControls ? 'pe-0' : 'pe-2.5',
         macosHeaderSizeClass
       )}
       style={headerChromeStyle}
       role="tablist"
       aria-label={t('header.navigation.mainAria')}
     >
-      {/* Drag region for the window-controls inset (traffic lights) to the left
-          of the overlay buttons — stays a window drag area. */}
+      {/* Drag region for the window-controls inset before the overlay buttons;
+          stays a window drag area. */}
       <div
         aria-hidden
-        className="shrink-0 self-stretch transition-[width] duration-[120ms] ease-out motion-reduce:transition-none"
-        style={{ width: headerInsetSpacerWidth }}
+        className="shrink-0 self-stretch transition-[width] motion-reduce:transition-none"
+        style={{ width: headerInsetSpacerWidth, transitionDuration: `${layoutAnimationMs}ms`, transitionTimingFunction: LAYOUT_ANIMATION_EASING }}
       />
       {/* No-drag carve under the persistent TitlebarLeftControls overlay so its
           buttons stay clickable. Width animates with the sidebar so the session
@@ -1561,8 +1030,8 @@ export const Header: React.FC = () => {
       <div
         ref={titlebarControlsWidthReaderRef}
         aria-hidden
-        className="app-region-no-drag shrink-0 self-stretch transition-[width] duration-[120ms] ease-out motion-reduce:transition-none"
-        style={{ width: headerControlsSpacerWidth }}
+        className="app-region-no-drag shrink-0 self-stretch transition-[width] motion-reduce:transition-none"
+        style={{ width: headerControlsSpacerWidth, transitionDuration: `${layoutAnimationMs}ms`, transitionTimingFunction: LAYOUT_ANIMATION_EASING }}
       />
       {/* Sidebar toggle + project actions live in the persistent
           TitlebarLeftControls overlay; the spacers above reserve its footprint
@@ -1570,72 +1039,48 @@ export const Header: React.FC = () => {
       <div className="flex min-w-0 flex-1 items-center">
         {activeSurfaceHeader ? (
           <>
-<<<<<<< HEAD
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="app-region-no-drag mr-1 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="app-region-no-drag me-1 size-6 text-muted-foreground hover:bg-transparent hover:text-foreground"
                   aria-label={t('header.mainSurface.backToChat')}
                   onClick={() => useUIStore.getState().closeMainSurfaces()}
                 >
-                  <Icon name="arrow-left" className="size-[18px]" />
+                  <Icon name="arrow-left" className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('header.mainSurface.backToChat')}</TooltipContent>
             </Tooltip>
-            <div className="mr-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-left">
-              <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
+            <div className="me-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-start">
+              <span className="truncate typography-ui-label text-[0.875rem] font-normal leading-tight text-foreground max-w-full">
                 {activeSurfaceHeader.title}
-=======
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="app-region-no-drag me-1 size-6 text-muted-foreground hover:bg-transparent hover:text-foreground"
-                aria-label={t('header.mainSurface.backToChat')}
-                onClick={() => useUIStore.getState().closeMainSurfaces()}
-              >
-                <Icon name="arrow-left" className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('header.mainSurface.backToChat')}</TooltipContent>
-          </Tooltip>
-          <div className="me-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-start">
-            <span className="truncate typography-ui-label text-[0.875rem] font-normal leading-tight text-foreground max-w-full">
-              {activeSurfaceHeader.title}
-            </span>
-            {activeSurfaceHeader.subtitle ? (
-              <span className="truncate typography-micro text-[0.65625rem] font-normal leading-tight text-muted-foreground max-w-full">
-                {activeSurfaceHeader.subtitle}
->>>>>>> bc50ba56a
               </span>
               {activeSurfaceHeader.subtitle ? (
-                <span className="truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75 max-w-full">
+                <span className="truncate typography-micro text-[0.65625rem] font-normal leading-tight text-muted-foreground max-w-full">
                   {activeSurfaceHeader.subtitle}
                 </span>
               ) : null}
             </div>
           </>
-        ) : !sessionTabsEnabled ? (
-          <div className="app-region-no-drag mr-3 flex min-w-0 max-w-full items-center gap-0.5 py-0.5 -my-0.5 text-left">
-            {isCurrentSessionAiRenaming ? <Icon name="loader-4" className="mr-1 size-3 shrink-0 animate-spin text-primary" aria-label={t('sessions.aiRename.generating')} /> : null}
+        ) : (isVSCode || !sessionTabsEnabled) ? (
+          <div className="app-region-no-drag me-3 flex min-w-0 max-w-full items-center gap-0.5 py-0.5 -my-0.5 text-start">
+            {isCurrentSessionAiRenaming ? <Icon name="loader-4" className="me-1 size-3 shrink-0 animate-spin text-primary" aria-label={t('sessions.aiRename.generating')} /> : null}
             {!isSidebarOpen ? (
               <Tooltip>
-              <SessionSwitcherDropdown align="start">
-                <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className={desktopHeaderIconButtonClass}
-                  aria-label={t('sessions.switcher.openAria')}
-                >
-                  <Icon name="history" className="h-[18px] w-[18px]" />
-                </button>
-                </TooltipTrigger>
-              </SessionSwitcherDropdown>
-              <TooltipContent side="bottom"><TooltipLabelWithShortcut label={t('sessions.switcher.openAria')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_session_list', shortcutOverrides), '')} /></TooltipContent>
+                <SessionSwitcherDropdown align="start">
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={desktopHeaderIconButtonClass}
+                      aria-label={t('sessions.switcher.openAria')}
+                    >
+                      <Icon name="history" className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                </SessionSwitcherDropdown>
+                <TooltipContent side="bottom"><TooltipLabelWithShortcut label={t('sessions.switcher.openAria')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_session_list', shortcutOverrides), '')} /></TooltipContent>
               </Tooltip>
             ) : null}
             <div className="flex min-w-0 flex-col justify-center px-1">
@@ -1655,7 +1100,7 @@ export const Header: React.FC = () => {
                     onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
                     onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
                     placeholder={t('sessions.sidebar.session.menu.rename')}
-                    className="min-w-0 flex-1 bg-transparent typography-ui-label text-[14px] font-normal leading-tight outline-none placeholder:text-muted-foreground"
+                    className="min-w-0 flex-1 bg-transparent typography-ui-label text-[0.875rem] font-normal leading-tight outline-none placeholder:text-muted-foreground"
                   />
                   <button
                     type="submit"
@@ -1676,7 +1121,7 @@ export const Header: React.FC = () => {
                   </button>
                 </form>
               ) : isNewSessionDraftOpen ? null : (
-                <span dir="auto" className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
+                <span dir="auto" className="oc-ui-start-align truncate typography-ui-label text-[0.875rem] font-normal leading-tight text-foreground max-w-full">
                   {currentSessionTitle}
                 </span>
               )}
@@ -1686,13 +1131,8 @@ export const Header: React.FC = () => {
                 <span className={cn(
                   'flex min-w-0 max-w-full items-center gap-1.5 truncate font-normal leading-tight',
                   isNewSessionDraftOpen
-<<<<<<< HEAD
-                    ? 'typography-ui-label text-[14px] text-foreground'
-                    : 'typography-micro text-[10.5px] text-muted-foreground/75',
-=======
                     ? 'typography-ui-label text-[0.875rem] text-foreground'
                     : 'typography-micro text-[0.65625rem] text-muted-foreground',
->>>>>>> bc50ba56a
                 )}>
                   {activeProjectLabel ? <span dir="auto" className="truncate">{activeProjectLabel}</span> : null}
                   {currentBranchLabel ? (
@@ -1714,7 +1154,7 @@ export const Header: React.FC = () => {
               ) : null}
             </div>
             <div className={cn(
-              'flex h-[18px] shrink-0 items-center justify-center',
+              'flex h-[1.125rem] shrink-0 items-center justify-center',
               // Top-aligned only when the title has a metadata line under it;
               // alone, the title is centred and the button must follow.
               showHeaderMetaRow ? 'self-start' : 'self-center',
@@ -1731,22 +1171,23 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="xs" className="h-[18px] w-6 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground" aria-label={t('header.sessionActions.openAria')}>
+                    <Button variant="ghost" size="xs" className="h-[1.125rem] w-6 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground" aria-label={t('header.sessionActions.openAria')}>
                       <Icon name="more" className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[190px]">
-<<<<<<< HEAD
-                    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}><DropdownMenuItem onClick={() => { pendingHeaderRenameRef.current = currentSessionId; }}><Icon name="pencil-ai" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.rename')}</DropdownMenuItem></SessionMenuItemHint>
-=======
                     <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}><DropdownMenuItem onClick={() => { pendingHeaderRenameRef.current = currentSessionId; }}><Icon name="pencil-ai" className="me-1 size-4" />{t('sessions.sidebar.session.menu.rename')}{renameShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{renameShortcut}</span> : null}</DropdownMenuItem></SessionMenuItemHint>
->>>>>>> bc50ba56a
                     <SessionAiRenameMenuItem sessionID={currentSessionId} directory={sessionDirectory} open={isHeaderSessionMenuOpen} Item={DropdownMenuItem} />
-                    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.copyId')}><DropdownMenuItem onClick={() => currentSessionId && copySessionIdFor(currentSessionId)}><Icon name="file-copy" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.copyId')}</DropdownMenuItem></SessionMenuItemHint>
+                    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.copyId')}><DropdownMenuItem onClick={() => currentSessionId && copySessionIdFor(currentSessionId)}><Icon name="file-copy" className="me-1 size-4" />{t('sessions.sidebar.session.menu.copyId')}</DropdownMenuItem></SessionMenuItemHint>
                     <DropdownMenuSeparator />
-                    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.exportMarkdown')}><DropdownMenuItem onClick={() => void exportCurrentSession()}><Icon name="download" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.exportMarkdown')}</DropdownMenuItem></SessionMenuItemHint>
+                    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.exportMarkdown')}><DropdownMenuItem onClick={() => void exportCurrentSession()}><Icon name="download" className="me-1 size-4" />{t('sessions.sidebar.session.menu.exportMarkdown')}</DropdownMenuItem></SessionMenuItemHint>
+                    {hasElectronDesktopIPC ? (
+                      <DropdownMenuItem onClick={() => openSessionInMiniChat(currentSessionId, currentSessionOpenDirectory)}>
+                        <Icon name="picture-in-picture-2" className="me-1 size-4" />{t('sessions.sidebar.session.menu.openInMiniChat')}
+                      </DropdownMenuItem>
+                    ) : null}
                     {renderGuestSessionActionItems(DropdownMenuItem)}
-                    {!isChatContext && currentSession && !currentSession.parentId ? (
+                    {!isVSCode && !isChatContext && currentSession && !currentSession.parentId ? (
                       <SessionMenuItemHint hint={isCurrentSessionMovingToWorktree
                         ? t('sessions.sidebar.session.moveToWorktree.tooltipMoving')
                         : isCurrentSessionActive
@@ -1758,7 +1199,7 @@ export const Header: React.FC = () => {
                             onClick={moveCurrentSessionToWorktree}
                             className="w-full"
                           >
-                            <Icon name="folder-shared" className="mr-1 size-4" />
+                            <Icon name="folder-shared" className="me-1 size-4" />
                             {t('sessions.sidebar.session.menu.moveToWorktree')}
                           </DropdownMenuItem>
                         </span>
@@ -1786,29 +1227,16 @@ export const Header: React.FC = () => {
                       Item={DropdownMenuItem}
                       onArchive={() => void runHeaderRetentionAction('archive', currentSessionId)}
                     />
-<<<<<<< HEAD
-                    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}><DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { if (currentSessionId) setPendingHeaderRetentionAction({ action: 'delete', sessionId: currentSessionId }); }}><Icon name="delete-bin" className="mr-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}</DropdownMenuItem></SessionMenuItemHint>
-=======
                     <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}><DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { if (currentSessionId) setPendingDeleteSessionId(currentSessionId); }}><Icon name="delete-bin" className="me-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}</DropdownMenuItem></SessionMenuItemHint>
->>>>>>> bc50ba56a
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}
             </div>
           </div>
         ) : (
-          <div className="flex h-full min-w-0 flex-1 items-center gap-0.5 text-left">
-            {!isSidebarOpen ? (
-              <SessionSwitcherDropdown align="start">
-                <button
-                  type="button"
-                  className={desktopHeaderIconButtonClass}
-                  aria-label={t('sessions.switcher.openAria')}
-                >
-                  <Icon name="history" className="h-[18px] w-[18px]" />
-                </button>
-              </SessionSwitcherDropdown>
-            ) : null}
+          <div className="flex h-full min-w-0 flex-1 items-center gap-0.5 text-start">
+            {/* No session switcher here: with the sidebar closed the tabs are
+                the switcher, and a history button beside them said it twice. */}
             <SessionTabsStrip
               renderMenu={renderSessionTabMenu}
               suppressActiveTabControls={isRenamingHeaderSession}
@@ -1836,7 +1264,7 @@ export const Header: React.FC = () => {
                       onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
                       onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
                       placeholder={t('sessions.sidebar.session.menu.rename')}
-                      className="min-w-0 flex-1 bg-transparent text-[13px] font-medium leading-4 outline-none placeholder:text-muted-foreground"
+                      className="min-w-0 flex-1 bg-transparent text-[0.8125rem] font-medium leading-4 outline-none placeholder:text-muted-foreground"
                     />
                     <button
                       type="submit"
@@ -1857,7 +1285,7 @@ export const Header: React.FC = () => {
                     </button>
                   </form>
                 ) : (
-                  <span dir="auto" className="block overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4 text-foreground max-w-full">
+                  <span dir="auto" className="block overflow-hidden whitespace-nowrap oc-ui-start-align text-[0.8125rem] font-medium leading-4 text-foreground max-w-full">
                     {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
                   </span>
                 )}
@@ -1866,71 +1294,8 @@ export const Header: React.FC = () => {
           </div>
         )}
 
-        {activeSurfaceHeader || !sessionTabsEnabled ? <div className="flex-1" /> : null}
+        {activeSurfaceHeader || isVSCode || !sessionTabsEnabled ? <div className="flex-1" /> : null}
 
-<<<<<<< HEAD
-        <div className="flex shrink-0 items-center gap-1">
-          {showDesktopHeaderContextUsage && stableDesktopContextUsage ? (
-            <ContextUsageDisplay
-              reading={toContextUsageReading(stableDesktopContextUsage)}
-              contextLimit={stableDesktopContextUsage.contextLimit}
-              outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
-              size="compact"
-              hideIcon
-              showPercentIcon
-              thresholdPercent={compactionThresholdPercent}
-              speculationPercent={compactionSpeculationPercent}
-              onClick={handleOpenContextPanel}
-              pressed={isContextPanelActive}
-              className={!showMiniChatHeaderAction ? 'mr-3.5' : ''}
-              valueClassName="typography-ui-label font-medium leading-none text-foreground"
-              percentIconClassName="h-4.5 w-4.5"
-            />
-          ) : null}
-
-          <HeaderIconActionButton
-            visible={showMiniChatHeaderAction}
-            title={isNewSessionDraftOpen ? t('header.actions.newMiniChat') : t('header.actions.openSessionMiniChat')}
-            ariaLabel={isNewSessionDraftOpen ? t('header.actions.newMiniChatAria') : t('header.actions.openSessionMiniChatAria')}
-            onClick={handleOpenCurrentMiniChat}
-            className={cn(desktopHeaderIconButtonClass, 'mr-1')}
-            Icon={'picture-in-picture-2'}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                data-work-status-toggle="true"
-                aria-pressed={workStatusToggleActive}
-                aria-label={t('header.workStatusPanel.toggleAria')}
-                onClick={handleWorkStatusToggle}
-                className={cn(
-                  DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                  // Trailing gap before the sidebar actions; it moved here
-                  // with the button when this took the last position.
-                  'mr-1',
-                  // On is the resting state and carries no chrome; off is the
-                  // one worth signalling, so it dims instead of filling.
-                  workStatusToggleActive ? 'text-foreground' : 'text-muted-foreground/50',
-                )}
-              >
-                <Icon name="list-indefinite" className="h-[18px] w-[18px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {workStatusPanelEnabled && !workStatusPanelFits
-                ? (workStatusOverlayOpen
-                  ? t('header.workStatusPanel.hide')
-                  : t('header.workStatusPanel.showOverlay'))
-                : workStatusPanelEnabled
-                  ? t('header.workStatusPanel.hide')
-                  : t('header.workStatusPanel.show')}
-            </TooltipContent>
-          </Tooltip>
-
-          {desktopSidebarActions}
-          <WindowsWindowControls visible={usesFramelessChrome && windowControlsSide === 'right'} position="right" />
-=======
         {/* Spacing comes from the gap only, so whichever control ends up last
             sits on the header's own right padding with no trailing margin. */}
         <div className="flex shrink-0 items-center gap-2">
@@ -1939,6 +1304,7 @@ export const Header: React.FC = () => {
           {!isVSCode && !activeSurfaceHeader ? (
             <>
               <HeaderContextUsage buttonClassName={DESKTOP_HEADER_ICON_BUTTON_CLASS} />
+              <HeaderTerminalAction directory={openDirectory} className="pe-1" />
               <HeaderProjectControls buttonClassName={DESKTOP_HEADER_ICON_BUTTON_CLASS} />
             </>
           ) : null}
@@ -1990,15 +1356,13 @@ export const Header: React.FC = () => {
           ) : null}
 
           <WindowsWindowControls visible={endEdgeOwnedByInWindowControls} position={windowControlsSide} />
->>>>>>> bc50ba56a
         </div>
       </div>
     </div>
   );
 
-  // The divider lives on the chat content wrapper instead of the header, so it
-  // doesn't run between the header and the right sidebar (they read as one
-  // continuous surface).
+  // No divider under the header: it, the chat and the window read as one
+  // surface, and the context panel separates itself as a framed card.
   const headerClassName = 'header-safe-area relative z-10 bg-background';
 
   return (
@@ -2034,18 +1398,6 @@ export const Header: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <UpdateDialog
-        open={remoteUpdateDialogOpen}
-        onOpenChange={setRemoteUpdateDialogOpen}
-        info={remoteUpdateInfo}
-        downloading={false}
-        downloaded={false}
-        progress={null}
-        error={remoteUpdateError}
-        onDownload={() => { }}
-        onRestart={() => { }}
-        runtimeType="web"
-      />
     </>
   );
 };

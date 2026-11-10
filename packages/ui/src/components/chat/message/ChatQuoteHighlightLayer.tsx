@@ -18,15 +18,12 @@
  * Ranges are re-resolved from their anchors whenever a marked message
  * re-renders or remounts in the virtualized list. Runtimes without
  * `CSS.highlights` get the scroll without the highlight.
-<<<<<<< HEAD
-=======
  *
  * A quote taken inside a page the agent showed (`openchamber_render`) has a
  * `page` in its anchor. A UI page is found in the chat by its source message
  * and render part; a framed page paints, scrolls and hit-tests through
  * `pageQuoteBridge.ts`. A frame's popover opens on click only because the
  * pointer over it is invisible to the app.
->>>>>>> bc50ba56a
  */
 
 import React from 'react';
@@ -41,12 +38,9 @@ import {
 import type { ChatQuoteHighlightStore } from '../hooks/chatQuoteHighlightStore';
 import { ChatColumnSessionContext } from '../chatColumnSession';
 import { ChatQuoteMarkPopover } from './ChatQuoteMarkPopover';
-<<<<<<< HEAD
-=======
 import type { HtmlRenderMark } from './parts/htmlRender';
 import { onPageMarkClick, revealPageMark, setPageMarks } from './pageQuoteBridge';
 import { dispatchNavigationRelease } from '../lib/scroll/timelineScrollIntent';
->>>>>>> bc50ba56a
 
 const MARK_HIGHLIGHT = 'oc-chat-quote';
 const FOCUS_HIGHLIGHT = 'oc-chat-quote-focus';
@@ -56,15 +50,8 @@ const FLASH_DURATION_MS = 1600;
 const POPOVER_OPEN_DELAY_MS = 400;
 const POPOVER_CLOSE_DELAY_MS = 250;
 const CORRIDOR_PADDING_PX = 6;
-<<<<<<< HEAD
-// Frames a scrolled-to row may take to mount, and a renderer to settle.
-const ROW_MOUNT_FRAMES = 20;
-// Anything that moves the view by hand, including a page frame scrolling itself.
-const REVEAL_CANCEL_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'openchamber:frame-scroll'] as const;
-=======
 // Page frames may mount after scrolling.
 const REVEAL_ATTEMPTS = 10;
->>>>>>> bc50ba56a
 
 const supportsHighlights = (): boolean => 'Highlight' in window && 'highlights' in CSS;
 
@@ -95,36 +82,13 @@ function paint(name: string, owner: PaintOwner, ranges: Range[]): void {
     CSS.highlights.set(name, highlight);
 }
 
+const nextFrame = (): Promise<void> => new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+});
+
 interface ChatQuoteHighlightLayerProps {
     store: ChatQuoteHighlightStore;
     scrollNode: HTMLElement | null;
-<<<<<<< HEAD
-    /** Loads older history until the quoted message is in the timeline. */
-    loadHistoryUntilMessage: (messageId: string) => Promise<boolean>;
-    scrollToMessage: (messageId: string, options?: { behavior?: ScrollBehavior }) => Promise<boolean>;
-    /** Asks the list for a page row that mounts without a message element. */
-    scrollToUiPageRow?: (messageId: string) => boolean;
-}
-
-/** The box spanning every row a mark's quote crosses; empty when not painted. */
-const unionOf = (ranges: readonly Range[]): DOMRect | null => {
-    if (ranges.length === 0) return null;
-    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-    for (const range of ranges) {
-        for (const rect of range.getClientRects()) {
-            left = Math.min(left, rect.left);
-            top = Math.min(top, rect.top);
-            right = Math.max(right, rect.right);
-            bottom = Math.max(bottom, rect.bottom);
-        }
-    }
-    return left === Infinity ? null : new DOMRect(left, top, right - left, bottom - top);
-};
-
-function markAtPoint(ranges: Map<string, Range[]>, x: number, y: number): string | null {
-    for (const [id, painted] of ranges) {
-        for (const range of painted) {
-=======
     loadHistoryUntilMessage: (messageId: string) => Promise<boolean>;
     scrollToMessage: (messageId: string, options?: { behavior?: ScrollBehavior }) => Promise<boolean>;
     resolveUiPageMessageId?: (messageId: string, partId: string) => string;
@@ -134,7 +98,6 @@ function markAtPoint(ranges: Map<string, Range[]>, x: number, y: number): string
 function markAtPoint(ranges: Map<string, Range[]>, x: number, y: number): string | null {
     for (const [id, parts] of ranges) {
         for (const range of parts) {
->>>>>>> bc50ba56a
             for (const rect of range.getClientRects()) {
                 if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return id;
             }
@@ -143,9 +106,6 @@ function markAtPoint(ranges: Map<string, Range[]>, x: number, y: number): string
     return null;
 }
 
-<<<<<<< HEAD
-type PopoverState = { markId: string; rect: DOMRect };
-=======
 // The box around a quote; one that crosses a long answer's rows has a Range per row.
 const boundsOf = (parts: Range[]): DOMRect => {
     const [first, ...rest] = parts.map((range) => range.getBoundingClientRect());
@@ -168,7 +128,6 @@ type PopoverState = {
     measure?: () => DOMRect;
     portal?: HTMLElement | null;
 };
->>>>>>> bc50ba56a
 
 
 // A long answer's rows: the lowest one drawn says whether the message goes
@@ -195,10 +154,7 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
     scrollNode,
     loadHistoryUntilMessage,
     scrollToMessage,
-<<<<<<< HEAD
-=======
     resolveUiPageMessageId,
->>>>>>> bc50ba56a
     scrollToUiPageRow,
 }: ChatQuoteHighlightLayerProps) {
     const session = React.useContext(ChatColumnSessionContext);
@@ -214,18 +170,14 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
         focus: { layer: 'focus' } satisfies PaintOwner,
         flash: { layer: 'flash' } satisfies PaintOwner,
     }));
+    // Who publishes this column's marks to the pages' frames.
+    const [pageOwner] = React.useState(() => Symbol('page marks owner'));
+    const marksRef = React.useRef(marks);
+    marksRef.current = marks;
     const scrollNodeRef = React.useRef(scrollNode);
     scrollNodeRef.current = scrollNode;
     const scrollToMessageRef = React.useRef(scrollToMessage);
     scrollToMessageRef.current = scrollToMessage;
-<<<<<<< HEAD
-    const loadHistoryUntilMessageRef = React.useRef(loadHistoryUntilMessage);
-    loadHistoryUntilMessageRef.current = loadHistoryUntilMessage;
-    const scrollToUiPageRowRef = React.useRef(scrollToUiPageRow);
-    scrollToUiPageRowRef.current = scrollToUiPageRow;
-    const revealGenerationRef = React.useRef(0);
-    const cancelRevealRef = React.useRef<(() => void) | null>(null);
-=======
     const resolveUiPageMessageIdRef = React.useRef(resolveUiPageMessageId);
     resolveUiPageMessageIdRef.current = resolveUiPageMessageId;
     const scrollToUiPageRowRef = React.useRef(scrollToUiPageRow);
@@ -233,7 +185,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
     const loadHistoryUntilMessageRef = React.useRef(loadHistoryUntilMessage);
     loadHistoryUntilMessageRef.current = loadHistoryUntilMessage;
     const revealGenerationRef = React.useRef(0);
->>>>>>> bc50ba56a
     const flashTimerRef = React.useRef<number | null>(null);
     const cancelRevealRef = React.useRef<(() => void) | null>(null);
 
@@ -254,22 +205,9 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
             const focused: Range[] = [];
             ranges.clear();
             for (const mark of marks) {
-<<<<<<< HEAD
-                // A quote inside a shown page resolves against that page's row;
-                // otherwise a long answer is several rows, and the mark spans
-                // whichever are mounted.
-                const pageRoot = mark.anchor.page && mark.anchor.page.kind === 'ui'
-                    ? findUiRenderQuoteRoot(scrollNode, mark.messageId, mark.anchor.page.partId)
-                    : null;
-                const parts = resolveChatQuoteRanges(
-                    mark.anchor.page ? pageRoot ? [pageRoot] : [] : findChatQuoteRoots(scrollNode, mark.messageId),
-                    mark.anchor,
-                );
-=======
                 if (mark.anchor.page && mark.anchor.page.kind !== 'ui') continue;
                 const root = mark.anchor.page ? findUiRenderQuoteRoot(scrollNode, mark.messageId, mark.anchor.page.partId) : null;
                 const parts = resolveChatQuoteRanges(mark.anchor.page ? root ? [root] : [] : findChatQuoteRoots(scrollNode, mark.messageId), mark.anchor);
->>>>>>> bc50ba56a
                 if (!parts) continue;
                 ranges.set(mark.id, parts);
                 marked.push(...parts);
@@ -288,15 +226,8 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                 const element = record.target instanceof Element ? record.target : record.target.parentElement;
                 const messageId = element?.closest('[data-message-id]')?.getAttribute('data-message-id');
                 const pageMessageId = element?.closest('[data-ui-render-message]')?.getAttribute('data-ui-render-message');
-<<<<<<< HEAD
-                return messageId === undefined || messageId === null
-                    || markedMessageIds.has(messageId)
-                    || (pageMessageId !== null && pageMessageId !== undefined && markedMessageIds.has(pageMessageId));
-=======
                 return messageId === undefined || messageId === null || markedMessageIds.has(messageId) || (pageMessageId != null && markedMessageIds.has(pageMessageId));
->>>>>>> bc50ba56a
             });
-
             if (relevant) frame = window.requestAnimationFrame(repaint);
         });
         observer.observe(scrollNode, { childList: true, subtree: true, characterData: true });
@@ -311,8 +242,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
         };
     }, [focusedMarkId, marks, owners, scrollNode]);
 
-<<<<<<< HEAD
-=======
     // The marks inside pages go to those pages' frames, which paint them.
     React.useEffect(() => {
         const byPart = new Map<string, HtmlRenderMark[]>();
@@ -328,129 +257,31 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
 
     React.useEffect(() => () => setPageMarks(pageOwner, new Map()), [pageOwner]);
 
->>>>>>> bc50ba56a
     // A flash paints both layers, so it reads as strong as a hovered mark.
     const paintFlash = React.useCallback((ranges: Range[]) => {
         paint(MARK_HIGHLIGHT, owners.flash, ranges);
         paint(FOCUS_HIGHLIGHT, owners.flash, ranges);
     }, [owners]);
 
-    // Leaving a session ends every reveal in flight: its flash belonged to
-    // rows of an answer the reader is no longer looking at.
     React.useEffect(() => () => {
         if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
-        flashTimerRef.current = null;
         paintFlash([]);
-    }, [paintFlash, session?.sessionId, session?.directory, scrollNode, store]);
-
-    React.useEffect(() => () => {
-        revealGenerationRef.current += 1;
-        cancelRevealRef.current?.();
-    }, [scrollNode, store, session?.sessionId, session?.directory]);
+    }, [paintFlash]);
 
     const reveal = React.useCallback((messageId: string, anchor: ChatQuoteAnchor) => {
         cancelRevealRef.current?.();
-<<<<<<< HEAD
-=======
         const scrollToMessage = scrollToMessageRef.current;
->>>>>>> bc50ba56a
         const scrollNode = scrollNodeRef.current;
         const generation = ++revealGenerationRef.current;
         let cancelled = false;
         let observer: MutationObserver | null = null;
         let frame: number | null = null;
-<<<<<<< HEAD
-        const isCurrent = () => !cancelled
-            && generation === revealGenerationRef.current
-            && scrollNode === scrollNodeRef.current;
-        const cancelOnKey = (event: KeyboardEvent) => {
-            if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) cancel();
-        };
-        function cancel() {
-=======
         const isCurrent = () => !cancelled && generation === revealGenerationRef.current && scrollNode === scrollNodeRef.current;
         const cancel = () => {
->>>>>>> bc50ba56a
             cancelled = true;
             observer?.disconnect();
             if (frame !== null) window.cancelAnimationFrame(frame);
             frame = null;
-<<<<<<< HEAD
-            // A flash already painted belongs to this reveal too; leaving it
-            // up would mark text the reader no longer asked about.
-            if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
-            flashTimerRef.current = null;
-            paintFlash([]);
-            for (const event of REVEAL_CANCEL_EVENTS) scrollNode?.removeEventListener(event, cancel);
-            scrollNode?.removeEventListener('keydown', cancelOnKey);
-            if (cancelRevealRef.current === cancel) cancelRevealRef.current = null;
-        }
-        cancelRevealRef.current = cancel;
-        // A wheel, swipe or press means the reader took over: the reveal stops
-        // moving the view rather than fighting them.
-        for (const event of REVEAL_CANCEL_EVENTS) {
-            scrollNode?.addEventListener(event, cancel, { passive: true });
-        }
-        scrollNode?.addEventListener('keydown', cancelOnKey);
-
-        void (async () => {
-            // A quote can point into history this client has not loaded, so the
-            // message has to be there before scrolling to it means anything.
-            const loaded = await loadHistoryUntilMessageRef.current(messageId).catch(() => false);
-            if (!loaded || !isCurrent() || !scrollNode) return;
-
-            // Scrolling through the timeline controller releases live follow
-            // and mounts the row when the virtualized list dropped it.
-            const uiRoot = anchor.page && anchor.page.kind === 'ui'
-                ? findUiRenderQuoteRoot(scrollNode, messageId, anchor.page.partId)
-                : null;
-            const mounted = uiRoot !== null || findChatQuoteRoots(scrollNode, messageId).length > 0;
-            // An expanded page row mounts without a message element; the list
-            // has to be asked for it directly.
-            let pageRowRequested = anchor.page?.kind === 'ui' && uiRoot === null
-                && scrollToUiPageRowRef.current?.(messageId) === true;
-            const scrolled = uiRoot !== null || pageRowRequested
-                || await scrollToMessageRef.current(messageId, { behavior: 'auto' }).catch(() => false);
-            if (!isCurrent()) return;
-            if (!scrolled && !mounted) return;
-
-            let misses = 0;
-            const tryReveal = () => {
-                frame = null;
-                if (!isCurrent() || !scrollNode) { cancel(); return; }
-
-                const pageRoot = anchor.page?.kind === 'ui'
-                    ? findUiRenderQuoteRoot(scrollNode, messageId, anchor.page.partId)
-                    : null;
-                const roots = anchor.page ? pageRoot ? [pageRoot] : [] : findChatQuoteRoots(scrollNode, messageId);
-
-
-
-                if (anchor.page?.kind === 'ui' && roots.length === 0 && !pageRowRequested
-                    && scrollToUiPageRowRef.current?.(messageId)) {
-                    pageRowRequested = true;
-                    return;
-                }
-                // A row mounts on the frame after the scroll request, and a lazy
-                // renderer draws raw source first; an absent row or one still
-                // settling says nothing yet.
-                const pendingRenderer = roots.some((root) => root.querySelector('[data-chat-quote-pending]'));
-                if (roots.length === 0 || pendingRenderer) {
-                    // A missing row is a mount timing question, so frames answer
-                    // it; a pending renderer settles on its own mutation.
-                    if (!pendingRenderer && misses < ROW_MOUNT_FRAMES) {
-                        misses += 1;
-                        frame = window.requestAnimationFrame(tryReveal);
-                    }
-                    return;
-                }
-                const parts = resolveChatQuoteRanges(roots, anchor);
-                // An ambiguous or changed quote is final: the mounted text is
-                // what it is, so retrying cannot change the answer.
-                cancel();
-                if (!parts) return;
-                parts[0]?.startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' });
-=======
             for (const event of ['wheel', 'touchstart', 'pointerdown', 'openchamber:frame-scroll']) {
                 scrollNode?.removeEventListener(event, cancel);
             }
@@ -521,7 +352,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                 cancel();
                 if (!parts) return;
                 parts[0].startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' });
->>>>>>> bc50ba56a
                 if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
                 paintFlash(parts);
                 flashTimerRef.current = window.setTimeout(() => {
@@ -529,11 +359,7 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                     paintFlash([]);
                 }, FLASH_DURATION_MS);
             };
-<<<<<<< HEAD
-            const messageSelector = `[data-message-id="${CSS.escape(messageId)}"]`;
-=======
             const selector = `[data-message-id="${CSS.escape(targetMessageId)}"]`;
->>>>>>> bc50ba56a
             const pageSelector = anchor.page?.kind === 'ui'
                 ? `[data-ui-render-message="${CSS.escape(messageId)}"][data-ui-render-part="${CSS.escape(anchor.page.partId)}"]`
                 : null;
@@ -541,31 +367,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                 if (frame !== null) return;
                 const relevant = records.some((record) => {
                     const element = record.target instanceof Element ? record.target : record.target.parentElement;
-<<<<<<< HEAD
-                    if (!element) return false;
-                    // Only a mutation inside the quoted message (or the page that
-                    // quoted it), or one that adds it, can make the quote resolvable.
-                    const owner = element.closest('[data-message-id]')?.getAttribute('data-message-id');
-                    if (owner === messageId) return true;
-                    if (pageSelector) {
-                        const page = element.closest('[data-ui-render-message]');
-                        if (page?.getAttribute('data-ui-render-message') === messageId
-                            && page.getAttribute('data-ui-render-part') === anchor.page?.partId) return true;
-                    }
-                    return [...record.addedNodes].some((node) => node instanceof Element
-                        && (node.matches(messageSelector) || node.querySelector(messageSelector) !== null
-                            || (pageSelector !== null
-                                && (node.matches(pageSelector) || node.querySelector(pageSelector) !== null))));
-                });
-
-                if (relevant) frame = window.requestAnimationFrame(tryReveal);
-
-
-            });
-            observer.observe(scrollNode, { childList: true, subtree: true, characterData: true });
-            // Anything queued before this reveal is not a change it waits for.
-            observer.takeRecords();
-=======
                     if (pageSelector && element?.closest(pageSelector)) return true;
                     const message = element?.closest('[data-message-id]');
                     if (message?.getAttribute('data-message-id') === targetMessageId) return true;
@@ -576,7 +377,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                 if (relevant) frame = window.requestAnimationFrame(tryReveal);
             });
             observer.observe(scrollNode, { childList: true, subtree: true, characterData: true });
->>>>>>> bc50ba56a
             tryReveal();
         })().finally(() => { if (!observer) cancel(); });
     }, [paintFlash]);
@@ -585,10 +385,6 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
         store.setRevealHandler(reveal);
         return () => {
             revealGenerationRef.current += 1;
-<<<<<<< HEAD
-            cancelRevealRef.current?.();
-=======
->>>>>>> bc50ba56a
             store.setRevealHandler(null);
         };
     }, [reveal, store]);
@@ -607,17 +403,10 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
     // must not start the close.
     const isInPopoverCorridor = React.useCallback((x: number, y: number): boolean => {
         const open = popoverRef.current;
-<<<<<<< HEAD
-        const painted = open ? rangesRef.current.get(open.markId) : null;
-        const box = popoverElementRef.current?.getBoundingClientRect();
-        const mark = painted ? unionOf(painted) : null;
-        if (!mark || !box) return false;
-=======
         const parts = open ? rangesRef.current.get(open.markId) : null;
         const box = popoverElementRef.current?.getBoundingClientRect();
         if (!parts || !box) return false;
         const mark = boundsOf(parts);
->>>>>>> bc50ba56a
         return x >= Math.min(mark.left, box.left) - CORRIDOR_PADDING_PX
             && x <= Math.max(mark.right, box.right) + CORRIDOR_PADDING_PX
             && y >= Math.min(mark.top, box.top) - CORRIDOR_PADDING_PX
@@ -637,17 +426,29 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
         setEditing(false);
     }, [clearTimers]);
 
+    React.useEffect(() => onPageMarkClick((click) => {
+        // A click on no mark closes a page mark's popover; the popover of a
+        // mark in the chat's own text is the pointer's business.
+        if (!click.markId) {
+            if (popoverRef.current?.measure && !editingRef.current) closePopover();
+            return;
+        }
+        // Another column's mark, one already gone, or one the reporting page
+        // does not hold: a page only opens the popovers of its own marks.
+        if (!marksRef.current.some((mark) => mark.id === click.markId && mark.anchor.page?.partId === click.partId)) return;
+        if (popoverRef.current?.markId === click.markId) {
+            closePopover();
+            return;
+        }
+        clearTimers();
+        setEditing(false);
+        setPopover({ markId: click.markId, rect: click.measure(), measure: click.measure, portal: click.portalTarget });
+    }), [clearTimers, closePopover]);
+
     const showPopover = React.useCallback((markId: string) => {
-<<<<<<< HEAD
-        const painted = rangesRef.current.get(markId);
-        const rect = painted ? unionOf(painted) : null;
-        if (!rect) return;
-        setPopover({ markId, rect });
-=======
         const parts = rangesRef.current.get(markId);
         if (!parts) return;
         setPopover({ markId, rect: boundsOf(parts) });
->>>>>>> bc50ba56a
     }, []);
 
     const scheduleClose = React.useCallback(() => {
@@ -734,13 +535,8 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
             if (frame !== null) return;
             frame = window.requestAnimationFrame(() => {
                 frame = null;
-<<<<<<< HEAD
-                const painted = rangesRef.current.get(openMarkId);
-                const rect = painted ? unionOf(painted) : null;
-=======
                 const parts = rangesRef.current.get(openMarkId);
                 const rect = parts ? boundsOf(parts) : popoverRef.current?.measure?.();
->>>>>>> bc50ba56a
                 if (!rect) {
                     closePopover();
                     return;
@@ -749,7 +545,8 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
             });
         };
         const handlePointerMove = (event: PointerEvent) => {
-            if (event.pointerType !== 'mouse' || editingRef.current) return;
+            // A page mark's popover opened by click stays until a click elsewhere.
+            if (event.pointerType !== 'mouse' || editingRef.current || popoverRef.current?.measure) return;
             if (isInPopoverCorridor(event.clientX, event.clientY)
                 || markAtPoint(rangesRef.current, event.clientX, event.clientY) === openMarkId) {
                 cancelClose();
@@ -781,6 +578,7 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
         <ChatQuoteMarkPopover
             ref={popoverElementRef}
             anchorRect={popover.rect}
+            portalTarget={popover.portal}
             comment={openMark.comment}
             editing={editing}
             onEditingChange={setEditing}

@@ -19,11 +19,7 @@ const local = (year: number, month: number, day: number, hour = 0) => new Date(y
 describe('rangeStart', () => {
   test('starts at local midnight and counts today as the first day', () => {
     const now = new Date(2026, 8, 23, 15, 30);
-<<<<<<< HEAD
-    expect(rangeStart('90d', now)).toBe(local(2026, 6, 26));
-=======
     expect(rangeStart('1d', now)).toBe(local(2026, 9, 23));
->>>>>>> bc50ba56a
     expect(rangeStart('7d', now)).toBe(local(2026, 9, 17));
     expect(rangeStart('30d', now)).toBe(local(2026, 8, 25));
     expect(rangeStart('all', now)).toBeUndefined();

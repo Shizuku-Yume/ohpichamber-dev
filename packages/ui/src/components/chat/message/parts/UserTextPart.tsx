@@ -36,10 +36,6 @@ import UserContextPart from './UserContextPart';
 import { SessionMentionChipsContext, withSessionMentionChips, type SessionMentionChips } from './sessionMentionChips';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-<<<<<<< HEAD
-=======
-import { useGuestLinkRules } from '@/lib/guests/links';
->>>>>>> bc50ba56a
 
 type PartWithText = Part & { text?: string; content?: string; value?: string };
 
@@ -58,11 +54,7 @@ type UserTextPartProps = {
     partIndex: number;
     onTruncationChange: (partIndex: number, truncated: boolean) => void;
     /** How many lines the collapsed text takes, 0 for a context card; context rows get what is left. */
-<<<<<<< HEAD
     onCollapsedLinesChange?: (partIndex: number, lines: number) => void;
-=======
-    onCollapsedLinesChange: (partIndex: number, lines: number) => void;
->>>>>>> bc50ba56a
     /** Names of the files attached to this message; `[name]` in the text renders as a file chip. */
     attachmentFilenames: readonly string[];
     /** The message's file parts; a citation of one the app can show opens it on click. */
@@ -99,7 +91,6 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     // Structured context (inline comments, terminal selections, annotations,
     // PR context) renders as a dedicated block instead of raw prompt text.
     const contextPayload = React.useMemo(() => readContextPart(part), [part]);
-    const guestLinks = useGuestLinkRules();
 
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
@@ -216,13 +207,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
 
     const textLines = contextPayload ? 0 : collapsedLines;
     React.useLayoutEffect(() => {
-<<<<<<< HEAD
         onCollapsedLinesChange?.(partIndex, textLines);
         return () => onCollapsedLinesChange?.(partIndex, 0);
-=======
-        onCollapsedLinesChange(partIndex, textLines);
-        return () => onCollapsedLinesChange(partIndex, 0);
->>>>>>> bc50ba56a
     }, [onCollapsedLinesChange, partIndex, textLines]);
 
     const handleExpand = React.useCallback(() => {
@@ -410,8 +396,6 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                             className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
                             disableLinkSafety
                             enableFileReferences={false}
-                            literalText
-                            guestLinks={guestLinks}
                         />
                     </SessionMentionChipsContext.Provider>
                 ) : (

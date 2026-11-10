@@ -6,11 +6,11 @@ export type CaretCoords = { top: number; bottom: number; left: number };
 
 /** Where a caret popup goes, in viewport coordinates. `above`: `top` is the popup's bottom edge. */
 type CaretPopupPlacement = {
- left: number;
- top: number;
- place: 'above' | 'below';
- width: number;
- maxHeight: number;
+  left: number;
+  top: number;
+  place: 'above' | 'below';
+  width: number;
+  maxHeight: number;
 };
 
 /**
@@ -38,53 +38,53 @@ const TEXT_INSET_PX = 12;
  * field: over the transcript above a composer, for instance.
  */
 export const placeCaretPopup = ({
- caret,
- caretBottom = caret.bottom,
- bounds,
- limits,
- width,
- rightToLeft = false,
+  caret,
+  caretBottom = caret.bottom,
+  bounds,
+  limits,
+  width,
+  rightToLeft = false,
 }: {
- caret: CaretCoords;
- /** The bottom of the line the caret is on now, below a trigger whose query wrapped. */
- caretBottom?: number;
- bounds: { left: number; right: number };
- limits: PopupLimits;
- width: number;
- rightToLeft?: boolean;
+  caret: CaretCoords;
+  /** The bottom of the line the caret is on now, below a trigger whose query wrapped. */
+  caretBottom?: number;
+  bounds: { left: number; right: number };
+  limits: PopupLimits;
+  width: number;
+  rightToLeft?: boolean;
 }): CaretPopupPlacement => {
- const spaceAbove = caret.top - GAP_PX - limits.top - EDGE_PX;
- const spaceBelow = limits.bottom - caretBottom - GAP_PX - EDGE_PX;
- const place = spaceAbove >= PREFERRED_HEIGHT_PX || spaceAbove >= spaceBelow ? 'above' : 'below';
- const fitted = Math.max(0, Math.min(width, bounds.right - bounds.left));
- const start = rightToLeft ? caret.left + TEXT_INSET_PX - fitted : caret.left - TEXT_INSET_PX;
- return {
-  left: Math.max(bounds.left, Math.min(start, bounds.right - fitted)),
-  top: place === 'above' ? caret.top - GAP_PX : caretBottom + GAP_PX,
-  place,
-  width: fitted,
-  maxHeight: Math.max(MIN_HEIGHT_PX, Math.min(PREFERRED_HEIGHT_PX, place === 'above' ? spaceAbove : spaceBelow)),
- };
+  const spaceAbove = caret.top - GAP_PX - limits.top - EDGE_PX;
+  const spaceBelow = limits.bottom - caretBottom - GAP_PX - EDGE_PX;
+  const place = spaceAbove >= PREFERRED_HEIGHT_PX || spaceAbove >= spaceBelow ? 'above' : 'below';
+  const fitted = Math.max(0, Math.min(width, bounds.right - bounds.left));
+  const start = rightToLeft ? caret.left + TEXT_INSET_PX - fitted : caret.left - TEXT_INSET_PX;
+  return {
+    left: Math.max(bounds.left, Math.min(start, bounds.right - fitted)),
+    top: place === 'above' ? caret.top - GAP_PX : caretBottom + GAP_PX,
+    place,
+    width: fitted,
+    maxHeight: Math.max(MIN_HEIGHT_PX, Math.min(PREFERRED_HEIGHT_PX, place === 'above' ? spaceAbove : spaceBelow)),
+  };
 };
 
 /** Two placements that put the popup in the same spot. */
 export const samePlacement = (a: CaretPopupPlacement | null, b: CaretPopupPlacement): boolean => (
- a !== null && a.left === b.left && a.top === b.top && a.place === b.place && a.width === b.width && a.maxHeight === b.maxHeight
+  a !== null && a.left === b.left && a.top === b.top && a.place === b.place && a.width === b.width && a.maxHeight === b.maxHeight
 );
 
 /** The placement as fixed-position styles for a popup portalled out of its field. */
 export const fixedPopupStyle = (placement: CaretPopupPlacement): React.CSSProperties => ({
- position: 'fixed',
- left: placement.left,
- // The lists carry `inset-s-0`, which right to left is `right: 0` and would win over `left`.
- right: 'auto',
- width: placement.width,
- maxWidth: placement.width,
- maxHeight: placement.maxHeight,
- marginBottom: 0,
- ...(placement.place === 'above'
-  ? { top: 'auto', bottom: window.innerHeight - placement.top }
-  : { top: placement.top, bottom: 'auto' }),
+  position: 'fixed',
+  left: placement.left,
+  // The lists carry `inset-s-0`, which right to left is `right: 0` and would win over `left`.
+  right: 'auto',
+  width: placement.width,
+  maxWidth: placement.width,
+  maxHeight: placement.maxHeight,
+  marginBottom: 0,
+  ...(placement.place === 'above'
+    ? { top: 'auto', bottom: window.innerHeight - placement.top }
+    : { top: placement.top, bottom: 'auto' }),
 });
 
 /**
@@ -95,29 +95,20 @@ export const fixedPopupStyle = (placement: CaretPopupPlacement): React.CSSProper
  * the room there.
  */
 export const viewportLimits = (): PopupLimits => {
-<<<<<<< HEAD
- const top = window.visualViewport?.offsetTop ?? 0;
- const keyboard = readMobileKeyboardVar('--oc-keyboard-inset');
- return {
-  top,
-  bottom: Math.min(top + (window.visualViewport?.height ?? window.innerHeight), window.innerHeight - keyboard),
- };
-=======
   const top = window.visualViewport?.offsetTop ?? 0;
   const keyboard = readMobileKeyboardVar('--oc-keyboard-inset');
   return {
     top,
     bottom: Math.min(top + (window.visualViewport?.height ?? window.innerHeight), window.innerHeight - keyboard),
   };
->>>>>>> bc50ba56a
 };
 
 // What decides where a textarea's text wraps, copied onto the measuring box.
 const MIRRORED_STYLES = [
- 'boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
- 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderStyle',
- 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform',
- 'wordSpacing', 'tabSize', 'textIndent', 'whiteSpace', 'wordBreak', 'overflowWrap', 'direction', 'textAlign',
+  'boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+  'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderStyle',
+  'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform',
+  'wordSpacing', 'tabSize', 'textIndent', 'whiteSpace', 'wordBreak', 'overflowWrap', 'direction', 'textAlign',
 ] as const;
 
 /**
@@ -129,29 +120,29 @@ const MIRRORED_STYLES = [
  * visible part.
  */
 export const textareaCaretCoords = (field: HTMLTextAreaElement, position = field.selectionStart): CaretCoords => {
- const box = field.getBoundingClientRect();
- const style = window.getComputedStyle(field);
- const mirror = document.createElement('div');
- for (const key of MIRRORED_STYLES) mirror.style[key] = style[key];
- // The field's text width, without a scrollbar it may show.
- const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
- Object.assign(mirror.style, {
-  position: 'fixed', top: '0', left: '-10000px', visibility: 'hidden', overflow: 'hidden', height: 'auto',
-  boxSizing: 'border-box', width: `${field.clientWidth + borders}px`,
- });
- mirror.textContent = field.value.slice(0, position);
- const word = /^\S*/.exec(field.value.slice(position))?.[0] ?? '';
- const marker = document.createElement('span');
- marker.textContent = word || '\u200b';
- mirror.append(marker);
- document.body.append(mirror);
- const mirrorBox = mirror.getBoundingClientRect();
- const first = marker.getClientRects()[0] ?? marker.getBoundingClientRect();
- const lineHeight = Math.min(first.height || Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) || 16, box.height);
- const offsetTop = first.top - mirrorBox.top;
- const offsetLeft = (style.direction === 'rtl' ? first.right : first.left) - mirrorBox.left;
- mirror.remove();
- const top = Math.max(box.top, Math.min(box.top + offsetTop - field.scrollTop, box.bottom - lineHeight));
- const left = Math.max(box.left, Math.min(box.left + offsetLeft - field.scrollLeft, box.right));
- return { top, bottom: top + lineHeight, left };
+  const box = field.getBoundingClientRect();
+  const style = window.getComputedStyle(field);
+  const mirror = document.createElement('div');
+  for (const key of MIRRORED_STYLES) mirror.style[key] = style[key];
+  // The field's text width, without a scrollbar it may show.
+  const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
+  Object.assign(mirror.style, {
+    position: 'fixed', top: '0', left: '-10000px', visibility: 'hidden', overflow: 'hidden', height: 'auto',
+    boxSizing: 'border-box', width: `${field.clientWidth + borders}px`,
+  });
+  mirror.textContent = field.value.slice(0, position);
+  const word = /^\S*/.exec(field.value.slice(position))?.[0] ?? '';
+  const marker = document.createElement('span');
+  marker.textContent = word || '\u200b';
+  mirror.append(marker);
+  document.body.append(mirror);
+  const mirrorBox = mirror.getBoundingClientRect();
+  const first = marker.getClientRects()[0] ?? marker.getBoundingClientRect();
+  const lineHeight = Math.min(first.height || Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) || 16, box.height);
+  const offsetTop = first.top - mirrorBox.top;
+  const offsetLeft = (style.direction === 'rtl' ? first.right : first.left) - mirrorBox.left;
+  mirror.remove();
+  const top = Math.max(box.top, Math.min(box.top + offsetTop - field.scrollTop, box.bottom - lineHeight));
+  const left = Math.max(box.left, Math.min(box.left + offsetLeft - field.scrollLeft, box.right));
+  return { top, bottom: top + lineHeight, left };
 };

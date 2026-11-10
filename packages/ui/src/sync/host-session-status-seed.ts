@@ -1,20 +1,9 @@
-<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
 import { canonicalClient, type SessionList } from '@/api/canonicalClient';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { isSessionDiscoveryFailed, resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { applyGlobalSessionStatusSnapshot, useGlobalSessionStatusStore } from './global-session-status';
 import { seedGlobalBlockingRequests } from './global-blocking-requests';
-=======
-import { hostTurnStart, type SessionTurnStart, type SyncEvent } from '@/lib/opencode/events';
-import { opencodeClient } from '@/lib/opencode/client';
-import type { HostSessionStatusSnapshot } from '@/lib/opencode/session-status';
-import { getRuntimeKey } from '@/lib/runtime-switch';
-import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { applyGlobalSessionStatusEvents, hasBackgroundWork, useGlobalSessionStatusStore } from './global-session-status';
-import { readHostBlockingRequestsSnapshot } from './global-blocking-requests';
-import { applyHostTurnStarts, needsHostTurnStarts } from './session-activity-timing';
->>>>>>> bc50ba56a
 
 // All retained surfaces use the active Host's canonical discovery. This seed is
 // additive, never proof that a missing session settled, and never a live event.
@@ -46,7 +35,6 @@ export const buildHostStatusSeedSnapshots = (
   return byDirectory;
 };
 
-<<<<<<< HEAD
 type SeedRequest = { runtimeKey: string; stale: boolean; promise: Promise<void> };
 let inFlight: SeedRequest | null = null;
 const isKnown = (sessionId: string): boolean => {
@@ -55,36 +43,6 @@ const isKnown = (sessionId: string): boolean => {
 };
 
 /** Coalesce only current-runtime requests; failure and absence preserve activity. */
-=======
-/**
- * The host's turn starts, moved onto this device's clock. A busy entry's start
- * is its running turn's. An idle entry's is its last turn's, which counts only
- * while this device holds that turn open for background work (`isHeldHere`); otherwise the turn is over, or a newer one began that the
- * host map has not caught up with.
- */
-export const buildHostTurnStarts = (
-  snapshot: HostSessionStatusSnapshot,
-  isHeldHere: (sessionId: string) => boolean,
-): Map<string, SessionTurnStart> => {
-  const starts = new Map<string, SessionTurnStart>();
-  for (const [sessionId, entry] of Object.entries(snapshot.sessions)) {
-    if (entry.turnStartedAt === undefined) continue;
-    const running = entry.status === 'busy' || entry.status === 'retry';
-    if (!running && !isHeldHere(sessionId)) continue;
-    starts.set(sessionId, hostTurnStart(entry.turnStartedAt, snapshot.serverTime));
-  }
-  return starts;
-};
-
-/** Idle here, with background work keeping its turn open. */
-const isHeldHere = (sessionId: string, activeSessionIds: ReadonlySet<string>): boolean => (
-  !activeSessionIds.has(sessionId) && hasBackgroundWork(sessionId, activeSessionIds)
-);
-
-let inFlight: Promise<void> | null = null;
-
-/** Fetches the host map once and seeds unobserved busy sessions. Coalesces overlapping calls. */
->>>>>>> bc50ba56a
 export const seedGlobalSessionStatusFromHost = (): Promise<void> => {
   const runtimeKey = getRuntimeKey();
   if (inFlight && !inFlight.stale && inFlight.runtimeKey === runtimeKey) return inFlight.promise;

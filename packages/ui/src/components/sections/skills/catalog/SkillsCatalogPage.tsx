@@ -23,7 +23,7 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { toast } from '@/components/ui';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
-import type { SkillsCatalogItem, SkillsCatalogSource } from '@/stores/useSkillsCatalogStore';
+import type { SkillsCatalogItem, SkillsCatalogSource } from '@/lib/api/types';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 
@@ -307,11 +307,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     const remaining: SkillsCatalogItem[] = [];
     const refreshedSources = new Set<string>();
     for (const item of uninstallItems) {
-      // A downloaded skill lives either in the user's skills root or in the
-      // project's; the canonical entry says which when it is installed at all.
-      const installed = item.installed;
-      const directory = installed?.isInstalled && installed.scope === 'workspace' ? settingsDirectory : null;
-      const success = (!installed?.isInstalled || installed.scope !== 'workspace' || Boolean(directory))
+      const directory = item.installed?.scope === 'project' ? settingsDirectory : null;
+      const success = (item.installed?.scope !== 'project' || Boolean(directory))
         && await deleteSkill(item.skillName, directory);
       if (success) {
         refreshedSources.add(item.sourceId);
@@ -600,9 +597,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 items={filtered}
                 itemKey={itemKey}
                 renderRow={(item) => {
-                  const installedEntry = item.installed;
-                  const installed = installedEntry?.isInstalled === true;
-                  const installedScope = installedEntry?.isInstalled ? installedEntry.scope : null;
+                  const installed = item.installed?.isInstalled;
+                  const installedScope = item.installed?.scope;
                   const skillUrl = skillCatalogUrl(item);
 
                   return (

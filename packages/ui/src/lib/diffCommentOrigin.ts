@@ -64,7 +64,12 @@ export const diffCommentOriginFromWalkthroughTarget = (
     target: WalkthroughTarget | null | undefined,
     changeRequest?: { provider?: SourceControlProvider | null; revision?: string | null },
 ): DiffCommentOrigin | undefined => (
-    target ? diffCommentOriginFromSource(target.source, changeRequest) : undefined
+    target
+        ? diffCommentOriginFromSource(
+            target.source,
+            'context' in target ? { provider: target.context.provider } : changeRequest,
+        )
+        : undefined
 );
 
 /** Identity for matching drafts to the surface they were written on. */

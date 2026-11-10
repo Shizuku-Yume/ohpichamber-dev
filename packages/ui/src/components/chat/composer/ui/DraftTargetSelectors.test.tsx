@@ -39,7 +39,6 @@ const renderBranchSheet = async (onCreateCustomWorktree?: () => void) => {
                 hasUncommittedChanges={false}
                 projectRootBranchOption={{ value: '/repo', label: 'main' }}
                 worktreeBranchOptions={[]}
-                spaceBranchOptions={[]}
                 branchItems={[{ value: '/repo', label: 'main' }]}
                 showBranchSelector
                 onProjectChange={() => { }}

@@ -782,6 +782,15 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** upstream changes license or repository, or the fork stops tracking upstream.
 - **Effort:** ux-v270-omp-alignment
 
+### Within the same merge: workbench shell resolutions
+
+- **Header project action:** the upstream `HeaderProjectControls` (and its test) is the header's one project-action surface; the fork's `ProjectActionsButton` and its test are deleted rather than kept beside it. `ProjectActionsProvider`, `ProjectActionsScope`, `projectActionsRunnerContext` and `ProjectActionRunIndicator` come from upstream and the main layout mounts the provider and the on-demand dialog.
+- **Isolated spaces in the workbench:** the merge drops upstream's draft-space branches (`useDraftSpaceTarget`, `panelContentDirectory`, `SpacePreparing`, `isSpaceDirectory`) from `Header`, `ContextSurfacePanes` and `SidebarFilesTree` instead of restoring `components/session/spaces/SpacePreparing`; isolated spaces stay unreleased behind `ISOLATED_SPACES_RELEASED = false`, so no surface can reach a draft-space state.
+- **Guest panes:** `PluginPane` keeps the fork's private `MessagePort` bootstrap transport (decision `2026-10-24 - Break the Guest SDK version for the private bootstrap transport`) and takes upstream's value from `usePageColors` plus the `DockedPanelSurfaceContext` provider around the floating popover, and upstream's `/btw` shell stop is left as the fork's `createGuestShellRequests`.
+- **RTL:** the upstream conversion to logical CSS and `getInlineStartSide` in `Sidebar`, `TitlebarLeftControls` and `Header` is not taken here; these files keep the fork's `--oc-titlebar-left-inset` and physical props until the separate RTL conversion lands, so one tree does not mix two conventions.
+- **Header terminal control:** `HeaderTerminalAction` is the fork's addition and has no upstream counterpart; it is kept and mounted in the header's right cluster.
+- **Files tree rows:** `fileTreeRows.ts` (+test) is restored because the adopted `SidebarFilesTree` imports it; the upstream `SidebarFilesTree.test.tsx` is retired with the draft-space behavior it tests.
+
 ## 2026-11-10 - OMP TUI parity means function and display parity, not a mirror of OMP's settings and commands
 
 - **Decided:** "OMP TUI parity" covers what the user can do and see in the agent experience (status, tool intent, live streaming, tool summaries, todo, modes, goals, subagents), presented in OpenChamber's UI idioms. GUI Settings expose only settings a GUI user acts on; terminal-presentation settings, internal tuning knobs and duplicates of an existing OpenChamber control are not shown, and the OMP Settings page offers "open config.yml" for the rest. When OpenChamber already has a control for a concept, it is the single surface. The Commands page manages prompt templates; built-in OMP commands stay in chat autocomplete.
@@ -820,4 +829,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Also recorded:** docs and tests in the same files follow those owners, so a re-sync takes the fork side for them until the Agent Service exposes the same behavior as Canonical events.
 - **Decided by:** agent (conservative option; no maintainer question)
 - **Revisit when:** the Agent Service exposes those behaviors as Canonical events, or a Host-owned contract replaces each fork route.
+## 2026-11-11 - Chat presentation is ported onto the canonical contract, not kept on the OpenCode engine
+
+- **Decided:** The chat UI keeps the OMP-boundary data access (canonical `ToolCallPart`/`ToolResultPart` from `/api/agent/v1`) and takes upstream v2.7.0's presentation for the components that render what an agent showed: `ShownToolCard`, `HtmlRenderFrame`, `UiPageFrame`, `OpenChamberToolOutput`, `ToolResultParts`, `GeneratedImages`, `SecretRequestCard`, `PageAskStatus`, plus the page/quote/selection stack (`pageQuoteBridge`, `frameSelection`, `TextSelectionMenu`, `ChatQuoteHighlightLayer`) and the composer/file-mention/markdown/work-status surface. Where a component's only engine dependency was its shape, a thin adapter (`message/parts/toolView.ts`) joins a canonical call with its glued result and `message/parts/pageRenderView.ts` carries the ported pure helpers (`renderedPage`, `generatedImagePaths`, `requestedSecret`, `requestedSecretRun`, `proposedWorkflowRunId`, `isShownInPlace`, `isSettledAsk`). `lib/opencode` is not restored; upstream-only chat files whose closure needs it stay excluded.
+- **Instead of:** keeping the fork's wholesale chat rewrites, or restoring the OpenCode UI engine so upstream's chat compiles verbatim (the engine is a standing merge exclusion and the migration target is OMP-only).
+- **Because:** upstream's chat is one version-coupled component rooted in `@/lib/opencode/*` (180 of 675 files import it directly; 244 of the 274 fork-vs-upstream disagreements share one dependency component), so neither wholesale side gives both the boundary and the presentation. The adapter is the smallest join that does, and it keeps the R3 cutover (tasks 23-24) free to change semantics without re-porting presentation.
+- **Decided by:** user instruction on the lane 13 merge ticket
+- **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
 - **Effort:** ux-v270-omp-alignment

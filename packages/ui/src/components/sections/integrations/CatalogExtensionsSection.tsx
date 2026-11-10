@@ -44,7 +44,7 @@ interface CatalogExtensionsSectionProps {
  * OpenChamber extensions the team publishes (Excalidraw, Resource Monitor), offered with a
  * one-click Git install. The installed extension is an ordinary entry in
  * Settings → Extensions; these cards read the same catalog. Hidden where the
- * runtime loads no extensions (mobile).
+ * runtime loads no extensions (VS Code, mobile).
  */
 export const CatalogExtensionsSection: React.FC<CatalogExtensionsSectionProps> = ({ divider = true }) => {
   const { t } = useI18n();

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
-import { isDesktopShell } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
@@ -46,6 +46,7 @@ const TEMPLATE_EVENT_LABEL_KEYS = {
 export const NotificationSettings: React.FC = () => {
   const { t } = useI18n();
   const isDesktop = React.useMemo(() => isDesktopShell(), []);
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   // The native Capacitor app runs in a WKWebView with no Web Notification API; it has its
   // own native (Local Notifications) permission. Treat it as a native runtime, not a
   // browser, so the toggle isn't gated on Notification.permission (which is stuck there).
@@ -54,7 +55,7 @@ export const NotificationSettings: React.FC = () => {
     const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
     return capacitor?.isNativePlatform?.() === true || window.location.protocol === 'capacitor:';
   }, []);
-  const isBrowser = !isDesktop && !isNativeApp;
+  const isBrowser = !isDesktop && !isVSCode && !isNativeApp;
   const nativeNotificationsEnabled = useUIStore(state => state.nativeNotificationsEnabled);
   const setNativeNotificationsEnabled = useUIStore(state => state.setNativeNotificationsEnabled);
   const notificationMode = useUIStore(state => state.notificationMode);
@@ -149,7 +150,7 @@ export const NotificationSettings: React.FC = () => {
     }
   };
 
-  const canShowNotifications = isDesktop || isNativeApp || (isBrowser && globalThis.Notification?.permission === 'granted');
+  const canShowNotifications = isDesktop || isVSCode || isNativeApp || (isBrowser && typeof Notification !== 'undefined' && Notification.permission === 'granted');
 
   const updateTemplate = (
     event: 'completion' | 'error' | 'question' | 'subtask',
@@ -470,7 +471,13 @@ export const NotificationSettings: React.FC = () => {
                 void handleToggleChange(checked);
               }}
               label={t('settings.notifications.page.delivery.enableLabel')}
-              info={isBrowser ? t('settings.notifications.page.delivery.browserPermissionHint') : undefined}
+              info={
+                isBrowser
+                  ? t('settings.notifications.page.delivery.browserPermissionHint')
+                  : isVSCode
+                    ? t('settings.notifications.page.delivery.vscodeHint')
+                    : undefined
+              }
               ariaLabel={t('settings.notifications.page.delivery.enableAria')}
             />
 
@@ -529,15 +536,6 @@ export const NotificationSettings: React.FC = () => {
                   label={t('settings.notifications.page.events.completionLabel')}
                   ariaLabel={t('settings.notifications.page.events.completionAria')}
                 />
-<<<<<<< HEAD
-                <SettingsCheckboxRow
-                  settingsItem="notifications.pullRequests"
-                  checked={notifyOnPullRequests}
-                  onChange={setNotifyOnPullRequests}
-                  label={t('settings.notifications.pullRequests.label')}
-                  info={t('settings.notifications.pullRequests.info')}
-                />
-=======
                 {!isVSCode && (
                   <SettingsCheckboxRow
                     settingsItem="notifications.pullRequests"
@@ -547,7 +545,6 @@ export const NotificationSettings: React.FC = () => {
                     info={t('settings.notifications.pullRequests.info')}
                   />
                 )}
->>>>>>> bc50ba56a
 
                 <SettingsCheckboxRow
                   checked={notifyOnSubtasks}

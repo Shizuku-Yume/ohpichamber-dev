@@ -1,4 +1,4 @@
-import type { SkillsCatalogItem } from '@/stores/useSkillsCatalogStore';
+import type { SkillsCatalogItem } from '@/lib/api/types';
 
 const GITHUB_REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 

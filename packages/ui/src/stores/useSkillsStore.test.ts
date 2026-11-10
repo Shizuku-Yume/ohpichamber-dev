@@ -37,7 +37,6 @@ afterAll(() => {
   read.mockRestore(); write.mockRestore(); remove.mockRestore();
 });
 
-<<<<<<< HEAD
 describe('native authored skills', () => {
   test('authored-only files remain repairable without inventing executable discovery IDs', async () => {
     catalog.mockResolvedValue({ workspaceId: 'workspace', skills: [] });
@@ -58,127 +57,6 @@ describe('native authored skills', () => {
     expect(await store.loadSkills(directory)).toBe(false);
     expect(useSkillsStore.getState().filesByDirectory[directory]).toEqual(files);
     expect((await store.getSkillDetail({ scope: 'workspace', authoredSkillId: 'folder/native' }, directory))?.content).toBe(rawMarkdown);
-=======
-const runtimeFetchMock = async (url: string, init?: RequestInit) => {
-  runtimeFetchCalls.push({ url: String(url), headers: init?.headers });
-  return runtimeFetchImpl(url, init);
-};
-
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
-    getDirectory: () => getDirectoryImpl(),
-    checkHealth: async () => true,
-    getIntegrationPolicies: () => policiesImpl(),
-  },
-}));
-
-mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: {
-    getState: () => ({
-      getActiveProject: () => ({ path: activeProjectPath }),
-    }),
-  },
-}));
-
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: runtimeFetchMock,
-}));
-
-mock.module('@/lib/background-network', () => ({
-  runBackgroundNetworkTask: async <T,>(task: () => Promise<T>) => task(),
-}));
-
-mock.module('@/lib/configUpdate', () => ({
-  startConfigUpdate: mock(() => undefined),
-  finishConfigUpdate: mock(() => undefined),
-  updateConfigUpdateMessage: mock(() => undefined),
-}));
-
-mock.module('@/lib/configSync', () => ({
-  emitConfigChange: mock(() => undefined),
-  scopeMatches: mock(() => false),
-  subscribeToConfigChanges: mock(() => () => undefined),
-}));
-
-mock.module('./utils/safeStorage', () => ({
-  createDeferredSafeJSONStorage: () => ({
-    getItem: async () => null,
-    setItem: async () => undefined,
-    removeItem: async () => undefined,
-  }),
-}));
-
-const { invalidateSkillsLoadCache, selectAvailableSkillsForDirectory, selectSkillsLoadedForDirectory, useSkillsStore } = await import('./useSkillsStore');
-
-describe('useSkillsStore directory resolution', () => {
-  beforeEach(() => {
-    runtimeFetchCalls = [];
-    getDirectoryImpl = () => undefined;
-    policiesImpl = async () => [];
-    runtimeFetchImpl = async () => new Response(JSON.stringify({
-      skills: [{
-        name: 'repo-local-skill',
-        path: `${activeProjectPath}/.agents/skills/repo-local-skill/SKILL.md`,
-        scope: 'project',
-        source: 'agents',
-        sources: { md: { description: 'Repository local' } },
-      }],
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    invalidateSkillsLoadCache(activeProjectPath);
-    invalidateSkillsLoadCache('/workspace/other-project');
-    useSkillsStore.setState({
-      selectedSkillName: null,
-      skills: [],
-      skillsByDirectory: {},
-      policiesByDirectory: {},
-      isLoading: false,
-      skillDraft: null,
-    });
-  });
-
-  test('a project counts as loaded once its skills are read, even when it has none or the read fails', async () => {
-    const loaded = (directory: string) => selectSkillsLoadedForDirectory(useSkillsStore.getState(), directory);
-    expect(loaded(activeProjectPath)).toBe(false);
-
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ skills: [] }), { headers: { 'Content-Type': 'application/json' } });
-    await useSkillsStore.getState().loadSkills(activeProjectPath);
-    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState(), activeProjectPath)).toEqual([]);
-    expect(loaded(activeProjectPath)).toBe(true);
-
-    runtimeFetchImpl = async () => new Response('{}', { status: 500 });
-    expect(await useSkillsStore.getState().loadSkills('/workspace/other-project')).toBe(false);
-    expect(loaded('/workspace/other-project')).toBe(true);
-  });
-
-  test('loading another project leaves the active project\'s skills alone', async () => {
-    // Settings can browse a project the app is not on. Chat autocompletes read
-    // `skills`, so that list must keep describing the active project.
-    const activeSkills = [{
-      id: 'active-only',
-      name: 'active-only',
-      path: `${activeProjectPath}/.agents/skills/active-only/SKILL.md`,
-      scope: 'project' as const,
-      source: 'agents' as const,
-      description: 'Active project skill',
-      group: undefined,
-      renamable: false,
-    }];
-    useSkillsStore.setState({
-      skills: activeSkills,
-      skillsByDirectory: { [activeProjectPath]: activeSkills },
-    });
-
-    const loaded = await useSkillsStore.getState().loadSkills('/workspace/other-project');
-
-    expect(loaded).toBe(true);
-    expect(runtimeFetchCalls[0]?.url).toContain(`directory=${encodeURIComponent('/workspace/other-project')}`);
-    const state = useSkillsStore.getState();
-    expect(state.skills).toEqual(activeSkills);
-    expect(state.skillsByDirectory['/workspace/other-project']?.map((skill) => skill.name)).toEqual(['repo-local-skill']);
->>>>>>> bc50ba56a
   });
   test('browsing a different settings directory never replaces ambient skills', async () => {
     const store = useSkillsStore.getState();
@@ -237,7 +115,6 @@ describe('useSkillsStore directory resolution', () => {
     expect(remove).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled();
   });
-<<<<<<< HEAD
   test('runtime switch rejects an older discovery completion', async () => {
     const pending = Promise.withResolvers<{ workspaceId: string; skills: FileResourceSkillEntry[] }>();
     const started = Promise.withResolvers<void>();
@@ -249,89 +126,5 @@ describe('useSkillsStore directory resolution', () => {
     pending.resolve({ workspaceId: 'workspace', skills: [entry] });
     expect(await loading).toBe(false);
     expect(selectAvailableSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([]);
-=======
-
-  test('a switch write moves the skill only after the server answers', async () => {
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    const [skill] = useSkillsStore.getState().skillsByDirectory[activeProjectPath];
-
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ error: 'Failed to write OpenCode configuration' }), { status: 500 });
-    expect(await useSkillsStore.getState().setSkillEnabled(skill, false)).toBe(false);
-    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState())).toEqual([skill]);
-
-    let body = '';
-    runtimeFetchImpl = async (_url, init) => {
-      body = String(init?.body);
-      return new Response(JSON.stringify({ changed: [`${activeProjectPath}/.opencode/opencode.json`] }), { headers: { 'Content-Type': 'application/json' } });
-    };
-    expect(await useSkillsStore.getState().setSkillEnabled(skill, false)).toBe(true);
-    expect(JSON.parse(body)).toEqual({ id: 'repo-local-skill', enabled: false, scope: 'project' });
-    expect(runtimeFetchCalls.at(-1)?.url).toContain('/api/config/skill-switch');
-    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState())).toEqual([]);
-    expect(useSkillsStore.getState().policiesByDirectory[activeProjectPath]).toEqual([
-      { resource: 'skill:repo-local-skill', effect: 'deny', path: `${activeProjectPath}/.opencode/opencode.json` },
-    ]);
-  });
-
-  test('a switch from a project with a non-Latin path reaches the server', async () => {
-    const directory = '/workspace/мій-проєкт';
-    expect(await useSkillsStore.getState().loadSkills(directory)).toBe(true);
-    const [skill] = useSkillsStore.getState().skillsByDirectory[directory];
-
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ changed: [`${directory}/.opencode/opencode.json`] }), { headers: { 'Content-Type': 'application/json' } });
-    expect(await useSkillsStore.getState().setSkillEnabled(skill, false, directory)).toBe(true);
-    const switchCall = runtimeFetchCalls.at(-1);
-    expect(switchCall?.url).toContain(`/api/config/skill-switch?directory=${encodeURIComponent(directory)}`);
-    expect(switchCall?.headers).toEqual({ 'Content-Type': 'application/json', 'x-opencode-directory': directory });
-  });
-
-  test('statements never read are unknown, not empty, and the next load asks again', async () => {
-    policiesImpl = async () => { throw new Error('offline'); };
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(useSkillsStore.getState().policiesByDirectory[activeProjectPath]).toBeUndefined();
-
-    policiesImpl = async () => [{ resource: 'skill:repo-local-skill', effect: 'deny', path: '/home/u/.config/opencode/opencode.json' }];
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(2);
-    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState())).toEqual([]);
-  });
-
-  test('a user skill switched off shows off in every loaded directory; nothing written is a failure', async () => {
-    const globalConfig = '/home/u/.config/opencode/opencode.json';
-    useSkillsStore.setState({ policiesByDirectory: { '/workspace/other-project': [] } });
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    const skill = { ...useSkillsStore.getState().skillsByDirectory[activeProjectPath][0], scope: 'user' as const };
-
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ changed: [globalConfig] }), { headers: { 'Content-Type': 'application/json' } });
-    expect(await useSkillsStore.getState().setSkillEnabled(skill, false)).toBe(true);
-    const deny: Policy = { resource: 'skill:repo-local-skill', effect: 'deny', path: globalConfig };
-    expect(useSkillsStore.getState().policiesByDirectory).toEqual({ [activeProjectPath]: [deny], '/workspace/other-project': [deny] });
-
-    // The deny lives where the server cannot edit it: on writes nothing.
-    useSkillsStore.setState({ policiesByDirectory: { [activeProjectPath]: [{ ...deny, path: '/broken/opencode.json' }] } });
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ changed: [] }), { headers: { 'Content-Type': 'application/json' } });
-    expect(await useSkillsStore.getState().setSkillEnabled(skill, true)).toBe(false);
-  });
-
-  test('renaming a switched-off skill carries its rule to the new id', async () => {
-    const projectConfig = `${activeProjectPath}/.opencode/opencode.json`;
-    policiesImpl = async () => [{ resource: 'skill:repo-local-skill', effect: 'deny', path: projectConfig }];
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-
-    const switches: unknown[] = [];
-    runtimeFetchImpl = async (url, init) => {
-      if (String(url).includes('/api/config/skill-switch')) {
-        const body = JSON.parse(String(init?.body));
-        switches.push(body);
-        return new Response(JSON.stringify({ changed: [projectConfig] }), { headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ skills: [] }), { headers: { 'Content-Type': 'application/json' } });
-    };
-    expect(await useSkillsStore.getState().renameSkill('repo-local-skill', 'shipped')).toBe(true);
-    expect(switches).toEqual([
-      { id: 'shipped', enabled: false, scope: 'project' },
-      { id: 'repo-local-skill', enabled: true, scope: 'project' },
-    ]);
->>>>>>> bc50ba56a
   });
 });

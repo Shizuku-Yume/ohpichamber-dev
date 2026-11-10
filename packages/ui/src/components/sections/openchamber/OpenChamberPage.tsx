@@ -1,7 +1,6 @@
 import React from 'react';
 import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 import { ChatSettings } from './ChatSettings';
-import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { MergedWorktreeCleanupSettings } from './MergedWorktreeCleanupSettings';
 import { SessionWorkSettings } from './SessionWorkSettings';
@@ -15,17 +14,10 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
-<<<<<<< HEAD
-import { DesktopAppSettings } from './DesktopAppSettings';
-import { MobileWorkspaceTabsSettings } from './MobileWorkspaceTabsSettings';
-=======
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
-import { ChatSettings } from './ChatSettings';
 import { GeneralConnectionAndPrivacySettings, GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
->>>>>>> bc50ba56a
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { useDeviceInfo } from '@/lib/device';
 import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { isCapacitorApp } from '@/lib/platform';
 import { useI18n } from '@/lib/i18n';
@@ -43,37 +35,13 @@ const useRuntimeEndpointEpoch = (): number => {
 };
 
 interface OpenChamberPageProps {
-    /** Which section to display. If undefined, shows all sections (mobile/legacy behavior) */
-    section?: OpenChamberSection;
+    /** Which section to display. */
+    section: OpenChamberSection;
 }
 
 export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => {
     const { t } = useI18n();
-    const { isMobile } = useDeviceInfo();
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
-    const showAbout = isMobile && isWebRuntime();
-    const isLocalDesktop = isDesktopShell() && isDesktopLocalOriginActive();
-    const showDesktopNetworkSettings = isLocalDesktop;
-
-    // If no section specified, show all (mobile/legacy behavior)
-    if (!section) {
-        return (
-            <SettingsPageLayout showSaveStatus className="openchamber-page-body space-y-3 sm:space-y-6">
-                <OpenChamberVisualSettings />
-                <SessionWorkSettings />
-                {showDesktopNetworkSettings && <DesktopNetworkSettings />}
-                {isLocalDesktop && <DesktopAppSettings />}
-                {isMobile && <MobileWorkspaceTabsSettings />}
-                <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
-                <OpenChamberToolsSettings />
-                <SessionRetentionSettings />
-                <MergedWorktreeCleanupSettings />
-                <AppLinkSecuritySettings />
-                {isWebRuntime() && !isDesktopShell() && !isCapacitorApp() && <PasskeySettings />}
-                {showAbout && <AboutSettings />}
-            </SettingsPageLayout>
-        );
-    }
 
     // Show specific section content
     const renderSectionContent = () => {
@@ -114,22 +82,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         tunnel: t('settings.page.tunnel.title'),
     }[section];
 
-<<<<<<< HEAD
-    const pageDescription = {
-        general: t('settings.page.general.description'),
-        visual: t('settings.page.appearance.description'),
-        chat: t('settings.page.chat.description'),
-        sessions: t('settings.page.sessions.description'),
-        shortcuts: t('settings.page.shortcuts.description'),
-        git: undefined,
-        github: undefined,
-        notifications: t('settings.page.notifications.description'),
-        voice: t('settings.page.voice.description'),
-        tunnel: t('settings.page.tunnel.description'),
-    }[section];
-
-=======
->>>>>>> bc50ba56a
     return (
         <SettingsPageLayout
             title={pageTitle}
@@ -146,62 +98,30 @@ const ShortcutsSectionContent: React.FC = () => {
     return <KeyboardShortcutsSettings />;
 };
 
-<<<<<<< HEAD
-// General section: app-level settings — startup/tray/network, access password,
-// passkeys, message stream transport, privacy.
-=======
 // General, by what people come here for: the desktop app itself, the agent's
-// tools, how other devices reach this app, the window, global shortcuts, the
-// OpenCode CLI and its environment, files and the terminal, then trusted
-// links, message transport and privacy. The layout drops the divider above
-// whichever section renders first.
->>>>>>> bc50ba56a
+// tools, how other devices reach this app, the window, global shortcuts,
+// files and the terminal, then trusted links, message transport and privacy.
+// The layout drops the divider above whichever section renders first.
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
-    const { isMobile } = useDeviceInfo();
     const isLocalDesktop = isDesktopShell() && isDesktopLocalOriginActive();
-    const showDesktopNetworkSettings = isLocalDesktop;
     // Passkeys only work against the browser's WebAuthn UI on the web surface —
     // desktop shell and the Capacitor app never show the login screen.
     const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isCapacitorApp();
     return (
         <>
-<<<<<<< HEAD
-            {isLocalDesktop && <DesktopAppSettings />}
-            {isMobile && <MobileWorkspaceTabsSettings />}
-            {showDesktopNetworkSettings && <DesktopNetworkSettings />}
-            {showPasskeySettings && <PasskeySettings />}
-            <AppLinkSecuritySettings />
-            {/* Remounts on a runtime switch: the names come from that server. */}
-            <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
-            <OpenChamberToolsSettings />
-            <OpenChamberVisualSettings visibleSettings={[
-                'fileEditorKeymap',
-                'sessionTabs',
-                'liveBrowserTabs',
-                'autoSaveEnabled',
-                'confirmFileTreeMove',
-                'terminalQuickKeys',
-                'terminalShell',
-                'terminalLoginShell',
-                'messageTransport',
-                'reportUsage',
-            ]} />
-=======
             {/* Remote hosts too: the Dock badge works there. */}
             {isDesktopShell() && <DesktopAppSettings />}
-            {!isVSCode && <OpenChamberToolsSettings />}
+            <OpenChamberToolsSettings />
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <GeneralInterfaceSettings />
             {isLocalDesktop && <DesktopQuickAccessSettings />}
-            {!isVSCode && <OpenCodeCliSettings />}
             {/* Remounts on a runtime switch: the names come from that server. */}
-            {!isVSCode && <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />}
+            <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
             <GeneralFilesAndTerminalSettings />
             <AppLinkSecuritySettings />
             <GeneralConnectionAndPrivacySettings />
->>>>>>> bc50ba56a
         </>
     );
 };

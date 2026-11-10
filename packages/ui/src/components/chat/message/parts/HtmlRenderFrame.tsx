@@ -10,8 +10,8 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
-import type { ToolPart } from '@/lib/opencode/model';
-import { renderedPage, type RenderedPageAsk } from '@/lib/opencode/tools';
+import type { CanonicalToolView, RenderedPageAsk } from './toolView';
+import { renderedPage } from './pageRenderView';
 import { answerRenderedPage } from '@/lib/renderPageAnswer';
 import { openExternalUrl } from '@/lib/url';
 import type { ChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
@@ -371,11 +371,11 @@ function PageSelectionScope({
 }
 
 /** The page an `openchamber_render` call showed, or nothing for any other part. */
-export function ShownPage({ part }: { part: ToolPart }) {
+export function ShownPage({ part }: { part: CanonicalToolView }) {
     // Kept while the call's state is the same object, so the page is not sent
     // its answer state again on every render.
     const { t } = useI18n();
-    const page = React.useMemo(() => renderedPage(part.tool, part.state), [part.tool, part.state]);
+    const page = React.useMemo(() => renderedPage(part), [part]);
     if (!page) return null;
     if (page.ui) return <UiPageFrame part={part} source={page.ui} ask={page.ask} />;
     return <HtmlRenderFrame part={part} html={page.html} title={page.title || t('chat.htmlRender.untitled')} ask={page.ask} />;
@@ -383,7 +383,7 @@ export function ShownPage({ part }: { part: ToolPart }) {
 
 interface HtmlRenderFrameProps {
     /** The call; selections and quotes in the page are attributed to its message. */
-    part: ToolPart;
+    part: CanonicalToolView;
     html: string;
     title: string;
     ask: RenderedPageAsk;

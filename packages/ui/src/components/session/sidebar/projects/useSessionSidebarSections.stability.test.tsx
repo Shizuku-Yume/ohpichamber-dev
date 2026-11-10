@@ -14,22 +14,14 @@ import { buildSidebarSessionProjection } from '../list/sessionCollection';
 // a real change to one project rebuilds that project only, and an update that
 // changes nothing a project renders keeps every reference.
 
-const session = (sessionId: string, directory: string, title = sessionId): Session => ({
-  sessionId,
-  rootSessionId: sessionId,
-  projectId: 'project',
-  workspaceId: 'workspace',
-  displayPath: directory,
-  createdAt: 1,
-  updatedAt: 1,
-  epoch: 'epoch',
-  headSequence: '0',
-  runtimeStatus: 'idle',
-  activeRunId: null,
-  mode: { kind: 'main' },
-  title: title, metadata: {},
-  metadataRevision: '0',
-  archiveRevision: '0',
+const session = (id: string, directory: string, title = id): Session => ({
+  id,
+  projectID: 'project',
+  cost: 0,
+  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  title,
+  directory,
+  time: { created: 1, updated: 1 },
 });
 
 const worktree = (projectDirectory: string, name: string): WorktreeMetadata => ({
@@ -69,11 +61,7 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
   const currentSessions = inputs.sessions ?? sessionsByProject;
   const allSessions = [...currentSessions.values()].flat();
   const projectIdBySessionId = new Map(
-<<<<<<< HEAD
-    [...currentSessions].flatMap(([projectId, sessions]) => sessions.map((entry) => [entry.sessionId, projectId] as const)),
-=======
     [...currentSessions].flatMap(([projectId, sessions]) => sessions.map((entry) => [entry.id, projectId] as const)),
->>>>>>> bc50ba56a
   );
   const projection = buildSidebarSessionProjection({
     globalActiveSessions: allSessions,
@@ -85,20 +73,12 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
   });
   const projectedSessions = new Map(projects.map((project) => [
     project.id,
-<<<<<<< HEAD
-    projection.projectSessions.filter((entry) => projectIdBySessionId.get(entry.sessionId) === project.id),
-=======
     projection.projectSessions.filter((entry) => projectIdBySessionId.get(entry.id) === project.id),
->>>>>>> bc50ba56a
   ]));
   const nestedSessionIds = new Set(
     [...projection.childrenMap]
       .filter(([parentId]) => projection.sessionById.has(parentId))
-<<<<<<< HEAD
-      .flatMap(([, children]) => children.map((child) => child.sessionId)),
-=======
       .flatMap(([, children]) => children.map((child) => child.id)),
->>>>>>> bc50ba56a
   );
   const grouping = useSessionGrouping({
     homeDirectory: null,
@@ -106,6 +86,7 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
     pinnedSessionIds: stableMaps.pinnedSessionIds,
     sessionOrderRanks: inputs.ranks,
     gitBranches: stableMaps.gitBranches,
+    isVSCode: false,
     sessionOwners: inputs.owners,
     sessionById: projection.sessionById,
     childrenMap: projection.childrenMap,
@@ -220,20 +201,12 @@ describe('sidebar project sections keep references across unrelated updates', ()
   });
 
   test('a same-ID descendant update rebuilds its parent project tree', async () => {
-<<<<<<< HEAD
-    const child = { ...b1, parentSessionId: 'a1' };
-=======
     const child = { ...b1, parentID: 'a1' };
->>>>>>> bc50ba56a
     const beforeSessions = new Map([['a', [a1, a2]], ['b', [child, b2]]]);
     const owners = ownersFor(defaultScopes);
     await render({ ranks: new Map(), owners, sessions: beforeSessions });
     const sectionA = section('a');
-<<<<<<< HEAD
     expect(sectionA?.groups.flatMap((group) => group.sessions).find((node) => node.session.sessionId === 'a1')
-=======
-    expect(sectionA?.groups.flatMap((group) => group.sessions).find((node) => node.session.id === 'a1')
->>>>>>> bc50ba56a
       ?.children.map((node) => node.session.title)).toContain('b1');
 
     const updatedChild = { ...child, title: 'renamed child' };
@@ -244,30 +217,17 @@ describe('sidebar project sections keep references across unrelated updates', ()
     });
 
     expect(section('a')).not.toBe(sectionA);
-<<<<<<< HEAD
     expect(section('a')?.groups.flatMap((group) => group.sessions).find((node) => node.session.sessionId === 'a1')
-=======
-    expect(section('a')?.groups.flatMap((group) => group.sessions).find((node) => node.session.id === 'a1')
->>>>>>> bc50ba56a
       ?.children.map((node) => node.session.title)).toContain('renamed child');
   });
 
   test('a cross-project sibling rank change rebuilds the parent tree in lifecycle order', async () => {
-<<<<<<< HEAD
-    const childOne = { ...b1, parentSessionId: 'a1' };
-    const childTwo = { ...b2, parentSessionId: 'a1' };
-    const sessions = new Map([['a', [a1, a2]], ['b', [childOne, childTwo]]]);
-    const owners = ownersFor(defaultScopes);
-    const childIds = () => section('a')?.groups.flatMap((group) => group.sessions)
-      .find((node) => node.session.sessionId === 'a1')?.children.map((node) => node.session.sessionId);
-=======
     const childOne = { ...b1, parentID: 'a1' };
     const childTwo = { ...b2, parentID: 'a1' };
     const sessions = new Map([['a', [a1, a2]], ['b', [childOne, childTwo]]]);
     const owners = ownersFor(defaultScopes);
     const childIds = () => section('a')?.groups.flatMap((group) => group.sessions)
-      .find((node) => node.session.id === 'a1')?.children.map((node) => node.session.id);
->>>>>>> bc50ba56a
+      .find((node) => node.session.sessionId === 'a1')?.children.map((node) => node.session.sessionId);
 
     await render({ ranks: new Map([['b1', 3], ['b2', 2]]), owners, sessions });
     const parentSection = section('a');
@@ -281,28 +241,17 @@ describe('sidebar project sections keep references across unrelated updates', ()
 
   test('a foreign child arriving after a newer review invalidates only affected project trees', async () => {
     const review = {
-<<<<<<< HEAD
-      ...session('review', a1.displayPath),
-      metadata: { openchamber: { kind: 'review' as const, originalSessionID: 'a1' } },
-    };
-    const owners = ownersFor({ ...defaultScopes, review: a1.displayPath });
-=======
       ...session('review', a1.directory),
       metadata: { openchamber: { kind: 'review', originalSessionID: 'a1' } },
     };
     const owners = ownersFor({ ...defaultScopes, review: a1.directory });
->>>>>>> bc50ba56a
     const ranks = new Map([['review', 10], ['a1', 5]]);
     const beforeSessions = new Map([['a', [a1, review, a2]], ['b', [b2]], ['c', [c1]]]);
     await render({ ranks, owners, sessions: beforeSessions });
     const beforeA = section('a');
     const beforeC = section('c');
 
-<<<<<<< HEAD
-    const foreignChild = { ...b1, parentSessionId: 'a1' };
-=======
     const foreignChild = { ...b1, parentID: 'a1' };
->>>>>>> bc50ba56a
     await render({
       ranks,
       owners,
@@ -310,15 +259,9 @@ describe('sidebar project sections keep references across unrelated updates', ()
     });
 
     const original = section('a')?.groups.flatMap((group) => group.sessions)
-<<<<<<< HEAD
       .find((node) => node.session.sessionId === 'a1');
     expect(section('a')).not.toBe(beforeA);
     expect(original?.children.map((node) => node.session.sessionId)).toEqual(['review', 'b1']);
-=======
-      .find((node) => node.session.id === 'a1');
-    expect(section('a')).not.toBe(beforeA);
-    expect(original?.children.map((node) => node.session.id)).toEqual(['review', 'b1']);
->>>>>>> bc50ba56a
     expect(section('c')).toBe(beforeC);
   });
 });

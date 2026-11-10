@@ -234,7 +234,6 @@ export function createComposerMorphController(): ComposerMorphController {
   });
   if (riders) riders.style.translate = `0 ${ridersTravel().from}px`;
 
-<<<<<<< HEAD
   const restore = () => {
    for (const animation of animations) animation.cancel();
    animations.length = 0;
@@ -352,125 +351,6 @@ export function createComposerMorphController(): ComposerMorphController {
    if (detail.open !== (phase === 'show')) return;
    finish();
   }
-=======
-        const restore = () => {
-            for (const animation of animations) animation.cancel();
-            animations.length = 0;
-            box.style.height = '';
-            box.removeAttribute(MORPH_STATE_ATTR);
-            if (prompt) {
-                prompt.style.transform = '';
-                prompt.style.clipPath = '';
-            }
-            for (const control of arriving) control.style.opacity = '';
-            if (riders) riders.style.translate = '';
-            if (slot) {
-                slot.style.height = '';
-                slot.style.alignItems = '';
-            }
-        };
-        const cleanup = () => {
-            if (startTimer !== null) window.clearTimeout(startTimer);
-            if (finishTimer !== null) window.clearTimeout(finishTimer);
-            window.removeEventListener('oc:keyboard-anim', handleKeyboardAnim);
-            window.removeEventListener('oc:keyboard-settled', handleKeyboardSettled);
-            restore();
-        };
-        const finish = () => {
-            if (active !== cleanup) return;
-            active = null;
-            cleanup();
-            if (!startedByKeyboard) {
-                dispatchMorph({ phase: 'release', direction, delta: transcriptDelta, durationMs: timing.durationMs });
-            }
-        };
-        const start = (byKeyboard: boolean) => {
-            if (started) return;
-            started = true;
-            startedByKeyboard = byKeyboard;
-            if (startTimer !== null) {
-                window.clearTimeout(startTimer);
-                startTimer = null;
-            }
-            window.removeEventListener('oc:keyboard-anim', handleKeyboardAnim);
-            // Re-read the resting geometry now that the keyboard's root class
-            // has flipped, so the pinned inset (expand) and the announced
-            // delta (collapse) match what the slot will measure at release —
-            // a stale value here is a few-pixel re-pin after the motion.
-            if (slot && fromSlotHeight !== null) {
-                const natural = measureSlotNatural();
-                if (natural !== null) {
-                    slotDelta = Math.abs(natural - fromSlotHeight);
-                    transcriptDelta = transcriptDeltaFor(natural);
-                    if (direction === 'expand') pinSlot(natural);
-                    dispatchMorph({ phase: 'hold', direction, delta: transcriptDelta, durationMs: timing.durationMs });
-                }
-            }
-            // A height and a clip run on the main thread whatever their easing;
-            // transforms, translates and opacity take keyframes of the curve,
-            // which Core Animation runs (keyboardKeyframes).
-            const options: KeyframeAnimationOptions = { duration: timing.durationMs, easing: timing.easing, fill: 'forwards' };
-            const compositorOptions: KeyframeAnimationOptions = { duration: timing.durationMs, easing: 'linear', fill: 'forwards' };
-            animations.push(box.animate([{ height: `${fromRect.height}px` }, { height: `${toRect.height}px` }], options));
-            if (prompt) {
-                if (Math.abs(promptOffset) >= 0.5) {
-                    animations.push(prompt.animate(
-                        keyboardKeyframes((position) => ({ transform: `translateY(${promptOffset * (1 - position)}px)` })),
-                        compositorOptions,
-                    ));
-                }
-                if (direction === 'expand' && promptGainedHeight >= 0.5) {
-                    // Extra lines unfurl beneath the rising first line instead
-                    // of sliding up from under the footer as one block.
-                    animations.push(prompt.animate(
-                        [{ clipPath: `inset(0 0 ${promptGainedHeight}px 0)` }, { clipPath: 'inset(0 0 0 0)' }],
-                        options,
-                    ));
-                }
-            }
-            if (riders) {
-                // Re-read after the slot delta was refreshed above; the
-                // keyframes carry it, so no inline update is needed.
-                const travel = ridersTravel();
-                animations.push(riders.animate(
-                    keyboardKeyframes((position) => ({ translate: `0 ${travel.from + (travel.to - travel.from) * position}px` })),
-                    compositorOptions,
-                ));
-            }
-            for (const control of arriving) {
-                // Hidden through the first half while the prompt still crosses
-                // the footer row, then in along the direction of travel.
-                animations.push(control.animate(
-                    keyboardKeyframes((position) => ({ opacity: position, transform: `translateY(${ARRIVAL_DRIFT_PX * (1 - position)}px)` })),
-                    { duration: timing.durationMs / 2, delay: timing.durationMs / 2, easing: 'linear', fill: 'both' },
-                ));
-            }
-            if (!byKeyboard) {
-                // No keyboard leg: the transcript glides on the morph alone.
-                dispatchMorph({ phase: 'glide', direction, delta: transcriptDelta, durationMs: timing.durationMs });
-                finishTimer = window.setTimeout(finish, timing.durationMs + FINISH_SLACK_MS);
-            } else {
-                // The keyboard's settled event ends the leg; the timer is a
-                // backstop should it never arrive.
-                finishTimer = window.setTimeout(finish, timing.durationMs + 4 * FINISH_SLACK_MS);
-            }
-        };
-        function handleKeyboardAnim(event: Event) {
-            // SAFETY: oc:keyboard-anim is dispatched only by useNativeMobileChrome
-            // as a CustomEvent whose detail carries `phase: 'show' | 'hide'`.
-            const detail = (event as CustomEvent<{ phase: 'show' | 'hide' }>).detail;
-            if (detail.phase !== phase) return;
-            start(true);
-        }
-        function handleKeyboardSettled(event: Event) {
-            // SAFETY: oc:keyboard-settled is dispatched only by useNativeMobileChrome
-            // as a CustomEvent whose detail carries `open`.
-            const detail = (event as CustomEvent<{ open: boolean }>).detail;
-            if (!started || !startedByKeyboard) return;
-            if (detail.open !== (phase === 'show')) return;
-            finish();
-        }
->>>>>>> bc50ba56a
 
   dispatchMorph({ phase: 'hold', direction, delta: transcriptDelta, durationMs: timing.durationMs });
   window.addEventListener('oc:keyboard-anim', handleKeyboardAnim);

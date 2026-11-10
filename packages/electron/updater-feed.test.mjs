@@ -2,17 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-<<<<<<< HEAD
-  CANARY_UPDATER_FEED,
-  PRODUCTION_UPDATER_FEED,
-=======
   CANARY_MIRROR_UPDATER_FEED,
   CANARY_UPDATER_FEED,
   MIRROR_FAILURE_BACKOFF_MS,
   PRODUCTION_UPDATER_FEED,
   STABLE_MIRROR_UPDATER_FEED,
   pickUpdaterSource,
->>>>>>> bc50ba56a
   isCanaryVersion,
   isUpdateChannel,
   normalizeUpdateChannel,

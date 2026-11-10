@@ -7,6 +7,7 @@ import { I18nProvider } from '@/lib/i18n';
 import type { CreateTerminalOptions, TerminalHandlers, TerminalStreamEvent } from '@/lib/api/types';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 import type { OpenChamberProjectAction } from '@/lib/openchamberConfig';
+import { getSafeStorage } from '@/stores/utils/safeStorage';
 
 const toastCalls = {
   error: new Array<string>(),
@@ -20,6 +21,7 @@ const openExternalCalls: string[] = [];
 const detectedDevServer: MockedDetectedDevServer = { command: null, previewUrlHint: null };
 const mockedDeviceInfo = { isMobile: false, isTablet: false, hasTouchOnlyPointer: false };
 let effectiveDirectory = '/repo';
+const projectSetupReads: Array<{ id: string; path: string }> = [];
 
 const uiState = {
   terminalShell: 'zsh',
@@ -57,6 +59,7 @@ interface MockedActionsState {
 interface MockedDetectedDevServer {
   command: string | null;
   previewUrlHint: string | null;
+  actionId?: string;
 }
 
 const createCalls: CreateTerminalOptions[] = [];
@@ -122,14 +125,6 @@ const terminal = {
   },
 };
 
-<<<<<<< HEAD:packages/ui/src/components/layout/ProjectActionsButton.test.tsx
-mock.module('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
-  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
-  DropdownMenuItem: ({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) => React.createElement('button', { type: 'button', onClick, className }, children),
-  DropdownMenuSeparator: () => React.createElement('hr'),
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
-=======
 // The right-click menu renders inline, so its items are plain buttons.
 mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -137,7 +132,6 @@ mock.module('@/components/ui/context-menu', () => ({
   ContextMenuItem: ({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) => React.createElement('button', { type: 'button', onClick, className }, children),
   ContextMenuSeparator: () => React.createElement('hr'),
   ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
->>>>>>> bc50ba56a:packages/ui/src/components/layout/HeaderProjectControls.test.tsx
 }));
 mock.module('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -152,7 +146,7 @@ mock.module('@/components/ui', () => ({
   },
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: ({ name, className }: { name: string; className?: string }) => React.createElement('span', { 'data-icon': name, className }) }));
-mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ terminal, runtime: { platform: 'web' } }) }));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ terminal, runtime: { isVSCode: false, platform: 'web' } }) }));
 mock.module('@/lib/device', () => ({ useDeviceInfo: () => mockedDeviceInfo }));
 // Modules under test import other desktop helpers too; keep the real ones.
 const desktop = await import('@/lib/desktop');
@@ -163,10 +157,6 @@ mock.module('@/stores/useDesktopSshStore', () => ({ useDesktopSshStore: useDeskt
 mock.module('@/lib/url', () => ({ openExternalUrl: async (url: string) => { openExternalCalls.push(url); } }));
 const openchamberConfig = await import('@/lib/openchamberConfig');
 mock.module('@/lib/openchamberConfig', () => ({
-<<<<<<< HEAD:packages/ui/src/components/layout/ProjectActionsButton.test.tsx
-  fetchProjectSetup: async () => ({
-    trust: { hash: null, trusted: true },
-=======
   ...openchamberConfig,
   getProjectActionsState: async () => mockedActionsState,
   getProjectSetup: async (projectRef: { id: string; path: string }) => {
@@ -175,27 +165,15 @@ mock.module('@/lib/openchamberConfig', () => ({
     trust: mockedActionsState.actions.some((action) => action.source === 'shared')
       ? { hash: 'sha256:shared', trusted: false }
       : { hash: null, trusted: true },
->>>>>>> bc50ba56a:packages/ui/src/components/layout/HeaderProjectControls.test.tsx
     setupWorktree: [],
     setupWorktreeWait: false,
-    projectActions: mockedActionsState.actions.map((action) => ({ ...action, source: 'personal' })),
+    projectActions: mockedActionsState.actions.map((action) => ({ ...action, source: action.source ?? 'personal' })),
     projectActionsPrimaryId: null,
     draftStarters: [],
-    shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
-    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: mockedActionsState.actions, projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
-  }),
-  getProjectActionsState: async () => mockedActionsState,
-  // The button loads the merged setup; the test's actions are personal, so nothing asks for trust.
-  getProjectSetup: async () => ({
-    trust: { hash: null, trusted: true },
-    setupWorktree: [],
-    setupWorktreeWait: false,
-    projectActions: mockedActionsState.actions.map((action) => ({ ...action, source: 'personal' })),
-    projectActionsPrimaryId: null,
-    draftStarters: [],
-    shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
-    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: mockedActionsState.actions, projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
-  }),
+    shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: mockedActionsState.actions.filter((action) => action.source === 'shared'), draftStarters: [], plansDir: null },
+    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', projectActions: mockedActionsState.actions.filter((action) => action.source !== 'shared'), projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
+    };
+  },
   updateProjectSetup: async () => true,
 }));
 mock.module('@/lib/browser/announcedServers', () => ({ setAnnouncedDevServers: () => undefined }));
@@ -203,19 +181,15 @@ mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () 
 mock.module('@/lib/detectDevServer', () => ({
   detectDevServerCommand: async () => (
     detectedDevServer.command
-      ? { command: detectedDevServer.command, previewUrlHint: detectedDevServer.previewUrlHint ?? undefined }
+      ? { command: detectedDevServer.command, previewUrlHint: detectedDevServer.previewUrlHint ?? undefined, actionId: detectedDevServer.actionId }
       : null
   ),
   readPackageJsonScripts: async () => ({}),
 }));
 
-<<<<<<< HEAD:packages/ui/src/components/layout/ProjectActionsButton.test.tsx
-const { ProjectActionsButton } = await import('./ProjectActionsButton');
-=======
 const { HeaderProjectAction } = await import('./HeaderProjectControls');
 const { ProjectActionsScope } = await import('./ProjectActionsScope');
 const { getSharedTrustConfirmationSnapshot, settleSharedTrustConfirmation } = await import('@/lib/sharedTrustConfirmation');
->>>>>>> bc50ba56a:packages/ui/src/components/layout/HeaderProjectControls.test.tsx
 
 describe('HeaderProjectAction lifecycle', () => {
   let windowInstance: Window;
@@ -274,10 +248,13 @@ describe('HeaderProjectAction lifecycle', () => {
     openExternalCalls.length = 0;
     detectedDevServer.command = null;
     detectedDevServer.previewUrlHint = null;
+    detectedDevServer.actionId = undefined;
     mockedDeviceInfo.isMobile = true;
     effectiveDirectory = '/repo';
+    projectSetupReads.length = 0;
     sessionCounter = 0;
     mockedActionsState.actions = [{ id: 'build', name: 'Build', command: 'echo hello', icon: 'build' }];
+    getSafeStorage().clear();
   });
 
   afterEach(async () => {
@@ -291,25 +268,17 @@ describe('HeaderProjectAction lifecycle', () => {
     await act(async () => {
       root.render(
         React.createElement(I18nProvider, null,
-          React.createElement(ProjectActionsButton, {
+          React.createElement(ProjectActionsScope, {
             projectRef: { id: 'project-1', path: projectPath },
             directory,
             allowMobile: true,
-<<<<<<< HEAD:packages/ui/src/components/layout/ProjectActionsButton.test.tsx
-          }),
-=======
           }, React.createElement(HeaderProjectAction, { buttonClassName: '' })),
->>>>>>> bc50ba56a:packages/ui/src/components/layout/HeaderProjectControls.test.tsx
         ),
       );
     });
     await act(async () => { await Promise.resolve(); });
   };
 
-<<<<<<< HEAD:packages/ui/src/components/layout/ProjectActionsButton.test.tsx
-
-
-=======
   // The run or stop button; the preview globe can stand before it.
   const runButton = () => host.querySelector<HTMLButtonElement>('button[aria-label^="Run "], button[aria-label^="Stop "]');
   const primaryLabel = () => runButton()?.getAttribute('aria-label') ?? '';
@@ -428,17 +397,14 @@ describe('HeaderProjectAction lifecycle', () => {
       expect(primary?.getAttribute('aria-label') ?? '').toContain('Build');
     } finally { terminal.listSessions = originalList; }
   });
->>>>>>> bc50ba56a:packages/ui/src/components/layout/HeaderProjectControls.test.tsx
 
   test('adopting a saved URL action does not auto-open a different output URL', async () => {
     mockedActionsState.actions = [{ id: 'build', name: 'Build', command: 'echo hello', autoOpenUrl: true, openUrl: 'http://localhost:4000' }];
     const originalList = terminal.listSessions;
-    Object.assign(terminal, {
-      listSessions: async () => [{
-        sessionId: 'peer-run', cwd: '/repo', status: 'running', createdAt: 1, mode: 'command',
-        purpose: { type: 'project-action', actionId: 'build', executionId: 'peer-execution' },
-      }]
-    });
+    Object.assign(terminal, { listSessions: async () => [{
+      sessionId: 'peer-run', cwd: '/repo', status: 'running', createdAt: 1, mode: 'command',
+      purpose: { type: 'project-action', actionId: 'build', executionId: 'peer-execution' },
+    }] });
     try {
       await renderButton();
       await act(async () => { emitToSession('peer-run', { type: 'snapshot', sequence: 1, status: 'running', data: 'Local: http://localhost:5173/\n' }); });
@@ -448,12 +414,10 @@ describe('HeaderProjectAction lifecycle', () => {
 
   test('a second run keeps its tab and displays fresh output under a new terminal ID', async () => {
     const originalCreate = terminal.createSession;
-    Object.assign(terminal, {
-      createSession: async (options: CreateTerminalOptions) => {
-        createCalls.push(options);
-        return { sessionId: options.sessionId, cols: 80, rows: 24, status: 'running', mode: 'command', purpose: options.purpose };
-      }
-    });
+    Object.assign(terminal, { createSession: async (options: CreateTerminalOptions) => {
+      createCalls.push(options);
+      return { sessionId: options.sessionId, cols: 80, rows: 24, status: 'running', mode: 'command', purpose: options.purpose };
+    } });
     try {
       await renderButton();
       const button = runButton();
@@ -638,6 +602,7 @@ describe('HeaderProjectAction lifecycle', () => {
 
   test('auto-discover without a preview hint settles on an announced localhost URL in context preview only', async () => {
     mockedDeviceInfo.isMobile = false;
+    mockedActionsState.actions = [];
     detectedDevServer.command = 'bun run dev';
     await renderButton();
 
@@ -674,6 +639,7 @@ describe('HeaderProjectAction lifecycle', () => {
 
   test('auto-discover opens its terminal when no preview URL appears before the fallback timeout', async () => {
     mockedDeviceInfo.isMobile = false;
+    mockedActionsState.actions = [];
     detectedDevServer.command = 'bun run dev';
     effectiveDirectory = '/repo-worktree';
     await renderButton({ projectPath: '/repo', directory: '/repo' });
@@ -696,6 +662,7 @@ describe('HeaderProjectAction lifecycle', () => {
 
   test('unmount closes active subscriptions and cancels pending preview timeouts', async () => {
     mockedDeviceInfo.isMobile = false;
+    mockedActionsState.actions = [];
     detectedDevServer.command = 'bun run dev';
     effectiveDirectory = '/repo-worktree';
     await renderButton({ projectPath: '/repo', directory: '/repo' });

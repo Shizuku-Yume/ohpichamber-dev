@@ -48,11 +48,7 @@ export function SidebarFooter({
               <Icon name="settings-3" className="h-4 w-4" />
             </button>
           </TooltipTrigger>
-<<<<<<< HEAD
-          <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.settings')}</p></TooltipContent>
-=======
           <TooltipContent side="top" sideOffset={4}><TooltipLabelWithShortcut label={t('sessions.sidebar.footer.actions.settings')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_settings', shortcutOverrides), '')} /></TooltipContent>
->>>>>>> bc50ba56a
         </Tooltip>
       ) : null}
       {showUpdateButton ? (

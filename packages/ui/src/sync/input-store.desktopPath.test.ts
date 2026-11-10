@@ -106,11 +106,7 @@ test('a desktop reference survives prompt history and stops an @-mention of its 
   expect(isMentionAlreadyAttached(mention, [restored])).toBe(true);
 });
 
-<<<<<<< HEAD
-test('a desktop file of a type the prompt cannot name keeps its bytes and its on-disk path', async () => {
-=======
 test('a desktop file of a type the prompt cannot carry goes as a note naming its path', async () => {
->>>>>>> bc50ba56a
   const { useInputStore } = await import('./input-store');
   const store = useInputStore.getState();
   store.clearAttachedFiles();
@@ -119,18 +115,8 @@ test('a desktop file of a type the prompt cannot carry goes as a note naming its
   expect(await store.addAttachedFile(new File([zip], 'book.epub'))).toBe(true);
 
   const [file] = useInputStore.getState().attachedFiles;
-<<<<<<< HEAD
-  if (!file) throw new Error('book.epub was not attached');
-  expect(file.agentPath).toBe('/Users/me/Documents/book.epub');
-  // The picker named no type and the bytes are not text, so the payload goes
-  // under an opaque type instead of being replaced by a note about the path.
-  expect(file.mimeType).toBe('application/octet-stream');
-  expect(new Uint8Array(await file.file.arrayBuffer())).toEqual(zip);
-  expect(await file.file.text()).not.toContain('/Users/me/Documents/book.epub');
-=======
   expect(file?.agentPath).toBe('/Users/me/Documents/book.epub');
   expect(await file?.file?.text()).toContain('/Users/me/Documents/book.epub');
->>>>>>> bc50ba56a
 });
 
 test('a desktop reference is dropped when the draft is cleared while it is prepared', async () => {

@@ -6,13 +6,8 @@
 #
 # Writes into <output dir>, owned by the user who ran sudo:
 #   lo0.txt       packet headers and request lines (method, path, user agent)
-<<<<<<< HEAD
 #                 on loopback to the OpenChamber server and to its agent worker,
 #                 which is where server-to-agent traffic becomes visible.
-=======
-#                 on loopback to the OpenChamber server and to its OpenCode,
-#                 which is where server-to-OpenCode traffic becomes visible.
->>>>>>> bc50ba56a
 #                 Every other header line, auth included, is dropped before it
 #                 reaches the disk, and token-like query values are redacted;
 #   external.txt  connection openings and DNS traffic on every interface, with
@@ -36,39 +31,23 @@ if [ -z "$APP_PID" ]; then
   echo "OpenChamber is not running" >&2
   exit 1
 fi
-<<<<<<< HEAD
 AGENT_PID=$(ps -axo pid=,ppid=,command= | awk -v app="$APP_PID" '$2 == app && (/\/omp( |$)/ || /agent-service/) {print $1; exit}')
-=======
-OPENCODE_PID=$(ps -axo pid=,ppid=,command= | awk -v app="$APP_PID" '$2 == app && /opencode serve/ {print $1; exit}')
->>>>>>> bc50ba56a
 # The main process also listens on the debugging port; the server port is the
 # one the desktop settings name.
 OWNER_HOME=$(eval echo "~$OWNER")
 SERVER_PORT=$(sed -n 's/.*"desktopLocalPort": *\([0-9]*\).*/\1/p' "$OWNER_HOME/.config/openchamber/settings.json" 2>/dev/null | head -n 1)
-<<<<<<< HEAD
 AGENT_PORT=$(lsof -nP -a -p "$AGENT_PID" -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {sub(/.*:/, "", $9); print $9; exit}')
 if [ -z "$SERVER_PORT" ] || [ -z "$AGENT_PORT" ]; then
   echo "Could not find the server port ($SERVER_PORT) or the agent worker port ($AGENT_PORT)" >&2
-=======
-OPENCODE_PORT=$(lsof -nP -a -p "$OPENCODE_PID" -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {sub(/.*:/, "", $9); print $9; exit}')
-if [ -z "$SERVER_PORT" ] || [ -z "$OPENCODE_PORT" ]; then
-  echo "Could not find the server port ($SERVER_PORT) or the OpenCode port ($OPENCODE_PORT)" >&2
->>>>>>> bc50ba56a
   exit 1
 fi
 if ! lsof -nP -a -p "$APP_PID" -iTCP:"$SERVER_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "The app does not listen on desktopLocalPort $SERVER_PORT" >&2
   exit 1
 fi
-<<<<<<< HEAD
 printf '{"appPid":%s,"agentPid":%s,"serverPort":%s,"agentPort":%s,"startedAt":%s}\n' \
   "$APP_PID" "$AGENT_PID" "$SERVER_PORT" "$AGENT_PORT" "$(date +%s)000" > "$OUT/capture.json"
 echo "app $APP_PID, server port $SERVER_PORT, agent worker $AGENT_PID on port $AGENT_PORT; recording $MINUTES min"
-=======
-printf '{"appPid":%s,"opencodePid":%s,"serverPort":%s,"opencodePort":%s,"startedAt":%s}\n' \
-  "$APP_PID" "$OPENCODE_PID" "$SERVER_PORT" "$OPENCODE_PORT" "$(date +%s)000" > "$OUT/capture.json"
-echo "app $APP_PID, server port $SERVER_PORT, OpenCode $OPENCODE_PID on port $OPENCODE_PORT; recording $MINUTES min"
->>>>>>> bc50ba56a
 
 FIFO=""
 PIDS=""
@@ -89,11 +68,7 @@ mkfifo "$FIFO"
 LC_ALL=C grep --line-buffered -aE '^[0-9]+\.[0-9]+ IP|(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) /|^[Uu]ser-[Aa]gent:' < "$FIFO" \
   | LC_ALL=C sed -l -E 's/((token|password|secret|auth|key|code)=)[^& ]*/\1REDACTED/gi' > "$OUT/lo0.txt" &
 PIDS="$PIDS $!"
-<<<<<<< HEAD
 tcpdump -i lo0 -n -tt -l -A -s 1024 "tcp dst port $SERVER_PORT or tcp dst port $AGENT_PORT" > "$FIFO" 2>"$OUT/lo0.err" &
-=======
-tcpdump -i lo0 -n -tt -l -A -s 1024 "tcp dst port $SERVER_PORT or tcp dst port $OPENCODE_PORT" > "$FIFO" 2>"$OUT/lo0.err" &
->>>>>>> bc50ba56a
 PIDS="$PIDS $!"
 tcpdump -i pktap,all -k NP -n -tt -l "(tcp[tcpflags] & tcp-syn != 0 and not net 127.0.0.0/8 and not ip6 host ::1) or udp port 53" > "$OUT/external.txt" 2>"$OUT/external.err" &
 PIDS="$PIDS $!"

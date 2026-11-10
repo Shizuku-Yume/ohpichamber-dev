@@ -84,11 +84,6 @@ const renderMenuItem = async () => {
   return button;
 };
 
-<<<<<<< HEAD
-for (const archivedAt of [undefined]) {
-  test(`active sessions with archive timestamp ${archivedAt} keep archive confirmation`, async () => {
-    useGlobalSessionsStore.getState().upsertSession(session('target', archivedAt));
-=======
 test('archive hint follows rebindings and appears only for the current active session', async () => {
   useGlobalSessionsStore.getState().upsertSession(session('target'));
   useSessionUIStore.setState({ currentSessionId: 'target' });
@@ -112,7 +107,6 @@ test('archive hint follows rebindings and appears only for the current active se
 for (const archived of [undefined, 0]) {
   test(`active sessions with archive timestamp ${archived} keep archive confirmation`, async () => {
     useGlobalSessionsStore.getState().upsertSession(session('target', archived));
->>>>>>> bc50ba56a
     const button = await renderMenuItem();
     expect(button.textContent).toBe('Archive');
     expect(button.querySelector('use')?.getAttribute('href')).toBe('#oc-inbox-archive');

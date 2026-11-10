@@ -7,11 +7,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { buildSessionTreeMoveMessages, requestSessionTreeMove } from '@/lib/worktrees/sessionWorktreeMove';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-<<<<<<< HEAD
-import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-=======
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
->>>>>>> bc50ba56a
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useProjectsInSidebarOrder } from '@/components/session/sidebar/list/useProjectsInSidebarOrder';
 import { collectSessionMoveDescendants } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
@@ -29,87 +25,6 @@ const ROW_CLASS = 'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-s
  * folder it leaves.
  */
 export const MoveSessionDialog: React.FC<{
-<<<<<<< HEAD
- open: boolean;
- onOpenChange: (open: boolean) => void;
- sessionId: string;
- sourceDirectory: string;
-}> = ({ open, onOpenChange, sessionId, sourceDirectory }) => {
- const { t } = useI18n();
- const projects = useProjectsInSidebarOrder(useProjectsStore((state) => state.projects), open);
- const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
- const [choosingFolder, setChoosingFolder] = React.useState(false);
- const currentDirectory = normalizePath(sourceDirectory);
-
- const moveTo = (directory: string) => {
-  onOpenChange(false);
-  // A subsession's composer moves the whole tree in this folder, so it never
-  // leaves its parent behind. The index holds archived sessions too.
-  const { entityById } = useGlobalSessionsStore.getState();
-  let root = entityById.get(sessionId);
-  if (!root) return;
-  const rootDirectory = resolveGlobalSessionDirectory(root);
-  while (root.parentSessionId) {
-   const parent = entityById.get(root.parentSessionId);
-   if (!parent || resolveGlobalSessionDirectory(parent) !== rootDirectory) break;
-   root = parent;
-  }
-  requestSessionTreeMove({
-   kind: 'project',
-   root,
-   descendants: collectSessionMoveDescendants(root, []),
-   sourceDirectory,
-   projectDirectory: directory,
-   messages: buildSessionTreeMoveMessages(t, {
-    success: 'sessions.moveSession.success',
-    failure: 'sessions.moveSession.failed',
-   }),
-  });
- };
-
- return (
-  <>
-   <Dialog open={open && !choosingFolder} onOpenChange={onOpenChange}>
-    <DialogContent className="max-w-md">
-     <DialogHeader>
-      <DialogTitle>{t('sessions.moveSession.title')}</DialogTitle>
-      <DialogDescription>{t('sessions.moveSession.description')}</DialogDescription>
-     </DialogHeader>
-     <ScrollableOverlay outerClassName="max-h-[50vh]" className="flex flex-col gap-0.5" disableHorizontal>
-      {projects.map((project) => {
-       const isCurrent = normalizePath(project.path) === currentDirectory;
-       return (
-        <button key={project.id} type="button" className={ROW_CLASS} disabled={isCurrent} onClick={() => moveTo(project.path)}>
-         <Icon name="folder" className="size-4 shrink-0 text-muted-foreground" />
-         <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">
-          {project.label?.trim() || formatDirectoryName(project.path)}
-         </span>
-         <span className="min-w-0 max-w-[45%] truncate typography-micro text-muted-foreground">
-          {formatPathForDisplay(project.path, homeDirectory)}
-         </span>
-         {isCurrent ? <Icon name="check" className="size-3.5 shrink-0 text-primary" aria-label={t('sessions.moveSession.current')} /> : null}
-        </button>
-       );
-      })}
-      {/* VS Code's projects are the workspace folders, which only opening one adds to. */}
-      {isVSCodeRuntime() ? null : (
-       <button type="button" className={ROW_CLASS} onClick={() => setChoosingFolder(true)}>
-        <Icon name="folder-add" className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">{t('sessions.moveSession.chooseFolder')}</span>
-       </button>
-      )}
-     </ScrollableOverlay>
-    </DialogContent>
-   </Dialog>
-   {choosingFolder ? (
-    <DirectoryExplorerDialog
-     open
-     onOpenChange={setChoosingFolder}
-    />
-   ) : null}
-  </>
- );
-=======
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sessionId: string;
@@ -128,7 +43,7 @@ export const MoveSessionDialog: React.FC<{
     const { entityById } = useGlobalSessionsStore.getState();
     let root = entityById.get(sessionId);
     if (!root) return;
-    for (let parent = entityById.get(root.parentID ?? ''); parent?.directory === root.directory; parent = entityById.get(root.parentID ?? '')) {
+    for (let parent = entityById.get(session.parentSessionId ?? ''); parent?.directory === root.directory; parent = entityById.get(session.parentSessionId ?? '')) {
       root = parent;
     }
     requestSessionTreeMove({
@@ -190,5 +105,4 @@ export const MoveSessionDialog: React.FC<{
       ) : null}
     </>
   );
->>>>>>> bc50ba56a
 };

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import type { ToolInput } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
+
+/** Tool arguments as the model produced them. */
+type ToolInput = Record<string, JsonValue>;
 import { workflowRunSchema, workflowRunStateSchema } from '@/lib/workflows/model';
 
 /**

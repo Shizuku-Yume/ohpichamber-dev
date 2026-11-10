@@ -45,7 +45,7 @@ const schema: NonNullable<Parameters<typeof rehypeSanitize>[0]> = {
   strip: ['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'form'],
   attributes: {
     '*': ['align', 'alt', 'checked', 'colSpan', 'height', 'media', 'open', 'rowSpan', 'start', 'title', 'width'],
-    a: ['href', 'id', 'ariaDescribedBy', 'ariaLabel', 'dataFootnoteRef', 'dataFootnoteBackref', 'dataOcLinkSource', 'dataOcReference', 'dataOcGuestLink'],
+    a: ['href', 'id', 'ariaDescribedBy', 'ariaLabel', 'dataFootnoteRef', 'dataFootnoteBackref', 'dataOcLinkSource', 'dataOcReference'],
     // `:` for GitLab's suggestion fences (`suggestion:-0+2`).
     code: [['className', /^language-[\w#+.:-]+$/, 'math-inline', 'math-display'], 'metastring'],
     img: ['src', 'srcSet', 'alt', 'dataOcMediaSource'],
@@ -92,18 +92,6 @@ function remarkSessionLinks() {
   };
 }
 
-/**
- * Text a person typed reads as typed: `<b>` and `&amp;` stay those characters
- * instead of becoming HTML or `&`. The parser never sees them as HTML or
- * character references, so inline code and formulas keep their characters
- * too, which escaping the source cannot give: an entity there is shown
- * literally (`a&lt;b` in code, a broken formula).
- */
-export function remarkLiteralText(this: Processor) {
-  const data = this.data();
-  (data.micromarkExtensions ??= []).push({ disable: { null: ['htmlFlow', 'htmlText', 'characterReference'] } });
-}
-
 // Static mode parses the whole document without the streaming BlockComponent.
 // Match the original top-level source policy without stripping inline joiners.
 function remarkVisibleBlocks() {
@@ -118,7 +106,6 @@ function remarkVisibleBlocks() {
   };
 }
 
-<<<<<<< HEAD
 function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
   return {
     remarkPlugins: [
@@ -128,11 +115,6 @@ function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<Stream
       remarkVisibleBlocks,
       remarkSessionLinks,
     ],
-=======
-function createOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
-  return {
-    remarkPlugins: [...(singleTilde ? Object.values(defaultRemarkPlugins) : defaultRemarkPluginList), remarkDisclosures, remarkAlerts, remarkVisibleBlocks, remarkSessionLinks],
->>>>>>> bc50ba56a
     rehypePlugins: [
       ...(allowRawHtml ? [defaultRehypePlugins.raw] : []),
       rehypeMarkdownPolicy,
@@ -142,7 +124,6 @@ function createOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde: bo
     ],
   };
 }
-<<<<<<< HEAD
 
 const policies = {
   strictText: createOptions(false, false),
@@ -159,12 +140,4 @@ export function getMarkdownProcessingOptions(
     return allowRawHtml ? policies.gfmRaw : policies.gfmText;
   }
   return allowRawHtml ? policies.strictRaw : policies.strictText;
-=======
-const policies = [false, true].flatMap(singleTilde => [
-  createOptions(false, false, singleTilde), createOptions(false, true, singleTilde),
-  createOptions(true, false, singleTilde), createOptions(true, true, singleTilde),
-]);
-export function getMarkdownProcessingOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde = false): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
-  return policies[(singleTilde ? 4 : 0) + (allowRawHtml ? 2 : 0) + (isVSCode ? 1 : 0)];
->>>>>>> bc50ba56a
 }

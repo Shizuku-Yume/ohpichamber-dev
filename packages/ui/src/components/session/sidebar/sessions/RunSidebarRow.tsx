@@ -166,9 +166,6 @@ function RunSidebarRowComponent({
     </>
   );
 
-<<<<<<< HEAD
-  const hoverOut = alwaysShowActions ? undefined : 'group-hover/run:opacity-0 group-has-[:focus-visible]/run:opacity-0';
-=======
   // With a mouse the run's menu is its right-click menu (Shift+F10 from the
   // keyboard); the ⋯ button shows on touch only: always in touch layouts, on
   // hover for a touch screen elsewhere. Hover reserves count it only where it
@@ -176,7 +173,6 @@ function RunSidebarRowComponent({
   const showMenuButton = alwaysShowActions;
   const hoverButtons = (sessionWorkEnabled ? 1 : 0) + (showMenuButton ? 1 : 0);
   const hoverOut = alwaysShowActions || hoverButtons === 0 ? undefined : 'group-hover/run:opacity-0 group-has-[:focus-visible]/run:opacity-0';
->>>>>>> bc50ba56a
   const hoverIn = alwaysShowActions ? undefined : 'opacity-0 group-hover/run:opacity-100 group-has-[:focus-visible]/run:opacity-100';
   const chevron = expandable ? (
     <span

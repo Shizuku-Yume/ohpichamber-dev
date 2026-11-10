@@ -1,22 +1,11 @@
 import React, { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-<<<<<<< HEAD
 import { CanonicalClient } from '@/api/canonicalClient';
 
 // The whole-file comment in each entry's header reads the session's directory
 // from sync; an empty client is enough for an entry with no session.
 const client = new CanonicalClient();
-=======
-import { OpenCode } from '@opencode/client';
-
-// The whole-file comment in each entry's header reads the session's directory
-// from sync; an empty client is enough for an entry with no session.
-const SYNC_SDK = OpenCode.make({
-  baseUrl: 'http://opencode.test',
-  fetch: async () => new Response('[]', { headers: { 'content-type': 'application/json' } }),
-});
->>>>>>> bc50ba56a
 
 const installDom = () => {
   const dom = new Window({ url: 'http://localhost' });
@@ -35,11 +24,7 @@ const installDom = () => {
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
   const previousFetch = globalThis.fetch;
-<<<<<<< HEAD
   globalThis.fetch = Object.assign(async () => new Promise<Response>(() => { }), previousFetch);
-=======
-  globalThis.fetch = Object.assign(async () => new Promise<Response>(() => {}), previousFetch);
->>>>>>> bc50ba56a
   return () => {
     globalThis.fetch = previousFetch;
     dom.happyDOM.cancelAsync();
@@ -63,7 +48,6 @@ test('a nested repository row keeps the separate-repository note without recursi
   const statusRequests: string[] = [];
   const diffRequests: string[] = [];
   const base = createWebAPIs();
-<<<<<<< HEAD
   const apis = {
     ...base, git: {
       ...base.git,
@@ -89,45 +73,14 @@ test('a nested repository row keeps the separate-repository note without recursi
       },
     }
   };
-=======
-  const apis = { ...base, git: { ...base.git,
-    checkIsGitRepository: async () => true,
-    getGitStatus: async (directory: string) => {
-      statusRequests.push(directory);
-      const filesByDirectory: Record<string, Array<{ path: string; index: string; working_dir: string }>> = {
-        '/repo/nested': [
-          { path: 'src/inner.ts', index: ' ', working_dir: 'M' },
-          { path: 'inner-lib/', index: ' ', working_dir: 'M' },
-        ],
-        '/repo/nested/inner-lib': [{ path: 'deep.ts', index: ' ', working_dir: 'M' }],
-      };
-      const files = filesByDirectory[directory] ?? [];
-      return { current: 'main', tracking: null, ahead: 0, behind: 0, files, isClean: files.length === 0, diffStats: { staged: {}, working: { 'src/inner.ts': { insertions: 3, deletions: 1 } } } };
-    },
-    getGitDiff: async (directory: string, options: { path: string }) => {
-      diffRequests.push(`${directory}:${options.path}`);
-      if (options.path === 'nested/' || options.path === 'inner-lib/') {
-        throw new GitPathUnavailableError(`Path is a separate Git repository: ${options.path}`, 'nested_repository');
-      }
-      return { diff: '', submodule: null };
-    },
-  } };
->>>>>>> bc50ba56a
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
   const render = () => act(async () => {
-<<<<<<< HEAD
     root.render(<SyncProvider client={client} directory="/repo"><I18nProvider><RuntimeAPIContext.Provider value={apis}>
       <MultiFileDiffEntry directory="/repo" file={{ path: 'nested/', index: ' ', working_dir: 'M', insertions: 0, deletions: 0, isNew: false }}
         layout="inline" wrapLines={false} isSelected={false} isExpanded isMounted
         onSelect={() => { }} onExpandedChange={() => { }} registerSectionRef={() => { }} />
-=======
-    root.render(<SyncProvider sdk={SYNC_SDK} directory="/repo"><I18nProvider><RuntimeAPIContext.Provider value={apis}>
-      <MultiFileDiffEntry directory="/repo" file={{ path: 'nested/', index: ' ', working_dir: 'M', insertions: 0, deletions: 0, isNew: false }}
-        layout="inline" wrapLines={false} isSelected={false} isExpanded isMounted
-        onSelect={() => {}} onExpandedChange={() => {}} registerSectionRef={() => {}} />
->>>>>>> bc50ba56a
     </RuntimeAPIContext.Provider></I18nProvider></SyncProvider>);
   });
   try {

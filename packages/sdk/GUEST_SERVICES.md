@@ -88,11 +88,7 @@ Parse rules:
 - `contributes.service` is optional. A guest without `service` is HTML-only.
 - `service.entry` is a relative path inside the package. Ship compiled JS; the host never compiles TypeScript.
 - `service.runtime` phase 1 accepts only `"host"`.
-<<<<<<< HEAD
 - `service.provides` is optional: host roles `"browser"`, `"source-control"`, `"notifications"`, `"tracker"` and `"quota"`. A service that provides a role needs no `panel.entry` or `background.entry`; the host starts it itself. An extension is a Git host or a tracker, never both: the two would share the id `ext-<panel.id>`.
-=======
-- `service.provides` is optional: host roles `"browser"`, `"source-control"`, `"notifications"`, `"tracker"` and `"quota"`, plus `"opencode"` for the reads described under [OpenCode access](#opencode-access). A service that provides a role needs no `panel.entry` or `background.entry`; the host starts it itself. An extension is a Git host or a tracker, never both: the two would share the id `ext-<panel.id>`.
->>>>>>> bc50ba56a
 - `service.keepRunning` is optional (`true`): the host starts the service with OpenChamber and brings it back when it stops (*Running with nobody asking*, below). The approval dialog says so.
 - `service.schedule` is optional, up to `SERVICE_SCHEDULE_MAX` (8) of `{ id, cron, timezone? }`: runs the host posts on a clock. The approval dialog lists them.
 - `service.surface` is optional (`true`): the service shows a live picture the host draws in the extension's rail panel and takes the user's input back (below). With `panel.entry` too, that page is docked to one edge of the picture (`panel.dock`: `top`, `bottom`, `left`, or `right`, default `top`; `panel.size` in CSS px across that edge, 24 to 480, default 40); without it, the picture is the whole panel.
@@ -150,10 +146,6 @@ Env the host sets:
 - `OPENCHAMBER_SERVICE_DATA_DIR` — this extension's own folder (`OPENCHAMBER_SERVICE_DATA_DIR` in `@openchamber/sdk` names the variable). The host creates it before the start. It survives restarts and updates and is deleted when the extension is removed. Keep the service's files here, never next to OpenChamber's own: the location of OpenChamber's data is not part of this contract
 - `OPENCHAMBER_SERVICE_SOCKETS` — JSON map `{ [socketId]: absolutePath }` for every binding that resolved (override or first existing candidate)
 - `OPENCHAMBER_HOST_CALLBACK_URL` — OpenChamber's callback listener: what a service calls on its own (*Calling OpenChamber*, below) and the requests the `source-control`, `notifications` and `tracker` roles send out
-<<<<<<< HEAD
-=======
-- `OPENCHAMBER_OPENCODE_URL` is the loopback read-only OpenCode connection for an approved `opencode` service. Authenticate with `OPENCHAMBER_SERVICE_TOKEN`; upstream credentials stay in the host.
->>>>>>> bc50ba56a
 
 Inbound auth: every request, including ready, must send:
 
@@ -199,12 +191,6 @@ Ship `service/main.js` already built. Same packaging rule as `panel/main.js`.
 | Call | Needs | What it does |
 |---|---|---|
 | `sessions.start({ prompt, projectId?, directory?, title?, model?, variant?, agent? })` | `contributes.sessionControl` | Creates a session and sends it the prompt. Answers `{ sessionId, directory }` |
-<<<<<<< HEAD
-| `sessions.send(sessionId, prompt)` | `sessionControl` | Sends to a session |
-| `sessions.retry(sessionId)` | `sessionControl` | Sends the session's last message again, for a turn that failed |
-| `sessions.status(sessionId)` | `sessionControl` | `idle`, `busy`, or `waiting` when only the user can move it on |
-| `sessions.lastReply(sessionId)` | `sessionControl: { content: true }` | The agent's last answer, or `null` |
-=======
 | `sessions.send(sessionId, prompt)` | `sessionControl` | Sends to a session. A form or page the agent waits on there is closed first, as when the user writes in the chat, so the message never waits behind it |
 | `sessions.retry(sessionId)` | `sessionControl` | Sends the session's last message again, for a turn that failed |
 | `sessions.status(sessionId)` | `sessionControl` | `idle`, `busy`, or `waiting` when only the user can move it on |
@@ -212,7 +198,6 @@ Ship `service/main.js` already built. Same packaging rule as `panel/main.js`.
 | `sessions.stop(sessionId)` | `sessionControl` | Stops the running turn, as the stop button does. Answers `{ stopped }`, false when nothing ran. The session reads `busy` for a moment after, and a stopped turn emits no `turn-finished` |
 | `sessions.answerPermission(sessionId, requestId, { decision, message? })` | `sessionControl: { answers: true }` | Answers the request a `permission-asked` event names in `event.permission.requestId`. `allow` lets the agent do it this once; `deny` refuses, and `message` (up to `SERVICE_ANSWER_MESSAGE_MAX`, 2,000) reaches the agent as the reason. "Always allow" stays a click in the app |
 | `sessions.answerForm(sessionId, formId, values, message?)` | `sessionControl: { answers: true }` | Answers the form a `question-asked` event names in `event.question.id` (`kind: "form"`). `values` are keyed by the field `key` from the event's content; a choice field takes an option's `value`. `null` dismisses the form and `message` tells the agent why. A `page` cannot be answered from a service: send to the session instead |
->>>>>>> bc50ba56a
 | `setInstructions(directory, text)` | `contributes.instructions` | Text the agent reads in every session under `directory`, or everywhere with `null`, up to `SERVICE_INSTRUCTIONS_MAX` (4096). Empty text removes it. It stays on the server, so no message waits on your process |
 | `emit(topic, data?)` | nothing | Sends `data` to the extension's open frames, which hear it through `host.onServiceEvent`. Up to `SERVICE_EVENT_RATE_MAX` (30) a second and `SERVICE_EVENT_DATA_MAX` (64 000) characters of JSON. Nothing replays: a frame that opens later reads the current state from the service |
 | `readSettings()` | nothing | The fields of `contributes.integration.settings`, the `secret` ones included |
@@ -220,11 +205,7 @@ Ship `service/main.js` already built. Same packaging rule as `panel/main.js`.
 
 A service sends at most 60 prompts an hour, counting starts, sends and retries, and sets its status at most 30 times a minute. Panel events stop at 30 a second and 256,000 characters a second. Past a limit the call answers 429 and does nothing.
 
-<<<<<<< HEAD
-`sessionControl` shows in the approval dialog as its own line, and `content: true` adds `transcript`. A failed session call answers what the session service told the caller, never its internals.
-=======
-`sessionControl` shows in the approval dialog as its own line, and `content: true` adds `transcript`. `answers: true` adds `sessionAnswers`, a line of its own too: the service answers for the user in any session, so a messenger bridge can carry the agent's requests to the user and their decisions back. Hosts up to 2.6.1 refuse the key, so declare an `engines.openchamber` floor above it. An answer to a request that settled meanwhile, in the app or on another device, is a 404. A failed session call answers what the session service told the caller, never its internals.
->>>>>>> bc50ba56a
+`sessionControl` shows in the approval dialog as its own line, and `content: true` adds `transcript`. `answers: true` adds `sessionAnswers`, a line of its own too: the service answers for the user in any session, so a messenger bridge can carry the agent's requests to the user and their decisions back. An answer to a request that settled meanwhile, in the app or on another device, is a 404. A failed session call answers what the session service told the caller, never its internals.
 
 ## Running with nobody asking
 
@@ -596,74 +577,6 @@ The service reaches its provider's API itself with the credential it was handed.
 
 `examples/quota-provider` is the reference: a provider over a fake usage API you run beside it, run by `scripts/quota-provider-example.test.ts`.
 
-<<<<<<< HEAD
-=======
-## OpenCode access
-
-A service with `provides: ["opencode"]` reads from the OpenCode server the host is currently using. The role adds the implicit `opencode` capability alongside `service`, and the user must approve both. Do not put `opencode` in `contributes.capabilities`.
-
-The access is read-only, and the host enforces it on every request. Sessions and messages hold what was said in them, including anything pasted there, so approve it only for a service you trust with that. Enterprise extension policy, including `allowedExtensions`, applies to this capability.
-
-This example is a `contributes` block:
-
-```json
-{
-  "panel": { "id": "opencode-reader", "name": "OpenCode reader", "icon": "apps", "entry": "panel/index.html" },
-  "service": { "entry": "service/main.js", "runtime": "host", "provides": ["opencode"] }
-}
-```
-
-The panel can start the service through `serviceRequest`. A service-only declaration can omit `panel.entry` and combine the role with host-driven contributions such as `sessionEvents`. The `opencode` role alone schedules no calls.
-
-### What a service can read
-
-| Request | Returns |
-| --- | --- |
-| `GET /api/session` | Sessions, with OpenCode's filters and paging, such as `parentID` for a session's subagents |
-| `GET /api/session/active` | Sessions running right now |
-| `GET /api/session/<sessionID>` | One session |
-| `GET /api/session/<sessionID>/message` | A session's messages, with tool calls |
-| `GET /api/session/<sessionID>/message/<messageID>` | One message |
-| `GET /api/project` | Projects |
-| `GET /api/event` | Live events as SSE, with `types` to pick them |
-
-Everything else answers 403 with code `NOT_A_LISTED_READ` and never reaches OpenCode: writes, prompts, configuration, plugin RPC, the server's own details, reads scoped to a directory, and any route OpenCode adds later. Those directory reads are left out on purpose, because each one starts that directory's MCP servers.
-
-### Client setup
-
-The host provides `OPENCHAMBER_OPENCODE_URL`, a loopback address, when the approved service starts. Use the existing service token as its bearer. The host does not put the upstream address or its authentication in the service environment.
-
-```ts
-import { OpenCode } from '@opencode/client';
-
-if (!process.env.OPENCHAMBER_OPENCODE_URL || !process.env.OPENCHAMBER_SERVICE_TOKEN) {
-  throw new Error('OpenChamber OpenCode access is unavailable');
-}
-
-const client = OpenCode.make({
-  baseUrl: process.env.OPENCHAMBER_OPENCODE_URL,
-  headers: { Authorization: `Bearer ${process.env.OPENCHAMBER_SERVICE_TOKEN}` },
-});
-
-const sessions = await client.session.list();
-```
-
-Missing environment variables are a failure. Do not discover or start another OpenCode server as a fallback.
-
-Requests carry only the path, the query and `Accept`. Each request goes to the OpenCode selected when it arrives and makes one upstream request. Redirects are not followed. Responses keep OpenCode's HTTP status and body, with no extra envelope. WebSockets are unsupported.
-
-### Lifetime and failures
-
-The authorization lasts for the service process, so it works between host calls and after a service response completes. Keep the URL and token inside the service; never pass them to the panel. Service stop, process exit, pause, removal, package update, approval withdrawal and host shutdown revoke access and abort reads in flight, the event stream included. A restarted service receives its environment from the host again.
-
-When the host moves to another OpenCode, new requests go there and a stream still open ends without delivering anything more from the old server. Reconnect to follow the new one. Requests are not an atomic snapshot across such a move.
-
-The host rechecks approval and extension policy on every request and on every chunk of a response, so a stream closes at its next chunk once approval is gone, an administrator's policy change included. Missing or revoked authorization, unlisted requests and an unavailable OpenCode fail explicitly. OpenCode's HTTP failures keep their status and body; a stream failure after headers closes the stream. No failure becomes an empty successful response.
-
-Each response, the event stream included, is limited to `GUEST_REQUEST_RESPONSE_MAX` bytes, so a long-lived event subscription has to reconnect. OpenCode inactivity is limited to `GUEST_REQUEST_TIMEOUT_MS`. Exceeding either limit terminates the transfer.
-
-Web and Electron desktop use the connected OpenChamber backend in direct and relay modes. The connection stays on loopback between that backend and its service and is unavailable through UI APIs, relay routes or tunnels. VS Code, hosted mobile and Capacitor mobile keep the guest catalog unsupported.
->>>>>>> bc50ba56a
 
 ## Session events (`contributes.sessionEvents`)
 
@@ -704,24 +617,15 @@ OpenChamber posts `POST /session-events` (`SESSION_EVENTS_PATH`) with the servic
     "session": { "id": "ses_…", "parentId": null },
     "project": { "directory": "/Users/me/repo" },
     "linked": [{ "id": "linear:OPE-367", "kind": "linear", "url": "https://…", "provider": "linear", "identifier": "OPE-367" }],
-<<<<<<< HEAD
-    "permission": { "requestId": "perm_…" }
-=======
     "permission": { "requestId": "perm_…" },
     "question": { "kind": "form", "id": "frm_…" }
->>>>>>> bc50ba56a
   },
   "content": { "type": "turn-finished", "sessionTitle": "Fix the parser", "reply": "Done. …", "replyTruncated": false }
 }
 ```
 
-<<<<<<< HEAD
-- `event.id` is OpenCode's event id (or one OpenChamber made for an event it synthesized), `at` epoch milliseconds, `session.parentId` set for a subagent's session, `project.directory` the session's directory or `null` when OpenChamber does not know it. `linked` is what the user attached to the session: ids, kinds, urls, the tracker's `provider` and `identifier`, a Git host's `number`, never a title. `permission` comes with `permission-asked` only.
-- `content` comes only with the `transcript` grant, typed by `type`: the four session types carry `sessionTitle`; `turn-finished` carries `sessionTitle`, `reply` (cut at `SESSION_EVENT_REPLY_MAX`, 64 000 characters, with `replyTruncated`); `turn-failed` carries `error { type, message }` and no reply; `permission-asked` carries `action`, `resources`, `message`; `question-asked` carries `ask`, a form (`id`, `title`, `fields[{ title, description }]`) or a page (`id`, `title`).
-=======
 - `event.id` is OpenCode's event id (or one OpenChamber made for an event it synthesized), `at` epoch milliseconds, `session.parentId` set for a subagent's session, `project.directory` the session's directory or `null` when OpenChamber does not know it. `linked` is what the user attached to the session: ids, kinds, urls, the tracker's `provider` and `identifier`, a Git host's `number`, never a title. `permission` comes with `permission-asked` only, `question` (`kind` `form` or `page`, and its `id`) with `question-asked` only.
 - `content` comes only with the `transcript` grant, typed by `type`: the four session types carry `sessionTitle`; `turn-finished` carries `sessionTitle`, `reply` (cut at `SESSION_EVENT_REPLY_MAX`, 64 000 characters, with `replyTruncated`); `turn-failed` carries `error { type, message }` and no reply; `permission-asked` carries `action`, `resources`, `message`; `question-asked` carries `ask`, a form (`id`, `title`, `fields`) or a page (`id`, `title`). Each field (`GuestFormField`) has `key`, `type` (`string`, `number`, `integer`, `boolean`, `multiselect` or `external`, a link only the user can open), `title`, `description`, `required`, and for a choice its `options[{ value, label }]`, with `custom` on a multiselect that takes values of its own, and `when` on a field asked only when earlier answers match (`[{ key, op: "eq" | "neq", value }]`, all of them). A field the form hides from the user is left out. `sessions.answerForm` builds the reply the way the chat's form card does: a field you leave out takes its default, and a value for a field whose `when` does not hold is dropped.
->>>>>>> bc50ba56a
 - Parse the body with `readSessionEventRequest` (zod-free; `null` is a body that is not a session event of this wire version, answer HTTP 400) and answer HTTP 200 `{ "ok": true }` once the event is taken, or `{ "ok": false, "error": "…" }` (`GuestSessionEventResult`, `error` up to `SESSION_EVENT_ERROR_MAX`). OpenChamber parses the answer with `sessionEventResultSchema`; anything else is a failed delivery.
 
 ### Delivery
@@ -732,10 +636,6 @@ OpenChamber posts `POST /session-events` (`SESSION_EVENTS_PATH`) with the servic
 - One request in flight per service, in order. A delivery has `SESSION_EVENT_TIMEOUT_MS` (10 s). A failed delivery (a timeout, a non-200 status, `ok: false`, a body that does not parse) drops that service's events for the next 30 s and logs the `error` text; OpenChamber never logs an event's content.
 - At most once, with no persistence: an event that happened while OpenChamber was down, while the extension was paused, or during that backoff is gone. A paused extension, a withdrawn approval and a removal drop what waited for them.
 - Two idle events for one turn end (OpenCode announces it twice) are one `turn-finished`.
-<<<<<<< HEAD
-=======
-- Session events alone grant no OpenCode access. A service with the separately approved `opencode` role can read through its own connection during event handling and between events, under the [OpenCode access](#opencode-access) contract.
->>>>>>> bc50ba56a
 
 `examples/session-events-log` is the reference: a service-only extension that journals every event to a file.
 

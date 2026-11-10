@@ -88,7 +88,6 @@ macOS `activate` can ask for a window while that startup still runs, and
 `openMainWindow` then waits for it. Resolving next to it would call `main()` of
 the server module a second time in the same process: depending on the timing,
 that run fails to listen on the port, replaces the first run's listener handle
-<<<<<<< HEAD
 so the supervised Agent Service cannot start, or binds a second port, and the failure
 can reject the startup itself and exit the app. A background launch without a
 local server still probes its remote again when the window opens, because
@@ -105,12 +104,6 @@ bootstrap runs only for the packaged app shell and a Host on this machine;
 remote Hosts keep their own saved credential, external pages never receive the
 local token, and a Host that requires a session or client authentication is
 left unauthenticated rather than bypassed.
-=======
-so the managed OpenCode cannot start, or binds a second port, and the failure
-can reject the startup itself and exit the app. A background launch without a
-local server still probes its remote again when the window opens, because
-reachability from login time says little about later.
->>>>>>> bc50ba56a
 
 `bun run profile:startup` measures a packaged build's launch in an isolated
 profile; see `scripts/perf/DOCUMENTATION.md`.
@@ -220,14 +213,9 @@ and the open chat stay; a crash they cause still stops at the fourth crash.
 |------|---------|
 | `entry.mjs` | What Electron loads: pre-`ready` configuration, single-instance lock, the first window, then a dynamic import of `main.mjs` |
 | `compile-cache.mjs` | Node's V8 code cache for the packaged main process: enabling it under userData, keeping it out of child environments, flushing and pruning after startup |
-<<<<<<< HEAD
 | `packaged-runtime-config.mjs` | Runtime values for packaged application documents: inline injection, and the blocking script and gate used while the first navigation runs ahead of the local server |
 | `desktop-local-auth.mjs` | Whether a window may receive the embedded Host's local credential, and the stored-or-minted `desktop-local` client token before the runtime config script is released |
-| `early-startup.mjs` | Settings and window-state reading, splash markup, main-window options, the early window handoff and buffered app events; shared by both bundles |
-=======
-| `packaged-runtime-config.mjs` | Runtime values for packaged application documents: the script that asks main for them, the check on the asking frame, and the blocking script and gate used while the first navigation runs ahead of the local server |
-| `early-startup.mjs` | Settings and window-state reading, splash markup, main-window options, the early window handoff and buffered app events; shared by both bundles. Its window icon in an unpackaged Windows run is `dev-icon.ico`, the Windows icon behind construction tape (source `resources/icons/dev-icon-win.svg`), so the taskbar tells a dev copy apart; Linux keeps the usual icon, because GNOME takes the dock icon from the installed app's `.desktop` entry |
->>>>>>> bc50ba56a
+| `early-startup.mjs` | Settings and window-state reading, splash markup, main-window options, the early window handoff and buffered app events; shared by both bundles. Its window icon in an unpackaged Windows run is `dev-icon.ico` (source `resources/icons/dev-icon-win.svg`), so the taskbar tells a dev copy apart; Linux keeps the usual icon, because GNOME takes the dock icon from the installed app's `.desktop` entry |
 | `main.mjs` | Electron main process, app lifecycle, windows, menus, deep links, native IPC handlers, updates, local server startup |
 | `electron-host-probe.mjs` | Chromium direct-host probes, identity checks, attempt deadlines, and response cleanup |
 | `host-probe-policy.mjs` | Selector fast attempt and unreachable-only retry policy |
@@ -341,18 +329,10 @@ bun run electron:build
 That runs, in order:
 
 1. `build:web-assets` to build the web UI and copy it into `packages/electron/resources/web-dist`.
-<<<<<<< HEAD
 2. `prepare:agent-runtime` to stage the pinned Bun runtime, the agent-service bundle and its resolved SDK package closure into `packages/electron/resources/agent-runtime`.
 3. `bundle:main` to create `packages/electron/dist-bundle/{entry,main,early-startup}.mjs`.
 4. `rebuild:native` to rebuild native modules for Electron.
 5. `package.mjs` to run `electron-builder`; its `afterPack` hook stages the compiled macOS icon asset catalog.
-=======
-2. `prepare:opencode-cli` to download/cache the pinned OpenCode CLI and copy it into `packages/electron/resources/opencode-cli`.
-3. `prepare:ripgrep` to download/cache the target architecture's ripgrep and copy it into `packages/electron/resources/ripgrep`.
-4. `bundle:main` to create `packages/electron/dist-bundle/{entry,main,early-startup}.mjs`.
-5. `rebuild:native` to rebuild native modules for Electron.
-6. `package.mjs` to run `electron-builder`; its `afterPack` hook stages the compiled macOS icon asset catalog and gives the macOS main executable its own UUID.
->>>>>>> bc50ba56a
 
 Build output goes to `packages/electron/dist`.
 
@@ -362,7 +342,6 @@ Windows voice-model installation uses the native decoder from `7zip-bin`, a runt
 
 macOS builds produce `dmg` and `zip` artifacts. Windows builds produce an NSIS installer. Linux builds produce an AppImage, a `.deb` and an `.rpm` for the native x64 or arm64 host; the `.rpm` needs `rpmbuild` on the build host.
 
-<<<<<<< HEAD
 Packaged desktop builds target six native architectures:
 - **macOS (`darwin-arm64`, `darwin-x64`)**: produces `.dmg` and `.zip` artifacts.
 - **Windows (`win32-x64`, `win32-arm64`)**: produces NSIS installer `.exe` packages.
@@ -373,13 +352,6 @@ Packaged desktop builds target six native architectures:
 macOS Local Network privacy identifies an app by its main executable's Mach-O `LC_UUID` (Apple TN3179). Electron ships one prebuilt executable per version and architecture, so every app on the same Electron release shares that UUID, and macOS applies the Local Network answer of whichever of those apps it met first. OpenChamber then never gets its own prompt: its terminals and the supervised Agent Service get `No route to host` for LAN addresses when the other app was denied or never asked, and the prompt, when one shows, names the other app. The `afterPack` hook (`scripts/macos-executable-uuid.cjs`) writes a UUID derived from the `appId` before electron-builder signs, so it stays the same across releases and the user's answer survives updates; the first update to such a build asks once. The hook then signs the executable ad hoc, so a build that skips signing still launches on arm64. Only the small launcher changes; `Electron Framework.framework` and the helper apps keep Electron's binaries. A thin executable is required, so a `--universal` build fails here.
 
 Making terminals and the Agent Service their own responsible process (a private `responsibility_spawnattrs_setdisclaim` launcher) also gets them LAN access, but it moves every other privacy prompt they raise, such as Documents or Desktop, away from OpenChamber. With the UUID fix they stay attributed to OpenChamber.
-=======
-### Why the macOS executable gets its own UUID
-
-macOS Local Network privacy identifies an app by its main executable's Mach-O `LC_UUID` (Apple TN3179). Electron ships one prebuilt executable per version and architecture, so every app on the same Electron release shares that UUID, and macOS applies the Local Network answer of whichever of those apps it met first. OpenChamber then never gets its own prompt: its terminals and the managed OpenCode get `No route to host` for LAN addresses when the other app was denied or never asked, and the prompt, when one shows, names the other app. The `afterPack` hook (`scripts/macos-executable-uuid.cjs`) writes a UUID derived from the `appId` before electron-builder signs, so it stays the same across releases and the user's answer survives updates; the first update to such a build asks once. The hook then signs the executable ad hoc, so a build that skips signing still launches on arm64. Only the small launcher changes; `Electron Framework.framework` and the helper apps keep Electron's binaries. A thin executable is required, so a `--universal` build fails here.
-
-Making terminals and OpenCode their own responsible process (a private `responsibility_spawnattrs_setdisclaim` launcher) also gets them LAN access, but it moves every other privacy prompt they raise, such as Documents or Desktop, away from OpenChamber. With the UUID fix they stay attributed to OpenChamber.
->>>>>>> bc50ba56a
 
 ### Windows signing through SignPath
 
@@ -389,11 +361,7 @@ Making terminals and OpenCode their own responsible process (a private `responsi
 2. `build-installer` puts the signed `OpenChamber.exe` into the same unpacked app and builds the installer from it (`--prepackaged`), with the signed uninstaller in place. The request uses `windows-installer`.
 3. `finalize` regenerates the blockmap and `latest.yml`, which electron-builder computed from the unsigned installer.
 
-<<<<<<< HEAD
 Only those executables are ours. Electron's DLLs, `elevate.exe`, the bundled Agent Runtime, ripgrep and node-pty's binaries come from upstream projects, and SignPath Foundation's terms forbid signing them with our certificate; they ship unsigned inside the signed installer.
-=======
-Only those executables are ours. Electron's DLLs, `elevate.exe`, the bundled OpenCode CLI, ripgrep and node-pty's binaries come from upstream projects, and SignPath Foundation's terms forbid signing them with our certificate; they ship unsigned inside the signed installer.
->>>>>>> bc50ba56a
 
 #### Why Windows releases get their own workflow
 
@@ -465,8 +433,6 @@ first, from the same sidebar-visible set as its badge. A session opens through
 the tray's session action route. Mark all as read reaches the renderer even
 with the menu bar disabled. Turning off the Dock badge also clears this menu;
 an empty unread list offers no actions. Native labels follow the preferred UI locale.
-<<<<<<< HEAD
-=======
 
 Packaged Windows exposes the same unread set in a custom taskbar jump-list
 category and a Mark all as read task. Session items launch the executable with
@@ -478,17 +444,6 @@ lists clear the custom jump list. Windows-removed items are excluded by their
 launch arguments before deduplication, so re-adding one cannot drop the category.
 Development skips jump lists because Electron's
 executable needs a separate app-path argument to relaunch this checkout.
-
-An enabled tray loads the dropdown providers' quota once after renderer runtime
-initialization when no sample has loaded. The native Menu `menu-will-show` event
-requests a quota refresh through `openchamber:tray-action` before or as the menu
-opens on macOS, Windows and Linux. It shares the readouts' 15-second freshness
-window and works while the main window is hidden or minimized without revealing
-it. The menu can open with cached usage; the renderer pushes a new tray snapshot
-when the fetch lands. No quota timer runs for the tray.
-
-## Bundled OpenCode CLI
->>>>>>> bc50ba56a
 
 Packaged Windows exposes the same unread set in a custom taskbar jump-list
 category and a Mark all as read task. Session items launch the executable with
@@ -652,13 +607,8 @@ Add new native capabilities in this order:
 
 The desktop app updates from one of two channels, chosen under Settings → About → Updates and stored as `desktopUpdateChannel` in `settings.json`:
 
-<<<<<<< HEAD
-- **Stable**: the latest full release on GitHub (the `github` provider of electron-updater).
-- **Canary**: the nightly build of `main`. `.github/workflows/canary.yml` builds it when `main` moved and replaces the files of one pre-release tagged `canary`; the app reads that pre-release's manifests directly (the `generic` provider on `releases/download/canary/`). Stable never sees them, because the GitHub provider reads only the latest full release.
-=======
-- **Stable**: the latest full release, read from its mirror on Cloudflare R2 (`https://downloads.openchamber.dev/desktop/stable/`, the `generic` provider), with the GitHub release as the fallback (the `github` provider). `release.yml`'s `finalize-release` copies the draft's desktop files and `latest*.yml` manifests there with `scripts/release-mirror/mirror-to-r2.mjs` before anything announces the release: publishing it, the Discord post and the website rebuild wait for the upload, and a failed upload leaves the release a draft (`.github/workflows/mirror-release.yml` mirrors a published release again by hand). The script uploads files first and manifests last, keeps the previous release whole (the website links its files until it is rebuilt) and deletes older releases' files except their `.blockmap`s, which a Windows update reads to download only the changed blocks. A check or download that fails on the mirror sends checks to GitHub for an hour (`pickUpdaterSource`, `updater-feed.mjs`); a missing manifest on the mirror counts as a failure there, while on GitHub it still means "no release for this platform yet".
-- **Canary**: the nightly build of `main`. `.github/workflows/canary.yml` builds it when `main` moved, mirrors the night to `https://downloads.openchamber.dev/desktop/canary/` with the same script (`--channel canary`; blockmaps stay for the nights `canary-notes.json` covers), then replaces the files of one pre-release tagged `canary`. The app reads the mirror first and that pre-release's manifests as the fallback (the `generic` provider on `releases/download/canary/`), with the same one-hour switch as Stable. Stable never sees them, because the GitHub provider reads only the latest full release.
->>>>>>> bc50ba56a
+- **Stable**: the latest full release on GitHub (the `github` provider of electron-updater), read from the R2 mirror first (`https://downloads.openchamber.dev/desktop/stable/`, the `generic` provider) and falling back to GitHub for an hour after the mirror fails.
+- **Canary**: the nightly build of `main`. `.github/workflows/canary.yml` builds it when `main` moved and replaces the files of one pre-release tagged `canary`; the app reads the mirror first and that pre-release's manifests as the fallback (the `generic` provider on `releases/download/canary/`). Stable never sees them, because the GitHub provider reads only the latest full release.
 
 Picking Canary checks at once and offers the Canary build as an ordinary update; after it installs, the app is Canary and keeps updating from Canary. Picking Stable from a Canary build offers the latest release, which is older: `applyUpdaterChannel` (`main.mjs`) sets `allowDowngrade` for exactly that case, and `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself. A release build never downgrades. Without a stored pick the app follows its own build, so a Canary build downloaded from the canary pre-release stays on Canary and is not offered the older release on its first check. On a Linux .deb or .rpm install the downgrade tells the package manager the older package is wanted (`linux-package-install.mjs`), or it would keep the newer one. Every check re-reads the stored channel, so a switch needs no restart; a switch during a running check waits for that check first, because electron-updater answers a running check for the feed it started on.
 
@@ -672,13 +622,9 @@ A separate app (own name, id, profile) was built first. It meant two installs, t
 
 Waiting for the next release would leave the person on a build they asked to leave for up to a few days. The downgrade is offered right away, knowing that a Canary build may have written settings or data in a form the older release does not read yet.
 
-<<<<<<< HEAD
-=======
 ### Why Stable reads a mirror on R2 and not GitHub alone
 
 GitHub's release downloads fail now and then, answering 504 from `releases/download` for hours while its API serves the same files, and they download at a few MB/s. R2 is served by Cloudflare's network with free egress and downloaded about twice as fast in a measurement on 2.7.0. GitHub stays the fallback, so a broken mirror costs one failed request an hour, never an update.
-
->>>>>>> bc50ba56a
 ### Why one rolling pre-release and not a release per night
 
 The download link stays the same, the releases page does not fill up with nightly entries, and the update feed is one fixed address.
