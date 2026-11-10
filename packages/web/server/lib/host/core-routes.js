@@ -625,9 +625,12 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
    */
   const selfAuthenticatedApiPaths = new Set(['/api/git/repository-credential']);
 
+  // An extension tracker's OAuth callback (`/tracker/ext-<id>/oauth/callback`)
+  // is the same kind of page: the tracker redirects the browser here with no
+  // UI bearer, and the route accepts only a `state` this process issued.
   const isGuestOauthCallback = (req) => (
     req.method === 'GET'
-    && /^\/guests\/[a-z][a-z0-9-]*\/oauth\/callback$/.test(req.path || '')
+    && /^\/(?:guests\/[a-z][a-z0-9-]*|tracker\/ext-[a-z][a-z0-9-]*)\/oauth\/callback$/.test(req.path || '')
   );
 
   // An HTML preview runs in an opaque-origin sandbox and carries no session.
@@ -637,10 +640,17 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     && /^\/fs\/preview\/[^/]+\/./.test(req.path || '')
   );
 
+  // An extension frame is sandboxed the same way and loads its package
+  // through a grant in the path; the guests route checks it.
+  const isGuestFrameFileRead = (req) => (
+    req.method === 'GET'
+    && /^\/guest-files\/[^/]+\/./.test(req.path || '')
+  );
+
   const requireApiAuth = async (req, res, next) => {
     const pathname = (req.originalUrl || '').split('?')[0];
     if (selfAuthenticatedApiPaths.has(pathname)) return next();
-    if (isGuestOauthCallback(req) || isFilePreviewRead(req)) {
+    if (isGuestOauthCallback(req) || isFilePreviewRead(req) || isGuestFrameFileRead(req)) {
       return next();
     }
     const requestScope = tunnelAuthController.classifyRequestScope(req);

@@ -1,4 +1,5 @@
 import { publicEnterprisePolicy } from '../enterprise-mode.js';
+import { withUserEnv } from '../injected-env.js';
 
 const SYSTEMD_SERVICE_UNIT_PATTERN = /^[A-Za-z0-9:_.@-]+\.service$/;
 
@@ -190,6 +191,26 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     }
   });
 
+  // Release notes for Settings > About: `version` alone, or what an update
+  // from `since` to `version` brings. 502 when GitHub could not be read, so
+  // the page never mistakes an outage for a release without notes.
+  app.get('/api/openchamber/release-notes', async (req, res) => {
+    const { fetchReleaseNotes, VERSION_PATTERN, CANARY_VERSION_PATTERN } = await import('../changelog/update-notes.js');
+    // Query values can be arrays; only the string form is checked and used.
+    const isVersion = (value) => VERSION_PATTERN.test(value) || CANARY_VERSION_PATTERN.test(value);
+    const version = String(req.query.version ?? '');
+    const since = req.query.since === undefined ? undefined : String(req.query.since);
+    if (!isVersion(version) || (since !== undefined && !isVersion(since))) {
+      return res.status(400).json({ error: 'version and since must be OpenChamber versions' });
+    }
+    const { compareVersions } = await import('../version-order.js');
+    const releases = await fetchReleaseNotes(version, since, compareVersions);
+    if (!releases) {
+      return res.status(502).json({ error: 'Release notes are unavailable' });
+    }
+    res.json({ releases });
+  });
+
   app.post('/api/openchamber/update-install', async (_req, res) => {
     try {
       if (process.env.OPENCHAMBER_RUNTIME === 'desktop') {
@@ -240,11 +261,19 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         checkForUpdates,
         getUpdateCommand,
         detectPackageManagerDetails,
+        isUnmanagedInstall,
       } = await import('../package-manager.js');
 
       const updateInfo = await checkForUpdates();
       if (!updateInfo.available) {
         return res.status(400).json({ error: 'No update available' });
+      }
+
+      // A global install would add a second copy and leave this one as it is.
+      if (isUnmanagedInstall()) {
+        return res.status(409).json({
+          error: 'This copy can\'t update itself. Install the new version the way you installed it.',
+        });
       }
 
       const pmDetails = detectPackageManagerDetails();
@@ -466,8 +495,11 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         const child = spawnChild(shell, [shellFlag, script], {
           detached: true,
           stdio: logFd !== null ? ['ignore', logFd, logFd] : 'ignore',
+          // The restarted server's password is this one's on purpose: handed
+          // over as the user's own, since `serve` drops what the record marks
+          // as another instance's.
           env: storedOptions.uiPassword
-            ? { ...process.env, OPENCHAMBER_UI_PASSWORD: storedOptions.uiPassword }
+            ? withUserEnv(process.env, { OPENCHAMBER_UI_PASSWORD: storedOptions.uiPassword })
             : process.env,
           windowsHide: true,
         });
