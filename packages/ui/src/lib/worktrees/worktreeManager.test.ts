@@ -121,8 +121,6 @@ mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
   getWorktreeBootstrapState: (directory: string) => (failedBootstraps.has(directory) ? { status: 'failed', phase: 'directory-created', error: null, updatedAt: 1 } : null),
   markWorktreeBootstrapPending: mock(),
   setWorktreeBootstrapState: mock(),
-  // Removal skips the teardown of a checkout whose bootstrap failed.
-  getWorktreeBootstrapState: () => null,
   startWorktreeBootstrapWatcher: (directory: string, options?: { onReady?: () => void }) => {
     bootstrapWatcherCalls.push(directory);
     bootstrapWatcherOptions.push(options ?? {});
