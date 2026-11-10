@@ -1,10 +1,7 @@
 import { asNonEmptyString } from '../shared/guards.js';
 import fs from 'node:fs';
-import path from 'node:path';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { discoverLoopFiles, loopFingerprint, parseLoopDefinition, setLoopFileEnabled } from './loops.js';
-
-const samePath = (a, b) => a && b && path.resolve(a) === path.resolve(b);
 
 // Same scope rule the scheduler applies: a file under the project's own
 // `.agents/loops` is a repository loop, even where it is also the user folder.
@@ -17,10 +14,8 @@ export const createScheduledTaskService = (dependencies) => {
     sanitizeProjects,
     projectConfigRuntime,
     scheduledTasksRuntime,
+    resolveWorkspaceScope,
     chatsScope = null,
-    // Git helper that maps a linked worktree back to the checkout it came from;
-    // see resolveProjectID.
-    resolvePrimaryWorktreeRoot = null,
   } = dependencies;
 
   const listProjects = async () => {
@@ -41,57 +36,15 @@ export const createScheduledTaskService = (dependencies) => {
     throw new OpenChamberControlError('Project not found', 404);
   };
 
-  const resolveProjectID = async ({ projectId, directory } = {}) => {
+  const resolveProjectID = async ({ projectId, workspaceId } = {}) => {
     const requestedProjectID = asNonEmptyString(projectId);
-    const requestedDirectory = asNonEmptyString(directory);
-    if (requestedProjectID && requestedDirectory) {
-      throw new OpenChamberControlError('Provide only one of projectId or directory', 400);
-    }
-    if (requestedProjectID) {
-      return (await findProjectByID(requestedProjectID)).id;
-    }
-    if (!requestedDirectory) throw new OpenChamberControlError('projectId or directory is required', 400);
-    const resolvedDirectory = path.resolve(requestedDirectory);
-    const projects = await listProjects();
-    const project = projects.find((entry) => samePath(entry.path, resolvedDirectory));
-    if (project) return project.id;
-    // A session in a linked worktree of a registered project schedules for
-    // that project: the worktree itself is almost never registered, and the
-    // project root checkout is what its record stores. A directory inside the
-    // chats scope wins first, so chats paths are never run through git.
-    if (chatsScope?.contains(resolvedDirectory)) return chatsScope.id;
-    if (resolvePrimaryWorktreeRoot) {
-      try {
-        const primaryRoot = asNonEmptyString((await resolvePrimaryWorktreeRoot(resolvedDirectory))?.root);
-        if (primaryRoot && !samePath(primaryRoot, resolvedDirectory)) {
-          const owner = projects.find((entry) => samePath(entry.path, primaryRoot));
-          if (owner) return owner.id;
-        }
-      } catch {
-        // A throwing resolver call: fall through to the unchanged 404.
-        // resolvePrimaryWorktreeRoot itself reports the directory for a
-        // non-checkout or unavailable git, and the samePath guard above
-        // skips those, so only an unexpected throw reaches this catch.
-      }
-    }
-    throw new OpenChamberControlError(`Project not found for directory: ${resolvedDirectory}`, 404);
-  };
-
-  const resolveExecutionDirectory = async (projectID, targetSessionId, { tolerateMissingTarget = false } = {}) => {
-    const project = await findProjectByID(projectID);
-    if (targetSessionId) {
-      try {
-        return (await scheduledTasksRuntime.validateTarget(project.id, targetSessionId)).directory;
-      } catch (error) {
-        // A paused task may keep a target that no longer resolves — `upsert`
-        // tolerates exactly that so the task stays editable. Without a session
-        // there is no worktree to read a catalog from, so the caller stands down
-        // rather than failing a save the guard just allowed.
-        if (!tolerateMissingTarget) throw error;
-        return null;
-      }
-    }
-    return project.path;
+    const requestedWorkspaceID = asNonEmptyString(workspaceId);
+    if (Boolean(requestedProjectID) === Boolean(requestedWorkspaceID)) throw new OpenChamberControlError('Provide exactly one of projectId or workspaceId', 400);
+    if (requestedProjectID) return (await findProjectByID(requestedProjectID)).id;
+    if (typeof resolveWorkspaceScope !== 'function') throw new OpenChamberControlError('Workspace scope service is unavailable', 503);
+    const scope = await resolveWorkspaceScope(requestedWorkspaceID);
+    if (!scope || scope.workspaceId !== requestedWorkspaceID || !scope.hostProjectId) throw new OpenChamberControlError('Workspace is not authorized', 404);
+    return (await findProjectByID(scope.hostProjectId)).id;
   };
 
   const list = async (projectID) => {
@@ -116,10 +69,6 @@ export const createScheduledTaskService = (dependencies) => {
       throw new OpenChamberControlError('enabled must be a boolean', 400);
     }
     const { id, task } = await findLoopTask(projectID, taskID);
-    // A loop file is hand-written, so enabling it is the only point where a
-    // person is present to be told its model does not exist. Checked before the
-    // file is rewritten, so a rejected enable leaves the loop off.
-    const definition = enabled ? parseLoopDefinition(task.loopFile) : null;
     try {
       if (!setLoopFileEnabled(task.loopFile, enabled)) {
         throw new OpenChamberControlError('Loop file must be valid before changing its enabled state', 400);
@@ -131,6 +80,7 @@ export const createScheduledTaskService = (dependencies) => {
     }
     // Enabling here is the user's approval of this version of the loop on
     // this machine; a repository loop does not run on its file's word alone.
+    const definition = enabled ? parseLoopDefinition(task.loopFile) : null;
     await projectConfigRuntime.setLoopApproval(id, task.loopFile, definition ? loopFingerprint(definition) : null);
     const tasks = await scheduledTasksRuntime.syncProject(id);
     return tasks.find((entry) => entry.id === taskID) || null;
@@ -273,7 +223,6 @@ export const createScheduledTaskService = (dependencies) => {
   return {
     listProjects,
     resolveProjectID,
-    resolveExecutionDirectory,
     list,
     upsert,
     remove,
