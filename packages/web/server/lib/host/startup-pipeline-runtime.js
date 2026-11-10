@@ -29,14 +29,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       terminalRebindWindowMs,
       terminalMaxRebindsPerWindow,
       environmentRuntime = null,
-<<<<<<< HEAD:packages/web/server/lib/host/startup-pipeline-runtime.js
       startAgentService,
-=======
-      broadcastUiEvent,
-      setupProxy,
-      scheduleOpenCodeApiDetection,
-      bootstrapOpenCodeAtStartup,
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/startup-pipeline-runtime.js
       onListenerReady = null,
       staticRoutesRuntime,
       process,
@@ -79,11 +72,8 @@ export const createStartupPipelineRuntime = (dependencies) => {
       TERMINAL_INPUT_WS_REBIND_WINDOW_MS: terminalRebindWindowMs,
       TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: terminalMaxRebindsPerWindow,
       environmentRuntime,
-<<<<<<< HEAD:packages/web/server/lib/host/startup-pipeline-runtime.js
       // Session create/close/kill is authoritative on the Host, so the UI
       // hears about it instead of rediscovering terminals on the next focus.
-=======
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/startup-pipeline-runtime.js
       broadcastUiEvent,
     });
 

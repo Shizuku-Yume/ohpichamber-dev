@@ -8,14 +8,11 @@ import {
   GUEST_ATTACH_DATA_MAX,
   GUEST_ATTACH_TITLE_MAX,
   GUEST_COMPOSE_TEXT_MAX,
-<<<<<<< HEAD
-=======
   GUEST_GENERATE_PROMPT_MAX,
   GUEST_GENERATE_SYSTEM_MAX,
   GUEST_GENERATE_TIMEOUT_MS,
   isGuestAttachItem,
   isGuestLinkItem,
->>>>>>> bc50ba56a
   readHostMessage,
   type JsonValue,
 } from './contract.ts';
@@ -28,13 +25,13 @@ import {
 } from './protocol.ts';
 
 test('background action messages round-trip and reject invalid payloads', () => {
-  const action = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'action', id: 'a1', payload: {
+  const action = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'action', id: 'a1', payload: {
     kind: 'message', action: 'count', sessionId: 's1', sessionTitle: 'Session', directory: null, messageId: 'm1', role: 'assistant', text: 'Hello',
   } };
   expect(hostMessageSchema.parse(action)).toEqual(action);
   expect(readHostMessage(action)).toEqual(action);
   expect(hostMessageSchema.safeParse({ ...action, payload: { ...action.payload, kind: 'issue' } }).success).toBe(false);
-  const reply = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'action-result', id: 'a1', payload: { ok: true } };
+  const reply = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'action-result', id: 'a1', payload: { ok: true } };
   expect(guestMessageSchema.parse(reply)).toEqual(reply);
   expect(guestMessageSchema.safeParse({ ...reply, payload: { ok: false } }).success).toBe(false);
   expect(guestMessageSchema.safeParse({ ...reply, payload: { ok: false, error: ' ' } }).success).toBe(false);
@@ -83,10 +80,26 @@ const readyPayload = {
   item: null,
 };
 
+describe('guest generate timeout invariant', () => {
+  test('exceeds the Small Model deadline for the largest guest-shaped request', () => {
+    // The server derives its deadline from prompt size (issue #5017): 60 s base
+    // plus 40 ms per estimated token (~4 chars/token), capped at 900 s —
+    // `generationBudgetMs` in packages/web/server/lib/small-model/index.js.
+    // The arithmetic is inlined here rather than importing that module: the SDK
+    // tests must not pull in the web server's dependency tree.
+    const guestPromptChars = GUEST_GENERATE_PROMPT_MAX + GUEST_GENERATE_SYSTEM_MAX;
+    const serverBudgetMs = Math.min(900_000, 60_000 + Math.ceil(guestPromptChars / 4) * 40);
+    // 72 000 chars ≈ 18 000 tokens → 780 s. A shorter SDK wait would time out
+    // first and orphan the model's remaining work.
+    expect(serverBudgetMs).toBe(780_000);
+    expect(GUEST_GENERATE_TIMEOUT_MS).toBeGreaterThan(serverBudgetMs);
+  });
+});
+
 describe('parseHostMessage', () => {
   test('accepts bounded popover messages and refuses unsafe guest payloads', () => {
     const open = {
-      channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'popover-open', id: 'call-1', payload: {
+      channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'popover-open', id: 'call-1', payload: {
         id: 'preview-1', anchor: { x: 10, y: 20, width: 30, height: 40 }, width: 320, height: 160, data: { sha: 'abc' },
       },
     };
@@ -98,7 +111,7 @@ describe('parseHostMessage', () => {
   });
 
   test('reads popover close pushes only when their bounded shape is valid', () => {
-    const closed = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'popover-closed', payload: { id: 'preview-1', reason: 'escape' } };
+    const closed = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'popover-closed', payload: { id: 'preview-1', reason: 'escape' } };
     expect(parseHostMessage(closed)).toEqual(closed);
     expect(parseHostMessage({ ...closed, payload: { ...closed.payload, reason: 'late' } })).toBeNull();
   });
@@ -125,7 +138,7 @@ describe('parseHostMessage', () => {
     });
     expect(message).toEqual({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: readyPayload,
     });
@@ -146,7 +159,7 @@ describe('parseHostMessage', () => {
   test('accepts a null directory', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'directory',
       payload: { directory: null },
     });
@@ -159,13 +172,13 @@ describe('parseHostMessage', () => {
   test('drops a message from another channel or version', () => {
     expect(hostMessageSchema.safeParse({
       channel: 'other',
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: readyPayload,
     }).success).toBe(false);
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION + 1,
+      v: 2,
       type: 'ready',
       payload: readyPayload,
     }).success).toBe(false);
@@ -174,7 +187,7 @@ describe('parseHostMessage', () => {
   test('accepts a null session push', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'session',
       payload: { session: null },
     });
@@ -187,7 +200,7 @@ describe('parseHostMessage', () => {
   test('drops ready without a surface field', () => {
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: {
         theme: readyPayload.theme,
@@ -201,7 +214,7 @@ describe('parseHostMessage', () => {
   test('accepts an attach dialog surface', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: { ...readyPayload, surface: 'dialog' },
     });
@@ -221,7 +234,7 @@ describe('parseHostMessage', () => {
     };
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: { ...readyPayload, item },
     });
@@ -231,13 +244,13 @@ describe('parseHostMessage', () => {
     }
     const push = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'item',
       payload: { item: null },
     });
     expect(push).toEqual({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'item',
       payload: { item: null },
     });
@@ -247,7 +260,7 @@ describe('parseHostMessage', () => {
     const data = { status: 'open', comments: [{ author: 'mara', text: 'hi' }], n: 1, ok: true, none: null };
     const base = {
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'attach' as const,
       id: 'oc-1',
     };
@@ -263,7 +276,7 @@ describe('parseHostMessage', () => {
     }).success).toBe(false);
     expect(parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'item',
       payload: { item: { ...payload, data } },
     })).toMatchObject({ type: 'item', payload: { item: { data } } });
@@ -274,7 +287,7 @@ describe('parseHostMessage', () => {
     void _item;
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: withoutItem,
     }).success).toBe(false);
@@ -283,7 +296,7 @@ describe('parseHostMessage', () => {
   test('drops ready without connection or settings', () => {
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: {
         theme: readyPayload.theme,
@@ -298,7 +311,7 @@ describe('parseHostMessage', () => {
   test('resolves a failed result code and falls back to HOST_REJECTED', () => {
     expect(parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: false,
@@ -312,7 +325,7 @@ describe('parseHostMessage', () => {
     });
     expect(parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: false,
@@ -324,7 +337,7 @@ describe('parseHostMessage', () => {
     });
     expect(parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: false,
@@ -340,7 +353,7 @@ describe('parseHostMessage', () => {
   test('defaults missing session busy to false and keeps model and agent', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'session',
       payload: {
         session: {
@@ -368,13 +381,13 @@ describe('parseHostMessage', () => {
   test('accepts a session-lifecycle push', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'session-lifecycle',
       payload: { sessionId: 'ses-1', phase: 'started' },
     });
     expect(message).toEqual({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'session-lifecycle',
       payload: { sessionId: 'ses-1', phase: 'started' },
     });
@@ -383,7 +396,7 @@ describe('parseHostMessage', () => {
   test('accepts a start-session result payload', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: true,
@@ -399,7 +412,7 @@ describe('parseHostMessage', () => {
   test('accepts a prompt result payload', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: true,
@@ -415,7 +428,7 @@ describe('parseHostMessage', () => {
   test('accepts a request result payload', () => {
     const message = parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: true,
@@ -431,7 +444,7 @@ describe('parseHostMessage', () => {
   test('accepts the four file result payloads', () => {
     const result = (payload: unknown) => parseHostMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       id: 'oc-1',
       ok: true,
@@ -452,7 +465,7 @@ describe('parseHostMessage', () => {
   test('drops ready without a session field', () => {
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'ready',
       payload: {
         theme: readyPayload.theme,
@@ -465,7 +478,7 @@ describe('parseHostMessage', () => {
   test('drops a result without an id', () => {
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'result',
       ok: true,
     }).success).toBe(false);
@@ -476,11 +489,11 @@ describe('parseGuestMessage', () => {
   test('accepts hello without an id', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'hello',
     })).toEqual({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'hello',
     });
   });
@@ -488,7 +501,7 @@ describe('parseGuestMessage', () => {
   test('accepts toast', () => {
     const message = parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'toast',
       id: 'oc-1',
       payload: { kind: 'info', message: 'Hello' },
@@ -497,7 +510,7 @@ describe('parseGuestMessage', () => {
   });
 
   test('toast buttons round-trip and copy text is bounded without trimming it', () => {
-    const envelope = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'toast', id: 'toast-buttons' };
+    const envelope = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'toast', id: 'toast-buttons' };
     for (const copy of [true, false, { text: '  source\n' }, { text: 'x'.repeat(32_000) }]) {
       const payload = { kind: 'info', message: 'Summary', copy, dismiss: true, persistent: true };
       expect(guestMessageSchema.parse({ ...envelope, payload })).toEqual({ ...envelope, payload });
@@ -513,7 +526,7 @@ describe('parseGuestMessage', () => {
   test('drops toast with an empty message', () => {
     expect(guestMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'toast',
       id: 'oc-1',
       payload: { kind: 'info', message: '   ' },
@@ -523,14 +536,14 @@ describe('parseGuestMessage', () => {
   test('accepts clipboard-write and compose', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'clipboard-write',
       id: 'oc-2',
       payload: { text: '/repo' },
     })?.type).toBe('clipboard-write');
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'compose',
       id: 'oc-3',
       payload: { text: 'Ask about the diff', mode: 'append' },
@@ -540,7 +553,7 @@ describe('parseGuestMessage', () => {
   test('accepts attach and close', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'attach',
       id: 'oc-7',
       payload: {
@@ -552,7 +565,7 @@ describe('parseGuestMessage', () => {
     })?.type).toBe('attach');
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'close',
       id: 'oc-8',
     })?.type).toBe('close');
@@ -562,7 +575,7 @@ describe('parseGuestMessage', () => {
     const title = 'x'.repeat(GUEST_ATTACH_TITLE_MAX + 40);
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'attach',
       id: 'oc-7',
       payload: {
@@ -574,7 +587,7 @@ describe('parseGuestMessage', () => {
     })).toBeNull();
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'attach',
       id: 'oc-7',
       payload: clampAttachRequest({
@@ -630,7 +643,7 @@ describe('parseGuestMessage', () => {
     });
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'attach',
       id: 'oc-7',
       payload: {
@@ -648,7 +661,7 @@ describe('parseGuestMessage', () => {
   test('accepts start-session and keeps worktree only when asked', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'start-session',
       id: 'oc-12',
       payload: {
@@ -680,14 +693,14 @@ describe('parseGuestMessage', () => {
   test('accepts prompt and session-link', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'prompt',
       id: 'oc-20',
       payload: { text: 'Fix the login', send: true },
     })?.type).toBe('prompt');
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'session-link',
       id: 'oc-21',
       payload: {
@@ -709,7 +722,7 @@ describe('parseGuestMessage', () => {
   test('drops attach without an http url shape the host will accept later', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'attach',
       id: 'oc-7',
       payload: {
@@ -724,19 +737,19 @@ describe('parseGuestMessage', () => {
   test('accepts oauth-start, oauth-disconnect, and request', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'oauth-start',
       id: 'oc-10',
     })?.type).toBe('oauth-start');
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'oauth-disconnect',
       id: 'oc-11',
     })?.type).toBe('oauth-disconnect');
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'request',
       id: 'oc-12',
       payload: { method: 'GET', path: '/api/v2/user' },
@@ -744,7 +757,7 @@ describe('parseGuestMessage', () => {
   });
 
   test('accepts generate messages and drops an empty prompt or oversized output ask', () => {
-    const base = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION as const, id: 'oc-30' };
+    const base = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1 as const, id: 'oc-30' };
     expect(parseGuestMessage({ ...base, type: 'generate', payload: { prompt: 'Summarize' } })?.type).toBe('generate');
     expect(parseGuestMessage({ ...base, type: 'generate', payload: { prompt: 'Summarize', system: 'Be brief', maxOutputTokens: 200 } })).toMatchObject({
       payload: { prompt: 'Summarize', system: 'Be brief', maxOutputTokens: 200 },
@@ -755,8 +768,19 @@ describe('parseGuestMessage', () => {
     expect(parseGuestMessage({ ...base, type: 'generate', payload: {} })).toBeNull();
   });
 
+  test('accepts the late generate listen notice and a late answer, and drops a malformed one', () => {
+    const envelope = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1 as const };
+    expect(parseGuestMessage({ ...envelope, type: 'generate-late-listen' })?.type).toBe('generate-late-listen');
+    const answered = { ...envelope, type: 'generate-late' as const, payload: { request: { prompt: 'Summarize' }, ok: true as const, result: { text: 'Short.' } } };
+    expect(parseHostMessage(answered)).toEqual(answered);
+    const failed = { ...envelope, type: 'generate-late' as const, payload: { request: { prompt: 'Summarize', system: 'Be brief' }, ok: false as const, code: 'MODEL_FAILED' as const, error: 'Failed.' } };
+    expect(parseHostMessage(failed)).toEqual(failed);
+    expect(parseHostMessage({ ...answered, payload: { request: { prompt: '' }, ok: true, result: { text: 'x' } } })).toBeNull();
+    expect(parseHostMessage({ ...failed, payload: { ...failed.payload, code: 'NOPE' } })).toBeNull();
+  });
+
   test('accepts file messages and drops an empty or backslash path', () => {
-    const base = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION as const, id: 'oc-20' };
+    const base = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1 as const, id: 'oc-20' };
     expect(parseGuestMessage({ ...base, type: 'file-read', payload: { path: 'README.md' } })?.type).toBe('file-read');
     expect(parseGuestMessage({ ...base, type: 'file-write', payload: { path: '~/.config/x.json', content: '{}' } })?.type).toBe('file-write');
     expect(parseGuestMessage({ ...base, type: 'file-list', payload: { path: '.' } })?.type).toBe('file-list');
@@ -769,14 +793,14 @@ describe('parseGuestMessage', () => {
   test('drops a request path that escapes the api origin', () => {
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'request',
       id: 'oc-12',
       payload: { method: 'GET', path: '/api/../secret' },
     })).toBeNull();
     expect(parseGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'request',
       id: 'oc-12',
       payload: { method: 'GET', path: 'https://evil.example/x' },
@@ -786,7 +810,7 @@ describe('parseGuestMessage', () => {
   test('drops empty compose text', () => {
     expect(guestMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'compose',
       id: 'oc-3',
       payload: { text: '   ' },
@@ -796,7 +820,7 @@ describe('parseGuestMessage', () => {
   test('drops compose text over the cap', () => {
     expect(guestMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: OPENCHAMBER_SDK_API_VERSION,
+      v: 1,
       type: 'compose',
       id: 'oc-3',
       payload: { text: 'x'.repeat(GUEST_COMPOSE_TEXT_MAX + 1) },
@@ -836,7 +860,7 @@ describe('readHostMessage', () => {
   test('drops junk, wrong channels, and results without an id or error', () => {
     expect(readHostMessage(null)).toBeNull();
     expect(readHostMessage('hello')).toBeNull();
-    expect(readHostMessage({ channel: 'other', v: OPENCHAMBER_SDK_API_VERSION, type: 'directory', payload: {} })).toBeNull();
+    expect(readHostMessage({ channel: 'other', v: 1, type: 'directory', payload: {} })).toBeNull();
     expect(readHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'nope', payload: {} })).toBeNull();
     expect(readHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', ok: true })).toBeNull();
     expect(readHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: 'x', ok: false })).toBeNull();
@@ -952,18 +976,6 @@ describe('actions, commands, and badge wire shapes', () => {
   });
 });
 
-<<<<<<< HEAD
-describe('late generate protocol', () => {
-  test('accepts the late generate listen notice and a late answer, and drops a malformed one', () => {
-    const envelope = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION };
-    expect(parseGuestMessage({ ...envelope, type: 'generate-late-listen' })?.type).toBe('generate-late-listen');
-    const answered = { ...envelope, type: 'generate-late' as const, payload: { request: { prompt: 'Summarize' }, ok: true as const, result: { text: 'Short.' } } };
-    expect(parseHostMessage(answered)).toEqual(answered);
-    const failed = { ...envelope, type: 'generate-late' as const, payload: { request: { prompt: 'Summarize', system: 'Be brief' }, ok: false as const, code: 'MODEL_FAILED' as const, error: 'Failed.' } };
-    expect(parseHostMessage(failed)).toEqual(failed);
-    expect(parseHostMessage({ ...answered, payload: { request: { prompt: '' }, ok: true, result: { text: 'x' } } })).toBeNull();
-    expect(parseHostMessage({ ...failed, payload: { ...failed.payload, code: 'NOPE' } })).toBeNull();
-=======
 describe('the link item', () => {
   const push = (item: JsonValue) => parseHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'item', payload: { item } });
 
@@ -982,6 +994,5 @@ describe('the link item', () => {
     expect(push({ kind: 'link', identifier: '' })).toBeNull();
     expect(push({ kind: 'link', identifier: 'DEMO-12', title: 'x' })).toBeNull();
     expect(push({ kind: 'link', identifier: 'D'.repeat(129) })).toBeNull();
->>>>>>> bc50ba56a
   });
 });

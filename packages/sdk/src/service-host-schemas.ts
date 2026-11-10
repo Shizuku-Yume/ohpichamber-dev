@@ -4,10 +4,7 @@ import {
   MENTION_ID_MAX,
   MENTION_TEXT_MAX,
   MENTION_TITLE_MAX,
-<<<<<<< HEAD
-=======
   SERVICE_ANSWER_MESSAGE_MAX,
->>>>>>> bc50ba56a
   SERVICE_EVENT_TOPIC_MAX,
   SERVICE_INSTRUCTIONS_MAX,
   SERVICE_PROMPT_MAX,
@@ -18,10 +15,7 @@ const prompt = z.string().trim().min(1).max(SERVICE_PROMPT_MAX);
 const sessionId = z.string().trim().min(1).max(256);
 const shortText = z.string().trim().min(1).max(256);
 const directory = z.string().trim().min(1).max(4096);
-<<<<<<< HEAD
-=======
 const answerMessage = z.string().trim().min(1).max(SERVICE_ANSWER_MESSAGE_MAX);
->>>>>>> bc50ba56a
 
 /** The host's parse of a service call; anything else is refused before it runs. */
 export const serviceHostCallSchema = z.discriminatedUnion('method', [
@@ -41,8 +35,6 @@ export const serviceHostCallSchema = z.discriminatedUnion('method', [
   z.object({ method: z.literal('sessions.retry'), input: z.object({ sessionId }).strict() }).strict(),
   z.object({ method: z.literal('sessions.status'), input: z.object({ sessionId }).strict() }).strict(),
   z.object({ method: z.literal('sessions.lastReply'), input: z.object({ sessionId }).strict() }).strict(),
-<<<<<<< HEAD
-=======
   z.object({ method: z.literal('sessions.stop'), input: z.object({ sessionId }).strict() }).strict(),
   z.object({
     method: z.literal('sessions.answerPermission'),
@@ -60,7 +52,6 @@ export const serviceHostCallSchema = z.discriminatedUnion('method', [
       message: answerMessage.optional(),
     }).strict(),
   }).strict(),
->>>>>>> bc50ba56a
   z.object({
     method: z.literal('instructions.set'),
     input: z.object({ directory: directory.nullable(), text: z.string().max(SERVICE_INSTRUCTIONS_MAX) }).strict(),

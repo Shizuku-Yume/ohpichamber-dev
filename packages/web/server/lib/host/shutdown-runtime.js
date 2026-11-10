@@ -12,13 +12,6 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     sessionAssistRuntime,
     sessionWorkRuntime,
     contextObligatoryRuntime,
-<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-=======
-    sessionWarmingRuntime,
-    autoReviewRuntime,
-    prWatchRuntime,
-    mergeFollowRuntime,
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/shutdown-runtime.js
     messageQueueRuntime,
     dispatchResultsRuntime,
     messageSearchRuntime,
@@ -36,15 +29,12 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     tunnelAuthController,
     beginGuestServiceShutdown,
     stopAllGuestServices,
-    extensionServiceLifetime,
-    extensionSessionEvents,
     getGuestSurfaceRuntime,
     getRealtimeProxyRuntime,
     getDictationRuntime,
     getRelayService,
     getRelayReconcileTimer,
     getSpacesHost = () => null,
-    stopFolderWatches = () => {},
   } = dependencies;
 
   let shutdownPromise = null;
@@ -71,11 +61,6 @@ export const createGracefulShutdownRuntime = (dependencies) => {
 
     setIsShuttingDown(true);
     beginGuestServiceShutdown();
-    // Admission to guest services closed above; stop the session-event
-    // subscriber in the same tick, so no event reaches a service's refusal
-    // ("the host is shutting down") and reads as a broken service entry.
-    extensionSessionEvents?.stop?.();
-    extensionServiceLifetime?.stop?.();
     syncToHmrState();
     console.log('Starting graceful shutdown...');
     const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : getExitOnShutdown();
@@ -90,22 +75,10 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       () => getSpacesHost()?.close(),
       () => getRelayService()?.stop(),
       () => getDictationRuntime()?.stop(),
-<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-=======
-      stopFolderWatches,
-      () => openCodeWatcherRuntime.stop(),
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/shutdown-runtime.js
       () => sessionRuntime.dispose(),
       () => sessionAssistRuntime?.stop?.(),
       () => sessionWorkRuntime?.stop?.(),
       () => contextObligatoryRuntime?.stop?.(),
-<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-=======
-      () => sessionWarmingRuntime?.stop?.(),
-      () => autoReviewRuntime?.stop?.(),
-      () => prWatchRuntime?.stop?.(),
-      () => mergeFollowRuntime?.stop?.(),
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/shutdown-runtime.js
       () => messageQueueRuntime?.stop?.(),
       () => dispatchResultsRuntime?.stop?.(),
       () => messageSearchRuntime?.stop?.(),

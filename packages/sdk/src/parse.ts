@@ -66,13 +66,10 @@ import {
   TRACKER_URL_TEMPLATES_MAX,
   TRACKER_URL_TOKENS,
   isTrackerUrlTemplate,
-<<<<<<< HEAD
-=======
   GUEST_LINK_ACTIONS,
   GUEST_LINK_KEY,
   GUEST_LINK_KEYS_MAX,
   isBuildableLinkTemplate,
->>>>>>> bc50ba56a
 } from './manifest.ts';
 import { isGuestRequestPath } from './contract.ts';
 import { GUEST_SESSION_EVENT_TYPES } from './session-events.ts';
@@ -616,8 +613,6 @@ const blockSchema = z.object({
   answers: z.boolean().optional(),
 }).strict();
 
-<<<<<<< HEAD
-=======
 // A link origin: a public https origin with a literal hostname, never an IP
 // literal or loopback, so an extension cannot claim links to the app itself.
 const IPV4_HOSTNAME = /^\d+(?:\.\d+){3}$/;
@@ -666,7 +661,6 @@ const linksSchema = z.object({
   }
 });
 
->>>>>>> bc50ba56a
 const blocksSchema = z.array(blockSchema).min(1).max(GUEST_BLOCKS_MAX)
   .refine((blocks) => uniqueBy(blocks, (block) => block.name), { message: 'block names must be unique' });
 
@@ -714,22 +708,13 @@ const contributesSchema = z.object({
   notifications: notificationsSchema.optional(),
   tracker: trackerSchema.optional(),
   quota: quotaSchema.optional(),
-<<<<<<< HEAD
-  sessionControl: z.object({ content: z.literal(true).optional() }).strict().optional(),
-  instructions: z.literal(true).optional(),
-  skills: z.string().trim().refine(isSafeAssetPath).optional(),
-  mentions: z.object({ label: z.string().trim().min(1).max(GUEST_MENTIONS_LABEL_MAX) }).strict().optional(),
-  blocks: blocksSchema.optional(),
-=======
   sessionControl: z.object({ content: z.literal(true).optional(), answers: z.literal(true).optional() }).strict().optional(),
   instructions: z.literal(true).optional(),
   skills: z.string().trim().refine(isSafeAssetPath).optional(),
   // The value becomes a filesystem path OpenCode executes code from, so only a folder inside the package.
-  opencodePlugin: z.string().trim().refine(isSafeAssetPath).optional(),
   mentions: z.object({ label: z.string().trim().min(1).max(GUEST_MENTIONS_LABEL_MAX) }).strict().optional(),
   blocks: blocksSchema.optional(),
   links: linksSchema.optional(),
->>>>>>> bc50ba56a
 });
 
 /**
@@ -879,8 +864,6 @@ export const openChamberManifestSchema = z.object({
       });
       return;
     }
-<<<<<<< HEAD
-=======
     // `open` hands the link to the extension's page; without one there is nothing to open.
     if (contributes.links?.action === 'open' && !hasGuestPage(contributes)) {
       ctx.addIssue({
@@ -889,7 +872,6 @@ export const openChamberManifestSchema = z.object({
       });
       return;
     }
->>>>>>> bc50ba56a
     for (const key of ['sessionControl', 'instructions', 'mentions'] as const) {
       if (contributes[key] !== undefined && !contributes.service) {
         ctx.addIssue({
@@ -1014,7 +996,7 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
     );
   }
   if (path === 'engines' || path.startsWith('engines.')) {
-    return fail('invalid-engines', 'engines.openchamber must be a version like 3.0.0 or >=3.0.0.');
+    return fail('invalid-engines', 'engines.openchamber must be a version like 1.22.0 or >=1.22.0.');
   }
   if (path === 'contributes.panel' && issue.code === 'custom') {
     return fail('invalid-panel', issue.message);
@@ -1110,11 +1092,7 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       : `contributes.sessionEvents is { events: [1 to ${GUEST_SESSION_EVENT_TYPES.length} distinct of ${GUEST_SESSION_EVENT_TYPES.map((type) => `"${type}"`).join(', ')}], content?: true }.`);
   }
   if (path === 'contributes.sessionControl' || path.startsWith('contributes.sessionControl.')) {
-<<<<<<< HEAD
-    return fail('invalid-session-control', issue.code === 'custom' ? issue.message : 'contributes.sessionControl is { content?: true }.');
-=======
     return fail('invalid-session-control', issue.code === 'custom' ? issue.message : 'contributes.sessionControl is { content?: true, answers?: true }.');
->>>>>>> bc50ba56a
   }
   if (path === 'contributes.instructions') {
     return fail('invalid-instructions', issue.code === 'custom' ? issue.message : 'contributes.instructions is true.');
@@ -1122,12 +1100,6 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
   if (path === 'contributes.skills') {
     return fail('invalid-skills', 'contributes.skills is a folder inside the package.');
   }
-<<<<<<< HEAD
-=======
-  if (path === 'contributes.opencodePlugin') {
-    return fail('invalid-opencode-plugin', 'contributes.opencodePlugin is a plugin folder inside the package: a directory with a package.json whose entry OpenCode loads.');
-  }
->>>>>>> bc50ba56a
   if (path === 'contributes.mentions' || path.startsWith('contributes.mentions.')) {
     return fail('invalid-mentions', issue.code === 'custom' ? issue.message : `contributes.mentions is { label: 1 to ${GUEST_MENTIONS_LABEL_MAX} characters }.`);
   }
@@ -1137,15 +1109,12 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       `contributes.blocks lists 1 to ${GUEST_BLOCKS_MAX} components, each with a unique PascalCase name, a description of 1 to ${GUEST_BLOCK_DESCRIPTION_MAX} characters, up to ${GUEST_BLOCK_ARGS_MAX} unique camelCase args, an entry ending in .html inside the package, and an optional height.`,
     );
   }
-<<<<<<< HEAD
-=======
   if (path === 'contributes.links' || path.startsWith('contributes.links.')) {
     const field = fieldPath(issue.path);
     return fail('invalid-links', issue.code === 'custom'
       ? `${field}: ${issue.message}`
       : `${field} is invalid: contributes.links is { action: "open" | "attach", identifier?: { keys: 1 to ${GUEST_LINK_KEYS_MAX} upper-case keys like "PROJ" }, urls?: { origin: "https://...", identifier: ${TRACKER_IDENTIFIER_KINDS.map((kind) => `"${kind}"`).join(' | ')}, item: link templates } }.`);
   }
->>>>>>> bc50ba56a
   if (path.startsWith('contributes.integration')) {
     return fail(
       'invalid-integration',
@@ -1180,11 +1149,7 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
   if (path.startsWith('contributes.service')) {
     return fail('invalid-service', issue.code === 'custom'
       ? issue.message
-<<<<<<< HEAD
       : 'contributes.service needs entry, runtime "host", optional permissions, optional provides ("browser", "source-control", "notifications", "tracker", "quota"), optional surface (true), optional keepRunning (true), and optional schedule (up to 8 of { id, cron, timezone? }).');
-=======
-      : 'contributes.service needs entry, runtime "host", optional permissions, optional provides ("browser", "source-control", "notifications", "tracker", "quota", "opencode"), optional surface (true), optional keepRunning (true), and optional schedule (up to 8 of { id, cron, timezone? }).');
->>>>>>> bc50ba56a
   }
   return fail('missing-panel', 'The manifest needs id, name and icon.');
 };

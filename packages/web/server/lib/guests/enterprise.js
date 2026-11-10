@@ -11,10 +11,7 @@ import { readEnterprisePolicy } from '../enterprise-mode.js';
  * - `transcript`: session content (the agent's answers, questions and
  *   permission requests) posted to that process, so it is gated with it;
  * - `sessionControl`: that process starting sessions and sending to them;
-<<<<<<< HEAD
-=======
  * - `sessionAnswers`: that process allowing what the agent asks to do;
->>>>>>> bc50ba56a
  * - `instructions` and `skills`: text every agent reads, which can steer what
  *   it sends where;
  * - `opencodePlugin`: code that runs inside OpenCode itself, with every
@@ -29,11 +26,7 @@ import { readEnterprisePolicy } from '../enterprise-mode.js';
  * The list names repositories, not package ids: a package declares its own
  * id, so an id would let a user ship any code under an allowed name.
  */
-<<<<<<< HEAD
-const ENTERPRISE_GATED_CAPABILITIES = ['network', 'origins', 'service', 'transcript', 'sessionControl', 'instructions', 'skills', 'opencodePlugin', 'opencode'];
-=======
 const ENTERPRISE_GATED_CAPABILITIES = ['network', 'origins', 'service', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'opencodePlugin', 'opencode'];
->>>>>>> bc50ba56a
 
 /** `host/path` of a clone URL (https or scp-style ssh), for comparing two spellings of one repository. */
 const repositoryKey = (value) => {
@@ -77,10 +70,7 @@ const isAllowedRepository = (gitUrl, allowed) => {
  */
 export const enterpriseBlockedCapabilities = (guest, { source, gitUrl } = {}, policy = readEnterprisePolicy()) => {
   if (!policy.enterpriseMode) return [];
-  const requested = new Set(requestedGuestCapabilities(guest));
-  if (guest.opencodePlugin) requested.add("opencodePlugin");
-  if (guest.service?.provides?.includes("opencode")) requested.add("opencode");
-  const gated = [...requested].filter((capability) => ENTERPRISE_GATED_CAPABILITIES.includes(capability));
+  const gated = requestedGuestCapabilities(guest).filter((capability) => ENTERPRISE_GATED_CAPABILITIES.includes(capability));
   if (gated.length === 0) return [];
   if (source === 'git' && isAllowedRepository(gitUrl, policy.allowedExtensions)) return [];
   if (source === 'path' && policy.allowLocalExtensions) return [];

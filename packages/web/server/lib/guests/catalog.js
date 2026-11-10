@@ -1,11 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-<<<<<<< HEAD
-import { hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
-=======
 import { GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
->>>>>>> bc50ba56a
   toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
 
@@ -17,10 +13,7 @@ import { ensureGuestStorageIds, onExtensionStoreWrite, readExtensionStore } from
 import { buildPublicSocketBindings } from './sockets.js';
 import { isReservedBuiltInId, readBuiltInRegistry } from './builtins.js';
 import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
-<<<<<<< HEAD
-=======
 import { toPublicLinks } from './links.js';
->>>>>>> bc50ba56a
 
 const builtInsByStore = new Map();
 
@@ -392,12 +385,9 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (parsed.manifest.contributes.mentions) {
     guest.mentions = parsed.manifest.contributes.mentions;
   }
-<<<<<<< HEAD
-=======
   if (parsed.manifest.contributes.links) {
     guest.links = parsed.manifest.contributes.links;
   }
->>>>>>> bc50ba56a
   // The package's skills folder; a declared folder that is not there fails the install.
   if (parsed.manifest.contributes.skills) {
     if (!await isGuestPackageFolder(packageRoot, parsed.manifest.contributes.skills)) {
@@ -406,23 +396,11 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
     guest.skills = parsed.manifest.contributes.skills;
   }
   // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
-<<<<<<< HEAD
-  let rawParsed;
-  try { rawParsed = JSON.parse(raw); } catch {}
-  const rawPlugin = parsed.manifest.contributes.opencodePlugin
-    ?? (rawParsed?.openchamber?.contributes?.opencodePlugin ?? rawParsed?.contributes?.opencodePlugin);
-  if (rawPlugin) {
-    if (!await resolveOpenCodePluginFolder(fs, packageRoot, rawPlugin)) {
-      return { ok: false, code: 'invalid-opencode-plugin' };
-    }
-    guest.opencodePlugin = rawPlugin;
-=======
   if (parsed.manifest.contributes.opencodePlugin) {
     if (!await resolveOpenCodePluginFolder(fs, packageRoot, parsed.manifest.contributes.opencodePlugin)) {
       return { ok: false, code: 'invalid-opencode-plugin' };
     }
     guest.opencodePlugin = parsed.manifest.contributes.opencodePlugin;
->>>>>>> bc50ba56a
   }
   return { ok: true, guest };
 };
@@ -595,18 +573,10 @@ export const toPublicGuest = (guest) => {
   }
   if (guest.opencodePlugin) {
     row.opencodePlugin = true;
-<<<<<<< HEAD
-    if (!row.capabilities.requested.includes("opencodePlugin")) {
-      row.capabilities.requested.push("opencodePlugin");
-    }
-=======
->>>>>>> bc50ba56a
   }
   if (guest.mentions) {
     row.mentions = { label: guest.mentions.label };
   }
-<<<<<<< HEAD
-=======
   if (guest.links) {
     // A template the compiler refuses drops this row's links, never the catalog.
     try {
@@ -615,7 +585,6 @@ export const toPublicGuest = (guest) => {
       console.warn(`[guests] links of ${guest.id} left out: ${error?.message ?? error}`);
     }
   }
->>>>>>> bc50ba56a
   const configurationNote = configurationNotes.get(guest.id);
   if (configurationNote) {
     row.needsConfiguration = configurationNote;

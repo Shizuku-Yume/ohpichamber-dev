@@ -1,100 +1,17 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 
-<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
 export const isAgentMemoryFeatureAvailable = () => true;
-=======
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-helpers.js
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 export const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
-<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
 import { isPermissionMode } from '../permission-auto-accept/modes.js';
-=======
-import { sshHostSchema } from '../spaces/places/ssh-host.js';
-import { PROVIDER_LOGO_MIMES } from './provider-logo-routes.js';
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-helpers.js
 
 // Generated from packages/ui/src/lib/settings/registry.ts by
 // `bun run settings-registry:generate`; `registry.test.ts` fails when stale.
 // The server is plain ESM without a bundler, so the snapshot is read with
 // `createRequire` (import attributes differ across the Node versions we run on).
 const settingsRegistry = createRequire(import.meta.url)('./settings-registry.json');
-
-// The sidebar's sections and pin lists, the same shapes the UI keeps
-// (packages/ui/src/lib/sidebarSections.ts, which also restores missing built-in
-// sections on read). The server keeps what is well formed and drops the rest.
-const SIDEBAR_BUILTIN_SECTION_IDS = ['chats', 'pinned', 'work', 'projects'];
-const sidebarSectionIdSchema = z.string().trim().min(1).max(64);
-const sidebarSectionNameSchema = z.string().trim().min(1).transform((value) => value.slice(0, 60));
-const sidebarChips = (values) => z.array(z.unknown()).transform((entries) => (
-  [...new Set(entries.flatMap((entry) => {
-    const parsed = z.enum(values).safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
-  }))]
-));
-const sidebarIdList = (schema) => z.array(z.unknown()).transform((entries) => (
-  [...new Set(entries.flatMap((entry) => {
-    const parsed = schema.safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
-  }))]
-));
-const sidebarIds = sidebarIdList(sidebarSectionIdSchema);
-// A project's id names its folder (`path_` and the path encoded), so it grows with the path.
-const sidebarProjectIds = sidebarIdList(z.string().trim().min(1).max(4096));
-const sidebarSectionSchema = z.union([
-  z.object({ kind: z.literal('builtin'), id: z.enum(SIDEBAR_BUILTIN_SECTION_IDS) }),
-  z.object({
-    kind: z.literal('custom'),
-    id: sidebarSectionIdSchema,
-    name: sidebarSectionNameSchema,
-    grouping: z.enum(['time', 'project']).catch('time'),
-    filter: z.object({
-      states: sidebarChips(['running', 'needs-answer', 'unread', 'failed', 'looks-done']).catch([]),
-      work: sidebarChips(['in-work', 'done']).catch([]),
-      pins: sidebarIds.catch([]),
-      kinds: sidebarChips(['session', 'worktree', 'space', 'run', 'scheduled']).catch([]),
-      links: sidebarChips(['pr', 'issue', 'tracker', 'plan', 'goal']).catch([]),
-      projectIds: sidebarProjectIds.catch([]),
-      folders: sidebarIds.catch([]),
-      activity: z.enum(['any', 'today', 'two-days', 'week', 'stalled']).catch('any'),
-      // A list of phrases; a build before lists kept one phrase as a string.
-      text: z.union([z.string().transform((value) => [value]), z.array(z.unknown())]).transform((entries) => (
-        [...new Set(entries.flatMap((entry) => {
-          const phrase = z.string().trim().transform((value) => value.slice(0, 100)).safeParse(entry);
-          return phrase.success && phrase.data ? [phrase.data] : [];
-        }))].slice(0, 12)
-      )).catch([]),
-    }).partial().catch({}),
-    claims: z.boolean().catch(false),
-    hideWhenEmpty: z.boolean().catch(true),
-  }),
-]);
-
-const sanitizeSidebarSections = (entries) => {
-  const result = [];
-  const seen = new Set();
-  for (const entry of entries) {
-    const parsed = sidebarSectionSchema.safeParse(entry);
-    if (!parsed.success || seen.has(parsed.data.id) || result.length >= 28) continue;
-    if (parsed.data.kind === 'custom' && SIDEBAR_BUILTIN_SECTION_IDS.includes(parsed.data.id)) continue;
-    seen.add(parsed.data.id);
-    result.push(parsed.data);
-  }
-  return result;
-};
-
-const sanitizeSidebarPinLists = (entries) => {
-  const result = [];
-  const seen = new Set(['pinned']);
-  for (const entry of entries) {
-    const parsed = z.object({ id: sidebarSectionIdSchema, name: sidebarSectionNameSchema }).safeParse(entry);
-    if (!parsed.success || seen.has(parsed.data.id) || result.length >= 24) continue;
-    seen.add(parsed.data.id);
-    result.push(parsed.data);
-  }
-  return result;
-};
 
 /**
  * Whether a client may persist this key through PUT /api/config/settings:
@@ -164,27 +81,6 @@ const sanitizeCustomProviderIcons = (value) => {
   return result;
 };
 
-// What `provider-logo-routes.js` stores for an uploaded logo; the bytes stay in its folder.
-const customProviderLogosSchema = z.record(
-  z.string().trim().min(1).max(128),
-  z.object({
-    mime: z.enum(PROVIDER_LOGO_MIMES),
-    updatedAt: z.number().int().positive(),
-  }),
-);
-
-/** Provider id -> `{ mime, updatedAt }`; malformed entries are dropped one by one. */
-const sanitizeCustomProviderLogos = (value) => {
-  const record = z.record(z.string(), z.unknown()).safeParse(value);
-  if (!record.success) return undefined;
-  const result = {};
-  for (const [providerID, logo] of Object.entries(record.data).slice(0, CUSTOM_PROVIDER_ICONS_MAX)) {
-    const entry = customProviderLogosSchema.safeParse({ [providerID]: logo });
-    if (entry.success) Object.assign(result, entry.data);
-  }
-  return result;
-};
-
 export const createSettingsHelpers = (dependencies) => {
   const {
     normalizePathForPersistence,
@@ -204,7 +100,6 @@ export const createSettingsHelpers = (dependencies) => {
 
   const PWA_APP_NAME_MAX_LENGTH = 64;
   const STT_SERVER_URL_MAX_LENGTH = 2048;
-  const STT_ENDPOINT_PATH_MAX_LENGTH = 1024;
   const STT_MODEL_MAX_LENGTH = 256;
   const STT_LANGUAGE_MAX_LENGTH = 64;
   const SHORTCUT_OVERRIDE_KEY_MAX_LENGTH = 128;
@@ -223,8 +118,6 @@ export const createSettingsHelpers = (dependencies) => {
   const HIDDEN_MODELS_MAX = 1024;
   const RECENT_EFFORTS_MAX_KEYS = 128;
   const RECENT_EFFORTS_MAX_VARIANTS_PER_KEY = 5;
-  const LAST_USED_EFFORTS_MAX_KEYS = 512;
-  const lastUsedEffortsSchema = z.record(z.string(), z.string().trim().min(1).nullable().catch(undefined));
 
   const sanitizeShortcutOverrides = (value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -265,26 +158,6 @@ export const createSettingsHelpers = (dependencies) => {
       result[key] = variants;
       count += 1;
       if (count >= RECENT_EFFORTS_MAX_KEYS) break;
-    }
-    return count > 0 ? result : null;
-  };
-
-  // One explicit Default (`null`) or variant name per model. A missing entry is
-  // "never sent", which is not the same as Default.
-  const sanitizeLastUsedEfforts = (value) => {
-    const parsed = lastUsedEffortsSchema.safeParse(value);
-    if (!parsed.success) return null;
-    const result = {};
-    const seenKeys = new Set();
-    let count = 0;
-    for (const [rawKey, effort] of Object.entries(parsed.data)) {
-      const key = rawKey.trim();
-      if (!key || seenKeys.has(key)) continue;
-      if (effort === undefined) continue;
-      seenKeys.add(key);
-      result[key] = effort;
-      count += 1;
-      if (count >= LAST_USED_EFFORTS_MAX_KEYS) break;
     }
     return count > 0 ? result : null;
   };
@@ -408,8 +281,8 @@ export const createSettingsHelpers = (dependencies) => {
         ...new Set(candidate.workStatusHiddenSections.filter((entry) => typeof entry === 'string' && entry.length > 0)),
       ];
     }
-    for (const key of ['workStatusHiddenSectionsExplicit', 'workStatusSectionOrderExplicit']) {
-      if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
+    if (typeof candidate.workStatusHiddenSectionsExplicit === 'boolean') {
+      result.workStatusHiddenSectionsExplicit = candidate.workStatusHiddenSectionsExplicit;
     }
     if (Array.isArray(candidate.workStatusSectionOrder)) {
       result.workStatusSectionOrder = [
@@ -424,12 +297,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.desktopMinimizeToTrayEnabled === 'boolean') {
       result.desktopMinimizeToTrayEnabled = candidate.desktopMinimizeToTrayEnabled;
-    }
-    if (candidate.desktopUpdateChannel === 'stable' || candidate.desktopUpdateChannel === 'canary') {
-      result.desktopUpdateChannel = candidate.desktopUpdateChannel;
-    }
-    if (candidate.serverUpdateChannel === 'stable' || candidate.serverUpdateChannel === 'canary') {
-      result.serverUpdateChannel = candidate.serverUpdateChannel;
     }
     if (typeof candidate.desktopMacMenuBarEnabled === 'boolean') {
       result.desktopMacMenuBarEnabled = candidate.desktopMacMenuBarEnabled;
@@ -520,21 +387,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sidebarDetailedZoneRows === 'boolean') {
       result.sidebarDetailedZoneRows = candidate.sidebarDetailedZoneRows;
     }
-    if (candidate.sidebarWorktreeNameByBranch === true || candidate.sidebarWorktreeNameByBranch === false) {
-      result.sidebarWorktreeNameByBranch = candidate.sidebarWorktreeNameByBranch;
-    }
-    if (Array.isArray(candidate.sidebarSections)) {
-      result.sidebarSections = sanitizeSidebarSections(candidate.sidebarSections);
-    }
-    if (Array.isArray(candidate.sidebarPinLists)) {
-      result.sidebarPinLists = sanitizeSidebarPinLists(candidate.sidebarPinLists);
-    }
-    if (Array.isArray(candidate.sidebarHiddenSections)) {
-      result.sidebarHiddenSections = [...new Set(candidate.sidebarHiddenSections.flatMap((entry) => {
-        const parsed = sidebarSectionIdSchema.safeParse(entry);
-        return parsed.success ? [parsed.data] : [];
-      }))];
-    }
 
     if (Array.isArray(candidate.securityScopedBookmarks)) {
       result.securityScopedBookmarks = normalizeStringArray(candidate.securityScopedBookmarks);
@@ -621,18 +473,11 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.tableCellWrap === 'boolean') {
       result.tableCellWrap = candidate.tableCellWrap;
     }
-    const selectionApprovalText = z.string().transform((value) => value.slice(0, 1000)).safeParse(candidate.selectionApprovalText);
-    if (selectionApprovalText.success) {
-      result.selectionApprovalText = selectionApprovalText.data;
-    }
     if (typeof candidate.copyMessagesAsPlainText === 'boolean') {
       result.copyMessagesAsPlainText = candidate.copyMessagesAsPlainText;
     }
     if (typeof candidate.autoSaveEnabled === 'boolean') {
       result.autoSaveEnabled = candidate.autoSaveEnabled;
-    }
-    if (candidate.fileEditorWrapLines === true || candidate.fileEditorWrapLines === false) {
-      result.fileEditorWrapLines = candidate.fileEditorWrapLines;
     }
     if (candidate.confirmFileTreeMove === true || candidate.confirmFileTreeMove === false) {
       result.confirmFileTreeMove = candidate.confirmFileTreeMove;
@@ -654,12 +499,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sessionTabsEnabled === 'boolean') {
       result.sessionTabsEnabled = candidate.sessionTabsEnabled;
-    }
-    if (candidate.sessionTabsPerWorkspace === true || candidate.sessionTabsPerWorkspace === false) {
-      result.sessionTabsPerWorkspace = candidate.sessionTabsPerWorkspace;
-    }
-    if (candidate.terminalCloseOnExit === true || candidate.terminalCloseOnExit === false) {
-      result.terminalCloseOnExit = candidate.terminalCloseOnExit;
     }
     if (typeof candidate.largeTextPasteBehavior === 'string') {
       const mode = candidate.largeTextPasteBehavior.trim();
@@ -743,9 +582,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.notifyOnCompletion === 'boolean') {
       result.notifyOnCompletion = candidate.notifyOnCompletion;
     }
-    if (candidate.notifyOnPullRequests === true || candidate.notifyOnPullRequests === false) {
-      result.notifyOnPullRequests = candidate.notifyOnPullRequests;
-    }
     if (typeof candidate.notifyOnError === 'boolean') {
       result.notifyOnError = candidate.notifyOnError;
     }
@@ -788,9 +624,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sessionRetentionOnlyArchived === 'boolean') {
       result.sessionRetentionOnlyArchived = candidate.sessionRetentionOnlyArchived;
-    }
-    if (candidate.sessionRetentionIncludeInWork === true || candidate.sessionRetentionIncludeInWork === false) {
-      result.sessionRetentionIncludeInWork = candidate.sessionRetentionIncludeInWork;
     }
     if (typeof candidate.mergedWorktreeCleanupEnabled === 'boolean') {
       result.mergedWorktreeCleanupEnabled = candidate.mergedWorktreeCleanupEnabled;
@@ -925,7 +758,6 @@ export const createSettingsHelpers = (dependencies) => {
     ]) {
       if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
     }
-<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
     // The live browser tab limit is clamped to the same 1..20 range as the UI
     // parser (`src/lib/browser/liveTabs.ts`).
     if (typeof candidate.liveBrowserTabLimit === 'number' && Number.isFinite(candidate.liveBrowserTabLimit)) {
@@ -934,21 +766,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.smallModelVariant === 'string') {
       const trimmed = candidate.smallModelVariant.trim();
       result.smallModelVariant = trimmed.length > 0 ? trimmed : undefined;
-=======
-    if (candidate.agentImageToolEnabled === true || candidate.agentImageToolEnabled === false) {
-      result.agentImageToolEnabled = candidate.agentImageToolEnabled;
-    }
-    // `provider/model`; the model id may hold slashes of its own (OpenRouter's `openai/gpt-image-2`).
-    const agentImageModel = asNonEmptyString(candidate.agentImageModel);
-    if (agentImageModel && /^[^/\s]+\/\S+$/.test(agentImageModel)) {
-      result.agentImageModel = agentImageModel;
-    }
-    if (candidate.agentSecretToolEnabled === true || candidate.agentSecretToolEnabled === false) {
-      result.agentSecretToolEnabled = candidate.agentSecretToolEnabled;
-    }
-    if (candidate.agentUsageToolEnabled === true || candidate.agentUsageToolEnabled === false) {
-      result.agentUsageToolEnabled = candidate.agentUsageToolEnabled;
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-helpers.js
     }
     if (typeof candidate.isolatedSpacesEnabled === 'boolean') {
       result.isolatedSpacesEnabled = candidate.isolatedSpacesEnabled;
@@ -1028,11 +845,7 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
       result.fontSize = Math.max(50, Math.min(200, Math.round(candidate.fontSize)));
     }
-<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
     if (typeof candidate.chatFontSize === 'number' && Number.isFinite(candidate.chatFontSize)) {
-=======
-    if (Number.isFinite(candidate.chatFontSize)) {
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-helpers.js
       result.chatFontSize = Math.max(50, Math.min(200, Math.round(candidate.chatFontSize)));
     }
     if (typeof candidate.terminalFontSize === 'number' && Number.isFinite(candidate.terminalFontSize)) {
@@ -1107,11 +920,6 @@ export const createSettingsHelpers = (dependencies) => {
       result.smallModelVariant = candidate.smallModelVariant.trim();
     }
 
-    const customProviderLogos = sanitizeCustomProviderLogos(candidate.customProviderLogos);
-    if (customProviderLogos) {
-      result.customProviderLogos = customProviderLogos;
-    }
-
     if (Array.isArray(candidate.recentAgents)) {
       result.recentAgents = normalizeStringArray(candidate.recentAgents);
     }
@@ -1122,11 +930,6 @@ export const createSettingsHelpers = (dependencies) => {
     const recentEfforts = sanitizeRecentEfforts(candidate.recentEfforts);
     if (recentEfforts) {
       result.recentEfforts = recentEfforts;
-    }
-
-    const lastUsedEfforts = sanitizeLastUsedEfforts(candidate.lastUsedEfforts);
-    if (lastUsedEfforts) {
-      result.lastUsedEfforts = lastUsedEfforts;
     }
     if (typeof candidate.diffLayoutPreference === 'string') {
       const mode = candidate.diffLayoutPreference.trim();
@@ -1296,8 +1099,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.dictationEnabled === 'boolean') {
       result.dictationEnabled = candidate.dictationEnabled;
     }
-    const dictationAutoSend = z.boolean().safeParse(candidate.dictationAutoSend);
-    if (dictationAutoSend.success) result.dictationAutoSend = dictationAutoSend.data;
     if (typeof candidate.sttProvider === 'string') {
       const provider = candidate.sttProvider.trim();
       if (provider === 'local' || provider === 'openai-compatible') {
@@ -1321,10 +1122,6 @@ export const createSettingsHelpers = (dependencies) => {
         result.sttModel = trimmed;
       }
     }
-    const sttEndpointPath = z.string().trim().safeParse(candidate.sttEndpointPath);
-    if (sttEndpointPath.success && sttEndpointPath.data.length <= STT_ENDPOINT_PATH_MAX_LENGTH) {
-      result.sttEndpointPath = sttEndpointPath.data;
-    }
     if (typeof candidate.sttLocalModel === 'string') {
       const trimmed = candidate.sttLocalModel.trim();
       if (trimmed.length <= STT_MODEL_MAX_LENGTH) {
@@ -1336,9 +1133,6 @@ export const createSettingsHelpers = (dependencies) => {
       if (trimmed.length <= STT_LANGUAGE_MAX_LENGTH) {
         result.sttLanguage = trimmed;
       }
-    }
-    if (candidate.sttCorrectTranscript === true || candidate.sttCorrectTranscript === false) {
-      result.sttCorrectTranscript = candidate.sttCorrectTranscript;
     }
 
     // The registry is the last word on what a client may persist: a key the
@@ -1392,17 +1186,9 @@ export const createSettingsHelpers = (dependencies) => {
       ...sanitized,
       hasManagedRemoteTunnelToken,
       hasDesktopUiPassword,
-<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
       // Tells the client whether agent memory exists in this build at all, so
       // its settings row and panel tab can be absent rather than merely off.
       agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
-=======
-      // Agent memory needs the OpenChamber server, like routing below.
-      agentMemoryFeatureAvailable: true,
-      // The same for agent workflows.
-      agentWorkflowFeatureAvailable: true,
-      // The overview page ships dark until `OPENCHAMBER_OVERVIEW_ENABLED` is set.
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-helpers.js
       overviewFeatureAvailable: isOverviewFeatureAvailable(),
       // Whether this build has agent workflows (OPENCHAMBER_WORKFLOWS_ENABLE).
       agentWorkflowFeatureAvailable: isWorkflowFeatureAvailable(),

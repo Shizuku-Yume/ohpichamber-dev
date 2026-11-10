@@ -271,11 +271,6 @@ const diffItemSchema = z.object({
   side: z.enum(['additions', 'deletions']).optional(),
 });
 
-<<<<<<< HEAD
-// Action items carry a literal `kind`; the chip's optional `kind` is `issue`
-// / `pull`, so they never overlap.
-const guestItemSchema = z.union([messageItemSchema, sessionItemSchema, selectionItemSchema, fileItemSchema, diffItemSchema, attachPayloadSchema]).nullable();
-=======
 const linkItemSchema = z.object({
   kind: z.literal('link'),
   identifier: z.string().trim().min(1).max(GUEST_ATTACH_ID_MAX),
@@ -285,7 +280,6 @@ const linkItemSchema = z.object({
 // Action and link items carry a literal `kind`; the chip's optional `kind` is
 // `issue` / `pull`, so they never overlap.
 const guestItemSchema = z.union([messageItemSchema, sessionItemSchema, selectionItemSchema, fileItemSchema, diffItemSchema, linkItemSchema, attachPayloadSchema]).nullable();
->>>>>>> bc50ba56a
 
 const readyPayloadSchema = z.object({
   theme: z.object({

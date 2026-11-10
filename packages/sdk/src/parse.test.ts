@@ -1,19 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-<<<<<<< HEAD
-import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
-const OPENCHAMBER_SDK_API_VERSION = OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0];
-import { clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicSourceControl, toPublicSessionEvents, toPublicNotifications, toPublicTracker, toPublicQuota, isOpenCodeProviderId, isTrackerUrlTemplate, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes } from './manifest.ts';
-=======
 import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
 import { GUEST_PROVIDER_LOGOS_MAX, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
 import type { JsonValue } from './contract.ts';
 import type { LinksContribution } from './manifest.ts';
->>>>>>> bc50ba56a
 import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
-  apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
+  apiVersion: OPENCHAMBER_SDK_API_VERSION,
   contributes: {
     panel: {
       id: 'acme-hello',
@@ -703,7 +697,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/clickup',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
+        apiVersion: OPENCHAMBER_SDK_API_VERSION,
         contributes: {
           panel: { id: 'clickup', name: 'ClickUp', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -730,7 +724,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/linear',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
+        apiVersion: OPENCHAMBER_SDK_API_VERSION,
         contributes: {
           panel: { id: 'linear-issues', name: 'Linear', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -754,7 +748,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/gitlab',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
+        apiVersion: OPENCHAMBER_SDK_API_VERSION,
         contributes: {
           panel: { id: 'gitlab', name: 'GitLab', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -1677,8 +1671,6 @@ describe('services that act on their own', () => {
     expect(requestedGuestCapabilities({ service: declared, sessionControl: {} })).toEqual(['service', 'sessionControl']);
     expect(requestedGuestCapabilities({ service: declared, sessionControl: { content: true }, instructions: true, skills: 'skills' }))
       .toEqual(['service', 'transcript', 'sessionControl', 'instructions', 'skills']);
-<<<<<<< HEAD
-=======
     expect(requestedGuestCapabilities({ service: declared, sessionControl: { answers: true } })).toEqual(['service', 'sessionControl', 'sessionAnswers']);
   });
 
@@ -1686,7 +1678,6 @@ describe('services that act on their own', () => {
     const running = { ...service, keepRunning: true };
     expect(parse({ panel: pageless, service: running, sessionControl: { answers: true } }).ok).toBe(true);
     expect(parse({ panel: pageless, service: running, sessionControl: { answers: false } })).toMatchObject({ ok: false, code: 'invalid-session-control' });
->>>>>>> bc50ba56a
   });
 
   test('skills stay inside the package', () => {
@@ -1694,12 +1685,6 @@ describe('services that act on their own', () => {
     expect(parse({ panel: pageless, skills: '../skills' })).toMatchObject({ ok: false, code: 'invalid-skills' });
   });
 
-<<<<<<< HEAD
-  test('a legacy plugin contribution is dropped as retired/unrecognized', () => {
-    const res = parse({ panel: pageless, opencodePlugin: 'plugin' });
-    expect(res.ok).toBe(true);
-    if (res.ok) expect('opencodePlugin' in res.manifest.contributes).toBe(false);
-=======
   test('an OpenCode plugin is a folder inside the package and asks for its own capability', () => {
     const accepted = parse({ panel: pageless, opencodePlugin: 'plugin' });
     expect(accepted.ok).toBe(true);
@@ -1711,7 +1696,6 @@ describe('services that act on their own', () => {
     for (const hostile of ['../x', '/etc', 'file:///x', 'https://example.test/plugin', 'plugin\0', '', ' ', 'a//b', './plugin', 'plugin\\win']) {
       expect(parse({ panel: pageless, opencodePlugin: hostile }), hostile).toMatchObject({ ok: false, code: 'invalid-opencode-plugin' });
     }
->>>>>>> bc50ba56a
     expect(requestedGuestCapabilities({ skills: 'skills' })).toEqual(['skills']);
   });
 
@@ -1746,8 +1730,6 @@ describe('contributes.blocks', () => {
     expect(parse([{ ...block, entry: 'blocks/issue.js' }])).toMatchObject({ ok: false, code: 'invalid-blocks' });
   });
 });
-<<<<<<< HEAD
-=======
 
 describe('contributes.links', () => {
   const panel = { id: 'tasks', name: 'Tasks', icon: 'task', entry: 'panel/index.html' };
@@ -1797,4 +1779,3 @@ describe('contributes.links', () => {
     expect(parse({ action: 'jump', urls })).toMatchObject({ ok: false, code: 'invalid-links' });
   });
 });
->>>>>>> bc50ba56a

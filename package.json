@@ -1,10 +1,6 @@
 {
   "name": "openchamber-monorepo",
-<<<<<<< HEAD
   "version": "3.0.0",
-=======
-  "version": "2.7.0",
->>>>>>> bc50ba56a
   "description": "OpenChamber monorepo workspace for web, ui, and desktop runtimes",
   "private": true,
   "type": "module",
@@ -39,7 +35,6 @@
     "type-check:ui": "bun run --cwd packages/ui type-check",
     "settings-registry:generate": "bun run --cwd packages/ui src/lib/settings/registry-snapshot.ts",
     "type-check:electron": "bun run --cwd packages/electron type-check",
-    "type-check:mobile": "bun run --cwd packages/mobile type-check",
     "lint": "bun run --filter '*' lint",
     "lint:web": "bun run --cwd packages/web lint",
     "lint:ui": "bun run --cwd packages/ui lint",
@@ -52,15 +47,8 @@
     "changelog-card": "node scripts/changelog-card/generate.mjs",
     "changelog:build": "node scripts/changelog/build.mjs",
     "changelog:check": "node scripts/changelog/build.mjs --check",
-<<<<<<< HEAD
     "postinstall": "node ./fix-deprecation.js && bun run --cwd packages/agent-contract build && bun run --cwd packages/agent-service build && bun run --cwd packages/sdk build && bun run extensions:build && node ./packages/electron/scripts/ensure-electron.mjs --best-effort",
-    "dev:web": "bun run --cwd packages/web build:watch",
     "dev:web:server": "bun run --cwd packages/web dev:server:watch",
-    "dev:web:hmr": "node ./scripts/dev-web-hmr.mjs",
-=======
-    "postinstall": "node ./fix-deprecation.js && bun run --cwd packages/sdk build && bun run extensions:build && node ./packages/electron/scripts/ensure-electron.mjs --best-effort",
-    "dev:web:server": "bun run --cwd packages/web dev:server:watch",
->>>>>>> bc50ba56a
     "start:web": "bun run --cwd packages/web start",
     "pack:web": "bun pm pack --cwd packages/web",
     "electron:dev": "bun run extensions:build && node ./packages/electron/scripts/electron-dev.mjs",
@@ -109,8 +97,9 @@
     "profile:ios": "node scripts/profile-ios.mjs",
     "profile:serve": "node scripts/perf/isolated-server.mjs",
     "profile:analyze": "node scripts/perf/analyze-run.mjs",
-    "profile:soak": "node scripts/profile-soak.mjs",
-    "profile:ios": "node scripts/profile-ios.mjs"
+    "type-check:mobile": "bun run --cwd packages/mobile type-check",
+    "dev:web": "bun run --cwd packages/web build:watch",
+    "dev:web:hmr": "node ./scripts/dev-web-hmr.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -128,7 +117,7 @@
     "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/lang-xml": "^6.1.0",
     "@codemirror/lang-yaml": "6.1.3",
-    "@codemirror/language": "6.12.4",
+    "@codemirror/language": "6.13.1",
     "@codemirror/lint": "6.9.7",
     "@codemirror/search": "6.7.2",
     "@codemirror/state": "6.7.6",
@@ -138,11 +127,6 @@
     "@heroui/theme": "^2.4.23",
     "@lezer/highlight": "^1.2.3",
     "@octokit/rest": "^22.0.1",
-<<<<<<< HEAD
-=======
-    "@opencode/client": "2.2.6",
-    "@opencode/schema": "2.2.6",
->>>>>>> bc50ba56a
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -174,23 +158,17 @@
     "zustand": "^5.0.8"
   },
   "overrides": {
-<<<<<<< HEAD
-    "@codemirror/autocomplete": "6.20.3",
-=======
-    "katex": "0.19.1",
     "@codemirror/autocomplete": "6.20.4",
->>>>>>> bc50ba56a
     "@codemirror/commands": "6.11.1",
     "@codemirror/lang-html": "6.4.12",
     "@codemirror/lang-javascript": "6.2.5",
     "@codemirror/lang-markdown": "6.5.2",
     "@codemirror/lang-yaml": "6.1.3",
-    "@codemirror/language": "6.12.4",
-    "@codemirror/legacy-modes": "6.5.4",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/legacy-modes": "6.5.5",
     "@codemirror/lint": "6.9.7",
     "@codemirror/search": "6.7.2",
     "@codemirror/state": "6.7.6",
-<<<<<<< HEAD
     "@codemirror/view": "6.43.15",
     "@ark/schema": "0.56.2",
     "@oh-my-pi/omp-stats": "file:vendor/omp/b5a6b2f7/tarballs/oh-my-pi-omp-stats-18.18.0.tgz",
@@ -433,10 +411,8 @@
     "@oh-my-pi/pi-coding-agent@18.18.0>axe-core": "4.13.0",
     "@oh-my-pi/pi-coding-agent@18.18.0>puppeteer-core": "25.3.0",
     "@oh-my-pi/pi-mnemopi@18.18.0>fastembed": "3.0.0",
-    "@oh-my-pi/pi-mnemopi@18.18.0>onnxruntime-node": "1.26.0"
-=======
-    "@codemirror/view": "6.43.15"
->>>>>>> bc50ba56a
+    "@oh-my-pi/pi-mnemopi@18.18.0>onnxruntime-node": "1.26.0",
+    "katex": "0.19.1"
   },
   "devDependencies": {
     "@clack/prompts": "^1.1.0",
@@ -464,7 +440,6 @@
     "vite": "^7.3.2"
   },
   "patchedDependencies": {
-<<<<<<< HEAD
     "happy-dom@18.0.1": "bun-patches/happy-dom@18.0.1.patch",
     "@legendapp/list@3.7.1": "bun-patches/@legendapp%2Flist@3.7.1.patch",
     "@tanstack/virtual-core@3.19.10": "bun-patches/@tanstack+virtual-core+3.19.10.patch",
@@ -472,12 +447,5 @@
     "bun-pty@0.6.0": "bun-patches/bun-pty@0.6.0.patch",
     "puppeteer-core@25.3.0": "vendor/omp/b5a6b2f7/patches/puppeteer-core@25.3.0.patch",
     "@oh-my-pi/pi-coding-agent@vendor/omp/b5a6b2f7/tarballs/oh-my-pi-pi-coding-agent-18.18.0.tgz": "vendor/omp/b5a6b2f7/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2Fb5a6b2f7%2Ftarballs%2Foh-my-pi-pi-coding-agent-18.18.0.tgz.patch"
-=======
-    "@tanstack/virtual-core@3.19.10": "bun-patches/@tanstack+virtual-core+3.19.10.patch",
-    "happy-dom@18.0.1": "bun-patches/happy-dom@18.0.1.patch",
-    "@legendapp/list@3.7.1": "bun-patches/@legendapp%2Flist@3.7.1.patch",
-    "@codemirror/view@6.43.15": "bun-patches/@codemirror%2Fview@6.43.15.patch",
-    "bun-pty@0.6.0": "bun-patches/bun-pty@0.6.0.patch"
->>>>>>> bc50ba56a
   }
 }

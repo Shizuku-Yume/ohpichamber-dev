@@ -21,11 +21,6 @@ import {
   IMAGE_ONLY_PATH,
   IMAGE_SH,
   SPACE_IDLE_STOP_PATH,
-<<<<<<< HEAD
-=======
-  SPACE_PERMISSION_DEFAULT_PATH,
-  SPACE_USER_TASK_TITLE_PATH,
->>>>>>> bc50ba56a
   SPACE_SERVER_HOST,
   SPACE_SERVER_PORT,
   SPACE_TOKEN_DIRECTORY,
@@ -60,16 +55,6 @@ const WRITE_IDLE_STOP_SCRIPT = [
   `mkdir -p ${SPACE_TOKEN_DIRECTORY} && chmod 700 ${SPACE_TOKEN_DIRECTORY}`,
   `&& cat > ${SPACE_IDLE_STOP_PATH}.new && mv ${SPACE_IDLE_STOP_PATH}.new ${SPACE_IDLE_STOP_PATH}`,
 ].join(' ');
-<<<<<<< HEAD
-=======
-const WRITE_IDLE_STOP_SCRIPT = writeSettingScript(SPACE_IDLE_STOP_PATH);
-const WRITE_PERMISSION_DEFAULT_SCRIPT = writeSettingScript(SPACE_PERMISSION_DEFAULT_PATH);
-const WRITE_USER_TASK_TITLE_SCRIPT = writeSettingScript(SPACE_USER_TASK_TITLE_PATH);
-
-// Module resolution walks up from the project files, so one link above every project is enough.
-// Only the plugin is linked, so project code does not quietly resolve our other packages.
-const LINK_PLUGIN_SCRIPT = `${IMAGE_ONLY_PATH} mkdir -p "$1/node_modules/@opencode" && ln -sfn "$2" "$1/node_modules/@opencode/plugin"`;
->>>>>>> bc50ba56a
 
 const pause = (milliseconds) => new Promise((resolve) => { setTimeout(resolve, milliseconds); });
 
@@ -117,13 +102,6 @@ export function createSpaceServerChannel({ exec, wait = pause, now = Date.now })
   /** The idle stop's setting, `{ enabled, hours }`, for the server inside to read at its next check. */
   const writeIdleStop = (spaceId, setting) => runFixedScript(spaceId, [IMAGE_SH, '-c', WRITE_IDLE_STOP_SCRIPT], JSON.stringify(setting), 'store the idle stop setting');
 
-<<<<<<< HEAD
-=======
-  /** The permission mode a new chat inside starts in, `{ mode }`, for the server inside to read at the chat's creation. */
-  const writePermissionDefault = (spaceId, setting) => runFixedScript(spaceId, [IMAGE_SH, '-c', WRITE_PERMISSION_DEFAULT_SCRIPT], JSON.stringify(setting), 'store the default permission mode');
-  const writeUserTaskTitle = (spaceId, setting) => runFixedScript(spaceId, [IMAGE_SH, '-c', WRITE_USER_TASK_TITLE_SCRIPT], JSON.stringify(setting), 'store the user task title');
-
->>>>>>> bc50ba56a
   /**
    * The host keeps no copy of the token. It reads it back when it needs it.
    * The agent owns the file. It can make it huge, empty, or a FIFO that never ends, so the read has
@@ -215,9 +193,5 @@ export function createSpaceServerChannel({ exec, wait = pause, now = Date.now })
     );
   };
 
-<<<<<<< HEAD
   return { writeToken, writeIdleStop, readToken, request, waitUntilReady };
-=======
-  return { writeToken, writeIdleStop, writePermissionDefault, writeUserTaskTitle, readToken, linkPlugin, request, waitUntilReady };
->>>>>>> bc50ba56a
 }

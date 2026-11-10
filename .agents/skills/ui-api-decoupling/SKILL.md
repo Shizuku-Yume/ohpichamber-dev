@@ -7,11 +7,7 @@ description: Use when creating or modifying OpenChamber shared UI data access, O
 
 ## Core Boundary
 
-<<<<<<< HEAD
 - In the adopted pre-M0 baseline, official OpenCode calls use `@opencode/client` and `@opencode/schema` through `opencodeClient`. Migrated agent functionality must use the Canonical Client through the Host Gateway, as specified in `.workflow/omp-migration/`.
-=======
-- Official OpenCode API calls use `@opencode/client` (OpenCode 2.x, `/api/*` routes) through `opencodeClient`; only `packages/ui/src/lib/opencode/` sees wire types, everything else uses the domain model in `lib/opencode/model.ts`.
->>>>>>> bc50ba56a
 - OpenChamber-owned HTTP capabilities use `RuntimeAPIs` where runtime-specific behavior exists, otherwise explicit OpenChamber routes through `runtimeFetch`.
 - Browser/realtime consumers use shared runtime URL/socket helpers.
 - Shared UI never hardcodes localhost, ports, API origins, credentials, or one runtime's transport assumptions.
@@ -34,11 +30,7 @@ Before writing code that changes what a user can reach or do, write the surface 
 
 The step is done when no runtime is missing a line. "Not applicable" is a line; silence is not. A stable unsupported response is a valid outcome, an accidental fallthrough is not.
 
-<<<<<<< HEAD
 Record the list in the task or change summary for handoff and validation. A surface you cannot answer for is the finding — say so in the list rather than leaving the row blank.
-=======
-Carry the list into the pull request *Affected surfaces* table. A runtime you cannot answer for goes in the list as unknown.
->>>>>>> bc50ba56a
 
 This applies to any user-reachable behavior, not only shared UI data access. A sequence that spans native shell, server, and renderer has surfaces too; so does a capability that only one runtime implements today.
 
@@ -52,15 +44,14 @@ This applies to any user-reachable behavior, not only shared UI data access. A s
 
 Load every matching reference before editing.
 
-## Rules
+## Mandatory Rules
 
-1. **Call official OpenCode APIs through the SDK**, preserving its method, body, headers, query, auth, and abort signal.
+1. **Do not bypass the SDK for official OpenCode APIs.** Preserve SDK-generated method, body, headers, query, auth, and abort signal.
 2. **Keep OpenChamber routes explicit.** Register them before the generic OpenCode proxy.
 3. **Use runtime APIs for runtime-owned capabilities.** Components consume hooks/providers, not runtime globals.
 4. **Resolve runtime state at call time.** Do not cache runtime base URLs, resolver output, credentials, or SDK clients across endpoint switches.
 5. **Let transport own auth.** HTTP uses runtime bearer handling; browser/realtime URLs use scoped short-lived URL auth where headers are impossible.
 6. **Never put long-lived client credentials in URLs.** Do not manually append URL tokens.
-<<<<<<< HEAD
 7. **Define runtime parity explicitly.** Shared UI needs deliberate web, Electron, hosted-mobile, and Capacitor behavior or stable unsupported responses across retained surfaces (do not extend retired VS Code support).
 8. **Authoritative fetches must signal failure.** Do not convert failure into a valid empty value that callers use to clear state.
 9. **Keep privileges at the native/runtime boundary.** UI visibility and prompts are not authorization.
@@ -68,14 +59,6 @@ Load every matching reference before editing.
 11. **Parse at the boundary.** Treat external, persisted, bridge, IPC, and network payloads as unknown until a schema, parser, or narrow constructor produces the trusted type consumed by shared code. Do not validate fields and then continue passing the raw payload.
 12. **Model the real contract.** Prefer precise result/state unions and required dependencies over loose strings, boolean combinations, optional callback bags, `any`, or repeated casts. Make unsupported runtime behavior and failure distinct from valid empty success.
 13. **Keep adapters deep and bridges thin.** Hide meaningful protocol or platform mechanics behind an intention-revealing runtime operation; do not add pass-through layers that only rename SDK, fetch, or bridge calls.
-=======
-7. **Authoritative fetches signal failure.** Adapters return a distinct failure result (`sync-state-invariants`, *Failure Is Not Empty*).
-8. **Keep privileges at the native/runtime boundary.** UI visibility and prompts are not authorization.
-9. **Parse at the boundary.** Treat external, persisted, bridge, IPC, and network payloads as unknown until a schema, parser, or narrow constructor produces the trusted type consumed by shared code. Do not validate fields and then continue passing the raw payload.
-10. **Model the real contract.** Prefer precise result/state unions and required dependencies over loose strings, boolean combinations, optional callback bags, `any`, or repeated casts. Make unsupported runtime behavior and failure distinct from valid empty success.
-11. **Keep adapters deep and bridges thin.** Hide meaningful protocol or platform mechanics behind an intention-revealing runtime operation; do not add pass-through layers that only rename SDK, fetch, or bridge calls.
-12. **Scope every OpenCode read to the directory being worked in.** Each such read starts that location with all its MCP servers, so one read per known project is a fan-out (`opencode-v2`, *Every directory-scoped read starts a location*).
->>>>>>> bc50ba56a
 
 ## HTTP Decision Rules
 
@@ -102,7 +85,6 @@ Review runtime base URL, auth, SDK clients, terminal/realtime transports, stores
 
 Re-parse values obtained after a switch at their owning boundary. A type established for one runtime response does not make cached raw data from another runtime trustworthy.
 
-<<<<<<< HEAD
 ## Common Anti-Patterns
 
 | Avoid | Use |
@@ -117,8 +99,6 @@ Re-parse values obtained after a switch at their owning boundary. A type establi
 | Component validates unknown JSON then passes it onward | Adapter parses once and returns a trusted contract |
 | Boolean/nullable combinations for exclusive outcomes | Discriminated result or state union |
 
-=======
->>>>>>> bc50ba56a
 ## Verification
 
 - Official calls use SDK paths or documented SDK-gap wrappers.
@@ -128,4 +108,4 @@ Re-parse values obtained after a switch at their owning boundary. A type establi
 - Every applicable runtime has implementation or explicit unsupported behavior, and the surface list written before editing has a line for each.
 - Runtime switching cannot reuse stale endpoint/auth/cache state.
 - Privileged Electron/extension behavior is enforced outside the renderer.
-- Focused transport, bridge, proxy, auth, and runtime tests pass.
+- Focused transport, bridge, proxy, auth, and runtime tests pass; static type/lint checks alone are insufficient.

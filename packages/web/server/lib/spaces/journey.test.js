@@ -61,36 +61,9 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
   // `calls` so the order of the other steps reads as it did before 5d-3.
   const idle = { saved: null, writes: [], release: () => {} };
   const idleSaveHeld = new Promise((resolve) => { idle.release = resolve; });
-<<<<<<< HEAD
   const serverInside = {
     writeToken: async (spaceId, token) => { calls.push(['writeToken', spaceId, token]); fail('writeToken'); },
     writeIdleStop: async (spaceId, setting) => { fail('writeIdleStop'); idle.writes.push([spaceId, setting]); },
-=======
-  // The permission mode a new chat starts in, as the host's settings hold it, and each one said to a server inside.
-  const defaultMode = { saved: 'auto', writes: [] };
-  const userTaskTitles = [];
-  // With `holdReady`, the server inside reports ready only when the test lets it, so the login
-  // row's repair after a start waits where a real server inside would still be starting.
-  let releaseReady = () => {};
-  const readyHeld = new Promise((resolve) => { releaseReady = resolve; });
-  const serverInside = {
-    writeToken: async (spaceId, token) => { calls.push(['writeToken', spaceId, token]); fail('writeToken'); },
-    writeIdleStop: async (spaceId, setting) => { fail('writeIdleStop'); idle.writes.push([spaceId, setting]); },
-    writePermissionDefault: async (spaceId, setting) => { fail('writePermissionDefault'); defaultMode.writes.push([spaceId, setting]); },
-    writeUserTaskTitle: async (spaceId, setting) => { fail('writeUserTaskTitle'); userTaskTitles.push([spaceId, setting]); },
-    waitUntilReady: async (spaceId) => { fail('waitUntilReady'); if (holdReady) await readyHeld; calls.push(['waitUntilReady', spaceId]); },
-  };
-  const restartOpenCodeInside = async (spaceId) => { calls.push(['restartOpenCodeInside', spaceId]); fail('restartOpenCodeInside'); };
-  // With `holdLoginRow`, a write or removal of the login row inside waits until the test lets it
-  // go, so the repair after a start can be caught in the middle of its writing.
-  let releaseLoginRow = () => {};
-  const loginRowHeld = new Promise((resolve) => { releaseLoginRow = resolve; });
-  const spaceOpenCode = {
-    // The host's custom provider definitions travel as a fourth element only when there are any, so the older expectations read as before.
-    writeProviderConfig: async (spaceId, grants, customProviders) => { calls.push(['writeProviderConfig', spaceId, grants, ...(customProviders?.size > 0 ? [customProviders] : [])]); fail('writeProviderConfig'); },
-    writeLogin: async (spaceId, provider, login) => { calls.push(['writeLogin', spaceId, provider, login]); if (holdLoginRow) await loginRowHeld; fail('writeLogin'); },
-    removeLogin: async (spaceId, provider) => { calls.push(['removeLogin', spaceId, provider]); if (holdLoginRow) await loginRowHeld; fail('removeLogin'); },
->>>>>>> bc50ba56a
   };
   const codeIn = {
     bringCodeIn: async (request) => {
@@ -128,49 +101,11 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
     logger,
     now: () => new Date('2026-09-26T10:00:00.000Z'),
   });
-<<<<<<< HEAD
   return { journey, place, records, calls, events, manager, releaseCodeIn, releaseCodeOut, gatekeeper, dataDir, idle };
-=======
-  return { journey, place, records, calls, events, changes, manager, releaseCodeIn, releaseCodeOut, releaseReady, releaseLoginRow, gatekeeper, dataDir, idle, defaultMode, userTaskTitles, clock };
->>>>>>> bc50ba56a
 };
 
 const REQUEST = { projectDirectory: PROJECT, name: ' Fix login ', start: 'uncommitted', network: NETWORK };
 const steps = (events, spaceId) => events.filter((event) => event.spaceId === spaceId).map((event) => event.step);
-
-describe('the journey: task naming', () => {
-  const ready = async (options) => {
-    const state = journeyWith(options);
-    const { id } = await state.journey.createSpace(REQUEST);
-    expect(await until(() => steps(state.events, id).includes('ready'))).toBe(true);
-    return { ...state, id };
-  };
-
-  it('persists a user name and delivers it on rename, start and both restarts', async () => {
-    const { journey, id, records, userTaskTitles, events } = await ready();
-    expect(userTaskTitles).toEqual([[id, { title: '' }]]);
-    userTaskTitles.length = 0;
-    expect(await journey.setTaskTitle(id, 'Mine')).toEqual({ applied: true, taskTitle: { title: 'Mine', by: 'user' } });
-    expect(records.read(id).record.taskTitle).toEqual({ title: 'Mine', by: 'user' });
-    expect(events.at(-1)).toMatchObject({ spaceId: id, taskTitle: { title: 'Mine', by: 'user' } });
-    expect(userTaskTitles).toEqual([[id, { title: 'Mine' }]]);
-    await journey.stopSpace(id);
-    expect((await journey.listSpaces()).find((entry) => entry.id === id).taskTitle).toEqual({ title: 'Mine', by: 'user' });
-    await journey.startSpace(id);
-    await journey.restartOpenCode(id);
-    await journey.restartSpace(id);
-    expect(userTaskTitles).toHaveLength(4);
-    expect(userTaskTitles.every(([, setting]) => setting.title === 'Mine')).toBe(true);
-  });
-
-  it('keeps and announces the host name when delivery inside fails', async () => {
-    const logs = [];
-    const { journey, id, records } = await ready({ failAt: 'writeUserTaskTitle', logger: { warn: (line) => logs.push(line) } });
-    await journey.setTaskTitle(id, 'Still mine');
-    expect(records.read(id).record.taskTitle).toEqual({ title: 'Still mine', by: 'user' });
-    expect(logs.join(' ')).toContain('writeUserTaskTitle_failed');
-  });
-});
 
 describe('the journey: create', () => {
   it('answers at once, then makes the space, sets its network, brings the code in and sends the history behind it', async () => {

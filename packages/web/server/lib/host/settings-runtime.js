@@ -40,27 +40,6 @@ const ensureNotificationTemplateShape = (templates) => {
   return { templates: next, changed };
 };
 
-<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
-=======
-/** Settings that decide which OpenChamber plugins the managed OpenCode loads. */
-const MANAGED_PLUGIN_SETTINGS_KEYS = new Set([
-  'agentControlToolEnabled',
-  'agentScheduleToolEnabled',
-  'agentWebToolEnabled',
-  'agentMemoryToolEnabled',
-  'agentKnowledgeToolEnabled',
-  'agentNotifyToolEnabled',
-  'agentRenderToolEnabled',
-  'agentImageToolEnabled',
-  'agentSecretToolEnabled',
-  'agentUsageToolEnabled',
-  'agentWorkflowToolEnabled',
-  // The limit failover plugin loads only while one of these is set.
-  'fallbackModel',
-  'accountSwitchProviders',
-]);
-
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/settings-runtime.js
 export const createSettingsRuntime = (deps) => {
   const {
     fsPromises,
@@ -953,10 +932,6 @@ export const createSettingsRuntime = (deps) => {
       next.notifyOnCompletion = true;
       changed = true;
     }
-    if (settings.notifyOnPullRequests !== true && settings.notifyOnPullRequests !== false) {
-      next.notifyOnPullRequests = true;
-      changed = true;
-    }
     if (typeof settings.notifyOnError !== 'boolean') {
       next.notifyOnError = true;
       changed = true;
@@ -1073,15 +1048,12 @@ export const createSettingsRuntime = (deps) => {
     return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration8.settings;
   };
 
-  // For a caller whose change depends on the settings on disk: `resolveChanges`
-  // runs inside the queue, so no other save lands between that read and this write.
-  const persistResolvedSettings = async (resolveChanges, { surface = null } = {}) => {
+  const persistSettings = async (changes, { surface = null } = {}) => {
     const result = persistSettingsLock.then(async () => {
-      const current = await readSettingsFromDisk({ surface });
-      const changes = resolveChanges(current);
       // Log field names only — changes can carry credentials (UI password,
       // client tokens, tunnel tokens) that must never reach the log file.
       console.log('[persistSettings] Updating fields:', Object.keys(changes || {}).join(', ') || '(none)');
+      const current = await readSettingsFromDisk({ surface });
       const sanitized = sanitizeSettingsUpdate(changes);
       for (const key of Object.keys(sanitized)) {
         // Device state belongs to the install in front of the user, never to
@@ -1173,34 +1145,11 @@ export const createSettingsRuntime = (deps) => {
     return result;
   };
 
-  const persistSettings = (changes, options) => persistResolvedSettings(() => changes, options);
-
-  // A background session may discover a project while another window saves
-  // settings. Resolve the append inside the settings queue, without activation.
-  const registerSessionProject = (resolveProject) => {
-    const result = persistSettingsLock.then(async () => {
-      const current = await readSettingsFromDiskStrict();
-      if (Array.isArray(current) || (current.projects !== undefined && !Array.isArray(current.projects))) {
-        throw new Error('Project registry is malformed');
-      }
-      const projects = sanitizeProjects(current.projects) || [];
-      const project = await resolveProject(projects);
-      if (!projects.some((entry) => entry.id === project.id)) {
-        await writeJsonFileAtomic(SETTINGS_FILE_PATH, JSON.stringify({ ...current, projects: [...(current.projects || []), project] }, null, 2));
-      }
-      return project;
-    });
-    persistSettingsLock = result.catch(() => {});
-    return result;
-  };
-
   return {
     readSettingsFromDisk,
     readSettingsFromDiskStrict,
     readSettingsFromDiskMigrated,
     writeSettingsToDisk,
     persistSettings,
-    persistResolvedSettings,
-    registerSessionProject,
   };
 };

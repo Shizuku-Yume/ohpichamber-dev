@@ -102,8 +102,6 @@ export type GuestPermissionAskedContent = {
   message: string | null;
 };
 
-<<<<<<< HEAD
-=======
 /**
  * One field of a form, enough to ask it elsewhere and answer it with
  * `sessions.answerForm`: the value goes under `key`. `options` are the
@@ -130,16 +128,11 @@ export type GuestFormField = {
  * from a service. Sending to the session with `sessions.send` closes it as
  * if the user wrote in the chat, and so does it for an open form.
  */
->>>>>>> bc50ba56a
 export type GuestQuestionAskedContent = {
   type: 'question-asked';
   sessionTitle: string | null;
   ask:
-<<<<<<< HEAD
-    | { kind: 'form'; id: string; title: string; fields: Array<{ title: string; description: string | null }> }
-=======
     | { kind: 'form'; id: string; title: string; fields: GuestFormField[] }
->>>>>>> bc50ba56a
     | { kind: 'page'; id: string; title: string };
 };
 
@@ -161,13 +154,9 @@ export type GuestSessionEventContent =
  * that have content. `project.directory` is the session's directory, `null`
  * when OpenChamber does not know it. `session.parentId` is set for a
  * subagent's session. `permission.requestId` names the request on a
-<<<<<<< HEAD
- * `permission-asked` event.
-=======
  * `permission-asked` event, and `question` what a `question-asked` event
  * waits on; both are what `sessions.answerPermission` and
  * `sessions.answerForm` take.
->>>>>>> bc50ba56a
  */
 export type GuestSessionEventRequest = {
   v: typeof SESSION_EVENTS_WIRE_VERSION;
@@ -182,10 +171,7 @@ export type GuestSessionEventRequest = {
     project: { directory: string | null };
     linked: GuestSessionLinkedItem[];
     permission?: { requestId: string };
-<<<<<<< HEAD
-=======
     question?: { kind: 'form' | 'page'; id: string };
->>>>>>> bc50ba56a
   };
   content?: GuestSessionEventContent;
 };
@@ -204,17 +190,11 @@ export const isGuestSessionEventType = (value: string): value is GuestSessionEve
 type WireSession = { id?: unknown; parentId?: unknown };
 type WireProject = { directory?: unknown };
 type WirePermission = { requestId?: unknown };
-<<<<<<< HEAD
-type WireContent = { type?: unknown };
-type WireEvent = {
-  id?: unknown; type?: unknown; at?: unknown; session?: WireSession; project?: WireProject; linked?: unknown; permission?: WirePermission;
-=======
 type WireQuestion = { kind?: unknown; id?: unknown };
 type WireContent = { type?: unknown };
 type WireEvent = {
   id?: unknown; type?: unknown; at?: unknown; session?: WireSession; project?: WireProject; linked?: unknown;
   permission?: WirePermission; question?: WireQuestion;
->>>>>>> bc50ba56a
 };
 type WireRequest = { v?: unknown; requestId?: unknown; event?: WireEvent; content?: WireContent };
 
@@ -238,11 +218,7 @@ export const readSessionEventRequest = (body: string): GuestSessionEventRequest 
   if (v !== SESSION_EVENTS_WIRE_VERSION) return null;
   if (String(requestId) !== requestId || requestId.length === 0) return null;
   if (Object(event) !== event || event === undefined) return null;
-<<<<<<< HEAD
-  const { id, type, at, session, project, linked, permission } = event;
-=======
   const { id, type, at, session, project, linked, permission, question } = event;
->>>>>>> bc50ba56a
   if (String(id) !== id || id.length === 0) return null;
   if (String(type) !== type || !isGuestSessionEventType(type)) return null;
   if (!Number.isFinite(at)) return null;
@@ -268,8 +244,6 @@ export const readSessionEventRequest = (body: string): GuestSessionEventRequest 
     if (String(permissionRequestId) !== permissionRequestId || permissionRequestId.length === 0) return null;
     request.event.permission = { requestId: permissionRequestId };
   }
-<<<<<<< HEAD
-=======
   if (question !== undefined) {
     if (Object(question) !== question) return null;
     const { kind, id: questionId } = question;
@@ -277,7 +251,6 @@ export const readSessionEventRequest = (body: string): GuestSessionEventRequest 
     if (String(questionId) !== questionId || questionId.length === 0) return null;
     request.event.question = { kind, id: questionId };
   }
->>>>>>> bc50ba56a
   if (content !== undefined) {
     if (Object(content) !== content || content.type !== type) return null;
     // SAFETY: the content's `type` equals the event's, and OpenChamber built

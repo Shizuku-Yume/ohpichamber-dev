@@ -4,7 +4,6 @@ import path from 'node:path';
 import request from 'supertest';
 
 vi.mock('child_process', () => ({
-  execFile: vi.fn(),
   spawn: vi.fn(),
   spawnSync: vi.fn(),
 }));
@@ -13,12 +12,7 @@ vi.mock('../package-manager.js', () => ({
   checkForUpdates: vi.fn(),
   getUpdateCommand: vi.fn(),
   detectPackageManagerDetails: vi.fn(),
-<<<<<<< HEAD:packages/web/server/lib/host/openchamber-routes.test.js
   isUnmanagedInstall: vi.fn(() => false),
-=======
-  isUnmanagedInstall: vi.fn(),
-  fetchRequiredOpenCodeVersion: vi.fn(),
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/openchamber-routes.test.js
 }));
 
 const childProcess = await import('child_process');
@@ -32,7 +26,6 @@ const createApp = ({
   platform = 'linux',
   execPath = '/usr/bin/node',
   plistExists = false,
-  openCodeVersion = '2.2.6',
 } = {}) => {
   const app = express();
   const dependencies = {
@@ -75,7 +68,6 @@ const createApp = ({
     modelsMetadataCacheTtl: 0,
     readSettingsFromDiskMigrated: vi.fn(),
     desktopUpdater,
-    getOpenCodeCompatibility: vi.fn(async () => ({ version: openCodeVersion })),
   };
 
   registerOpenChamberRoutes(app, dependencies);
@@ -91,11 +83,6 @@ beforeEach(() => {
     packageManager: 'npm',
   });
   packageManager.getUpdateCommand.mockReturnValue('npm install -g @openchamber/web@latest');
-<<<<<<< HEAD:packages/web/server/lib/host/openchamber-routes.test.js
-=======
-  packageManager.isUnmanagedInstall.mockReturnValue(false);
-  packageManager.fetchRequiredOpenCodeVersion.mockResolvedValue(null);
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/openchamber-routes.test.js
 });
 
 afterEach(() => {
@@ -491,89 +478,6 @@ describe('OpenChamber foreground update route', () => {
   });
 });
 
-<<<<<<< HEAD:packages/web/server/lib/host/openchamber-routes.test.js
-=======
-describe('OpenChamber update route for a copy no package manager installed', () => {
-  beforeEach(() => {
-    packageManager.isUnmanagedInstall.mockReturnValue(true);
-  });
-
-  it('marks an available update as blocked so clients show no Update button', async () => {
-    const { app } = createApp({ storedOptions: { launchMode: 'daemon' } });
-
-    const response = await request(app).get('/api/openchamber/update-check?appType=web').expect(200);
-
-    expect(response.body).toMatchObject({ available: true, installBlocked: 'manual-install' });
-  });
-
-  it('refuses the install instead of adding a global copy next to this one', async () => {
-    for (const environment of [{}, { CONTAINER: '1' }]) {
-      const { app } = createApp({ environment, storedOptions: { launchMode: 'daemon' } });
-
-      await request(app)
-        .post('/api/openchamber/update-install')
-        .expect(409, {
-          error: 'This copy can\'t update itself. Install the new version the way you installed it.',
-        });
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(packageManager.detectPackageManagerDetails).not.toHaveBeenCalled();
-    expect(packageManager.getUpdateCommand).not.toHaveBeenCalled();
-    expect(childProcess.spawn).not.toHaveBeenCalled();
-    expect(childProcess.spawnSync).not.toHaveBeenCalled();
-  });
-});
-
-describe('OpenChamber update that needs a newer OpenCode', () => {
-  beforeEach(() => {
-    packageManager.fetchRequiredOpenCodeVersion.mockResolvedValue('2.3.0');
-  });
-
-  it('marks the update as blocked with both OpenCode versions, ahead of the other blocks', async () => {
-    packageManager.isUnmanagedInstall.mockReturnValue(true);
-    const { app } = createApp();
-
-    const response = await request(app).get('/api/openchamber/update-check?appType=web').expect(200);
-
-    expect(packageManager.fetchRequiredOpenCodeVersion).toHaveBeenCalledWith('1.17.1');
-    expect(response.body).toMatchObject({
-      available: true,
-      installBlocked: 'opencode-version',
-      requiredOpenCodeVersion: '2.3.0',
-      openCodeVersion: '2.2.6',
-    });
-  });
-
-  it('refuses the install before anything runs', async () => {
-    const { app } = createApp({ storedOptions: { launchMode: 'daemon' } });
-
-    await request(app).post('/api/openchamber/update-install').expect(409, {
-      code: 'OPENCODE_TOO_OLD',
-      error: 'OpenChamber 1.17.1 needs OpenCode 2.3.0. This server has 2.2.6. Update OpenCode first.',
-      requiredOpenCodeVersion: '2.3.0',
-      openCodeVersion: '2.2.6',
-    });
-    expect(packageManager.getUpdateCommand).not.toHaveBeenCalled();
-    expect(childProcess.spawn).not.toHaveBeenCalled();
-  });
-
-  it('blocks nothing when OpenCode is new enough, its version is unknown, or the release names no minimum', async () => {
-    const cases = [
-      { openCodeVersion: '2.3.0', required: '2.3.0' },
-      { openCodeVersion: null, required: '2.3.0' },
-      { openCodeVersion: '2.2.6', required: null },
-    ];
-    for (const { openCodeVersion, required } of cases) {
-      packageManager.fetchRequiredOpenCodeVersion.mockResolvedValue(required);
-      const { app } = createApp({ storedOptions: { launchMode: 'daemon' }, openCodeVersion });
-      const response = await request(app).get('/api/openchamber/update-check?appType=web').expect(200);
-      expect(response.body.installBlocked).toBeUndefined();
-    }
-  });
-});
-
->>>>>>> bc50ba56a:packages/web/server/lib/opencode/openchamber-routes.test.js
 describe('OpenChamber web update route on Windows', () => {
   it('runs the install-and-restart script from a batch file instead of a cmd.exe /c argument', async () => {
     const { app, dependencies } = createApp({

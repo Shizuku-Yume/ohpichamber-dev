@@ -14,16 +14,10 @@ const sortedUnique = (values) => [...new Set(values)].sort();
  * @typedef {{ kind: 'fixed', origin: string } | { kind: 'user' }} TrackerInstanceScope
  * @typedef {{ instances: TrackerInstanceScope, oauth: { authorizeUrl: string, tokenUrl: string } | null, urls: string[] }} TrackerScope
  * @typedef {{ providers: string[] }} QuotaScope
-<<<<<<< HEAD
- * @typedef {{ exec: string[], sockets: string[], sourceControl?: { defaultInstances: string[], custom: boolean }, sessionEvents?: SessionEventsScope, notifications?: NotificationsScope, tracker?: TrackerScope, quota?: QuotaScope, keepRunning?: true, schedule?: string[], mentions?: true, sessionControl?: { content: boolean } }} ServiceScope
- * @param {{ filesystem?: string[], integration?: object, skills?: string, mentions?: object, sessionControl?: { content?: true }, service?: { provides?: string[], keepRunning?: true, schedule?: Array<{ id: string, cron: string, timezone?: string }>, permissions?: { exec?: string[], sockets?: Array<{ id: string }> } }, sourceControl?: { instances: { defaultInstances: string[], custom: boolean } }, sessionEvents?: { events: string[], content?: true }, notifications?: { instances: { kind: 'fixed', origin: string } | { kind: 'user' } }, tracker?: { instances: { kind: 'fixed', origin: string } | { kind: 'user' }, auth: { oauth?: { authorizeUrl: string, tokenUrl: string } }, urls: { item: string[] } }, quota?: { providers: string[] } }} guest
- * @returns {{ filesystem?: string[], apiOrigin?: string, service?: ServiceScope }}
-=======
  * @typedef {{ action: string, keys: string[], origin: string | null, identifier: string | null, urls: string[] }} LinksScope
  * @typedef {{ exec: string[], sockets: string[], sourceControl?: { defaultInstances: string[], custom: boolean }, sessionEvents?: SessionEventsScope, notifications?: NotificationsScope, tracker?: TrackerScope, quota?: QuotaScope, keepRunning?: true, schedule?: string[], mentions?: true, sessionControl?: { content: boolean } }} ServiceScope
  * @param {{ filesystem?: string[], integration?: object, skills?: string, mentions?: object, sessionControl?: { content?: true }, service?: { provides?: string[], keepRunning?: true, schedule?: Array<{ id: string, cron: string, timezone?: string }>, permissions?: { exec?: string[], sockets?: Array<{ id: string }> } }, sourceControl?: { instances: { defaultInstances: string[], custom: boolean } }, sessionEvents?: { events: string[], content?: true }, notifications?: { instances: { kind: 'fixed', origin: string } | { kind: 'user' } }, tracker?: { instances: { kind: 'fixed', origin: string } | { kind: 'user' }, auth: { oauth?: { authorizeUrl: string, tokenUrl: string } }, urls: { item: string[] } }, quota?: { providers: string[] }, links?: { action: string, identifier?: { keys: string[] }, urls?: { origin: string, identifier: string, item: string[] } } }} guest
  * @returns {{ filesystem?: string[], apiOrigin?: string, service?: ServiceScope, links?: LinksScope }}
->>>>>>> bc50ba56a
  */
 export const guestGrantScope = (guest) => {
   const scope = {};
@@ -106,8 +100,6 @@ export const guestGrantScope = (guest) => {
     // What the user types after `@` goes to the service.
     if (guest.mentions) scope.service.mentions = true;
     if (guest.sessionControl) scope.service.sessionControl = { content: guest.sessionControl.content === true };
-<<<<<<< HEAD
-=======
   }
   // Which identifiers and links in chats become the extension's, and what a
   // click hands it; a version that claims others or acts differently asks again.
@@ -119,7 +111,6 @@ export const guestGrantScope = (guest) => {
       identifier: guest.links.urls?.identifier ?? null,
       urls: sortedUnique(guest.links.urls?.item ?? []),
     };
->>>>>>> bc50ba56a
   }
   return scope;
 };
@@ -192,15 +183,12 @@ export const effectiveGrants = (granted, stored, current) => granted.filter((cap
   if (capability === 'sessionControl') {
     return Boolean(stored?.service?.sessionControl) && sameSessionControl(stored.service.sessionControl, current.service?.sessionControl);
   }
-<<<<<<< HEAD
-=======
   if (capability === 'links') {
     const a = stored?.links;
     const b = current.links;
     return Boolean(a && b && a.action === b.action && a.origin === b.origin && a.identifier === b.identifier
       && sameList(a.keys, b.keys) && sameList(a.urls, b.urls));
   }
->>>>>>> bc50ba56a
   if (capability === 'filesystem') {
     return Boolean(stored?.filesystem) && sameList(stored.filesystem, current.filesystem ?? []);
   }

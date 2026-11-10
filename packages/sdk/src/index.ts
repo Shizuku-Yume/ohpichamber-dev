@@ -106,10 +106,7 @@ export {
   hasGuestPage,
   isGuestApproved,
   isGuestPackageSvgIcon,
-<<<<<<< HEAD
-=======
   isGuestProviderLogoPath,
->>>>>>> bc50ba56a
   NOTIFICATIONS_GUEST_ID_MAX,
   notificationProviderIdOf,
   requestedGuestCapabilities,
@@ -148,14 +145,11 @@ export {
   TRACKER_URL_TOKENS,
   isTrackerUrlTemplate,
   trackerProviderIdOf,
-<<<<<<< HEAD
-=======
   GUEST_LINK_ACTIONS,
   GUEST_LINK_KEY,
   GUEST_LINK_KEYS_MAX,
   buildLinkUrl,
   isBuildableLinkTemplate,
->>>>>>> bc50ba56a
 } from './manifest.ts';
 export {
   GUEST_SESSION_EVENT_TYPES,
@@ -170,10 +164,7 @@ export {
   readSessionEventRequest,
 } from './session-events.ts';
 export type {
-<<<<<<< HEAD
-=======
   GuestFormField,
->>>>>>> bc50ba56a
   GuestPermissionAskedContent,
   GuestQuestionAskedContent,
   GuestSessionEventContent,
@@ -198,10 +189,7 @@ export {
   MENTION_TEXT_MAX,
   MENTION_TITLE_MAX,
   OPENCHAMBER_HOST_CALLBACK_URL_ENV,
-<<<<<<< HEAD
-=======
   SERVICE_ANSWER_MESSAGE_MAX,
->>>>>>> bc50ba56a
   SERVICE_EVENT_DATA_MAX,
   SERVICE_EVENT_RATE_MAX,
   SERVICE_EVENT_TOPIC_MAX,
@@ -229,18 +217,12 @@ export type {
   MentionsResolveResult,
   MentionsSearchRequest,
   MentionsSearchResult,
-<<<<<<< HEAD
-  ServiceHost,
-  ServiceHostCalls,
-  ServiceHostMethod,
-=======
   ServiceAnswered,
   ServiceFormValues,
   ServiceHost,
   ServiceHostCalls,
   ServiceHostMethod,
   ServicePermissionAnswer,
->>>>>>> bc50ba56a
   ServiceScheduleEntry,
   ServiceScheduleRequest,
   ServiceSessionReply,
@@ -248,10 +230,7 @@ export type {
   ServiceSessionStart,
   ServiceSessionStarted,
   ServiceSessionStatus,
-<<<<<<< HEAD
-=======
   ServiceSessionStopped,
->>>>>>> bc50ba56a
 } from './service-host.ts';
 export type {
   GuestServiceProvides,
@@ -261,11 +240,8 @@ export type {
   GuestActionContribution,
   GuestBlockContribution,
   MentionsContribution,
-<<<<<<< HEAD
-=======
   GuestLinkAction,
   LinksContribution,
->>>>>>> bc50ba56a
   SessionControlContribution,
   GuestActionPayload,
   GuestActionRole,
@@ -489,10 +465,7 @@ export type {
   GuestBlockAnswerMessage,
   GuestBlockCall,
   GuestDiffItem,
-<<<<<<< HEAD
-=======
   GuestLinkItem,
->>>>>>> bc50ba56a
   GuestFileItem,
   GuestHostSurface,
   GuestSelectionItem,
@@ -710,11 +683,8 @@ export type {
   SourceControlReconcileData,
   SourceControlResourceMethod,
   SourceControlVerifyData,
-<<<<<<< HEAD
-=======
   SourceControlStatusData,
   SourceControlStringForgeUser,
->>>>>>> bc50ba56a
   GuestNotification,
   GuestNotificationKind,
   NotificationsAccountData,

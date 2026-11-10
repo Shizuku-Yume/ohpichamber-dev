@@ -23,7 +23,6 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { failureOfError, spaceFailureText } from './spaceFailureText';
 import { useOpenSpaceDomain, useSpaceJournal } from './spaceNetwork';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type OutputRead = { kind: 'reading' } | { kind: 'read'; answer: SpaceSetupOutput } | { kind: 'failed'; reason: string };
 
@@ -41,7 +40,7 @@ const SetupBlockedDomains: React.FC<{ entry: SpaceEntry; span: { startedAt: stri
   if (blocked.length === 0) return null;
   const allowed = entry.network?.mode === 'allowlist' ? entry.network.domains : [];
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-edge px-2.5 py-2">
+    <div className="flex flex-col gap-1.5 rounded-md border border-border/60 px-2.5 py-2">
       <p className="typography-meta text-muted-foreground">{t('spaces.setup.output.blocked')}</p>
       <ul className="flex flex-col gap-1.5">
         {blocked.map((domain) => (
@@ -105,20 +104,10 @@ export const SpaceSetupOutputDialog: React.FC = () => {
     <div className="flex min-w-0 flex-col gap-3">
       {setup?.state === 'failed' ? (
         <div className="flex min-w-0 flex-col gap-1">
-<<<<<<< HEAD
           <p className="typography-meta text-muted-foreground">
             {t('spaces.setup.output.command', { current: setup.index + 1, total: setup.total })}
           </p>
           <code className="block min-w-0 whitespace-pre-wrap break-all rounded-md bg-[var(--surface-muted)] px-2 py-1 font-mono typography-meta text-foreground">{setup.command}</code>
-=======
-          {setup.total > 1 ? <p className="typography-micro text-muted-foreground">{t('spaces.setup.output.command', { current: setup.index + 1, total: setup.total })}</p> : null}
-          {/* The command and what it printed, as a terminal shows them; the project's own text, shown as is. */}
-          <ScrollableOverlay as="pre" dir="ltr" outerClassName="max-h-[50vh] min-w-0 rounded-md bg-[var(--surface-muted)]" className="whitespace-pre-wrap break-all p-2.5 font-mono text-[0.6875rem] leading-snug text-foreground" disableHorizontal>
-            <span className="text-muted-foreground">$ </span>{setup.command}
-            {output ? `\n${output}` : null}
-          </ScrollableOverlay>
-          {read.kind === 'read' && !output ? <p className="typography-meta text-muted-foreground">{t('spaces.setup.output.empty')}</p> : null}
->>>>>>> bc50ba56a
           {setup.timedOut ? <p className="typography-meta text-muted-foreground">{t('spaces.setup.output.timedOut')}</p> : null}
         </div>
       ) : null}

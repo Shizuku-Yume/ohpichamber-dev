@@ -345,16 +345,11 @@ export type PublicSocketBinding = {
  * to Linear, described by `contributes.tracker`; an extension is a Git host
  * or a tracker, never both. `quota` makes it a usage provider next to the
  * built-in ones on the Usage page, described by `contributes.quota`. The
- * contracts are in `service-providers.ts`. `opencode` lets the service read
- * from the OpenCode the host uses, requiring its own capability approval. A
+ * contracts are in `service-providers.ts`. A
  * service that provides a role needs no panel or background entry: the host
  * starts it on the first call.
  */
-<<<<<<< HEAD
 export const GUEST_SERVICE_PROVIDES = ['browser', 'source-control', 'notifications', 'tracker', 'quota'] as const;
-=======
-export const GUEST_SERVICE_PROVIDES = ['browser', 'source-control', 'notifications', 'tracker', 'quota', 'opencode'] as const;
->>>>>>> bc50ba56a
 export type GuestServiceProvides = (typeof GUEST_SERVICE_PROVIDES)[number];
 
 /**
@@ -830,30 +825,16 @@ export const serviceProvides = (
  * `contributes.sessionControl.content`: the service receives what the agent
  * said or asked, not only that it did. `sessionControl` follows from
  * `contributes.sessionControl`: the service starts sessions and sends to them
-<<<<<<< HEAD
- * with no window open. `instructions` follows from `contributes.instructions`:
-=======
  * with no window open. `sessionAnswers` follows from
  * `contributes.sessionControl.answers`: the service answers the agent's
  * permission requests and forms in any session, for the user.
  * `instructions` follows from `contributes.instructions`:
->>>>>>> bc50ba56a
  * the service adds to what agents read. `skills` follows from
- * `contributes.skills`: the package's skills reach every agent.
- * `opencodePlugin` follows from `contributes.opencodePlugin`: the package's
- * plugin runs inside the user's OpenCode. `opencode` follows from the service
- * role of the same name: the service reads sessions, messages, projects and
-<<<<<<< HEAD
- * live events from the OpenCode the host uses, and nothing else.
- */
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'instructions', 'skills'] as const;
-=======
- * live events from the OpenCode the host uses, and nothing else. `links`
+ * `contributes.skills`: the package's skills reach every agent. `links`
  * follows from `contributes.links`: identifiers and links in chat messages
  * become the extension's, and a click hands the one clicked to it.
  */
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'opencodePlugin', 'opencode', 'links'] as const;
->>>>>>> bc50ba56a
+export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'links'] as const;
 
 export type GuestCapability = (typeof GUEST_CAPABILITIES)[number];
 
@@ -892,18 +873,12 @@ export const isGuestFilesystemPattern = (value: string): boolean => {
 /**
  * The service acts on sessions by itself (`service-host.ts`). `content: true`
  * also lets it read the agent's answers, which asks for `transcript`.
-<<<<<<< HEAD
- */
-export type SessionControlContribution = {
-  content?: true;
-=======
  * `answers: true` lets it answer the agent's permission requests and forms,
  * which asks for `sessionAnswers`.
  */
 export type SessionControlContribution = {
   content?: true;
   answers?: true;
->>>>>>> bc50ba56a
 };
 
 /** `contributes.mentions`: the extension's rows in the composer's `@` menu, answered by its service. */
@@ -915,8 +890,6 @@ export type MentionsContribution = {
 /** Characters of a mention section's label. */
 export const GUEST_MENTIONS_LABEL_MAX = 40;
 
-<<<<<<< HEAD
-=======
 /** Identifier keys one extension may claim in chat text (`contributes.links.identifier.keys`). */
 export const GUEST_LINK_KEYS_MAX = 8;
 /** A literal identifier key: `PROJ` claims `PROJ-123`. Upper case, so prose and code words stay text. */
@@ -957,7 +930,6 @@ export const buildLinkUrl = (origin: string, template: string, identifier: strin
   `${origin}${template.replace('{id}', encodeURIComponent(identifier))}`
 );
 
->>>>>>> bc50ba56a
 /** A component name an agent writes in a UI block. */
 export const GUEST_BLOCK_NAME = /^[A-Z][A-Za-z0-9]{1,31}$/;
 /** An argument name of a block component. */
@@ -1037,23 +1009,12 @@ export type OpenChamberContributes = {
   instructions?: true;
   /** A folder of `<name>/SKILL.md` skills inside the package. Grants `skills`. */
   skills?: string;
-  /**
-<<<<<<< HEAD
-=======
-   * An OpenCode plugin folder inside the package: a directory with a
-   * `package.json` whose entry OpenCode loads. Grants `opencodePlugin`.
-   */
-  opencodePlugin?: string;
->>>>>>> bc50ba56a
   /** Rows in the composer's `@` menu. Needs `service`. */
   mentions?: MentionsContribution;
   /** Components agents write in UI blocks, each drawn by its own frame. */
   blocks?: GuestBlockContribution[];
-<<<<<<< HEAD
-=======
   /** Identifiers and links in chat messages a click hands to the extension. Grants `links`. */
   links?: LinksContribution;
->>>>>>> bc50ba56a
 };
 
 /** Whether any declared action asks for a session's messages, which needs `conversation`. */
@@ -1068,31 +1029,20 @@ export type PublicGuestCapabilities = {
 };
 
 export const requestedGuestCapabilities = (
-<<<<<<< HEAD
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills'>,
-=======
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'opencodePlugin' | 'links'>,
->>>>>>> bc50ba56a
+  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'links'>,
 ): GuestCapability[] => {
   const declared = new Set<GuestCapability>(contributes.capabilities ?? []);
   if (guestActionsNeedConversation(contributes.actions)) declared.add('conversation');
   if (contributes.service) declared.add('service');
-  if (serviceProvides(contributes.service, 'opencode')) declared.add('opencode');
   if (contributes.integration) declared.add('network');
   if (contributes.filesystem && contributes.filesystem.length > 0) declared.add('filesystem');
   if (contributes.origins && contributes.origins.length > 0) declared.add('origins');
   if (contributes.sessionEvents?.content || contributes.sessionControl?.content) declared.add('transcript');
   if (contributes.sessionControl) declared.add('sessionControl');
-<<<<<<< HEAD
-  if (contributes.instructions) declared.add('instructions');
-  if (contributes.skills) declared.add('skills');
-=======
   if (contributes.sessionControl?.answers) declared.add('sessionAnswers');
   if (contributes.instructions) declared.add('instructions');
   if (contributes.skills) declared.add('skills');
-  if (contributes.opencodePlugin) declared.add('opencodePlugin');
   if (contributes.links) declared.add('links');
->>>>>>> bc50ba56a
   return GUEST_CAPABILITIES.filter((capability) => declared.has(capability));
 };
 
@@ -1212,15 +1162,9 @@ export type ParseManifestErrorCode =
   | 'invalid-session-control'
   | 'invalid-instructions'
   | 'invalid-skills'
-<<<<<<< HEAD
-  | 'invalid-mentions'
-  | 'invalid-blocks'
-=======
-  | 'invalid-opencode-plugin'
   | 'invalid-mentions'
   | 'invalid-blocks'
   | 'invalid-links'
->>>>>>> bc50ba56a
   | 'invalid-capabilities'
   | 'invalid-integration'
   | 'invalid-service'
