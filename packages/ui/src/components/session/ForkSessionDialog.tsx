@@ -13,7 +13,6 @@ import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { EXECUTION_FORK_DEFAULT_INSTRUCTIONS, EXECUTION_FORK_GOAL_INSTRUCTIONS } from '@/lib/messages/executionMeta';
 import { useI18n } from '@/lib/i18n';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -130,8 +129,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
     setVariant('');
   }, [open, providers, providerID, modelID]);
 
-  const agentFilter = React.useCallback((candidate: { mode?: string }) => isPrimaryMode(candidate.mode), []);
-
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.id === providerID);
     const model = provider?.models?.find((item) => item.id === modelID) as { variants?: ModelVariantSource } | undefined;
@@ -208,7 +205,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
               agentName={agent}
-              filter={agentFilter}
               dropdownPortalToBody
               onChange={setAgent}
             />

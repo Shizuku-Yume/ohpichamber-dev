@@ -46,8 +46,6 @@ import { normalizePath, renderHighlightedText } from '../utils';
 import { useWorktreeWork } from './useWorktreeWork';
 import { requestNewFolder } from '../folders/newFolderRequest';
 import { worktreeFolderMemberId } from './sidebarWorks';
-import { SpaceMenuItems } from '@/components/session/spaces/SpaceActions';
-import { SpaceStatusLines, SpaceStatusMark } from '@/components/session/spaces/SpaceStatus';
 
 const NO_FOLDERS: never[] = [];
 
@@ -102,11 +100,6 @@ type Props = {
  * not named yet shows its branch. With detailed zone rows it takes their two
  * lines: the second names the project, the branch and the reference, as a
  * detailed session row's does, while its sessions stay one-line rows under it.
- *
- * An isolated space is a work the same way and has this row too: its instance
- * icon where the worktree mark goes, its task's name for the title (its own
- * name under it, where a worktree's branch goes), its state as one mark
- * at the end (`SpaceStatusMark`), and the space's actions for the menu.
  */
 export function WorktreeWorkRow(props: Props): React.ReactNode {
   const {
@@ -137,7 +130,7 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
     },
   });
   const {
-    worktree, space, spaceName, directory, worktreeRemoving, sessions, project, projectLabel, refs, selected,
+    worktree, directory, worktreeRemoving, sessions, project, projectLabel, refs, selected,
     title, branch, label, secondName, finishing, canArchive, canRename, canNewChat, pinned, canPin, workAction, inWork, activityState,
     runningSessionId, durationSessionId,
   } = work;
@@ -211,13 +204,11 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
     ? <Spinner className="h-3 w-3" />
     : activityState ? <CollapsedActivityIndicator state={activityState} /> : null;
   // The slot always says what the row is: the worktree mark tinted by the
-  // branch's PR, or a space's instance icon, so the title starts where session titles
-  // do and a running work never reads as a chat; the chevron takes its place
-  // while the row is hovered or focused, when there is something to open.
-  // Touch layouts have no hover and keep the chevron.
-  const workMark = (className: string) => space ? (
-    <Icon name="instance" className={cn(className, 'flex-shrink-0 text-muted-foreground')} aria-hidden={false} role="img" aria-label={t('sessions.sidebar.group.space')} />
-  ) : (
+  // branch's PR, so the title starts where session titles do and a running work
+  // never reads as a chat; the chevron takes its place while the row is hovered
+  // or focused, when there is something to open. Touch layouts have no hover and
+  // keep the chevron.
+  const workMark = (className: string) => (
     <Icon
       name="worktree"
       className={cn(className, 'flex-shrink-0', refs.prColor ? 'oc-ref-tint' : 'text-muted-foreground')}
@@ -298,9 +289,9 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
   // The second line of a detailed row has room for its number too, which
   // stays neutral: the mark alone carries the state.
   // A worktree's PR shows only as the tint of its branch mark, with the PR
-  // itself in the tooltip; a space's mark takes no tint, so it keeps the PR mark.
+  // itself in the tooltip.
   const refMark = refs.prSummary
-    ? space ? { icon: 'git-pull-request' as const, color: refs.prColor, label: refs.prLabel ?? refs.prReference, text: refs.prReference, url: refs.prSummary.url } : null
+    ? { icon: 'git-pull-request' as const, color: refs.prColor, label: refs.prLabel ?? refs.prReference, text: refs.prReference, url: refs.prSummary.url }
     : refs.primaryIssue
       ? { icon: refs.primaryIssue.icon, color: refs.primaryIssue.color, label: refs.issueItems.map((item) => item.text).join(', '), text: refs.primaryIssue.label, url: refs.primaryIssue.url }
       : null;
@@ -388,10 +379,6 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
           </Slots.SubContent>
         </Slots.Sub>
       ) : null}
-      {space ? <>
-        {canFile ? <Slots.Separator /> : null}
-        <SpaceMenuItems spaceId={space.id} slots={Slots} />
-      </> : null}
       {worktree && !worktreeRemoving ? <>
         <Slots.Separator />
         {canArchive ? (
@@ -427,7 +414,7 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
         onChange={(event) => setRenameDraft(event.target.value)}
         onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setRenaming(false))}
         className="min-w-0 flex-1 bg-transparent typography-ui-label text-foreground outline-none placeholder:text-muted-foreground"
-        placeholder={branch ?? spaceName ?? t('sessions.sidebar.work.rename.placeholder')}
+        placeholder={branch ?? t('sessions.sidebar.work.rename.placeholder')}
         aria-label={t('sessions.sidebar.work.rename.aria')}
       />
       <button
@@ -513,7 +500,6 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
                     <Icon name="alert" className="h-3 w-3" />
                   </span>
                 ) : null}
-                {space ? <SpaceStatusMark spaceId={space.id} /> : null}
                 {pinnedMark}
                 {detailed ? null : ref}
                 {group.directory ? <DirectoryActionIndicator directory={group.directory} /> : null}
@@ -539,14 +525,7 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
                   <span className="min-w-0 truncate">{branch}</span>
                 </div>
               ) : null}
-              {spaceName && spaceName !== (title ?? label) ? (
-                <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-                  <Icon name="instance" className="h-3 w-3 flex-shrink-0" />
-                  <span className="min-w-0 truncate">{spaceName}</span>
-                </div>
-              ) : null}
               {tooltipLinks.length > 0 ? <SidebarRefLinks items={tooltipLinks} directory={project?.path ?? group.directory ?? null} /> : null}
-              {space ? <SpaceStatusLines spaceId={space.id} /> : null}
             </div>
           </TooltipContent>
         </Tooltip>
@@ -554,14 +533,13 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
         {detailed ? (
           // Fixed 16px, always rendered, like a detailed session row's second
           // line: the lead icon (or the chevron), then the name the title is
-          // not (the branch or the space's name, or the task's by branch).
+          // not (the branch, or the task's by branch).
           <div className="flex h-4 w-full min-w-0 items-center gap-1">
             {lead}
-            {mixed && project && space ? workMark('h-3 w-3') : null}
             {/* A worktree's branch wears the worktree mark: after the project's
                 icon it is what tells the work from a plain session row, whose
-                branch shows no icon. A space's mark is already above. */}
-            {mixed && project && !space && secondName && secondName === branch ? workMark('h-3 w-3') : null}
+                branch shows no icon. */}
+            {mixed && project && secondName && secondName === branch ? workMark('h-3 w-3') : null}
             {secondName ? (
               <span dir="auto" className="min-w-0 truncate typography-micro text-muted-foreground">{secondName}</span>
             ) : null}

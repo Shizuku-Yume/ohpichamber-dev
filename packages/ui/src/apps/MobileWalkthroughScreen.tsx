@@ -16,7 +16,7 @@ import { WalkthroughToc } from '@/components/views/walkthrough/WalkthroughToc';
 import { useWalkthroughReview } from '@/components/views/walkthrough/useWalkthroughReview';
 import { useI18n } from '@/lib/i18n';
 import type { WalkthroughTarget } from '@/lib/walkthrough/types';
-import { diffCommentOriginFromTarget } from '@/lib/diffCommentOrigin';
+import { diffCommentOriginFromWalkthroughTarget } from '@/lib/diffCommentOrigin';
 import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS, MOBILE_HEADER_TITLE_CLASS } from '@/components/ui/mobileHeader';
 
 /**
@@ -39,7 +39,7 @@ export const MobileWalkthroughScreen: React.FC<{
   const { t } = useI18n();
   const review = useWalkthroughReview({ directory, target, visible, needsSourceSelection: false, revision });
   const { view } = review;
-  const commentOrigin = React.useMemo(() => diffCommentOriginFromTarget(target), [target]);
+  const commentOrigin = React.useMemo(() => diffCommentOriginFromWalkthroughTarget(target), [target]);
   const [optionsOpen, setOptionsOpen] = React.useState(false);
   // The walkthrough being read, by when it was generated: a new one starts
   // again from its contents.

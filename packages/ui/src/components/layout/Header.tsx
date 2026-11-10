@@ -713,8 +713,13 @@ export const Header: React.FC = () => {
     if (typeof document === 'undefined') {
       return;
     }
+    // `--oc-titlebar-start-inset` is the logical edge the titlebar line starts
+    // from; `--oc-titlebar-left-inset` is the physical left clearance that the
+    // sidebar's top strip and the persistent overlay still read, since they keep
+    // their physical props until the RTL conversion lands.
     document.documentElement.style.setProperty('--oc-titlebar-start-inset', titlebarStartInset);
-  }, [titlebarStartInset]);
+    document.documentElement.style.setProperty('--oc-titlebar-left-inset', titlebarLeftInset);
+  }, [titlebarLeftInset, titlebarStartInset]);
 
   // Space reserved at the header's start for the persistent overlay when the
   // sidebar is collapsed (the overlay sits over the header then). Split into two
@@ -1034,48 +1039,48 @@ export const Header: React.FC = () => {
       <div className="flex min-w-0 flex-1 items-center">
         {activeSurfaceHeader ? (
           <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="app-region-no-drag me-1 size-6 text-muted-foreground hover:bg-transparent hover:text-foreground"
-                aria-label={t('header.mainSurface.backToChat')}
-                onClick={() => useUIStore.getState().closeMainSurfaces()}
-              >
-                <Icon name="arrow-left" className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('header.mainSurface.backToChat')}</TooltipContent>
-          </Tooltip>
-          <div className="me-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-start">
-            <span className="truncate typography-ui-label text-[0.875rem] font-normal leading-tight text-foreground max-w-full">
-              {activeSurfaceHeader.title}
-            </span>
-            {activeSurfaceHeader.subtitle ? (
-              <span className="truncate typography-micro text-[0.65625rem] font-normal leading-tight text-muted-foreground max-w-full">
-                {activeSurfaceHeader.subtitle}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-region-no-drag me-1 size-6 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  aria-label={t('header.mainSurface.backToChat')}
+                  onClick={() => useUIStore.getState().closeMainSurfaces()}
+                >
+                  <Icon name="arrow-left" className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('header.mainSurface.backToChat')}</TooltipContent>
+            </Tooltip>
+            <div className="me-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-start">
+              <span className="truncate typography-ui-label text-[0.875rem] font-normal leading-tight text-foreground max-w-full">
+                {activeSurfaceHeader.title}
               </span>
-            ) : null}
-          </div>
+              {activeSurfaceHeader.subtitle ? (
+                <span className="truncate typography-micro text-[0.65625rem] font-normal leading-tight text-muted-foreground max-w-full">
+                  {activeSurfaceHeader.subtitle}
+                </span>
+              ) : null}
+            </div>
           </>
         ) : (isVSCode || !sessionTabsEnabled) ? (
           <div className="app-region-no-drag me-3 flex min-w-0 max-w-full items-center gap-0.5 py-0.5 -my-0.5 text-start">
             {isCurrentSessionAiRenaming ? <Icon name="loader-4" className="me-1 size-3 shrink-0 animate-spin text-primary" aria-label={t('sessions.aiRename.generating')} /> : null}
             {!isSidebarOpen ? (
               <Tooltip>
-              <SessionSwitcherDropdown align="start">
-                <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className={desktopHeaderIconButtonClass}
-                  aria-label={t('sessions.switcher.openAria')}
-                >
-                  <Icon name="history" className="h-4 w-4" />
-                </button>
-                </TooltipTrigger>
-              </SessionSwitcherDropdown>
-              <TooltipContent side="bottom"><TooltipLabelWithShortcut label={t('sessions.switcher.openAria')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_session_list', shortcutOverrides), '')} /></TooltipContent>
+                <SessionSwitcherDropdown align="start">
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={desktopHeaderIconButtonClass}
+                      aria-label={t('sessions.switcher.openAria')}
+                    >
+                      <Icon name="history" className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                </SessionSwitcherDropdown>
+                <TooltipContent side="bottom"><TooltipLabelWithShortcut label={t('sessions.switcher.openAria')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_session_list', shortcutOverrides), '')} /></TooltipContent>
               </Tooltip>
             ) : null}
             <div className="flex min-w-0 flex-col justify-center px-1">
@@ -1242,49 +1247,49 @@ export const Header: React.FC = () => {
                 }
               }}
             >
-            <div className="flex min-w-0 flex-col justify-center">
-              {isRenamingHeaderSession ? (
-                <form
-                  ref={headerRenameFormRef}
-                  className="flex w-full min-w-0 items-center gap-2 leading-tight"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveHeaderSessionRename();
-                  }}
-                >
-                  <input
-                    ref={focusHeaderRenameInput}
-                    value={headerSessionTitleDraft}
-                    onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
-                    placeholder={t('sessions.sidebar.session.menu.rename')}
-                    className="min-w-0 flex-1 bg-transparent text-[0.8125rem] font-medium leading-4 outline-none placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    aria-label={t('sessions.sidebar.session.rename.save')}
-                    title={t('sessions.sidebar.session.rename.save')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
+              <div className="flex min-w-0 flex-col justify-center">
+                {isRenamingHeaderSession ? (
+                  <form
+                    ref={headerRenameFormRef}
+                    className="flex w-full min-w-0 items-center gap-2 leading-tight"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveHeaderSessionRename();
+                    }}
                   >
-                    <Icon name="check" className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsRenamingHeaderSession(false)}
-                    aria-label={t('sessions.sidebar.session.rename.cancel')}
-                    title={t('sessions.sidebar.session.rename.cancel')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <Icon name="close" className="size-4" />
-                  </button>
-                </form>
-              ) : (
-                <span dir="auto" className="block overflow-hidden whitespace-nowrap oc-ui-start-align text-[0.8125rem] font-medium leading-4 text-foreground max-w-full">
-                  {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
-                </span>
-              )}
-            </div>
+                    <input
+                      ref={focusHeaderRenameInput}
+                      value={headerSessionTitleDraft}
+                      onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
+                      onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
+                      placeholder={t('sessions.sidebar.session.menu.rename')}
+                      className="min-w-0 flex-1 bg-transparent text-[0.8125rem] font-medium leading-4 outline-none placeholder:text-muted-foreground"
+                    />
+                    <button
+                      type="submit"
+                      aria-label={t('sessions.sidebar.session.rename.save')}
+                      title={t('sessions.sidebar.session.rename.save')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="check" className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsRenamingHeaderSession(false)}
+                      aria-label={t('sessions.sidebar.session.rename.cancel')}
+                      title={t('sessions.sidebar.session.rename.cancel')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="close" className="size-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <span dir="auto" className="block overflow-hidden whitespace-nowrap oc-ui-start-align text-[0.8125rem] font-medium leading-4 text-foreground max-w-full">
+                    {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
+                  </span>
+                )}
+              </div>
             </SessionTabsStrip>
           </div>
         )}

@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
@@ -109,8 +108,6 @@ function ReviewFlowDialogView({
       variant: '',
     }));
   }, [open, providers, execution.providerID, execution.modelID]);
-
-  const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.id === execution.providerID);
@@ -209,7 +206,6 @@ function ReviewFlowDialogView({
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
               agentName={execution.agent}
-              filter={agentFilter}
               dropdownPortalToBody
               onChange={(agent) => setExecution((prev) => ({ ...prev, agent }))}
             />

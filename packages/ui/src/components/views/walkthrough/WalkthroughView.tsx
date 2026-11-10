@@ -62,7 +62,7 @@ import { NestedRepoPicker } from '@/components/views/git/NestedRepoPicker';
 import { revisionSuffix } from '@/lib/diff/pullRequestDiff';
 import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
 import { useInContextPanelHeader } from '@/components/layout/contextPanelHeaderSlotContext';
-import { diffCommentOriginFromTarget } from '@/lib/diffCommentOrigin';
+import { diffCommentOriginFromWalkthroughTarget } from '@/lib/diffCommentOrigin';
 
 interface WalkthroughViewProps {
   directory: string;
@@ -271,7 +271,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     [branchSource, isCommitScope, isPrScope, readContext, readsChangeRequests, requestedTarget, scope, selectedCommitHash, selectedPr]
   );
   const source = target.source;
-  const commentOrigin = useMemo(() => diffCommentOriginFromTarget(target), [target]);
+  const commentOrigin = useMemo(() => diffCommentOriginFromWalkthroughTarget(target), [target]);
   const { review: changeRequestReview, provider: reviewProvider } = useComparisonReview(prComparison, directory, visible && isPrScope);
   // A scope the person picked before its subject exists: the base of a branch
   // comparison, or which commit to read. Nothing loads until they say.

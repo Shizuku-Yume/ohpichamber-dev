@@ -1,7 +1,6 @@
 import { DirectoryActionIndicator } from './DirectoryActionIndicator';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
-import { getSessionActivityTime } from '@/sync/session-ordering';
 import React from 'react';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
@@ -43,7 +42,7 @@ import { SessionAiRenameMenuItem } from '@/components/session/SessionAiRenameMen
 import { MoveSessionDialog } from '@/components/session/MoveSessionDialog';
 import { handleSessionRenameKeyDown } from '@/components/session/sessionRenameKeyboard';
 import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
-import { useSessionBlockingRequests } from '@/sync/sync-context';
+import { useSessionBlockingRequestCounts } from '@/sync/sync-context';
 import { usePrefetchSessionMessages, useSessionMessageRecordsForExport } from '@/sync/use-sync';
 import { useSessionHoverPrefetch } from '../list/useSessionPrefetch';
 import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
@@ -594,15 +593,16 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     () => timelineBadgeSessionScopes ?? selectBlockingBadgeSessionScopes(node, isExpanded, sessionDirectory),
     [isExpanded, node, sessionDirectory, timelineBadgeSessionScopes],
   );
-  const {
-    hasPermission: hasPendingPermission,
-    hasForm: hasPendingForm,
-  } = useSessionBlockingRequests(blockingBadgeSessionScopes);
+  const { permissionCount: pendingPermissionCount, formCount: pendingFormCount } = useSessionBlockingRequestCounts(
+    blockingBadgeSessionScopes.map(({ directory, sessionIDs }) => ({ directory, sessionIds: sessionIDs })),
+  );
+  const hasPendingPermission = pendingPermissionCount > 0;
+  const hasPendingForm = pendingFormCount > 0;
   const isSubtaskSession = Boolean(resolvedSession.parentID);
   const needsAttention = useSessionUnread(session.sessionId);
   // The last conversation, as the list orders by: a rename or a metadata
   // write must not make an old session read as just used.
-  const sessionTimestamp = getSessionActivityTime(resolvedSession) || Date.now();
+  const sessionTimestamp = resolvedSession.updatedAt || resolvedSession.createdAt || Date.now();
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const {
