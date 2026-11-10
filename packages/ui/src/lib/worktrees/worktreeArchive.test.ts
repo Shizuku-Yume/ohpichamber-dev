@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 const archivedSessionIds: string[][] = [];
@@ -65,13 +65,23 @@ const { archiveWorktreeWork } = await import('./worktreeArchive');
 const project = { id: 'project', path: '/repo' };
 const worktree: WorktreeMetadata = { path: '/repo-feature', branch: 'feature', projectDirectory: '/repo', label: 'feature' };
 const session: Session = {
-  id: 'ses_1',
-  projectID: 'project',
-  directory: '/repo-feature',
+  sessionId: 'ses_1',
+  projectId: 'project',
+  workspaceId: 'workspace',
+  displayPath: '/repo-feature',
+  parentSessionId: undefined,
+  rootSessionId: 'ses_1',
   title: 'Feature',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  mode: { kind: 'main' },
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
 };
 
 describe('archiveWorktreeWork teardown', () => {

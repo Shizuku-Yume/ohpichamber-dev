@@ -1169,8 +1169,10 @@ export interface GitWorktreeArchive {
   /** The task title it had; empty when it had none. */
   title: string;
   archivedAt: number;
-  /** The sessions archived with it. */
-  sessionIds: string[];
+  /** The sessions archived with it; the Host derives them, so a client read may omit them. */
+  sessionIds?: string[];
+  /** Host-derived authority; Git metadata does not authorize session mutations. The Host always reports one. */
+  sessionBinding: { status: 'bound' | 'verified-empty' | 'unbound' | 'ref-changed'; phase?: string; revision?: number; recoveryHead?: string };
 }
 
 export interface ArchiveGitWorktreePayload {

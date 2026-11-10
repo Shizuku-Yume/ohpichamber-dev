@@ -1764,6 +1764,13 @@ const worktreeArchiveSchema = z.object({
   title: z.string(),
   archivedAt: z.number(),
   sessionIds: z.array(z.string()),
+  // The Host derives the session binding and always reports one.
+  sessionBinding: z.object({
+    status: z.enum(['bound', 'verified-empty', 'unbound', 'ref-changed']),
+    phase: z.string().optional(),
+    revision: z.number().optional(),
+    recoveryHead: z.string().optional(),
+  }),
 });
 
 const worktreeArchiveRequest = async <T>(path: string, directory: string, init: RequestInit, schema: z.ZodType<T>, fallback: string): Promise<T> => {
