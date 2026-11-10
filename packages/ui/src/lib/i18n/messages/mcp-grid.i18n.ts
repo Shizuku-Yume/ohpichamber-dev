@@ -14,6 +14,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Project',
     'settings.mcp.page.back': 'Back to MCP servers',
     'settings.mcp.page.unmanagedNotice': 'This server is configured in an unmanaged native MCP configuration file and is read-only.',
+    'settings.mcp.grid.runtimeProvided': 'Provided by OpenCode',
   },
   nl: {
     'settings.mcp.grid.actionsAria': 'Acties voor {name}',
@@ -29,6 +30,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Project',
     'settings.mcp.page.back': 'Terug naar MCP-servers',
     'settings.mcp.page.unmanagedNotice': 'Deze server is geconfigureerd in een niet-beheerd native MCP-configuratiebestand en is alleen-lezen.',
+    'settings.mcp.grid.runtimeProvided': 'Geleverd door OpenCode',
   },
   uk: {
     'settings.mcp.grid.actionsAria': 'Дії для {name}',
@@ -44,6 +46,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Проєкт',
     'settings.mcp.page.back': 'Назад до MCP-серверів',
     'settings.mcp.page.unmanagedNotice': 'Цей сервер налаштовано в некерованому нативному файлі конфігурації MCP і доступний лише для читання.',
+    'settings.mcp.grid.runtimeProvided': 'Надається OpenCode',
   },
   de: {
     'settings.mcp.grid.actionsAria': 'Aktionen für {name}',
@@ -59,6 +62,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Projekt',
     'settings.mcp.page.back': 'Zurück zu MCP-Servern',
     'settings.mcp.page.unmanagedNotice': 'Dieser Server ist in einer nicht verwalteten nativen MCP-Konfigurationsdatei konfiguriert und ist schreibgeschützt.',
+    'settings.mcp.grid.runtimeProvided': 'Von OpenCode bereitgestellt',
   },
   es: {
     'settings.mcp.grid.actionsAria': 'Acciones de {name}',
@@ -74,6 +78,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Proyecto',
     'settings.mcp.page.back': 'Volver a servidores MCP',
     'settings.mcp.page.unmanagedNotice': 'Este servidor está configurado en un archivo nativo de configuración MCP no administrado y es de solo lectura.',
+    'settings.mcp.grid.runtimeProvided': 'Proporcionado por OpenCode',
   },
   fr: {
     'settings.mcp.grid.actionsAria': 'Actions pour {name}',
@@ -89,6 +94,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Projet',
     'settings.mcp.page.back': 'Retour aux serveurs MCP',
     'settings.mcp.page.unmanagedNotice': 'Ce serveur est configuré dans un fichier de configuration MCP natif non géré et est en lecture seule.',
+    'settings.mcp.grid.runtimeProvided': 'Fourni par OpenCode',
   },
   ja: {
     'settings.mcp.grid.actionsAria': '{name} の操作',
@@ -104,6 +110,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'プロジェクト',
     'settings.mcp.page.back': 'MCP サーバーに戻る',
     'settings.mcp.page.unmanagedNotice': 'このサーバーは非管理のネイティブ MCP 設定ファイルで構成されており、読み取り専用です。',
+    'settings.mcp.grid.runtimeProvided': 'OpenCode が提供',
   },
   ko: {
     'settings.mcp.grid.actionsAria': '{name} 작업',
@@ -119,6 +126,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': '프로젝트',
     'settings.mcp.page.back': 'MCP 서버로 돌아가기',
     'settings.mcp.page.unmanagedNotice': '이 서버는 비관리형 네이티브 MCP 구성 파일에 설정되어 있으며 읽기 전용입니다.',
+    'settings.mcp.grid.runtimeProvided': 'OpenCode에서 제공',
   },
   pl: {
     'settings.mcp.grid.actionsAria': 'Działania dla {name}',
@@ -134,6 +142,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Projekt',
     'settings.mcp.page.back': 'Wróć do serwerów MCP',
     'settings.mcp.page.unmanagedNotice': 'Ten serwer jest skonfigurowany w niezarządzanym natywnym pliku konfiguracji MCP i jest tylko do odczytu.',
+    'settings.mcp.grid.runtimeProvided': 'Zapewniane przez OpenCode',
   },
   'pt-BR': {
     'settings.mcp.grid.actionsAria': 'Ações para {name}',
@@ -149,6 +158,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Projeto',
     'settings.mcp.page.back': 'Voltar aos servidores MCP',
     'settings.mcp.page.unmanagedNotice': 'Este servidor está configurado em um arquivo de configuração MCP nativo não gerenciado e é somente leitura.',
+    'settings.mcp.grid.runtimeProvided': 'Fornecido pelo OpenCode',
   },
   tr: {
     'settings.mcp.grid.actionsAria': '{name} için işlemler',
@@ -164,6 +174,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'Proje',
     'settings.mcp.page.back': 'MCP sunucularına dön',
     'settings.mcp.page.unmanagedNotice': 'Bu sunucu yönetilmeyen bir yerel MCP yapılandırma dosyasında yapılandırılmıştır ve salt okunurdur.',
+    'settings.mcp.grid.runtimeProvided': 'OpenCode tarafından sağlanır',
   },
   'zh-CN': {
     'settings.mcp.grid.actionsAria': '{name} 的操作',
@@ -179,6 +190,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': '项目',
     'settings.mcp.page.back': '返回 MCP 服务器',
     'settings.mcp.page.unmanagedNotice': '该服务器配置在非托管的原生 MCP 配置文件中，处于只读状态。',
+    'settings.mcp.grid.runtimeProvided': '由 OpenCode 提供',
   },
   'zh-TW': {
     'settings.mcp.grid.actionsAria': '{name} 的操作',
@@ -194,6 +206,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': '專案',
     'settings.mcp.page.back': '返回 MCP 伺服器',
     'settings.mcp.page.unmanagedNotice': '此伺服器設定在非受管的原生 MCP 設定檔中，處於唯讀狀態。',
+    'settings.mcp.grid.runtimeProvided': '由 OpenCode 提供',
   },
   ar: {
     'settings.mcp.grid.actionsAria': 'إجراءات {name}',
@@ -209,6 +222,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'المشروع',
     'settings.mcp.page.back': 'كل الخوادم',
     'settings.mcp.page.unmanagedNotice': 'تم تكوين هذا الخادم في ملف تكوين MCP أصلي غير مُدار وهو للقراءة فقط.',
+    'settings.mcp.grid.runtimeProvided': 'يوفّره OpenCode',
   },
   he: {
     'settings.mcp.grid.actionsAria': 'פעולות עבור {name}',
@@ -224,5 +238,6 @@ export const mcpGridI18n = {
     'settings.mcp.grid.scope.project': 'פרויקט',
     'settings.mcp.page.back': 'כל השרתים',
     'settings.mcp.page.unmanagedNotice': 'שרת זה מוגדר בקובץ תצורת MCP מקורי שאינו מנוהל והוא לקריאה בלבד.',
+    'settings.mcp.grid.runtimeProvided': 'מסופק על ידי OpenCode',
   },
 } as const;

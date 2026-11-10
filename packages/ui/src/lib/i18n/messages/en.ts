@@ -9424,6 +9424,7 @@ export const dict = {
   'gitView.empty.repositoryUnreadableRetry': 'Try again',
   'contextSidebar.section.sessionTotals': 'Session Totals',
   'directoryExplorerDialog.browse.linkTarget': 'Link to {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} needs OpenCode {required}. This server has {current}. Update OpenCode first.',
   'chat.workStatus.breakdown.planCountSingle': '{count} plan',
   'chat.workStatus.breakdown.planCountPlural': '{count} plans',
   'chat.workStatus.linkedPlans.open': 'Open plan {title}',
