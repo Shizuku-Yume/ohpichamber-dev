@@ -15,8 +15,6 @@ export const CANARY_UPDATER_FEED = Object.freeze({
   url: 'https://github.com/openchamber/openchamber/releases/download/canary/',
 });
 
-<<<<<<< HEAD
-=======
 // Both channels are mirrored to Cloudflare R2 (scripts/release-mirror):
 // release.yml copies each Stable release, canary.yml each night. The same
 // files and manifests as on GitHub, served by Cloudflare, which stays up when
@@ -42,7 +40,6 @@ export const pickUpdaterSource = ({ mirrorFailedAt = null, now = Date.now() } = 
   mirrorFailedAt === null || now - mirrorFailedAt >= MIRROR_FAILURE_BACKOFF_MS ? 'mirror' : 'github'
 );
 
->>>>>>> bc50ba56a
 // Where the app takes its updates from: the releases, or the nightly Canary
 // build. The person picks it in Settings → About; the app installs the next
 // update from that channel and keeps following it. Without a pick (unset, an
@@ -90,16 +87,11 @@ export const resolveUpdaterFeed = ({
   environment = process.env,
   testBuild = false,
   channel = 'stable',
-<<<<<<< HEAD
-} = {}) => {
-  const productionFeed = channel === 'canary' ? CANARY_UPDATER_FEED : PRODUCTION_UPDATER_FEED;
-=======
   source = 'github',
 } = {}) => {
   const productionFeed = channel === 'canary'
     ? (source === 'mirror' ? CANARY_MIRROR_UPDATER_FEED : CANARY_UPDATER_FEED)
     : (source === 'mirror' ? STABLE_MIRROR_UPDATER_FEED : PRODUCTION_UPDATER_FEED);
->>>>>>> bc50ba56a
   if (environment.OPENCHAMBER_E2E !== '1'
     || testBuild !== true) {
     return productionFeed;

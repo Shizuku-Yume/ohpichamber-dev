@@ -1,5 +1,78 @@
 // packages/sdk/examples/agent-desk/service/main.ts
 import http from "node:http";
+// packages/sdk/src/bootstrap.ts
+var GUEST_BOOTSTRAP_CHANNEL = "openchamber.guest-bootstrap";
+var GUEST_BOOTSTRAP_API_VERSION = 2;
+var GUEST_BOOTSTRAP_EVENT = "openchamber:guest-bootstrap";
+var bootstrap = (channelName, apiVersion, eventName) => {
+  const hostWindow = globalThis.window;
+  const Channel = globalThis.MessageChannel;
+  if (!hostWindow || !Channel)
+    return;
+  try {
+    const channel = new Channel;
+    const privatePort = channel.port1;
+    let closed = false;
+    let hostReady = false;
+    let pendingSdkPort = null;
+    const closePort = (port) => {
+      try {
+        port.close();
+      } catch {}
+    };
+    const fail = (ports = []) => {
+      for (const port of ports)
+        closePort(port);
+      if (!closed) {
+        closed = true;
+        closePort(privatePort);
+      }
+    };
+    const deliverSdkPort = (sdkPort) => {
+      const event = new CustomEvent(eventName, { detail: sdkPort, cancelable: true });
+      if (!hostWindow.dispatchEvent(event))
+        return;
+      closePort(sdkPort);
+      closed = true;
+    };
+    hostWindow.addEventListener(eventName, (event) => {
+      if (!("detail" in event) || event.detail !== null)
+        return;
+      hostReady = true;
+      if (pendingSdkPort) {
+        const sdkPort = pendingSdkPort;
+        pendingSdkPort = null;
+        deliverSdkPort(sdkPort);
+      }
+    });
+    privatePort.addEventListener("message", (event) => {
+      if (closed)
+        return;
+      const data = event.data;
+      const ports = event.ports ?? [];
+      if (!data || data.channel !== channelName || data.v !== apiVersion || data.type !== "connect-port" || ports.length !== 1) {
+        fail(ports);
+        return;
+      }
+      const sdkPort = ports[0];
+      closed = true;
+      closePort(privatePort);
+      sdkPort.start();
+      if (!hostReady) {
+        pendingSdkPort = sdkPort;
+        return;
+      }
+      deliverSdkPort(sdkPort);
+    });
+    privatePort.start();
+    hostWindow.parent.postMessage({
+      channel: channelName,
+      v: apiVersion,
+      type: "bootstrap"
+    }, "*", [channel.port2]);
+  } catch {}
+};
+var GUEST_BOOTSTRAP_SCRIPT = `(${bootstrap.toString()})(${JSON.stringify(GUEST_BOOTSTRAP_CHANNEL)}, ${GUEST_BOOTSTRAP_API_VERSION}, ${JSON.stringify(GUEST_BOOTSTRAP_EVENT)});`;
 // packages/sdk/src/scrollbar-style.ts
 var GUEST_SCROLLING_ATTRIBUTE = "data-oc-scrolling";
 var GUEST_SCROLLBAR_CSS = `
@@ -60,10 +133,7 @@ function installGuestScrollbarActivity(doc) {
 }
 var GUEST_SCROLLBAR_SCRIPT = `(${installGuestScrollbarActivity.toString()})(document);`;
 // packages/sdk/src/manifest.ts
-<<<<<<< HEAD
-=======
 var GUEST_PROVIDER_LOGO_BYTES_MAX = 1024 * 1024;
->>>>>>> bc50ba56a
 var TRACKER_URL_TOKENS = ["{id}", "{segment}", "{segments+}"];
 var TRACKER_URL_TOKEN_SET = new Set(TRACKER_URL_TOKENS);
 // packages/sdk/src/session-events.ts
@@ -148,14 +218,10 @@ var createServiceHost = ({ env }) => {
       send: (sessionId, prompt) => call("sessions.send", { sessionId, prompt }),
       retry: (sessionId) => call("sessions.retry", { sessionId }),
       status: (sessionId) => call("sessions.status", { sessionId }),
-<<<<<<< HEAD
-      lastReply: (sessionId) => call("sessions.lastReply", { sessionId })
-=======
       lastReply: (sessionId) => call("sessions.lastReply", { sessionId }),
       stop: (sessionId) => call("sessions.stop", { sessionId }),
       answerPermission: (sessionId, requestId, answer) => call("sessions.answerPermission", { sessionId, requestId, ...answer }),
       answerForm: (sessionId, formId, values, message) => call("sessions.answerForm", { sessionId, formId, values, ...message === undefined ? {} : { message } })
->>>>>>> bc50ba56a
     },
     setInstructions: (directory, text) => call("instructions.set", { directory, text }),
     emit: (topic, data) => call("panels.emit", { topic, data }),

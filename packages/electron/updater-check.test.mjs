@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-<<<<<<< HEAD
-import { checkForDesktopUpdate, downloadPendingDesktopUpdate, isDowngrade, markDesktopUpdateDownloaded } from './updater-check.mjs';
-=======
 import { checkForDesktopUpdate, describeCheckFailure, downloadPendingDesktopUpdate, isDowngrade, markDesktopUpdateDownloaded } from './updater-check.mjs';
->>>>>>> bc50ba56a
 
 test('signals failed checks without replacing an existing pending update', async () => {
   const pendingUpdate = { version: '2.0.0', electronUpdate: { id: 'existing' } };
@@ -184,8 +180,6 @@ test('drops the downloaded payload when a newer version appears', async () => {
   assert.equal(result.pendingUpdate.version, '2.1.0');
   assert.equal(result.pendingUpdate.downloaded, undefined);
 });
-<<<<<<< HEAD
-=======
 
 test('a missing manifest on the mirror is a failed check, so GitHub is asked', async () => {
   await assert.rejects(checkForDesktopUpdate({
@@ -195,4 +189,3 @@ test('a missing manifest on the mirror is a failed check, so GitHub is asked', a
     missingFeedIsError: true,
   }), /Unable to check for updates \(HTTP 404\)/);
 });
->>>>>>> bc50ba56a
