@@ -2,11 +2,7 @@ import { z } from 'zod';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-<<<<<<< HEAD
 import { normalizeFilePath } from '@/lib/path-utils';
-=======
-import { isFilePathWithinDirectory, normalizeFilePath } from '@/lib/path-utils';
->>>>>>> bc50ba56a
 
 const FILE_REFERENCE_STAT_CONCURRENCY = 4;
 const FILE_REFERENCE_STAT_CACHE_MAX = 1000;
@@ -21,10 +17,7 @@ const pendingFileReferenceStats: Array<() => void> = [];
 const statCacheKey = (directory: string, normalizedPath: string): string => `${directory}\u0000${normalizedPath}`;
 
 export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: string): Promise<boolean> => {
-<<<<<<< HEAD
   // The path is already resolved: edge spaces belong to the file's name.
-=======
->>>>>>> bc50ba56a
   const normalizedPath = normalizeFilePath(resolvedPath, { preserveWhitespace: true });
   if (!normalizedPath) {
     return Promise.resolve(false);
@@ -87,10 +80,7 @@ export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: st
   return request;
 };
 
-<<<<<<< HEAD
 
-=======
->>>>>>> bc50ba56a
 const fileStatSchema = z.object({ exists: z.boolean().optional() });
 
 /**
@@ -99,7 +89,6 @@ const fileStatSchema = z.object({ exists: z.boolean().optional() });
  * request must not read as a missing file.
  */
 export const checkFileReference = async (resolvedPath: string, effectiveDirectory: string): Promise<'exists' | 'missing' | 'failed'> => {
-<<<<<<< HEAD
   const normalizedPath = normalizeFilePath(resolvedPath, { preserveWhitespace: true });
   try {
     const response = await runtimeFetch('/api/fs/stat', {
@@ -110,15 +99,6 @@ export const checkFileReference = async (resolvedPath: string, effectiveDirector
         directory: effectiveDirectory || undefined,
       },
       cache: 'no-store',
-=======
-  const params = new URLSearchParams({ path: normalizeFilePath(resolvedPath, { preserveWhitespace: true }), optional: 'true' });
-  if (!isFilePathWithinDirectory(resolvedPath, effectiveDirectory)) params.set('allowOutsideWorkspace', 'true');
-  try {
-    const response = await runtimeFetch(`/api/fs/stat?${params.toString()}`, {
-      method: 'GET',
-      cache: 'no-store',
-      headers: { 'x-opencode-directory': effectiveDirectory },
->>>>>>> bc50ba56a
     });
     if (!response.ok) return 'failed';
     const parsed = fileStatSchema.safeParse(await response.json().catch(() => null));
@@ -129,7 +109,6 @@ export const checkFileReference = async (resolvedPath: string, effectiveDirector
   }
 };
 
-<<<<<<< HEAD
 export const lookupFilesByName = (name: string, effectiveDirectory: string): Promise<string[] | null> => (
   runtimeFetch('/api/fs/find-by-name', {
     method: 'GET',
@@ -144,27 +123,10 @@ export const lookupFilesByName = (name: string, effectiveDirectory: string): Pro
     .catch(() => null)
 );
 
-=======
->>>>>>> bc50ba56a
 const fileNameLookupSchema = z.object({ paths: z.array(z.string()) });
 
 const FILE_NAME_LOOKUP_CACHE = new Map<string, Promise<string | null>>();
 const FILE_NAME_LOOKUP_CACHE_MAX = 200;
-
-/** Every workspace file called `name`; null when the request fails. */
-export const lookupFilesByName = (name: string, effectiveDirectory: string): Promise<string[] | null> => (
-  runtimeFetch(`/api/fs/find-by-name?name=${encodeURIComponent(name)}`, {
-    method: 'GET',
-    cache: 'no-store',
-    headers: { 'x-opencode-directory': effectiveDirectory },
-  })
-    .then(async (response) => {
-      if (!response.ok) return null;
-      const parsed = fileNameLookupSchema.safeParse(await response.json().catch(() => null));
-      return parsed.success ? parsed.data.paths : null;
-    })
-    .catch(() => null)
-);
 
 /**
  * The one workspace file called `name`, for a reference an agent wrote
@@ -178,7 +140,6 @@ export const findUniqueFileByName = (name: string, effectiveDirectory: string): 
   const cached = FILE_NAME_LOOKUP_CACHE.get(cacheKey);
   if (cached) return cached;
 
-<<<<<<< HEAD
   const request = runtimeFetch('/api/fs/find-by-name', {
     method: 'GET',
     query: { name, directory: effectiveDirectory },
@@ -191,9 +152,6 @@ export const findUniqueFileByName = (name: string, effectiveDirectory: string): 
       return paths.length === 1 ? paths[0] : null;
     })
     .catch(() => null);
-=======
-  const request = lookupFilesByName(name, effectiveDirectory).then((paths) => (paths?.length === 1 ? paths[0] : null));
->>>>>>> bc50ba56a
 
   while (FILE_NAME_LOOKUP_CACHE.size >= FILE_NAME_LOOKUP_CACHE_MAX) {
     const oldest = FILE_NAME_LOOKUP_CACHE.keys().next();

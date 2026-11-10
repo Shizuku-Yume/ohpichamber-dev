@@ -2,7 +2,6 @@ import React from 'react';
 import { Icon } from "@/components/icon/Icon";
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { resolveGuestToolIcon } from '@/lib/guests/icon';
-import { opencodeNamespaceTool } from '@/lib/opencode/tools';
 import type { GuestToolRule } from '@/lib/guests/tool-presentation';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 
@@ -20,15 +19,7 @@ export const getToolIcon = (toolName: string, presentation?: GuestToolRule | nul
     if (guestIcon) {
         return <GuestIcon icon={guestIcon.icon} iconSrc={guestIcon.iconSrc} className={iconClass} />;
     }
-<<<<<<< HEAD
     const tool = toolName;
-=======
-    const tool = toolName.toLowerCase();
-    // OpenCode managing itself: sessions, worktrees, models, schedules, artifacts.
-    if (tool === 'opencode' || opencodeNamespaceTool(tool)) {
-        return <Icon name="opencode" className={iconClass} />;
-    }
->>>>>>> bc50ba56a
 
     if (tool === 'reasoning') {
         return <Icon name="brain-ai-3" className={iconClass} />;
@@ -75,24 +66,6 @@ export const getToolIcon = (toolName: string, presentation?: GuestToolRule | nul
     if (tool === 'openchamber_notify') {
         return <Icon name="notification-3" className={iconClass} />;
     }
-<<<<<<< HEAD
-=======
-    if (tool === 'openchamber_usage') {
-        return <Icon name="bar-chart-2" className={iconClass} />;
-    }
-    if (tool === 'openchamber_render') {
-        return <Icon name="bar-chart-box" className={iconClass} />;
-    }
-    if (tool === 'openchamber_image') {
-        return <Icon name="image" className={iconClass} />;
-    }
-    if (tool === 'openchamber_secret') {
-        return <Icon name="shield-keyhole" className={iconClass} />;
-    }
-    if (tool === 'openchamber_knowledge') {
-        return <Icon name="sticky-note" className={iconClass} />;
-    }
->>>>>>> bc50ba56a
     if (tool === 'openchamber_memory') {
         return <Icon name="brain-4" className={iconClass} />;
     }

@@ -1,11 +1,7 @@
 import { EditorView } from '@codemirror/view';
 import { isIMECompositionEvent } from '@/lib/ime';
-<<<<<<< HEAD
 const isLinuxPlatform = (): boolean =>
   typeof navigator !== "undefined" && (navigator.platform?.toLowerCase().startsWith("linux") ?? false);
-=======
-import { isLinuxPlatform } from '@/lib/platform';
->>>>>>> bc50ba56a
 import { getTerminalFocusOwner } from '@/lib/terminalFocus';
 import { CHAT_INPUT_EDITOR_SELECTOR, findMainChatInputEditor } from './dom';
 

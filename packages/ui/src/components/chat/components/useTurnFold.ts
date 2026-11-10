@@ -14,7 +14,6 @@ export const finalActivityContentId = (turnId: string) => `turn-final-activity-$
  * answer, whose own non-text parts fold with the rest.
  */
 export const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
-<<<<<<< HEAD
  // Named by the rows (`timelineRows.ts`), which are built from the turn's
  // record: a live turn's newest parts may already finish an answer the
  // record does not have yet, and the answer has no row of its own until it does.
@@ -30,28 +29,10 @@ export const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expand
  // The final answer's own text is the answer, so it is never hoisted.
  const pages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage), [turn.assistantMessages, finalMessage]);
  return { finalMessage, activityMessages, settled, isExpanded: !settled || expanded, pages };
-=======
-    // Named by the rows (`timelineRows.ts`), which are built from the turn's
-    // record: a live turn's newest parts may already finish an answer the
-    // record does not have yet, and the answer has no row of its own until it does.
-    const finalMessage = finalMessageId ? turn.assistantMessages.find((message) => message.info.id === finalMessageId) : undefined;
-    const activityMessages = React.useMemo(
-        () => (finalMessage ? turn.assistantMessages.filter((message) => message !== finalMessage) : turn.assistantMessages),
-        [finalMessage, turn.assistantMessages],
-    );
-    const settled = Boolean(finalMessage) || hasLaterAssistant;
-    // A page the agent showed is never folded away: it sits below the fold,
-    // above the answer once one arrives, and stays there in a turn that ended
-    // without one.
-    // The final answer's own text is the answer, so it is never hoisted.
-    const pages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage), [turn.assistantMessages, finalMessage]);
-    return { finalMessage, activityMessages, settled, isExpanded: !settled || expanded, pages };
->>>>>>> bc50ba56a
 };
 
 /** What the rows of a turn under a fold read: the pages it hoists, and the final answer's fold state. */
 export const useTurnFoldContexts = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
-<<<<<<< HEAD
  const { finalMessage, isExpanded, pages } = useTurnFold(turn, hasLaterAssistant, expanded, finalMessageId);
  const hoistedPages = React.useMemo(() => new Set(pages.map((part) => part.partId)), [pages]);
  const shownFinalMessageId = finalMessage?.messageId;
@@ -59,13 +40,4 @@ export const useTurnFoldContexts = (turn: TurnRecord, hasLaterAssistant: boolean
   messageId: shownFinalMessageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages,
  } : null, [shownFinalMessageId, isExpanded, pages, turn.turnId]);
  return { hoistedPages, finalContext };
-=======
-    const { finalMessage, isExpanded, pages } = useTurnFold(turn, hasLaterAssistant, expanded, finalMessageId);
-    const hoistedPages = React.useMemo(() => new Set(pages.map((part) => part.id)), [pages]);
-    const shownFinalMessageId = finalMessage?.info.id;
-    const finalContext = React.useMemo(() => shownFinalMessageId ? {
-        messageId: shownFinalMessageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages,
-    } : null, [shownFinalMessageId, isExpanded, pages, turn.turnId]);
-    return { hoistedPages, finalContext };
->>>>>>> bc50ba56a
 };

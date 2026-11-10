@@ -2,8 +2,8 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { dispatchPageWaiting } from '@/components/chat/lib/scroll/timelineScrollIntent';
 import { useI18n } from '@/lib/i18n';
-import type { ToolPart } from '@/lib/opencode/model';
-import type { RenderedPageAsk } from '@/lib/opencode/tools';
+import type { CanonicalToolView, RenderedPageAsk } from './toolView';
+
 import { answerRenderedPage } from '@/lib/renderPageAnswer';
 import { pageAnswerSummary, uiBlockAnswerData, type UiBlockAnswer } from '../../uiBlocks/answer';
 import type { UiBlockHost } from '../../uiBlocks/UiBlock';
@@ -19,7 +19,7 @@ import { PageAskStatus } from './PageAskStatus';
  * with the parser's errors instead, so the agent is not left waiting on
  * fields nobody can see.
  */
-export function UiPageFrame({ part, source, ask }: { part: ToolPart; source: string; ask: RenderedPageAsk }) {
+export function UiPageFrame({ part, source, ask }: { part: CanonicalToolView; source: string; ask: RenderedPageAsk }) {
     const { t } = useI18n();
     const UiBlock = useUiBlockComponent();
     const [sentSummary, setSentSummary] = React.useState<string | null>(null);
