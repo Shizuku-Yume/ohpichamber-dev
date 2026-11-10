@@ -22,21 +22,12 @@ const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boole
   return Number.isFinite(timestamp) && timestamp > 0 && timestamp < cutoff;
 };
 
-<<<<<<< HEAD
 /** Sessions the user asked to keep: pinned on this client, or in the In work block. */
 /** In work keeps a session unless retention was told to take those too. */
-=======
-/**
- * Whether the In work block keeps its sessions from retention: unless the
- * user includes them, and only while sessions in work are shown, since
- * without the block nobody can see them or press Done.
- */
->>>>>>> bc50ba56a
 export const inWorkKeepsSessions = (settings: { sessionWorkEnabled: boolean; sessionRetentionIncludeInWork: boolean }): boolean => (
   settings.sessionWorkEnabled && !settings.sessionRetentionIncludeInWork
 );
 
-<<<<<<< HEAD
 export const isSessionKeptByUser = (
   session: Session,
   pinnedIds: Set<string> = useSessionPinnedStore.getState().ids,
@@ -46,22 +37,6 @@ export const isSessionKeptByUser = (
   (workKeeps && session.metadata?.openchamber?.work?.state === 'open')
   || session.metadata?.isPinned === true
   || isSessionPinned(pinnedIds, directory, session.sessionId)
-=======
-/**
- * Sessions the user keeps: pinned, or in the In work block while it keeps
- * them. An archived session is never in the block, whatever work its
- * metadata still carries. The pin is read from the session itself and from
- * the pinned set, which also holds a pin clicked a moment ago and this
- * device's older local pins that have not reached the server yet.
- */
-export const isSessionKeptByUser = (
-  session: Session,
-  pinnedIds: Set<string> = useSessionPinnedStore.getState().ids,
-  workKeeps: boolean = inWorkKeepsSessions(useUIStore.getState()),
-): boolean => (
-  (workKeeps && !isArchived(session) && isSessionInWork(session))
-  || isSessionPinnedInMetadata(session) || isSessionPinned(pinnedIds, session.directory, session.id)
->>>>>>> bc50ba56a
 );
 
 type CandidateOptions = {

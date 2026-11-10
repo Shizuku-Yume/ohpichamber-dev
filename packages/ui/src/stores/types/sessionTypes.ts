@@ -11,7 +11,6 @@ export type SessionWorktreeAttachment = {
 };
 
 export interface AttachedFile {
-<<<<<<< HEAD
  id: string;
  file: File;
  dataUrl: string;
@@ -25,23 +24,6 @@ export interface AttachedFile {
  /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
   *  Removing any entry with this ID cascades to all entries in the group. */
  sourceDocumentId?: string;
-=======
-    id: string;
-    file: File;
-    dataUrl: string;
-    mimeType: string;
-    filename: string;
-    size: number;
-    source: "local" | "server" | "vscode";
-    serverPath?: string;
-    vscodePath?: string;
-    vscodeSource?: 'file' | 'selection';
-    /** Original desktop file path used as the model-facing name. */
-    agentPath?: string;
-    /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
-     *  Removing any entry with this ID cascades to all entries in the group. */
-    sourceDocumentId?: string;
->>>>>>> bc50ba56a
 }
 
 export type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
