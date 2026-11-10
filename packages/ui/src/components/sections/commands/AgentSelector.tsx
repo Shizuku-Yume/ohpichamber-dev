@@ -26,15 +26,16 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
   directory,
 }) => {
   const { t } = useI18n();
-  const workspaceDirectory = directory ?? null;
-  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, workspaceDirectory));
+  // An omitted directory follows the active project, as the store resolves it;
+  // an explicit null would be read as an unavailable workspace.
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, directory));
   const loadAgents = useAgentsStore((state) => state.loadAgents);
-  const { isUnavailable } = useCatalogReadiness('agents', workspaceDirectory);
+  const { isUnavailable } = useCatalogReadiness('agents', directory);
   const offered = React.useMemo(() => (filter ? agents.filter(filter) : agents), [agents, filter]);
 
   React.useEffect(() => {
-    void loadAgents(workspaceDirectory);
-  }, [loadAgents, workspaceDirectory]);
+    void loadAgents(directory);
+  }, [loadAgents, directory]);
 
   return (
     <Select

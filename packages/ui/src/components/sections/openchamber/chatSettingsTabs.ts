@@ -45,6 +45,7 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.subagent-read-only-banner', 'composer'],
   ['chat.save-pasted-images', 'composer'],
   ['chat.spellcheck', 'composer'],
+  ['chat.mobile-return-key-sends', 'composer'],
   ['chat.input-history-scope', 'composer'],
   ['chat.input-history-limit', 'composer'],
   ['chat.session-assistance', 'assistance'],
