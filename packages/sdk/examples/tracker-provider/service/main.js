@@ -1,6 +1,5 @@
 // packages/sdk/examples/tracker-provider/service/main.ts
 import http from "node:http";
-<<<<<<< HEAD
 // packages/sdk/src/bootstrap.ts
 var GUEST_BOOTSTRAP_CHANNEL = "openchamber.guest-bootstrap";
 var GUEST_BOOTSTRAP_API_VERSION = 2;
@@ -74,8 +73,6 @@ var bootstrap = (channelName, apiVersion, eventName) => {
   } catch {}
 };
 var GUEST_BOOTSTRAP_SCRIPT = `(${bootstrap.toString()})(${JSON.stringify(GUEST_BOOTSTRAP_CHANNEL)}, ${GUEST_BOOTSTRAP_API_VERSION}, ${JSON.stringify(GUEST_BOOTSTRAP_EVENT)});`;
-=======
->>>>>>> bc50ba56a
 // packages/sdk/src/scrollbar-style.ts
 var GUEST_SCROLLING_ATTRIBUTE = "data-oc-scrolling";
 var GUEST_SCROLLBAR_CSS = `
@@ -136,10 +133,7 @@ function installGuestScrollbarActivity(doc) {
 }
 var GUEST_SCROLLBAR_SCRIPT = `(${installGuestScrollbarActivity.toString()})(document);`;
 // packages/sdk/src/manifest.ts
-<<<<<<< HEAD
-=======
 var GUEST_PROVIDER_LOGO_BYTES_MAX = 1024 * 1024;
->>>>>>> bc50ba56a
 var TRACKER_URL_TOKENS = ["{id}", "{segment}", "{segments+}"];
 var TRACKER_URL_TOKEN_SET = new Set(TRACKER_URL_TOKENS);
 // packages/sdk/src/session-events.ts

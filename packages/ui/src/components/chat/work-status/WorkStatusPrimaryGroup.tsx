@@ -11,14 +11,11 @@ import { useContextWindowLimits } from '@/hooks/useContextWindowLimits';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
-import { useSpaceProjectDirectory } from '@/lib/spaces/spaces-store';
-import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
-import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { resolveUsageTone } from '@/lib/quota';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { normalizePath } from '@/lib/pathNormalization';
-import { computeContextUsage, computeLastReplyCacheHit } from './contextUsage';
+import { computeContextUsage } from './contextUsage';
 import { formatCost } from './subagentCost';
 import { useSubagentCostRollup } from './useSubagentCostRollup';
 import {
@@ -31,17 +28,7 @@ import {
 } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
-<<<<<<< HEAD
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
-=======
-import { formatChangeRequestReference } from '@/lib/source-control/providers/terminology';
-import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
-import { PrChecksValue } from './PrChecksValue';
-import { useMobileAppActions } from '@/apps/mobileAppContext';
-import { useOpenTrackerItem } from '@/components/sourceBoard/openTrackerItem';
-import { useLeaveWorkStatus } from './leaveWorkStatus';
-import { prChecksTooltip } from './prChecks';
->>>>>>> bc50ba56a
 
 type Props = {
   sessionId: string | null;
@@ -67,13 +54,6 @@ const UNKNOWN_PERCENT = '\u2014';
  */
 export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, goalRow, showSession, showRepository, children }) => {
   const { t } = useI18n();
-<<<<<<< HEAD
-=======
-  // On the phone the rows lead to the phone's own pages.
-  const mobile = useMobileAppActions();
-  const leaveWorkStatus = useLeaveWorkStatus();
-  const openTrackerItem = useOpenTrackerItem();
->>>>>>> bc50ba56a
   const { git } = useRuntimeAPIs();
   const ensureStatus = useGitStore((state) => state.ensureStatus);
   const fetchStatus = useGitStore((state) => state.fetchStatus);
@@ -85,11 +65,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   // folder of repositories still reports the branch and changes the Git tab
   // shows. Navigation below stays keyed on `directory` — context-panel tabs
   // are per project root.
-  // A draft waiting for a new space reads the space's tree once it runs, and
-  // none while it is made, as the other panels do (`panelContentDirectory`).
-  const draftSpace = useDraftSpaceTarget();
-  const repositoryDirectory = sessionId ? directory : panelContentDirectory(draftSpace, directory);
-  const { gitDirectory } = useNestedGitDirectory(repositoryDirectory, { enabled: showRepository });
+  const { gitDirectory } = useNestedGitDirectory(directory, { enabled: showRepository });
 
   const gitStatus = useGitStore(
     React.useCallback(
@@ -159,29 +135,27 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   // when the readouts come from a nested repository; for a project that is a
   // repository itself the section header already names it.
   const nestedRepoLabel = React.useMemo(() => {
-    if (!repositoryDirectory || !gitDirectory || gitDirectory === repositoryDirectory) return null;
-    const rootPrefix = `${repositoryDirectory}/`;
+    if (!directory || !gitDirectory || gitDirectory === directory) return null;
+    const rootPrefix = `${directory}/`;
     return gitDirectory.startsWith(rootPrefix) ? gitDirectory.slice(rootPrefix.length) : gitDirectory;
-  }, [gitDirectory, repositoryDirectory]);
+  }, [directory, gitDirectory]);
 
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   // Worktrees normally sit beside rather than beneath their project directory,
   // so a prefix match alone cannot find their owning project. Reuse the shared
   // session-directory resolver, which consults the discovered worktree map.
-  const spaceProjectDirectory = useSpaceProjectDirectory(directory);
   const projectLabel = useProjectsStore(
     React.useCallback((state) => {
       const project = resolveProjectForSessionDirectory(
         state.projects,
         availableWorktreesByProject,
         directory,
-        spaceProjectDirectory,
       );
       if (!project) return null;
       return project.label?.trim()
         || project.path.split('/').filter(Boolean).pop()
         || project.path;
-    }, [availableWorktreesByProject, directory, spaceProjectDirectory]),
+    }, [availableWorktreesByProject, directory]),
   );
 
   // Read-only: PR watching is owned by the background tracker. Starting a watch
@@ -199,9 +173,6 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
     () => computeContextUsage(sessionMessages, contextLimit),
     [sessionMessages, contextLimit],
   );
-
-  // What the provider caches right now, from the reply the context reading comes from.
-  const lastReplyCacheHit = React.useMemo(() => computeLastReplyCacheHit(sessionMessages), [sessionMessages]);
 
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
@@ -317,14 +288,6 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
               ) : null}
             </>
           ) : null}
-          {/* Under the meter, from the same reply, so it reads as the cache right now. */}
-          {lastReplyCacheHit !== null ? (
-            <WorkStatusRow
-              muted
-              label={t('contextSidebar.tokens.cacheHit')}
-              value={<WorkStatusValue>{`${lastReplyCacheHit.toFixed(1)}%`}</WorkStatusValue>}
-            />
-          ) : null}
           {/* Below the context readout: the goal is a standing instruction,
               while context is the live number the reader came for. */}
           {goalRow}
@@ -334,11 +297,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
       repository: hasRepository ? (
         <WorkStatusSection
           title={t('chat.workStatus.section.project')}
-<<<<<<< HEAD
           summary={projectLabel}
-=======
-          subject={projectLabel}
->>>>>>> bc50ba56a
         >
           {attentionLabel ? <WorkStatusCallout>{attentionLabel}</WorkStatusCallout> : null}
 
@@ -350,7 +309,6 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
               onClick={directory ? () => openSurface('git') : undefined}
               ariaLabel={t('chat.workStatus.action.openGit')}
               label={branch}
-              labelDir="ltr"
               value={(gitStatus?.ahead ?? 0) > 0 || (gitStatus?.behind ?? 0) > 0 ? (
                 <>
                   {(gitStatus?.ahead ?? 0) > 0
@@ -368,7 +326,6 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
               onClick={directory ? () => openSurface('git') : undefined}
               ariaLabel={t('chat.workStatus.action.openGit')}
               label={nestedRepoLabel}
-              labelDir="ltr"
               muted
             />
           ) : null}
@@ -402,12 +359,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
                 onClick={directory ? () => openSurface('pr') : undefined}
                 ariaLabel={t(changeRequestCopy('chat.workStatus.action.openPr', prSummary.provider))}
                 iconColor={`var(--pr-${prSummary.visualState})`}
-<<<<<<< HEAD
                 label={prSummary.title ?? t(changeRequestCopy('chat.workStatus.pr.untitled', prSummary.provider))}
-=======
-                label={prSummary.title ?? t(changeRequestCopy('chat.workStatus.pr.untitled', prTerm))}
-                labelDir={prSummary.title ? 'auto' : undefined}
->>>>>>> bc50ba56a
                 value={(
                   <WorkStatusPill
                     color={`var(--pr-${prSummary.visualState})`}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { buildSessionMessageRecordsSnapshot, useDirectoryStore, useDirectorySync, useSessionMessageRecords, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
+import { useDirectorySync, useSessionMessageRecords, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
 import { normalizePath } from '@/lib/pathNormalization';
 import { useUIStore } from '@/stores/useUIStore';
 import {
@@ -15,7 +15,6 @@ import {
   formatTelemetryTokens,
   formatThroughputRate,
   getLatestCompletedTurnStats,
-  getPreviousCompletedTurnStats,
   type CompletedTurnStats,
 } from './telemetry';
 
@@ -46,7 +45,6 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
   );
   const { runtimeKey } = useSyncRuntime();
   const syncDirectory = useSyncDirectory();
-  const store = useDirectoryStore(directory ?? undefined);
   const scope = JSON.stringify([runtimeKey, normalizePath(directory ?? syncDirectory), sessionId]);
   const status = useDirectorySync(
     React.useCallback((state) => sessionId && !state.sessionStatusInvalidated?.[sessionId]
@@ -77,33 +75,14 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
   React.useEffect(() => {
     if (eligibleForStats) {
       setRetained({ scope, stats: computed });
-<<<<<<< HEAD
     } else {
       setRetained((previous) => previous?.scope === scope && status !== 'unavailable' ? previous : null);
     }
   }, [scope, status, eligibleForStats, computed]);
   const stats = eligibleForStats ? computed : status !== 'unavailable' && retained?.scope === scope ? retained.stats : null;
   const summary = stats && stats.responseTokensPerSecond !== null
-=======
-    } else if (status === 'unknown') {
-      setRetained(null);
-    } else if (retained?.scope !== scope) {
-      // A mid-run mount reads warm history once without subscribing to the stream.
-      const snapshot = buildSessionMessageRecordsSnapshot(store.getState(), sessionId ?? '');
-      setRetained({ scope, stats: getPreviousCompletedTurnStats(snapshot.list) });
-    }
-  }, [scope, status, eligibleForStats, computed, retained?.scope, store, sessionId]);
-  const stats = eligibleForStats ? computed : status !== 'unknown' && retained?.scope === scope ? retained.stats : null;
-  const previousTurn = stats !== null && (stats.previousTurn || !eligibleForStats);
-  const rate = stats && stats.responseTokensPerSecond !== null
->>>>>>> bc50ba56a
     ? formatThroughputRate(stats.responseTokensPerSecond)
     : undefined;
-  const summary = previousTurn
-    ? rate !== undefined
-      ? t('chat.workStatus.telemetry.previousTurnRate', { rate })
-      : t('chat.workStatus.telemetry.previousTurn')
-    : rate;
 
   useReportWorkStatusPresence('telemetry', Boolean(sessionId));
 

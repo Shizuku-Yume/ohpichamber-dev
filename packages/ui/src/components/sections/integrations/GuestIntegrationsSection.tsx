@@ -5,17 +5,12 @@ import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { SettingsSection, SettingsStackedField } from '@/components/sections/shared/SettingsSection';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
-<<<<<<< HEAD
-import { focusDesktopWindow, isDesktopShell } from '@/lib/desktop';
-=======
 import { IntegrationCatalogCard } from './IntegrationCatalogCard';
 import { NotificationChannelCard } from './NotificationChannelCard';
 import { TrackerSettings } from './TrackerSettings';
 import { focusDesktopWindow, isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { loadNotificationChannels, type NotificationChannel } from '@/lib/notifications/channels';
->>>>>>> bc50ba56a
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
@@ -41,7 +36,6 @@ import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { openExternalUrl } from '@/lib/url';
-import { cn } from '@/lib/utils';
 
 type GuestIntegrationCardProps = {
   guest: InstalledGuest;
@@ -108,11 +102,7 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
     : connected
       ? (account || t('settings.integrations.guests.status.connected'))
       : t('settings.integrations.guests.status.notConnected');
-  const statusClassName = isWaiting
-    ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
-    : connected
-      ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-      : 'bg-[var(--surface-muted)] text-muted-foreground';
+  const statusTone = isWaiting ? 'warning' : connected ? 'success' : 'neutral';
   const expanded = isWaiting || open;
   const name = integration.name;
 
@@ -289,7 +279,18 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
   };
 
   return (
-    <Collapsible
+    <IntegrationCatalogCard
+      logo={(
+        <GuestIcon
+          icon={resolveGuestIconName(guest.icon)}
+          iconSrc={iconSrc}
+          className="size-5 text-foreground"
+        />
+      )}
+      name={name}
+      description={integration.description}
+      status={statusLabel}
+      statusTone={statusTone}
       open={expanded}
       onOpenChange={(nextOpen) => {
         if (isWaiting) {
@@ -299,38 +300,6 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
         setOpen(nextOpen);
       }}
     >
-      <div className="overflow-hidden rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)]">
-        <CollapsibleTrigger
-          className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-[var(--interactive-hover)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--interactive-focus-ring)]"
-        >
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--surface-muted)]">
-            <GuestIcon
-              icon={resolveGuestIconName(guest.icon)}
-              iconSrc={iconSrc}
-              className="size-5 text-foreground"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-foreground">{name}</div>
-            <p className="mt-0.5 line-clamp-1 text-xs leading-snug text-muted-foreground">
-              {integration.description}
-            </p>
-          </div>
-          <span
-            aria-live="polite"
-            className={cn('max-w-36 shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium', statusClassName)}
-          >
-            {statusLabel}
-          </span>
-          <Icon
-            name="arrow-down-s"
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out motion-reduce:transition-none',
-              expanded && 'rotate-180',
-            )}
-          />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="border-t border-[var(--interactive-border)] px-4 py-4">
           <div className="space-y-3">
             {auth === 'oauth' ? (
               <>
@@ -464,9 +433,7 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
               )}
             </div>
           </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
+    </IntegrationCatalogCard>
   );
 };
 
@@ -503,9 +470,6 @@ export const GuestIntegrationsSection: React.FC<{ divider?: boolean }> = ({ divi
     void loadGuestCatalog();
   }, []);
 
-<<<<<<< HEAD
-  if (isMobileSurfaceRuntime()) {
-=======
   React.useEffect(() => {
     if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return;
     void refreshChannels();
@@ -513,7 +477,6 @@ export const GuestIntegrationsSection: React.FC<{ divider?: boolean }> = ({ divi
   }, [refreshChannels, guests]);
 
   if (isVSCodeRuntime() || isMobileSurfaceRuntime()) {
->>>>>>> bc50ba56a
     return null;
   }
 

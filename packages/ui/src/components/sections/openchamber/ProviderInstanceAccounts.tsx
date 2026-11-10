@@ -556,11 +556,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
 
       {/* While the CLI login is a listed account, its own row carries the switch.
           A switch the server kept for a CLI that cannot answer has no row, so it shows here. */}
-<<<<<<< HEAD
-      {descriptor.auth.methods.includes('cli') && cli && (cli.disabled || cli.active || (connected && cli.available))
-=======
       {!serviceOnly && descriptor.auth.methods.includes('cli') && cli && (cli.disabled || cli.active || (connected && cli.available))
->>>>>>> bc50ba56a
         && (cli.disabled || !accounts.some((account) => account.source === 'cli')) && (
         <div>
           <SettingsFieldRow label={t(copy.cliLabel, { cli: cliName })} info={t(copy.cliInfo, { cli: cliName })}>

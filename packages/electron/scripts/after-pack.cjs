@@ -5,17 +5,12 @@ const { Arch } = require('electron-builder');
 const { setExecutableUuid } = require('./macos-executable-uuid.cjs');
 const { verifyPackagedAppContents } = require('./packaged-app-contents.cjs');
 
-<<<<<<< HEAD
 module.exports = async (context) => {
-=======
-module.exports = (context) => {
->>>>>>> bc50ba56a
   const { appInfo } = context.packager;
   const contentsPath = path.join(context.appOutDir, `${appInfo.productFilename}.app`, 'Contents');
   const resourcesPath = context.electronPlatformName === 'darwin'
     ? path.join(contentsPath, 'Resources')
     : path.join(context.appOutDir, 'resources');
-<<<<<<< HEAD
 
   const { verifyAgentPayload } = await import('./verify-agent-runtime.mjs');
   const architecture = ['ia32', 'x64', 'armv7l', 'arm64', 'universal'][context.arch];
@@ -23,8 +18,6 @@ module.exports = (context) => {
     platform: context.electronPlatformName,
     architecture,
   });
-=======
->>>>>>> bc50ba56a
   verifyPackagedAppContents(resourcesPath, { platform: context.electronPlatformName, arch: Arch[context.arch] });
   if (context.electronPlatformName !== 'darwin') return;
 

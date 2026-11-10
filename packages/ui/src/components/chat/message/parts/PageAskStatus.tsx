@@ -1,6 +1,6 @@
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
-import type { RenderedPageAsk } from '@/lib/opencode/tools';
+import type { RenderedPageAsk } from './toolView';
 import { cn } from '@/lib/utils';
 
 // Its own component: the blink re-renders this dot once a second, not the page around it.

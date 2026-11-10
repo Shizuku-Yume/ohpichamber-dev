@@ -7,9 +7,5 @@ import type { ChatMessageEntry } from './types';
  * as a notice row, which never sticks.
  */
 export const turnHeaderCanStick = (userMessage: ChatMessageEntry): boolean => (
-<<<<<<< HEAD
  userMessage.role === 'user' && !isHiddenUserMessage(userMessage)
-=======
-    userMessage.info.role === 'user' && !isHiddenUserMessage(userMessage)
->>>>>>> bc50ba56a
 );

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
@@ -61,11 +61,6 @@ describe('ProjectsPage', () => {
     const { createRoot } = await import('react-dom/client');
     const { ThemeSystemProvider } = await import('@/contexts/ThemeSystemContext');
     const { I18nProvider } = await import('@/lib/i18n');
-    // Test seam: the page's composer selector reads the active session's
-    // directory, and this page test mounts no sync pipeline. `mock.module`
-    // must run before the page loads, so the real module is imported here.
-    const actualSyncContext = await import('@/sync/sync-context');
-    mock.module('@/sync/sync-context', () => ({ ...actualSyncContext, useSessionDirectory: () => null }));
     const { useProjectsStore } = await import('@/stores/useProjectsStore');
     const { useUIStore } = await import('@/stores/useUIStore');
     const { ProjectsPage } = await import('./ProjectsPage');

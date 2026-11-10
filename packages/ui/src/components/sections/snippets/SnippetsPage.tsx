@@ -62,88 +62,13 @@ export const SnippetsPage: React.FC = () => {
 
   const selectedSnippet = React.useMemo(
     () => selectedSnippetName
-      ? snippets.find((snippet) => snippet.templateId === selectedSnippetName) ?? null
+      ? snippets.find((snippet) => snippet.name === selectedSnippetName || snippet.aliases.includes(selectedSnippetName)) ?? null
       : null,
     [selectedSnippetName, snippets],
   );
-<<<<<<< HEAD
-  const isNew = Boolean(snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet);
-  const [draftName, setDraftName] = React.useState('');
-  const [draftScope, setDraftScope] = React.useState<SnippetScope>('agent');
-  const [description, setDescription] = React.useState('');
-  const [content, setContent] = React.useState('');
-  const [isSaving, setIsSaving] = React.useState(false);
-  const initialStateRef = React.useRef<{ draftName: string; draftScope: SnippetScope; description: string; content: string } | null>(null);
-
-  React.useEffect(() => {
-    if (isNew && snippetDraft) {
-      const next = {
-        draftName: snippetDraft.name || '',
-        draftScope: snippetDraft.scope,
-        description: snippetDraft.description || '',
-        content: snippetDraft.content || '',
-      };
-      setDraftName(next.draftName);
-      setDraftScope(next.draftScope);
-      setDescription(next.description);
-      setContent(next.content);
-      initialStateRef.current = next;
-    } else if (selectedSnippet) {
-      const next = {
-        draftName: '',
-        draftScope: selectedSnippet.scope === 'workspace' ? 'workspace' as const : 'agent' as const,
-        description: selectedSnippet.description,
-        content: selectedSnippet.content,
-      };
-      setDescription(next.description);
-      setContent(next.content);
-      initialStateRef.current = next;
-    }
-  }, [selectedSnippet, isNew, selectedSnippetName, snippetDraft]);
-
-  const isDirty = React.useMemo(() => {
-    const initial = initialStateRef.current;
-    if (!initial) return false;
-    if (isNew && draftName !== initial.draftName) return true;
-    if (isNew && draftScope !== initial.draftScope) return true;
-    return description !== initial.description || content !== initial.content;
-  }, [content, description, draftName, draftScope, isNew]);
-
-  const handleSave = async () => {
-    const snippetName = isNew ? draftName.trim().replace(/\s+/g, '-') : selectedSnippetName?.trim();
-    if (!snippetName) {
-      toast.error(t('settings.snippets.page.toast.nameRequired'));
-      return;
-    }
-
-    if (!content.trim()) {
-      toast.error(t('settings.snippets.page.toast.contentRequired'));
-      return;
-    }
-
-
-    setIsSaving(true);
-    try {
-      const success = isNew
-        ? await createSnippet(snippetName, content, { description, scope: draftScope })
-        : await updateSnippet(snippetName, { content, description });
-      if (!success) {
-        toast.error(t('settings.snippets.page.toast.saveFailed'));
-        return;
-      }
-      toast.success(t('settings.snippets.page.toast.saved'));
-      if (isNew) setSnippetDraft(null);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (!selectedSnippetName) {
-=======
   const draft = snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet ? snippetDraft : null;
 
   if (!selectedSnippetName || (!selectedSnippet && !draft)) {
->>>>>>> bc50ba56a
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
@@ -280,25 +205,14 @@ const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | n
 
   return (
     <SettingsPageLayout
-<<<<<<< HEAD
-      title={isNew ? t('settings.snippets.page.title.new') : `/${selectedSnippet?.name ?? ''}`}
-      description={selectedSnippet?.source}
-=======
       title={snippet ? `#${snippet.name}` : t('settings.snippets.page.title.new')}
       description={snippet?.filePath}
->>>>>>> bc50ba56a
       showSaveStatus={false}
       fillHeight
     >
-<<<<<<< HEAD
-      <SettingsSection divider={false} contentClassName="space-y-0">
-        {isNew ? (
-          <SettingsFieldRow label="/">
-=======
       <SettingsSection divider={false} contentClassName="space-y-4">
         <SettingsStackedField label={t('snippets.field.name')}>
           <div className="flex w-full max-w-sm min-w-0 items-center gap-2">
->>>>>>> bc50ba56a
             <Input
               value={form.name}
               onChange={(event) => updateForm({ name: normalizeSnippetNameInput(event.target.value) })}
@@ -307,51 +221,25 @@ const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | n
               aria-invalid={nameProblem !== null}
               className="min-w-0 flex-1 px-2"
             />
-<<<<<<< HEAD
-            <Select value={draftScope} onValueChange={(value) => setDraftScope(value as SnippetScope)}>
-              <SelectTrigger className="w-fit min-w-[100px]">
-                <SelectValue>
-                  {draftScope === 'agent' ? t('settings.common.scope.global') : t('settings.common.scope.project')}
-                </SelectValue>
-=======
             <Select value={form.scope} onValueChange={(value) => updateForm({ scope: value === 'project' ? 'project' : 'global' })}>
               <SelectTrigger className="w-fit shrink-0" aria-label={t('snippets.field.scopeAria')}>
                 <SelectValue>{form.scope === 'project' ? t('settings.common.scope.project') : t('settings.common.scope.global')}</SelectValue>
->>>>>>> bc50ba56a
               </SelectTrigger>
               <SelectContent align="end">
-                <SelectItem value="agent">{t('settings.common.scope.global')}</SelectItem>
-                <SelectItem value="workspace">{t('settings.common.scope.project')}</SelectItem>
+                <SelectItem value="global">{t('settings.common.scope.global')}</SelectItem>
+                <SelectItem value="project">{t('settings.common.scope.project')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </SettingsStackedField>
         <SettingsStackedField label={t('settings.common.field.description')}>
           <Input
-<<<<<<< HEAD
-            value={description}
-            readOnly={!isNew && !selectedSnippet?.editable}
-            onChange={(e) => setDescription(e.target.value)}
-=======
             value={form.description}
             onChange={(event) => updateForm({ description: event.target.value })}
->>>>>>> bc50ba56a
             placeholder={t('settings.snippets.page.field.descriptionPlaceholder')}
             className="w-full max-w-sm px-2"
           />
         </SettingsStackedField>
-<<<<<<< HEAD
-      </SettingsSection>
-
-      <SettingsSection settingsItem="snippets.content">
-        <div className="flex items-center gap-1">
-          <span className="typography-ui-label text-foreground">{t('settings.snippets.page.field.content')}</span>
-          <SettingsInfoHint>{t('settings.snippets.page.hint')}</SettingsInfoHint>
-        </div>
-        <Textarea readOnly={!isNew && !selectedSnippet?.editable} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('settings.snippets.page.field.contentPlaceholder')} rows={12} className="mt-1.5 w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
-        <div className="pt-3">
-          <Button onClick={handleSave} disabled={isSaving || !isDirty || (!isNew && !selectedSnippet?.editable)} size="xs" className="!font-normal">
-=======
         <SettingsStackedField label={t('settings.snippets.page.field.aliases')}>
           <SnippetAliasesField
             aliases={form.aliases}
@@ -402,7 +290,6 @@ const SnippetEditor: React.FC<{ snippet: Snippet | null; draft: SnippetDraft | n
         )}
         <div className="pt-3">
           <Button onClick={handleSave} disabled={!canSave} size="xs" className="!font-normal">
->>>>>>> bc50ba56a
             {isSaving ? t('settings.common.actions.saving') : t('settings.common.actions.saveChanges')}
           </Button>
         </div>

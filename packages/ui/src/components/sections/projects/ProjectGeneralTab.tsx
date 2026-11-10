@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
+import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsFieldRow,
@@ -12,6 +13,7 @@ import {
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { modelVariantNames } from '@/lib/modelVariants';
 import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
 import { ensureSharedSetupTrusted, resetSharedSetupTrust } from '@/lib/sharedTrustConfirmation';
 import { useI18n } from '@/lib/i18n';
@@ -36,9 +38,9 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
     const { providerId, modelId } = parsedDefaultModel;
     if (!providerId || !modelId) return [];
     const model = providers
-      .find((provider) => provider.providerId === providerId)
-      ?.models.find((entry) => entry.modelId === modelId);
-    return model?.variants.map((variant) => variant.variant) ?? [];
+      .find((provider) => provider.id === providerId)
+      ?.models.find((entry) => entry.id === modelId);
+    return modelVariantNames(model);
   }, [parsedDefaultModel, providers]);
 
   if (!form.project) return null;
@@ -50,6 +52,14 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
       divider={false}
       contentClassName="space-y-0"
     >
+      <SettingsFieldRow settingsItem="projects.default-agent" label={t('settings.projects.page.field.projectAgent')}>
+        <AgentSelector
+          directory={form.project.path}
+          agentName={form.defaultAgent || ''}
+          onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
+          className={SETTINGS_CUSTOM_TRIGGER_CLASS}
+        />
+      </SettingsFieldRow>
 
       <SettingsFieldRow settingsItem="projects.default-model" label={t('settings.projects.page.field.projectModel')}>
         <ModelSelector

@@ -2,9 +2,6 @@ import React from 'react';
 import type { Theme } from '@/types/theme';
 import type { ToolPopupContent } from '../message/types';
 import type { MarkdownCodePlugin } from './streamdownCode';
-import type { GuestLinkRule } from '@/lib/guests/links';
-
-export type FileReferenceSource = 'path' | 'href';
 
 export type FileReferenceSource = 'path' | 'href';
 
@@ -30,11 +27,6 @@ export interface MarkdownPresentation {
   /** The finished reply a UI block answers and a command block runs from; absent while it streams, and outside chat replies. */
   settledReply: { sessionId: string; messageId: string } | null;
   disableLinkSafety?: boolean;
-<<<<<<< HEAD
-=======
-  /** What active extensions claim in this chat message; null outside chat messages and in copies. */
-  guestLinks: readonly GuestLinkRule[] | null;
->>>>>>> bc50ba56a
   /** Names the document whose tables keep the column widths the user sets; absent, columns have no grips. */
   tableWidthScope?: string;
   theme: Theme;

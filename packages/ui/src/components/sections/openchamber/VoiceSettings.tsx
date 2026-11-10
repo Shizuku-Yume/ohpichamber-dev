@@ -53,8 +53,6 @@ const LOCAL_STT_MODELS = [
         speed: 5,
         size: '460 MB',
         languageHint: false,
-<<<<<<< HEAD
-=======
     },
     {
         id: 'parakeet-ultra-int8',
@@ -64,7 +62,6 @@ const LOCAL_STT_MODELS = [
         speed: 4,
         size: '485 MB',
         languageHint: false,
->>>>>>> bc50ba56a
     },
     {
         id: 'parakeet-tdt-0.6b-v3-int8',

@@ -37,13 +37,13 @@ import {
 } from '@/components/ui/dialog';
 import { Icon } from '@/components/icon/Icon';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
-import { ToolbarTooltipButton } from '@/components/ui/action-toolbar';
+import { PreviewToggleButton } from '@/components/views/PreviewToggleButton';
 import { SkillsCatalogPage } from './catalog/SkillsCatalogPage';
 import { useI18n } from '@/lib/i18n';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
-import { getCodeTokenTheme, getThemeRenderName } from '@/lib/shiki/appThemeRegistry';
+import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
@@ -179,7 +179,7 @@ const SkillsInstalledPage: React.FC = () => {
       ...(language ? [language] : []),
       ...(useShiki && shikiLanguage ? [codeHighlightExtension({
         language: shikiLanguage,
-        themeName: getThemeRenderName(currentTheme),
+        themeName: currentTheme.metadata.id,
         theme: getCodeTokenTheme(currentTheme),
       })] : []),
       EditorView.lineWrapping,
@@ -434,17 +434,9 @@ const SkillsInstalledPage: React.FC = () => {
         <SettingsSection
           title={t('settings.skills.page.section.instructions')}
           headerAction={(
-<<<<<<< HEAD
             <PreviewToggleButton
               currentMode={preview ? 'preview' : 'edit'}
               onToggle={() => setPreview(value => !value)}
-=======
-            <ToolbarTooltipButton
-              label={t('documentToolbar.preview')}
-              icon="eye"
-              pressed={skillEditorMode === 'preview'}
-              onClick={() => setSkillEditorMode((mode) => mode === 'preview' ? 'edit' : 'preview')}
->>>>>>> bc50ba56a
             />
           )}
           settingsItem="skills.instructions"

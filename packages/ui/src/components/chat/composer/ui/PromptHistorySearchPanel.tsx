@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-<<<<<<< HEAD
 import { useI18n as useBaseI18n } from '@/lib/i18n';
 const useI18n = () => {
     const { t: baseT, ...rest } = useBaseI18n();
@@ -15,9 +14,6 @@ const useI18n = () => {
     }, [baseT]);
     return { ...rest, t };
 };
-=======
-import { useI18n } from '@/lib/i18n';
->>>>>>> bc50ba56a
 import { isIMECompositionEvent } from '@/lib/ime';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 
