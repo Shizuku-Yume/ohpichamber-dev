@@ -17,7 +17,6 @@ import { AnimatePresence } from 'motion/react';
 import { EmojiAutocomplete, type EmojiAutocompleteHandle } from '@/components/emoji/EmojiAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '../../CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '../../FileMentionAutocomplete';
-import type { GuestMention } from '@/lib/guests/mentions';
 import { SkillAutocomplete, type SkillAutocompleteHandle } from '../../SkillAutocomplete';
 import type { AutocompleteKind } from '../language/triggers';
 import { GlassPopupMotion } from './GlassPopupMotion';
@@ -54,7 +53,6 @@ function caretStyle(
 }
 
 interface ComposerAutocompletePopupsProps {
-<<<<<<< HEAD
  /** Which picker is open, if any. */
  open: AutocompleteKind | null;
  query: string;
@@ -69,33 +67,6 @@ interface ComposerAutocompletePopupsProps {
  onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
  onEmojiSelect: (emoji: string) => void;
  onClose: () => void;
-=======
-    /** Which picker is open, if any. */
-    open: AutocompleteKind | null;
-    query: string;
-    /** Caret placement in focus mode; null when the picker anchors itself. */
-    overlayPosition: AutocompleteOverlayPosition | null;
-    commandRef: React.RefObject<CommandAutocompleteHandle | null>;
-    skillRef: React.RefObject<SkillAutocompleteHandle | null>;
-    snippetRef: React.RefObject<SnippetAutocompleteHandle | null>;
-    mentionRef: React.RefObject<FileMentionHandle | null>;
-    emojiRef: React.RefObject<EmojiAutocompleteHandle | null>;
-    onCommandSelect: (command: CommandInfo) => void;
-    onSkillSelect: (skillName: string) => void;
-    onSnippetSelect: (snippet: unknown, trigger: string) => void;
-    /** The draft without the `#name` being typed, offered to save as that snippet. */
-    snippetDraftText?: string;
-    onSnippetDraftSaved?: (name: string) => void;
-    onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
-    onAgentSelect: (agentName: string) => void;
-    /** Mentions another session; absent where the composer cannot attach one. */
-    onSessionSelect?: (session: Session) => void;
-    onExtensionMentionSelect?: (mention: GuestMention) => void;
-    /** The session this composer writes to, which `@` never offers. */
-    currentSessionId: string | null;
-    onEmojiSelect: (emoji: string) => void;
-    onClose: () => void;
->>>>>>> bc50ba56a
 }
 function ComposerAutocompletePopupsView(props: ComposerAutocompletePopupsProps) {
  const { open } = props;
@@ -118,7 +89,6 @@ function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: Auto
 
  const style = caretStyle(open, overlayPosition);
 
-<<<<<<< HEAD
  switch (open) {
   case 'command':
    return (
@@ -161,66 +131,6 @@ function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: Auto
     />
    );
  }
-=======
-    switch (open) {
-        case 'command':
-            return (
-                <CommandAutocomplete
-                    ref={props.commandRef}
-                    searchQuery={query}
-                    onCommandSelect={props.onCommandSelect}
-                    onClose={onClose}
-                    style={style}
-                />
-            );
-        case 'skill':
-            return (
-                <SkillAutocomplete
-                    ref={props.skillRef}
-                    searchQuery={query}
-                    onSkillSelect={props.onSkillSelect}
-                    onClose={onClose}
-                    style={style}
-                />
-            );
-        case 'snippet':
-            return (
-                <SnippetAutocomplete
-                    ref={props.snippetRef}
-                    searchQuery={query}
-                    onSnippetSelect={props.onSnippetSelect}
-                    draftText={props.snippetDraftText}
-                    onDraftSaved={props.onSnippetDraftSaved}
-                    onClose={onClose}
-                    style={style}
-                />
-            );
-        case 'mention':
-            return (
-                <FileMentionAutocomplete
-                    ref={props.mentionRef}
-                    searchQuery={query}
-                    onFileSelect={props.onFileSelect}
-                    onAgentSelect={props.onAgentSelect}
-                    onSessionSelect={props.onSessionSelect}
-                    onExtensionMentionSelect={props.onExtensionMentionSelect}
-                    currentSessionId={props.currentSessionId}
-                    onClose={onClose}
-                    style={style}
-                />
-            );
-        case 'emoji':
-            return (
-                <EmojiAutocomplete
-                    ref={props.emojiRef}
-                    searchQuery={query}
-                    onEmojiSelect={props.onEmojiSelect}
-                    onClose={onClose}
-                    style={style}
-                />
-            );
-    }
->>>>>>> bc50ba56a
 }
 
 /** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */

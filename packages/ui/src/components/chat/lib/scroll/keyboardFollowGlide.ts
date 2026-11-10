@@ -195,13 +195,8 @@ export function createKeyboardFollowGlide(options: KeyboardFollowGlideOptions): 
         const options: KeyframeAnimationOptions = { duration: durationMs, easing: 'linear', fill: 'forwards' };
         const at = (position: number) => from + (to - from) * position;
         return [
-<<<<<<< HEAD
             content.animate(keyboardKeyframes((position: number) => ({ transform: `translateY(${at(position)}px)` })), options),
             ...headers.map((header) => header.animate(keyboardKeyframes((position: number) => ({ transform: `translateY(${-at(position)}px)` })), options)),
-=======
-            content.animate(keyboardKeyframes((position) => ({ transform: `translateY(${at(position)}px)` })), options),
-            ...headers.map((header) => header.animate(keyboardKeyframes((position) => ({ transform: `translateY(${-at(position)}px)` })), options)),
->>>>>>> bc50ba56a
         ];
     };
 

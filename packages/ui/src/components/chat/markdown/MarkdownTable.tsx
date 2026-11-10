@@ -19,7 +19,6 @@ import { cn } from '@/lib/utils';
 import { ColumnResizeHandle } from '@/components/ui/ColumnResizeHandle';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { loadColumnWidths, saveColumnWidths, type ColumnWidths } from '@/lib/columnWidthMemory';
-<<<<<<< HEAD
 import { useConfigStore } from "@/stores/useConfigStore";
 import { TableAutoChart } from "./TableAutoChart";
 
@@ -35,8 +34,6 @@ function extractTextFromHast(node: Element): string {
   return text.trim();
 }
 
-=======
->>>>>>> bc50ba56a
 
 type TableFormat = 'csv' | 'tsv' | 'md';
 const copyFormats = ['csv', 'tsv', 'md'] as const;
@@ -282,7 +279,6 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
     }
     return result;
   }, [node, cappedColumns]);
-<<<<<<< HEAD
   const tableData = React.useMemo(() => {
     if (!isAutoGraphEnabled || !node?.children) return null;
     const headerRow: string[] = [];
@@ -305,8 +301,6 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
     }
     return { headers: headerRow, rows: bodyRows };
   }, [node, isAutoGraphEnabled]);
-=======
->>>>>>> bc50ba56a
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useI18n();
@@ -395,12 +389,9 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
           </TableResizing.Provider>
         </table>
       </ScrollableOverlay>
-<<<<<<< HEAD
       {isAutoGraphEnabled && tableData && tableData.rows.length >= 2 && !purpose && (
         <TableAutoChart headers={tableData.headers} rows={tableData.rows} />
       )}
-=======
->>>>>>> bc50ba56a
     </div>
   );
 }

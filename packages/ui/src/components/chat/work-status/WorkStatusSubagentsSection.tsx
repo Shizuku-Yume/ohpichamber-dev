@@ -1,11 +1,6 @@
-<<<<<<< HEAD
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React, { useState } from 'react';
 import { useSessionWorkflowRuns } from '@/lib/workflows/store';
-=======
-import React from 'react';
-import { isWorkflowAgentSession } from '@/lib/sessionWorkflowMetadata';
->>>>>>> bc50ba56a
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
@@ -24,7 +19,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import type { State } from '@/sync/types';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type Props = {
  sessionId: string | null;
@@ -51,7 +45,6 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
  const [hubOpen, setHubOpen] = useState(false);
  const isMobile = useUIStore((state) => state.isMobile);
 
-<<<<<<< HEAD
  const liveSessions = useAllLiveSessions();
  const statuses = useAllSessionStatuses();
  // A workflow's agents are child sessions too; the Workflows section lists
@@ -72,24 +65,6 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
  const [steerInput, setSteerInput] = React.useState('');
  const [isSteering, setIsSteering] = React.useState(false);
  const [cancellingId, setCancellingId] = React.useState<string | null>(null);
-=======
-  const liveSessions = useAllLiveSessions();
-  const statuses = useAllSessionStatuses();
-  // A workflow's agents are child sessions too; the Workflows section lists
-  // them under their run, so they stay out of this list: by their mark, and
-  // by the runs for agents started before sessions carried one.
-  const workflowRuns = useSessionWorkflowRuns(sessionId);
-  const workflowAgentIds = React.useMemo(
-    () => new Set(workflowRuns.flatMap((run) => run.agents.flatMap((agent) => (agent.sessionId ? [agent.sessionId] : [])))),
-    [workflowRuns],
-  );
-  const children = React.useMemo(
-    () => (sessionId ? liveSessions.filter((candidate) => (
-      candidate.parentID === sessionId && !workflowAgentIds.has(candidate.id) && !isWorkflowAgentSession(candidate)
-    )) : []),
-    [liveSessions, sessionId, workflowAgentIds],
-  );
->>>>>>> bc50ba56a
 
  const handleSteerSubmit = async (e: React.FormEvent, subagentId: string) => {
   e.preventDefault();
@@ -175,7 +150,6 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
 
  useReportWorkStatusPresence('subagents', children.length > 0);
 
-<<<<<<< HEAD
  if (children.length === 0) return null;
 
  const failedIds = new Set(failedChildIds.split('\n'));
@@ -329,73 +303,4 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
    <AgentHubModal open={hubOpen} onOpenChange={setHubOpen} sessionId={sessionId} />
   </WorkStatusCollapsibleSection>
  );
-=======
-  return (
-    <WorkStatusCollapsibleSection
-      id={SECTION_ID}
-      title={t('chat.workStatus.section.subagents')}
-      icon="ai-agent"
-      defaultExpanded
-      summary={busyChildren > 0 ? `${busyChildren}/${children.length}` : children.length}
-    >
-      <ScrollableOverlay outerClassName="max-h-56" disableHorizontal>
-        {rows.map(({ child, blocked, asked, busy, failed, done }) => {
-          const label = child.title?.trim() || t('chat.workStatus.subagent.untitled');
-          let icon: IconName = 'time';
-          let iconColor: string | undefined;
-          let statusLabel = '';
-          if (blocked || asked) {
-            icon = 'alert';
-            iconColor = 'var(--status-warning)';
-            statusLabel = t(blocked ? 'chat.workStatus.subagent.needsPermission' : 'chat.workStatus.subagent.askedQuestion');
-          } else if (busy) {
-            icon = 'record-circle';
-            iconColor = 'var(--status-info)';
-            statusLabel = t('chat.workStatus.subagent.working');
-          } else if (failed) {
-            icon = 'close-circle';
-            iconColor = 'var(--status-error)';
-            statusLabel = t('chat.workStatus.subagent.failed');
-          } else if (done) {
-            icon = 'checkbox-circle';
-            iconColor = 'var(--status-success)';
-            statusLabel = t('chat.workStatus.subagent.done');
-          }
-          const childCost = perChildCost.get(child.id) ?? 0;
-          const modelName = getProviderModelDisplayName(
-            providers.find((provider) => provider.id === child.model?.providerID),
-            child.model?.id,
-          );
-          return (
-            <WorkStatusRow
-              key={child.id}
-              onClick={directory ? () => openChildSession(child.id, label) : undefined}
-              ariaLabel={[t('chat.workStatus.action.openSubagent', { name: label }), statusLabel].filter(Boolean).join('. ')}
-              // The smaller status glyph sits centred in the panel's 14px icon
-              // slot, so it lines up under the section icon and the label
-              // starts where every other row's does.
-              leading={(
-                <span className="flex size-3.5 shrink-0 items-center justify-center">
-                  <Icon name={icon} className="size-3" style={iconColor ? { color: iconColor } : undefined} />
-                </span>
-              )}
-              label={label}
-              tooltip={modelName || undefined}
-              value={(
-                <>
-                  {blocked ? (
-                    <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.needsPermission')}</WorkStatusValue>
-                  ) : asked ? (
-                    <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.askedQuestion')}</WorkStatusValue>
-                  ) : busy ? <SubagentDuration sessionId={child.id} /> : null}
-                  {childCost > 0 ? <WorkStatusValue tone="muted">{formatCost(childCost)}</WorkStatusValue> : null}
-                </>
-              )}
-            />
-          );
-        })}
-      </ScrollableOverlay>
-    </WorkStatusCollapsibleSection>
-  );
->>>>>>> bc50ba56a
 };

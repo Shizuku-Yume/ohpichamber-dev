@@ -791,3 +791,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Supersedes:** the "visual selectors for all 16 `modelRoles` + `modelPresets`" and settings/command exposure parts of 2026-11-05 - Scope M4 to full OMP 18.16.0 TUI feature/display parity; refines part (1) of 2026-11-06 - Preserve OpenChamber frontend capabilities alongside full OMP engine parity.
 - **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Chat presentation is ported onto the canonical contract, not kept on the OpenCode engine
+
+- **Decided:** The chat UI keeps the OMP-boundary data access (canonical `ToolCallPart`/`ToolResultPart` from `/api/agent/v1`) and takes upstream v2.7.0's presentation for the components that render what an agent showed: `ShownToolCard`, `HtmlRenderFrame`, `UiPageFrame`, `OpenChamberToolOutput`, `ToolResultParts`, `GeneratedImages`, `SecretRequestCard`, `PageAskStatus`, plus the page/quote/selection stack (`pageQuoteBridge`, `frameSelection`, `TextSelectionMenu`, `ChatQuoteHighlightLayer`) and the composer/file-mention/markdown/work-status surface. Where a component's only engine dependency was its shape, a thin adapter (`message/parts/toolView.ts`) joins a canonical call with its glued result and `message/parts/pageRenderView.ts` carries the ported pure helpers (`renderedPage`, `generatedImagePaths`, `requestedSecret`, `requestedSecretRun`, `proposedWorkflowRunId`, `isShownInPlace`, `isSettledAsk`). `lib/opencode` is not restored; upstream-only chat files whose closure needs it stay excluded.
+- **Instead of:** keeping the fork's wholesale chat rewrites, or restoring the OpenCode UI engine so upstream's chat compiles verbatim (the engine is a standing merge exclusion and the migration target is OMP-only).
+- **Because:** upstream's chat is one version-coupled component rooted in `@/lib/opencode/*` (180 of 675 files import it directly; 244 of the 274 fork-vs-upstream disagreements share one dependency component), so neither wholesale side gives both the boundary and the presentation. The adapter is the smallest join that does, and it keeps the R3 cutover (tasks 23-24) free to change semantics without re-porting presentation.
+- **Decided by:** user instruction on the lane 13 merge ticket
+- **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
+- **Effort:** ux-v270-omp-alignment

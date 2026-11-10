@@ -6,7 +6,6 @@ import type { ApprovalRequest } from '@openchamber/agent-contract';
 import { ComposerFloatingPanel } from './composer/ui/ComposerFloatingPanel';
 import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { useScopedBlockingPermissions } from '@/sync/sync-context';
 import { useRequestReveal } from '@/sync/request-reveal';
@@ -17,7 +16,6 @@ import {
 } from './PermissionCard';
 import { getApprovalPresentation } from './permissionPresentation';
 import { usePermissionFromSubagent, usePermissionResponse } from './usePermissionResponse';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 /**
  * The agent's native approval requests, docked above the composer in the same
@@ -104,7 +102,6 @@ const PermissionDockRequest: React.FC<{
             compact={collapsed}
             header={<>
                 <Tooltip>
-<<<<<<< HEAD
                     <TooltipTrigger asChild>
                         <button
                             type="button"
@@ -113,16 +110,6 @@ const PermissionDockRequest: React.FC<{
                             aria-label={collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}
                             className="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
                         >
-=======
-                <TooltipTrigger asChild>
-                <button
-                    type="button"
-                    onClick={onToggleCollapsed}
-                    aria-expanded={!collapsed}
-                    aria-label={collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-start text-muted-foreground transition-colors hover:text-foreground"
-                >
->>>>>>> bc50ba56a
                     <Icon name="question" className="size-3.5 shrink-0 text-[var(--status-warning)]" />
                     <Icon name={collapsed ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" />
                     <span className="typography-ui-label min-w-0 truncate text-foreground">{title}</span>
@@ -136,15 +123,9 @@ const PermissionDockRequest: React.FC<{
                             {t('chat.formDock.progress', { current: String(currentIndex + 1), total: String(permissions.length) })}
                         </span>
                     ) : null}
-<<<<<<< HEAD
                         </button>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={6}>{collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}</TooltipContent>
-=======
-                </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>{collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}</TooltipContent>
->>>>>>> bc50ba56a
                 </Tooltip>
                 {/* One dot per pending request, the current one solid. */}
                 {!collapsed && permissions.length > 1 ? (
@@ -152,22 +133,14 @@ const PermissionDockRequest: React.FC<{
                         {permissions.map((entry, index) => {
                             const label = t('chat.permissionDock.stepAria', { index: String(index + 1), tool: entry.toolName });
                             return (
-<<<<<<< HEAD
                                 <Tooltip key={entry.approvalId}>
-=======
-                                <Tooltip key={entry.id}>
->>>>>>> bc50ba56a
                                     <TooltipTrigger asChild>
                                         <button
                                             type="button"
                                             role="tab"
                                             aria-selected={index === currentIndex}
                                             aria-label={label}
-<<<<<<< HEAD
                                             onClick={() => onSelect(entry.approvalId)}
-=======
-                                            onClick={() => onSelect(entry.id)}
->>>>>>> bc50ba56a
                                             className="flex size-4 items-center justify-center"
                                         >
                                             <span className={cn('block size-1.5 rounded-full transition-colors', index === currentIndex ? 'bg-primary' : 'bg-foreground/15')} />

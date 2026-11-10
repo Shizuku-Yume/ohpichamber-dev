@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { Icon } from '@/components/icon/Icon';
 import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
 import { formatSchedule } from '@/components/session/scheduledTaskSchedule';
-import type { JsonValue, ToolInput, ToolPart } from '@/lib/opencode/model';
+import type { JsonValue } from '@openchamber/agent-contract';
+import type { CanonicalToolView } from './toolView';
 import { workflowRunSchema, type WorkflowRun } from '@/lib/workflows/model';
 import { openWorkflowRunInPanel } from '@/lib/workflows/panel';
 import { useWorkflowRun } from '@/lib/workflows/store';
@@ -469,7 +470,7 @@ const PageOpenedBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
-const ScreenshotBody: React.FC<{ data: unknown; part: ToolPart; onShowPopup?: (content: ToolPopupContent) => void }> = ({ data, part, onShowPopup }) => {
+const ScreenshotBody: React.FC<{ data: unknown; part: CanonicalToolView; onShowPopup?: (content: ToolPopupContent) => void }> = ({ data, part, onShowPopup }) => {
     const parsed = screenshotSchema.safeParse(data);
     if (!parsed.success) return null;
     const { path, url, title } = parsed.data;
@@ -791,7 +792,7 @@ const WorkflowStatusBody: React.FC<{ data: unknown; isMobile: boolean }> = ({ da
     );
 };
 
-const WorkflowResultBody: React.FC<{ data: unknown; part: ToolPart; isMobile: boolean }> = ({ data, part, isMobile }) => {
+const WorkflowResultBody: React.FC<{ data: unknown; part: CanonicalToolView; isMobile: boolean }> = ({ data, part, isMobile }) => {
     const { t } = useI18n();
     const parsed = workflowResultSchema.safeParse(data);
     const open = useOpenWorkflowRun(isMobile, part.sessionID, parsed.success ? parsed.data.runId : undefined);
@@ -837,7 +838,7 @@ const WorkflowListedBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
-const WorkflowChangedBody: React.FC<{ data: unknown; part: ToolPart; isMobile: boolean }> = ({ data, part, isMobile }) => {
+const WorkflowChangedBody: React.FC<{ data: unknown; part: CanonicalToolView; isMobile: boolean }> = ({ data, part, isMobile }) => {
     const { t } = useI18n();
     const parsed = workflowStoppedSchema.safeParse(data);
     const open = useOpenWorkflowRun(isMobile, part.sessionID, parsed.success ? parsed.data.runId : undefined);
@@ -872,8 +873,8 @@ const WorkflowSavedBody: React.FC<{ data: unknown }> = ({ data }) => {
  */
 export const OpenChamberToolOutput: React.FC<{
     envelope: OpenChamberEnvelope;
-    part: ToolPart;
-    input: ToolInput | undefined;
+    part: CanonicalToolView;
+    input: Record<string, JsonValue> | undefined;
     directory: string;
     isMobile: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
@@ -887,8 +888,8 @@ export const OpenChamberToolOutput: React.FC<{
 
 const OpenChamberView: React.FC<{
     envelope: OpenChamberEnvelope;
-    part: ToolPart;
-    input: ToolInput | undefined;
+    part: CanonicalToolView;
+    input: Record<string, JsonValue> | undefined;
     directory: string;
     isMobile: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
