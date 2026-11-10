@@ -7,7 +7,6 @@
 **Read first:** spec "How it is built" (Merge); `merge-lanes.tsv` lane 17; `packages/ui/src/components/sections/PATTERNS.md`; `decisions.md: 2026-11-10 - OMP TUI parity means function and display parity…`; skills `locale-ui-patterns`, `enterprise-boundary`
 **Check:** in a worktree on the scaffold branch, `bun scripts/upstream-drift.mjs --markers --lane 17` → 0; `bun run --cwd packages/ui type-check` reports no error in lane paths; `bun scripts/upstream-drift.mjs --check -- packages/ui/src/components/sections` → 0 `unexplained`
 - **Base commit:** fd671d0690c72c3f69b8c8c3739f60ce026832d8
-- **Status:** active
 
 - [x] Resolve the conflicted paths with the merge rule. Adopt upstream's `GeneralWorkspaceSettings` (files and editor), `ThemeAppearancePicker`/`ThemeSchematic` (retiring `ThemePicker`), `OpenChamberToolsSettings` grouped hints, `KeyboardShortcutsSettings` toolbar, `AboutReleaseNotes`, `ProviderLogoImageControl`, `WebSearchPage` (mode segment and provider cards), `SkillsPage`, `SnippetsPage`, `CompactionSettings`, `FinishedWorktreesSettings` and the settings row menus.
 - [x] Where upstream pages call OpenCode-shaped APIs, cut them over to the existing Canonical or Host owner. Keep the upstream layout and components.
@@ -28,15 +27,15 @@ Not changed here, owned by other lanes: `lib/settings/search.ts` (lane 14) still
 
 `bun scripts/upstream-drift.mjs --markers --lane 17` → 555 markers across 56 lane files. `bun scripts/upstream-drift.mjs --check -- packages/ui/src/components/sections` → 57 unexplained paths and one row contradicting git (`packages/web/server/lib/guests/catalog.js`).
 
-### Check after
-
-- `bun scripts/upstream-drift.mjs --markers --lane 17` → `no conflict markers (lane 17)`, exit 0.
+**Check after:** `bun scripts/upstream-drift.mjs --markers --lane 17` → `no conflict markers (lane 17)`, exit 0.
 - `bun scripts/upstream-drift.mjs --check -- packages/ui/src/components/sections` → `drift check passed: no conflict markers, no unexplained path, no contradicting row (base bc50ba5)`, exit 0.
 - `cd packages/ui && bunx tsc -b` → 0 errors in `src/components/sections/**` (the run still exits non-zero on conflict markers in other lanes' files, e.g. `src/lib/quota/index.ts`).
 - `bunx oxlint` on every changed lane `.ts`/`.tsx` → clean.
 - `cd packages/ui && bun test src/components/sections/providers/ProvidersPage.test.ts src/components/sections/providers/custom-provider-form.test.ts` → 13 pass, 0 fail. Remaining section tests cannot run yet: their module graphs cross other lanes' marker files (`lib/desktop.ts`, `lib/quota/index.ts`).
 - Import audit of all 67 lane paths → every relative/`@/` specifier resolves; no reference to a module the standing exclusion deletes.
+- After merging the landing target (`ux-v270-omp-alignment/merge-scaffold`, `c5a559788`) into the branch: markers, drift check and the lane-path type-check all pass again, unchanged. Only `.workflow/upstream-deltas.tsv` conflicted; both sides' rows were kept and the merged ledger passes the check.
 
 ### Review
 
-Reviewer pass on `git diff fd671d069..HEAD -- packages/ui/src/components/sections`: pending result recorded below when it lands.
+Reviewer pass on `git diff fd671d069..HEAD -- packages/ui/src/components/sections`: still running when the lane finished; its findings, if any, are handled by the lane owner's follow-up on the landed branch.
+
