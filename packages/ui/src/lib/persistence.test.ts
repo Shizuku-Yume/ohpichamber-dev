@@ -573,7 +573,7 @@ describe('updateDesktopSettings', () => {
     getWindow();
     useSessionDisplayStore.setState({
       projectDisplayMode: 'all',
-      sidebarViewMode: 'projects',
+      sidebarGrouping: 'project',
       projectSortOrder: 'manual',
       showChatsSection: true,
       singleProjectId: 'local-project',
@@ -581,7 +581,7 @@ describe('updateDesktopSettings', () => {
     registerSettingsApi(async () => ({}), async () => ({
       settings: {
         sidebarProjectDisplayMode: 'single',
-        sidebarViewMode: 'timeline',
+        sidebarGrouping: 'time',
         sidebarProjectSortOrder: 'recent',
         sidebarShowChatsSection: false,
         autoSaveEnabled: true,
@@ -596,13 +596,13 @@ describe('updateDesktopSettings', () => {
     const state = useSessionDisplayStore.getState();
     expect({
       projectDisplayMode: state.projectDisplayMode,
-      sidebarViewMode: state.sidebarViewMode,
+      sidebarGrouping: state.sidebarGrouping,
       projectSortOrder: state.projectSortOrder,
       showChatsSection: state.showChatsSection,
       singleProjectId: state.singleProjectId,
     }).toEqual({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'recent',
       showChatsSection: false,
       singleProjectId: 'local-project',
@@ -614,7 +614,7 @@ describe('updateDesktopSettings', () => {
     const saves: Array<Partial<SettingsPayload>> = [];
     useSessionDisplayStore.setState({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'a-z',
       showChatsSection: false,
     });
@@ -637,12 +637,12 @@ describe('updateDesktopSettings', () => {
     const state = useSessionDisplayStore.getState();
     expect({
       projectDisplayMode: state.projectDisplayMode,
-      sidebarViewMode: state.sidebarViewMode,
+      sidebarGrouping: state.sidebarGrouping,
       projectSortOrder: state.projectSortOrder,
       showChatsSection: state.showChatsSection,
     }).toEqual({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'a-z',
       showChatsSection: false,
     });
@@ -652,7 +652,7 @@ describe('updateDesktopSettings', () => {
     getWindow();
     useSessionDisplayStore.setState({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'z-a',
       showChatsSection: false,
     });
@@ -665,12 +665,12 @@ describe('updateDesktopSettings', () => {
     const state = useSessionDisplayStore.getState();
     expect({
       projectDisplayMode: state.projectDisplayMode,
-      sidebarViewMode: state.sidebarViewMode,
+      sidebarGrouping: state.sidebarGrouping,
       projectSortOrder: state.projectSortOrder,
       showChatsSection: state.showChatsSection,
     }).toEqual({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'z-a',
       showChatsSection: false,
     });

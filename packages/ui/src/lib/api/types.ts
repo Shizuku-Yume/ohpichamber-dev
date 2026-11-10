@@ -1211,6 +1211,10 @@ export interface CreateGitCommitOptions {
   addAll?: boolean;
   files?: string[];
   stageFiles?: string[];
+  /** Writes a Change-Id trailer on the commit. */
+  changeId?: boolean;
+  /** Writes the commit's notes. */
+  notes?: boolean;
 }
 
 export interface GitLogOptions {

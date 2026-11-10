@@ -174,6 +174,8 @@ const restoresInFlight = new Map<string, Promise<WorktreeArchiveRestore>>();
 export function restoreArchivedWorktree(input: {
   project: ProjectRef;
   archive: GitWorktreeArchive;
+  /** Set when an earlier restore was ambiguous: the Host resumes that attempt. */
+  recovery?: { head: string; revision: number };
 }): Promise<WorktreeArchiveRestore> {
   const running = restoresInFlight.get(input.archive.id);
   if (running) return running;
@@ -185,6 +187,7 @@ export function restoreArchivedWorktree(input: {
 async function restoreArchivedWorktreeOnce(input: {
   project: ProjectRef;
   archive: GitWorktreeArchive;
+  recovery?: { head: string; revision: number };
 }): Promise<WorktreeArchiveRestore> {
   const { project, archive } = input;
   const setupCommands = await resolveWorktreeSetupCommandsOrCancel(project);
@@ -202,7 +205,10 @@ async function restoreArchivedWorktreeOnce(input: {
     });
   let conflicts: boolean;
   try {
-    ({ conflicts } = await git.worktree.restoreArchive(worktree.path, archive.id));
+    const { recovery } = input;
+    ({ conflicts } = await git.worktree.restoreArchive(worktree.path, archive.id, recovery
+      ? { mode: 'same_target', revision: recovery.revision }
+      : undefined));
   } catch (error) {
     // The archive is kept, so a retry must find the branch free again: the
     // checkout made for it goes, and a branch made for it with it.

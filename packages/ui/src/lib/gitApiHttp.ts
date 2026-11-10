@@ -33,6 +33,7 @@ import type {
   GitWorktreePinResult,
   GitWorktreeValidationResult,
   CreateGitCommitOptions,
+  GitCommitExtrasFailure,
   GitCommitResult,
   GitPushResult,
   GitPullResult,
@@ -807,6 +808,16 @@ const completeStatusMutation = async <T>(directory: string, response: Response):
   invalidateGitStatusCache(directory);
   return result;
 };
+/** The commit exists; at least one requested extra did not apply. */
+export class GitCommitExtrasError extends Error {
+  readonly result: GitCommitExtrasFailure;
+
+  constructor(result: GitCommitExtrasFailure) {
+    super(result.error);
+    this.name = 'GitCommitExtrasError';
+    this.result = result;
+  }
+}
 
 function buildUrl(
   path: string,
@@ -1012,6 +1023,16 @@ export async function prefetchProjectStatuses(directories: string[]): Promise<vo
     return !(cached && cached.expiresAt > now) && !gitStatusInFlight.has(key);
   });
   await Promise.allSettled(pending.map((directory) => readProjectOverview(directory, 'status')));
+}
+
+export async function initializeGit(directory: string): Promise<void> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/init`, directory), { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = body && typeof body.error === 'string' ? body.error : `Failed to initialize Git: ${response.statusText}`;
+    throw new Error(message);
+  }
+  invalidateGitStatusCache(directory);
 }
 
 export async function checkIsGitRepository(directory: string): Promise<boolean> {
@@ -1836,10 +1857,21 @@ export async function createGitCommit(
       addAll: options.addAll ?? false,
       files: options.files,
       stageFiles: options.stageFiles,
+      // Omitted rather than false when the setting is off, so the server keeps
+      // the plain direct-commit path for a client that never asked.
+      ...(options.changeId ? { changeId: true } : {}),
+      ...(options.notes ? { notes: true } : {}),
     }),
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
+    const error = await response.json().catch(() => ({ error: response.statusText })) as Partial<GitCommitExtrasFailure> & { error?: string };
+    // A commit that exists with extras that did not apply is its own outcome:
+    // the status cache still moved, and the caller must name the partial result
+    // instead of reporting a plain failure.
+    if (error?.code === 'COMMIT_EXTRAS_FAILED') {
+      invalidateGitStatusCache(directory);
+      throw new GitCommitExtrasError(error as GitCommitExtrasFailure);
+    }
     throw new Error(error.error || 'Failed to create commit');
   }
   return completeStatusMutation(directory, response);
