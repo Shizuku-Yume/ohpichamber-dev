@@ -11,16 +11,6 @@ export const extractMessageText = (message: Message): string => message.parts
  .join('')
  .trim();
 
-const completedReplyText = (record: LatestReplyRecord): string | null => {
-    const { info, parts } = record;
-    if (info.role !== 'assistant') return null;
-    if (info.finish !== 'stop') return null;
-    if (info.time.completed === undefined || info.time.completed <= 0) return null;
-
-    const text = flattenAssistantTextParts(parts).trim();
-    return text || null;
-};
-
 /**
  * The answer of the session's newest prompt, when that turn has authoritatively
  * finished and its final assistant message carries text.
@@ -30,7 +20,6 @@ const completedReplyText = (record: LatestReplyRecord): string | null => {
  * An earlier completed answer never stands in for it, so auto-read can only
  * ever speak the answer to the prompt the user actually sent last.
  */
-<<<<<<< HEAD
 export const findLatestCompletedReply = (
  turns: readonly Turn[],
  messages: readonly Message[],
@@ -53,26 +42,3 @@ export const turnMessageIds = (turn: Turn): readonly string[] => [
  turn.userMessageId,
  ...turn.assistantMessageIds,
 ];
-=======
-export const findLatestCompletedReply = (messages: readonly LatestReplyRecord[]): LatestReply | null => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const record = messages[index];
-        if (!record) continue;
-        if (record.info.role === 'user') return null;
-
-        const text = completedReplyText(record);
-        if (text) return { messageId: record.info.id, text };
-    }
-
-    return null;
-};
-
-/** Finished answers across all turns, for the auto-read history baseline. */
-export const findCompletedReplyIds = (messages: readonly LatestReplyRecord[]): string[] => {
-    const ids: string[] = [];
-    for (const record of messages) {
-        if (completedReplyText(record)) ids.push(record.info.id);
-    }
-    return ids;
-};
->>>>>>> bc50ba56a

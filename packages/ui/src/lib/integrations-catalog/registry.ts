@@ -6,13 +6,9 @@
  * DOCUMENTATION.md next to this file.
  *
  * An entry is one integration and may bundle several components: an MCP
- * server, a native OMP plugin, and skills can arrive together the way vendors
+ * server, an OpenCode plugin, and skills can arrive together the way vendors
  * ship them. Field names follow the official MCP Registry `server.json`
  * where they overlap, so importing from it stays possible.
- *
- * OpenCode-only npm plugins are not listed: this app runs OMP native plugins
- * from `@oh-my-pi/pi-coding-agent`, which does not load them. The `plugin`
- * component kind stays for native plugin packages that support OMP.
  *
  * Vendor URLs were checked against vendor docs on 2026-10-01 (OPE-282 launch
  * list); the entries added on 2026-10-15 come from integrations.sh and passed
@@ -2430,12 +2426,6 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     components: [{ kind: 'skill', source: 'openai/skills', subpath: 'skills/.curated/pdf', skillDir: 'pdf' }],
   },
 
-<<<<<<< HEAD
-  // --- Native OMP plugins (npm, pinned to a major, explicit confirmation) ---
-  // No entry yet: the upstream OpenCode plugins in this catalog position
-  // (Langfuse, LangSmith, Claude Code, Search Providers) load only in
-  // OpenCode's plugin runtime, which OMP does not provide.
-=======
   // --- OpenCode plugins (npm, pinned to a major, explicit confirmation) ---
   {
     id: 'langfuse-plugin',
@@ -2476,7 +2466,6 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     status: 'stable',
     components: [{ kind: 'plugin', spec: '@openchamber/opencode-search-providers@^1', license: 'MIT' }],
   },
->>>>>>> bc50ba56a
 
   // --- OpenChamber extensions (installed from Git like Settings → Integrations) ---
   {

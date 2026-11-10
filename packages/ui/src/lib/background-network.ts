@@ -2,7 +2,7 @@
  * Shared concurrency gate for background network traffic.
  *
  * The browser allows only ~6 concurrent HTTP/1.1 connections per origin, and
- * every runtime (web, desktop loopback, mobile host) funnels API
+ * every runtime (web, desktop loopback, VS Code, mobile host) funnels API
  * traffic through one origin. During startup many subsystems fan out at once —
  * per-directory session/status polls, git checks per project and worktree,
  * command/skill discovery, global session pages — and several of those calls
@@ -22,15 +22,9 @@
 import { captureRuntimeInstance, subscribeRuntimeEndpointWillChange } from './runtime-switch'
 
 type NetworkLane = {
-<<<<<<< HEAD
- active: number
- waiters: Array<(admitted: boolean) => void>
- activeSessionWaiters: Array<(admitted: boolean) => void>
-=======
   active: number
   waiters: Array<(admitted: boolean) => void>
   activeSessionWaiters: Array<(admitted: boolean) => void>
->>>>>>> bc50ba56a
 }
 const createLane = (): NetworkLane => ({ active: 0, waiters: [], activeSessionWaiters: [] })
 let background = createLane()
@@ -40,54 +34,6 @@ const LANE_LIMIT = 2
 
 // Retire before changed listeners can enqueue the replacement instance's reads.
 subscribeRuntimeEndpointWillChange(({ runtimeKey, previousRuntimeKey }) => {
-<<<<<<< HEAD
- if (runtimeKey === previousRuntimeKey) return
- const retired = [background, sessionLists]
- background = createLane()
- sessionLists = createLane()
- for (const lane of retired) {
-  for (const waiter of [...lane.activeSessionWaiters, ...lane.waiters]) waiter(false)
-  lane.activeSessionWaiters.length = 0
-  lane.waiters.length = 0
- }
-})
-
-const pump = () => {
- while (background.active + sessionLists.active < TOTAL_LIMIT) {
-  // Background reads never occupy the reserved list slot. Either lane may
-  // use a second slot, without serializing independent background queries.
-  const lane = sessionLists.active < LANE_LIMIT && sessionLists.waiters.length > 0
-   ? sessionLists
-   : background.active < LANE_LIMIT && (background.activeSessionWaiters.length > 0 || background.waiters.length > 0)
-    ? background
-    : null
-  if (!lane) return
-  const next = lane.activeSessionWaiters.shift() ?? lane.waiters.shift()
-  if (!next) return
-  lane.active += 1
-  next(true)
- }
-}
-
-async function run<T>(lane: NetworkLane, task: () => Promise<T>, priority: "normal" | "active-session"): Promise<T | undefined> {
- const isCurrent = captureRuntimeInstance()
- // Explicit construction: the UI's lib target is ES2022, which predates
- // `Promise.withResolvers`.
- let admit: (admitted: boolean) => void = () => undefined
- const admission = new Promise<boolean>((resolve) => { admit = resolve })
- const queue = priority === "active-session" ? lane.activeSessionWaiters : lane.waiters
- queue.push(admit)
- pump()
- if (!await admission) return undefined
- try {
-  if (!isCurrent()) return undefined
-  const result = await task()
-  return isCurrent() ? result : undefined
- } finally {
-  lane.active -= 1
-  pump()
- }
-=======
   if (runtimeKey === previousRuntimeKey) return
   const retired = [background, sessionLists]
   background = createLane()
@@ -132,7 +78,6 @@ async function run<T>(lane: NetworkLane, task: () => Promise<T>, priority: "norm
     lane.active -= 1
     pump()
   }
->>>>>>> bc50ba56a
 }
 
 /** Undefined means retired work, never a successful empty response. */
@@ -143,6 +88,6 @@ const snapshot = (lane: NetworkLane) => ({ active: lane.active, waiting: lane.wa
 
 /** Test-only visibility into both lanes. */
 export const getBackgroundNetworkState = () => ({
- ...snapshot(background),
- sessionLists: snapshot(sessionLists),
+  ...snapshot(background),
+  sessionLists: snapshot(sessionLists),
 })

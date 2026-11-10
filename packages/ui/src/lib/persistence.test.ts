@@ -126,10 +126,10 @@ const deferred = <T>() => {
 
 const registerSettingsApi = (
   save: (changes: Partial<SettingsPayload>) => Promise<SettingsPayload>,
-  load: () => Promise<{ settings: SettingsPayload; source: 'web' }> = async () => ({ settings: {}, source: 'web' }),
+  load: () => Promise<{ settings: SettingsPayload; source: 'web' | 'vscode' }> = async () => ({ settings: {}, source: 'web' }),
 ): void => {
   registerRuntimeAPIs({
-    runtime: { platform: 'web', isDesktop: false },
+    runtime: { platform: 'web', isDesktop: false, isVSCode: false },
     settings: {
       load,
       save,
@@ -388,7 +388,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('rejects stale loads by generation across an A to B to A switch', async () => {
-    const originalLoad = deferred<{ settings: SettingsPayload; source: 'web' }>();
+    const originalLoad = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
     switchRuntimeEndpoint({ apiBaseUrl: 'https://load-a.example', runtimeKey: 'load-a' });
     registerSettingsApi(async () => ({}), () => originalLoad.promise);
     const firstSync = syncDesktopSettings();
@@ -725,7 +725,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('does not broadcast a stale loaded project selection over a newer pending update', async () => {
-    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' }>();
+    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
     registerSettingsApi(async (changes) => changes as SettingsPayload, () => loadedSettings.promise);
     invalidateSettingsCache();
     const syncedSettings: SettingsPayload[] = [];
@@ -757,7 +757,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('does not broadcast a stale load after a newer project update has saved', async () => {
-    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' }>();
+    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
     registerSettingsApi(async (changes) => changes as SettingsPayload, () => loadedSettings.promise);
     invalidateSettingsCache();
     const syncedSettings: SettingsPayload[] = [];
@@ -788,7 +788,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('preserves only the latest settings values across repeated pending updates', async () => {
-    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' }>();
+    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
     registerSettingsApi(async (changes) => changes as SettingsPayload, () => loadedSettings.promise);
     invalidateSettingsCache();
     const syncedSettings: SettingsPayload[] = [];
@@ -899,11 +899,7 @@ describe('updateDesktopSettings', () => {
         recentAgents: ['build'],
         favoriteAgents: ['plan'],
         recentEfforts: { 'openai/gpt-5': ['low'] },
-<<<<<<< HEAD
-        lastUsedEfforts: {},
-=======
         lastUsedEfforts: { 'openai/gpt-5': 'low', 'openai/gpt-5-mini': null },
->>>>>>> bc50ba56a
         customProviderIcons: {},
       });
     } finally {
@@ -967,10 +963,8 @@ describe('updateDesktopSettings', () => {
     for (const explicit of [undefined, false, true]) {
       invalidateSettingsCache();
       registerSettingsApi(async (changes) => changes, async () => ({
-        settings: {
-          workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: explicit,
-          draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true
-        },
+        settings: { workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: explicit,
+          draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
         source: 'web',
       }));
       await syncDesktopSettings();
@@ -1265,7 +1259,7 @@ describe('updateDesktopSettings', () => {
 
   test('reconciles warm cached reads with pending and in-flight settings writes', async () => {
     const saveResult = deferred<SettingsPayload>();
-    const savedSettings = { defaultAgent: 'provider/new-model' } satisfies SettingsPayload;
+    const savedSettings = { lastSelectedModel: 'provider/new-model' } satisfies SettingsPayload;
     const saveCalls: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(
       async (changes) => {
@@ -1273,21 +1267,21 @@ describe('updateDesktopSettings', () => {
         return saveResult.promise;
       },
       async () => ({
-        settings: { defaultAgent: 'provider/old-model' },
+        settings: { lastSelectedModel: 'provider/old-model' },
         source: 'web',
       }),
     );
 
     const initialSettings = await loadDesktopSettings();
-    expect(initialSettings?.defaultAgent).toBe('provider/old-model');
-    const update = updateDesktopSettings({ defaultAgent: 'provider/new-model' });
+    expect(initialSettings?.lastSelectedModel).toBe('provider/old-model');
+    const update = updateDesktopSettings({ lastSelectedModel: 'provider/new-model' });
 
     const pendingSettings = await loadDesktopSettings();
-    expect(pendingSettings?.defaultAgent).toBe('provider/new-model');
+    expect(pendingSettings?.lastSelectedModel).toBe('provider/new-model');
     await delay(250);
-    expect(saveCalls).toEqual([{ defaultAgent: 'provider/new-model' }]);
+    expect(saveCalls).toEqual([{ lastSelectedModel: 'provider/new-model' }]);
     const inFlightSettings = await loadDesktopSettings();
-    expect(inFlightSettings?.defaultAgent).toBe('provider/new-model');
+    expect(inFlightSettings?.lastSelectedModel).toBe('provider/new-model');
 
     saveResult.resolve(savedSettings);
     await update;
@@ -1295,16 +1289,16 @@ describe('updateDesktopSettings', () => {
 
   test('a delayed read retains an edit whose write finishes before the read', async () => {
     const readResult = deferred<{ settings: SettingsPayload; source: 'web' }>();
-    const newDefaults = { defaultAgent: 'review', zenModel: 'provider/new' };
+    const newDefaults = { lastSelectedModel: 'provider/new', zenModel: 'high', defaultAgent: 'review' };
     const writes: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(async (changes) => { writes.push(changes); return { ...changes }; }, () => readResult.promise);
     const update = updateDesktopSettings(newDefaults);
     const read = loadDesktopSettings();
     await update;
-    readResult.resolve({ settings: { defaultAgent: 'build', zenModel: 'provider/old' }, source: 'web' });
+    readResult.resolve({ settings: { lastSelectedModel: 'provider/old', zenModel: 'low', defaultAgent: 'build' }, source: 'web' });
     expect(await read).toMatchObject(newDefaults);
     expect(await loadDesktopSettings()).toMatchObject(newDefaults);
-    await updateDesktopSettings({ zenModel: 'provider/old' });
+    await updateDesktopSettings({ lastSelectedModel: 'provider/old' });
     expect(writes).toHaveLength(2);
   });
 
@@ -1312,10 +1306,10 @@ describe('updateDesktopSettings', () => {
     const readResult = deferred<{ settings: SettingsPayload; source: 'web' }>();
     registerSettingsApi(async (changes) => ({ ...changes }), () => readResult.promise);
     const read = loadDesktopSettings();
-    await updateDesktopSettings({ defaultAgent: 'provider/new' });
-    readResult.resolve({ settings: { defaultAgent: 'provider/old' }, source: 'web' });
-    expect((await read)?.defaultAgent).toBe('provider/new');
-    expect((await loadDesktopSettings())?.defaultAgent).toBe('provider/new');
+    await updateDesktopSettings({ lastSelectedModel: 'provider/new' });
+    readResult.resolve({ settings: { lastSelectedModel: 'provider/old' }, source: 'web' });
+    expect((await read)?.lastSelectedModel).toBe('provider/new');
+    expect((await loadDesktopSettings())?.lastSelectedModel).toBe('provider/new');
   });
 
   test('toggling back to the server value inside the debounce window cancels the pending write', async () => {

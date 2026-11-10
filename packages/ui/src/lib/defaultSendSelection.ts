@@ -1,9 +1,4 @@
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-<<<<<<< HEAD
-=======
-import { resolveEffortChoice, resolveEffortForModelSelection } from '@/lib/modelEfforts';
-import { modelVariantNames } from '@/lib/modelVariants';
->>>>>>> bc50ba56a
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSelectionStore } from '@/sync/selection-store';
 
@@ -32,11 +27,7 @@ const resolveDefaultModelSelection = (): { providerID: string; modelID: string }
   return { providerID: parsed.providerId, modelID: parsed.modelId };
 };
 
-const resolveDefaultVariant = (
-  providerID: string,
-  modelID: string,
-  agentName: string | undefined,
-): string | null | undefined => {
+const resolveDefaultVariant = (providerID: string, modelID: string): string | undefined => {
   const configState = useConfigStore.getState();
   // The configured effort belongs to its default model; on the fallback model it does not apply.
   const configuredVariant = configState.getDefaultVariantForModel(providerID, modelID);
@@ -49,16 +40,13 @@ const resolveDefaultVariant = (
   if (variantNames.length === 0) {
     return configuredVariant || currentVariant || undefined;
   }
-  // The agent's pin for this model is configuration too; after it the level
-  // this model was last sent with, then whatever the composer currently shows.
-  // `null` is an explicit Default and is kept as the answer.
-  return resolveEffortChoice(
-    [resolveEffortForModelSelection({
-      providerID, modelID, variants: variantNames,
-      agents: configState.agents, agentName, configuredVariant,
-    }), currentVariant],
-    variantNames,
-  );
+  if (configuredVariant && variantNames.includes(configuredVariant)) {
+    return configuredVariant;
+  }
+  if (currentVariant && variantNames.includes(currentVariant)) {
+    return currentVariant;
+  }
+  return undefined;
 };
 
 export const captureDefaultSendSelection = () => {
@@ -71,5 +59,5 @@ export const captureDefaultSendSelection = () => {
   if (!providerID || !modelID) {
     return null;
   }
-  return { providerID, modelID, agentName, variant: resolveDefaultVariant(providerID, modelID, agentName) };
+  return { providerID, modelID, agentName, variant: resolveDefaultVariant(providerID, modelID) };
 };

@@ -1,7 +1,6 @@
 import React from 'react';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
-import { getRuntimeKey } from '@/lib/runtime-switch';
 
 // Server holds expire on their own (the UI that asserted them may be gone);
 // re-assert well inside that window while a run is still going.
@@ -14,15 +13,14 @@ const REASSERT_INTERVAL_MS = 2 * 60 * 1000;
  * server is told to hold that session's queue, and released when it ends.
  */
 export function useMessageQueueHoldSync(): void {
-  const runs = useAutoReviewStore((state) => state.runsByOriginalSessionID);
+  const runs = useAutoReviewStore((state) => state.runs);
   // Session id → its directory, which names the server that owns the session's queue.
   const heldRef = React.useRef<Map<string, string>>(new Map());
 
   const running = React.useMemo(() => {
-    const runtimeKey = getRuntimeKey();
     return new Map(
       Object.values(runs)
-        .filter((run) => run.status === 'running' && run.runtimeKey === runtimeKey)
+        .filter((run) => run.status === 'running')
         .map((run) => [run.originalSessionID, run.directory]),
     );
   }, [runs]);

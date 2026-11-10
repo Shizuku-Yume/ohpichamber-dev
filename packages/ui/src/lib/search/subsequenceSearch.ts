@@ -24,8 +24,6 @@ const BONUS_CONSECUTIVE = -(GAP_START + GAP_EXTENSION);
 const FIRST_LETTER_MULTIPLIER = 2;
 
 const CharClass = { Whitespace: 0, Delimiter: 1, Punctuation: 2, Lower: 3, Upper: 4, Digit: 5 } as const;
-type CharClass = (typeof CharClass)[keyof typeof CharClass];
-
 const classify = (char: string): CharClass => {
   if (char === '/' || char === '\\') return CharClass.Delimiter;
   if (char >= '0' && char <= '9') return CharClass.Digit;

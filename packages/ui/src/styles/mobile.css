@@ -635,8 +635,6 @@
   padding-bottom: max(0px, calc(var(--oc-app-bottom-safe, 0px) - var(--oc-kb-layout, 0px)));
 }
 
-<<<<<<< HEAD
-=======
 /* A screen that gives no top and no left inset still has rounded corners: the
    inner screen of iPhone Duo puts its status bar on the right, so a button in
    the top row sat in the top-left curve (radius ~55pt). Such a screen gets
@@ -657,7 +655,6 @@
   padding-left: calc(0.75rem + var(--oc-corner-clearance, 0px) * 0.7);
 }
 
->>>>>>> bc50ba56a
 /* Portal surfaces (drawers, dialogs, overlay panels, the comment bar) render
    at <body> level, outside the app shell, so they take the keyboard into their
    own layout: their bottom edge rises by the keyboard height. Like the shell,
@@ -968,13 +965,9 @@
    (the command palette) where they are. */
 [data-slot="dialog-layer"][data-sheet] {
   align-items: flex-end;
-<<<<<<< HEAD
-  padding: max(0.75rem, env(safe-area-inset-top)) 0 0;
-=======
   /* Sides clear the screen's insets: a landscape notch, the status bar column
      of iPhone Duo. */
   padding: max(0.75rem, env(safe-area-inset-top)) var(--oc-safe-area-right, 0px) 0 var(--oc-safe-area-left, 0px);
->>>>>>> bc50ba56a
 }
 
 [data-slot="dialog-layer"][data-sheet] > [data-slot="dialog-content"] {

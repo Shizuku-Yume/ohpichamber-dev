@@ -5,18 +5,6 @@ import { runtimeFetch } from './runtime-fetch';
 const errorSchema = z.object({ error: z.string().min(1) }).catch({ error: '' });
 
 /**
-<<<<<<< HEAD
- * Sends the user's answer to a secret an agent is waiting on (secret.request):
- * the value, or a decline. The server writes the value to a private file and
- * only the file's path reaches the agent. A request that no longer waits,
- * because it was answered elsewhere or its turn ended, is refused with the
- * server's message. `directory` is the session's: in an isolated space the
- * call waits on the space's own server, which is also where the agent's
- * commands read the file.
- */
-export async function answerSecretRequest(
-    input: { sessionId: string; callId: string } & ({ value: string } | { declined: true }),
-=======
  * Sends the user's answer to a secret card an agent is waiting on: the value
  * of a `secret.request` (the server writes it to a private file and only the
  * file's path reaches the agent), the values of a `secret.run` and the ones
@@ -28,7 +16,6 @@ export async function answerSecretRequest(
  */
 export async function answerSecretRequest(
     input: { sessionId: string; callId: string } & ({ value: string } | { values: Record<string, string>; remember: string[] } | { declined: true }),
->>>>>>> bc50ba56a
     directory: string | undefined,
 ): Promise<void> {
     const response = await runtimeFetch('/api/openchamber/secret/answer', {
@@ -41,8 +28,6 @@ export async function answerSecretRequest(
     const payload = errorSchema.parse(await response.json().catch(() => null));
     throw new Error(payload.error || `The secret was not saved (${response.status})`);
 }
-<<<<<<< HEAD
-=======
 
 const secretRunFieldsSchema = z.object({ fields: z.array(z.string()), reused: z.array(z.string()) });
 
@@ -63,4 +48,3 @@ export async function readSecretRunFields(
     const parsed = secretRunFieldsSchema.safeParse(await response.json().catch(() => null));
     return parsed.success ? parsed.data : null;
 }
->>>>>>> bc50ba56a

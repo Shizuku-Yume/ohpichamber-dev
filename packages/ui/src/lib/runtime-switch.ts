@@ -19,11 +19,10 @@ const RUNTIME_ENDPOINT_WILL_CHANGE_EVENT = 'openchamber:runtime-endpoint-will-ch
 let activeApiBaseUrl = '';
 let activeRuntimeKey = '';
 let instanceGeneration = 0;
-<<<<<<< HEAD
+// Bumped by every endpoint switch, even one that keeps the same runtime key:
+// a queued send must notice that the endpoint it captured is no longer current.
 let runtimeSwitchRevision = 0;
 export const getRuntimeSwitchRevision = (): number => runtimeSwitchRevision;
-=======
->>>>>>> bc50ba56a
 // Null reads the native boot injection; an explicit switch replaces it, even when local.
 let activeSshForwarded: boolean | null = null;
 
@@ -211,7 +210,7 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
   } else {
     deactivateRelayTunnel();
   }
-  void refreshRuntimeUrlAuthToken(apiBaseUrl).catch(() => { });
+  void refreshRuntimeUrlAuthToken(apiBaseUrl).catch(() => {});
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent<RuntimeEndpointChangedDetail>(RUNTIME_ENDPOINT_CHANGED_EVENT, {
       detail,
@@ -220,7 +219,7 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
 };
 
 export const subscribeRuntimeEndpointWillChange = (callback: (detail: RuntimeEndpointChangedDetail) => void): (() => void) => {
-  if (typeof window === 'undefined') return () => { };
+  if (typeof window === 'undefined') return () => {};
   const listener = (event: Event) => {
     callback((event as CustomEvent<RuntimeEndpointChangedDetail>).detail);
   };
@@ -229,7 +228,7 @@ export const subscribeRuntimeEndpointWillChange = (callback: (detail: RuntimeEnd
 };
 
 export const subscribeRuntimeEndpointChanged = (callback: (detail: RuntimeEndpointChangedDetail) => void): (() => void) => {
-  if (typeof window === 'undefined') return () => { };
+  if (typeof window === 'undefined') return () => {};
   const listener = (event: Event) => {
     callback((event as CustomEvent<RuntimeEndpointChangedDetail>).detail);
   };

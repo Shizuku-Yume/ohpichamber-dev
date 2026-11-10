@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { adoptRelayTunnel, deactivateRelayTunnel } from './relay/runtime-tunnel';
 import type { RelayTunnelClient } from './relay/tunnel-client';
-import { setRuntimeBearerToken, setRuntimeExtraHeaders } from './runtime-auth';
+import { setRuntimeBearerToken } from './runtime-auth';
 
 class MockEventSource {
   static CLOSED = 2;
@@ -35,62 +35,10 @@ describe('openchamber events', () => {
   afterEach(() => {
     deactivateRelayTunnel();
     setRuntimeBearerToken(null);
-    setRuntimeExtraHeaders(null);
     Reflect.deleteProperty(globalThis, 'window');
     Reflect.deleteProperty(globalThis, 'EventSource');
   });
 
-<<<<<<< HEAD
-=======
-  test('does not open the server-only event stream in VS Code', async () => {
-    Object.defineProperty(window, '__VSCODE_CONFIG__', {
-      value: { workspaceFolder: 'C:/repo', workspaceFolders: [] },
-      configurable: true,
-    });
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
-    try {
-      expect(MockEventSource.instances).toHaveLength(0);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  test('native mobile sends proxy headers on the HTTP event stream and aborts on unsubscribe', async () => {
-    Object.assign(window, { Capacitor: { isNativePlatform: () => true } });
-    setRuntimeExtraHeaders({ 'X-Proxy': 'fixture-secret' });
-    setRuntimeBearerToken('fixture-token');
-    let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
-    let streamSignal: AbortSignal | null | undefined;
-    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
-      expect(new Headers(init?.headers).get('X-Proxy')).toBe('fixture-secret');
-      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer fixture-token');
-      streamSignal = init?.signal;
-      return new Response(new ReadableStream<Uint8Array>({
-        start(value) {
-          controller = value;
-          init?.signal?.addEventListener('abort', () => value.error(new DOMException('Aborted', 'AbortError')), { once: true });
-        },
-      }), { headers: { 'content-type': 'text/event-stream' } });
-    });
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const events: string[] = [];
-    const unsubscribe = subscribeOpenchamberEvents((event) => events.push(event.type));
-    try {
-      for (let i = 0; i < 20 && !controller; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(MockEventSource.instances).toHaveLength(0);
-      expect(controller).toBeDefined();
-      controller?.enqueue(new TextEncoder().encode('data: {"type":"openchamber:event-stream-ready"}\n\n'));
-      for (let i = 0; i < 20 && !events.length; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(events).toEqual(['event-stream-ready']);
-    } finally {
-      unsubscribe();
-      fetchSpy.mockRestore();
-    }
-    expect(streamSignal?.aborted).toBe(true);
-  });
-
->>>>>>> bc50ba56a
   test('desktop browser-capable events cross the active relay as streamed HTTP, not native EventSource', async () => {
     Object.defineProperty(window, '__OPENCHAMBER_ELECTRON__', { value: true, configurable: true });
     const requests: Array<{ path: string; authorization: string | null; signal: AbortSignal | undefined }> = [];
@@ -168,50 +116,6 @@ describe('openchamber events', () => {
     } finally {
       drivingUnsubscribe();
     }
-  });
-
-  test('preserves scheduled task dispatch and legacy outcome statuses', async () => {
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const statuses: string[] = [];
-    const unsubscribe = subscribeOpenchamberEvents((event) => {
-      if (event.type === 'scheduled-task-ran') statuses.push(event.status);
-    });
-    try {
-      for (const status of ['running', 'sent', 'success', 'error']) {
-        MockEventSource.instances[0].onmessage?.({
-          data: JSON.stringify({
-            type: 'openchamber:scheduled-task-ran',
-            properties: { projectId: 'project_1', taskId: 'task_1', ranAt: 123, status },
-          }),
-        });
-      }
-      expect(statuses).toEqual(['running', 'sent', 'success', 'error']);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  test('a listener that subscribes after the stream is ready still gets its connection, and not after a drop', async () => {
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const unsubscribeEarly = subscribeOpenchamberEvents(() => {});
-    const source = MockEventSource.instances[0];
-    source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:event-stream-ready', properties: { connectionId: 'conn_1' } }) });
-
-    const late: unknown[] = [];
-    const unsubscribeLate = subscribeOpenchamberEvents((event) => late.push(event));
-    await Promise.resolve();
-    expect(late).toEqual([{ type: 'event-stream-ready', connectionId: 'conn_1' }]);
-    expect(MockEventSource.instances).toHaveLength(1);
-
-    source.onerror?.();
-    const afterDrop: unknown[] = [];
-    const unsubscribeAfterDrop = subscribeOpenchamberEvents((event) => afterDrop.push(event));
-    await Promise.resolve();
-    expect(afterDrop).toEqual([]);
-
-    unsubscribeAfterDrop();
-    unsubscribeLate();
-    unsubscribeEarly();
   });
 
   test('dispatches externally created session events', async () => {
@@ -470,43 +374,6 @@ describe('openchamber events', () => {
       { type: 'worktree-changed', directories: ['/repo', '/repo-linked'], changedAt: 456 },
     ]);
     unsubscribe();
-  });
-
-  test('dispatches the session announcements an SSE main stream never carries', async () => {
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const events: unknown[] = [];
-    const unsubscribe = subscribeOpenchamberEvents((event) => {
-      if (event.type === 'control-sync') events.push(event.event);
-    });
-    const run = {
-      id: 'wf_one', parentSessionId: 'ses_1', directory: '/repo', name: 'audit', description: '', state: 'running',
-      attempt: 1, createdAt: 1, currentPhase: null, phases: [], agents: [], logs: [],
-    };
-    try {
-      for (const payload of [
-        { type: 'openchamber:workflow-run', properties: { run } },
-        { type: 'openchamber:workflow-run', properties: { run: { ...run, state: 'exploded' } } },
-        { type: 'openchamber:workflow-run-removed', properties: { runId: 'wf_one', parentSessionId: 'ses_1' } },
-        { type: 'openchamber:page-waiting', properties: { sessionID: 'ses_1', directory: '/repo', page: { id: 'call_1', title: 'Pick' } } },
-        { type: 'openchamber:page-settled', properties: { sessionID: 'ses_1', pageID: 'call_1' } },
-        { type: 'openchamber:session-assist', properties: { sessionID: 'ses_1', directory: null, pending: true } },
-        { type: 'openchamber:session-archived', properties: { sessionID: 'ses_1', archivedAt: 42 } },
-        // OpenCode announces metadata itself on every transport.
-        { type: 'openchamber:session-metadata', properties: { sessionID: 'ses_1', metadata: { pinned: true } } },
-      ]) {
-        MockEventSource.instances[0].onmessage?.({ data: JSON.stringify(payload) });
-      }
-      expect(events).toEqual([
-        { type: 'openchamber.workflow-run', properties: { run } },
-        { type: 'openchamber.workflow-run-removed', properties: { runId: 'wf_one', parentSessionId: 'ses_1' } },
-        { type: 'openchamber.page-waiting', properties: { sessionID: 'ses_1', directory: '/repo', page: { id: 'call_1', title: 'Pick' } } },
-        { type: 'openchamber.page-settled', properties: { sessionID: 'ses_1', pageID: 'call_1' } },
-        { type: 'openchamber.session-assist', properties: { sessionID: 'ses_1', directory: null, pending: true } },
-        { type: 'session.patched', properties: { sessionID: 'ses_1', patch: { time: { archived: 42 } } } },
-      ]);
-    } finally {
-      unsubscribe();
-    }
   });
 
   test('dispatches a project-context invalidation only with a valid owner id', async () => {

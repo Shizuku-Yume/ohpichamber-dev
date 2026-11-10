@@ -7,7 +7,6 @@ import { formatMessage, useI18nStore } from '@/lib/i18n';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { git } from '@/lib/gitApi';
 import { runBoundRemoteBranchDelete } from '@/lib/boundGitNetworkOperation';
-import { resolveWorktreeTeardownCommands } from '@/lib/sharedTrustConfirmation';
 import {
   clearWorktreeBootstrapState,
   getWorktreeBootstrapState,
@@ -20,15 +19,16 @@ import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/work
 import { checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
 import type {
   CreateGitWorktreePayload,
-  GitWorktreeArchive,
   GitWorktreeBootstrapStatus,
   GitWorktreeValidationResult,
   GitChangeRequestSourceRequest,
+  GitWorktreeArchive,
   GitAPI,
   SourceControlAPI,
 } from '@/lib/api/types';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
+import { generatedBranchPrefix } from '@/lib/git/branchNameGenerator';
 
 type WorktreeListEntry = {
   path?: string;
@@ -36,6 +36,7 @@ type WorktreeListEntry = {
   head?: string;
   name?: string;
   prunable?: boolean;
+  title?: string;
   provenance?: WorktreeMetadata['provenance'];
 };
 
@@ -206,19 +207,11 @@ const deriveSdkWorktreeNameFromDirectory = (directory: string): string => {
   return parts[parts.length - 1] ?? normalized;
 };
 
-<<<<<<< HEAD
-/** The project's commands joined for one shell, with `{root}` replaced. */
-const buildWorktreeCommands = (args: {
-  projectDirectory: string;
-  commands: string[];
-}): { commands: string | undefined } => {
-=======
 /** The commands as one `&&` chain for the server, so the first failure stops the rest. */
 const joinWorktreeCommands = (args: {
   projectDirectory: string;
   commands: string[];
 }): string | undefined => {
->>>>>>> bc50ba56a
   const commands: string[] = [];
 
   for (const raw of args.commands) {
@@ -230,34 +223,7 @@ const joinWorktreeCommands = (args: {
   }
 
   const joined = commands.filter(Boolean).join(' && ');
-  return { commands: joined.trim().length > 0 ? joined : undefined };
-};
-
-const buildSdkStartCommand = (args: {
-  projectDirectory: string;
-  setupCommands: string[];
-}): string | undefined => buildWorktreeCommands({ projectDirectory: args.projectDirectory, commands: args.setupCommands }).commands;
-
-/**
- * What the server runs in the worktree before it goes; may ask for trust
- * first, unless `ask` is false (a removal nobody started by hand), where
- * untrusted shared commands reject instead. Nothing is asked for a checkout
- * the server runs no teardown in: one whose bootstrap failed never ran its
- * setup, and a contributor fork runs no project command before its checkout
- * trust passes.
- */
-export const resolveWorktreeTeardownCommand = async (
-  project: ProjectRef,
-  worktree: WorktreeMetadata,
-  { ask = true }: { ask?: boolean } = {},
-): Promise<string | undefined> => {
-  if (getWorktreeBootstrapState(worktree.path)?.status === 'failed') return undefined;
-  if (worktree.provenance?.kind === 'contributor-fork') return undefined;
-  const { commands } = buildWorktreeCommands({
-    projectDirectory: normalizePath(project.path),
-    commands: await resolveWorktreeTeardownCommands(project, { ask }),
-  });
-  return commands;
+  return joined.trim().length > 0 ? joined : undefined;
 };
 
 const toCreatePayload = (args: {
@@ -276,6 +242,8 @@ const toCreatePayload = (args: {
   expectedRevision?: string;
   changeRequestSource?: GitChangeRequestSourceRequest;
   returnAfterDirectoryCreated?: boolean;
+  /** The pull request's or issue's title, the worktree's task title until the agent names it. */
+  taskTitle?: string;
 }, projectDirectory: string): CreateGitWorktreePayload => {
   const mode = args.mode === 'existing' ? 'existing' : 'new';
 
@@ -308,8 +276,6 @@ const toCreatePayload = (args: {
   if (args.expectedRevision) payload.expectedRevision = args.expectedRevision;
   if (args.changeRequestSource) payload.changeRequestSource = args.changeRequestSource;
   if (args.returnAfterDirectoryCreated) payload.returnAfterDirectoryCreated = true;
-<<<<<<< HEAD
-=======
   if (args.taskTitle?.trim()) payload.taskTitle = args.taskTitle.trim();
   // Quick worktree's `agile-chipmunk`, or the dialog's suggestion kept as is
   // (an issue's `issue-180-merry-salamander` keeps its number on rename).
@@ -318,7 +284,6 @@ const toCreatePayload = (args: {
     payload.generatedBranchName = branchName;
     if (generatedPrefix) payload.generatedBranchPrefix = generatedPrefix;
   }
->>>>>>> bc50ba56a
   return payload;
 };
 
@@ -360,9 +325,6 @@ export const worktreeMapsEqual = (
         || next.headState !== current.headState
         || next.worktreeStatus !== current.worktreeStatus
         || next.worktreeSource !== current.worktreeSource
-<<<<<<< HEAD
-        || next.source !== current.source) return false;
-=======
         || next.source !== current.source
         // The task title changes while the worktree stays: the agent names
         // the task, the user renames it. Left out, a renamed list read as
@@ -371,7 +333,6 @@ export const worktreeMapsEqual = (
         // Pinning changes it the same way.
         || next.pinnedAt !== current.pinnedAt
         || next.pinList !== current.pinList) return false;
->>>>>>> bc50ba56a
     }
   }
   return true;
@@ -608,12 +569,9 @@ const readProjectWorktrees = async (projectDirectory: string, isCurrent: () => b
         worktreeStatus: canonical.worktreeStatus,
         headState: canonical.headState,
         worktreeSource: canonical.worktreeSource,
-<<<<<<< HEAD
-=======
         title: entry.title?.trim() || undefined,
         pinnedAt: (entry.pinnedAt ?? 0) > 0 ? entry.pinnedAt : undefined,
         pinList: (entry.pinnedAt ?? 0) > 0 ? entry.pinList || undefined : undefined,
->>>>>>> bc50ba56a
         ...(entry.provenance ? { provenance: entry.provenance } : {}),
       };
     })
@@ -705,6 +663,8 @@ export type CreateWorktreeArgs = {
   expectedRevision?: string;
   changeRequestSource?: GitChangeRequestSourceRequest;
   returnAfterDirectoryCreated?: boolean;
+  /** The pull request's or issue's title, the worktree's task title until the agent names it. */
+  taskTitle?: string;
 };
 
 export async function createWorktree(project: ProjectRef, args: CreateWorktreeArgs): Promise<WorktreeMetadata> {
@@ -725,6 +685,13 @@ export async function createWorktree(project: ProjectRef, args: CreateWorktreeAr
     toast.warning(formatMessage(
       useI18nStore.getState().dictionary,
       created.sourceFetchReason === 'access' ? 'session.newWorktree.toast.fetchSourceAccess' : 'session.newWorktree.toast.fetchSourceFailed',
+    ));
+  }
+  if (created?.branchBackup) {
+    toast.info(formatMessage(
+      useI18nStore.getState().dictionary,
+      'session.newWorktree.toast.branchBackup',
+      { branch: created.branch, backup: created.branchBackup },
     ));
   }
   const returnedName = typeof created?.name === 'string' ? created.name : '';
@@ -853,9 +820,6 @@ const forgetRemovedWorktree = (project: ProjectRef, worktree: WorktreeMetadata):
   clearWorktreeRemoval(worktree.path);
 };
 
-<<<<<<< HEAD
-/** Archive a worktree through the Host-owned worker and session lifecycle. */
-=======
 /**
  * What the server runs in the worktree before it goes; may ask for trust
  * first, unless `ask` is false (a removal nobody started by hand), where
@@ -882,11 +846,10 @@ export const resolveWorktreeTeardownCommand = async (
  * sessions the caller archived for it) under a private ref and removes the
  * folder, keeping the branch. The row shows the removal until git answers.
  */
->>>>>>> bc50ba56a
 export async function archiveProjectWorktree(
   project: ProjectRef,
   worktree: WorktreeMetadata,
-  input: { id: string; title?: string },
+  input: { id: string; sessionIds?: string[]; title?: string },
 ): Promise<GitWorktreeArchive> {
   markWorktreeRemoving(worktree.path);
   let archive: GitWorktreeArchive;
@@ -924,20 +887,10 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   try {
     let teardownCommand = options?.skipTeardown === true ? undefined : await resolveWorktreeTeardownCommand(project, worktree);
     if (deleteRemote && branchName && remoteName && options?.network) {
-<<<<<<< HEAD
-      // The teardown runs before the remote branch goes, so a failing teardown
-      // deletes nothing; the removal then has nothing left to run.
-      const teardownFirst = teardownCommand;
-      if (teardownFirst) {
-        await git.worktree.teardown(projectDirectory, { directory: worktree.path, teardownCommand: teardownFirst });
-        teardownCommand = undefined;
-      }
-=======
       // The teardown runs on its own once the remote is known ready (a remote
       // that refuses stops nothing) and before the remote branch goes (a
       // failing teardown deletes nothing); the removal then has nothing left to run.
       const teardownFirst = teardownCommand;
->>>>>>> bc50ba56a
       await runBoundRemoteBranchDelete({
         beforePlan: teardownFirst
           ? async () => { await git.worktree.teardown(projectDirectory, { directory: worktree.path, teardownCommand: teardownFirst }); }

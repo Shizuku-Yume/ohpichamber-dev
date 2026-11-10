@@ -51,7 +51,6 @@ const metadataWrites: Array<{ sessionId: string; metadata: WorktreeMetadata | nu
 const toastSuccesses: string[] = [];
 const toastErrors: Array<{ title: string; description?: string }> = [];
 const toastWarnings: string[] = [];
-const titleWrites: Array<{ directory: string; title: string; by: 'agent' | 'user' }> = [];
 const directoryStates = new Map<string, DirectoryState>();
 const storedMetadata = new Map<string, WorktreeMetadata | null>();
 // The shape `fetchProjectSetup` answers with: no shared commands, so nothing
@@ -156,10 +155,6 @@ mock.module('@/components/ui', () => ({
 mock.module('@/lib/gitApi', () => ({
   checkIsGitRepository: (directory: string) => isGitRepositoryImplementation(directory),
   getGitStatus: (directory: string) => getGitStatusImplementation(directory),
-  setGitWorktreeTitle: (directory: string, title: string, by: 'agent' | 'user') => {
-    titleWrites.push({ directory, title, by });
-    return Promise.resolve({ applied: true, title });
-  },
   deleteRemoteBranch: mock(),
   resolveGitRepositoryPrefix: mock((directory: string) => Promise.resolve(projectFoldersByPath.get(directory) ?? projectFolderInRepository)),
   resolveGitPrimaryRoot: mock(() => Promise.resolve('/repo')),
@@ -190,9 +185,6 @@ mock.module('@/lib/openchamberConfig', () => ({
   getProjectSetup: async () => EMPTY_PROJECT_SETUP,
   updateProjectSetup: async () => true,
 }));
-mock.module('@/lib/sharedTrustConfirmation', () => ({
-  resolveWorktreeTeardownCommands: async () => [],
-}));
 
 mock.module('@/lib/worktreeSessionCreator', () => ({
   resolveProjectRef: mock((directory: string) => resolveProjectRefImplementation(directory)),
@@ -216,7 +208,6 @@ const worktreeBootstrap = await import('@/lib/worktrees/worktreeBootstrap');
 mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
   ...worktreeBootstrap,
   clearWorktreeBootstrapState: mock(),
-  getWorktreeBootstrapState: () => null,
   markWorktreeBootstrapPending: mock(),
   setWorktreeBootstrapState: mock(),
   // Removal skips the teardown of a checkout whose bootstrap failed.
@@ -256,10 +247,7 @@ mock.module('@/sync/session-actions', () => ({
     moveCalls.push({ sessionId: session.sessionId, sourceDirectory, destinationDirectory });
     return moveSessionImplementation(session, sourceDirectory, destinationDirectory);
   },
-  readSessionsLiveActivity: async (sessionIds: string[]) => {
-    const activities = sessionIds.map(getSessionLiveActivity);
-    return activities.find((activity) => activity === 'active') ?? activities.find((activity) => activity === 'unknown') ?? 'idle';
-  },
+  getSessionLiveActivity,
   isSessionBusyNow: (sessionId: string) => getSessionLiveActivity(sessionId) === 'active',
 }));
 
@@ -338,7 +326,7 @@ const setStatuses = (directory: string, statuses: Record<string, SessionRuntimeS
 // over its own async chain before git is asked, so a microtask-only poll can
 // run out of attempts before the answer lands.
 const waitFor = async (predicate: () => boolean): Promise<void> => {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     if (predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -401,7 +389,6 @@ describe('moveSessionTreeToExistingWorktree', () => {
     toastSuccesses.length = 0;
     toastErrors.length = 0;
     toastWarnings.length = 0;
-    titleWrites.length = 0;
     directoryStates.clear();
     storedMetadata.clear();
     sessionUIState.worktreeMetadata = new Map();
@@ -906,7 +893,6 @@ describe('moveSessionTreeToExistingWorktree', () => {
     expect(moveCalls).toEqual([]);
   });
 
-<<<<<<< HEAD
   test('refuses a second move while the first one runs, and clears the pending mark after it settles', async () => {
     setStatuses('/source', { root: 'idle' });
     let release!: () => void;
@@ -919,39 +905,6 @@ describe('moveSessionTreeToExistingWorktree', () => {
         changesMoved: false,
         carried: request.carry,
       });
-=======
-  test('a new worktree carries the current session title and explicit user ownership', async () => {
-    setStatuses('/source', { named: 'idle', plain: 'idle' });
-    const named = { ...makeSession('named'), title: 'Login fix', metadata: { openchamber: { workTitle: { title: 'Login fix', by: 'agent' } } } };
-
-    requestSessionTreeMove({ ...makeQuickIntent(), root: named });
-    await waitFor(() => toastSuccesses.length === 1);
-    requestSessionTreeMove({ ...makeQuickIntent(), root: { ...makeSession('plain'), title: 'Generated title' } });
-    await waitFor(() => toastSuccesses.length === 2);
-
-    setStatuses('/source', { user: 'idle' });
-    requestSessionTreeMove({ ...makeQuickIntent(), root: { ...makeSession('user'), title: 'My task', metadata: { openchamber: { workTitle: { title: 'My task', by: 'user' } } } } });
-    await waitFor(() => toastSuccesses.length === 3);
-    expect(titleWrites).toEqual([
-      { directory: '/created-worktree', title: 'Login fix', by: 'agent' },
-      { directory: '/created-worktree', title: 'Generated title', by: 'agent' },
-      { directory: '/created-worktree', title: 'My task', by: 'user' },
-    ]);
-  });
-
-  test('keeps a newly created worktree when a descendant fails ambiguously before the root moved', async () => {
-    setStatuses('/source', { root: 'idle', child: 'idle' });
-    moveSessionImplementation = async (session) => {
-      if (session.id === 'child') throw new Error('Request timed out');
-    };
-
-    requestSessionTreeMove({
-      kind: 'quick',
-      root: makeSession('root'),
-      descendants: [makeSession('child')],
-      sourceDirectory: '/source',
-      messages: makeMoveMessages(),
->>>>>>> bc50ba56a
     });
 
     requestSessionTreeMove(makeQuickIntent());

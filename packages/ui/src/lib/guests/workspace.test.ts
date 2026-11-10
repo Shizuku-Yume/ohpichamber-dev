@@ -9,7 +9,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { setSyncRefs } from '@/sync/sync-refs';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
-import { applySessionEventToGlobalSessions } from '@/sync/session-event-router';
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
 import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedTrackerItem } from '@/lib/linkedIssues';
@@ -71,7 +70,6 @@ describe('extension workspace projection', () => {
       expect(fetch.mock.calls.length).toBe(0);
     } finally { fetch.mockRestore(); }
   });
-<<<<<<< HEAD
   test('projects canonical sessions by resolved workspace directory, not canonical project ids', () => {
     const aliasSession = session('alias-session', 'fix', 'pro_b', 'ws-b-alias');
     registerWorkspaceDirectory('ws-b-alias', '/b-alias');
@@ -130,51 +128,6 @@ describe('extension workspace projection', () => {
     if (other.kind !== 'sessions') throw new Error('Expected sessions');
     expect(other.sessions[0].items).toEqual([{ id: 'ITEM-2', data: { secret: true } }]);
   });
-=======
-  test('forwards the session agent to extensions and publishes changes', async () => {
-    useGlobalSessionsStore.getState().applySnapshot([
-      { ...session('b-session', '/b-tree'), agent: 'fixer' },
-      session('a-session', '/a'),
-    ], [], 'ready');
-    const snapshot = readB();
-    expect(snapshot.sessions.map((entry) => [entry.id, entry.agent])).toEqual([['b-session', 'fixer']]);
-    const agents: (string | undefined)[] = [];
-    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', (next) => {
-      if (next.kind === 'sessions') agents.push(next.sessions[0].agent);
-    });
-    try {
-      useGlobalSessionsStore.getState().applySnapshot([{ ...session('b-session', '/b-tree'), agent: 'review', time: { created: 1, updated: 2 } }], [], 'ready');
-      await Promise.resolve();
-      useGlobalSessionsStore.getState().applySnapshot([{ ...session('b-session', '/b-tree'), time: { created: 1, updated: 3 } }], [], 'ready');
-      await Promise.resolve();
-      expect(agents.length).toBe(3);
-      expect(agents).toEqual(['fixer', 'review', undefined]);
-      expect(Object.hasOwn(readB().sessions[0], 'agent')).toBe(false);
-    } finally { stop(); }
-  });
-  for (const updated of [1, 2]) {
-    test(`publishes agent patches immediately with updated timestamp ${updated}`, async () => {
-      const agents: (string | undefined)[] = [];
-      const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', (next) => {
-        if (next.kind === 'sessions') agents.push(next.sessions[0].agent);
-      });
-      try {
-        for (const agent of ['fixer', 'review']) {
-          applySessionEventToGlobalSessions({
-            type: 'session.patched',
-            properties: { sessionID: 'b-session', patch: { agent, time: { updated } } },
-          });
-          await Promise.resolve();
-          expect(readB().sessions[0].agent).toBe(agent);
-        }
-        expect(agents).toEqual([undefined, 'fixer', 'review']);
-      } finally {
-        stop();
-        applySessionEventToGlobalSessions({ type: 'session.idle', properties: { sessionID: 'b-session' } });
-      }
-    });
-  }
->>>>>>> bc50ba56a
   test('a session in the project folder of a worktree belongs to the project and to that worktree', () => {
     const nested = { ...bSession, sessionId: 'nested-session', displayPath: 'ai', workspaceId: 'ws-b-tree-nested' };
     registerWorkspaceDirectory('ws-b-tree-nested', '/b-tree/ai');

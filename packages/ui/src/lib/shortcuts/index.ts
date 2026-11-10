@@ -17,7 +17,6 @@ export type { ShortcutCombo } from './bindings';
 export { ShortcutDispatcher } from './dispatcher';
 export { shortcutRegistry } from './registry';
 export type { ShortcutHandler } from './registry';
-export { PALETTE_COMMANDS } from './config';
 export {
   getCustomizableShortcutActions,
   getShortcutBindingConflicts,

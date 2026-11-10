@@ -17,6 +17,7 @@ import type {
   GitUnpushedBranchCounts,
   GitDeleteBranchPayload,
   GitRemoveRemotePayload,
+  GeneratedCommitMessage,
   GitWorktreeInfo,
   CreateGitWorktreePayload,
   GitWorktreeCreateResult,
@@ -32,8 +33,8 @@ import type {
   GitWorktreePinResult,
   GitWorktreeValidationResult,
   CreateGitCommitOptions,
-  GitCommitResult,
   GitCommitExtrasFailure,
+  GitCommitResult,
   GitPushResult,
   GitPullResult,
   GitPullOptions,
@@ -193,9 +194,9 @@ const checkoutTrustSchema = z.object({
   state: z.literal('awaiting-trust'),
   digest: fingerprintSchema,
   actions: z.array(z.object({
-    kind: z.enum(['post-checkout-hook', 'setup-command']),
+    kind: z.enum(['post-checkout-hook', 'project-start-command', 'setup-command']),
     label: z.string().max(65536),
-  }).strict()).max(2),
+  }).strict()).max(3),
 }).strict();
 
 type NetworkOperationTracking = {
@@ -240,7 +241,7 @@ const redactedDestinationSchema = z.object({
 }).strict();
 const runtimeIdentitySchema = z.object({
   id: identityStringSchema,
-  platform: z.enum(['web', 'desktop']),
+  platform: z.enum(['web', 'desktop', 'vscode']),
   label: boundedString(512).optional(),
 }).strict();
 const transportActorSchema = z.discriminatedUnion('kind', [
@@ -807,7 +808,6 @@ const completeStatusMutation = async <T>(directory: string, response: Response):
   invalidateGitStatusCache(directory);
   return result;
 };
-
 /** The commit exists; at least one requested extra did not apply. */
 export class GitCommitExtrasError extends Error {
   readonly result: GitCommitExtrasFailure;
@@ -1182,8 +1182,6 @@ export async function resolveGitTopLevel(directory: string): Promise<{ root: str
   return { root: typeof payload.root === 'string' && payload.root ? payload.root : directory };
 }
 
-
-
 export async function getGitCommitSummaries(
   directory: string,
   shas: string[]
@@ -1537,6 +1535,113 @@ export async function removeRemote(directory: string, payload: GitRemoveRemotePa
   return completeStatusMutation(directory, response);
 }
 
+export async function generateCommitMessage(
+  directory: string,
+  files: string[],
+  options?: { zenModel?: string; providerId?: string; modelId?: string }
+): Promise<{ message: GeneratedCommitMessage }> {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('No files provided to generate commit message');
+  }
+
+  const body: Record<string, unknown> = { files };
+  if (options?.zenModel) {
+    body.zenModel = options.zenModel;
+  }
+  if (options?.providerId) {
+    body.providerId = options.providerId;
+  }
+  if (options?.modelId) {
+    body.modelId = options.modelId;
+  }
+
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/commit-message`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    console.error('[git-generation][browser] http error', {
+      status: response.status,
+      statusText: response.statusText,
+      error,
+    });
+    const traceSuffix = typeof error?.traceId === 'string' && error.traceId
+      ? ` (traceId: ${error.traceId})`
+      : '';
+    throw new Error(`${error.error || 'Failed to generate commit message'}${traceSuffix}`);
+  }
+
+  const data = await response.json();
+
+  if (!data?.message || typeof data.message !== 'object') {
+    throw new Error('Malformed commit generation response');
+  }
+
+  const subject =
+    typeof data.message.subject === 'string' && data.message.subject.trim().length > 0
+      ? data.message.subject.trim()
+      : '';
+
+  const highlights: string[] = Array.isArray(data.message.highlights)
+    ? (data.message.highlights as unknown[])
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => (item as string).trim())
+    : [];
+
+  return {
+    message: {
+      subject,
+      highlights,
+    },
+  };
+}
+
+export async function generatePullRequestDescription(
+  directory: string,
+  payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }
+): Promise<{ title: string; body: string }> {
+  const { base, head, context, zenModel, providerId, modelId } = payload;
+  if (!base || !head) {
+    throw new Error('base and head are required');
+  }
+
+  const requestBody: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string } = { base, head };
+  if (context?.trim()) {
+    requestBody.context = context.trim();
+  }
+  if (zenModel) {
+    requestBody.zenModel = zenModel;
+  }
+  if (providerId) {
+    requestBody.providerId = providerId;
+  }
+  if (modelId) {
+    requestBody.modelId = modelId;
+  }
+
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/pr-description`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to generate PR description');
+  }
+
+  const data = await response.json().catch(() => null);
+  const title = typeof data?.title === 'string' ? data.title : '';
+  const body = typeof data?.body === 'string' ? data.body : '';
+  if (!title && !body) {
+    throw new Error('Malformed PR description response');
+  }
+  return { title, body };
+}
+
 export async function listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
   const overview = await readProjectOverview(directory, 'worktrees');
   return overview.worktrees ?? [];
@@ -1609,39 +1714,18 @@ export async function deleteGitWorktree(directory: string, payload: RemoveGitWor
     body: JSON.stringify(payload ?? {}),
   });
 
-<<<<<<< HEAD
-  // A removal stopped by the project's teardown commands carries its code, so
-  // the failure toast can offer to go on without the teardown.
-  if (!response.ok) throw await worktreeCodeAwareError(response, 'Failed to delete worktree');
-  return response.json();
-}
-
-=======
   if (!response.ok) await throwWorktreeTeardownAwareError(response, 'Failed to delete worktree');
 
   return response.json();
 }
 
 /** Runs the worktree's teardown commands and keeps it. */
->>>>>>> bc50ba56a
 export async function teardownGitWorktree(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }> {
   const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees/teardown`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-<<<<<<< HEAD
-  if (!response.ok) throw await worktreeCodeAwareError(response, 'Failed to tear down worktree');
-  return response.json();
-}
-
-/** The server's code on a kept worktree, so a caller can tell a teardown failure. */
-const worktreeCodeAwareError = async (response: Response, fallback: string): Promise<Error> => {
-  const body = z.object({ error: z.string().optional(), code: z.string().optional() }).catch({})
-    .parse(await response.json().catch(() => null));
-  const message = body.error || response.statusText || fallback;
-  return body.code ? new GitWorktreeRequestError(body.code, message, response.status) : new Error(message);
-=======
   if (!response.ok) await throwWorktreeTeardownAwareError(response, 'Failed to tear down worktree');
   return response.json();
 }
@@ -1652,7 +1736,6 @@ const throwWorktreeTeardownAwareError = async (response: Response, fallback: str
     .parse(await response.json().catch(() => null));
   const message = body.error || response.statusText || fallback;
   throw body.code ? new GitWorktreeRequestError(body.code, message, response.status) : new Error(message);
->>>>>>> bc50ba56a
 };
 
 const worktreeTitleResultSchema = z.object({ title: z.string(), branch: z.string() });
@@ -1701,7 +1784,14 @@ const worktreeArchiveSchema = z.object({
   branchExists: z.boolean(),
   title: z.string(),
   archivedAt: z.number(),
-  sessionBinding: z.strictObject({ status: z.enum(['bound', 'verified-empty', 'unbound', 'ref-changed']), phase: z.string().optional(), revision: z.number().int().positive().optional(), recoveryHead: z.string().optional() }),
+  sessionIds: z.array(z.string()),
+  // The Host derives the session binding and always reports one.
+  sessionBinding: z.object({
+    status: z.enum(['bound', 'verified-empty', 'unbound', 'ref-changed']),
+    phase: z.string().optional(),
+    revision: z.number().optional(),
+    recoveryHead: z.string().optional(),
+  }),
 });
 
 const worktreeArchiveRequest = async <T>(path: string, directory: string, init: RequestInit, schema: z.ZodType<T>, fallback: string): Promise<T> => {
@@ -1727,8 +1817,8 @@ export const listGitWorktreeArchives = async (directory: string): Promise<GitWor
   (await worktreeArchiveRequest('', directory, { method: 'GET' }, z.object({ archives: z.array(worktreeArchiveSchema) }), 'Failed to list worktree archives')).archives
 );
 
-export const restoreGitWorktreeArchive = (directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }): Promise<GitWorktreeArchiveRestoreResult> => (
-  worktreeArchiveRequest('/restore', directory, { method: 'POST', body: JSON.stringify({ id, recovery }) }, z.object({ id: z.string(), conflicts: z.boolean() }), 'Failed to restore worktree archive')
+export const restoreGitWorktreeArchive = (directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult> => (
+  worktreeArchiveRequest('/restore', directory, { method: 'POST', body: JSON.stringify({ id }) }, z.object({ id: z.string(), conflicts: z.boolean() }), 'Failed to restore worktree archive')
 );
 
 export const deleteGitWorktreeArchive = (directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }> => (
@@ -2188,21 +2278,13 @@ export async function getCommitFileDiff(
   hash: string,
   filePath: string,
   isBinary: boolean,
-<<<<<<< HEAD
-  previousPath?: string
-=======
   previousPath?: string,
->>>>>>> bc50ba56a
 ): Promise<CommitFileDiffResponse> {
   const response = await runtimeFetch(
     buildUrl(`${API_BASE}/commit-file-diff`, directory, {
       hash,
       path: filePath,
       binary: isBinary ? 'true' : undefined,
-<<<<<<< HEAD
-      // A rename's diff is read against the path it had before.
-=======
->>>>>>> bc50ba56a
       previousPath,
     })
   );

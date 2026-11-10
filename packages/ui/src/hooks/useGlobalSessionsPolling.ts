@@ -69,27 +69,7 @@ export const startGlobalSessionsPolling = (
   // OpenCode answered while a load that started before it was in flight.
   let readyDuringRun = false;
   let fullRefreshPending = false;
-<<<<<<< HEAD
-  // A refresh came due while the app was hidden and has not run yet.
-  let missedWhileHidden = false;
   let lastFullRefreshAt = Number.NEGATIVE_INFINITY;
-  /** Schedules the next pass; the caller decided its delay. */
-  const scheduleNext = (retryDelay?: number, delay = GLOBAL_SESSIONS_REFRESH_INTERVAL_MS) => {
-    timeoutId = scheduleTimeout(() => {
-      timeoutId = undefined;
-      if (visibility.isHidden()) {
-        // A refresh that came due is owed, not dropped: becoming visible runs
-        // it once, and an app that never hides still sees its own cadence.
-        missedWhileHidden = true;
-        return;
-      }
-      const fullDue = !hasSucceeded || now() - lastFullRefreshAt >= GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
-      void run(fullDue ? refresh : headCheck, fullDue);
-    }, retryDelay ?? delay);
-  };
-=======
-  let lastFullRefreshAt = Number.NEGATIVE_INFINITY;
->>>>>>> bc50ba56a
   const run = async (load: () => Promise<boolean>, full = true) => {
     running = true;
     readyDuringRun = false;
@@ -114,9 +94,6 @@ export const startGlobalSessionsPolling = (
     const delay = untilFullRefresh > 0
       ? Math.min(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS, untilFullRefresh)
       : full ? GLOBAL_SESSIONS_REFRESH_INTERVAL_MS : 0;
-<<<<<<< HEAD
-    scheduleNext(retryDelay, delay);
-=======
     timeoutId = scheduleTimeout(() => {
       timeoutId = undefined;
       if (visibility.isHidden()) {
@@ -125,19 +102,11 @@ export const startGlobalSessionsPolling = (
       const fullDue = !hasSucceeded || now() - lastFullRefreshAt >= GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS;
       void run(fullDue ? refresh : headCheck, fullDue);
     }, retryDelay ?? delay);
->>>>>>> bc50ba56a
   };
   const stopListening = visibility.onVisible(() => {
     if (disposed) return;
     if (timeoutId !== undefined) clearScheduledTimeout(timeoutId);
     timeoutId = undefined;
-<<<<<<< HEAD
-    // Only a refresh the reader missed is owed; nothing was due while the app
-    // was visible, so coming back to it asks for nothing.
-    if (!missedWhileHidden) { if (!running) scheduleNext(); return; }
-    missedWhileHidden = false;
-=======
->>>>>>> bc50ba56a
     if (running) { fullRefreshPending = true; return; }
     void run(refresh);
   });

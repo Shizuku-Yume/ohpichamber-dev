@@ -173,8 +173,6 @@ export const HelpDialog: React.FC = () => {
           icon: "close-circle",
           keys: '',
         },
-<<<<<<< HEAD
-=======
         {
           id: 'background_session_work',
           icon: 'arrow-up-double',
@@ -225,7 +223,6 @@ export const HelpDialog: React.FC = () => {
           icon: 'git-merge',
           keys: '',
         },
->>>>>>> bc50ba56a
       ],
     },
     {

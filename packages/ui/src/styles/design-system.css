@@ -33,19 +33,6 @@
     --oc-tile-tone: 4%;
     --oc-tile-inset-tone: 6%;
     --oc-tile-hover-tone: 7%;
-<<<<<<< HEAD
-
-    /* Motion: springs traced as linear() easings (lib/motion/springs.ts,
-       whose test keeps these in step). Popups open on the popup spring and
-       close on a short fade; layout moves take the calmer layout spring.
-       The dev motion panel overrides them on the root element. */
-    --oc-motion-popup-duration: 251ms;
-    --oc-motion-popup-easing: linear(0, 0.0186, 0.0657, 0.1307, 0.2056, 0.2848, 0.364, 0.4406, 0.5127, 0.5791, 0.6394, 0.6933, 0.741, 0.7828, 0.819, 0.8501, 0.8767, 0.8992, 0.9182, 0.9341, 0.9473, 0.9581, 0.9671, 0.9743, 0.9802, 0.9849, 0.9887, 0.9917, 0.994, 0.9958, 0.9972, 0.9982, 1);
-    --oc-motion-popup-exit-duration: 110ms;
-    --oc-motion-layout-duration: 294ms;
-    --oc-motion-layout-easing: linear(0, 0.0344, 0.1145, 0.2151, 0.3209, 0.423, 0.5166, 0.5995, 0.6712, 0.7322, 0.7832, 0.8255, 0.8602, 0.8885, 0.9114, 0.9298, 0.9445, 0.9563, 0.9657, 0.9731, 0.9789, 0.9835, 0.9872, 0.99, 0.9922, 0.994, 0.9953, 0.9964, 0.9972, 0.9978, 0.9983, 0.9987, 1);
-=======
->>>>>>> bc50ba56a
 
     /* Semantic typography defaults (must match SEMANTIC_TYPOGRAPHY) */
     --text-markdown: 0.875rem;
@@ -819,8 +806,6 @@
    layer is the surface. */
 .oc-surface-floating[data-dictating] > :not([data-dictation-chain]),
 .oc-surface-floating[data-dictating] [data-dictation-chain] > :not([data-dictation-chain], .oc-dictation-overlay),
-.oc-glass-composer[data-dictating] > :not([data-dictation-chain]),
-.oc-glass-composer[data-dictating] [data-dictation-chain] > :not([data-dictation-chain], .oc-dictation-overlay),
 [data-dictation-host]:has(> .oc-dictation-overlay) > :not(.oc-dictation-overlay) {
   opacity: 0;
 }

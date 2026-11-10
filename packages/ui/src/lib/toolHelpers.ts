@@ -1,15 +1,4 @@
-<<<<<<< HEAD
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
-=======
-import { normalizeToolName, opencodeNamespaceTool } from '@/lib/opencode/tools';
-import {
-  isEditTool,
-  isPatchTool,
-  isShellTool,
-  isSubagentTool,
-  isWriteTool,
-} from '@/lib/opencode/tools';
->>>>>>> bc50ba56a
 
 /** OMP's builtin tool registry; extension and MCP names remain opaque. */
 export const NATIVE_TOOLS = {
@@ -85,186 +74,13 @@ export function toolInputPaths(call: ToolCallPart): string[] {
  return paths;
 }
 
-<<<<<<< HEAD
 export interface ToolMetadata {
  displayName: string;
  outputLanguage: string;
  category: 'file' | 'search' | 'code' | 'system' | 'ai' | 'web';
-=======
-  webfetch: {
-    displayName: 'Fetch URL',
-    category: 'web',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'url', label: 'URL', type: 'text' },
-      { key: 'format', label: 'Format', type: 'text' },
-      { key: 'timeout', label: 'Timeout', type: 'text' }
-    ]
-  },
-
-   websearch: {
-     displayName: 'Web Search',
-     category: 'web',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'query', label: 'Search Query', type: 'text' },
-       { key: 'numResults', label: 'Results Count', type: 'text' },
-       { key: 'type', label: 'Search Type', type: 'text' }
-     ]
-   },
-   codesearch: {
-     displayName: 'Code Search',
-     category: 'web',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'query', label: 'Search Query', type: 'text' },
-       { key: 'tokensNum', label: 'Tokens', type: 'text' }
-     ]
-   },
-
-   skill: {
-     displayName: 'Load Skill',
-     category: 'ai',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'id', label: 'Skill', type: 'text' }
-     ]
-   },
-    question: {
-       displayName: 'Question',
-       category: 'ai',
-       outputLanguage: 'text',
-       inputFields: [
-         { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
-       ]
-     },
-
-    openchamber: {
-      displayName: 'OpenChamber',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_schedule: {
-      displayName: 'OpenChamber Schedule',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_web: {
-      displayName: 'OpenChamber Web',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_memory: {
-      displayName: 'OpenChamber Memory',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_knowledge: {
-      displayName: 'OpenChamber Knowledge',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_notify: {
-      displayName: 'OpenChamber Notify',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_usage: {
-      displayName: 'OpenChamber Usage',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_render: {
-      displayName: 'OpenChamber Render',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_image: {
-      displayName: 'OpenChamber Image',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_secret: {
-      displayName: 'OpenChamber Secret',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_workflow: {
-      displayName: 'OpenChamber Workflow',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    plan_enter: {
-      displayName: 'Plan Mode',
-      category: 'ai',
-      outputLanguage: 'text',
-      inputFields: []
-    },
-
-    plan_exit: {
-      displayName: 'Build Mode',
-      category: 'ai',
-      outputLanguage: 'text',
-      inputFields: []
-    },
-
-    StructuredOutput: {
-      displayName: 'Structured Output',
-      category: 'ai',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    structuredoutput: {
-      displayName: 'Structured Output',
-      category: 'ai',
-      outputLanguage: 'json',
-      inputFields: []
-    }
-  };
-
-function formatUnknownToolDisplayName(toolName: string): string {
-  return toolName
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/^./, (char) => char.toUpperCase());
->>>>>>> bc50ba56a
 }
 
-// OpenCode's `opencode` namespace goes by one name, as OpenChamber's tools do;
-// what each call did is the row's description.
-const OPENCODE_NAMESPACE_METADATA: ToolMetadata = {
-  displayName: 'OpenCode',
-  category: 'system',
-  outputLanguage: 'json',
-  inputFields: []
-};
-
 export function getToolMetadata(toolName: string): ToolMetadata {
-<<<<<<< HEAD
  const category = isFileChangeTool(toolName) || toolName === NATIVE_TOOLS.read ? 'file'
   : isSubagentTool(toolName) || isQuestionTool(toolName) ? 'ai'
    : isWebTool(toolName) ? 'web'
@@ -273,17 +89,6 @@ export function getToolMetadata(toolName: string): ToolMetadata {
  const outputLanguage = isEditTool(toolName) || isAstEditTool(toolName) ? 'diff'
   : toolName === NATIVE_TOOLS.read || isWriteTool(toolName) ? 'auto' : 'text';
  return { displayName: toolName || 'tool', category, outputLanguage };
-=======
-  // The namespace itself names a script whose calls all went to it.
-  if (toolName === 'opencode' || opencodeNamespaceTool(toolName)) return OPENCODE_NAMESPACE_METADATA;
-  // Namespaced tools (`opencode.session_rename`) are keyed by their last segment.
-  return TOOL_METADATA[toolName] || TOOL_METADATA[normalizeToolName(toolName)] || {
-    displayName: formatUnknownToolDisplayName(toolName),
-    category: 'system',
-    outputLanguage: 'text',
-    inputFields: []
-  };
->>>>>>> bc50ba56a
 }
 
 export type ToolDescription =
@@ -854,32 +659,6 @@ export function isDataFile(filePath: string): boolean {
 /** Files whose diff is the two versions themselves, not a text patch. */
 export function hasFileVersionsDiff(filePath: string): boolean {
  return isImageFile(filePath) || isOfficePreviewFile(filePath);
-}
-
-/** Office documents the viewer can draw. The older doc, xls and ppt formats stay downloads. */
-const OFFICE_PREVIEW_EXTENSIONS = new Set(['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp']);
-
-export function isOfficePreviewFile(filePath: string): boolean {
-  return OFFICE_PREVIEW_EXTENSIONS.has(getFileExtension(filePath));
-}
-
-export function isNotebookFile(filePath: string): boolean {
-  return getFileExtension(filePath) === 'ipynb';
-}
-
-/** Zip archives under the names they go by. */
-export function isArchiveFile(filePath: string): boolean {
-  return ['zip', 'jar', 'war'].includes(getFileExtension(filePath));
-}
-
-/** Tables kept in a binary file, read in the viewer. */
-export function isDataFile(filePath: string): boolean {
-  return ['sqlite', 'sqlite3', 'db', 'parquet'].includes(getFileExtension(filePath));
-}
-
-/** Files whose diff is the two versions themselves, not a text patch. */
-export function hasFileVersionsDiff(filePath: string): boolean {
-  return isImageFile(filePath) || isOfficePreviewFile(filePath);
 }
 
 export function isMermaidFile(filePath: string): boolean {

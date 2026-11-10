@@ -495,6 +495,12 @@ button,
   color: color-mix(in srgb, var(--syntax-comment) 85%, var(--syntax-foreground) 15%);
 }
 
+/* The composer draws its placeholder as a pseudo-element of the empty line
+   (editor/theme.ts); in VS Code it takes the editor's placeholder colour. */
+:root.vscode-runtime [data-chat-input="true"] .cm-content.cm-composer-empty .cm-line::before {
+  color: var(--vscode-input-placeholderForeground, var(--muted-foreground));
+}
+
 /* Match chat footer background to input in WebKit to avoid dual-tone hover/focus */
 div[data-chat-input-footer="true"] {
   background: transparent !important;
@@ -1234,22 +1240,22 @@ diffs-container {
 }
 
 /* Header tab responsiveness */
-:root:not(.mobile-pointer) .header-tab-label {
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
   display: inline;
 }
-:root:not(.mobile-pointer) .header-open-label {
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
   display: inline;
 }
 
 @media (max-width: 940px) {
-  :root:not(.mobile-pointer) .header-tab-label {
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
     display: none;
   }
-  :root:not(.mobile-pointer) .header-open-label {
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
     display: none;
   }
-  :root:not(.mobile-pointer) .header-tab-badge {
-    margin-left: -0.125rem;
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-badge {
+    margin-inline-start: -0.125rem;
   }
 }
 
@@ -1258,11 +1264,7 @@ diffs-container {
    Minimal overrides - fonts only, using Streamdown defaults
    ============================================ */
 
-<<<<<<< HEAD
-/* Tool input text inherits its card surface. */
-=======
 /* VS Code webviews can inject default pre/code backgrounds; tool input/output should inherit the card surface. */
->>>>>>> bc50ba56a
 .tool-input-surface pre,
 .tool-input-surface code,
 .tool-input-text {
@@ -1270,8 +1272,6 @@ diffs-container {
   background-color: transparent !important;
 }
 
-<<<<<<< HEAD
-=======
 /* Plain-text prose in an expanded tool (a subagent's prompt), set like tool and reasoning markdown. */
 .tool-prose-text {
   font-family: var(--font-sans);
@@ -1292,14 +1292,13 @@ diffs-container {
   font-size: inherit !important;
 }
 
->>>>>>> bc50ba56a
 /* Model/agent controls: progressively collapse labels to icon-only as the row narrows.
    Hide priority (most aggressive first → most resilient last): agent, variant, model. */
 
-/* Pick thresholds that fire BEFORE the per-label `max-w-[Xpx]`
+/* Desktop (non-VSCode): pick thresholds that fire BEFORE the per-label `max-w-[Xpx]`
    constraints would truncate text with an ellipsis. */
 @container model-controls (max-width: 22rem) {
-  .model-controls__agent-label {
+  :root:not(.vscode-runtime) .model-controls__agent-label {
     display: none;
   }
 }
@@ -1310,12 +1309,8 @@ diffs-container {
 }
 
 @container model-controls (max-width: 14rem) {
-<<<<<<< HEAD
-  .model-controls__variant-label {
-=======
   :root:not(.vscode-runtime) .model-controls__variant-label,
   :root:not(.vscode-runtime) .model-controls__variant-slash {
->>>>>>> bc50ba56a
     display: none;
   }
 
@@ -1325,13 +1320,11 @@ diffs-container {
 }
 
 @container model-controls (max-width: 10rem) {
-  .model-controls__model-label {
+  :root:not(.vscode-runtime) .model-controls__model-label {
     display: none;
   }
 }
 
-<<<<<<< HEAD
-=======
 /* VS Code side panel: tighter thresholds since the panel is narrow and labels are smaller. */
 @container model-controls (max-width: 11rem) {
   :root.vscode-runtime .model-controls__agent-label {
@@ -1355,7 +1348,6 @@ diffs-container {
     display: none;
   }
 }
->>>>>>> bc50ba56a
 
 /* Commit actions: collapse labels when narrow. */
 @container commit-actions (max-width: 21rem) {

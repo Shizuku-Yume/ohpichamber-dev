@@ -61,11 +61,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'forking a session',
     'chat.agentStatus.sessions.moveToWorktree': 'moving to a worktree',
     'chat.agentStatus.sessions.link': 'linking the work',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'marking a session done',
-    'chat.agentStatus.sessions.track': 'putting a session in work',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'opening a file',
     'chat.agentStatus.sessions.rename': 'renaming the session',
     'chat.agentStatus.sessions.move': 'moving the session',
@@ -95,17 +90,9 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.showPlan': 'showing a plan',
 
     'chat.agentStatus.notify': 'sending a notification',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'drawing a page',
     'chat.agentStatus.image': 'generating an image',
     'chat.agentStatus.secret': 'asking for a secret',
-=======
-    'chat.agentStatus.usage': 'checking usage limits',
-    'chat.agentStatus.render': 'drawing a page',
-    'chat.agentStatus.image': 'generating an image',
-    'chat.agentStatus.secret': 'asking for a secret',
-    'chat.agentStatus.secretRun': "running a command with secrets",
->>>>>>> bc50ba56a
 
     'chat.agentStatus.retry': 'Retrying',
     'chat.agentStatus.retry.in': 'Retrying in {time}',
@@ -113,6 +100,10 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.inAttempt': 'Retrying in {time} (attempt {attempt})',
     'chat.agentStatus.limit.today': 'Limit resets at {time}',
     'chat.agentStatus.limit.later': 'Limit resets {date}, {time}',
+    'chat.agentStatus.sessions.markDone': 'marking a session done',
+    'chat.agentStatus.sessions.track': 'putting a session in work',
+    'chat.agentStatus.usage': 'checking usage limits',
+    'chat.agentStatus.secretRun': 'running a command with secrets',
   },
   de: {
     'chat.agentStatus.working': 'arbeitet',
@@ -158,11 +149,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'zweigt eine Sitzung ab',
     'chat.agentStatus.sessions.moveToWorktree': 'wechselt in einen Arbeitsbaum',
     'chat.agentStatus.sessions.link': 'verknüpft die Arbeit',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'markiert eine Sitzung als erledigt',
-    'chat.agentStatus.sessions.track': 'setzt eine Sitzung auf In Arbeit',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'öffnet eine Datei',
     'chat.agentStatus.sessions.rename': 'benennt die Sitzung um',
     'chat.agentStatus.sessions.move': 'verschiebt die Sitzung',
@@ -187,23 +173,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'aktualisiert das Projektwissen',
     'chat.agentStatus.knowledge.showPlan': 'zeigt einen Plan',
     'chat.agentStatus.notify': 'sendet eine Benachrichtigung',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'gestaltet eine Seite',
     'chat.agentStatus.image': 'erzeugt ein Bild',
     'chat.agentStatus.secret': 'fragt nach Zugangsdaten',
-=======
-    'chat.agentStatus.usage': 'prüft Nutzungslimits',
-    'chat.agentStatus.render': 'gestaltet eine Seite',
-    'chat.agentStatus.image': 'erzeugt ein Bild',
-    'chat.agentStatus.secret': 'fragt nach Zugangsdaten',
-    'chat.agentStatus.secretRun': "führt einen Befehl mit Zugangsdaten aus",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Neuer Versuch',
     'chat.agentStatus.retry.in': 'Neuer Versuch in {time}',
     'chat.agentStatus.retry.attempt': 'Neuer Versuch (Versuch {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Neuer Versuch in {time} (Versuch {attempt})',
     'chat.agentStatus.limit.today': 'Limit wird um {time} zurückgesetzt',
     'chat.agentStatus.limit.later': 'Limit wird am {date} um {time} zurückgesetzt',
+    'chat.agentStatus.sessions.markDone': 'markiert eine Sitzung als erledigt',
+    'chat.agentStatus.sessions.track': 'setzt eine Sitzung auf In Arbeit',
+    'chat.agentStatus.usage': 'prüft Nutzungslimits',
+    'chat.agentStatus.secretRun': 'führt einen Befehl mit Zugangsdaten aus',
   },
   fr: {
     'chat.agentStatus.working': 'travaille',
@@ -249,11 +231,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'crée une branche de session',
     'chat.agentStatus.sessions.moveToWorktree': 'passe dans un arbre de travail',
     'chat.agentStatus.sessions.link': 'ajoute un lien au travail',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'marque une session comme terminée',
-    'chat.agentStatus.sessions.track': 'remet une session en cours',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'ouvre un fichier',
     'chat.agentStatus.sessions.rename': 'renomme la session',
     'chat.agentStatus.sessions.move': 'déplace la session',
@@ -278,23 +255,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'met à jour les connaissances du projet',
     'chat.agentStatus.knowledge.showPlan': 'affiche un plan',
     'chat.agentStatus.notify': 'envoie une notification',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'dessine une page',
     'chat.agentStatus.image': 'génère une image',
     'chat.agentStatus.secret': 'demande un identifiant secret',
-=======
-    'chat.agentStatus.usage': 'vérifie les limites d’utilisation',
-    'chat.agentStatus.render': 'dessine une page',
-    'chat.agentStatus.image': 'génère une image',
-    'chat.agentStatus.secret': 'demande un identifiant secret',
-    'chat.agentStatus.secretRun': "exécute une commande avec des secrets",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Nouvelle tentative',
     'chat.agentStatus.retry.in': 'Nouvelle tentative dans {time}',
     'chat.agentStatus.retry.attempt': 'Nouvelle tentative (essai {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Nouvelle tentative dans {time} (essai {attempt})',
     'chat.agentStatus.limit.today': 'Limite réinitialisée à {time}',
     'chat.agentStatus.limit.later': 'Limite réinitialisée le {date} à {time}',
+    'chat.agentStatus.sessions.markDone': 'marque une session comme terminée',
+    'chat.agentStatus.sessions.track': 'remet une session en cours',
+    'chat.agentStatus.usage': 'vérifie les limites d’utilisation',
+    'chat.agentStatus.secretRun': 'exécute une commande avec des secrets',
   },
   nl: {
     'chat.agentStatus.working': 'werkt',
@@ -340,11 +313,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'takt een sessie af',
     'chat.agentStatus.sessions.moveToWorktree': 'verhuist naar een werkboom',
     'chat.agentStatus.sessions.link': 'koppelt het werk',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'markeert een sessie als afgerond',
-    'chat.agentStatus.sessions.track': 'zet een sessie in bewerking',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'opent een bestand',
     'chat.agentStatus.sessions.rename': 'hernoemt de sessie',
     'chat.agentStatus.sessions.move': 'verplaatst de sessie',
@@ -369,23 +337,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'werkt de projectkennis bij',
     'chat.agentStatus.knowledge.showPlan': 'toont een plan',
     'chat.agentStatus.notify': 'verstuurt een melding',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'tekent een pagina',
     'chat.agentStatus.image': 'genereert een afbeelding',
     'chat.agentStatus.secret': 'vraagt om een geheime toegangswaarde',
-=======
-    'chat.agentStatus.usage': 'controleert gebruikslimieten',
-    'chat.agentStatus.render': 'tekent een pagina',
-    'chat.agentStatus.image': 'genereert een afbeelding',
-    'chat.agentStatus.secret': 'vraagt om een geheime toegangswaarde',
-    'chat.agentStatus.secretRun': "voert een opdracht met geheimen uit",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Opnieuw proberen',
     'chat.agentStatus.retry.in': 'Opnieuw proberen over {time}',
     'chat.agentStatus.retry.attempt': 'Opnieuw proberen (poging {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Opnieuw proberen over {time} (poging {attempt})',
     'chat.agentStatus.limit.today': 'Limiet wordt om {time} gereset',
     'chat.agentStatus.limit.later': 'Limiet wordt op {date} om {time} gereset',
+    'chat.agentStatus.sessions.markDone': 'markeert een sessie als afgerond',
+    'chat.agentStatus.sessions.track': 'zet een sessie in bewerking',
+    'chat.agentStatus.usage': 'controleert gebruikslimieten',
+    'chat.agentStatus.secretRun': 'voert een opdracht met geheimen uit',
   },
   es: {
     'chat.agentStatus.working': 'trabaja',
@@ -431,11 +395,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'crea una rama de la sesión',
     'chat.agentStatus.sessions.moveToWorktree': 'se traslada a un árbol de trabajo',
     'chat.agentStatus.sessions.link': 'vincula el trabajo',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'marca una sesión como terminada',
-    'chat.agentStatus.sessions.track': 'pone una sesión en curso',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'abre un archivo',
     'chat.agentStatus.sessions.rename': 'renombra la sesión',
     'chat.agentStatus.sessions.move': 'mueve la sesión',
@@ -460,23 +419,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'actualiza los conocimientos del proyecto',
     'chat.agentStatus.knowledge.showPlan': 'muestra un plan',
     'chat.agentStatus.notify': 'envía una notificación',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'dibuja una página',
     'chat.agentStatus.image': 'genera una imagen',
     'chat.agentStatus.secret': 'solicita una credencial secreta',
-=======
-    'chat.agentStatus.usage': 'consulta los límites de uso',
-    'chat.agentStatus.render': 'dibuja una página',
-    'chat.agentStatus.image': 'genera una imagen',
-    'chat.agentStatus.secret': 'solicita una credencial secreta',
-    'chat.agentStatus.secretRun': "ejecuta un comando con secretos",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Reintentando',
     'chat.agentStatus.retry.in': 'Reintentando en {time}',
     'chat.agentStatus.retry.attempt': 'Reintentando (intento {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Reintentando en {time} (intento {attempt})',
     'chat.agentStatus.limit.today': 'El límite se restablece a las {time}',
     'chat.agentStatus.limit.later': 'El límite se restablece el {date} a las {time}',
+    'chat.agentStatus.sessions.markDone': 'marca una sesión como terminada',
+    'chat.agentStatus.sessions.track': 'pone una sesión en curso',
+    'chat.agentStatus.usage': 'consulta los límites de uso',
+    'chat.agentStatus.secretRun': 'ejecuta un comando con secretos',
   },
   'pt-BR': {
     'chat.agentStatus.working': 'trabalha',
@@ -522,11 +477,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'cria uma ramificação da sessão',
     'chat.agentStatus.sessions.moveToWorktree': 'muda para uma árvore de trabalho',
     'chat.agentStatus.sessions.link': 'vincula o trabalho',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'marca uma sessão como concluída',
-    'chat.agentStatus.sessions.track': 'coloca uma sessão em andamento',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'abre um arquivo',
     'chat.agentStatus.sessions.rename': 'renomeia a sessão',
     'chat.agentStatus.sessions.move': 'move a sessão',
@@ -551,23 +501,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'atualiza o conhecimento do projeto',
     'chat.agentStatus.knowledge.showPlan': 'mostra um plano',
     'chat.agentStatus.notify': 'envia uma notificação',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'desenha uma página',
     'chat.agentStatus.image': 'gera uma imagem',
     'chat.agentStatus.secret': 'solicita uma credencial secreta',
-=======
-    'chat.agentStatus.usage': 'consulta os limites de uso',
-    'chat.agentStatus.render': 'desenha uma página',
-    'chat.agentStatus.image': 'gera uma imagem',
-    'chat.agentStatus.secret': 'solicita uma credencial secreta',
-    'chat.agentStatus.secretRun': "executa um comando com segredos",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Tentando novamente',
     'chat.agentStatus.retry.in': 'Tentando novamente em {time}',
     'chat.agentStatus.retry.attempt': 'Tentando novamente (tentativa {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Tentando novamente em {time} (tentativa {attempt})',
     'chat.agentStatus.limit.today': 'O limite é redefinido às {time}',
     'chat.agentStatus.limit.later': 'O limite é redefinido em {date}, às {time}',
+    'chat.agentStatus.sessions.markDone': 'marca uma sessão como concluída',
+    'chat.agentStatus.sessions.track': 'coloca uma sessão em andamento',
+    'chat.agentStatus.usage': 'consulta os limites de uso',
+    'chat.agentStatus.secretRun': 'executa um comando com segredos',
   },
   ja: {
     'chat.agentStatus.working': '作業中',
@@ -613,11 +559,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'セッションを分岐中',
     'chat.agentStatus.sessions.moveToWorktree': 'ワークツリーへ移動中',
     'chat.agentStatus.sessions.link': '作業にリンクを追加中',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'セッションを完了にしています',
-    'chat.agentStatus.sessions.track': 'セッションを作業中に戻しています',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'ファイルを開いているところ',
     'chat.agentStatus.sessions.rename': 'セッション名を変更中',
     'chat.agentStatus.sessions.move': 'セッションを移動中',
@@ -642,23 +583,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'プロジェクトの知識を更新中',
     'chat.agentStatus.knowledge.showPlan': '計画を表示中',
     'chat.agentStatus.notify': '通知を送信中',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'ページを描画中',
     'chat.agentStatus.image': '画像を生成中',
     'chat.agentStatus.secret': '認証情報を要求中',
-=======
-    'chat.agentStatus.usage': '使用量の上限を確認中',
-    'chat.agentStatus.render': 'ページを描画中',
-    'chat.agentStatus.image': '画像を生成中',
-    'chat.agentStatus.secret': '認証情報を要求中',
-    'chat.agentStatus.secretRun': "シークレットを使ってコマンドを実行中",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': '再試行中',
     'chat.agentStatus.retry.in': '{time}後に再試行',
     'chat.agentStatus.retry.attempt': '再試行中（{attempt}回目）',
     'chat.agentStatus.retry.inAttempt': '{time}後に再試行（{attempt}回目）',
     'chat.agentStatus.limit.today': '{time}に利用制限がリセットされます',
     'chat.agentStatus.limit.later': '{date} {time}に利用制限がリセットされます',
+    'chat.agentStatus.sessions.markDone': 'セッションを完了にしています',
+    'chat.agentStatus.sessions.track': 'セッションを作業中に戻しています',
+    'chat.agentStatus.usage': '使用量の上限を確認中',
+    'chat.agentStatus.secretRun': 'シークレットを使ってコマンドを実行中',
   },
   ko: {
     'chat.agentStatus.working': '작업 중',
@@ -704,11 +641,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': '세션 분기 중',
     'chat.agentStatus.sessions.moveToWorktree': '작업 트리로 이동 중',
     'chat.agentStatus.sessions.link': '작업에 링크 추가 중',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': '세션을 완료로 표시하는 중',
-    'chat.agentStatus.sessions.track': '세션을 작업 중으로 추적하는 중',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': '파일 여는 중',
     'chat.agentStatus.sessions.rename': '세션 이름 변경 중',
     'chat.agentStatus.sessions.move': '세션 이동 중',
@@ -733,23 +665,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': '프로젝트 지식 업데이트 중',
     'chat.agentStatus.knowledge.showPlan': '계획 표시 중',
     'chat.agentStatus.notify': '알림 전송 중',
-<<<<<<< HEAD
     'chat.agentStatus.render': '페이지 그리는 중',
     'chat.agentStatus.image': '이미지 생성 중',
     'chat.agentStatus.secret': '인증 정보 요청 중',
-=======
-    'chat.agentStatus.usage': '사용량 한도 확인 중',
-    'chat.agentStatus.render': '페이지 그리는 중',
-    'chat.agentStatus.image': '이미지 생성 중',
-    'chat.agentStatus.secret': '인증 정보 요청 중',
-    'chat.agentStatus.secretRun': "비밀로 명령 실행 중",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': '다시 시도 중',
     'chat.agentStatus.retry.in': '{time} 후 다시 시도',
     'chat.agentStatus.retry.attempt': '다시 시도 중 ({attempt}번째 시도)',
     'chat.agentStatus.retry.inAttempt': '{time} 후 다시 시도 ({attempt}번째 시도)',
     'chat.agentStatus.limit.today': '{time}에 한도가 초기화됩니다',
     'chat.agentStatus.limit.later': '{date} {time}에 한도가 초기화됩니다',
+    'chat.agentStatus.sessions.markDone': '세션을 완료로 표시하는 중',
+    'chat.agentStatus.sessions.track': '세션을 작업 중으로 추적하는 중',
+    'chat.agentStatus.usage': '사용량 한도 확인 중',
+    'chat.agentStatus.secretRun': '비밀로 명령 실행 중',
   },
   pl: {
     'chat.agentStatus.working': 'pracuje',
@@ -795,11 +723,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'tworzy odgałęzienie sesji',
     'chat.agentStatus.sessions.moveToWorktree': 'przenosi się do drzewa roboczego',
     'chat.agentStatus.sessions.link': 'dodaje odnośnik do pracy',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'oznacza sesję jako gotową',
-    'chat.agentStatus.sessions.track': 'oznacza sesję jako w toku',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'otwiera plik',
     'chat.agentStatus.sessions.rename': 'zmienia nazwę sesji',
     'chat.agentStatus.sessions.move': 'przenosi sesję',
@@ -824,23 +747,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'aktualizuje wiedzę projektu',
     'chat.agentStatus.knowledge.showPlan': 'pokazuje plan',
     'chat.agentStatus.notify': 'wysyła powiadomienie',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'rysuje stronę',
     'chat.agentStatus.image': 'generuje obraz',
     'chat.agentStatus.secret': 'prosi o poufne dane dostępu',
-=======
-    'chat.agentStatus.usage': 'sprawdza limity użycia',
-    'chat.agentStatus.render': 'rysuje stronę',
-    'chat.agentStatus.image': 'generuje obraz',
-    'chat.agentStatus.secret': 'prosi o poufne dane dostępu',
-    'chat.agentStatus.secretRun': "uruchamia polecenie z sekretami",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Ponawianie próby',
     'chat.agentStatus.retry.in': 'Ponowna próba za {time}',
     'chat.agentStatus.retry.attempt': 'Ponawianie (próba {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Ponowna próba za {time} (próba {attempt})',
     'chat.agentStatus.limit.today': 'Limit odnawia się o {time}',
     'chat.agentStatus.limit.later': 'Limit odnawia się {date} o {time}',
+    'chat.agentStatus.sessions.markDone': 'oznacza sesję jako gotową',
+    'chat.agentStatus.sessions.track': 'oznacza sesję jako w toku',
+    'chat.agentStatus.usage': 'sprawdza limity użycia',
+    'chat.agentStatus.secretRun': 'uruchamia polecenie z sekretami',
   },
   uk: {
     'chat.agentStatus.working': 'працює',
@@ -886,11 +805,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'відгалужує сесію',
     'chat.agentStatus.sessions.moveToWorktree': 'переходить у робоче дерево',
     'chat.agentStatus.sessions.link': 'додає посилання до роботи',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'позначає сесію готовою',
-    'chat.agentStatus.sessions.track': 'повертає сесію в роботу',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'відкриває файл',
     'chat.agentStatus.sessions.rename': 'перейменовує сесію',
     'chat.agentStatus.sessions.move': 'переміщує сесію',
@@ -915,23 +829,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'оновлює знання проєкту',
     'chat.agentStatus.knowledge.showPlan': 'показує план',
     'chat.agentStatus.notify': 'надсилає сповіщення',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'малює сторінку',
     'chat.agentStatus.image': 'генерує зображення',
     'chat.agentStatus.secret': 'запитує секретні дані доступу',
-=======
-    'chat.agentStatus.usage': 'перевіряє ліміти використання',
-    'chat.agentStatus.render': 'малює сторінку',
-    'chat.agentStatus.image': 'генерує зображення',
-    'chat.agentStatus.secret': 'запитує секретні дані доступу',
-    'chat.agentStatus.secretRun': "виконує команду із секретами",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Повторна спроба',
     'chat.agentStatus.retry.in': 'Повторна спроба через {time}',
     'chat.agentStatus.retry.attempt': 'Повторна спроба (спроба {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Повторна спроба через {time} (спроба {attempt})',
     'chat.agentStatus.limit.today': 'Ліміт скинеться о {time}',
     'chat.agentStatus.limit.later': 'Ліміт скинеться {date} о {time}',
+    'chat.agentStatus.sessions.markDone': 'позначає сесію готовою',
+    'chat.agentStatus.sessions.track': 'повертає сесію в роботу',
+    'chat.agentStatus.usage': 'перевіряє ліміти використання',
+    'chat.agentStatus.secretRun': 'виконує команду із секретами',
   },
   'zh-CN': {
     'chat.agentStatus.working': '正在工作',
@@ -977,11 +887,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': '正在创建会话分支',
     'chat.agentStatus.sessions.moveToWorktree': '正在移至工作树',
     'chat.agentStatus.sessions.link': '正在为工作添加链接',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': '正在将会话标记为完成',
-    'chat.agentStatus.sessions.track': '正在将会话作为进行中跟踪',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': '正在打开文件',
     'chat.agentStatus.sessions.rename': '正在重命名会话',
     'chat.agentStatus.sessions.move': '正在移动会话',
@@ -1006,23 +911,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': '正在更新项目知识',
     'chat.agentStatus.knowledge.showPlan': '正在展示计划',
     'chat.agentStatus.notify': '正在发送通知',
-<<<<<<< HEAD
     'chat.agentStatus.render': '正在绘制页面',
     'chat.agentStatus.image': '正在生成图像',
     'chat.agentStatus.secret': '正在请求私密凭据',
-=======
-    'chat.agentStatus.usage': '正在查看用量限额',
-    'chat.agentStatus.render': '正在绘制页面',
-    'chat.agentStatus.image': '正在生成图像',
-    'chat.agentStatus.secret': '正在请求私密凭据',
-    'chat.agentStatus.secretRun': "正在使用密钥运行命令",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': '正在重试',
     'chat.agentStatus.retry.in': '将在{time}后重试',
     'chat.agentStatus.retry.attempt': '正在重试（第{attempt}次尝试）',
     'chat.agentStatus.retry.inAttempt': '将在{time}后重试（第{attempt}次尝试）',
     'chat.agentStatus.limit.today': '额度将在{time}重置',
     'chat.agentStatus.limit.later': '额度将在{date} {time}重置',
+    'chat.agentStatus.sessions.markDone': '正在将会话标记为完成',
+    'chat.agentStatus.sessions.track': '正在将会话作为进行中跟踪',
+    'chat.agentStatus.usage': '正在查看用量限额',
+    'chat.agentStatus.secretRun': '正在使用密钥运行命令',
   },
   'zh-TW': {
     'chat.agentStatus.working': '正在工作',
@@ -1068,11 +969,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': '正在建立工作階段分支',
     'chat.agentStatus.sessions.moveToWorktree': '正在移至工作樹',
     'chat.agentStatus.sessions.link': '正在為工作新增連結',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': '正在將工作階段標記為完成',
-    'chat.agentStatus.sessions.track': '正在將工作階段作為進行中追蹤',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': '正在開啟檔案',
     'chat.agentStatus.sessions.rename': '正在重新命名工作階段',
     'chat.agentStatus.sessions.move': '正在移動工作階段',
@@ -1097,23 +993,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': '正在更新專案知識',
     'chat.agentStatus.knowledge.showPlan': '正在顯示計畫',
     'chat.agentStatus.notify': '正在傳送通知',
-<<<<<<< HEAD
     'chat.agentStatus.render': '正在繪製頁面',
     'chat.agentStatus.image': '正在產生圖片',
     'chat.agentStatus.secret': '正在請求機密憑證',
-=======
-    'chat.agentStatus.usage': '正在查看用量限額',
-    'chat.agentStatus.render': '正在繪製頁面',
-    'chat.agentStatus.image': '正在產生圖片',
-    'chat.agentStatus.secret': '正在請求機密憑證',
-    'chat.agentStatus.secretRun': "正在使用密鑰執行指令",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': '正在重試',
     'chat.agentStatus.retry.in': '將在{time}後重試',
     'chat.agentStatus.retry.attempt': '正在重試（第{attempt}次嘗試）',
     'chat.agentStatus.retry.inAttempt': '將在{time}後重試（第{attempt}次嘗試）',
     'chat.agentStatus.limit.today': '額度將於{time}重設',
     'chat.agentStatus.limit.later': '額度將於{date} {time}重設',
+    'chat.agentStatus.sessions.markDone': '正在將工作階段標記為完成',
+    'chat.agentStatus.sessions.track': '正在將工作階段作為進行中追蹤',
+    'chat.agentStatus.usage': '正在查看用量限額',
+    'chat.agentStatus.secretRun': '正在使用密鑰執行指令',
   },
   tr: {
     'chat.agentStatus.working': 'çalışıyor',
@@ -1159,11 +1051,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'oturumu dallandırıyor',
     'chat.agentStatus.sessions.moveToWorktree': 'çalışma ağacına geçiyor',
     'chat.agentStatus.sessions.link': 'çalışmaya bağlantı ekliyor',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'oturumu tamamlandı olarak işaretliyor',
-    'chat.agentStatus.sessions.track': 'oturumu devam eden iş olarak izliyor',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'dosya açıyor',
     'chat.agentStatus.sessions.rename': 'oturumu yeniden adlandırıyor',
     'chat.agentStatus.sessions.move': 'oturumu taşıyor',
@@ -1188,23 +1075,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'proje bilgilerini güncelliyor',
     'chat.agentStatus.knowledge.showPlan': 'plan gösteriyor',
     'chat.agentStatus.notify': 'bildirim gönderiyor',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'sayfa çiziyor',
     'chat.agentStatus.image': 'görsel oluşturuyor',
     'chat.agentStatus.secret': 'gizli erişim bilgisi istiyor',
-=======
-    'chat.agentStatus.usage': 'kullanım limitlerini kontrol ediyor',
-    'chat.agentStatus.render': 'sayfa çiziyor',
-    'chat.agentStatus.image': 'görsel oluşturuyor',
-    'chat.agentStatus.secret': 'gizli erişim bilgisi istiyor',
-    'chat.agentStatus.secretRun': "gizli değerlerle bir komut çalıştırıyor",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'Yeniden deneniyor',
     'chat.agentStatus.retry.in': '{time} sonra yeniden denenecek',
     'chat.agentStatus.retry.attempt': 'Yeniden deneniyor (deneme {attempt})',
     'chat.agentStatus.retry.inAttempt': '{time} sonra yeniden denenecek (deneme {attempt})',
     'chat.agentStatus.limit.today': 'Limit {time} saatinde sıfırlanır',
     'chat.agentStatus.limit.later': 'Limit {date}, {time} tarihinde sıfırlanır',
+    'chat.agentStatus.sessions.markDone': 'oturumu tamamlandı olarak işaretliyor',
+    'chat.agentStatus.sessions.track': 'oturumu devam eden iş olarak izliyor',
+    'chat.agentStatus.usage': 'kullanım limitlerini kontrol ediyor',
+    'chat.agentStatus.secretRun': 'gizli değerlerle bir komut çalıştırıyor',
   },
   ar: {
     'chat.agentStatus.working': 'يعمل',
@@ -1250,11 +1133,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'ينشئ فرعا للجلسة',
     'chat.agentStatus.sessions.moveToWorktree': 'ينتقل إلى شجرة عمل',
     'chat.agentStatus.sessions.link': 'يربط العمل',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'يعلّم جلسة كمنجزة',
-    'chat.agentStatus.sessions.track': 'يتتبّع جلسة كعمل جارٍ',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'يفتح ملفا',
     'chat.agentStatus.sessions.rename': 'يعيد تسمية الجلسة',
     'chat.agentStatus.sessions.move': 'ينقل الجلسة',
@@ -1279,23 +1157,19 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'يحدث معارف المشروع',
     'chat.agentStatus.knowledge.showPlan': 'يعرض خطة',
     'chat.agentStatus.notify': 'يرسل إشعارا',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'يرسم صفحة',
     'chat.agentStatus.image': 'يولد صورة',
     'chat.agentStatus.secret': 'يطلب بيانات وصول سرية',
-=======
-    'chat.agentStatus.usage': 'يتحقق من حدود الاستخدام',
-    'chat.agentStatus.render': 'يرسم صفحة',
-    'chat.agentStatus.image': 'يولد صورة',
-    'chat.agentStatus.secret': 'يطلب بيانات وصول سرية',
-    'chat.agentStatus.secretRun': "يشغّل أمرًا بالأسرار",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'جار إعادة المحاولة',
     'chat.agentStatus.retry.in': 'إعادة المحاولة بعد {time}',
     'chat.agentStatus.retry.attempt': 'جار إعادة المحاولة (المحاولة {attempt})',
     'chat.agentStatus.retry.inAttempt': 'إعادة المحاولة بعد {time} (المحاولة {attempt})',
     'chat.agentStatus.limit.today': 'يتجدد الحد عند {time}',
     'chat.agentStatus.limit.later': 'يتجدد الحد في {date} عند {time}',
+    'chat.agentStatus.sessions.markDone': 'يعلّم جلسة كمنجزة',
+    'chat.agentStatus.sessions.track': 'يتتبّع جلسة كعمل جارٍ',
+    'chat.agentStatus.usage': 'يتحقق من حدود الاستخدام',
+    'chat.agentStatus.secretRun': 'يشغّل أمرًا بالأسرار',
   },
   he: {
     'chat.agentStatus.working': 'עובד',
@@ -1341,11 +1215,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.sessions.fork': 'יוצר הסתעפות של שיחה',
     'chat.agentStatus.sessions.moveToWorktree': 'עובר לעץ עבודה',
     'chat.agentStatus.sessions.link': 'מוסיף קישור לעבודה',
-<<<<<<< HEAD
-=======
-    'chat.agentStatus.sessions.markDone': 'מסמן שיחה כהושלמה',
-    'chat.agentStatus.sessions.track': 'מסמן שיחה כבעבודה',
->>>>>>> bc50ba56a
     'chat.agentStatus.sessions.openFile': 'פותח קובץ',
     'chat.agentStatus.sessions.rename': 'משנה את שם השיחה',
     'chat.agentStatus.sessions.move': 'מעביר את השיחה',
@@ -1370,22 +1239,18 @@ export const agentStatusI18n = {
     'chat.agentStatus.knowledge.update': 'מעדכן את הידע של הפרויקט',
     'chat.agentStatus.knowledge.showPlan': 'מציג תוכנית',
     'chat.agentStatus.notify': 'שולח התראה',
-<<<<<<< HEAD
     'chat.agentStatus.render': 'מצייר דף',
     'chat.agentStatus.image': 'יוצר תמונה',
     'chat.agentStatus.secret': 'מבקש פרטי גישה סודיים',
-=======
-    'chat.agentStatus.usage': 'בודק מגבלות שימוש',
-    'chat.agentStatus.render': 'מצייר דף',
-    'chat.agentStatus.image': 'יוצר תמונה',
-    'chat.agentStatus.secret': 'מבקש פרטי גישה סודיים',
-    'chat.agentStatus.secretRun': "מריץ פקודה עם סודות",
->>>>>>> bc50ba56a
     'chat.agentStatus.retry': 'מנסה שוב',
     'chat.agentStatus.retry.in': 'ניסיון נוסף בעוד {time}',
     'chat.agentStatus.retry.attempt': 'מנסה שוב (ניסיון {attempt})',
     'chat.agentStatus.retry.inAttempt': 'ניסיון נוסף בעוד {time} (ניסיון {attempt})',
     'chat.agentStatus.limit.today': 'המכסה מתאפסת בשעה {time}',
     'chat.agentStatus.limit.later': 'המכסה מתאפסת בתאריך {date}, בשעה {time}',
+    'chat.agentStatus.sessions.markDone': 'מסמן שיחה כהושלמה',
+    'chat.agentStatus.sessions.track': 'מסמן שיחה כבעבודה',
+    'chat.agentStatus.usage': 'בודק מגבלות שימוש',
+    'chat.agentStatus.secretRun': 'מריץ פקודה עם סודות',
   },
 } as const;

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { Session, SessionMetadata as Metadata } from '@openchamber/agent-contract';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
-import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
 
 /**
  * A pin lives in the session's metadata, `session.metadata.openchamber.pinned`,
@@ -23,12 +22,7 @@ export const isSessionPinned = (ids: ReadonlySet<string>, directory: string | nu
  return key ? ids.has(key) : false;
 };
 
-<<<<<<< HEAD
 const directPinSchema = z.object({ isPinned: z.boolean().optional() });
-=======
-// `list`: the user's pin list the pin is filed in (Pin to); absent for Pinned.
-const pinnedSchema = z.object({ openchamber: z.object({ pinned: z.object({ at: z.number(), list: z.string().min(1).optional() }) }) });
->>>>>>> bc50ba56a
 
 export const isSessionPinnedInMetadata = (session: Session | null | undefined): boolean => (
  directPinSchema.safeParse(session).data?.isPinned === true
@@ -36,7 +30,6 @@ export const isSessionPinnedInMetadata = (session: Session | null | undefined): 
  || Boolean(session?.metadata?.openchamber?.pinned)
 );
 
-<<<<<<< HEAD
 /** The metadata after the user pinned (`at` = when) or unpinned the session. */
 export function withSessionPinned(metadata: Metadata, pinned: boolean, now: number): Metadata {
  const isPinned = Boolean(metadata.isPinned || metadata.openchamber?.pinned);
@@ -60,34 +53,4 @@ export function withSessionPinned(metadata: Metadata, pinned: boolean, now: numb
  };
  delete next.isPinned;
  return next;
-=======
-/** The pin list a pinned session is filed in, `DEFAULT_PIN_LIST` for Pinned, or null when not pinned. */
-export const getSessionPinList = (session: Session | null | undefined): string | null => {
-  const parsed = pinnedSchema.safeParse(session?.metadata);
-  if (!parsed.success) return null;
-  return parsed.data.openchamber.pinned.list ?? DEFAULT_PIN_LIST;
-};
-
-const openchamberSchema = z.object({ openchamber: z.record(z.string(), z.json()) });
-
-/**
- * The metadata after the user pinned (`at` = when) or unpinned the session.
- * `list` files the pin in one of the user's pin lists; null is Pinned. Moving
- * a pin to another list keeps the time it was first pinned.
- */
-export function withSessionPinned(metadata: Metadata, pin: boolean, now: number, list: string | null = null): Metadata {
-  const namespace = openchamberSchema.safeParse(metadata).data?.openchamber ?? {};
-  const current = pinnedSchema.safeParse(metadata).data?.openchamber.pinned;
-  if (!pin) {
-    if (!current) return metadata;
-    const rest = { ...namespace };
-    delete rest.pinned;
-    return { ...metadata, openchamber: rest };
-  }
-  const nextList = list && list !== DEFAULT_PIN_LIST ? list : undefined;
-  if (current && current.list === nextList) return metadata;
-  const at = current?.at ?? now;
-  if (!nextList) return { ...metadata, openchamber: { ...namespace, pinned: { at } } };
-  return { ...metadata, openchamber: { ...namespace, pinned: { at, list: nextList } } };
->>>>>>> bc50ba56a
 }

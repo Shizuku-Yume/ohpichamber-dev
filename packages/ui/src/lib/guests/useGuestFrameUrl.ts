@@ -16,7 +16,7 @@ type GuestFrameOptions = {
 
 
 type FrameState =
-  | { key: string; status: 'loading' | 'error' | 'incompatible' }
+  | { key: string; status: 'loading' | 'error' }
   | { key: string; status: 'ready'; source: GuestFrameUrl };
 
 /** Keep a loaded document alive; renew scoped auth only when it navigates again. */
@@ -79,16 +79,7 @@ export const useGuestFrameUrl = ({ guestId, entry, instanceKey, enabled, origins
     recoveryAttempted.current = false;
   }, []);
 
-<<<<<<< HEAD
-  // The pre-M3 SDK posts `hello` to the parent window. Its pane must not wait
-  // for a timeout the old client cannot report; name the incompatible SDK in
-  // the host frame instead and stop loading the document.
-  const rejectSdkVersion = React.useCallback(() => {
-    setState({ key, status: 'incompatible' });
-  }, [key]);
-=======
   const retry = React.useCallback(() => setReloadGeneration((generation) => generation + 1), []);
->>>>>>> bc50ba56a
 
   return {
     retry,
@@ -97,6 +88,5 @@ export const useGuestFrameUrl = ({ guestId, entry, instanceKey, enabled, origins
     status: state?.key === key ? state.status : 'loading',
     recoverExpiredNavigation,
     acknowledgeHandshake,
-    rejectSdkVersion,
   };
 };
