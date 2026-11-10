@@ -1,14 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
-const OPENCHAMBER_SDK_API_VERSION = OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0];
 import { GUEST_PROVIDER_LOGOS_MAX, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
 import type { JsonValue } from './contract.ts';
 import type { LinksContribution } from './manifest.ts';
 import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
-  apiVersion: OPENCHAMBER_SDK_API_VERSION,
+  apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
   contributes: {
     panel: {
       id: 'acme-hello',
@@ -698,7 +697,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/clickup',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
         contributes: {
           panel: { id: 'clickup', name: 'ClickUp', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -725,7 +724,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/linear',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
         contributes: {
           panel: { id: 'linear-issues', name: 'Linear', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -749,7 +748,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/gitlab',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
         contributes: {
           panel: { id: 'gitlab', name: 'GitLab', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -1442,7 +1441,7 @@ describe('contributes.sourceControl', () => {
 describe('contributes.sessionEvents', () => {
   const pageless = { id: 'acme-events', name: 'Events', icon: 'window' };
   const service = { entry: 'service/main.js', runtime: 'host' };
-  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_API_VERSION, contributes }));
+  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
   test('a service-only package may subscribe to events and asks for transcript only with content', () => {
     const result = parse({ panel: pageless, service, sessionEvents: { events: ['turn-finished', 'question-asked'] } });
@@ -1485,7 +1484,7 @@ describe('contributes.notifications', () => {
     instances: { kind: 'fixed', origin: 'https://slack.com' },
     token: { header: 'authorization', scheme: 'bearer', scopes: ['chat:write'], createPath: '/apps' },
   };
-  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_API_VERSION, contributes }));
+  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
   test('the role and the contribution come together and name a channel OpenChamber can draw without the service', () => {
     const result = parse({ panel: pageless, service: role, notifications: channel });
@@ -1532,7 +1531,7 @@ describe('contributes.tracker', () => {
     identifier: 'key-number',
     urls: { item: ['/issue/{id}', '/{segments+}/issue/{id}', '/agiles/{segment}/current?issue={id}'] },
   };
-  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_API_VERSION, contributes }));
+  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
   test('the role and the contribution come together and name a tracker OpenChamber can list without the service', () => {
     const result = parse({ panel: pageless, service: role, tracker });
@@ -1617,7 +1616,7 @@ describe('contributes.quota', () => {
   const pageless = { id: 'teapot-usage', name: 'Teapot Usage', icon: 'cup' };
   const role = { entry: 'service/main.js', runtime: 'host', provides: ['quota'] };
   const quota = { providers: ['openrouter', 'deepinfra'] };
-  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_API_VERSION, contributes }));
+  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
   test('the role and the contribution come together and name the providers whose credentials the service receives', () => {
     const result = parse({ panel: pageless, service: role, quota });
@@ -1649,7 +1648,7 @@ describe('contributes.quota', () => {
 describe('services that act on their own', () => {
   const pageless = { id: 'desk', name: 'Desk', icon: 'robot-2' };
   const service = { entry: 'service/main.js', runtime: 'host' };
-  const parse = (contributes: JsonValue) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_API_VERSION, contributes }));
+  const parse = (contributes: JsonValue) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
   test('keepRunning and a schedule need no frame', () => {
     expect(parse({ panel: pageless, service: { ...service, keepRunning: true } }).ok).toBe(true);
@@ -1686,6 +1685,13 @@ describe('services that act on their own', () => {
     expect(parse({ panel: pageless, skills: '../skills' })).toMatchObject({ ok: false, code: 'invalid-skills' });
   });
 
+  test('a legacy plugin contribution is dropped as retired/unrecognized', () => {
+    const res = parse({ panel: pageless, opencodePlugin: 'plugin' });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect('opencodePlugin' in res.manifest.contributes).toBe(false);
+    expect(requestedGuestCapabilities({ skills: 'skills' })).toEqual(['skills']);
+  });
+
   test('mentions need no frame', () => {
     expect(parse({ panel: pageless, service, mentions: { label: 'Notes' } }).ok).toBe(true);
   });
@@ -1694,7 +1700,7 @@ describe('services that act on their own', () => {
 describe('contributes.blocks', () => {
   const block = { name: 'JiraIssue', description: 'A Jira ticket', args: ['key'], entry: 'blocks/issue.html' };
   const parse = (blocks: JsonValue[]) => parseManifestJson(JSON.stringify({
-    apiVersion: OPENCHAMBER_SDK_API_VERSION,
+    apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
     contributes: { panel: { id: 'desk', name: 'Desk', icon: 'robot-2' }, blocks },
   }));
 
@@ -1722,7 +1728,7 @@ describe('contributes.links', () => {
   const panel = { id: 'tasks', name: 'Tasks', icon: 'task', entry: 'panel/index.html' };
   const urls: NonNullable<LinksContribution['urls']> = { origin: 'https://tasks.example.com', identifier: 'key-number', item: ['/tasks/{id}'] };
   const parse = (links: JsonValue, withPanel: JsonValue = panel) => parseManifestJson(JSON.stringify({
-    apiVersion: OPENCHAMBER_SDK_API_VERSION,
+    apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
     contributes: { panel: withPanel, links },
   }));
 

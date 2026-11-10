@@ -13,11 +13,11 @@ path	lane
 .openchamber/project.json	16
 .workflow/references/release-notes.md	16
 .workflow/references/writing-for-agents.md	16
-AGENTS.md	16
-CHANGELOG.md	16
-Dockerfile	16
-README.md	16
-SECURITY.md	16
+AGENTS.md	18
+CHANGELOG.md	18
+Dockerfile	18
+README.md	18
+SECURITY.md	18
 bun.lock	16
 changelog/index.json	16
 package.json	16
@@ -1082,9 +1082,6 @@ packages/web/src/api/git.ts	12
 packages/web/src/api/index.ts	12
 packages/web/src/api/trackers-legacy-linear.ts	12
 packages/web/src/api/trackers.ts	12
-scripts/brand/DOCUMENTATION.md	18
-scripts/brand/generate.mjs	18
-scripts/brand/raster.mjs	18
 scripts/generate-icon-sprite.mjs	18
 scripts/model-bench/README.md	18
 scripts/model-bench/bench.mjs	18
