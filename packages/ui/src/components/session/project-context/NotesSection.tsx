@@ -2,20 +2,21 @@ import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import React from 'react';
 
 import { toast } from '@/components/ui';
-import { Icon } from '@/components/icon/Icon';
-import { Textarea } from '@/components/ui/textarea';
-import { InlineDictationButton } from '@/components/dictation/InlineDictationButton';
+import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { KnowledgeCard } from './KnowledgeCard';
+import { KnowledgeComposer } from './KnowledgeComposer';
+import { KnowledgeEntryView } from './KnowledgeEntryView';
+import { KnowledgeSplit } from './KnowledgeSplit';
+import { KnowledgeMenu, KnowledgePinToggle } from './KnowledgeActions';
+import { formatKnowledgeDate, splitNoteTitle } from './knowledgeFormat';
+import { noteDeleteKey, scheduleKnowledgeDelete, usePendingKnowledgeDeletes } from './pendingKnowledgeDeletes';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_NOTE_BODY_MAX_LENGTH, type ProjectNote, type ProjectRef } from '@/lib/projectContextApi';
-import { cn } from '@/lib/utils';
+import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
-import { useUIStore } from '@/stores/useUIStore';
 
 const NOTE_SAVE_DEBOUNCE_MS = 400;
 
-<<<<<<< HEAD
-=======
 /** Lazy: the editor brings CodeMirror, and most panel visits never open a note. */
 const NoteEditor = React.lazy(() => import('./NoteEditor').then((module) => ({ default: module.NoteEditor })));
 
@@ -121,25 +122,27 @@ const NoteCard: React.FC<{
   );
 };
 
->>>>>>> bc50ba56a
 /**
- * One note, edited in place.
+ * An open note, in place of the list or beside it. `NoteEditor` is always
+ * editable and always reads as formatted text, so there is no read mode to
+ * click out of.
  *
  * The draft is local and debounced: writing straight through on every keystroke
  * would put a request behind every character, and re-reading the store on every
  * render would fight the caret. The stored body is adopted only while the
  * editor is untouched since its last save, so a concurrent write from another
- * surface reaches an idle row without eating an active one.
+ * surface (an agent, another window) reaches an idle note without eating an
+ * active one.
  */
-const NoteRow: React.FC<{
+const NoteView: React.FC<{
   note: ProjectNote;
   pinned: boolean;
-  expanded: boolean;
-  onToggleExpanded: () => void;
   onSaveBody: (noteId: string, body: string) => void;
   onTogglePinned: () => void;
   onDelete: () => void;
-}> = ({ note, pinned, expanded, onToggleExpanded, onSaveBody, onTogglePinned, onDelete }) => {
+  onClose: () => void;
+  showBack: boolean;
+}> = ({ note, pinned, onSaveBody, onTogglePinned, onDelete, onClose , showBack}) => {
   const { t } = useI18n();
   const [draft, setDraft] = React.useState(note.body);
   const lastSavedRef = React.useRef(note.body);
@@ -170,7 +173,7 @@ const NoteRow: React.FC<{
     debounceRef.current = window.setTimeout(() => {
       debounceRef.current = null;
       // An empty body is a rejected write, not a delete. Leave it unsaved so
-      // the row stays visible and the user can either restore it or delete it.
+      // the user can either restore it or delete the note.
       if (!draft.trim()) {
         return;
       }
@@ -181,9 +184,10 @@ const NoteRow: React.FC<{
     return cancelDebounce;
   }, [cancelDebounce, draft, note.id, onSaveBody]);
 
-  React.useEffect(() => cancelDebounce, [cancelDebounce]);
-
-  const handleBlur = React.useCallback(() => {
+  // Leaving the note (back, Escape, another section) must not drop the last
+  // keystrokes still waiting for the debounce.
+  const flushRef = React.useRef<() => void>(() => {});
+  flushRef.current = () => {
     cancelDebounce();
     if (draft === lastSavedRef.current) {
       return;
@@ -195,76 +199,46 @@ const NoteRow: React.FC<{
     }
     lastSavedRef.current = draft;
     onSaveBody(note.id, draft);
-  }, [cancelDebounce, draft, note.id, onSaveBody]);
-
-  const sourceLabel = note.source === 'selection'
-    ? t('rightSidebar.contextNotesTodo.notes.source.selection')
-    : note.source === 'agent'
-      ? t('rightSidebar.contextNotesTodo.notes.source.agent')
-      : null;
+  };
+  React.useEffect(() => () => flushRef.current(), []);
 
   return (
-    <KnowledgeCard
-      expanded={expanded}
-      onToggleExpanded={onToggleExpanded}
-      expandLabel={t('rightSidebar.contextNotesTodo.notes.actions.expand')}
-      footer={sourceLabel ? (
-        <span className="typography-micro text-muted-foreground">{sourceLabel}</span>
-      ) : null}
+    <KnowledgeEntryView
+      showBack={showBack}
+      backLabel={t('rightSidebar.contextNotesTodo.notes.actions.back')}
+      onClose={onClose}
+      meta={<NoteMeta note={note} pinned={pinned} />}
       actions={(
         <>
-          <button
-            type="button"
-            onClick={onTogglePinned}
-            className={cn(
-              'inline-flex h-6 w-6 items-center justify-center rounded-md hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-            )}
-            aria-pressed={pinned}
-            aria-label={pinned
-              ? t('rightSidebar.contextNotesTodo.notes.actions.unpin')
-              : t('rightSidebar.contextNotesTodo.notes.actions.pin')}
-            title={pinned
-              ? t('rightSidebar.contextNotesTodo.notes.actions.unpin')
-              : t('rightSidebar.contextNotesTodo.notes.actions.pin')}
-          >
-            {/* Filled means pinned, outline means "pin this" — the same
-                language the work status panel uses. */}
-            <Icon name={pinned ? 'pushpin-2-fill' : 'pushpin'} className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={t('rightSidebar.contextNotesTodo.notes.actions.delete')}
-            title={t('rightSidebar.contextNotesTodo.notes.actions.delete')}
-          >
-            <Icon name="delete-bin" className="h-3.5 w-3.5" />
-          </button>
+          <KnowledgePinToggle alwaysVisible pinned={pinned} onToggle={onTogglePinned} />
+          <KnowledgeMenu
+            alwaysVisible
+            items={[{
+              id: 'delete',
+              label: t('rightSidebar.contextNotesTodo.notes.actions.delete'),
+              destructive: true,
+              onSelect: onDelete,
+            }]}
+          />
         </>
       )}
     >
-      {expanded ? (
-        <Textarea
-          simple
-          autoFocus
-          rows={Math.min(20, Math.max(3, draft.split('\n').length + 1))}
+      <React.Suspense fallback={null}>
+        <NoteEditor
           value={draft}
-          onChange={(event) => setDraft(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
-          onBlur={handleBlur}
-          className="min-h-0 w-full resize-none bg-transparent p-0 typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-0"
+          onChange={setDraft}
+          onBlur={() => flushRef.current()}
+          ariaLabel={t('rightSidebar.contextNotesTodo.notes.editorLabel')}
+          maxLength={PROJECT_NOTE_BODY_MAX_LENGTH}
         />
-      ) : (
-        <p className="line-clamp-3 whitespace-pre-wrap break-words typography-ui-label leading-normal text-foreground" title={draft}>
-          {draft}
-        </p>
-      )}
-    </KnowledgeCard>
+      </React.Suspense>
+    </KnowledgeEntryView>
   );
 };
 
 /**
- * Free-form project notes, one entry per note.
+ * Free-form project notes: a list that never moves, and the open note in its
+ * place.
  *
  * Notes are written through their own routes, so this section owns its writes
  * end to end — nothing here has to be persisted alongside todos.
@@ -276,22 +250,34 @@ export const NotesSection: React.FC<{
   query: string;
   pinnedNoteIds: ReadonlySet<string>;
   onTogglePinned: (noteId: string, pinned: boolean) => Promise<boolean>;
-}> = ({ projectRef, notes, disabled, query, pinnedNoteIds, onTogglePinned }) => {
+  /** The open note, owned by the panel so its back control can close it. */
+  openNoteId: string | null;
+  onOpenNote: (noteId: string | null) => void;
+  /** Wide panel: the list and the open entry side by side. */
+  split: boolean;
+}> = ({ projectRef, notes, disabled, query, pinnedNoteIds, onTogglePinned, openNoteId, onOpenNote, split }) => {
   const { t } = useI18n();
-  const [composerText, setComposerText] = React.useState('');
-  // One at a time on purpose: notes can run to 3000 characters each, and
-  // letting several stand open turns the tab into one unbroken wall of text.
-  const [expandedNoteId, setExpandedNoteId] = React.useState<string | null>(null);
-  const notesPanelHeight = useUIStore((state) => state.notesPanelHeight);
-  const setNotesPanelHeight = useUIStore((state) => state.setNotesPanelHeight);
   const createNote = useProjectContextStore((state) => state.createNote);
   const saveNoteBody = useProjectContextStore((state) => state.saveNoteBody);
   const deleteNote = useProjectContextStore((state) => state.deleteNote);
+  const pendingDeletes = usePendingKnowledgeDeletes();
 
   const visibleNotes = React.useMemo(
-    () => notes.filter((note) => matchesRankQuery([note.body], query)),
-    [notes, query],
+    () => notes.filter((note) => (
+      !pendingDeletes.has(noteDeleteKey(projectRef, note.id)) && matchesRankQuery([note.body], query)
+    )),
+    [notes, pendingDeletes, projectRef, query],
   );
+
+  const openNote = React.useMemo(
+    () => (openNoteId ? notes.find((note) => note.id === openNoteId) ?? null : null),
+    [notes, openNoteId],
+  );
+
+  // A note deleted elsewhere (an agent, another window) closes if it was open.
+  React.useEffect(() => {
+    if (openNoteId && !openNote) onOpenNote(null);
+  }, [onOpenNote, openNote, openNoteId]);
 
   // The store keeps the failure reason; without passing it through, every
   // failure looks identical to the user and tells them nothing about the cause.
@@ -300,36 +286,25 @@ export const NotesSection: React.FC<{
     toast.error(message, detail ? { description: detail } : undefined);
   }, [projectRef]);
 
-  const handleAdd = React.useCallback(async () => {
-    const body = composerText.trim();
-    if (!body) {
-      return;
-    }
+  const handleAdd = React.useCallback(async (body: string) => {
     const created = await createNote(projectRef, { body });
     if (!created) {
       reportFailure(t('rightSidebar.contextNotesTodo.toast.createNoteFailed'));
-      return;
+      return false;
     }
-    setComposerText('');
-  }, [composerText, createNote, projectRef, reportFailure, t]);
+    return true;
+  }, [createNote, projectRef, reportFailure, t]);
 
-  // Dictated text continues the draft at its end; the cap still applies.
-  const handleDictated = React.useCallback((text: string) => {
-    setComposerText((current) => {
-      const joined = current.trim() ? `${current.trimEnd()} ${text}` : text;
-      return joined.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH);
+  const handleDelete = React.useCallback((noteId: string) => {
+    if (openNoteId === noteId) onOpenNote(null);
+    scheduleKnowledgeDelete({
+      key: noteDeleteKey(projectRef, noteId),
+      message: t('rightSidebar.contextNotesTodo.deleted.note'),
+      undoLabel: t('rightSidebar.contextNotesTodo.undo'),
+      run: () => deleteNote(projectRef, noteId),
+      onFailure: () => reportFailure(t('rightSidebar.contextNotesTodo.toast.deleteNoteFailed')),
     });
-  }, []);
-
-  const handleDelete = React.useCallback(
-    async (noteId: string) => {
-      const ok = await deleteNote(projectRef, noteId);
-      if (!ok) {
-        reportFailure(t('rightSidebar.contextNotesTodo.toast.deleteNoteFailed'));
-      }
-    },
-    [deleteNote, projectRef, reportFailure, t]
-  );
+  }, [deleteNote, onOpenNote, openNoteId, projectRef, reportFailure, t]);
 
   const handleTogglePinned = React.useCallback(
     async (noteId: string, pinned: boolean) => {
@@ -352,73 +327,58 @@ export const NotesSection: React.FC<{
     [projectRef, reportFailure, saveNoteBody, t]
   );
 
-  return (
+  const openView = openNote ? (
+    <NoteView
+      key={openNote.id}
+      note={openNote}
+      pinned={pinnedNoteIds.has(openNote.id)}
+      onSaveBody={handleSaveBody}
+      onTogglePinned={() => void handleTogglePinned(openNote.id, !pinnedNoteIds.has(openNote.id))}
+      onDelete={() => handleDelete(openNote.id)}
+      showBack={!split}
+      onClose={() => onOpenNote(null)}
+    />
+  ) : null;
+
+  const list = (
     <div className="space-y-2">
-      {/* Counter and add live in the textarea's own footer slot: beside it they
-          cost width the panel does not have and leave the button floating
-          against a tall field. */}
-      <Textarea
-        value={composerText}
-        onChange={(event) => setComposerText(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
+      <KnowledgeComposer
+        multiline
         placeholder={t('rightSidebar.contextNotesTodo.notes.placeholder')}
-        resizedHeight={notesPanelHeight}
-        onResizeHeightChange={setNotesPanelHeight}
-        useScrollShadow
-        scrollShadowSize={24}
+        addLabel={t('rightSidebar.contextNotesTodo.notes.addAria')}
+        maxLength={PROJECT_NOTE_BODY_MAX_LENGTH}
         disabled={disabled}
-        // The footer row carries counter, mic, add and resize; the default
-        // bottom padding left it pressed against the rounded border.
-        outerClassName="pb-3.5"
-        endSlot={(
-          <>
-            <span className="typography-meta text-muted-foreground">
-              {composerText.length}/{PROJECT_NOTE_BODY_MAX_LENGTH}
-            </span>
-            <InlineDictationButton
-              onTranscript={handleDictated}
-              disabled={disabled}
-              buttonClassName="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-            />
-            <button
-              type="button"
-              onClick={() => void handleAdd()}
-              disabled={disabled || composerText.trim().length === 0}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label={t('rightSidebar.contextNotesTodo.notes.addAria')}
-              title={t('rightSidebar.contextNotesTodo.notes.addAria')}
-            >
-              <Icon name="add" className="h-4 w-4" />
-            </button>
-          </>
-        )}
+        onSubmit={handleAdd}
       />
 
-      {/* No frame around the list: each note is a bordered card, and an outer
-          border sitting flush against them read as lines joining the cards. */}
-      <div>
-        {visibleNotes.length === 0 ? (
-          <p className="typography-meta text-muted-foreground">
-            {query.trim()
-              ? t('rightSidebar.contextNotesTodo.search.noResults', { query: query.trim() })
-              : t('rightSidebar.contextNotesTodo.notes.empty')}
+      {/* With no notes at all the composer's placeholder already says what
+          goes here; only a search that finds nothing needs saying. */}
+      {visibleNotes.length === 0 ? (
+        query.trim() ? (
+          <p className="px-1 typography-meta text-muted-foreground">
+            {t('rightSidebar.contextNotesTodo.search.noResults', { query: query.trim() })}
           </p>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {visibleNotes.map((note) => (
-              <NoteRow
-                key={note.id}
-                note={note}
-                pinned={pinnedNoteIds.has(note.id)}
-                expanded={expandedNoteId === note.id}
-                onToggleExpanded={() => setExpandedNoteId((current) => (current === note.id ? null : note.id))}
-                onSaveBody={handleSaveBody}
-                onTogglePinned={() => void handleTogglePinned(note.id, !pinnedNoteIds.has(note.id))}
-                onDelete={() => void handleDelete(note.id)}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+        ) : null
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {visibleNotes.map((note) => (
+            <NoteCard
+              key={note.id}
+              selected={split && note.id === openNoteId}
+              note={note}
+              pinned={pinnedNoteIds.has(note.id)}
+              onOpen={() => onOpenNote(note.id)}
+              onTogglePinned={() => void handleTogglePinned(note.id, !pinnedNoteIds.has(note.id))}
+              onDelete={() => handleDelete(note.id)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
+
+  if (split) {
+    return <KnowledgeSplit list={list} detail={openView} emptyLabel={t('rightSidebar.contextNotesTodo.notes.selectHint')} />;
+  }
+  return openView ?? list;
 };
