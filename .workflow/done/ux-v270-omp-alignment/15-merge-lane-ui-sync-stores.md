@@ -7,7 +7,6 @@
 **Read first:** spec "How it is built" (Merge); `merge-lanes.tsv` lane 15; `packages/ui/src/sync/DOCUMENTATION.md`; `packages/ui/src/stores/DOCUMENTATION.md`; skills `sync-state-invariants`, `ui-api-decoupling`
 **Check:** in a worktree on the scaffold branch, `bun scripts/upstream-drift.mjs --markers --lane 15` → 0; `bun run --cwd packages/ui type-check` reports no error in lane paths; `bun scripts/upstream-drift.mjs --check -- packages/ui/src/sync packages/ui/src/stores` → 0 `unexplained`
 - **Base commit:** fd671d0690c72c3f69b8c8c3739f60ce026832d8
-- **Status:** active
 
 - [x] Resolve the conflicted paths with the merge rule. The Canonical Client event model and Host session authority stay; upstream's store fields, settings-search ids, queue and eviction fixes are adopted onto it.
 - [x] Where upstream changes event translation the fork replaced (`lib/opencode/events.ts` era), record the fork's canonical replacement in `upstream-deltas.tsv` with the decision that retired it.
