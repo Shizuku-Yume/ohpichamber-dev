@@ -14,20 +14,8 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
+import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
-<<<<<<< HEAD
-import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { useI18n } from '@/lib/i18n';
-import { resolveEffortForModelSelection } from '@/lib/modelEfforts';
-
-type TodoSendTarget = 'session' | 'worktree';
-
-// One execution contract for the dialog and the flow that spends it: the
-// dialog's picks are recorded in `picked`, everything else follows the
-// directory the session lands in.
-import type { TodoSendExecution } from './todoSendExecution';
-
-=======
 import { selectConfigAgentsForDirectory, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
@@ -38,7 +26,6 @@ import type { TodoSendExecution } from './todoSendExecution';
 
 type TodoSendTarget = 'session' | 'worktree';
 
->>>>>>> bc50ba56a
 type TodoSendDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,35 +67,17 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
   const showRunAsGoal = allowRunAsGoal && !isVSCodeRuntime();
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-<<<<<<< HEAD
-  // The catalog of the project the dialog sends to, which need not be the active one.
-  const pickerDirectory = projectDirectory ?? undefined;
-  const providers = useConfigStore((state) => selectProvidersForDirectory(state, projectDirectory));
-=======
   const loadConfigAgents = useConfigStore((state) => state.loadAgents);
   const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   // The catalogs of the project the dialog sends to, which need not be the active one.
   const pickerDirectory = projectDirectory ?? undefined;
   const providers = useConfigStore((state) => selectProvidersForDirectory(state, projectDirectory));
   const agents = useConfigStore((state) => selectConfigAgentsForDirectory(state, pickerDirectory));
->>>>>>> bc50ba56a
   const resolveDirectoryDefaultSelection = useConfigStore((state) => state.resolveDirectoryDefaultSelection);
 
   const [execution, setExecution] = React.useState<TodoSendExecution>(EMPTY_EXECUTION);
   const [defaultsResolved, setDefaultsResolved] = React.useState(false);
 
-<<<<<<< HEAD
-  const resolveVariantForModel = React.useCallback((providerID: string, modelID: string) => {
-    const provider = providers.find((item) => item.providerId === providerID);
-    const model = provider?.models?.find((item) => item.modelId === modelID);
-    return resolveEffortForModelSelection({
-      providerID,
-      modelID,
-      variants: model?.variants.map((variant) => variant.variant) ?? [],
-      configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID),
-    }) ?? '';
-  }, [projectDirectory, providers]);
-=======
   const resolveVariantForModel = React.useCallback((providerID: string, modelID: string, agentName: string) => {
     const provider = providers.find((item) => item.id === providerID);
     const model = provider?.models?.find((item) => item.id === modelID) as { variants?: ModelVariantSource } | undefined;
@@ -121,12 +90,13 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
       configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID, projectDirectory),
     }) ?? '';
   }, [agents, projectDirectory, providers]);
->>>>>>> bc50ba56a
 
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'todoSendDialog' });
-  }, [open, loadProviders, projectDirectory]);
+    void loadConfigAgents({ directory: projectDirectory });
+    void loadAgentsStoreAgents();
+  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
 
   // The dialog starts on the defaults of the project it sends to. The
   // composer's pick belongs to whatever session is open, often in another
@@ -164,22 +134,6 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
     if (!open || !defaultsResolved || providers.length === 0 || execution.providerID) return;
 
     const provider = providers[0];
-<<<<<<< HEAD
-    const nextModelID = provider?.models?.[0]?.modelId ?? '';
-    setExecution((prev) => ({
-      ...prev,
-      providerID: provider?.providerId ?? '',
-      modelID: nextModelID,
-      variant: resolveVariantForModel(provider?.providerId ?? '', nextModelID),
-    }));
-  }, [open, defaultsResolved, providers, execution.providerID, resolveVariantForModel]);
-
-  const selectedModel = React.useMemo(() => {
-    const provider = providers.find((item) => item.providerId === execution.providerID);
-    return provider?.models?.find((item) => item.modelId === execution.modelID);
-  }, [providers, execution.providerID, execution.modelID]);
-  const variantOptions = React.useMemo(() => selectedModel?.variants.map((variant) => variant.variant) ?? [], [selectedModel]);
-=======
     const nextModelID = provider?.models?.[0]?.id ?? '';
     setExecution((prev) => ({
       ...prev,
@@ -196,7 +150,6 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
     return provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
   }, [providers, execution.providerID, execution.modelID]);
   const variantOptions = React.useMemo(() => listModelVariantIds(selectedModel?.variants), [selectedModel]);
->>>>>>> bc50ba56a
 
   const hasVariantOptions = variantOptions.length > 0;
 
@@ -251,11 +204,7 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
                   ...prev,
                   providerID,
                   modelID,
-<<<<<<< HEAD
-                  variant: resolveVariantForModel(providerID, modelID),
-=======
                   variant: resolveVariantForModel(providerID, modelID, prev.agent),
->>>>>>> bc50ba56a
                   picked: { ...prev.picked, model: true },
                 }));
               }}
@@ -268,8 +217,6 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
               options={variantOptions}
               disabled={!hasVariantOptions}
               onChange={(variant) => setExecution((prev) => ({ ...prev, variant, picked: { ...prev.picked, variant: true } }))}
-<<<<<<< HEAD
-=======
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -280,7 +227,6 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
               filter={agentFilter}
               dropdownPortalToBody
               onChange={(agent) => setExecution((prev) => ({ ...prev, agent, picked: { ...prev.picked, agent: true } }))}
->>>>>>> bc50ba56a
             />
           </div>
         </div>
@@ -305,14 +251,14 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
             </div>
           ) : null}
           <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
-              {t('rightSidebar.contextNotesTodo.sendDialog.actions.cancel')}
-            </Button>
-            <Button size="sm" onClick={handleSubmit} disabled={!canConfirm || submitting}>
-              {submitting
-                ? t('rightSidebar.contextNotesTodo.sendDialog.actions.sending')
-                : t('rightSidebar.contextNotesTodo.sendDialog.actions.send')}
-            </Button>
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
+            {t('rightSidebar.contextNotesTodo.sendDialog.actions.cancel')}
+          </Button>
+          <Button size="sm" onClick={handleSubmit} disabled={!canConfirm || submitting}>
+            {submitting
+              ? t('rightSidebar.contextNotesTodo.sendDialog.actions.sending')
+              : t('rightSidebar.contextNotesTodo.sendDialog.actions.send')}
+          </Button>
           </div>
         </div>
       </DialogContent>

@@ -18,13 +18,9 @@ import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { canDeleteWorktreeBranch, canDeleteWorktreeWithoutConfirm, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeDisplayName, removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
-<<<<<<< HEAD
-import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
-=======
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
 import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
 import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast, isWorktreeTeardownFailure } from '@/lib/worktrees/worktreeRemovalFlow';
->>>>>>> bc50ba56a
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { withSessionsNowInWorktree } from '@/lib/worktrees/worktreeUse';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -78,6 +74,7 @@ export const SessionDialogs: React.FC = () => {
     const archiveSession = sessionActions.archiveSession;
     const deleteSessions = useSessionUIStore((s) => s.deleteSessions);
     const archiveSessions = useSessionUIStore((s) => s.archiveSessions);
+    const unarchiveSessions = useSessionUIStore((s) => s.unarchiveSessions);
     const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
     const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
     const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
@@ -179,7 +176,7 @@ export const SessionDialogs: React.FC = () => {
 
         if (payload.sessions.length === 1) {
             const target = payload.sessions[0];
-            const success = await deleteSession(target.sessionId);
+            const success = await deleteSession(target.id);
             if (success) {
                 toast.success(t('sessions.sidebar.session.delete.success'));
             } else {
@@ -188,7 +185,7 @@ export const SessionDialogs: React.FC = () => {
             return;
         }
 
-        const ids = payload.sessions.map((session) => session.sessionId);
+        const ids = payload.sessions.map((session) => session.id);
         const { deletedIds, failedIds } = await deleteSessions(ids);
 
         if (deletedIds.length > 0) {
@@ -233,7 +230,7 @@ export const SessionDialogs: React.FC = () => {
 
         const summaries = deleteDialog.sessions
             .map((session) => {
-                const metadata = getWorktreeMetadata(session.sessionId);
+                const metadata = getWorktreeMetadata(session.id);
                 return metadata ? { session, metadata } : null;
             })
             .filter((entry): entry is { session: Session; metadata: WorktreeMetadata } => Boolean(entry));
@@ -371,8 +368,6 @@ export const SessionDialogs: React.FC = () => {
                 }
             );
 
-<<<<<<< HEAD
-=======
             // A directory inside the removed checkout, such as `<worktree>/sub`, goes with it.
             const isInRemovedWorktree = (directory: string): boolean => Boolean(
                 normalizedWorktreePath
@@ -382,12 +377,10 @@ export const SessionDialogs: React.FC = () => {
             // Read now, not when the delete started: a teardown can run for
             // minutes, and "Delete without teardown" can come much later.
             const newSessionDraft = useSessionUIStore.getState().newSessionDraft;
->>>>>>> bc50ba56a
             const draftDirectory = normalizeProjectDirectory(newSessionDraft?.directoryOverride);
             if (
                 newSessionDraft?.open
-                && normalizedWorktreePath
-                && draftDirectory === normalizedWorktreePath
+                && isInRemovedWorktree(draftDirectory)
                 && normalizedProjectPath
             ) {
                 setDraftBootstrapPendingDirectory(null);
@@ -397,23 +390,15 @@ export const SessionDialogs: React.FC = () => {
                 }, { force: true });
             }
 
-<<<<<<< HEAD
-            if (normalizeProjectDirectory(currentDirectory) === normalizedWorktreePath && normalizedProjectPath) {
-=======
             if (isInRemovedWorktree(normalizeProjectDirectory(useDirectoryStore.getState().currentDirectory)) && normalizedProjectPath) {
->>>>>>> bc50ba56a
                 useDirectoryStore.getState().setDirectory(normalizedProjectPath, { showOverlay: false });
             }
 
             return true;
         } catch (error) {
-<<<<<<< HEAD
-            toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle', { name: getWorktreeDisplayName(worktree) }), {
-=======
             // The caller's toast offers to delete without the teardown.
             if (error instanceof Error && isWorktreeTeardownFailure(error)) throw error;
             toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), {
->>>>>>> bc50ba56a
                 id: toastId,
                 description: renderToastDescription(error instanceof Error ? error.message : t('sessions.sidebar.dialogs.deleteResult.tryAgain')),
             });
@@ -437,15 +422,9 @@ export const SessionDialogs: React.FC = () => {
             markWorktreeRemoving(worktree.path);
             try {
                 const result = await archiveSessionsThenRemoveWorktree({
-<<<<<<< HEAD
-                    sessionIds,
-                    removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, toastId),
-                    restoreSessions: (ids) => sessionActions.unarchiveSessions(ids, { undo: true }),
-=======
                     sessionIds: attemptSessionIds,
                     removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, toastId, skipTeardown),
                     restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
->>>>>>> bc50ba56a
                     archiveSessions: async (ids) => {
                         if (ids.length === 1) {
                             const success = await archiveSession(ids[0]);
@@ -457,19 +436,15 @@ export const SessionDialogs: React.FC = () => {
                     },
                 });
                 if (!result.removed) return;
-<<<<<<< HEAD
-=======
                 // The removed work leaves the working set: its sessions' tabs
                 // close and the app moves off them, as Done does.
                 leaveFinishedSessions(attemptSessionIds, { projectId: getProjectRefForWorktree(worktree).id });
->>>>>>> bc50ba56a
 
-                const removalNote = shouldRemoveRemote
+                toast.success(shouldRemoveRemote
                     ? t('sessions.sidebar.sessionDialogs.worktree.removedWithRemote')
-                    : t('sessions.sidebar.sessionDialogs.worktree.removed');
-                toast.success(t('sessions.sidebar.sessionDialogs.worktree.removedTitle', { name: getWorktreeDisplayName(worktree) }), {
+                    : t('sessions.sidebar.sessionDialogs.worktree.removed'), {
                     id: toastId,
-                    description: renderToastDescription(removalNote),
+                    description: renderToastDescription(getWorktreeDisplayName(worktree)),
                 });
 
                 const { failedIds } = result.archive;
@@ -493,14 +468,9 @@ export const SessionDialogs: React.FC = () => {
             } finally {
                 clearWorktreeRemoval(worktree.path);
             }
-<<<<<<< HEAD
-        })();
-    }, [archiveSession, archiveSessions, canRemoveRemoteBranches, deleteDialogShouldRemoveRemote, removeSelectedWorktree, t]);
-=======
         };
         return run(false, sessionIds);
     }, [archiveSession, archiveSessions, canRemoveRemoteBranches, deleteDialogShouldRemoveRemote, getProjectRefForWorktree, removeSelectedWorktree, t, unarchiveSessions]);
->>>>>>> bc50ba56a
 
     // Paths whose quick delete is being checked or removed, so a repeated
     // Shift+click cannot remove the same worktree twice.
@@ -522,7 +492,7 @@ export const SessionDialogs: React.FC = () => {
                 openDeleteDialog({ sessions, mode: 'worktree', worktree });
                 return;
             }
-            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.sessionId), true);
+            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.id), true);
         } finally {
             quickDeletePathsRef.current.delete(pathKey);
         }
@@ -560,13 +530,8 @@ export const SessionDialogs: React.FC = () => {
                 }
                 void removeSelectedWorktreeInBackground(
                     selectedWorktree,
-<<<<<<< HEAD
-                    deleteDialog.sessions.map((session) => session.sessionId),
-                    deleteDialogShouldDeleteLocalBranch,
-=======
                     deleteDialog.sessions.map((session) => session.id),
                     deleteDialogShouldDeleteLocalBranch && canDeleteBranch,
->>>>>>> bc50ba56a
                 );
                 closeDeleteDialog();
                 return;
@@ -574,7 +539,7 @@ export const SessionDialogs: React.FC = () => {
 
             if (deleteDialog.sessions.length === 1) {
                 const target = deleteDialog.sessions[0];
-                const success = await deleteSession(target.sessionId);
+                const success = await deleteSession(target.id);
                 if (!success) {
                     toast.error(t('sessions.sidebar.session.delete.error'));
                     setIsProcessingDelete(false);
@@ -587,7 +552,7 @@ export const SessionDialogs: React.FC = () => {
                     },
                 });
             } else {
-                const ids = deleteDialog.sessions.map((session) => session.sessionId);
+                const ids = deleteDialog.sessions.map((session) => session.id);
                 const { deletedIds, failedIds } = await deleteSessions(ids);
 
                 if (deletedIds.length > 0) {
@@ -690,7 +655,7 @@ export const SessionDialogs: React.FC = () => {
                     <ul className={cn(isWorktreeDelete ? 'mt-2 space-y-1' : 'space-y-0.5')}>
                         {deleteDialog.sessions.slice(0, 5).map((session) => (
                             <li
-                                key={session.sessionId}
+                                key={session.id}
                                 className={cn(
                                     isWorktreeDelete
                                         ? 'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground'
@@ -700,7 +665,7 @@ export const SessionDialogs: React.FC = () => {
                                 <span className={cn(!isWorktreeDelete && 'hidden')}>
                                     •
                                 </span>
-                                <span dir="auto" className="truncate">
+                                <span dir="auto" className="oc-ui-start-align truncate">
                                     {session.title || t('sessions.sidebar.session.untitled')}
                                 </span>
                             </li>
