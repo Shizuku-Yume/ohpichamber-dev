@@ -21,16 +21,15 @@ Browsers key a cookie jar on the host only, never the port (RFC 6265). Two OpenC
 
 Compatibility: upgrading renames the cookie for any explicit-port host, so already-signed-in browser sessions must log in once again. No on-disk format changes.
 
-<<<<<<< HEAD
 ## Guest URL-token scope
 
 `POST /auth/url-token?scope=guest:<id>` issues a short-lived token for assets served from that guest's package path. The token authorizes only `GET /api/guests/<id>/<file>` requests whose path ends in a supported asset extension. It does not authorize the same guest's OAuth, service, or other API routes. The package-file route still validates the guest id and resolves the file inside the installed package.
 
 `ui-auth.test.js` covers an allowed guest asset and denial of same-guest API routes, other guests, and system paths.
-=======
+
 ## URL auth tokens
+
 `POST /auth/url-token` returns `{ token, expiresAt, expiresIn }`. `expiresAt` is on the server's clock; `expiresIn` is the remaining lifetime in milliseconds. The shared UI places the expiry on its own clock from `expiresIn` (`packages/ui/src/lib/runtime-auth.ts`), because a phone whose clock is a minute ahead of the server otherwise treats every fresh token as expired and opens the terminal and event sockets without one (issue #5614). `expiresAt` stays for clients older than `expiresIn`.
->>>>>>> bc50ba56a
 
 ## Public exports (ui-auth.js)
 - `readSessionTtlMs(raw, unitMs, fallbackMs)`: parses a positive session lifetime from an environment value, else the fallback. Defaults come from `OPENCHAMBER_UI_SESSION_TTL_HOURS` (12) and `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS` (7, used when the user ticks "trust this device").

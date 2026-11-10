@@ -61,7 +61,6 @@ There is no env gate — the feature shipped dark behind
 
 ## Invariants
 
-<<<<<<< HEAD
 - The Auto sentinel is a Host choice, never an OMP model. A native send passes
   `{ providerId: 'openchamber', modelId: 'auto' }` to `resolveAutoSelection`.
   The returned `{ model: { providerId, modelId, variant? }, agent, decision }`
@@ -73,41 +72,13 @@ There is no env gate — the feature shipped dark behind
 - Host session scope authorizes routing and must match any requested workspace.
   Missing scope and provider/credential service failures remain errors, not
   successful empty availability. Auto without a fallback fails before execution.
-=======
-- The sentinel never reaches OpenCode. OpenCode 2.x holds the model and agent
-  on the session and a prompt body carries only the user's text, so Auto is
-  per-session state: `POST /api/session` drops the sentinel from the create
-  body (the session starts on OpenCode's default; the first send switches it),
-  `POST /api/session/:id/model` with the sentinel is
-  swallowed and marks the session (`noteModelSelection`), and every
-  `POST /api/session/:id/{prompt,command}` in a marked session is routed
-  (`routeSend`) and switches the session onto the answer before the send is
-  forwarded. So is `POST /api/session/:id/form/:formId/reply`: the answer
-  resumes a turn, so it is routed on the values the user filled in, and a
-  failure answers with an error and leaves the form pending. Both sit ahead of
-  the generic proxy, which replays a parsed body.
-  The message queue calls `resolveAutoSelection` itself and applies the answer
-  with the model/agent switches it already makes. Without a fallback model the
-  runtime throws 400 rather than forwarding. The OpenChamber session service
-  (`openchamber-sessions/routes.js`) talks to OpenCode through the SDK and can
-  pick Auto up from Session Defaults, so it calls `resolveAutoSelection` itself
-  before switching the session. So do scheduled task runs
-  (`scheduled-tasks/runtime.js`): a run on Auto creates its session without a
-  model, routes on the expanded task prompt with the new session's id, and
-  switches the session before the goal and the first send.
-- The mark lives in process memory. A server restart between the model switch
-  and the next send drops it (see the TODO in `runtime.js`).
->>>>>>> bc50ba56a
 - Routing failures keep the user's own behaviour: a Jev error, timeout, unknown
   category or low confidence routes to the fallback model, and the decision
   carries the reason.
-- The routing and safety-net questions send `ROUTING_INSTRUCTIONS` and
-  `SAFETY_INSTRUCTIONS` as one string each, the same form as the Test probe,
-  and the safety-net `ask` question passes `SAFETY_CRITERIA` (`true` / `false`)
-  on `criteria`. TypeSafe and Ollama's `kev` runner accept a list for
-  `instructions`, while `@kev-ai/server` answers a list with 400 (#4175);
-  without `criteria` on `ask`, Ollama `kev` also scored `brew install` and
-  `git checkout -- .` below the 0.6 hold threshold (#6028).
+- The routing question sends `ROUTING_INSTRUCTIONS` as one string, the same
+  form as the Test probe. TypeSafe also accepts a list there, but a
+  self-hosted System One server may not: Kev answers a list with 400, so Auto
+  fell back on every send while Test passed (#4175).
 - The safety net accepts only on a verdict from Jev. With no usable
   classification provider it holds quietly (the session behaves like `ask`);
   when Jev fails it holds, broadcasts `openchamber:routing.safety-skipped` with
@@ -118,25 +89,10 @@ There is no env gate — the feature shipped dark behind
   entries. `safetyNet.threshold` still applies.
 - A category without a model uses the fallback model *and* variant; a variant
   only travels with the model it was chosen for. A category agent replaces the
-<<<<<<< HEAD
   composer's agent; an empty one keeps it.
 - A variant the canonical model catalog excludes is dropped before capture,
   so execution uses the model's default thinking level. An unreadable catalog,
   or one that does not know the model yet, cannot invalidate a saved variant.
-=======
-  session's agent, and the runtime remembers which agent it replaced. A send
-  whose category names no agent, or that falls back, keeps the composer's
-  agent, except while the session still runs as the agent routing set: then
-  it goes back to the agent from before (#6392). A session found on any other
-  agent, a composer agent other than the routed one, or a switch off Auto ends
-  that, so an agent the user picked stays. A session that had no agent of its
-  own before the category agent has nothing to go back to. The record is
-  process memory, like the Auto mark.
-- A variant the model's catalog entry does not list is dropped before the
-  switch, so the reply runs on the model's default thinking instead of OpenCode
-  refusing it (Settings from before #4133 saved list positions like `"2"`).
-  An unreadable catalog, or one that does not know the model yet, keeps it.
->>>>>>> bc50ba56a
 - A provider's prompt cache belongs to one model, so a model switch makes the
   new model read the whole context uncached. With `preserveCache` on (the
   default; a config without the key reads as on), a send Jev routes to a
@@ -163,16 +119,6 @@ There is no env gate — the feature shipped dark behind
   one request leaves independent siblings. The permission owner applies approval
   CAS and forgets resolved requests.
 
-## Decisions
-
-### Why the server puts the agent back and not the composer
-
-In Auto the composer hides the agent control and shows the session's agent,
-which after a routed Plan is `plan`, so the composer has no agent of its own
-to send. Only the runtime knows that it set the agent and which one was there
-before. Before #6392 an empty category agent left the routed agent in place,
-and every later send stayed in Plan.
-
 ## Where a Jev request goes
 
 The user picks a classification provider in Settings → Providers →
@@ -181,7 +127,6 @@ Classification providers:
 - `off`: no Jev at all. Every Jev feature takes its no-provider path.
 - `zen-promo`: `opencode.ai/zen/v1/systemone` as `jev-1.13-free`, which OpenCode
   Zen answers with no credential at all. Usable while
-<<<<<<< HEAD
   `ZEN_JEV_PROMOTION_ACTIVE` is true; flip it when OpenCode ends the promotion.
 - `zen-key`: the same endpoint as `jev-1.13`, using native provider
   `opencode-zen` with configured API-key authentication. OAuth presence is not
@@ -191,36 +136,6 @@ Classification providers:
 - `vercel`: `ai-gateway.vercel.sh/typesafe/v1/systemone` as `typesafe-ai/jev`,
   using native provider `vercel-ai-gateway` with configured API-key authentication.
   All gateways use the same System One request and response shapes.
-=======
-  `ZEN_JEV_PROMOTION_ACTIVE` is true. While it is false, a user who had picked
-  it sees it disabled as temporarily unavailable and falls back like any
-  unusable pick.
-  On 2026-10-27 zen's anti-fraud client check answered the free model with
-  429 `FreeUsageLimitError` ("Free models work in OpenCode") to Node and curl
-  clients whatever the headers, while Bun clients such as OpenCode got
-  through. The server runs on Node, so the promotion was off for a few hours
-  until Dax exempted Jev. If that 429 comes back, compare one call from Node
-  and one from Bun before anything else, and ask OpenCode in Slack. The other
-  route is OpenCode 2.2's `POST /api/experimental/generate/decisions` with the
-  `opencode` provider, which serves `jev-1.13-free` without a login and takes
-  `x-opencode-client` from `provider.opencode.options.headers`; in 2.2.0 it
-  starts a second copy of every local MCP server (anomalyco/opencode#59605)
-  and its predicate questions take no `criteria` (anomalyco/opencode#59606).
-- `zen-key`: the same endpoint as `jev-1.13` with a Zen API key read from
-  OpenCode's credentials (`opencode/auth.js`, entry `opencode`, type `api`).
-  An OpenCode account sign-in is an OAuth credential, and zen rejects it as a
-  key ("Invalid API key", checked 2026-09-27), so it does not count. A paid
-  call from Node with a Zen API key answers (checked 2026-10-27, billed to the
-  Zen balance); the client check that blocks the free model does not apply.
-- `openrouter`: `openrouter.ai/api/v1/systemone` as `jev-latest` (OpenRouter's
-  `~typesafe/jev-latest` alias) with the OpenRouter API key saved in OpenCode
-  (entry `openrouter`, type `api`), billed to that OpenRouter account.
-- `vercel`: `ai-gateway.vercel.sh/typesafe/v1/systemone` as `typesafe-ai/jev`
-  with the Vercel AI Gateway API key saved in OpenCode (entry `vercel`, type
-  `api`). Both gateways implement TypeSafe's request and response shapes, so
-  `jev.js` is the same for every source. Both answer 401 without a key
-  (checked 2026-09-27); a paid call is not verified live yet.
->>>>>>> bc50ba56a
 - `typesafe`: `api.typesafe.ai/v1/systemone` as `jev-latest` with the key saved
   in `routing-auth.json`. Saving a key also picks it.
 - `custom`: any endpoint that speaks the System One API, with the URL, model
@@ -320,7 +235,6 @@ features that need Jev.
 
 `store.test.js` (defaults, deviation round-trip, the cache setting's default,
 deleted built-ins, malformed
-<<<<<<< HEAD
 file, token file mode, classifier pick, custom endpoint file), `runtime.test.js`
 (native captured selections, bounded settled history, fallback/confidence,
 cache hysteresis, model variants and agent choice, canonical safety inputs,
@@ -329,12 +243,3 @@ selected-provider use-time resolution), and `routes.http.test.js` (real runtime
 and durable settings through HTTP, scoped catalog presence, secret-free state,
 draft probes, preserved service errors and enterprise refusal). Native delivery
 and permission auto-accept owner suites exercise their consumers.
-=======
-file, token file mode, classifier pick, custom endpoint file), `runtime.test.js` (request text,
-excerpts, decisions, the agent a category set and the way back from it, cache holds and the warm window, endpoints, custom URL normalization and setter,
-classifier fallback, rewrite and fallback
-paths, safety net accept/hold/skip/unavailable), `routes.http.test.js`
-(sentinel dropped from a create and swallowed on the model switch, routed send
-ahead of a stand-in proxy, the routes). The queue and auto-accept tests cover
-their hooks.
->>>>>>> bc50ba56a

@@ -27,16 +27,8 @@ described (`../session-knowledge/DOCUMENTATION.md`).
 After a successful send, the runtime merge-writes
 `context_obligatory_last_compaction_message_id`. This cursor prevents a
 replayed compaction event from reinjecting the same summary. The runtime is
-<<<<<<< HEAD
 owned by the OpenChamber web backend and therefore is not available to clients without the server.
-=======
-owned by the OpenChamber web backend and therefore is not available in
-extension-only VS Code mode.
 
-### Why root sessions keep inherited pins
+### Why a fork starts without inherited pins
 
-User forks keep their existing pin inheritance. Copied messages receive new ids,
-so remapping inherited pins needs a separate change. Filtering by the source
-owner or the fork's creation time would hide those pins and stop their restore
-after compaction.
->>>>>>> bc50ba56a
+The Canonical API creates a fork with its own session id and its own metadata record, and the copied messages receive new ids. Remapping inherited pins would need the source's message ids on the fork, which the contract does not carry, so the fork starts with no obligatory pins and restores only what the user marks in it.

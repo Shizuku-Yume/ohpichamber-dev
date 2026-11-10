@@ -7,129 +7,8 @@ helper shares (`callback-address.js`). The managed tools an agent calls are
 declared in `../openchamber-control/actions.js` and dispatched by the same
 control service the CLI uses, so tool, UI and CLI behavior have one owner.
 
-<<<<<<< HEAD
-The Agent Service exposes five tools to the model from its worker
+The Agent Service exposes six tools to the model from its worker
 (`packages/agent-service/src/worker/host-tool.ts`):
-=======
-- `openchamber` — projects, sessions, worktrees, and showing a file to the
-  user (`file.open`). Enabled while the persisted `agentControlToolEnabled`
-  setting is not `false`.
-- `openchamber_schedule` — the `schedule.*` actions of the same control
-  service, for scheduled tasks. Enabled while `agentScheduleToolEnabled` is not
-  `false`. It used to be part of `openchamber`; reading settings sets it to
-  `false` once for someone who had switched the control tool off
-  (`settings-runtime.js`), so the split hands nobody a tool they turned off.
-  Like the control tool, a stale plugin is not refused: the CLI runs the same
-  actions, so the service cannot tell an agent call from a CLI one.
-- `openchamber_web` — looking at and interacting with the page in OpenChamber's
-  browser panel. Enabled while `agentWebToolEnabled` is not `false`.
-- `openchamber_notify` — `notify.send`, a notification to the user through
-  `lib/notifications/emit-route.js` (same limits and rate window as
-  `POST /api/notifications/emit`). Off by default: enabled only while
-  `agentNotifyToolEnabled` is `true`, and the control service refuses the
-  action when the setting is off, so a stale plugin cannot keep paging.
-- `openchamber_knowledge` — the project's Notes, Todos and Plans, the items of
-  the Project knowledge panel (`knowledge.list`, `save`, `delete`, `show`,
-  with `kind` naming note, todo or plan; plans are files, so list and save
-  give their path and the agent reads and edits them with its own file tools;
-  dispatched by
-  `../openchamber-control/project-knowledge.js` into
-  `../project-context/runtime.js`). On by default: enabled while
-  `agentKnowledgeToolEnabled` is not `false`, and the control service refuses
-  these actions when it is, so a stale plugin cannot keep writing. Writes are
-  attributed to the session OpenCode reported, never to a payload field.
-- `openchamber_render` — `render.page`, a self-contained HTML page (`html`,
-  `title`) the chat draws inline above the agent's answer, such as a chart or
-  table. The page travels in the call's input, which OpenCode stores and
-  syncs, so the server keeps no copy: `../openchamber-control/render-page.js`
-  only checks the input (`html` at most 200,000 characters so the callback
-  body stays under its 1 MB limit, `title` at most 120) and the setting.
-  On by default: enabled while `agentRenderToolEnabled` is not `false`, and the
-  control service refuses the action when it is, so a stale plugin cannot
-  keep drawing. When to draw is stated only in the line every session carries
-  (`../session-knowledge/DOCUMENTATION.md`, *When to draw a page*), along with
-  the mockup exception: a mockup of the user's own project takes its look from
-  that project's code. The tool description keeps the look rules agents broke
-  most (no page background, no outer card, theme variables). How to write the
-  page is the `html` input's description: layout, boxes, the theme variables
-  the chat injects (`packages/ui/src/components/chat/message/parts/htmlRender.ts`;
-  change both together), how a page with its own colors, such as a project
-  mockup, keeps clear of them (a color on all its text and a background of its
-  own, since the injected base stylesheet colors unset text and the frame is
-  transparent), image files by path from anywhere on the machine as
-  the image grant route allows. Only complete local paths written literally
-  in the HTML are found and inlined before the page runs; the sandbox cannot
-  read paths assembled at runtime. The description gives the authoring pattern.
-  It also names the temporary directory to save a screenshot in
-  (`os.tmpdir()/opencode`) so it stays out of the project. How
-  to ask on a page is the `awaitAnswer` input's description.
-  With `awaitAnswer` the call waits for the user's answer on the page. The
-  plugin sends the call id (`context.id`) with the callback so the server can
-  find the waiting call when the chat answers it, and copies the answer into
-  the call's metadata (`metadata.openchamber.answer`), so every client shows
-  the page as answered. The waiting callback sends Bun's `timeout: false`,
-  since Bun's fetch otherwise ends a request with no response after about six
-  minutes. While the call waits, OpenCode holds any chat message
-  for that session until the call returns, so the plugin registers a
-  `session.prompt` hook: a prompt for the session, from any sender, aborts the
-  waiting call, which returns `{ answered: false, reason: "chat" }`, and the
-  agent reads the message next. A message sent before the page appeared
-  fired the hook too early; the server finds it in the inbox instead
-  (`render-page.js`).
-- `openchamber_image` — `image.generate`, images made or edited by the image
-  model the user chose in Settings (`../openchamber-control/generate-image.js`).
-  Off by default: enabled only while `agentImageToolEnabled` is `true`, and
-  the control service refuses the action when it is not. Never behind Code
-  Mode, like render: the chat draws the images in place of the call's row from
-  its stored result, which an `execute` script would hide.
-- `openchamber_secret` — `secret.run`, `secret.request` and `secret.forget`.
-  `secret.run` asks OpenCode's shell permission for its command line in the
-  plugin, before the call reaches the server: `ctx.permission.assert` with
-  action `shell`, the line `secretRunCommandLine` draws as the resource and
-  `<program> *` as the pattern to save, so the session's shell rules apply as
-  to any command and a deny never shows a card. The plugin embeds the server's
-  `secretRunCommand` and `secretRunCommandLine` with `toString()`, so the line
-  the user approves is the one the card shows; a malformed call fails before
-  anything is asked. The refusal `assert` throws is rethrown, since a plain
-  rejection ends the agent's step. Only a call from this tool reaches the
-  server as `secretRunAuthorized`, and secret actions use the session OpenCode
-  reported, so no payload field can reach another session's remembered values.
-  `secret.request` is a
-  card where the user types one secret the agent asked for (`label`, `reason`,
-  optional `placeholder`). Both wait, with the same plugin machinery as a page
-  with `awaitAnswer` (call id, `timeout: false`, the `session.prompt` hook
-  that ends the wait when the user writes in the chat, and the inbox check
-  for a message sent before the card appeared). The value never
-  travels through the call: the chat posts it to the server, which writes it
-  to a private file, and the call returns only `{ status, file }`
-  (`../openchamber-control/secret-request.js`). Direct, never behind Code
-  Mode, because the chat draws the card from the call. On by default:
-  enabled while `agentSecretToolEnabled` is not `false`, and the control
-  service refuses the action when it is, so a stale plugin cannot keep asking.
-- `openchamber_usage` — `usage.read`, the provider quotas Settings → Usage
-  shows (`../openchamber-control/usage-read.js`): every configured provider's
-  result as the page gets it, without `accountLabel`, or one with
-  `providerId`. Off by default:
-  enabled only while `agentUsageToolEnabled` is `true`, and the action reads
-  the setting on every call and refuses while it is not. Each call runs the
-  page's readers again, so the description tells agents to read once per
-  decision and that a rate-limited provider answers with its last sample. It
-  sits behind Code Mode like notify, since the chat draws nothing from its
-  call, and its catalog line says to read it when the user asks about limits
-  or a model choice depends on them, never before every task.
-- `openchamber_workflow` — `workflow.*`, scripts that fan a large task out to
-  many agents, run by OpenChamber (`../workflows/DOCUMENTATION.md`). Off by
-  default: enabled only while `agentWorkflowToolEnabled` is `true`, and the
-  workflow runtime refuses every action while it is not. How to write a script is the `script`
-  input's description, read while the agent writes one, for the same reason
-  render's page rules sit on `html`.
-- `openchamber_workflow_answer` — `workflow.answer`, how a workflow agent
-  asked for a schema answer hands it over. Registered with the workflow tool,
-  but the managed config denies it in every session (`managedPermissionRules`)
-  and only the session of such an agent allows it, so no other session carries
-  its declaration. Direct, never behind Code Mode: the agent's prompt names it,
-  and the sessions that see it are the ones that need it.
->>>>>>> bc50ba56a
 
 - `openchamber` — projects, models, sessions, scheduled tasks, workflows, and
   showing a file to the user (`file.open`). Enabled while
@@ -144,43 +23,14 @@ The Agent Service exposes five tools to the model from its worker
   (same limits and rate window as `POST /api/notifications/emit`). Off by
   default: enabled only while `agentNotifyToolEnabled` is `true`, and the
   control service refuses the action when the setting is off.
+- `openchamber_image` — `image.generate`, an image made or edited by the image
+  model the user chose in Settings (`../openchamber-control/generate-image.js`,
+  which reads `agentImageModel`). Off by default: the control service runs it
+  only while `agentImageToolEnabled` is `true`.
 
-<<<<<<< HEAD
 Each tool accepts `{ action, input }`; the Host checks that the action belongs
 to that tool's set, applies the feature policy named above, and dispatches.
 Actions an agent may not ask for are refused rather than forwarded.
-=======
-- `openchamber`, `openchamber_schedule`, `openchamber_web`,
-  `openchamber_memory`, `openchamber_knowledge` and `openchamber_notify` are
-  registered with `codemode: true`, behind OpenCode's Code Mode `execute`
-  tool; there is no setting for it. On `scripts/tool-use-bench` with three
-  models this cut the first request of a session by about 30% with the same or
-  better use of the tools, and one provider's tool-call streaming stalled on
-  their direct schemas. `openchamber_render`, `openchamber_secret`,
-  `openchamber_image`, `openchamber_workflow` and
-  `openchamber_workflow_answer` stay direct (`codemode: false`): the chat
-  draws a page, a secret card, images or a run card from the tool's own call,
-  and inside an `execute` script that call is only an entry in `execute`'s
-  list.
-- Behind Code Mode each tool also registers a namespace of its own name with
-  a one-line description (`CODE_MODE_CATALOG_LINES`). The catalog always
-  lists namespaces with their descriptions but tools only within a small
-  budget, and with large MCP servers connected ours showed as bare rows such
-  as `openchamber_web (1 tool, none shown)`; agents asked to open a page in the
-  browser panel fetched it instead and said they had no browser
-  (`scripts/tool-use-bench`). Names and paths stay as they are: agents call
-  `tools.openchamber(...)` straight from the session guidance, and both a
-  control tool renamed into a shared namespace and one with the other tools
-  nested under it made them stop calling it.
-- The plugin accepts the action's inputs either inside `parameters` or beside
-  `action`, because models produce both shapes; an explicit `parameters` object
-  wins on a conflict. Rejecting the flattened shape turned a call that plainly
-  carried a `url` into "url is required", which reads as a broken tool rather
-  than a malformed call. The schema declares the inputs only inside
-  `parameters`, and `additionalProperties: true` at the root lets flattened
-  inputs and unknown fields (a stale `wait` or `timeout`) through to the
-  adapter.
->>>>>>> bc50ba56a
 
 ## Knowledge actions
 

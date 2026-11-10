@@ -1914,7 +1914,7 @@ describe('git routes status discovery', () => {
     );
 
     expect(response.statusCode).toBe(200);
-    expect(gitLibraries.isGitRepository).toHaveBeenCalledWith('/opened/git-project');
+    expect(gitLibraries.isGitRepository).toHaveBeenCalledWith('/opened/git-project', { failOnGitError: true });
     expect(gitLibraries.getStatus).toHaveBeenCalledWith('/opened/git-project', { mode: undefined });
     expect(response.body).toMatchObject({ current: 'main' });
   });

@@ -5,11 +5,7 @@ Own filesystem API behavior for the web server runtime, including workspace-boun
 
 ## Entrypoints and structure
 - `packages/web/server/lib/fs/routes.js`: route registration and runtime-owned state for `/api/fs/*` endpoints.
-<<<<<<< HEAD
 - `packages/web/server/lib/fs/search.js`: fuzzy filesystem search runtime shared by Host search and project icon discovery.
-=======
-- `packages/web/server/lib/fs/search.js`: fuzzy filesystem search for workspace supplements and project icon discovery.
->>>>>>> bc50ba56a
 - `packages/web/server/lib/fs/content-search.js`: find in files, run by ripgrep (`GET /api/fs/find-in-files`).
 - `packages/web/server/lib/fs/ripgrep.js`: where the ripgrep binary comes from.
 - `folder-change-watch.js` owns signal-driven fingerprint/settle scheduling for extension packages and custom themes. Each root has one watcher, one 30-second safety interval and at most one pending fast check. Its first fingerprint starts at creation; stop closes the watcher, cancels timers and suppresses in-flight results.
@@ -51,11 +47,12 @@ The interval reopens the watcher before checking, so Linux/Windows folder deleti
      - `POST /api/fs/exec`
     - `GET /api/fs/exec/:jobId`
      - `GET /api/fs/list`
-     - `GET /api/fs/search` returns `{ files }` with name, absolute path,
-       relative path and extension. It accepts `directory` (active workspace
-       when omitted), `query`, `limit` (default 60, clamped to 1..500),
-       `includeHidden=true` and `respectGitignore=false`. Paths stay under the
-       requested root, including symlink aliases.
+     - `GET /api/fs/search` returns an array of hits with name, absolute path in
+       the requested directory's path space, relative path and extension. It
+       accepts `directory` (active workspace when omitted), `query`, `limit`
+       (default 60, clamped to 1..500), `type=directory`, `includeHidden=true`
+       and `respectGitignore=false`. Paths stay under the requested root,
+       including symlink aliases.
     - `GET /api/fs/find-in-files` — find in files, see below.
     - `GET /api/fs/git-dirs` — shallow nested git repository discovery for the
       Git tab (breadth-first readdir walk, capped at depth 3 and 100 visited
@@ -74,20 +71,13 @@ The interval reopens the watcher before checking, so Linux/Windows folder deleti
   - The active project directory is validated with `fs.realpath`, so when the project root is itself a symlink the workspace base no longer matches the paths the client sends. Workspace resolution therefore retries against the raw directory the client requested (`requestedDirectory` from `resolveProjectDirectory`) before falling back to worktree roots. Symlinks are still resolved afterwards, and write/exec routes keep their canonical containment check against the resolved base.
 - `createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn })` from `search.js`
   - Returns `{ searchFilesystemFiles(rootPath, options) }`.
-<<<<<<< HEAD
   - Supports fuzzy matching, hidden-file handling, and optional `git check-ignore` filtering.
   - An empty query stops at `limit` candidates. A query walks the tree until it is exhausted or 10,000 files are inspected (`FILE_SEARCH_MAX_VISITED_FILES`): weak shallow matches would otherwise exhaust a candidate budget before exact deeper matches are ever visited.
-=======
-   - Supports fuzzy matching, hidden-file handling, and optional Git ignore filtering.
-   - An empty query stops at `limit` candidates. A query walks the tree until it is exhausted or 10,000 files are inspected (`FILE_SEARCH_MAX_VISITED_FILES`): weak shallow matches would otherwise exhaust a candidate budget before exact deeper matches are ever visited. The ceiling mirrors `packages/vscode/src/bridge-fs-helpers-runtime.ts`, and both suites pin the two runtimes' agreement.
 
-### Why workspace search supplements OpenCode
+### Why workspace search walks the whole tree
 
-The shared file-search store keeps OpenCode's indexed hits in their original
-order, appends unique filesystem hits for non-default toggles, then applies the
-caller's result limit. Replacing the index with the icon-discovery walk would
-drop normal results. Web, desktop, hosted mobile and Capacitor use this endpoint;
-VS Code forwards the same flags to its extension-host search.
+`GET /api/fs/search` serves the file picker with the filesystem walk alone, so
+the result is what the workspace holds rather than what an index last saw.
 
 Git ignore reads use NUL-delimited paths, preserving Unicode, whitespace and
 newlines. Git's quoted line output cannot be compared directly with filesystem
@@ -101,7 +91,7 @@ an unmarked partial answer. Default icon discovery keeps its existing bounds.
 When the client closes the response (a new letter aborted the request) the walk
 stops at its next batch, starts no more Git reads, kills the running one and
 sends nothing. Typing a name otherwise leaves one whole-tree walk per letter
-running at once. VS Code stops its own walk through `api:fs:search:abort`.
+running at once. The response closing stops the walk of an abandoned query.
 
 ### Why a stopped walk kills Git without `taskkill /T`
 
@@ -126,7 +116,6 @@ The reads live only for the current
 query, so later queries see changed ignore rules and cannot share state across
 requested roots. Icon discovery retains per-directory `check-ignore` and its
 bounded walk.
->>>>>>> bc50ba56a
 
 ### Find in files
 

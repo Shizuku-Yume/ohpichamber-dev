@@ -34,8 +34,6 @@ import { ownedOriginInstance } from './origin-instance.js';
  * normalized address, `listSshHosts`/`readSshUrl` expose it to remote matching,
  * and `ownsHost` accepts a remote on it; `sshUrlFor` gives the session's
  * address to the provider's own remote parser.
-<<<<<<< HEAD
-=======
  *
  * A provider whose descriptor names a CLI (`authMethods.cli: { tool }`) and
  * that passes `cli` also takes that CLI's login, by GitLab's glab rule
@@ -50,7 +48,6 @@ import { ownedOriginInstance } from './origin-instance.js';
  * or null for that origin, with errors left unknown. It uses the same CLI
  * account without a token. With no PAT method it is current without a stored
  * activation flag; token-backed built-in CLIs retain their existing switches.
->>>>>>> bc50ba56a
  */
 
 const UNSUPPORTED_METHOD = Object.freeze({ available: false, reason: 'unsupported' });
@@ -71,10 +68,6 @@ const responseError = (status, body) => Object.assign(new Error(body.error), { s
 
 export function createPatAccountAuth({
   descriptor, store, events, verify, probe, classifyFailure, ownerElsewhere = null,
-<<<<<<< HEAD
-  normalizeSshUrl = null, parseSshUrl = null,
-}) {
-=======
   normalizeSshUrl = null, parseSshUrl = null, cli = null,
 }) {
   const cliEnabled = Boolean(cli && descriptor.authMethods?.cli);
@@ -82,7 +75,6 @@ export function createPatAccountAuth({
   const serviceLogin = cliEnabled && descriptor.authMethods.cli.kind === 'service';
   const serviceOnly = serviceLogin && !descriptor.authMethods.pat;
   const cliIsCurrent = (instance) => cliEnabled && (serviceOnly || instance.cliActive) && !instance.cliDisabled;
->>>>>>> bc50ba56a
   const takesUsername = descriptor.settings?.some((field) => field.type === 'username') === true;
   const takesSshUrl = descriptor.settings?.some((field) => field.key === 'sshUrl') === true;
   if (takesSshUrl && (!(normalizeSshUrl instanceof Function) || !(parseSshUrl instanceof Function))) {
@@ -235,20 +227,6 @@ export function createPatAccountAuth({
   const tokens = new WeakMap();
   const logins = new WeakMap();
   const sshUrls = new WeakMap();
-<<<<<<< HEAD
-
-  /** The exact account asked for, else the instance's current one. */
-  const resolveAccount = async ({ instance: origin, accountId: requestedAccountId = '' }) => {
-    const instance = await store.readInstance(origin);
-    const account = requestedAccountId
-      ? instance.accounts.find((candidate) => candidate.id === requestedAccountId)
-      : instance.accounts.find((candidate) => candidate.id === instance.activeAccountId && candidate.status !== 'invalid') ?? null;
-    if (!account?.token || account.status === 'invalid') {
-      const error = new Error(`${descriptor.label} is not connected`);
-      error.status = 401;
-      error.sourceControlAccountUnavailable = true;
-      if (requestedAccountId) error.sourceControlIdentity = identityFor(origin, requestedAccountId);
-=======
   const users = new WeakMap();
 
   const notConnected = (origin, requestedAccountId) => {
@@ -284,7 +262,6 @@ export function createPatAccountAuth({
       user = await verify(origin, lookup.token);
     } catch (error) {
       if (classifyFailure(error) === 'invalid-token') await events.invalidated(identityFor(origin, requestedAccountId));
->>>>>>> bc50ba56a
       throw error;
     }
     if (requestedAccountId !== cliAccountId(origin, user)) {
@@ -329,15 +306,7 @@ export function createPatAccountAuth({
       providerUserId: account.providerUserId,
       secretKind: 'pat',
       persisted: true,
-<<<<<<< HEAD
-    });
-    tokens.set(session, account.token);
-    logins.set(session, loginOf(account));
-    sshUrls.set(session, takesSshUrl ? instance.sshUrl ?? null : null);
-    return session;
-=======
     }, { token: account.token, login: loginOf(account) });
->>>>>>> bc50ba56a
   };
 
   /** The CLI method's availability: only a login whose token the instance accepts counts. */
@@ -443,15 +412,11 @@ export function createPatAccountAuth({
       if (usable) return cliAccountId(origin, usable.user);
       return instance.accounts.find((account) => account.id === instance.activeAccountId && account.status !== 'invalid')?.id ?? null;
     },
-<<<<<<< HEAD
-    listInstances: async () => (await store.listInstances?.()) ?? [],
-=======
     /** The stored instances, then those the CLI has a login for. */
     listInstances: async () => {
       const stored = (await store.listInstances?.()) ?? [];
       return cliEnabled ? [...new Set([...stored, ...await cli.listInstances()])] : stored;
     },
->>>>>>> bc50ba56a
     /** The instance's separate SSH address, when it has one. */
     readSshUrl: async ({ instance: origin }) => {
       if (!takesSshUrl) return null;

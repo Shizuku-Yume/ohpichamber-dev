@@ -1,35 +1,11 @@
 import { credentialAccessToken } from './selected-credential.js';
 import {
-<<<<<<< HEAD
-=======
-  asNonEmptyString,
-  getAuthEntry,
-  normalizeAuthEntry,
->>>>>>> bc50ba56a
   buildResult,
   toUsageWindow,
   toNumber,
   toTimestamp,
   formatCredits
 } from '../utils/index.js';
-
-const resolveCopilotPlanLabel = (payload) => {
-  if (!payload) return null;
-  const sku = asNonEmptyString(payload.access_type_sku);
-  const plan = asNonEmptyString(payload.copilot_plan);
-  const canSignup = Boolean(payload.can_signup_for_limited);
-
-  if (sku === 'free_limited_copilot') return 'Copilot Free';
-  if (sku === 'free_educational_quota') return 'Copilot Student';
-  if (plan === 'individual_edu') return 'Copilot Student';
-  if (plan === 'individual') return 'Copilot Pro';
-  if (plan === 'individual_pro') return 'Copilot Pro+';
-  if (plan === 'individual_max') return 'Copilot Max';
-  if (plan === 'business') return 'Copilot Business';
-  if (plan === 'enterprise') return 'Copilot Enterprise';
-  if (canSignup) return 'Copilot Free';
-  return null;
-};
 
 const buildCopilotWindows = (payload) => {
   const quota = payload?.quota_snapshots ?? {};
@@ -44,16 +20,11 @@ const buildCopilotWindows = (payload) => {
     if (!snapshot) return;
 
     if (snapshot.unlimited === true) {
-      const creditsUsed = toNumber(typeof snapshot.credits_used === 'string'
-        ? asNonEmptyString(snapshot.credits_used)
-        : snapshot.credits_used);
-      const showCreditsUsed = snapshot.has_quota !== false && creditsUsed !== null && creditsUsed >= 0;
       windows[label] = toUsageWindow({
         usedPercent: null,
         windowSeconds: null,
         resetAt,
-        valueLabel: showCreditsUsed ? null : 'Unlimited',
-        creditsUsed: showCreditsUsed ? creditsUsed : undefined
+        valueLabel: 'Unlimited'
       });
       return;
     }
@@ -149,14 +120,12 @@ export const fetchQuota = async ({ credential } = {}) => {
     }
 
     const payload = await response.json();
-    const planLabel = resolveCopilotPlanLabel(payload);
     return buildResult({
       providerId,
       providerName,
       ok: true,
       configured: true,
-      usage: { windows: buildCopilotWindows(payload) },
-      planLabel
+      usage: { windows: buildCopilotWindows(payload) }
     });
   } catch (error) {
     return buildResult({
@@ -207,14 +176,12 @@ export const fetchQuotaAddon = async ({ credential } = {}) => {
     }
 
     const payload = await response.json();
-    const planLabel = resolveCopilotPlanLabel(payload);
     return buildResult({
       providerId: providerIdAddon,
       providerName: providerNameAddon,
       ok: true,
       configured: true,
-      usage: { windows: buildCopilotWindows(payload) },
-      planLabel
+      usage: { windows: buildCopilotWindows(payload) }
     });
   } catch (error) {
     return buildResult({

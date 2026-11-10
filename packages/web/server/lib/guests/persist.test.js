@@ -394,8 +394,6 @@ describe('tracker scopes', () => {
     }
   });
 });
-<<<<<<< HEAD
-=======
 
 describe('links scopes', () => {
   test('round-trips the links scope, with and without link templates', async () => {
@@ -413,4 +411,3 @@ describe('links scopes', () => {
     }
   });
 });
->>>>>>> bc50ba56a

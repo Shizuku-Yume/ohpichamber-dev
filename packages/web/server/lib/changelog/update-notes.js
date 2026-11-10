@@ -21,11 +21,8 @@
 
 const CHANGELOG_API_URL = 'https://api.openchamber.dev/v1/changelog/full';
 const CHANGELOG_INDEX_URL = 'https://raw.githubusercontent.com/openchamber/openchamber/main/changelog/index.json';
-<<<<<<< HEAD
-=======
 // canary.yml writes the nights to the R2 mirror too; GitHub is the fallback.
 const CANARY_NOTES_MIRROR_URL = 'https://downloads.openchamber.dev/desktop/canary/canary-notes.json';
->>>>>>> bc50ba56a
 const CANARY_NOTES_URL = 'https://github.com/openchamber/openchamber/releases/download/canary/canary-notes.json';
 const PULL_URL = 'https://github.com/openchamber/openchamber/pull/';
 
@@ -37,13 +34,8 @@ const GROUPS = [
   ['misc', 'Misc'],
 ];
 
-<<<<<<< HEAD
-const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
-const CANARY_VERSION_PATTERN = /^\d+\.\d+\.\d+-canary\.\d+\.\d+$/;
-=======
 export const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 export const CANARY_VERSION_PATTERN = /^\d+\.\d+\.\d+-canary\.\d+\.\d+$/;
->>>>>>> bc50ba56a
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 // The file crosses a network boundary with no schema library on this side, so
@@ -105,26 +97,12 @@ const parseCanaryNight = (entry) => {
     title: null,
     intro: null,
     groups: [
-<<<<<<< HEAD
-      { heading: 'New', bullets: bullets(entry.new) },
-      { heading: 'Fixes', bullets: bullets(entry.fixes) },
-=======
       { key: 'new', heading: 'New', bullets: bullets(entry.new) },
       { key: 'fixes', heading: 'Fixes', bullets: bullets(entry.fixes) },
->>>>>>> bc50ba56a
     ],
   };
 };
 
-<<<<<<< HEAD
-const renderBetween = (entries, parse, fromVersion, toVersion, compareVersions) => {
-  if (!Array.isArray(entries)) return null;
-  const relevant = entries
-    .map(parse)
-    .filter((release) => release !== null)
-    .filter((release) => compareVersions(release.version, fromVersion) > 0 && compareVersions(release.version, toVersion) <= 0)
-    .sort((a, b) => compareVersions(b.version, a.version));
-=======
 /** The parsed releases in (fromVersion, toVersion], newest first. */
 const selectBetween = (entries, parse, fromVersion, toVersion, compareVersions) => entries
   .map(parse)
@@ -135,7 +113,6 @@ const selectBetween = (entries, parse, fromVersion, toVersion, compareVersions) 
 const renderBetween = (entries, parse, fromVersion, toVersion, compareVersions) => {
   if (!Array.isArray(entries)) return null;
   const relevant = selectBetween(entries, parse, fromVersion, toVersion, compareVersions);
->>>>>>> bc50ba56a
   if (relevant.length === 0) return null;
   return relevant.map(renderRelease).join('\n\n');
 };
@@ -153,24 +130,11 @@ export function renderCanaryNotes(nights, fromVersion, toVersion, compareVersion
   return renderBetween(nights, parseCanaryNight, fromVersion, toVersion, compareVersions);
 }
 
-<<<<<<< HEAD
-/** Fetch the notes and render them for one update; null on any failure. */
-export async function fetchUpdateNotes(fromVersion, toVersion, compareVersions, options = {}) {
-=======
 const fetchJson = async (url, options) => {
->>>>>>> bc50ba56a
   const fetchImpl = options.fetch ?? fetch;
-  const canary = CANARY_VERSION_PATTERN.test(String(toVersion ?? ''));
   try {
-<<<<<<< HEAD
-    const response = await fetchImpl(canary ? CANARY_NOTES_URL : CHANGELOG_INDEX_URL, { signal: AbortSignal.timeout(options.timeoutMs ?? 10_000) });
-    if (!response.ok) return null;
-    const render = canary ? renderCanaryNotes : renderUpdateNotes;
-    return render(await response.json(), fromVersion, toVersion, compareVersions);
-=======
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(options.timeoutMs ?? 10_000) });
     return response.ok ? await response.json() : null;
->>>>>>> bc50ba56a
   } catch {
     return null;
   }

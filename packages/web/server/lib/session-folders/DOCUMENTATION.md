@@ -60,7 +60,6 @@ owns the change semantics (the UI applies the same changes through
 - `import` keeps what the Host already has: its folders keep id, name and
   place, and a chat it already files stays where it is. The only thing it
   removes is a folder the device itself deleted, sent as a tombstone.
-<<<<<<< HEAD
 - A stored scope that cannot be read is failure, not empty: it is reported in
   `errors`, kept out of destructive writes, and never treated as an empty
   folder list. Only a valid whole-copy `POST` repairs it, since that is the
@@ -71,59 +70,3 @@ owns the change semantics (the UI applies the same changes through
 - Collapsing a folder is per device (`oc.sessions.folderCollapse`); the server
   stores `collapsedFolderIds` only for older clients, and current clients
   ignore it.
-=======
-- A file that exists but cannot be read is never treated as empty: `GET` and
-  `PATCH` answer 500 and nothing is written. Only the older clients' whole-copy
-  `POST` replaces it, since a valid copy is all such a file can be repaired from.
-- Any write that changes the folders moves `updatedAt` past the stored value,
-  the older clients' `POST` included, whose own stamp comes from its clock.
-- The client applies the same changes to its own copy with the same results
-  (`packages/ui/src/lib/sessionFolders/folderChanges.ts`); a change to one
-  side's semantics changes the other in the same commit.
-
-## Decisions
-
-### Why changes and not whole copies
-
-Clients used to send their whole folder map and the server merged it per
-scope, with the incoming copy winning per folder id. A device that had not
-seen another device's rename or move undid it on its next write, and a
-missing scope could not be told from a deleted one. A change says what the
-user did ("move these chats into this folder"), so a client that is behind
-cannot undo anything it did not touch, and the server needs no merge rules
-for ordinary edits.
-
-### Why a move carries where the chat was instead of an id the server remembers
-
-A client that timed out cannot tell whether the server stored its move, so it
-sends the move again, and it may do so after a reload, long after another client
-moved the same chat. Ids of applied changes would stop only the re-send of a
-stored move; a move that never arrived would still undo the newer one. Comparing
-the chat's place covers both and keeps the stored file as it is. The cost is
-that of two clients moving one chat from the same place, the first to reach the
-server wins, and a chat moved back to exactly where it started can still be
-moved again by a late re-send.
-
-### Why the server tells clients to read again instead of sending the folders
-
-The announcement carries only the revision, like `project-context-changed`.
-A client reads the folders once per change it has not seen, so an event that
-arrives late or twice cannot show an old map, and the event stays small for
-any number of projects.
-
-### Why the import lets the server win
-
-Each device's copy from before sharing is merged in once. What the server
-already has is what the other devices show, so it wins; a local folder with
-the same name under the same parent in the same scope joins it instead of
-becoming a duplicate, any other local folder is added, and a chat only the
-device had filed goes into the matching folder. Nothing on either side is
-dropped except folders deleted elsewhere within the last 30 days.
-
-### Why collapsing a folder is not shared
-
-Which folders are open is how one screen is arranged; collapsing one on the
-phone must not close it on the desktop. The client keeps it per device and
-ignores `collapsedFolderIds` in the file, which only older clients still read
-and write.
->>>>>>> bc50ba56a

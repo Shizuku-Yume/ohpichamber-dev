@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-<<<<<<< HEAD
-import { fetchUpdateNotes, renderCanaryNotes, renderUpdateNotes } from './update-notes.js';
-=======
 import { fetchReleaseNotes, fetchUpdateNotes, renderCanaryNotes, renderUpdateNotes } from './update-notes.js';
->>>>>>> bc50ba56a
 import { compareVersions } from '../version-order.js';
 
 const compare = (a, b) => {
@@ -82,8 +78,6 @@ describe('fetchUpdateNotes', () => {
   });
 });
 
-<<<<<<< HEAD
-=======
 describe('release sources', () => {
   const apiFeed = {
     entries: [
@@ -148,7 +142,6 @@ describe('fetchReleaseNotes', () => {
   });
 });
 
->>>>>>> bc50ba56a
 describe('Canary notes', () => {
   const nights = [
     { version: '2.5.4-canary.20261031.5', date: '2026-10-31', new: [{ area: 'chat', text: 'remember thinking level per model', pr: '5505' }], fixes: [{ area: 'scheduled-tasks', text: 'record dispatched runs as sent', pr: null }] },
@@ -179,13 +172,6 @@ describe('Canary notes', () => {
     expect(renderCanaryNotes(nights, '2.5.4-canary.20261031.5', '2.5.4-canary.20261031.5', compareVersions)).toBe(null);
   });
 
-<<<<<<< HEAD
-  it('reads them from the canary pre-release for a Canary target', async () => {
-    const urls = [];
-    const ok = async (url) => { urls.push(url); return { ok: true, json: async () => nights }; };
-    expect(await fetchUpdateNotes('2.5.4-canary.20261030.4', '2.5.4-canary.20261031.5', compareVersions, { fetch: ok })).toMatch(/^## \[2\.5\.4-canary\.20261031\.5\]/);
-    expect(urls).toEqual(['https://github.com/openchamber/openchamber/releases/download/canary/canary-notes.json']);
-=======
   it('reads them from the R2 mirror for a Canary target', async () => {
     const urls = [];
     const ok = async (url) => { urls.push(url); return { ok: true, json: async () => nights }; };
@@ -198,6 +184,5 @@ describe('Canary notes', () => {
     const mirrorDown = async (url) => { urls.push(url); return url.includes('downloads.openchamber.dev') ? { ok: false } : { ok: true, json: async () => nights }; };
     expect(await fetchUpdateNotes('2.5.4-canary.20261030.4', '2.5.4-canary.20261031.5', compareVersions, { fetch: mirrorDown })).toMatch(/^## \[2\.5\.4-canary\.20261031\.5\]/);
     expect(urls.at(-1)).toBe('https://github.com/openchamber/openchamber/releases/download/canary/canary-notes.json');
->>>>>>> bc50ba56a
   });
 });

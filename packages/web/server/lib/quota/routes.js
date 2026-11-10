@@ -1,5 +1,4 @@
 import express from 'express';
-<<<<<<< HEAD
 import { giftResetTypes, useZaiGiftReset } from './providers/zai.js';
 import { requireSelectedCredential, SELECTED_CREDENTIAL_UNAVAILABLE } from './providers/selected-credential.js';
 import { extensionQuotaGuest, listExtensionQuotaProviders } from './extension-registry.js';
@@ -12,51 +11,6 @@ export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelect
   // list, never a short one built from a stale registry.
   app.get('/api/quota/extensions', async (_req, res) => {
     if (typeof listExtensionQuotaGuests !== 'function') return res.json({ extensions: [] });
-=======
-import { deleteManagedCredential, getManagedCredentialStatus, normalizers, readManagedCredential, writeManagedCredential } from './credentials/providers.js';
-import { importCursorCredential, validateCursorCredential } from './providers/cursor.js';
-import { fetchExeDevUsage } from './providers/exe-dev.js';
-import { aliases as zaiAliases, giftResetTypes as zaiGiftResetTypes, useZaiGiftReset } from './providers/zai.js';
-import { asNonEmptyString } from '../shared/guards.js';
-import { fetchQuota as fetchZenmuxQuota } from './providers/zenmux.js';
-import { listExtensionQuotaProviders } from './extension-registry.js';
-import { QuotaRouteError } from './route-error.js';
-
-// Keyed by the same provider ids as `normalizers`: a provider with a normalizer
-// but no validator would be stored without ever being checked.
-const validators = {
-  'exe-dev': fetchExeDevUsage,
-  cursor: validateCursorCredential,
-  zenmux: async (credential) => {
-    const result = await fetchZenmuxQuota({ readCredential: () => credential });
-    if (!result.ok) throw new Error(result.error ?? 'Credential validation failed');
-  },
-};
-
-const getProvider = (req, res) => {
-  const providerId = req.params.providerId;
-  if (!normalizers[providerId]) {
-    res.status(404).json({ code: 'UNSUPPORTED_PROVIDER', error: 'Unsupported credential provider' });
-    return null;
-  }
-  return providerId;
-};
-
-const credentialError = (res, error) => res.status(400).json({
-  code: 'INVALID_CREDENTIAL',
-  error: error instanceof Error ? error.message : 'Credential validation failed',
-});
-
-export function registerQuotaRoutes(app, { getQuotaProviders }) {
-  // The usage providers installed extensions serve right now (id, name, icon,
-  // extension), which the UI draws beside its built-in list. Every client reads
-  // this on each stream connect, so it answers from memory and asks OpenCode nothing.
-  app.get('/api/quota/extensions', (_req, res) => {
-    res.json({ extensions: listExtensionQuotaProviders() });
-  });
-
-  app.get('/api/quota/providers', async (_req, res) => {
->>>>>>> bc50ba56a
     try {
       res.json({ extensions: listExtensionQuotaProviders(await listExtensionQuotaGuests()) });
     } catch (error) {
@@ -75,7 +29,6 @@ export function registerQuotaRoutes(app, { getQuotaProviders }) {
     }
   });
   app.get('/api/quota/:providerId', async (req, res) => {
-<<<<<<< HEAD
     const providerId = req.params.providerId;
     // An installed extension serves its own usage provider; the built-in
     // registry has no entry for it, and the reverse is also true.
@@ -94,18 +47,6 @@ export function registerQuotaRoutes(app, { getQuotaProviders }) {
       } catch {
         return res.status(503).json({ error: 'Extension usage provider unavailable' });
       }
-=======
-    try {
-      const { providerId } = req.params;
-      if (!providerId) return res.status(400).json({ error: 'Provider ID is required' });
-      const { fetchQuotaForProvider } = await getQuotaProviders();
-      res.json(await fetchQuotaForProvider(providerId));
-    } catch (error) {
-      // An extension's answer OpenChamber cannot use (`extension-quota.js`): the UI shows the message as the refresh failure, never an empty result.
-      if (error instanceof QuotaRouteError) return res.status(error.status).json({ code: error.code, error: error.message });
-      console.error('Failed to fetch quota:', error);
-      res.status(500).json({ error: error.message || 'Failed to fetch quota' });
->>>>>>> bc50ba56a
     }
     try {
       const providers = await getQuotaProviders();
@@ -130,33 +71,10 @@ export function registerQuotaRoutes(app, { getQuotaProviders }) {
     const { recordId, resetType } = req.body ?? {};
     if (!Number.isFinite(recordId) || !giftResetTypes.includes(resetType)) return res.status(400).json({ code: 'INVALID_REQUEST', error: 'Invalid gift reset request' });
     try {
-<<<<<<< HEAD
       const selection = await resolveQuotaSelection(req, req.params.providerId);
       const credential = await requireSelectedCredential({ ...selection, purpose: 'quota', resolveCredential });
       await useZaiGiftReset({ recordId, resetType, credential });
       return res.json({ success: true });
     } catch { return res.status(502).json({ error: 'Failed to activate gift reset' }); }
-=======
-      const providerId = req.params.providerId;
-      if (!zaiAliases.includes(providerId)) {
-        return res.status(404).json({ code: 'UNSUPPORTED_PROVIDER', error: 'Unsupported quota provider' });
-      }
-      const { recordId, resetType, grantType } = req.body ?? {};
-      if (!Number.isFinite(recordId)
-        || !zaiGiftResetTypes.includes(resetType)
-        || (grantType !== undefined && asNonEmptyString(grantType) === null)) {
-        return res.status(400).json({ code: 'INVALID_REQUEST', error: 'Invalid gift reset request' });
-      }
-      await useZaiGiftReset({ recordId, resetType, grantType });
-      res.json({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      if (message === 'Not configured') {
-        return res.status(400).json({ code: 'NOT_CONFIGURED', error: 'Not configured' });
-      }
-      console.error('Failed to activate gift reset:', error);
-      res.status(502).json({ error: message || 'Failed to activate gift reset' });
-    }
->>>>>>> bc50ba56a
   });
 }

@@ -141,11 +141,8 @@ export const projectSetupViewOf = (raw) => {
     setupWorktree: sanitizeSetupCommands(document['setup-worktree']),
     setupWorktreeWait: typeof document['setup-worktree-wait'] === 'boolean' ? document['setup-worktree-wait'] : null,
     setupWorktreeMode: SETUP_WORKTREE_MODES.has(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
-<<<<<<< HEAD
     worktreeDirectory: worktreeDirectoryOf(document),
-=======
     teardownWorktree: sanitizeSetupCommands(document.teardownWorktree),
->>>>>>> bc50ba56a
     projectActions,
     projectActionsPrimaryId: primaryRaw && projectActions.some((action) => action.id === primaryRaw) ? primaryRaw : null,
     draftStarters: sanitizeDraftStarters(document.draftStarters),
