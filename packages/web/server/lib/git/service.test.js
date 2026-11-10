@@ -1409,6 +1409,80 @@ describe('getStatus', () => {
   expect(light.diffStats).toBeUndefined();
  });
 
+ it('starts one Git process per question a status read asks (#5481)', async () => {
+  if (!canRunGit()) return;
+  // The wrapper is a shell script.
+  if (process.platform === 'win32') return;
+
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  fs.writeFileSync(path.join(repo, 'README.md'), 'one\n');
+  runGit(repo, ['add', 'README.md']);
+  runGit(repo, ['commit', '-m', 'initial']);
+  runGit(repo, ['remote', 'add', 'origin', createTempDir()]);
+  runGit(repo, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+  runGit(repo, ['branch', '--set-upstream-to=origin/main']);
+  fs.appendFileSync(path.join(repo, 'README.md'), 'two\n');
+
+  const wrapperDirectory = createTempDir();
+  const invocations = path.join(createTempDir(), 'invocations');
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  fs.writeFileSync(path.join(wrapperDirectory, 'git'), `#!/bin/sh
+echo "$*" >> "${invocations}"
+exec "${realGit}" "$@"
+`);
+  fs.chmodSync(path.join(wrapperDirectory, 'git'), 0o755);
+  vi.stubEnv('PATH', `${wrapperDirectory}${path.delimiter}${process.env.PATH || ''}`);
+
+  let status;
+  try {
+   status = await getStatus(repo);
+  } finally {
+   vi.unstubAllEnvs();
+  }
+
+  expect(status).toMatchObject({ current: 'main', tracking: 'origin/main', mergeInProgress: null, rebaseInProgress: null });
+  // `remote get-url` runs because this repository is new to the remote
+  // existence cache; later reads within its window skip it.
+  const commands = fs.readFileSync(invocations, 'utf8').trim().split('\n').sort();
+  expect(commands).toEqual([
+   'diff --cached --numstat -z',
+   'diff-files -M --numstat -z',
+   'remote get-url -- upstream',
+   'rev-parse --git-dir --show-toplevel',
+   'rev-parse --git-path MERGE_HEAD --git-path MERGE_MSG --git-path rebase-merge --git-path rebase-apply',
+   'rev-parse --verify --quiet HEAD',
+   'status --porcelain -b -u --null -unormal',
+  ]);
+ });
+
+ it("keys a renamed file's staged stats by its destination path", async () => {
+  if (!canRunGit()) return;
+
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['config', 'diff.renames', 'true']);
+  const source = 'source.md';
+  const destination = 'docs/renamed.md';
+  fs.writeFileSync(path.join(repo, source), 'one\ntwo\nthree\n');
+  runGit(repo, ['add', source]);
+  runGit(repo, ['commit', '-m', 'initial']);
+
+  fs.mkdirSync(path.dirname(path.join(repo, destination)), { recursive: true });
+  runGit(repo, ['mv', source, destination]);
+  fs.appendFileSync(path.join(repo, destination), 'four\n');
+  runGit(repo, ['add', destination]);
+
+  const status = await getStatus(repo);
+
+  expect(status.diffStats.staged[destination]).toEqual({ insertions: 1, deletions: 0 });
+  expect(status.diffStats.staged[source]).toBeUndefined();
+ });
+
  it('keys a working file whose name contains a quote character', async () => {
   if (!canRunGit()) return;
   // Windows file names cannot contain a quote character.
@@ -3195,6 +3269,71 @@ exec "$REAL_GIT" "$@"
   });
  }, 30_000);
 
+ // A worktree of this change request was removed earlier and left its local branch behind.
+ const commitOnBranch = (repository, branch, file, start = 'next') => {
+  runGit(repository, ['checkout', '-B', branch, start]);
+  fs.writeFileSync(path.join(repository, file), `${file}\n`);
+  runGit(repository, ['add', file]);
+  runGit(repository, ['commit', '-m', file]);
+  const sha = runGit(repository, ['rev-parse', 'HEAD']).trim();
+  runGit(repository, ['checkout', 'next']);
+  return sha;
+ };
+ const transferredSameRepositoryInput = (remote, worktreeName, expectedRevision) => ({
+  mode: 'existing',
+  branchName: 'feature/login',
+  worktreeName,
+  existingBranch: 'remotes/origin/feature/login',
+  ensureRemoteName: 'origin',
+  ensureRemoteUrl: remote,
+  changeRequestTransfer: true,
+  contributorTransferComplete: true,
+  expectedRevision,
+ });
+
+ it('moves a leftover change request branch that trails the head, without a backup', async () => {
+  if (!canRunGit()) return;
+
+  await withDataHome(async () => {
+   const { remote, repository } = createRepositoryWithRemote();
+   const leftover = commitOnBranch(repository, 'feature/login', 'FIRST.md');
+   const head = commitOnBranch(repository, 'head-source', 'SECOND.md', leftover);
+   runGit(repository, ['update-ref', 'refs/remotes/origin/feature/login', head]);
+
+   const created = await createWorktree(repository, transferredSameRepositoryInput(remote, 'pr-7-behind', head));
+
+   expect(created.branch).toBe('feature/login');
+   expect(created.branchBackup).toBeUndefined();
+   expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(head);
+   expect(runGit(repository, ['branch', '--list', 'feature/login-backup-*']).trim()).toBe('');
+  });
+ }, 30_000);
+
+ it('keeps a diverged leftover change request branch in a backup before moving it to the head', async () => {
+  if (!canRunGit()) return;
+
+  await withDataHome(async () => {
+   const { remote, repository } = createRepositoryWithRemote();
+   const leftover = commitOnBranch(repository, 'feature/login', 'OLD.md');
+   const head = commitOnBranch(repository, 'rebased', 'REBASED.md');
+   runGit(repository, ['update-ref', 'refs/remotes/origin/feature/login', head]);
+
+   const created = await createWorktree(repository, {
+    ...transferredSameRepositoryInput(remote, 'pr-7-diverged', head),
+    returnAfterDirectoryCreated: true,
+   });
+
+   const backup = `feature/login-backup-${leftover.slice(0, 7)}`;
+   expect(created.branchBackup).toBe(backup);
+   expect(runGit(repository, ['rev-parse', `refs/heads/${backup}`]).trim()).toBe(leftover);
+   await expect.poll(() => getWorktreeBootstrapStatus(created.path).then((status) => status.status), {
+    timeout: 5_000,
+   }).toBe('ready');
+   expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(head);
+   expect(runGit(created.path, ['branch', '--show-current']).trim()).toBe('feature/login');
+  });
+ }, 30_000);
+
  it('rejects a fork branch that moved away from the requested PR head revision', async () => {
   if (!canRunGit()) return;
 
@@ -3587,6 +3726,35 @@ describe('removeWorktree', () => {
   expect(fs.existsSync(fixture.metadata)).toBe(false);
   expect(() => runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toThrow();
   expect(runGit(fixture.repo, ['worktree', 'list', '--porcelain'])).not.toContain(fixture.worktree);
+ });
+
+ it('removes an absolute .git directory symlink only after instance disposal', async () => {
+  if (!canRunGit() || process.platform === 'win32') return;
+  const fixture = createRemovalWorktree();
+  const linkTarget = installGitDirectoryLink(fixture, true);
+  const disposalStates = [];
+
+  await expect(removeWorktree(fixture.repo, {
+   directory: fixture.worktree,
+   disposeInstance: async (directory) => {
+    disposalStates.push({
+     directory,
+     linkTarget: fs.readlinkSync(fixture.gitEntry),
+     metadataExists: fs.existsSync(fixture.metadata),
+     branch: runGit(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).trim(),
+    });
+   },
+  })).resolves.toBe(true);
+
+  expect(disposalStates).toEqual([{
+   directory: fixture.worktree,
+   linkTarget,
+   metadataExists: true,
+   branch: 'feature/remove',
+  }]);
+  expect(fs.existsSync(fixture.worktree)).toBe(false);
+  expect(fs.existsSync(fixture.metadata)).toBe(false);
+  expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
  });
 
  it('removes a registered worktree with an absolute .git directory symlink', async () => {
@@ -5360,7 +5528,7 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
   expect((await getStatus(tmpDir)).rebaseInProgress).toBeTruthy();
  });
 
- it('never disposes the primary workspace and warns about a failed disposal', async () => {
+ it('warns about a failed instance disposal and still removes the worktree', async () => {
   if (!canRunGit()) return;
 
   const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
@@ -5383,18 +5551,97 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
     throw new Error('OpenCode API URL is not available');
    });
    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
    try {
-    await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
+    await expect(removeWorktree(repo, {
+     directory: created.path,
+     disposeInstance,
+    })).resolves.toBe(true);
+
     expect(disposeInstance).toHaveBeenCalledTimes(1);
+    expect(fs.existsSync(created.path)).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(
      expect.stringContaining('Failed to dispose the OpenCode instance'),
      expect.stringContaining('OpenCode API URL is not available'),
     );
-    expect(fs.existsSync(created.path)).toBe(false);
    } finally {
     warnSpy.mockRestore();
    }
   } finally {
+   if (previousXdgDataHome === undefined) {
+    delete process.env.OPENCHAMBER_DATA_DIR;
+   } else {
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
+   }
+  }
+ });
+
+ it('never disposes the primary workspace', async () => {
+  if (!canRunGit()) return;
+
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = createTempDir();
+
+  try {
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   runGit(repo, ['config', 'user.email', 'test@example.com']);
+   runGit(repo, ['config', 'user.name', 'Test User']);
+   runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+
+   const disposeInstance = vi.fn();
+   await expect(removeWorktree(repo, {
+    directory: repo,
+    disposeInstance,
+   })).rejects.toThrow('Cannot remove the primary workspace');
+   expect(disposeInstance).not.toHaveBeenCalled();
+  } finally {
+   if (previousXdgDataHome === undefined) {
+    delete process.env.OPENCHAMBER_DATA_DIR;
+   } else {
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
+   }
+  }
+ });
+
+ it('releases the worktree instance again before retrying a busy removal', async () => {
+  if (!canRunGit() || process.platform === 'win32' || process.getuid?.() === 0) return;
+
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = createTempDir();
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+
+  try {
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   runGit(repo, ['config', 'user.email', 'test@example.com']);
+   runGit(repo, ['config', 'user.name', 'Test User']);
+   runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+
+   const created = await createWorktree(repo, {
+    mode: 'new',
+    branchName: 'feature/busy-release',
+    worktreeName: 'busy-release',
+   });
+   // Its background checkout must finish before the platform is faked below.
+   await expect.poll(async () => (await getWorktreeBootstrapStatus(created.path)).status).not.toBe('pending');
+   const held = path.join(created.path, 'held');
+   fs.mkdirSync(held);
+   fs.writeFileSync(path.join(held, 'file.txt'), 'held');
+   fs.chmodSync(held, 0o555);
+
+   // The second release is the one that frees the folder.
+   const disposeInstance = vi.fn(async () => {
+    if (disposeInstance.mock.calls.length === 2) fs.chmodSync(held, 0o755);
+   });
+   Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
+
+   await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
+
+   expect(disposeInstance).toHaveBeenCalledTimes(2);
+   expect(fs.existsSync(created.path)).toBe(false);
+  } finally {
+   Object.defineProperty(process, 'platform', platform);
    if (previousXdgDataHome === undefined) {
     delete process.env.OPENCHAMBER_DATA_DIR;
    } else {

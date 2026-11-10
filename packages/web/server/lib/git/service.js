@@ -2572,16 +2572,6 @@ const resolveExistingWorktreeSource = async (primaryWorktree, input = {}, intent
  };
 };
 
-// A live branch list offers remote branches that were never fetched (it asks
-// each remote with `ls-remote`), so a worktree from one of them fetches that
-// single branch first. A failed fetch reports the branch as missing.
-const ensureLocalRemoteBranchRef = async (primaryWorktree, remoteName, branchName) => {
- const localCheck = await checkLocalRemoteBranchExists(primaryWorktree, remoteName, branchName);
- if (localCheck.found || !localCheck.success) return localCheck;
- await fetchRemoteBranchRef(primaryWorktree, remoteName, branchName).catch(() => undefined);
- return checkLocalRemoteBranchExists(primaryWorktree, remoteName, branchName);
-};
-
 const checkLocalRemoteBranchExists = async (primaryWorktree, remoteName, branchName) => {
  const remote = String(remoteName || '').trim();
  const branch = String(branchName || '').trim();
@@ -3174,10 +3164,15 @@ export async function isPatchEquivalentOfHead(directory, sha) {
 
 async function readStatus(normalizedDirectory, lightMode) {
  try {
-  const { directoryPath, repoRoot, git } = await createRepositoryGitContext(normalizedDirectory, {
-   stallTimeoutMs: GIT_STATUS_STALL_TIMEOUT_MS,
-   optionalLocks: false,
-  });
+  const repository = await probeRepository(normalizedDirectory);
+  if (!repository.isRepository) {
+   throw new Error('fatal: not a git repository (or any of the parent directories): .git');
+  }
+
+  const gitOptions = { stallTimeoutMs: GIT_STATUS_STALL_TIMEOUT_MS, optionalLocks: false };
+  const { directoryPath, repoRoot, git } = repository.repoRoot
+   ? { directoryPath: normalizedDirectory, repoRoot: repository.repoRoot, git: await createGit(repository.repoRoot, gitOptions) }
+   : await createRepositoryGitContext(normalizedDirectory, gitOptions);
 
   // `-unormal` lists a directory with no tracked files as one `dir/` entry
   // and stops walking it at its first file. `-uall` would walk every file
@@ -3394,23 +3389,25 @@ async function readStatus(normalizedDirectory, lightMode) {
    upstreamComparison = await getRemoteBranchComparison(git, 'upstream', status.current);
   }
 
-  // Check for in-progress operations
+  // Check for in-progress operations. One `--git-path` call locates every
+  // marker, and the markers themselves are plain files: MERGE_HEAD is always
+  // a file in the git dir, whatever the ref storage.
   let mergeInProgress = null;
   let rebaseInProgress = null;
+  const [mergeHeadPath = '', mergeMsgPath = '', rebaseMergePath = '', rebaseApplyPath = ''] = await git
+   .raw(['rev-parse', '--git-path', 'MERGE_HEAD', '--git-path', 'MERGE_MSG', '--git-path', 'rebase-merge', '--git-path', 'rebase-apply'])
+   .then((value) => String(value || '').split(/\r?\n/).slice(0, 4).map((line) => (
+    line.trim() ? path.resolve(repoRoot, normalizeGitOutputPath(line.trim())) : ''
+   )))
+   .catch(() => []);
+  const pathExists = (target) => (target ? fsp.stat(target).then(() => true).catch(() => false) : false);
 
   try {
-   // Check MERGE_HEAD for merge in progress
-   const mergeHeadExists = await git
-    .raw(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])
-    .then(() => true)
-    .catch(() => false);
-
-   if (mergeHeadExists) {
+   if (await pathExists(mergeHeadPath)) {
     const mergeHead = await git.raw(['rev-parse', 'MERGE_HEAD']).catch(() => '');
     const headSha = mergeHead.trim().slice(0, 7);
     // Only set mergeInProgress if we actually have a valid head SHA
     if (headSha) {
-     const mergeMsgPath = await resolveGitInternalPath(repoRoot, git, 'MERGE_MSG').catch(() => '');
      const mergeMsg = mergeMsgPath ? await fsp.readFile(mergeMsgPath, 'utf8').catch(() => '') : '';
      mergeInProgress = {
       head: headSha,
@@ -3424,10 +3421,8 @@ async function readStatus(normalizedDirectory, lightMode) {
 
   try {
    // Check for rebase in progress (.git/rebase-merge or .git/rebase-apply)
-   const rebaseMergePath = await resolveGitInternalPath(repoRoot, git, 'rebase-merge').catch(() => '');
-   const rebaseApplyPath = await resolveGitInternalPath(repoRoot, git, 'rebase-apply').catch(() => '');
-   const rebaseMergeExists = rebaseMergePath ? await fsp.stat(rebaseMergePath).then(() => true).catch(() => false) : false;
-   const rebaseApplyExists = rebaseApplyPath ? await fsp.stat(rebaseApplyPath).then(() => true).catch(() => false) : false;
+   const rebaseMergeExists = await pathExists(rebaseMergePath);
+   const rebaseApplyExists = await pathExists(rebaseApplyPath);
 
    if (rebaseMergeExists || rebaseApplyExists) {
     const rebasePath = rebaseMergeExists ? rebaseMergePath : rebaseApplyPath;
@@ -5933,6 +5928,40 @@ export async function previewWorktreeCreate(directory, input = {}) {
  };
 }
 
+const readLocalBranchTip = async (primaryWorktree, branch) => {
+ const result = await runGitCommand(primaryWorktree, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`]);
+ return result.success ? String(result.stdout || '').trim() : '';
+};
+
+/**
+ * A change request's local branch can be left over from an earlier worktree
+ * of it that was removed. That branch is reused and moved to the change
+ * request head. When it diverged from the head (the head was force-pushed),
+ * its old tip is first kept in `<branch>-backup-<sha>`, so no commit becomes
+ * unreachable. Returns null when there is no such branch or it is checked out
+ * elsewhere, which the ordinary creation checks report.
+ */
+const prepareChangeRequestLocalBranch = async (primaryWorktree, input = {}) => {
+ const expectedRevision = String(input?.expectedRevision || '').trim();
+ if (input?.changeRequestTransfer !== true || !expectedRevision) return null;
+ const remoteRef = await resolveRemoteBranchRef(primaryWorktree, String(input?.existingBranch || '').trim());
+ const branch = cleanBranchName(String(input?.branchName || '').trim() || remoteRef?.branch || '');
+ if (!remoteRef || !branch) return null;
+ const tip = await readLocalBranchTip(primaryWorktree, branch);
+ if (!tip || await findBranchInUse(primaryWorktree, branch)) return null;
+ if (await isAncestorRef(primaryWorktree, tip, expectedRevision)) return { branch, tip, backupBranch: null };
+
+ const backupBranch = `${branch}-backup-${tip.slice(0, 7)}`;
+ const backupTip = await readLocalBranchTip(primaryWorktree, backupBranch);
+ if (backupTip && backupTip !== tip) {
+  throw new Error(`Branch ${branch} has commits the change request no longer has, and ${backupBranch} already exists`);
+ }
+ if (!backupTip) {
+  await runGitCommandOrThrow(primaryWorktree, ['branch', '--no-track', backupBranch, tip], `Failed to keep ${branch} as ${backupBranch}`);
+ }
+ return { branch, tip, backupBranch };
+};
+
 async function attachGitWorktreeToCandidateWithoutRemoteRollback(context, candidate, input = {}, serverOptions = {}) {
  const mode = input?.mode === 'existing' ? 'existing' : 'new';
  const startRef = normalizeStartRef(input?.startRef);
@@ -5954,6 +5983,8 @@ async function attachGitWorktreeToCandidateWithoutRemoteRollback(context, candid
   });
  }
  let createdLocalBranch = false;
+ // A leftover change request branch this attempt moves; a failed attempt puts it back.
+ let movedLocalBranch = null;
  const worktreeAddArgs = ['worktree', 'add', '--no-checkout'];
 
  if (mode === 'existing') {
@@ -5966,13 +5997,25 @@ async function attachGitWorktreeToCandidateWithoutRemoteRollback(context, candid
    throw new Error(`Branch is already checked out in ${inUse.worktree}`);
   }
 
-  if (resolved.createLocalBranch) {
+  const reusedBranch = serverOptions.changeRequestLocalBranch;
+  if (resolved.createLocalBranch && reusedBranch?.branch === localBranch) {
+   if (await readLocalBranchTip(context.primaryWorktree, localBranch) !== reusedBranch.tip) {
+    throw new Error(`Branch ${localBranch} changed during worktree creation`);
+   }
+   worktreeAddArgs.push('-B', localBranch);
+   movedLocalBranch = reusedBranch;
+  } else if (resolved.createLocalBranch) {
    worktreeAddArgs.push('-b', localBranch);
    createdLocalBranch = true;
   }
   worktreeAddArgs.push(candidate.directory, expectedRevision && resolved.createLocalBranch
    ? expectedRevision
    : resolved.checkoutRef);
+  if (movedLocalBranch && contributorFork) {
+   // The leftover branch may still track something; contributor worktrees never do.
+   await runGitCommand(context.primaryWorktree, ['config', '--unset-all', `branch.${localBranch}.remote`]);
+   await runGitCommand(context.primaryWorktree, ['config', '--unset-all', `branch.${localBranch}.merge`]);
+  }
 
   if (resolved.upstream) {
    inferredUpstream = {
@@ -6033,15 +6076,21 @@ async function attachGitWorktreeToCandidateWithoutRemoteRollback(context, candid
   await recordBranchParent(context.primaryWorktree, localBranch, parent);
  }
 
+ // Undoes what this attempt did to the local branch, once its worktree is removed.
+ const releaseLocalBranch = async () => {
+  if (createdLocalBranch) return (await runGitCommand(context.primaryWorktree, ['branch', '-D', localBranch])).success;
+  if (movedLocalBranch) {
+   return (await runGitCommand(context.primaryWorktree, ['branch', '-f', localBranch, movedLocalBranch.tip])).success;
+  }
+  return true;
+ };
+
  if (expectedRevision) {
   const createdHead = await runGitCommand(candidate.directory, ['rev-parse', '--verify', 'HEAD']);
   if (!createdHead.success || String(createdHead.stdout || '').trim() !== expectedRevision) {
    const removed = await runGitCommand(context.primaryWorktree, ['worktree', 'remove', '--force', candidate.directory]);
-   if (createdLocalBranch && removed.success) {
-    const branchRemoved = await runGitCommand(context.primaryWorktree, ['branch', '-D', localBranch]);
-    if (!branchRemoved.success) {
-     throw new Error('Created worktree revision does not match the requested change request head, and the new local branch could not be removed safely');
-    }
+   if (removed.success && !(await releaseLocalBranch())) {
+    throw new Error('Created worktree revision does not match the requested change request head, and the local branch could not be restored safely');
    }
    if (!removed.success) {
     throw new Error('Created worktree revision does not match the requested change request head, and the worktree could not be removed safely');
@@ -6071,9 +6120,7 @@ async function attachGitWorktreeToCandidateWithoutRemoteRollback(context, candid
    });
   } catch (error) {
    const removed = await runGitCommand(context.primaryWorktree, ['worktree', 'remove', '--force', candidate.directory]);
-   if (createdLocalBranch && removed.success) {
-    await runGitCommand(context.primaryWorktree, ['branch', '-D', localBranch]);
-   }
+   if (removed.success) await releaseLocalBranch();
    throw error;
   }
  }
@@ -6311,6 +6358,14 @@ export async function createWorktree(directory, input = {}, serverOptions = {}) 
  }
  const prepared = await prepareWorktreeCreateSource(context, input);
  const preparedInput = prepared.input;
+ const changeRequestLocalBranch = mode === 'existing'
+  ? await prepareChangeRequestLocalBranch(context.primaryWorktree, preparedInput)
+  : null;
+ const attachOptions = changeRequestLocalBranch ? { ...serverOptions, changeRequestLocalBranch } : serverOptions;
+ // Tells the user where a diverged leftover branch's commits went.
+ const withBranchBackup = (result) => (changeRequestLocalBranch?.backupBranch
+  ? { ...result, branchBackup: changeRequestLocalBranch.backupBranch }
+  : result);
 
  await fsp.mkdir(context.worktreeRoot, { recursive: true });
  context.worktreeRoot = await fsp.realpath(context.worktreeRoot);
@@ -6348,7 +6403,7 @@ export async function createWorktree(directory, input = {}, serverOptions = {}) 
    : candidate.branch;
 
   const task = bootstrapStatus.status === WORKTREE_BOOTSTRAP_PENDING
-   ? attachGitWorktreeToCandidate(context, candidate, preparedInput, serverOptions).catch(async (error) => {
+   ? attachGitWorktreeToCandidate(context, candidate, preparedInput, attachOptions).catch(async (error) => {
     await setWorktreeBootstrapState(
      candidate.directory,
      WORKTREE_BOOTSTRAP_FAILED,
@@ -6376,10 +6431,10 @@ export async function createWorktree(directory, input = {}, serverOptions = {}) 
    result.sourceFetchFailed = true;
    if (prepared.sourceFetchReason) result.sourceFetchReason = prepared.sourceFetchReason;
   }
-  return result;
+  return withBranchBackup(result);
  }
 
- const result = await attachGitWorktreeToCandidate(context, candidate, preparedInput, serverOptions);
+ const result = withBranchBackup(await attachGitWorktreeToCandidate(context, candidate, preparedInput, attachOptions));
  if (!prepared.sourceFetchFailed) return result;
  return prepared.sourceFetchReason
   ? { ...result, sourceFetchFailed: true, sourceFetchReason: prepared.sourceFetchReason }
@@ -6811,6 +6866,7 @@ const removeGitWorktreeWhenFree = async (primaryWorktree, worktreePath, targetCa
   }
   const delay = WORKTREE_BUSY_RETRY_DELAYS_MS[attempt];
   if (delay === undefined) throw new Error(WORKTREE_BUSY_MESSAGE);
+  await releaseInstance();
   await wait(delay);
  }
 };
