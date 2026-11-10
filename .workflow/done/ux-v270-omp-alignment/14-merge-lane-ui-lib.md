@@ -7,15 +7,18 @@
 **Read first:** spec "How it is built" (Merge); `merge-lanes.tsv` lane 14; `packages/ui/src/lib/theme/STYLING.md`; skills `locale-ui-patterns`, `ui-api-decoupling`
 **Check:** in a worktree on the scaffold branch, `bun scripts/upstream-drift.mjs --markers --lane 14` → 0; `bun run --cwd packages/ui type-check` reports no error located in lane paths; `bun scripts/upstream-drift.mjs --check -- packages/ui/src/lib packages/ui/src/hooks packages/ui/src/styles` → 0 `unexplained`
 - **Base commit:** eeb64ec99ed17a4611f6b951e51cbad054d79f0f
-- **Status:** active
 
 - [x] Resolve the conflicted paths with the merge rule. Restore the upstream CSS utilities the fork deleted while still in use (`oc-title-rest`, `oc-group-label`, `oc-bar-grow`, file-tree row utilities, terminal preedit) and upstream's theme, release-notes, provider-logo and text-direction libraries.
-- [ ] Merge i18n dictionaries key by key: upstream strings arrive in all 15 locales, and fork OMP keys are kept.
+- [x] Merge i18n dictionaries key by key: upstream strings arrive in all 15 locales, and fork OMP keys are kept.
 - [x] Deletes: fork-only helpers that duplicate an upstream helper now present.
 
 ## Progress
 
 **Check before:** `bun scripts/upstream-drift.mjs --markers --lane 14` → 2,082 markers in 168 lane paths (694 hunks).
+
+**Check after:** `bun scripts/upstream-drift.mjs --markers --lane 14` → `no conflict markers (lane 14)`; `cd packages/ui && bunx tsc -b --force` → 0 errors in every lane path; `bun scripts/upstream-drift.mjs --check -- packages/ui/src/lib packages/ui/src/hooks packages/ui/src/styles` → `drift check passed: no conflict markers, no unexplained path, no contradicting row` (175 decision rows added for the lane).
+
+**Markers:**
 
 **Check after (markers):** `bun scripts/upstream-drift.mjs --markers --lane 14` → `no conflict markers (lane 14)`.
 
