@@ -1,9 +1,6 @@
 import React from 'react';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
-<<<<<<< HEAD
-=======
 import { useBackgroundImagesStore } from '@/sync/background-images';
->>>>>>> bc50ba56a
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { collectOpenTurnSessionIds, useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { usePrWatchStore } from '@/sync/pr-watch';
@@ -24,16 +21,6 @@ const EMPTY_PR_WATCHES: PrWatchMap = new Map();
 
 /** The ids of top-level sessions whose last turn is unread and of those whose last turn failed, as one comparable key. */
 const selectTurnOutcomeKey = (state: ReturnType<typeof useGlobalSessionsStore.getState>): string => {
-<<<<<<< HEAD
- const unread: string[] = [];
- const failed: string[] = [];
- for (const session of state.entityById?.values() ?? []) {
-  if (session.parentSessionId || session.archivedAt !== undefined) continue;
-  if (isSessionUnread(session)) unread.push(session.sessionId);
-  if (session.runtimeStatus === 'unavailable') failed.push(session.sessionId);
- }
- return `${unread.sort().join(',')}|${failed.sort().join(',')}`;
-=======
   const unread: string[] = [];
   const failed: string[] = [];
   for (const session of state.entityById.values()) {
@@ -42,7 +29,6 @@ const selectTurnOutcomeKey = (state: ReturnType<typeof useGlobalSessionsStore.ge
     if (session.outcome === 'failed') failed.push(session.id);
   }
   return `${unread.sort().join(',')}|${failed.sort().join(',')}`;
->>>>>>> bc50ba56a
 };
 
 /**
@@ -55,28 +41,6 @@ const selectTurnOutcomeKey = (state: ReturnType<typeof useGlobalSessionsStore.ge
  * and not as unread, as its row reads.
  */
 export const useSidebarLiveFacts = (enabled: boolean): SidebarLiveFacts => {
-<<<<<<< HEAD
- // Membership of these sets changes only when a turn or its background work starts or ends.
- const activeIds = useGlobalSessionStatusStore((state) => (enabled ? state.activeSessionIds : EMPTY_IDS));
- const workflowIds = useWorkflowActivityStore((state) => (enabled ? state.runningSessionIds : EMPTY_IDS));
- const shellIds = useBackgroundShellsStore((state) => (enabled ? state.sessionIds : EMPTY_IDS));
- const prWatches = usePrWatchStore((state) => (enabled ? state.bySession : EMPTY_PR_WATCHES));
- const blocking = useGlobalBlockingRequestsStore((state) => (enabled ? state.bySession : EMPTY_BLOCKING));
- const outcomeKey = useGlobalSessionsStore(React.useCallback((state) => (enabled ? selectTurnOutcomeKey(state) : ''), [enabled]));
- return React.useMemo(() => {
-  if (!enabled) return EMPTY_SIDEBAR_LIVE_FACTS;
-  const [unread = '', failed = ''] = outcomeKey.split('|');
-  const openTurnIds = collectOpenTurnSessionIds(activeIds, [workflowIds, shellIds, prWatches.keys()]);
-  return {
-   activeIds: openTurnIds,
-   blockingIds: new Set([...blocking].flatMap(([sessionId, pending]) => (
-    pending.permissions.length + pending.forms.length > 0 ? [sessionId] : []
-   ))),
-   unreadIds: new Set(unread ? unread.split(',').filter((sessionId) => !openTurnIds.has(sessionId)) : []),
-   failedIds: new Set(failed ? failed.split(',') : []),
-  };
- }, [activeIds, blocking, enabled, outcomeKey, prWatches, shellIds, workflowIds]);
-=======
   // Membership of these sets changes only when a turn or its background work starts or ends.
   const activeIds = useGlobalSessionStatusStore((state) => (enabled ? state.activeSessionIds : EMPTY_IDS));
   const workflowIds = useWorkflowActivityStore((state) => (enabled ? state.runningSessionIds : EMPTY_IDS));
@@ -98,20 +62,13 @@ export const useSidebarLiveFacts = (enabled: boolean): SidebarLiveFacts => {
       failedIds: new Set(failed ? failed.split(',') : []),
     };
   }, [activeIds, blocking, enabled, imageIds, outcomeKey, prWatches, shellIds, workflowIds]);
->>>>>>> bc50ba56a
 };
 
 /** The start of the local hour: a local midnight is always one, whatever the time zone's offset. */
 const localHourStart = (): number => {
-<<<<<<< HEAD
- const date = new Date();
- date.setMinutes(0, 0, 0);
- return date.getTime();
-=======
   const date = new Date();
   date.setMinutes(0, 0, 0);
   return date.getTime();
->>>>>>> bc50ba56a
 };
 
 /**
@@ -121,20 +78,6 @@ const localHourStart = (): number => {
  * The list rebuilds once an hour, never on every minute.
  */
 export const useSidebarSectionsNow = (active: boolean): number => {
-<<<<<<< HEAD
- const [hourStart, setHourStart] = React.useState(localHourStart);
- React.useEffect(() => {
-  if (!active) return;
-  const check = (): void => {
-   const next = localHourStart();
-   setHourStart((current) => (current === next ? current : next));
-  };
-  check();
-  const timer = window.setInterval(check, 60_000);
-  return () => window.clearInterval(timer);
- }, [active]);
- return hourStart;
-=======
   const [hourStart, setHourStart] = React.useState(localHourStart);
   React.useEffect(() => {
     if (!active) return;
@@ -147,7 +90,6 @@ export const useSidebarSectionsNow = (active: boolean): number => {
     return () => window.clearInterval(timer);
   }, [active]);
   return hourStart;
->>>>>>> bc50ba56a
 };
 
 const EMPTY_PLAN_SESSIONS: ReadonlySet<string> = new Set();
@@ -159,35 +101,6 @@ const EMPTY_PLAN_SESSIONS: ReadonlySet<string> = new Set();
  * says its knowledge changed. A project whose knowledge failed to load lists none.
  */
 export const useSidebarPlanSessions = (projects: readonly ProjectRef[]): ReadonlySet<string> => {
-<<<<<<< HEAD
- const enabled = projects.length > 0;
- const entries = useProjectContextStore((state) => (enabled ? state.entries : null));
- React.useEffect(() => {
-  if (!enabled) return;
-  const byContextId = new Map(projects.map((project) => [resolveProjectContextId(project), project]));
-  const read = (project: ProjectRef, force: boolean): void => {
-   void runBackgroundNetworkTask(() => useProjectContextStore.getState().load(project, { force }));
-  };
-  const store = useProjectContextStore.getState();
-  for (const [contextId, project] of byContextId) {
-   const entry = store.entries[contextId];
-   if (!entry || (!entry.loaded && !entry.loading && !entry.error)) read(project, false);
-  }
-  return subscribeOpenchamberEvents((event) => {
-   if (event.type !== 'project-context-changed') return;
-   const project = byContextId.get(event.projectId);
-   if (project) read(project, true);
-  });
- }, [enabled, projects]);
- return React.useMemo(() => {
-  if (!entries) return EMPTY_PLAN_SESSIONS;
-  const ids = new Set<string>();
-  for (const project of projects) {
-   for (const plan of entries[resolveProjectContextId(project)]?.plans ?? []) if (plan.session) ids.add(plan.session.sessionId);
-  }
-  return ids;
- }, [entries, projects]);
-=======
   const enabled = projects.length > 0;
   const entries = useProjectContextStore((state) => (enabled ? state.entries : null));
   React.useEffect(() => {
@@ -215,5 +128,4 @@ export const useSidebarPlanSessions = (projects: readonly ProjectRef[]): Readonl
     }
     return ids;
   }, [entries, projects]);
->>>>>>> bc50ba56a
 };
