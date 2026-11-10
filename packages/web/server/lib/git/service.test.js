@@ -44,6 +44,7 @@ import {
  getLog,
  getStatus,
  getTrackingBranch,
+ getCheckedOutBranch,
  getWorktrees,
 
  setWorktreeTaskTitle,
@@ -88,6 +89,10 @@ import {
  validateWorktreeCreate,
  parseBranchCreationSource,
  getRangeFiles,
+ getPathsWithoutChanges,
+ stashPush,
+ stashApply,
+ listStashes,
  inspectContributorCheckoutActions,
  getConflictDetails,
  continueMerge,
@@ -944,7 +949,7 @@ describe('symlink diffs', () => {
 describe.runIf(canRunGit())('diffs for status paths that are not plain files', () => {
  const callDiffRoute = async (endpoint, query, requestBody) => {
   const routes = new Map();
-  registerGitRoutes({ get: (url, handler) => routes.set(url, handler), post: (url, handler) => routes.set(url, handler), put() {}, delete() {} });
+  registerGitRoutes({ get: (url, handler) => routes.set(url, handler), post: (url, handler) => routes.set(url, handler), put() { }, delete() { } });
   let status = 200;
   let body;
   await routes.get(`/api/git/${endpoint}`)({ query, body: requestBody }, {
@@ -1356,6 +1361,75 @@ describe('getStatus', () => {
   expect(status.diffStats.working[file]).toEqual({ insertions: 1, deletions: 0 });
  });
 
+ it('reports a branch with no commit yet as unborn until the first commit (#4886)', async () => {
+  if (!canRunGit()) return;
+
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
+
+  await expect(getStatus(repo)).resolves.toMatchObject({ current: 'main', unborn: true });
+
+  runGit(repo, ['add', 'README.md']);
+  runGit(repo, ['commit', '-m', 'Initial commit']);
+
+  await expect(getStatus(repo)).resolves.toMatchObject({ current: 'main', unborn: false });
+  runGit(repo, ['checkout', '--detach']);
+  await expect(getStatus(repo)).resolves.toMatchObject({ unborn: false });
+ });
+
+ it('keys diff stats for non-ASCII paths by the same path status reports', async () => {
+  if (!canRunGit()) return;
+
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  const file = 'docs/中文/说明.md';
+  fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+  fs.writeFileSync(path.join(repo, file), 'one\ntwo\n');
+  runGit(repo, ['add', file]);
+  runGit(repo, ['commit', '-m', 'initial']);
+
+  // Stage one new line, then keep editing without staging another.
+  fs.appendFileSync(path.join(repo, file), 'staged\n');
+  runGit(repo, ['add', file]);
+  fs.appendFileSync(path.join(repo, file), 'working\n');
+
+  const status = await getStatus(repo);
+
+  // Keys must match the path the file list reports, or the row falls back
+  // to +0/-0 in the UI.
+  expect(status.diffStats.staged[file]).toEqual({ insertions: 1, deletions: 0 });
+  expect(status.diffStats.working[file]).toEqual({ insertions: 1, deletions: 0 });
+
+  const light = await getStatus(repo, { mode: 'light' });
+  expect(light.diffStats).toBeUndefined();
+ });
+
+ it('keys a working file whose name contains a quote character', async () => {
+  if (!canRunGit()) return;
+  // Windows file names cannot contain a quote character.
+  if (process.platform === 'win32') return;
+
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  const file = 'quo"te.txt';
+  fs.writeFileSync(path.join(repo, file), 'one\n');
+  runGit(repo, ['add', file]);
+  runGit(repo, ['commit', '-m', 'initial']);
+
+  fs.appendFileSync(path.join(repo, file), 'two\n');
+
+  const status = await getStatus(repo);
+
+  expect(status.diffStats.working[file]).toEqual({ insertions: 1, deletions: 0 });
+ });
+
  it('scopes untracked files to working stats and staged additions to staged stats', async () => {
   if (!canRunGit()) return;
 
@@ -1513,6 +1587,15 @@ describe('worktree root resolution', () => {
   fs.mkdirSync(subdirectory, { recursive: true });
 
   expect(fs.realpathSync((await resolveWorktreeTopLevel(subdirectory)).root)).toBe(fs.realpathSync(repo));
+ });
+
+ it('answers without a prefix when git cannot read the directory, so a failure is not "at the root"', async () => {
+  if (!canRunGit()) return;
+
+  const missing = path.join(createTempDir(), 'does-not-exist');
+  const resolved = await resolveWorktreeTopLevel(missing);
+  expect(resolved.root).toBe(missing);
+  expect(resolved).not.toHaveProperty('prefix');
  });
 
  it('resolves the primary worktree root from a linked worktree', async () => {
@@ -2072,6 +2155,8 @@ describe('createWorktree', () => {
   ).not.toBe('pending');
   // The branch's upstream, not the first remote in the list.
   expect(hydrateCheckout).toHaveBeenCalledWith({ directory: created.path, parentRemoteName: 'upstream' });
+  // The branch it started from is recorded as its parent.
+  expect(readBranchConfig(created.path, 'feature/from-local', 'gh-merge-base')).toBe('main');
  });
 
  const installPostCheckoutHook = (repo, script, executable = true) => {
@@ -2295,10 +2380,10 @@ describe('createWorktree', () => {
  it('stops a setup command that never exits, and what it started, for a removal that cancels setup', async () => {
   if (!canRunGit() || process.platform === 'win32') return;
 
-  const previousXdgDataHome = process.env.XDG_DATA_HOME;
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
   const dataHome = createTempDir();
   const heartbeat = path.join(dataHome, 'heartbeat');
-  process.env.XDG_DATA_HOME = dataHome;
+  process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
   try {
    const repo = createTempDir();
@@ -2335,9 +2420,9 @@ describe('createWorktree', () => {
    expect(fs.existsSync(created.path)).toBe(false);
   } finally {
    if (previousXdgDataHome === undefined) {
-    delete process.env.XDG_DATA_HOME;
+    delete process.env.OPENCHAMBER_DATA_DIR;
    } else {
-    process.env.XDG_DATA_HOME = previousXdgDataHome;
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
    }
   }
  });
@@ -2707,12 +2792,10 @@ describe('createWorktree with a personal worktreeDirectory', () => {
   fs.mkdirSync(realRoot);
   fs.symlinkSync(realRoot, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir');
   const repo = initRepo();
-  fs.writeFileSync(path.join(repo, 'opencode.json'), JSON.stringify({ worktree: null }));
-  vi.stubEnv('OPENCODE_CONFIG', path.join(repo, 'opencode.json'));
   vi.stubEnv('HOME', aliasRoot);
   vi.stubEnv('USERPROFILE', aliasRoot);
   vi.stubEnv('XDG_CONFIG_HOME', path.join(realRoot, '.config'));
-  vi.stubEnv('XDG_DATA_HOME', undefined);
+  vi.stubEnv('OPENCHAMBER_DATA_DIR', undefined);
   try {
    const input = {
     mode: 'new', worktreeName: 'canonical-tree', branchName: 'openchamber/canonical-tree',
@@ -3269,9 +3352,9 @@ describe('contributor checkout trust inspection', () => {
  });
 
  it('inspects only explicit checkout actions, never OpenCode project storage', async () => {
-  const previousXdgDataHome = process.env.XDG_DATA_HOME;
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
   const dataHome = createTempDir();
-  process.env.XDG_DATA_HOME = dataHome;
+  process.env.OPENCHAMBER_DATA_DIR = dataHome;
   try {
    const { repository } = createRepositoryWithRemote();
    const sourceSha = runGit(repository, ['rev-parse', 'HEAD']).trim();
@@ -3290,9 +3373,9 @@ describe('contributor checkout trust inspection', () => {
    expect(inspection.actions).toEqual([{ kind: 'setup-command', command: 'touch explicit-setup-ran' }]);
   } finally {
    if (previousXdgDataHome === undefined) {
-    delete process.env.XDG_DATA_HOME;
+    delete process.env.OPENCHAMBER_DATA_DIR;
    } else {
-    process.env.XDG_DATA_HOME = previousXdgDataHome;
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
    }
   }
  });
@@ -5277,6 +5360,149 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
   expect((await getStatus(tmpDir)).rebaseInProgress).toBeTruthy();
  });
 
+ it('never disposes the primary workspace and warns about a failed disposal', async () => {
+  if (!canRunGit()) return;
+
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = createTempDir();
+
+  try {
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   runGit(repo, ['config', 'user.email', 'test@example.com']);
+   runGit(repo, ['config', 'user.name', 'Test User']);
+   runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+
+   const created = await createWorktree(repo, {
+    mode: 'new',
+    branchName: 'feature/dispose-failure',
+    worktreeName: 'dispose-failure',
+   });
+
+   const disposeInstance = vi.fn(async () => {
+    throw new Error('OpenCode API URL is not available');
+   });
+   const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+   try {
+    await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
+    expect(disposeInstance).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+     expect.stringContaining('Failed to dispose the OpenCode instance'),
+     expect.stringContaining('OpenCode API URL is not available'),
+    );
+    expect(fs.existsSync(created.path)).toBe(false);
+   } finally {
+    warnSpy.mockRestore();
+   }
+  } finally {
+   if (previousXdgDataHome === undefined) {
+    delete process.env.OPENCHAMBER_DATA_DIR;
+   } else {
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
+   }
+  }
+ });
+
+ it('holds requests for the worktree folders from the release until the removal settles', async () => {
+  if (!canRunGit()) return;
+
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = createTempDir();
+
+  try {
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   runGit(repo, ['config', 'user.email', 'test@example.com']);
+   runGit(repo, ['config', 'user.name', 'Test User']);
+   runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+
+   const created = await createWorktree(repo, {
+    mode: 'new',
+    branchName: 'feature/removal-hold',
+    worktreeName: 'removal-hold',
+   });
+   await expect(waitForWorktreeRemoval(created.path)).resolves.toBeUndefined();
+
+   const settledAfter = (promise) => promise.then(() => 'settled');
+   const pendingAfter = (ms) => new Promise((resolve) => setTimeout(() => resolve('pending'), ms));
+   let insideHold = null;
+   const observed = {};
+   const disposeInstance = vi.fn(async () => {
+    insideHold = waitForWorktreeRemoval(path.join(created.path, 'sub'));
+    observed.inside = await Promise.race([settledAfter(insideHold), pendingAfter(50)]);
+    observed.project = await Promise.race([settledAfter(waitForWorktreeRemoval(repo)), pendingAfter(50)]);
+   });
+
+   await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
+
+   expect(observed).toEqual({ inside: 'pending', project: 'settled' });
+   await expect(insideHold).resolves.toBeUndefined();
+   await expect(waitForWorktreeRemoval(created.path)).resolves.toBeUndefined();
+  } finally {
+   if (previousXdgDataHome === undefined) {
+    delete process.env.OPENCHAMBER_DATA_DIR;
+   } else {
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
+   }
+  }
+ });
+
+ it('disposes the registered worktree instance before git removes the directory', async () => {
+  if (!canRunGit()) return;
+
+  const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = createTempDir();
+
+  try {
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   runGit(repo, ['config', 'user.email', 'test@example.com']);
+   runGit(repo, ['config', 'user.name', 'Test User']);
+   runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+
+   const created = await createWorktree(repo, {
+    mode: 'new',
+    branchName: 'feature/dispose-order',
+    worktreeName: 'dispose-order',
+   });
+   const targetRealPath = fs.realpathSync(created.path);
+
+   let observed = null;
+   const disposeInstance = vi.fn(async (worktreeDirectory) => {
+    observed = {
+     realPath: fs.realpathSync(worktreeDirectory),
+     directoryExists: fs.existsSync(worktreeDirectory),
+    };
+   });
+
+   await expect(removeWorktree(repo, {
+    directory: created.path,
+    disposeInstance,
+   })).resolves.toBe(true);
+
+   expect(disposeInstance).toHaveBeenCalledTimes(1);
+   expect(observed).toEqual({ realPath: targetRealPath, directoryExists: true });
+   expect(fs.existsSync(created.path)).toBe(false);
+  } finally {
+   if (previousXdgDataHome === undefined) {
+    delete process.env.OPENCHAMBER_DATA_DIR;
+   } else {
+    process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
+   }
+  }
+ });
+
+ it('reports a merge in progress with its head and message', async () => {
+  const { tmpDir, git } = await createConflictingBranches();
+  const featureHead = (await git.revparse(['feature'])).trim();
+  expect(await merge(tmpDir, { branch: 'feature' })).toMatchObject({ success: false, conflict: true });
+
+  expect((await getStatus(tmpDir)).mergeInProgress).toEqual({
+   head: featureHead.slice(0, 7),
+   message: "Merge branch 'feature'",
+  });
+ });
+
  it('finishes a merge after the conflict is resolved', async () => {
   const { tmpDir, git, filePath } = await createConflictingBranches();
   expect(await merge(tmpDir, { branch: 'feature' })).toMatchObject({ success: false, conflict: true });
@@ -5602,6 +5828,29 @@ describe.runIf(canRunGit())('getBranches', () => {
   // Only what `git branch -a` knows: a branch nobody fetched is not listed.
   expect(branches.all).toContain('remotes/origin/react');
   expect(branches.all).not.toContain('remotes/origin/remote-only');
+ });
+
+ it('does not list a detached HEAD as a branch', async () => {
+  const { repository } = createRepositoryWithRemote({ remoteName: 'origin', defaultBranch: 'react' });
+  runGit(repository, ['tag', 'v2.1.3']);
+  runGit(repository, ['checkout', '--detach', 'v2.1.3']);
+
+  const branches = await getBranches(repository, { remote: 'local' });
+
+  expect(branches.all).not.toContain('v2.1.3');
+  expect(branches.branches).not.toHaveProperty('v2.1.3');
+ });
+
+ it('keeps a branch that shares its name with the detached HEAD', async () => {
+  const { repository } = createRepositoryWithRemote({ remoteName: 'origin', defaultBranch: 'react' });
+  runGit(repository, ['branch', 'v2.1.3']);
+  runGit(repository, ['tag', 'v2.1.3']);
+  runGit(repository, ['checkout', '--detach', 'refs/tags/v2.1.3']);
+
+  const branches = await getBranches(repository, { remote: 'local' });
+
+  expect(branches.all.filter((name) => name === 'v2.1.3')).toHaveLength(1);
+  expect(branches.branches['v2.1.3']).toMatchObject({ current: false });
  });
 
  it('reuses a remote\'s answer until its local tracking refs change', async () => {
@@ -5940,6 +6189,30 @@ describe.runIf(canRunGit())('getRangeDiff', () => {
   expect(await getBranchBase(repository, 'loose')).toEqual({ base: 'origin/react' });
  });
 
+ it('keeps a recorded parent through a rebase, where the reflog loses it', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['checkout', '-b', 'layer-one', 'origin/react']);
+  runGit(repository, ['checkout', '-b', 'layer-two', 'layer-one']);
+  runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'layer-one']);
+  fs.writeFileSync(path.join(repository, 'two.txt'), 'two\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'two']);
+  // The lower layer moves on, and the upper one is restacked onto it.
+  runGit(repository, ['checkout', 'layer-one']);
+  fs.writeFileSync(path.join(repository, 'one.txt'), 'one\n');
+  runGit(repository, ['add', '.']);
+  runGit(repository, ['commit', '-m', 'one']);
+  runGit(repository, ['checkout', 'layer-two']);
+  runGit(repository, ['rebase', 'layer-one']);
+  expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: 'layer-one' });
+  // A parent that is only a remote branch here still answers.
+  runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'react']);
+  expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: 'react' });
+  // A parent that no longer exists gives way to the reflog, which here has nothing.
+  runGit(repository, ['config', 'branch.layer-two.gh-merge-base', 'gone']);
+  expect(await getBranchBase(repository, 'layer-two')).toEqual({ base: null });
+ });
+
  it('asks for a new base after restacking and compares against the selected parent', async () => {
   const { repository } = createRepositoryWithRemote();
   runGit(repository, ['checkout', '-b', 'child', 'origin/react']);
@@ -6013,6 +6286,35 @@ describe.runIf(canRunGit())('getRangeDiff', () => {
   fs.writeFileSync(path.join(repository, 'README.md'), '# Test\n');
   expect(await getRangeFiles(repository, options)).toEqual([]);
   expect(await getRangeDiff(repository, options)).toBe('');
+ });
+
+ it('gives each working-tree file a revision that moves only when its patch can change', async () => {
+  const { repository } = createRepositoryWithRemote();
+  runGit(repository, ['branch', 'react']);
+  fs.writeFileSync(path.join(repository, 'a.txt'), 'one\n');
+  fs.writeFileSync(path.join(repository, 'b.txt'), 'two\n');
+  const options = { base: 'react', head: 'next', includeWorkingTree: true };
+  const revisions = async () => Object.fromEntries((await getRangeFiles(repository, options)).map((file) => [file.path, file.revision]));
+
+  const first = await revisions();
+  expect(await revisions()).toEqual(first);
+
+  // Same size, same line counts: only the write itself tells the patch apart.
+  fs.writeFileSync(path.join(repository, 'a.txt'), 'uno\n');
+  const edited = await revisions();
+  expect(edited['a.txt']).not.toBe(first['a.txt']);
+  expect(edited['b.txt']).toBe(first['b.txt']);
+
+  // A commit that keeps the content keeps the patch against the merge base.
+  runGit(repository, ['add', 'a.txt']);
+  runGit(repository, ['commit', '-m', 'a']);
+  expect(await revisions()).toEqual(edited);
+
+  // The base moving to that commit changes the merge base, so every patch.
+  runGit(repository, ['branch', '-f', 'react', 'HEAD']);
+  const moved = await revisions();
+  expect(moved['a.txt']).toBeUndefined();
+  expect(moved['b.txt']).not.toBe(edited['b.txt']);
  });
 
  it('keeps local and remote bases distinct and rejects a different checked-out branch', async () => {
@@ -6227,6 +6529,80 @@ describe('getTrackingBranch', () => {
   runGit(repo, ['checkout', '--detach']);
   await expect(getTrackingBranch(repo)).resolves.toBeNull();
   await expect(getTrackingBranch(createTempDir())).resolves.toBeNull();
+ });
+});
+
+describe('getCheckedOutBranch', () => {
+ it('names the checked-out branch, and returns empty when there is none to name', async () => {
+  if (!canRunGit()) return;
+
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  await expect(getCheckedOutBranch(repo)).resolves.toBe('main');
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
+  await expect(getCheckedOutBranch(repo)).resolves.toBe('main');
+
+  runGit(repo, ['checkout', '-b', 'fix/other-session']);
+  await expect(getCheckedOutBranch(repo)).resolves.toBe('fix/other-session');
+
+  runGit(repo, ['checkout', '--detach']);
+  await expect(getCheckedOutBranch(repo)).resolves.toBe('');
+  await expect(getCheckedOutBranch(createTempDir())).resolves.toBe('');
+ });
+
+ it('throws for a real git failure', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  fs.writeFileSync(path.join(repo, '.git', 'config'), '[broken config\n');
+  await expect(getCheckedOutBranch(repo)).rejects.toThrow(/bad config/i);
+ });
+});
+
+describe('carry path validation and stashing', () => {
+ it('checks literal paths from the session directory and stashes absolute paths from the root', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  const nested = path.join(repo, 'nested');
+  fs.mkdirSync(nested);
+  for (const name of ['unstaged.ts', 'staged.ts', 'deleted.ts', 'clean.ts']) {
+   fs.writeFileSync(path.join(nested, name), 'original\n');
+  }
+  runGit(repo, ['add', '.']);
+  runGit(repo, ['commit', '-m', 'Add carry fixtures']);
+  fs.writeFileSync(path.join(nested, 'unstaged.ts'), 'modified\n');
+  fs.writeFileSync(path.join(nested, 'staged.ts'), 'staged\n');
+  runGit(repo, ['add', 'nested/staged.ts']);
+  fs.unlinkSync(path.join(nested, 'deleted.ts'));
+  fs.mkdirSync(path.join(nested, 'new'));
+  fs.writeFileSync(path.join(nested, 'new', 'untracked.ts'), 'new\n');
+  fs.writeFileSync(path.join(nested, '[literal].ts'), 'literal\n');
+  fs.writeFileSync(path.join(repo, 'unrelated.ts'), 'keep here\n');
+
+  const changed = ['unstaged.ts', 'staged.ts', 'deleted.ts', 'new/untracked.ts', '[literal].ts'];
+  const invalid = ['clean.ts', 'missing.ts', '*.ts', path.join(createTempDir(), 'outside.ts')];
+  await expect(getPathsWithoutChanges(nested, [...changed, ...invalid])).resolves.toEqual(invalid);
+  await expect(getPathsWithoutChanges(nested, [path.join(nested, 'unstaged.ts')])).resolves.toEqual([]);
+
+  await stashPush(nested, { message: 'carry test', paths: changed.map((name) => path.resolve(nested, name)) });
+  expect(fs.readFileSync(path.join(nested, 'unstaged.ts'), 'utf8')).toBe('original\n');
+  expect(fs.existsSync(path.join(nested, 'new', 'untracked.ts'))).toBe(false);
+  expect(fs.readFileSync(path.join(repo, 'unrelated.ts'), 'utf8')).toBe('keep here\n');
+  const [stash] = await listStashes(repo);
+  await stashApply(repo, { ref: stash.hash });
+  expect(fs.readFileSync(path.join(nested, 'unstaged.ts'), 'utf8')).toBe('modified\n');
+  expect(fs.readFileSync(path.join(nested, 'new', 'untracked.ts'), 'utf8')).toBe('new\n');
+  expect(runGit(repo, ['diff', '--cached', '--name-only']).trim()).toBe('nested/staged.ts');
+ });
+
+ it('reports paths git cannot resolve', async () => {
+  if (!canRunGit()) return;
+  await expect(getPathsWithoutChanges(createTempDir(), ['a.ts', 'b.ts'])).resolves.toEqual(['a.ts', 'b.ts']);
  });
 });
 
