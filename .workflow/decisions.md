@@ -811,3 +811,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent (conservative option; no maintainer question)
 - **Revisit when:** the Agent Service exposes fork semantics as Canonical events, or a Host-owned repository-init contract replaces the fork route.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge
+
+- **Choice:** the web modules outside lane 12's work clusters keep the fork implementation where upstream v2.7.0 changes an OpenCode-engine path, an OpenCode-only helper, or text that named `server/lib/opencode/`.
+- **Instead of:** adopting upstream's OpenCode client reads, `opencodeBinary` policy field, provider/credential enterprise hooks, OpenCode diagnostic scrubber, OpenCode message-search cursors and `XDG_DATA_HOME`, or upstream's `bun:test` imports in the fork's vitest suite.
+- **Because:** those paths either read the retired OpenCode runtime or duplicate an owner the fork already has on the Host (`core-routes.js`, `sessionService`, `resolveSessionScope`, `OPENCHAMBER_DATA_DIR`). The fork also carries correctness and security work upstream lacks: project-id `..` rejection in `agent-memory` and `project-context`, bounded relay close reasons and an identity reset race, extension tracker attach/detach, the guest asset token scope, the space-prefixed dev tunnel, and the desktop runtime-key report that replaced the SDK reconnect.
+- **Also recorded:** docs and tests in the same files follow those owners, so a re-sync takes the fork side for them until the Agent Service exposes the same behavior as Canonical events.
+- **Decided by:** agent (conservative option; no maintainer question)
+- **Revisit when:** the Agent Service exposes those behaviors as Canonical events, or a Host-owned contract replaces each fork route.
+- **Effort:** ux-v270-omp-alignment
