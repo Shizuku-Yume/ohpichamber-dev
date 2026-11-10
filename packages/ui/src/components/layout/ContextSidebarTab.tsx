@@ -1,32 +1,22 @@
 import React from 'react';
-import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 
 import { Icon } from "@/components/icon/Icon";
-import { selectConfiguredModelPair, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { useSelectionStore } from '@/sync/selection-store';
-import { useShallow } from 'zustand/react/shallow';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { computeCacheHitRate, findLatestContextFill, type ContextFillMessage } from '@/stores/utils/tokenUtils';
-import { useSessionMessageRecords, useSessions } from '@/sync/sync-context';
+import { computeCacheHitRate, findLatestContextFill } from '@/stores/utils/tokenUtils';
+import { useSessions, useSessionMessageRecords } from '@/sync/sync-context';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
-import type { TimeFormatPreference } from '@/stores/useUIStore';
-import { formatDateTimeForPreference } from '@/lib/timeFormat';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { completePair, EMPTY_TOKEN_BREAKDOWN, readTokenBreakdown, resolveContextModel, type SidebarTokenBreakdown } from './contextSidebarModel';
 import {
   derivePartsLabel,
   deriveUserSnippet,
   formatAssistantTokens,
   formatMessagePreviewTime,
 } from './rawMessagePreview';
-<<<<<<< HEAD
-
-=======
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 import { formatDateTimeForPreference } from '@/lib/timeFormat';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -34,23 +24,40 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import { ContextPanelHeaderToolbar } from './contextPanelHeaderSlot';
 import { useInContextPanelHeader } from './contextPanelHeaderSlotContext';
-import { toolContentShellChars } from '@/lib/opencode/toolContentShells';
 import { composeContextBreakdown, type ContextBuckets } from './contextBreakdown';
 import { computeSessionTokenTotals } from '@/components/chat/work-status/contextUsage';
->>>>>>> bc50ba56a
 
 type SessionMessage = { info: Message; parts: Part[] };
 
-type TokenBreakdown = SidebarTokenBreakdown;
-
-type ContextBuckets = {
-  user: number;
-  assistant: number;
-  tool: number;
-  other: number;
+type ProviderModelLike = {
+  id?: string;
+  name?: string;
+  limit?: { context?: number };
 };
 
-const EMPTY_BREAKDOWN: TokenBreakdown = EMPTY_TOKEN_BREAKDOWN;
+type ProviderLike = {
+  id?: string;
+  name?: string;
+  models?: ProviderModelLike[];
+};
+
+type TokenBreakdown = {
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+};
+
+const EMPTY_BREAKDOWN: TokenBreakdown = {
+  input: 0,
+  output: 0,
+  reasoning: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  total: 0,
+};
 
 const EMPTY_BUCKETS: ContextBuckets = {
   user: 0,
@@ -59,34 +66,131 @@ const EMPTY_BUCKETS: ContextBuckets = {
   other: 0,
 };
 
-const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => readTokenBreakdown(message.info.usage);
+const toNonNegativeNumber = (value: unknown): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return value;
+};
 
-const estimateJsonLength = (value: JsonValue): number => JSON.stringify(value).length;
+const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => {
+  const tokenCandidate = (message.info as { tokens?: unknown }).tokens;
+  const source =
+    tokenCandidate !== undefined
+      ? tokenCandidate
+      : (message.parts.find((part) => (part as { tokens?: unknown }).tokens !== undefined) as { tokens?: unknown } | undefined)?.tokens;
 
-const estimatePartChars = (part: Part, role: 'user' | 'assistant' | 'tool' | 'other'): ContextBuckets => {
-  if (part.type === 'reasoning') {
-    return { ...EMPTY_BUCKETS, assistant: part.content.length };
-  }
-  if (part.type === 'text') {
-    const bucket = role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : role === 'tool' ? 'tool' : 'other';
-    return { ...EMPTY_BUCKETS, [bucket]: part.content.length };
-  }
-  if (part.type === 'tool_call') {
-    return { ...EMPTY_BUCKETS, tool: estimateJsonLength(part.input) + part.toolName.length };
-  }
-  if (part.type === 'tool_result') {
+  if (typeof source === 'number') {
     return {
-      ...EMPTY_BUCKETS,
-      tool: (part.output ? estimateJsonLength(part.output) : 0) + (part.error?.length ?? 0) + part.toolName.length,
+      ...EMPTY_BREAKDOWN,
+      total: toNonNegativeNumber(source),
     };
   }
-  if (part.type === 'attachment') {
-    return { ...EMPTY_BUCKETS, other: part.name.length + part.mediaType.length + part.uri.length };
+
+  if (!source || typeof source !== 'object') {
+    return EMPTY_BREAKDOWN;
   }
-  if (part.type === 'notice') {
-    return { ...EMPTY_BUCKETS, other: (part.title?.length ?? 0) + (part.message?.length ?? 0) };
+
+  const breakdown = source as {
+    total?: unknown;
+    input?: unknown;
+    output?: unknown;
+    reasoning?: unknown;
+    cache?: { read?: unknown; write?: unknown };
+  };
+
+  const input = toNonNegativeNumber(breakdown.input);
+  const output = toNonNegativeNumber(breakdown.output);
+  const reasoning = toNonNegativeNumber(breakdown.reasoning);
+  const cacheRead = toNonNegativeNumber(breakdown.cache?.read);
+  const cacheWrite = toNonNegativeNumber(breakdown.cache?.write);
+  // Multi-step turns accumulate the fields across API round-trips (every tool
+  // call re-reads the whole cached prompt), so summing them overstates the
+  // window. The server-reported total is the final round-trip's window.
+  const reportedTotal = toNonNegativeNumber(breakdown.total);
+
+  return {
+    input,
+    output,
+    reasoning,
+    cacheRead,
+    cacheWrite,
+    total: reportedTotal > 0 ? reportedTotal : input + output + reasoning + cacheRead + cacheWrite,
+  };
+};
+
+const pickString = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
   }
-  return { ...EMPTY_BUCKETS, other: part.title.length };
+  return '';
+};
+
+const estimateTextLength = (value: unknown): number => {
+  if (typeof value === 'string') {
+    return value.length;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).length;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce((sum, item) => sum + estimateTextLength(item), 0);
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + estimateTextLength(item), 0);
+  }
+  return 0;
+};
+
+const estimatePartChars = (part: Part, role: 'user' | 'assistant' | 'tool' | 'other'): ContextBuckets => {
+  const partRecord = part as Record<string, unknown>;
+  const type = typeof partRecord.type === 'string' ? partRecord.type : '';
+
+  if (type === 'reasoning') {
+    return {
+      ...EMPTY_BUCKETS,
+      assistant: estimateTextLength(partRecord.text) + estimateTextLength(partRecord.content),
+    };
+  }
+
+  const directText = pickString(
+    partRecord.text,
+    partRecord.content,
+    partRecord.value,
+    (partRecord.source as { value?: unknown; text?: { value?: unknown } } | undefined)?.value,
+    (partRecord.source as { value?: unknown; text?: { value?: unknown } } | undefined)?.text?.value,
+  );
+
+  if (type === 'tool' || role === 'tool') {
+    const toolInputOutputLength =
+      estimateTextLength(partRecord.input)
+      + estimateTextLength(partRecord.output)
+      + estimateTextLength(partRecord.error)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.input)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.output)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.error);
+
+    const toolPayloadLength =
+      toolInputOutputLength
+      + estimateTextLength(partRecord.raw)
+      + Math.round(estimateTextLength(partRecord.metadata) * 0.25)
+      + Math.round(estimateTextLength(partRecord.state) * 0.1)
+
+
+    return { user: 0, assistant: 0, tool: toolPayloadLength, other: 0 };
+  }
+
+  if (role === 'user') {
+    return { user: directText.length, assistant: 0, tool: 0, other: 0 };
+  }
+
+  if (role === 'assistant') {
+    return { user: 0, assistant: directText.length, tool: 0, other: 0 };
+  }
+
+  return { user: 0, assistant: 0, tool: 0, other: directText.length };
 };
 
 const addBuckets = (target: ContextBuckets, value: ContextBuckets): ContextBuckets => ({
@@ -155,8 +259,6 @@ const formatDateTime = (timestamp: number | null, timeFormatPreference: TimeForm
   });
 };
 
-<<<<<<< HEAD
-=======
 const resolveProviderAndModel = (
   providers: ProviderLike[],
   providerID: string,
@@ -330,9 +432,9 @@ const RawMessageRow = React.memo(function RawMessageRow({
   );
 });
 
->>>>>>> bc50ba56a
 export const ContextPanelContent: React.FC = () => {
   const { t } = useI18n();
+  const inPanelHeader = useInContextPanelHeader();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const [expandedRawMessages, setExpandedRawMessages] = React.useState<Record<string, boolean>>({});
   const [copiedRawMessageId, setCopiedRawMessageId] = React.useState<string | null>(null);
@@ -343,24 +445,8 @@ export const ContextPanelContent: React.FC = () => {
   const sessionMessages = useSessionMessageRecords(
     currentSessionId ?? '',
     currentSessionDirectory ?? undefined,
-  ).map((message): SessionMessage => ({ info: message, parts: message.parts }));
-  const providers = useConfigStore((state) => selectProvidersForDirectory(state, currentSessionDirectory));
-  // The readout still has to name a model before the first answer carries one.
-  // The session's own selection is authoritative; the composer's pair describes
-  // only the directory it was configured for, never another one.
-  // Primitive selectors keep every subscription stable: a fresh pair object
-  // from a selector would re-render on every store read.
-  // One shallow-compared pair per store read, so a fresh object literal still
-  // notifies only when the values change.
-  const configuredPairState = useConfigStore(useShallow(React.useCallback(
-    (state) => selectConfiguredModelPair(state, currentSessionDirectory),
-    [currentSessionDirectory],
-  )));
-  const sessionSelectionConfig = useSelectionStore(useShallow(React.useCallback((state) => {
-    const model = currentSessionId ? state.sessionModelSelections.get(currentSessionId) ?? null : null;
-    return { providerId: model?.providerId ?? '', modelId: model?.modelId ?? '' };
-  }, [currentSessionId])));
-
+  );
+  const providers = useConfigStore((state) => state.providers);
 
   React.useEffect(() => {
     if (copyResetTimeoutRef.current !== null) {
@@ -404,17 +490,16 @@ export const ContextPanelContent: React.FC = () => {
   }, []);
 
   const viewModel = React.useMemo(() => {
-    const currentSession = currentSessionId ? sessions.find((session) => session.sessionId === currentSessionId) ?? null : null;
+    const currentSession = currentSessionId ? sessions.find((session) => session.id === currentSessionId) ?? null : null;
 
     const assistantMessages = sessionMessages.filter((entry) => entry.info.role === 'assistant');
     const userMessages = sessionMessages.filter((entry) => entry.info.role === 'user');
 
-    const contextFill = findLatestContextFill(sessionMessages.map(({ info }): ContextFillMessage => ({
-      messageId: info.messageId,
-      role: info.role,
-      usage: info.usage,
-    })));
+    // After a compaction the fill is unknown until a response reports tokens;
+    // the compaction record itself still supplies the last-turn breakdown.
+    const contextFill = findLatestContextFill(sessionMessages.map((entry) => entry.info));
     const contextMessage = contextFill ? sessionMessages[contextFill.index] ?? null : null;
+    const isCompacted = contextFill?.state === 'compacted';
 
     const tokenBreakdown = contextMessage ? extractTokenBreakdown(contextMessage) : EMPTY_BREAKDOWN;
 
@@ -426,48 +511,53 @@ export const ContextPanelContent: React.FC = () => {
       cache: { read: tokenBreakdown.cacheRead, write: tokenBreakdown.cacheWrite },
     });
 
-    const totalAssistantCost = assistantMessages.reduce((sum, message) => sum + (message.info.usage?.cost.total ?? 0), 0);
+    // The session record carries the whole session's cost; the loaded
+    // messages are only its tail once a long chat was opened cold or cut back
+    // (`SessionMessageLoader.trimHistory`). A persisted snapshot strips the
+    // field, so the sum stands in until the live record arrives.
+    const totalAssistantCost = Number.isFinite(currentSession?.cost)
+      ? toNonNegativeNumber(currentSession?.cost)
+      : assistantMessages.reduce((sum, message) => {
+        const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost);
+        return sum + cost;
+      }, 0);
 
-    // The newest answer is the authority. Before one exists, the session's own
-    // selection wins, then the configured pair of the session's directory; the
-    // composer's pair only counts when it describes that same directory.
-    const latestAssistantInfo = contextMessage?.info ?? null;
-    const answering = completePair({
-      providerId: latestAssistantInfo?.providerId ?? '',
-      modelId: latestAssistantInfo?.modelId ?? '',
-    });
-    const sessionSelectionPair = completePair(sessionSelectionConfig);
-    // The composer's pair describes only its own directory. Another directory's
-    // configured pair must never label this session.
-    const configuredPair = completePair(configuredPairState);
-    const providerModel = resolveContextModel({
-      providers,
-      answering,
-      sessionSelection: sessionSelectionPair,
-      configured: configuredPair,
-    });
+    const latestAssistantInfo = (contextMessage?.info ?? null) as (Message & { providerID?: string; modelID?: string }) | null;
+    const providerModel = resolveProviderAndModel(
+      providers as ProviderLike[],
+      latestAssistantInfo?.providerID || '',
+      latestAssistantInfo?.modelID || '',
+    );
 
     const contextLimit = providerModel.contextLimit;
-    const usagePercent = contextFill && contextLimit && contextLimit > 0
-      ? Math.min(999, (tokenBreakdown.total / contextLimit) * 100)
-      : 0;
+    const usagePercent = isCompacted
+      ? null
+      : contextLimit && contextLimit > 0
+        ? Math.min(999, (tokenBreakdown.total / contextLimit) * 100)
+        : 0;
 
     // OpenCode v2 delivers instruction text as its own `system` message
     // instead of hanging a `system` string off the first user message.
     const systemMessage = [...sessionMessages].reverse().find((entry) => entry.info.role === 'system');
-    const systemPrompt = systemMessage?.info.role === 'system' ? systemMessage.info.parts.filter((part) => part.type === 'text').map((part) => part.content).join('') : '';
+    const systemPrompt = systemMessage?.info.role === 'system' ? systemMessage.info.text : '';
 
     const computedBreakdown = computeContextBreakdown(sessionMessages, systemPrompt);
 
-    const userTokens = computedBreakdown.user;
-    const assistantTokens = computedBreakdown.assistant;
-    const toolTokens = computedBreakdown.tool;
-    const otherTokens = Math.max(0, tokenBreakdown.input - userTokens - assistantTokens - toolTokens);
-    const breakdownTotal = userTokens + assistantTokens + toolTokens + otherTokens;
+    // The bar sits under the readout, so it is measured against the same window
+    // the readout reports, not against its own estimate. `other` is then the
+    // real unattributed remainder — prompt, schemas, skills, estimation error —
+    // rather than a leftover clamped to zero.
+    //
+    // A completed compaction record can still carry the summarizing turn's
+    // tokens. The readout shows `—` for that state because the fill is unknown,
+    // so the bar must not denominate against the pre-compaction window either;
+    // zero sends it to the estimate, which is the same fallback the panel
+    // documents for an unknown window.
+    const breakdown = composeContextBreakdown(computedBreakdown, { windowTokens: tokenBreakdown.total, compacted: isCompacted });
 
-    const firstMessageTs = sessionMessages[0]?.info.createdAt;
+    const firstMessageTs = sessionMessages[0]?.info?.time?.created;
     const lastMessageTs = sessionMessages.length > 0
-      ? sessionMessages[sessionMessages.length - 1]?.info.createdAt
+      ? sessionMessages[sessionMessages.length - 1]?.info?.time?.created
       : null;
 
     return {
@@ -476,27 +566,22 @@ export const ContextPanelContent: React.FC = () => {
       messagesCount: sessionMessages.length,
       userMessagesCount: userMessages.length,
       assistantMessagesCount: assistantMessages.length,
-      createdAt: currentSession?.createdAt ?? firstMessageTs ?? null,
-      lastActivityAt: lastMessageTs ?? currentSession?.createdAt ?? null,
+      createdAt: (currentSession?.time?.created ?? firstMessageTs ?? null) as number | null,
+      lastActivityAt: (lastMessageTs ?? currentSession?.time?.created ?? null) as number | null,
       providerModel,
       tokenBreakdown,
       usagePercent,
       cacheHitRate,
       totalAssistantCost,
       contextLimit,
-      breakdown: {
-        user: userTokens,
-        assistant: assistantTokens,
-        tool: toolTokens,
-        other: otherTokens,
-      },
-      breakdownTotal,
+      breakdown,
+      breakdownTotal: breakdown.total,
     };
-  }, [configuredPairState, currentSessionId, providers, sessionMessages, sessionSelectionConfig, sessions, t]);
+  }, [currentSessionId, providers, sessionMessages, sessions, t]);
 
   if (!currentSessionId) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center typography-ui-label text-muted-foreground">
+        <div className="flex h-full items-center justify-center p-6 text-center typography-ui-label text-muted-foreground">
         {t('contextSidebar.empty.openSession')}
       </div>
     );
@@ -511,19 +596,23 @@ export const ContextPanelContent: React.FC = () => {
 
   return (
     <ScrollableOverlay outerClassName="h-full" className="bg-background">
+      {/* In the context panel the session title names the panel itself, in
+          place of the generic "Context" label. */}
+      {inPanelHeader ? (
+        <ContextPanelHeaderToolbar>
+          <div className="flex min-w-0 flex-1 items-center ps-1.5 pe-1">
+            <span dir="auto" className="truncate typography-ui-label text-foreground" title={viewModel.sessionTitle}>{viewModel.sessionTitle}</span>
+          </div>
+        </ContextPanelHeaderToolbar>
+      ) : null}
       <div className="mx-auto w-full max-w-[52rem] px-5 py-6">
 
         {/* ── Session header ── */}
         <div className="mb-6">
-<<<<<<< HEAD
-          <h2 dir="auto" className="typography-ui-header font-semibold text-foreground truncate text-left">{viewModel.sessionTitle}</h2>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 typography-micro text-muted-foreground/70">
-=======
           {inPanelHeader ? null : (
             <h2 dir="auto" className="typography-ui-header font-semibold text-foreground truncate oc-ui-start-align">{viewModel.sessionTitle}</h2>
           )}
           <div className={cn(!inPanelHeader && 'mt-1', 'flex flex-wrap items-center gap-x-2 gap-y-0.5 typography-micro text-muted-foreground')}>
->>>>>>> bc50ba56a
             <span>{viewModel.providerModel.providerName} / {viewModel.providerModel.modelName}</span>
             {viewModel.createdAt && (
               <>
@@ -538,18 +627,13 @@ export const ContextPanelContent: React.FC = () => {
         <div className="mb-5 rounded-lg bg-[var(--surface-elevated)]/70 px-4 py-3.5">
           <div className="flex items-baseline justify-between">
             <span className="typography-micro text-muted-foreground">{t('contextSidebar.section.context')}</span>
-<<<<<<< HEAD
-            <span className="typography-micro tabular-nums text-muted-foreground/70">
-              {formatNumber(viewModel.tokenBreakdown.total)}
-=======
             <span className="typography-micro tabular-nums text-muted-foreground">
               {viewModel.usagePercent === null ? '—' : formatNumber(viewModel.tokenBreakdown.total)}
->>>>>>> bc50ba56a
               {viewModel.contextLimit ? ` / ${formatNumber(viewModel.contextLimit)}` : ''}
             </span>
           </div>
           <div className="mt-2.5 flex h-1 w-full overflow-hidden rounded-full bg-[var(--surface-subtle)]">
-            {viewModel.usagePercent > 0 && (
+            {viewModel.usagePercent !== null && viewModel.usagePercent > 0 && (
               <div
                 className="rounded-full transition-all duration-300"
                 style={{
@@ -560,7 +644,9 @@ export const ContextPanelContent: React.FC = () => {
             )}
           </div>
           <div className="mt-1.5 typography-micro font-medium tabular-nums text-foreground/80">
-            {t('contextSidebar.context.percentUsed', { percent: viewModel.usagePercent.toFixed(1) })}
+            {viewModel.usagePercent === null
+              ? t('contextUsage.compacted.description')
+              : t('contextSidebar.context.percentUsed', { percent: viewModel.usagePercent.toFixed(1) })}
           </div>
         </div>
 
@@ -628,120 +714,6 @@ export const ContextPanelContent: React.FC = () => {
         <div>
           <div className="typography-micro text-muted-foreground">{t('contextSidebar.section.rawMessages')}</div>
           <div className="mt-2.5 space-y-1">
-<<<<<<< HEAD
-            {[...sessionMessages].reverse().map((message) => {
-              const role = message.info.role;
-              const isAssistant = role === 'assistant';
-              const isUser = role === 'user';
-              const isExpanded = expandedRawMessages[message.info.messageId] === true;
-              const isCopied = copiedRawMessageId === message.info.messageId;
-              const messageCreatedAt = message.info.createdAt;
-              const partsLabel = derivePartsLabel(message.parts);
-              const tokens = isAssistant ? extractTokenBreakdown({ info: message.info, parts: message.parts }) : null;
-              const userSnippet = isUser ? deriveUserSnippet(message.parts) : '';
-              const previewTime = formatMessagePreviewTime(messageCreatedAt, timeFormatPreference);
-              // Keep token/time columns stable; the message label owns all
-              // remaining space and truncates before it can push metrics.
-              const assistantLeft = partsLabel || '\u2014';
-              const assistantMiddle = tokens
-                ? formatAssistantTokens(tokens.input, tokens.output, formatNumber)
-                : '';
-              const otherLeft = role || 'unknown';
-              const otherLabel = partsLabel ? `${otherLeft}: ${partsLabel}` : otherLeft;
-
-              const jsonValue = isExpanded
-                ? JSON.stringify({ info: message.info, parts: message.parts }, null, 2)
-                : '';
-
-              return (
-                <div
-                  key={message.info.messageId}
-                  className="overflow-hidden rounded-lg bg-[var(--surface-elevated)]/70"
-                >
-                  <button
-                    type="button"
-                    className="w-full cursor-pointer px-3 py-1.5 text-left hover:bg-[var(--interactive-hover)]"
-                    aria-expanded={isExpanded}
-                    onClick={() => {
-                      setExpandedRawMessages((prev) => ({
-                        ...prev,
-                        [message.info.messageId]: !(prev[message.info.messageId] === true),
-                      }));
-                    }}
-                  >
-                    <div
-                      className="grid items-center gap-x-2 whitespace-nowrap typography-micro"
-                      style={{ gridTemplateColumns: isAssistant ? 'minmax(0, 1fr) 7.5rem max-content' : 'minmax(0, 1fr) max-content' }}
-                    >
-                      {isUser ? (
-                        <span
-                          className="min-w-0 truncate text-muted-foreground"
-                        >
-                          <span className="typography-ui-label text-foreground">user:</span>{' '}
-                          {userSnippet}
-                        </span>
-                      ) : (
-                        <>
-                          <span
-                            className={
-                              isAssistant
-                                ? 'min-w-0 truncate text-muted-foreground'
-                                : 'min-w-0 truncate text-muted-foreground'
-                            }
-                          >
-                            {isAssistant ? assistantLeft : otherLabel}
-                          </span>
-                          {isAssistant && (
-                            <span className="text-right text-muted-foreground tabular-nums">
-                              {assistantMiddle}
-                            </span>
-                          )}
-                        </>
-                      )}
-                      <span className="text-right text-muted-foreground">{previewTime}</span>
-                    </div>
-                  </button>
-
-                  {isExpanded && (
-                    <div className="border-t border-[var(--surface-subtle)] p-0">
-                      <ScrollableOverlay outerClassName="max-h-[26rem] bg-[var(--surface-background)]" className="group relative" disableHorizontal>
-                        <div className="absolute top-1 right-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                className="rounded p-1 text-muted-foreground transition-colors hover:bg-interactive-hover/60 hover:text-foreground"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleCopyRawMessage(message.info.messageId, jsonValue);
-                                }}
-                                aria-label={isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}
-                              >
-                                {isCopied ? <Icon name="check" className="size-3.5" /> : <Icon name="file-copy" className="size-3.5" />}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent sideOffset={6}>{isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}</TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <WorkerHighlightedCode
-                          language="json"
-                          code={jsonValue}
-                          style={{
-                            margin: 0,
-                            padding: '0.75rem',
-                            background: 'transparent',
-                            fontSize: 'var(--text-micro)',
-                            lineHeight: '1.35',
-                          }}
-                          wrap
-                        />
-                      </ScrollableOverlay>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-=======
             {[...sessionMessages].reverse().map((message) => (
               <RawMessageRow
                 key={message.info.id}
@@ -753,7 +725,6 @@ export const ContextPanelContent: React.FC = () => {
                 onCopy={handleCopyRawMessage}
               />
             ))}
->>>>>>> bc50ba56a
           </div>
         </div>
       </div>
