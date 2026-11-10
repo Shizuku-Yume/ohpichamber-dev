@@ -7,14 +7,8 @@ import { countSyncPerformance } from './performance-diagnostics';
 
 type SessionActivityPhase = 'active' | 'settled';
 export type SessionActivityTimingMutation =
-<<<<<<< HEAD
   | { type: 'active'; sessionId: string; at?: number; runId?: string }
   | { type: 'settled'; sessionId: string; at?: number; runId?: string }
-=======
-  | { type: 'observe'; sessionId: string; phase: SessionActivityPhase; turnStart?: SessionTurnStart }
-  // The session went idle while its subagent, background command or pull request keeps the turn open.
-  | { type: 'hold'; sessionId: string }
->>>>>>> bc50ba56a
   | { type: 'remove'; sessionId: string };
 type ActivityTimingDraft = { startedAt: Map<string, number> | null; settledMs: Map<string, number> | null };
 type SessionActivityTimingState = { startedAt: ReadonlyMap<string, number>; settledMs: ReadonlyMap<string, number> };
@@ -178,7 +172,6 @@ export const applySessionActivityEvents = (_directory: string, events: readonly 
   }
   applySessionActivityTimingMutations(mutations);
 };
-<<<<<<< HEAD
 export const reconcileSessionActivityTiming = (activeSessionIds: ReadonlySet<string>, isCoveredBySnapshot: (sessionId: string) => boolean): void => applyTransitions(activeSessionIds, { source: 'snapshot', isCovered: isCoveredBySnapshot });
 export const removeSessionActivityTiming = (sessionId: string): void => applySessionActivityTimingMutations([{ type: 'remove', sessionId }]);
 export const resetSessionActivityTiming = (options: { pageLoadAt?: number } = {}): void => { restoredStarts = null; liveSeen.clear(); runIdBySession.clear(); lastPersistAt = 0; pageLoadAt = options.pageLoadAt ?? Date.now(); useSessionActivityTimingStore.setState({ startedAt: new Map(), settledMs: new Map() }); };
@@ -186,111 +179,3 @@ export const useSessionActivityStartedAt = (sessionId: string): number | undefin
 export const useSessionSettledDurationMs = (sessionId: string): number | undefined => useSessionActivityTimingStore(useCallback((state) => state.settledMs.get(sessionId), [sessionId]));
 export const useHasSessionActivityDuration = (sessionId: string, running: boolean): boolean => useSessionActivityTimingStore(useCallback((state) => running ? state.startedAt.has(sessionId) : state.settledMs.has(sessionId), [running, sessionId]));
 subscribeRuntimeEndpointChanged(() => resetSessionActivityTiming());
-=======
-
-/**
- * Authoritative path: a `/session/status` snapshot for one directory. Sessions
- * the snapshot covers but does not report active stop their live counters —
- * that is what recovers a turn whose end event this client missed — but their
- * persisted records survive, because a snapshot that cannot yet see a session
- * looks identical to one whose turn is over.
- */
-export const reconcileSessionActivityTiming = (
-  activeSessionIds: ReadonlySet<string>,
-  isCoveredBySnapshot: (sessionId: string) => boolean,
-  heldSessionIds: ReadonlySet<string> = EMPTY_IDS,
-): void => {
-  applyTransitions(activeSessionIds, { source: 'snapshot', isCovered: isCoveredBySnapshot }, heldSessionIds);
-};
-
-export const removeSessionActivityTiming = (sessionId: string): void => {
-  applySessionActivityTimingMutations([{ type: 'remove', sessionId }]);
-};
-
-/**
- * Starts read from the host's status map, already on this device's clock.
- * A session in a turn here takes its start, unless this device learned the
- * start of a newer turn while the map was being read (`requestedAt` to
- * `answeredAt`): the map then describes the turn before it. A session this
- * device only joined from a status snapshot is not such a turn, because the
- * map still describes the turn that was already running. `heldHere` names
- * sessions the host reports idle while this device sees their turn kept open
- * by background work: their turn begins here with the
- * host's last start, since nothing else on this device would ever start
- * counting it.
- */
-export const applyHostTurnStarts = (
-  starts: ReadonlyMap<string, SessionTurnStart>,
-  heldHere: ReadonlySet<string>,
-  read: { requestedAt: number; answeredAt: number },
-): void => {
-  if (starts.size === 0) return;
-  const state = useSessionActivityTimingStore.getState();
-  let started: Map<string, number> | null = null;
-  let settled: Map<string, number> | null = null;
-  const pass: TimingPass = {
-    currentStarted: () => started ?? state.startedAt,
-    draftStarted: () => (started ??= new Map(state.startedAt)),
-    askHost: false,
-  };
-  for (const [sessionId, turnStart] of starts) {
-    const beganAt = turnBeganAt.get(sessionId);
-    if (beganAt !== undefined && beganAt >= read.requestedAt && beganAt < read.answeredAt) continue;
-    if (heldHere.has(sessionId)) heldTurns.add(sessionId);
-    if (isInTurn(pass, sessionId)) {
-      offerHostStart(pass, sessionId, turnStart);
-    } else if (heldHere.has(sessionId)) {
-      beginTurn(pass, sessionId, turnStart, EMPTY_RESTORED);
-      if ((settled ?? state.settledMs).has(sessionId)) (settled ??= new Map(state.settledMs)).delete(sessionId);
-    }
-  }
-  if (!started) return;
-  useSessionActivityTimingStore.setState({ startedAt: started, settledMs: settled ?? state.settledMs });
-  ensureLivenessStampOnHide();
-  persistStarts(started, Date.now());
-};
-
-/**
- * Drops in-memory state and the cached restored-start snapshot — i.e. treats
- * what follows as a fresh page load. Called on a runtime switch, where the
- * previous instance's turns are no longer ours, and by tests. `pageLoadAt`
- * overrides the navigation-start reference so tests can place a load in the
- * past (slow bootstrap, expired window).
- */
-export const resetSessionActivityTiming = (options: { pageLoadAt?: number } = {}): void => {
-  restoredStarts = null;
-  liveSeen.clear();
-  hostStarted.clear();
-  startUnknown.clear();
-  askedHost.clear();
-  heldTurns.clear();
-  turnBeganAt.clear();
-  lastPersistAt = 0;
-  pageLoadAt = options.pageLoadAt ?? Date.now();
-  useSessionActivityTimingStore.setState({ startedAt: new Map(), settledMs: new Map() });
-};
-
-// ---------------------------------------------------------------------------
-// Leaf subscriptions
-// ---------------------------------------------------------------------------
-
-export const useSessionActivityStartedAt = (sessionId: string): number | undefined => (
-  useSessionActivityTimingStore(useCallback((state) => state.startedAt.get(sessionId), [sessionId]))
-);
-
-export const useSessionSettledDurationMs = (sessionId: string): number | undefined => (
-  useSessionActivityTimingStore(useCallback((state) => state.settledMs.get(sessionId), [sessionId]))
-);
-
-/**
- * Whether this page measured a duration to render, without subscribing the
- * caller to the value itself. Rows use `useHasSessionTurnDuration`
- * (`session-turn-duration.ts`), which also counts the length the server
- * recorded.
- */
-export const useHasSessionActivityDuration = (sessionId: string, running: boolean): boolean => (
-  useSessionActivityTimingStore(useCallback((state) => (
-    running ? state.startedAt.has(sessionId) : state.settledMs.has(sessionId)
-  ), [running, sessionId]))
-);
->>>>>>> bc50ba56a

@@ -3,17 +3,9 @@ import type { ProviderResult } from "@/types"
 
 let runtimeKey = "url:https://instance-a"
 let isInitialized = true
-let workspaceId = "workspace-a"
 const fetched: string[] = []
 
-<<<<<<< HEAD
-type StubPayload =
-  | { usageDropdownProviders: string[] }
-  | { extensions: unknown[] }
-  | ProviderResult
-=======
 type StubPayload = { usageDropdownProviders: string[] } | { extensions: never[] } | ProviderResult
->>>>>>> bc50ba56a
 let quotaRequestsFail = false
 let quotaFails = false;
 // What `/api/quota/providers` names; null answers 500, as a restarting OpenCode does.
@@ -38,9 +30,6 @@ mock.module("@/lib/runtime-fetch", () => ({
   runtimeFetch: async (path: string) => {
     fetched.push(path)
     if (quotaRequestsFail) throw new Error("network down")
-    // The instance's usage providers are read before its settings: the saved
-    // selection is narrowed against them.
-    if (path === "/api/quota/extensions") return json({ extensions: [] })
     if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: ["claude"] })
     // The extensions' usage providers, read beside the settings; none installed here.
     if (path === "/api/quota/extensions") return json({ extensions: [] })
@@ -57,7 +46,7 @@ mock.module("@/lib/runtime-fetch", () => ({
 const configStoreModule = await import("@/stores/useConfigStore")
 mock.module("@/stores/useConfigStore", () => ({
   ...configStoreModule,
-  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized, workspaceId }) },
+  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized }) },
 }))
 
 const { useQuotaStore } = await import("./useQuotaStore")
@@ -66,7 +55,6 @@ describe("Usage quotas are loaded once per ready instance", () => {
   beforeEach(() => {
     runtimeKey = "url:https://instance-a"
     isInitialized = true
-    workspaceId = "workspace-a"
     fetched.length = 0
     quotaRequestsFail = false
     configuredProviders = ["claude"]
@@ -95,35 +83,6 @@ describe("Usage quotas are loaded once per ready instance", () => {
     await useQuotaStore.getState().ensureLoadedForRuntime()
 
     expect(fetched.length).toBe(afterFirst)
-  })
-
-  test("nothing is fetched before the instance publishes its workspace", async () => {
-    workspaceId = ""
-    await useQuotaStore.getState().ensureLoadedForRuntime()
-
-    expect(fetched).toHaveLength(0)
-    expect(useQuotaStore.getState().loadedWorkspaceId).toBeNull()
-
-    workspaceId = "workspace-a"
-    await useQuotaStore.getState().ensureLoadedForRuntime()
-
-    expect(fetched.length).toBeGreaterThan(0)
-    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-a")
-  })
-
-  test("a workspace change reloads the same instance for the new workspace", async () => {
-    await useQuotaStore.getState().ensureLoadedForRuntime()
-    const afterFirst = fetched.length
-    expect(afterFirst).toBeGreaterThan(0)
-    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-a")
-
-    workspaceId = "workspace-b"
-    fetched.length = 0
-    await useQuotaStore.getState().ensureLoadedForRuntime()
-
-    expect(fetched.length).toBeGreaterThan(0)
-    expect(useQuotaStore.getState().loadedRuntimeKey).toBe("url:https://instance-a")
-    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-b")
   })
 
   test("a switch drops the previous instance's quotas and reloads for the new one", async () => {
@@ -177,10 +136,6 @@ describe("Usage quotas are loaded once per ready instance", () => {
       useQuotaStore.getState().ensureLoadedForRuntime(),
     ])
 
-<<<<<<< HEAD
-    expect(fetched.filter((path) => path === "/api/quota/extensions")).toHaveLength(1)
-=======
->>>>>>> bc50ba56a
     expect(fetched.filter((path) => path === "/api/quota/claude")).toHaveLength(1)
   })
 
@@ -336,7 +291,7 @@ describe("A provider-account switch re-reads the trackers", () => {
     // The stub resolves synchronously, so the in-flight request is stood in for
     // with one that has not answered yet. What matters is that the switch does
     // not hand back that request's promise.
-    let release = (): void => { }
+    let release = (): void => {}
     const gate = new Promise<void>((resolve) => { release = resolve })
     const realFetch = runtimeFetchModule.runtimeFetch
     mock.module("@/lib/runtime-fetch", () => ({
