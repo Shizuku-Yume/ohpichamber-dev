@@ -21,3 +21,5 @@
 - Root `README.md`, `AGENTS.md`, `SECURITY.md`, `CONTRIBUTING.md` and `CHANGELOG.md` untouched.
 - Review: one `reviewer` pass over the diff against `fd671d069` plus a manual sweep for retired content, orphaned sentences and duplicate sections.
 - Check after: `bun scripts/upstream-drift.mjs --markers --lane 18` → no conflict markers (lane 18). `bun --cwd packages/sdk test` → 32/32 files. `bun --cwd packages/electron test` → 71/71 files. `bun run docs:validate` → 696 pages, 58 sidebar links. Same four results on the landing target after the merge.
+- Reviewer pass returned no blocking defect, one P3: the enterprise extension bullet left a trailing comma before its closing parenthesis in `de`, `nl` and `ko` `security.mdx`. Closed in those three pages, plus a duplicated clause the same sweep found in `ko`.
+- Two further doc corrections found while re-reading: the provider-logo note in all 11 locales still said VS Code loads no extensions, and English `usage.mdx` still claimed the agent tool runs on "OpenChamber's own OpenCode server". Both now say the phone and the agent runtime respectively.
