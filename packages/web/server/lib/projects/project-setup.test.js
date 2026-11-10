@@ -26,11 +26,8 @@ const emptyPersonal = {
   setupWorktree: [],
   setupWorktreeWait: null,
   setupWorktreeMode: 'append',
-<<<<<<< HEAD
   worktreeDirectory: null,
-=======
   teardownWorktree: [],
->>>>>>> bc50ba56a
   projectActions: [],
   projectActionsPrimaryId: null,
   draftStarters: [],
@@ -116,11 +113,8 @@ describe('project setup sanitizers', () => {
       'setup-worktree': ['bun install'],
       'setup-worktree-wait': true,
       setupWorktreeMode: 'replace',
-<<<<<<< HEAD
       worktreeDirectory: ' ../trees ',
-=======
       teardownWorktree: [' docker compose down ', ''],
->>>>>>> bc50ba56a
       projectActions: [{ id: 'a', name: 'A', command: 'x' }],
       projectActionsPrimaryId: 'missing',
       draftStarters: [{ type: 'skill', name: 's' }],
@@ -131,11 +125,8 @@ describe('project setup sanitizers', () => {
       setupWorktree: ['bun install'],
       setupWorktreeWait: true,
       setupWorktreeMode: 'replace',
-<<<<<<< HEAD
       worktreeDirectory: '../trees',
-=======
       teardownWorktree: ['docker compose down'],
->>>>>>> bc50ba56a
       projectActions: [{ id: 'a', name: 'A', command: 'x', icon: null }],
       projectActionsPrimaryId: null,
       draftStarters: [{ type: 'skill', name: 's' }],
