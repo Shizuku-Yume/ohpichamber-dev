@@ -5,11 +5,7 @@
  *
  * Every source is bucketed by wall-clock second: CPU per process role,
  * requests the window sent, realtime frames it received, requests on loopback
-<<<<<<< HEAD
  * (server to the agent worker), processes the app spawned, connections to the outside.
-=======
- * (server to OpenCode), processes the app spawned, connections to the outside.
->>>>>>> bc50ba56a
  * From those buckets it reports totals per hour, the seconds where CPU spiked
  * with what happened around them, and for each kind of event the CPU the app
  * spent in the seconds after it, above its quiet floor. That last figure is
@@ -76,13 +72,8 @@ export const commandGroup = (command) => {
     const rest = parts.slice(1)
     const takesValue = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"])
     const sub = rest.find((part, index) => !part.startsWith("-") && !takesValue.has(rest[index - 1]))
-<<<<<<< HEAD
     const snapshot = rest.some((part) => part.includes("/agent/snapshot/"))
     return `git ${sub ?? "?"}${snapshot ? " (agent snapshot)" : ""}`
-=======
-    const snapshot = rest.some((part) => part.includes("/opencode/snapshot/"))
-    return `git ${sub ?? "?"}${snapshot ? " (OpenCode snapshot)" : ""}`
->>>>>>> bc50ba56a
   }
   if (["node", "bun", "python", "python3", "sh", "bash", "zsh", "npx", "uvx", "bunx"].includes(executable)) {
     const script = parts.slice(1).find((part) => !part.startsWith("-"))
@@ -116,11 +107,7 @@ export const parseLoopback = (text, ports) => {
   for (const line of text.split("\n")) {
     const head = /^(\d+\.\d+) IP6? [\d.:a-f]+\.(\d+) > [\d.:a-f]+\.(\d+):/.exec(line)
     if (head) {
-<<<<<<< HEAD
       header = { t: Math.round(Number(head[1]) * 1000), to: Number(head[3]) === ports.agentPort ? "agent" : "server" }
-=======
-      header = { t: Math.round(Number(head[1]) * 1000), to: Number(head[3]) === ports.opencodePort ? "opencode" : "server" }
->>>>>>> bc50ba56a
       continue
     }
     if (!header) continue
@@ -212,11 +199,7 @@ const inclusiveByFile = (profile, busyMs) => {
   return [...totals.entries()].sort((left, right) => right[1] - left[1]).map(([file, ms]) => [file, round(ms, 1), busyMs > 0 ? round((ms / busyMs) * 100, 1) : 0])
 }
 
-<<<<<<< HEAD
 const roleOrder = ["main", "renderer", "gpu", "network", "utility", "agent", "git", "child"]
-=======
-const roleOrder = ["main", "renderer", "gpu", "network", "utility", "opencode", "git", "child"]
->>>>>>> bc50ba56a
 
 export const analyzeSoak = async (runDir) => {
   const dir = resolve(runDir)
@@ -362,11 +345,7 @@ export const analyzeSoak = async (runDir) => {
   }
   report += "\n## Bytes per process (nettop)\n\n"
   report += table(["kind", "pid", "role", "in KB/min", "out KB/min", "MB/hour total"], [...netRows(netLoopback, "loopback"), ...netRows(netExternal, "external")])
-<<<<<<< HEAD
   report += "\nLoopback counts each byte on both ends: the server's out is the agent worker's in.\n"
-=======
-  report += "\nLoopback counts each byte on both ends: the server's out is OpenCode's in.\n"
->>>>>>> bc50ba56a
 
   // Renderer requests and realtime frames.
   const requests = []
@@ -484,11 +463,7 @@ export const analyzeSoak = async (runDir) => {
       if (directory) record.directories.add(directory)
       record.times.push(entry.t)
       groups.set(key, record)
-<<<<<<< HEAD
       if (entry.to === "agent") buckets[secondOf(entry.t)]?.events.push(`agent ${entry.method} ${loopbackPattern(entry.path).split("?")[0]}`)
-=======
-      if (entry.to === "opencode") buckets[secondOf(entry.t)]?.events.push(`oc ${entry.method} ${loopbackPattern(entry.path).split("?")[0]}`)
->>>>>>> bc50ba56a
     }
     report += `\n## Loopback requests (${loopback.length}, ${perHour(loopback.length)}/hour)\n\n`
     report += "`to` is the receiving side; `from` is the user agent (`renderer` is the window, `node`/`Bun` the server).\n\n"

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
+import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
+const OPENCHAMBER_SDK_API_VERSION = OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0];
 import { GUEST_PROVIDER_LOGOS_MAX, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
 import type { JsonValue } from './contract.ts';
 import type { LinksContribution } from './manifest.ts';
@@ -1683,20 +1684,6 @@ describe('services that act on their own', () => {
   test('skills stay inside the package', () => {
     expect(parse({ panel: pageless, skills: 'skills' }).ok).toBe(true);
     expect(parse({ panel: pageless, skills: '../skills' })).toMatchObject({ ok: false, code: 'invalid-skills' });
-  });
-
-  test('an OpenCode plugin is a folder inside the package and asks for its own capability', () => {
-    const accepted = parse({ panel: pageless, opencodePlugin: 'plugin' });
-    expect(accepted.ok).toBe(true);
-    if (accepted.ok) expect(accepted.manifest.contributes.opencodePlugin).toBe('plugin');
-    expect(parse({ panel: pageless, opencodePlugin: 'plugins/teapot' }).ok).toBe(true);
-    expect(requestedGuestCapabilities({ opencodePlugin: 'plugin' })).toEqual(['opencodePlugin']);
-    expect(requestedGuestCapabilities({ skills: 'skills', opencodePlugin: 'plugin' })).toEqual(['skills', 'opencodePlugin']);
-    // The value becomes a path OpenCode executes code from: nothing that leaves the package, no URL, no NUL, no empty value.
-    for (const hostile of ['../x', '/etc', 'file:///x', 'https://example.test/plugin', 'plugin\0', '', ' ', 'a//b', './plugin', 'plugin\\win']) {
-      expect(parse({ panel: pageless, opencodePlugin: hostile }), hostile).toMatchObject({ ok: false, code: 'invalid-opencode-plugin' });
-    }
-    expect(requestedGuestCapabilities({ skills: 'skills' })).toEqual(['skills']);
   });
 
   test('mentions need no frame', () => {

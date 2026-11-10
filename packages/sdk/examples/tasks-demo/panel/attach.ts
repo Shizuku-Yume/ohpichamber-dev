@@ -7,11 +7,7 @@ import {
   connectHost,
   HostRequestError,
   isGuestMessageItem,
-<<<<<<< HEAD
-  isGuestAttachItem, isGuestSessionItem,
-=======
   isGuestAttachItem, isGuestLinkItem, isGuestSessionItem,
->>>>>>> bc50ba56a
   type AttachIssueRequest,
   type GuestLinkItem,
   type GuestMessageItem,
@@ -231,11 +227,8 @@ host.onItem((item) => {
     renderMessageAction(item);
   } else if (isGuestSessionItem(item)) {
     renderSessionAction(item);
-<<<<<<< HEAD
-=======
   } else if (isGuestLinkItem(item)) {
     renderLink(item);
->>>>>>> bc50ba56a
   } else if (isGuestAttachItem(item)) {
     renderDetails(item);
   } else {
