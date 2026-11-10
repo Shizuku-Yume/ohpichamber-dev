@@ -1,17 +1,16 @@
 import { getGitLog, getGitStatus } from '@/lib/gitApi';
-<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
-=======
-import type { Session } from '@/lib/opencode/model';
->>>>>>> bc50ba56a
 import { isNothingLost, type OverviewWorktreeLosses } from '@/lib/overview/overviewModel';
+import { normalizePath } from '@/lib/pathNormalization';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { hasUnmergedCommits } from '@/lib/worktrees/mergedWorktreeCleanup';
 import { removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
-import { readWorktreeUse, sessionsInWorktree } from '@/lib/worktrees/worktreeUse';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { archiveSessions, setSessionWorkState } from '@/sync/session-actions';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 export type OverviewWorktreeGit = { losses: OverviewWorktreeLosses; lastCommitAt: number | null };
@@ -24,6 +23,22 @@ export type OverviewWorktreeTarget = {
   mergedHeadSha: string | null;
 };
 
+const isInside = (directory: string | null | undefined, root: string): boolean => {
+  const normalized = normalizePath(directory ?? null);
+  return normalized === root || Boolean(normalized?.startsWith(`${root}/`));
+};
+
+/** Sessions working in the worktree, its subdirectories and subsessions included. */
+export const sessionsInWorktree = (sessions: readonly Session[], path: string): Session[] => {
+  const root = normalizePath(path);
+  return root ? sessions.filter((session) => isInside(resolveGlobalSessionDirectory(session), root)) : [];
+};
+
+/**
+ * What removing the worktree would lose. Merged: anything past the PR's last
+ * commit. Otherwise: anything its upstream (or the base `ahead` was counted
+ * against) lacks; with neither, git cannot tell and the answer is null.
+ */
 export async function readOverviewWorktreeGit(target: OverviewWorktreeTarget): Promise<OverviewWorktreeGit> {
   const path = target.worktree.path;
   const status = await getGitStatus(path, { fresh: true });
@@ -55,7 +70,6 @@ export async function markOverviewSessionsDone(sessions: readonly Session[]): Pr
   return failed;
 }
 
-<<<<<<< HEAD
 export type WorktreeUse = 'free' | 'busy' | 'inUse' | 'unknown';
 
 /**
@@ -77,8 +91,6 @@ export async function readWorktreeUse(path: string): Promise<WorktreeUse> {
   return sessions.some((session) => activeIds.has(session.sessionId)) ? 'busy' : 'free';
 }
 
-=======
->>>>>>> bc50ba56a
 export type OverviewRemoveOutcome =
   | { kind: 'removed' }
   /** Something works there, it is open on screen, or that could not be read; nothing was touched. */

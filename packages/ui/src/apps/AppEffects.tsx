@@ -1,11 +1,7 @@
 import React from 'react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
-<<<<<<< HEAD
-import { useMessageQueueHoldSync } from '@/hooks/useMessageQueueHoldSync';
-=======
 import { useQueuedMessageAutoSend } from '@/hooks/useQueuedMessageAutoSend';
->>>>>>> bc50ba56a
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useMergedWorktreeCleanup } from '@/hooks/useMergedWorktreeCleanup';
 import { useWindowControlsOverlayLayout } from '@/hooks/useWindowControlsOverlayLayout';
@@ -13,6 +9,7 @@ import { setOptimisticRefs } from '@/sync/session-actions';
 import { markSessionViewed } from '@/sync/notification-store';
 import { setExternallyViewedSession } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { isServerOwnedMessageQueue } from '@/stores/messageQueueStore';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -71,14 +68,9 @@ export function SyncRuntimeEffects({ backgroundWorkEnabled }: {
   backgroundWorkEnabled: boolean;
 }) {
   useSessionAutoCleanup({ enabled: backgroundWorkEnabled });
-<<<<<<< HEAD
-  useMergedWorktreeCleanup({ enabled: backgroundWorkEnabled });
-  useMessageQueueHoldSync();
-=======
   // Web, desktop, and mobile hand the queue to the OpenChamber server, which
   // delivers it with or without a UI; only VS Code still sends from the UI.
   useQueuedMessageAutoSend(backgroundWorkEnabled && !isServerOwnedMessageQueue());
->>>>>>> bc50ba56a
 
   return <SyncOptimisticBridge />;
 }

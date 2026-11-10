@@ -1,21 +1,14 @@
 import { toast } from '@/components/ui';
 import { getDescendantIds } from '@/components/session/sidebar/list/sessionCollection';
 import { collectSessionSubtreeIds, runSessionSubtreeAction, type SessionSubtreeAction } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
+import { toastSessionWorkFailure } from '@/components/session/sidebar/sessions/sessionWorkFailure';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import type { Session } from '@openchamber/agent-contract';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { toggleSessionPin } from '@/sync/session-pins';
 import { useUIStore } from '@/stores/useUIStore';
-<<<<<<< HEAD
 import { SessionDirectoryMissingError, setSessionWorkState } from '@/sync/session-actions';
-=======
-import { setSessionWorkState } from '@/sync/session-actions';
-import { setSessionPinList } from '@/sync/session-pins';
-import { getSessionPinList } from '@/lib/sessionPins';
-import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
-import { requestPinTo } from '@/components/session/sidebar/sections/sectionActions';
->>>>>>> bc50ba56a
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSessionDirectory } from '../mobileSessionFields';
 
@@ -57,50 +50,19 @@ export const runMobileSubtreeAction = (action: SessionSubtreeAction, session: Se
  );
 };
 
-<<<<<<< HEAD
 export const toggleMobileSessionWork = async (session: Session, inWork: boolean, t: Translate): Promise<void> => {
  try {
   await setSessionWorkState(session.sessionId, getSessionDirectory(session) || null, inWork ? 'done' : 'open');
  } catch (error) {
   toastSessionWorkFailure(error instanceof SessionDirectoryMissingError, () => { void runMobileSubtreeAction('archive', session, t); }, t);
  }
-=======
-/**
- * Track a root session's work, or with sessions of it in work, mark all of
- * them done, as the desktop row does.
- */
-export const toggleMobileSessionWork = async (session: Session, sessionsInWork: readonly Session[], t: Translate): Promise<void> => {
-  try {
-    if (sessionsInWork.length === 0) {
-      await setSessionWorkState(session.id, getSessionDirectory(session) || null, 'open');
-      return;
-    }
-    for (const entry of sessionsInWork) {
-      await setSessionWorkState(entry.id, getSessionDirectory(entry) || getSessionDirectory(session) || null, 'done');
-    }
-  } catch {
-    toast.error(t('sessions.sidebar.session.work.updateFailed'));
-  }
->>>>>>> bc50ba56a
 };
 
-/** The swipe's Pin: Pinned at once while there are no pin lists, a choice of list once there are. */
 export const toggleMobileSessionPin = (session: Session, pinned: boolean, t: Translate): void => {
-<<<<<<< HEAD
  const directory = getSessionDirectory(session);
  if (!directory) return;
  const failedKey = pinned ? 'sessions.sidebar.session.pin.unpinFailed' : 'sessions.sidebar.session.pin.pinFailed';
  toggleSessionPin({ directory, sessionId: session.sessionId }).catch(() => toast.error(t(failedKey)));
-=======
-  const directory = getSessionDirectory(session);
-  if (!directory) return;
-  const target = { directory, sessionId: session.id };
-  requestPinTo({
-    current: pinned ? getSessionPinList(session) ?? DEFAULT_PIN_LIST : null,
-    pin: (list) => { setSessionPinList(target, true, list).catch(() => toast.error(t('sessions.sidebar.session.pin.pinFailed'))); },
-    unpin: () => { setSessionPinList(target, false, null).catch(() => toast.error(t('sessions.sidebar.session.pin.unpinFailed'))); },
-  });
->>>>>>> bc50ba56a
 };
 
 export const renameMobileSession = async (sessionId: string, title: string, t: Translate): Promise<void> => {
