@@ -7,7 +7,6 @@
 **Read first:** spec "How it is built" (Merge); `merge-lanes.tsv` lane 16; skills `ui-api-decoupling`, `drag-to-reorder`, `locale-ui-patterns`
 **Check:** in a worktree on the scaffold branch, `bun scripts/upstream-drift.mjs --markers --lane 16` → 0; `bun run --cwd packages/ui type-check` reports no error in lane paths; `bun scripts/upstream-drift.mjs --check` on lane paths → 0 `unexplained`
 - **Base commit:** fd671d0690c72c3f69b8c8c3739f60ce026832d8
-- **Status:** done
 
 - [x] Resolve the conflicted paths with the merge rule. Adopt upstream's `SidebarHeader` order and menus (sections manager, mark all read, worktree name by branch, row context menus, worktree icon), `ContextSurfacePanes`, Files preview failure states, knowledge panes, the update dialog with release notes and progress, and the mobile walkthrough/connections surfaces.
 - [x] Restore silently deleted upstream workbench files unless a decision retires them.
