@@ -76,7 +76,9 @@ const useChoose = (snapshot: WebSearchSnapshot) => {
   };
 
   const chooseProvider = (providerId: string): void => {
-    if (snapshot.selectedProviderId === providerId) return;
+    // Re-enabling a provider already stored as the selection still writes it:
+    // only a provider that is both selected and enabled needs no change.
+    if (snapshot.enabled && snapshot.selectedProviderId === providerId) return;
     // Removing the new primary from the fallback chain keeps the same CAS
     // write and honours the contract's primary-not-fallback rule.
     void commit({
@@ -95,7 +97,11 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
   const selectedProvider = snapshot.selectedProviderId === null
     ? null
     : snapshot.providers.find((provider) => provider.providerId === snapshot.selectedProviderId) ?? null;
-  const mode: ModeValue = snapshot.selectedProviderId === null ? 'default' : 'off';
+  // A chosen provider presses neither chip: the two describe the fallback
+    // modes, and the status line names the provider, as on the connect page.
+  const mode: 'default' | 'off' | 'provider' = !snapshot.enabled
+    ? 'off'
+    : snapshot.selectedProviderId === null ? 'default' : 'provider';
 
   const status = !snapshot.enabled
     ? t('settings.webSearch.mode.offDescription')
@@ -113,14 +119,16 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
       settingsItem="web-search.provider"
     >
       <div className="space-y-2">
-        <SettingsChipGroup<ModeValue>
+        <SettingsChipGroup<'default' | 'off' | 'provider'>
           aria-label={t('settings.webSearch.section.provider')}
           value={mode}
           options={[
             { value: 'default', label: t('settings.webSearch.option.default') },
             { value: 'off', label: t('settings.webSearch.option.off') },
           ]}
-          onChange={chooseMode}
+          onChange={(value) => {
+            if (value !== 'provider') chooseMode(value);
+          }}
         />
         <p className={SETTINGS_HELPER_CLASS}>{status}</p>
       </div>
@@ -437,10 +445,12 @@ export const WebSearchPage: React.FC = () => {
             info={t('settings.webSearch.section.providersInfo')}
             settingsItem="web-search.providers"
           >
+            {/* Each key is on its provider's own screen, so the registry's
+                "API keys" result lands on the cards that open those screens. */}
             {snapshot.providers.length === 0 ? (
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.noProviders')}</p>
             ) : (
-              <div className={SETTINGS_CARD_GRID_CLASS}>
+              <div className={SETTINGS_CARD_GRID_CLASS} data-settings-item="web-search.keys">
                 {snapshot.providers.map((provider) => (
                   <ProviderCard
                     key={provider.providerId}
