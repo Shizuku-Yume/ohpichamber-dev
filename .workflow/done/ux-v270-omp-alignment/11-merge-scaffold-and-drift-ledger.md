@@ -7,7 +7,6 @@
 **Read first:** spec "How it is built" (Merge); `decisions.md: 2026-11-10 - Merge upstream OpenChamber with a real git merge`; `specs/upstream-refresh.md` (standing exclusions); `research/ux-v270-systemic-review.md` R1
 **Check:** on the scaffold tip, `bun scripts/upstream-drift.mjs --markers --lane 11` → 0 markers in excluded and manifest paths; `bun install --frozen-lockfile` → exit 0; `bun scripts/upstream-drift.test.mjs` → exit 0; `merge-lanes.tsv` assigns every conflicted path to exactly one of lanes 12-18
 - **Base commit:** d599d1566b332cf1aa8a8c4450424b070506676e
-- **Status:** complete
 
 - [x] Fast-forward `ux-v270-omp-alignment/integration` to `main`. Cut `ux-v270-omp-alignment/merge-scaffold` from it, run `git merge --no-ff bc50ba56a`, and commit the conflicted state with markers. The commit message marks it as scaffold that never lands.
 - [x] Resolve the standing exclusions to the fork side: `packages/vscode` (deleted), OpenCode-engine paths, folder trust, isolated-spaces code, `.github` collaboration/CI, `changelog/`, `nix/`, `pr-evidence/`, upstream `.agents/.claude/.opencode` guidance.
@@ -35,16 +34,12 @@ carries their markers.
   `opencodeCli` and the VS Code scripts, with the fork version `3.0.0` (mobile `1.13.2`), scripts and OMP overrides;
   `bun.lock` regenerated from them.
 
-### Check before
-
-`bun scripts/upstream-drift.mjs --markers --lane 11` → no tool existed; `grep -rl '^<<<<<<<'` counted 917 marker-bearing
+**Check before:** `bun scripts/upstream-drift.mjs --markers --lane 11` → no tool existed; `grep -rl '^<<<<<<<'` counted 917 marker-bearing
 files, including `packages/web/server/lib/host/**` and every manifest. `bun install --frozen-lockfile` failed against the
 unresolved manifests.
 
-### Check after
-
-- `bun scripts/upstream-drift.mjs --markers --lane 11` → `no conflict markers (lane 11)`, exit 0.
-- `bun install --frozen-lockfile` → exit 0 (`Checked 1431 installs across 1579 packages (no changes)`).
-- `bun scripts/upstream-drift.test.mjs` → 9 checks pass, `upstream-drift: all checks passed`, exit 0.
-- `merge-lanes.tsv` → 1,298 rows, 1,298 unique paths, all assigned to lanes 12-18
+**Check after:** `bun scripts/upstream-drift.mjs --markers --lane 11` → `no conflict markers (lane 11)`, exit 0.
+`bun install --frozen-lockfile` → exit 0 (`Checked 1431 installs across 1579 packages (no changes)`).
+`bun scripts/upstream-drift.test.mjs` → 9 checks pass, `upstream-drift: all checks passed`, exit 0.
+`merge-lanes.tsv` → 1,298 rows, 1,298 unique paths, all assigned to lanes 12-18
   (12: 263, 13: 162, 14: 199, 15: 102, 16: 262, 17: 67, 18: 243).
