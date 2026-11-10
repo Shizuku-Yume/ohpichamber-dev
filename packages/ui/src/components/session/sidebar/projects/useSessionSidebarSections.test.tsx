@@ -10,22 +10,14 @@ import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 
 const CHATS_ROOT = '/home/user/.config/openchamber/chats';
 
-const chatSession = (sessionId: string, title: string): Session => ({
-  sessionId,
-  rootSessionId: sessionId,
-  projectId: 'chats',
-  workspaceId: 'workspace',
-  displayPath: `${CHATS_ROOT}/2026-08-28/session-${sessionId}`,
-  createdAt: 1,
-  updatedAt: 1,
-  epoch: 'epoch',
-  headSequence: '0',
-  runtimeStatus: 'idle',
-  activeRunId: null,
-  mode: { kind: 'main' },
-  title: title, metadata: {},
-  metadataRevision: '0',
-  archiveRevision: '0',
+const chatSession = (id: string, title: string): Session => ({
+  id,
+  projectID: 'chats',
+  cost: 0,
+  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  title,
+  directory: `${CHATS_ROOT}/2026-08-28/session-${id}`,
+  time: { created: 1, updated: 1 },
 });
 
 const chatsGroup = (sessions: Session[]): SessionGroup => ({
@@ -54,25 +46,22 @@ const renderSections = (
 ): Sections => {
   let captured: Sections | null = null;
   const Harness = () => {
-    const sessionById = new Map((projectSessions ?? []).map((session) => [session.id, session]));
+    const sessionById = new Map((projectSessions ?? []).map((session) => [session.sessionId, session]));
     const grouping = useSessionGrouping({
       homeDirectory: '/home/user',
       worktreeMetadata: new Map(),
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map(),
       gitBranches: new Map(),
-<<<<<<< HEAD
-=======
       isVSCode: false,
       sessionById,
       childrenMap: new Map(),
       nestedSessionIds: new Set(),
->>>>>>> bc50ba56a
     });
     captured = useSessionSidebarSections({
       normalizedProjects: projectSessions ? [{ id: 'project', path: CHATS_ROOT, normalizedPath: CHATS_ROOT }] : [],
-      getSessionsForProject: () => projectSessions?.filter((session) => session.archiveRevision === '0') ?? [],
-      getArchivedSessionsForProject: () => projectSessions?.filter((session) => session.archiveRevision !== '0') ?? [],
+      getSessionsForProject: () => projectSessions?.filter((session) => !session.time.archived) ?? [],
+      getArchivedSessionsForProject: () => projectSessions?.filter((session) => Boolean(session.time.archived)) ?? [],
       availableWorktreesByProject: new Map(),
       projectRepoStatus: new Map(),
       projectRootBranches: new Map(),
@@ -104,13 +93,13 @@ describe('sidebar search over standalone groups', () => {
   const targetId = 'ses_f88b1a2b3c4d';
 
   test('finds project sessions in flat results without searching their archived bucket', () => {
-    const active = { ...chatSession(targetId, 'Active'), displayPath: CHATS_ROOT };
-    const archived = { ...chatSession('ses_archived', 'Archived'), displayPath: CHATS_ROOT, archiveRevision: '2', archivedAt: 1 };
+    const active = { ...chatSession(targetId, 'Active'), directory: CHATS_ROOT };
+    const archived = { ...chatSession('ses_archived', 'Archived'), directory: CHATS_ROOT, time: { created: 1, updated: 1, archived: 2 } };
     const group = chatsGroup([]);
     const sections = renderSections(group, targetId, [active, archived]);
     expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.sessionId)).toEqual([targetId]);
     expect(sections.searchMatchCount).toBe(1);
-    const archivedSearch = renderSections(group, archived.sessionId, [active, archived]);
+    const archivedSearch = renderSections(group, archived.id, [active, archived]);
     expect(archivedSearch.flatSectionsForRender).toEqual([]);
     expect(archivedSearch.searchMatchCount).toBe(0);
   });
@@ -154,7 +143,7 @@ describe('sidebar search over standalone groups', () => {
 
   test('does not return archived sessions for an ID query', () => {
     const archived = chatSession(targetId, 'Archived');
-    archived.archivedAt = 2;
+    archived.time.archived = 2;
     const group = chatsGroup([archived]);
     expect(renderSections(group, targetId).searchMatchCount).toBe(0);
   });

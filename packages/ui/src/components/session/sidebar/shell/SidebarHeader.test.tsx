@@ -59,15 +59,10 @@ beforeEach(() => {
     MouseEvent: browser.MouseEvent,
     InputEvent: browser.InputEvent,
     KeyboardEvent: browser.KeyboardEvent,
-<<<<<<< HEAD
-    MouseEvent: browser.MouseEvent,
-    PointerEvent: browser.PointerEvent,
-=======
     ResizeObserver: browser.ResizeObserver,
     getComputedStyle: browser.getComputedStyle.bind(browser),
     requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
     cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
->>>>>>> bc50ba56a
     IS_REACT_ACT_ENVIRONMENT: true,
   })) {
     descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -88,12 +83,29 @@ afterEach(async () => {
 });
 
 describe('SidebarHeader', () => {
-
-  test('clears the committed search query with the clear button', async () => {
+  test('compact variant renders a persistent search input and no directory controls', async () => {
     await act(async () => root.render(
       <I18nProvider>
         <TooltipProvider>
-          <StatefulHeader {...baseProps} isSessionSearchOpen initialQuery="draft" />
+          <StatefulHeader {...baseProps} hideDirectoryControls />
+        </TooltipProvider>
+      </I18nProvider>,
+    ));
+
+    const inputs = document.querySelectorAll('input');
+    expect(inputs.length).toBe(1);
+    expect(inputs[0]?.getAttribute('placeholder')).toBe('Search sessions...');
+
+    expect(document.querySelector('[aria-label="Search sessions"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Add project"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Display mode"]')).toBeNull();
+  });
+
+  test('compact variant clears the search query with the clear button', async () => {
+    await act(async () => root.render(
+      <I18nProvider>
+        <TooltipProvider>
+          <StatefulHeader {...baseProps} hideDirectoryControls initialQuery="draft" />
         </TooltipProvider>
       </I18nProvider>,
     ));
@@ -107,12 +119,12 @@ describe('SidebarHeader', () => {
     expect(input.value).toBe('');
   });
 
-  test('applies an open search query on Enter, not on every keystroke', async () => {
+  test('compact variant applies the query on Enter, not on every keystroke', async () => {
     const submitted: string[] = [];
     await act(async () => root.render(
       <I18nProvider>
         <TooltipProvider>
-          <SidebarHeader {...baseProps} isSessionSearchOpen setSessionSearchQuery={(value) => submitted.push(value)} />
+          <SidebarHeader {...baseProps} hideDirectoryControls setSessionSearchQuery={(value) => submitted.push(value)} />
         </TooltipProvider>
       </I18nProvider>,
     ));
@@ -145,50 +157,7 @@ describe('SidebarHeader', () => {
     expect(document.querySelector('[aria-label="Add project"]')).not.toBeNull();
     expect(document.querySelector('[aria-label="Display mode"]')).not.toBeNull();
   });
-  test('compact variant with hideDirectoryControls renders only the compact search input', async () => {
-    await act(async () => root.render(
-      <I18nProvider>
-        <TooltipProvider>
-          <SidebarHeader {...baseProps} hideDirectoryControls={true} />
-        </TooltipProvider>
-      </I18nProvider>,
-    ));
 
-    expect(document.querySelector('input')).not.toBeNull();
-    expect(document.querySelector('[aria-label="Add project"]')).toBeNull();
-    expect(document.querySelector('[aria-label="Display mode"]')).toBeNull();
-  });
-
-
-<<<<<<< HEAD
-  test('a page button opens its page, shows it pressed, and closes it on the next click', async () => {
-    const initial = useUIStore.getState();
-    try {
-      await act(async () => root.render(
-        <I18nProvider>
-          <TooltipProvider>
-            <SidebarHeader {...baseProps} />
-          </TooltipProvider>
-        </I18nProvider>,
-      ));
-      const button = (label: string) => document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
-      for (const [label, isOpen] of [
-        ['Archive', () => useUIStore.getState().isArchivePageOpen],
-        ['Scheduled tasks', () => useUIStore.getState().isScheduledTasksDialogOpen],
-        ['Issues and PRs', () => useUIStore.getState().isSourceBoardOpen],
-      ] as const) {
-        expect(button(label).getAttribute('aria-pressed')).toBe('false');
-        await act(async () => button(label).click());
-        expect(isOpen()).toBe(true);
-        expect(button(label).getAttribute('aria-pressed')).toBe('true');
-        await act(async () => button(label).click());
-        expect(isOpen()).toBe(false);
-        expect(button(label).getAttribute('aria-pressed')).toBe('false');
-      }
-    } finally {
-      useUIStore.setState(initial);
-    }
-=======
   test('the row holds the list controls and one More menu, and no page buttons', async () => {
     await act(async () => root.render(
       <I18nProvider>
@@ -199,7 +168,6 @@ describe('SidebarHeader', () => {
     ));
     const labels = [...document.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
     expect(labels).toEqual(['Search sessions', 'Add project', 'Display mode', 'More']);
->>>>>>> bc50ba56a
   });
 
   test('the search button opens the field and, once open, closes it', async () => {

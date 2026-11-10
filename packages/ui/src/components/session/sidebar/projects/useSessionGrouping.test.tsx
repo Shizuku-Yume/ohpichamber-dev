@@ -3,6 +3,7 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Session } from '@openchamber/agent-contract';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionActions } from '../sessions/useSessionActions';
@@ -11,27 +12,6 @@ import { buildSidebarSessionProjection } from '../list/sessionCollection';
 import { useSessionGrouping } from './useSessionGrouping';
 import type { SessionNode } from '../types';
 
-<<<<<<< HEAD
-const session = (sessionId: string, parentSessionId?: string): Session => ({
-  sessionId,
-  parentSessionId,
-  rootSessionId: parentSessionId ?? sessionId,
-  projectId: 'project',
-  workspaceId: 'workspace',
-  displayPath: '/workspace',
-  createdAt: 1,
-  updatedAt: 1,
-  epoch: 'epoch',
-  headSequence: '0',
-  runtimeStatus: 'idle',
-  activeRunId: null,
-  mode: { kind: 'main' },
-  metadata: null,
-  metadataRevision: '0',
-  archiveRevision: '0',
-});
- 
-=======
 type FixtureSession = Session & { parentID?: string };
 type GroupingCapture = { buildGroupedSessions?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] };
 type BuildCapture = { build?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] };
@@ -48,7 +28,6 @@ const session = (id: string, parentID?: string): Session => {
   if (parentID) value.parentID = parentID;
   return value;
 };
->>>>>>> bc50ba56a
 
 const collectIds = (nodes: SessionNode[]): string[] => {
   const ids: string[] = [];
@@ -134,11 +113,8 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds,
         sessionOrderRanks,
         gitBranches,
-<<<<<<< HEAD
-=======
         isVSCode: false,
         ...groupingFixture([]).authority,
->>>>>>> bc50ba56a
       }).buildGroupedSessions;
       return null;
     };
@@ -172,11 +148,8 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-<<<<<<< HEAD
-=======
         isVSCode: false,
         ...groupingFixture(sessions).authority,
->>>>>>> bc50ba56a
       }).buildGroupedSessions;
       return null;
     };
@@ -203,7 +176,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const worktree = (name: string): WorktreeMetadata => ({
       source: 'sdk', name, path: `/workspace/.wt/${name}`, projectDirectory: '/workspace', branch: name, label: name,
     });
-    const busy = { ...session('busy'), displayPath: '/workspace/.wt/zeta', updatedAt: 99 };
+    const busy = { ...session('busy'), directory: '/workspace/.wt/zeta', time: { created: 1, updated: 99 } };
     const worktreeOrder = () => {
       const state: BuildCapture = {};
       const Harness = () => {
@@ -228,8 +201,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     expect(worktreeOrder()).toEqual(['zeta', 'alpha']);
   });
 
-<<<<<<< HEAD
-=======
   test('groups a session inside a worktree sub-folder under that worktree', () => {
     const alpha: WorktreeMetadata = {
       source: 'sdk', name: 'alpha', path: '/workspace/.wt/alpha', projectDirectory: '/workspace', branch: 'alpha', label: 'alpha',
@@ -259,7 +230,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     expect(collectIds(groups.find((group) => group.isMain)?.sessions ?? [])).toEqual([]);
   });
 
->>>>>>> bc50ba56a
   test('uses the row-local descendant snapshot for archive and hard-delete actions', async () => {
     type ActionsCapture = { handleDeleteSession?: ReturnType<typeof useSessionActions>['handleDeleteSession'] };
     const state: ActionsCapture = {};
@@ -293,14 +263,14 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
 
   test('keeps active unknown-directory sessions in their resolved project root group', () => {
     const state: GroupingCapture = {};
-    const restored = { ...session('restored'), displayPath: '/deleted/worktree', createdAt: 1, updatedAt: 1 };
-
+    const restored = { ...session('restored'), directory: '/deleted/worktree', time: { created: 1, updated: 1 } };
     const ownership = createSessionOwnershipIndex(
       [restored],
       [{ id: 'configured-workspace', normalizedPath: '/workspace' }],
       new Map(),
+      false,
       [],
-      [{ id: 'project', name: 'Project', state: 'complete', projectDirectory: '/workspace', directory: '/workspace' }],
+      [{ id: 'project', worktree: '/workspace' }],
     );
     const Harness = () => {
       state.buildGroupedSessions = useSessionGrouping({
@@ -309,6 +279,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
+        isVSCode: false,
         sessionOwners: ownership.bySessionId,
         ...groupingFixture([restored]).authority,
       }).buildGroupedSessions;
@@ -346,11 +317,8 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-<<<<<<< HEAD
-=======
         isVSCode: false,
         ...groupingFixture(activeSessions, new Map(), archivedSessions).authority,
->>>>>>> bc50ba56a
       }).buildGroupedSessions;
       return null;
     };
@@ -358,10 +326,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const buildGroupedSessions = state.buildGroupedSessions;
     if (!buildGroupedSessions) throw new Error('grouping callback was not mounted');
 
-<<<<<<< HEAD
-    const archived = (value: Session): Session => ({ ...value, archivedAt: 2, archiveRevision: '2' });
-=======
->>>>>>> bc50ba56a
     const groups = buildGroupedSessions(
       sessions,
       '/workspace',
@@ -411,9 +375,9 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const parentNode = parentGroups.find((group) => group.isMain)?.sessions[0];
     const childGroups = state.build(fixture.orderedProjectSessions.filter((entry) => entry.id !== 'parent'), '/workspace/.wt/child', [], null, true);
 
-    expect(parentNode?.children.map((node) => node.session.id)).toEqual(['newer', 'older']);
-    expect(parentNode?.children[0]?.children.map((node) => node.session.id)).toEqual(['grandchild']);
-    expect(parentNode?.children[0]?.session.directory).toBe('/workspace/.wt/child');
+    expect(parentNode?.children.map((node) => node.session.sessionId)).toEqual(['newer', 'older']);
+    expect(parentNode?.children[0]?.children.map((node) => node.session.sessionId)).toEqual(['grandchild']);
+    expect(parentNode?.children[0]?.resolveGlobalSessionDirectory(session)).toBe('/workspace/.wt/child');
     expect(parentNode?.children[0]?.worktree?.path).toBe('/workspace/.wt/child');
     expect(parentNode?.children[0]?.children[0]?.worktree?.path).toBe('/workspace/.wt/grandchild');
     expect(childGroups.find((group) => group.isMain)?.sessions).toEqual([]);
@@ -443,7 +407,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
       };
       renderToStaticMarkup(<I18nProvider><Harness /></I18nProvider>);
       return state.build?.([child], '/workspace', [], null, false)
-        .find((group) => group.isMain)?.sessions.map((node) => node.session.id);
+        .find((group) => group.isMain)?.sessions.map((node) => node.session.sessionId);
     };
 
     expect(renderRoots([child])).toEqual(['child']);
