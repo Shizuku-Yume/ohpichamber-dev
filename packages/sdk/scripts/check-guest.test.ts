@@ -45,8 +45,6 @@ describe('openchamber-guest-check', () => {
     expect(result.text).toContain('main.js');
   });
 
-<<<<<<< HEAD
-=======
   test('names a provider logo the install would refuse', async () => {
     const logoPanel = { id: 'x', name: 'X', icon: 'window' };
     const missing = check(await packageWith({ panel: logoPanel, providerLogos: { acme: 'acme.svg' } }, {}));
@@ -63,7 +61,6 @@ describe('openchamber-guest-check', () => {
     expect(alias.text.split('gone.svg is missing').length - 1).toBe(1);
   });
 
->>>>>>> bc50ba56a
   test('names a service that was not bundled', async () => {
     const service = { entry: 'service/main.js', runtime: 'host' };
     const result = check(await packageWith({ panel: { id: 'x', name: 'X', icon: 'window' }, service, background: { entry: 'b.html' } }, {

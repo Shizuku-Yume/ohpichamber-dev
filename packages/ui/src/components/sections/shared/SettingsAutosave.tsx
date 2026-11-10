@@ -3,17 +3,16 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 
 /**
- * Autosave for Settings pages that have no Save button (agents, commands,
- * skills, MCP, plugins, and Behavior's response style).
+ * Autosave for the OpenCode configuration pages (agents, commands, skills,
+ * MCP, plugins, behavior).
  *
- * The file-backed pages persist through their owning canonical resource APIs,
- * which apply the changed resources within a second or two; Behavior writes the
- * Host profile's response-style preferences through `updateDesktopSettings`.
- * Toggles, selects and pickers call `requestSave()` right after the state
- * update; text fields are committed by `onBlurCapture` on the page container
- * (and by Cmd/Ctrl+Enter where an editor supports it). Success is silent; a
- * failed write is reported with an error toast. There is no inline indicator:
- * the write is not something the user waits for.
+ * OpenCode v2 watches its own config files and applies changes within a second
+ * or two, so these pages have no Save or Apply button. Toggles, selects and
+ * pickers call `requestSave()` right after the state update; text fields are
+ * committed by `onBlurCapture` on the page container (and by Cmd/Ctrl+Enter
+ * where an editor supports it). Success is silent; a failed write is reported
+ * with an error toast. There is no inline indicator: the write is not
+ * something the user waits for.
  */
 
 export type AutosaveResult =

@@ -460,7 +460,6 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
    if (!found) recover = true
    break
   }
-<<<<<<< HEAD
   case "approval.requested":
   case "approval.resolved": {
    const request = event.approval
@@ -486,77 +485,6 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     updated = { ...updated, questions }
    }
    break
-=======
-  if (patch.time?.created !== undefined) {
-    const next = { ...message, time: { ...message.time, created: patch.time.created } }
-    // Only delivery out of the inbox moves a synthetic message's time.
-    if (next.role === "synthetic") delete next.pending
-    return next
-  }
-  return message
-}
-
-/**
- * A terminal tool state this client manufactured while finalizing an
- * interrupted turn. The server never confirmed it, so an authoritative
- * transition that arrives later supersedes it; every other final state is
- * OpenCode's and stands (a stale replay must not regress it).
- */
-function isLocallyMarkedToolState(state: ToolPart["state"]): boolean {
-  return state.status === "error" && state.errorSource === "local"
-}
-
-function applyToolTransition(part: ToolPart, transition: ToolTransition): ToolPart {
-  const state = part.state
-  switch (transition.kind) {
-    case "input":
-      if (state.status !== "pending") return part
-      return { ...part, state: { ...state, raw: transition.raw } }
-    case "called":
-      if (isFinalToolStatus(state.status)) return part
-      return {
-        ...part,
-        executed: transition.executed,
-        state: { status: "running", input: transition.input, time: { start: transition.start } },
-      }
-    case "progress":
-      if (state.status !== "running") return part
-      return { ...part, state: { ...state, metadata: transition.metadata } }
-    case "success": {
-      if (isFinalToolStatus(state.status) && !isLocallyMarkedToolState(state)) return part
-      const start = state.status === "pending" ? transition.end : state.time.start
-      const attachments = transition.attachments
-      return withoutUnshownResult({
-        ...part,
-        executed: transition.executed,
-        state: compact({
-          status: "completed",
-          input: state.input,
-          output: transition.output,
-          metadata: transition.metadata ?? (state.status === "running" ? state.metadata : undefined),
-          time: { start, end: transition.end },
-          attachments,
-        }),
-      })
-    }
-    case "failed": {
-      if (isFinalToolStatus(state.status) && !isLocallyMarkedToolState(state)) return part
-      const start = state.status === "pending" ? transition.end : state.time.start
-      return withoutUnshownResult({
-        ...part,
-        executed: transition.executed,
-        state: compact({
-          status: "error",
-          input: state.input,
-          error: transition.error,
-          errorType: transition.errorType,
-          output: transition.output,
-          metadata: transition.metadata ?? (state.status === "running" ? state.metadata : undefined),
-          time: { start, end: transition.end },
-        }),
-      })
-    }
->>>>>>> bc50ba56a
   }
   case "queue.updated":
    if (event.queue.sessionId !== id) recover = true

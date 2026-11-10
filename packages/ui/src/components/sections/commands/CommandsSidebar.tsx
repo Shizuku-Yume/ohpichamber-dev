@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { selectCommandsForDirectory, useCommandsStore, isCommandBuiltIn, type Command } from '@/stores/useCommandsStore';
+import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -28,9 +29,7 @@ import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/se
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
-import { getLocalizedCommandDescription } from './commandDescriptions';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
-
 
 interface CommandsSidebarProps {
   onItemSelect?: () => void;
@@ -42,25 +41,22 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const [renameDialogCommand, setRenameDialogCommand] = React.useState<Command | null>(null);
   const [renameNewName, setRenameNewName] = React.useState('');
   const [confirmActionCommand, setConfirmActionCommand] = React.useState<Command | null>(null);
+  const [confirmActionType, setConfirmActionType] = React.useState<'delete' | 'reset' | null>(null);
   const [isConfirmActionPending, setIsConfirmActionPending] = React.useState(false);
   const [openMenuCommand, setOpenMenuCommand] = React.useState<string | null>(null);
 
   const {
-    selectedCommandId,
     selectedCommandName,
     setSelectedCommand,
-    setSelectedCommandId,
     setCommandDraft,
-    updateCommand,
+    createCommand,
     deleteCommand,
     loadCommands,
   } = useCommandsStore(useShallow((s) => ({
-    selectedCommandId: s.selectedCommandId,
     selectedCommandName: s.selectedCommandName,
     setSelectedCommand: s.setSelectedCommand,
-    setSelectedCommandId: s.setSelectedCommandId,
     setCommandDraft: s.setCommandDraft,
-    updateCommand: s.updateCommand,
+    createCommand: s.createCommand,
     deleteCommand: s.deleteCommand,
     loadCommands: s.loadCommands,
   })));
@@ -68,8 +64,29 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   // stays where it is.
   const settingsDirectory = useSettingsDirectory();
   const commands = useCommandsStore((state) => selectCommandsForDirectory(state, settingsDirectory));
-  React.useEffect(() => { void loadCommands(settingsDirectory); }, [loadCommands, settingsDirectory]);
-  const commandOnlyItems = commands;
+  const skills = useSkillsStore((state) => selectSkillsForDirectory(state, settingsDirectory));
+  const loadSkills = useSkillsStore((s) => s.loadSkills);
+
+  React.useEffect(() => {
+    void loadCommands(settingsDirectory);
+    void loadSkills(settingsDirectory);
+  }, [loadCommands, loadSkills, settingsDirectory]);
+
+  const skillNames = React.useMemo(() => new Set(skills.map((skill) => skill.name)), [skills]);
+  const commandOnlyItems = React.useMemo(
+    () => commands.filter((command) => !skillNames.has(command.name)),
+    [commands, skillNames],
+  );
+
+  React.useEffect(() => {
+    if (!selectedCommandName) {
+      return;
+    }
+
+    if (skillNames.has(selectedCommandName)) {
+      setSelectedCommand(null);
+    }
+  }, [selectedCommandName, setSelectedCommand, skillNames]);
 
   const bgClass = 'bg-background';
 
@@ -84,7 +101,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     }
 
     // Set draft and open the page for editing
-    setCommandDraft({ name: newName, scope: 'agent' });
+    setCommandDraft({ name: newName, scope: 'user' });
     setSelectedCommand(newName);
     onItemSelect?.();
 
@@ -97,25 +114,42 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     }
 
     setConfirmActionCommand(command);
+    setConfirmActionType('delete');
+  };
+
+  const handleResetCommand = async (command: Command) => {
+    if (!isCommandBuiltIn(command)) {
+      return;
+    }
+
+    setConfirmActionCommand(command);
+    setConfirmActionType('reset');
   };
 
   const closeConfirmActionDialog = () => {
     setConfirmActionCommand(null);
+    setConfirmActionType(null);
   };
 
   const handleConfirmAction = async () => {
-    if (!confirmActionCommand) {
+    if (!confirmActionCommand || !confirmActionType) {
       return;
     }
 
     setIsConfirmActionPending(true);
-    const success = await deleteCommand(confirmActionCommand.name, settingsDirectory, confirmActionCommand.commandId);
+    const success = await deleteCommand(confirmActionCommand.name, settingsDirectory);
 
     if (success) {
-      toast.success(t('settings.commands.sidebar.toast.commandDeleted', { name: confirmActionCommand.name }));
+      if (confirmActionType === 'delete') {
+        toast.success(t('settings.commands.sidebar.toast.commandDeleted', { name: confirmActionCommand.name }));
+      } else {
+        toast.success(t('settings.commands.sidebar.toast.commandReset', { name: confirmActionCommand.name }));
+      }
       closeConfirmActionDialog();
-    } else {
+    } else if (confirmActionType === 'delete') {
       toast.error(t('settings.commands.sidebar.toast.deleteFailed'));
+    } else {
+      toast.error(t('settings.commands.sidebar.toast.resetFailed'));
     }
 
     setIsConfirmActionPending(false);
@@ -134,13 +168,12 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     // Set draft with prefilled values from source command
     setCommandDraft({
       name: newName,
-      scope: command.scope === 'workspace' ? 'workspace' : 'agent',
+      scope: command.scope || 'user',
       description: command.description,
-      content: command.content,
-      argumentHint: command.argumentHint,
-      agentId: command.agentId,
-      modelSelection: command.modelSelection,
-      group: command.group,
+      template: command.template,
+      agent: command.agent,
+      model: command.model,
+      subagent: command.subagent,
     });
     setSelectedCommand(newName);
 
@@ -166,16 +199,31 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    if (commands.some((cmd) => !isCommandBuiltIn(cmd) && cmd.name === sanitizedName)) {
+    if (commands.some((cmd) => cmd.name === sanitizedName)) {
       toast.error(t('settings.commands.sidebar.toast.commandExists'));
       return;
     }
 
-    const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory, renameDialogCommand.commandId);
+    // Create new command with new name and all existing config
+    const success = await createCommand({
+      name: sanitizedName,
+      description: renameDialogCommand.description,
+      template: renameDialogCommand.template,
+      agent: renameDialogCommand.agent,
+      model: renameDialogCommand.model,
+      subagent: renameDialogCommand.subagent,
+      scope: renameDialogCommand.scope,
+    }, settingsDirectory);
 
     if (success) {
-      toast.success(t('settings.common.status.saved'));
-      setSelectedCommand(sanitizedName);
+      // Delete old command
+      const deleteSuccess = await deleteCommand(renameDialogCommand.name, settingsDirectory);
+      if (deleteSuccess) {
+        toast.success(`Command renamed to "${sanitizedName}"`);
+        setSelectedCommand(sanitizedName);
+      } else {
+        toast.error(t('settings.commands.sidebar.toast.removeOldAfterRenameFailed'));
+      }
     } else {
       toast.error(t('settings.commands.sidebar.toast.renameFailed'));
     }
@@ -199,7 +247,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
             onClick={handleCreateNew}
-            aria-label={t('settings.common.actions.create')}
           >
             <Icon name="add" className="h-3.5 w-3.5" />
           </Button>
@@ -225,16 +272,18 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                 </div>
                 {[...builtInCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
                   <CommandListItem
-                    key={command.commandId}
+                    key={command.name}
                     command={command}
-                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
+                    isSelected={selectedCommandName === command.name}
                     onSelect={() => {
-                      setSelectedCommandId(command.commandId);
+                      setSelectedCommand(command.name);
                       onItemSelect?.();
+
                     }}
+                    onReset={() => handleResetCommand(command)}
                     onDuplicate={() => handleDuplicateCommand(command)}
-                    isMenuOpen={openMenuCommand === command.commandId}
-                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
+                    isMenuOpen={openMenuCommand === command.name}
+                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.name : null)}
                   />
                 ))}
               </>
@@ -247,18 +296,19 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                 </div>
                 {[...customCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
                   <CommandListItem
-                    key={command.commandId}
+                    key={command.name}
                     command={command}
-                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
+                    isSelected={selectedCommandName === command.name}
                     onSelect={() => {
-                      setSelectedCommandId(command.commandId);
+                      setSelectedCommand(command.name);
                       onItemSelect?.();
+
                     }}
                     onRename={() => handleOpenRenameDialog(command)}
                     onDelete={() => handleDeleteCommand(command)}
                     onDuplicate={() => handleDuplicateCommand(command)}
-                    isMenuOpen={openMenuCommand === command.commandId}
-                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
+                    isMenuOpen={openMenuCommand === command.name}
+                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.name : null)}
                   />
                 ))}
               </>
@@ -267,38 +317,38 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         )}
       </ScrollableOverlay>
 
-      {confirmActionCommand ? (
-        <Dialog
-          open
-          onOpenChange={(open) => {
-            if (!open && !isConfirmActionPending) {
-              closeConfirmActionDialog();
-            }
-          }}
-        >
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{t('settings.commands.sidebar.dialog.deleteTitle')}</DialogTitle>
-              <DialogDescription>
-                {t('settings.commands.sidebar.dialog.deleteDescription', { name: confirmActionCommand.name })}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={closeConfirmActionDialog}
-                disabled={isConfirmActionPending}
-              >
-                {t('settings.common.actions.cancel')}
-              </Button>
-              <Button size="sm" onClick={handleConfirmAction} disabled={isConfirmActionPending}>
-                {t('settings.common.actions.delete')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      ) : null}
+      <Dialog
+        open={confirmActionCommand !== null && confirmActionType !== null}
+        onOpenChange={(open) => {
+          if (!open && !isConfirmActionPending) {
+            closeConfirmActionDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmActionType === 'delete' ? t('settings.commands.sidebar.dialog.deleteTitle') : t('settings.commands.sidebar.dialog.resetTitle')}</DialogTitle>
+            <DialogDescription>
+              {confirmActionType === 'delete'
+                ? t('settings.commands.sidebar.dialog.deleteDescription', { name: confirmActionCommand?.name ?? '' })
+                : t('settings.commands.sidebar.dialog.resetDescription', { name: confirmActionCommand?.name ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={closeConfirmActionDialog}
+              disabled={isConfirmActionPending}
+            >
+              {t('settings.common.actions.cancel')}
+            </Button>
+            <Button size="sm" onClick={handleConfirmAction} disabled={isConfirmActionPending}>
+              {confirmActionType === 'delete' ? t('settings.common.actions.delete') : t('settings.common.actions.reset')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogCommand !== null} onOpenChange={(open) => !open && setRenameDialogCommand(null)}>
@@ -343,6 +393,7 @@ interface CommandListItemProps {
   isSelected: boolean;
   onSelect: () => void;
   onDelete?: () => void;
+  onReset?: () => void;
   onRename?: () => void;
   onDuplicate: () => void;
   isMenuOpen: boolean;
@@ -354,6 +405,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   isSelected,
   onSelect,
   onDelete,
+  onReset,
   onRename,
   onDuplicate,
   isMenuOpen,
@@ -366,17 +418,23 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
     <>
       {onRename && (
         <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRename(); }}>
-          <Icon name="edit" className="h-4 w-4 mr-px" />
+          <Icon name="edit" className="h-4 w-4 me-px" />
           {t('settings.common.actions.rename')}
         </Item>
       )}
       <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDuplicate(); }}>
-        <Icon name="file-copy" className="h-4 w-4 mr-px" />
+        <Icon name="file-copy" className="h-4 w-4 me-px" />
         {t('settings.common.actions.duplicate')}
       </Item>
+      {onReset && (
+        <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onReset(); }}>
+          <Icon name="restart" className="h-4 w-4 me-px" />
+          {t('settings.common.actions.reset')}
+        </Item>
+      )}
       {onDelete && (
         <Item onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
-          <Icon name="delete-bin" className="h-4 w-4 mr-px" />
+          <Icon name="delete-bin" className="h-4 w-4 me-px" />
           {t('settings.common.actions.delete')}
         </Item>
       )}
@@ -385,24 +443,6 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
       <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (e) => { e.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
-<<<<<<< HEAD
-        <div className="flex min-w-0 flex-1 items-center">
-          <button
-            onClick={onSelect}
-            className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            tabIndex={0}
-          >
-            <div className="flex items-center gap-2">
-              <span className="typography-ui-label font-normal truncate text-foreground">
-                /{command.name}
-              </span>
-              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                {isCommandBuiltIn(command)
-                  ? t('settings.agents.sidebar.badge.system')
-                  : t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
-                {command.group ? ` / ${command.group}` : ''}
-              </span>
-=======
       <div className="flex min-w-0 flex-1 items-center">
         <button
           onClick={onSelect}
@@ -423,33 +463,10 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
           {command.description && (
             <div className="typography-micro text-muted-foreground truncate leading-tight">
               {command.description}
->>>>>>> bc50ba56a
             </div>
+          )}
+        </button>
 
-<<<<<<< HEAD
-            {getLocalizedCommandDescription(command, t) && (
-              <div className="typography-micro text-muted-foreground truncate leading-tight">
-                {getLocalizedCommandDescription(command, t)}
-              </div>
-            )}
-          </button>
-
-          <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm"
-                variant="ghost"
-                className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-                aria-label={command.name}
-              >
-                <Icon name="more-2" className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-fit min-w-20">
-              {renderMenuItems(DropdownMenuItem)}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-=======
         <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
           <DropdownMenuTrigger asChild>
             <Button size="sm"
@@ -464,7 +481,6 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
->>>>>>> bc50ba56a
       </ContextMenuTrigger>
       <ContextMenuContent className="w-fit min-w-20">
         {renderMenuItems(ContextMenuItem)}

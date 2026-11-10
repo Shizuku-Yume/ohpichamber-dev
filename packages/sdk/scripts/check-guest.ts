@@ -1,14 +1,8 @@
 #!/usr/bin/env bun
-<<<<<<< HEAD
-import { access, readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-
-=======
 import { access, readFile, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import { GUEST_PROVIDER_LOGO_BYTES_MAX } from '../dist/index.js';
->>>>>>> bc50ba56a
 import { parseManifestJson } from '../dist/schemas.js';
 
 const root = resolve(process.argv[2] ?? '.');
@@ -47,8 +41,6 @@ const checkService = async (entry: string): Promise<void> => {
   if (!code.includes('OPENCHAMBER_SERVICE_PORT')) problems.push(`${entry} never reads OPENCHAMBER_SERVICE_PORT, so the host cannot reach it.`);
 };
 
-<<<<<<< HEAD
-=======
 const checkProviderLogo = async (logo: string): Promise<void> => {
   const path = join(root, logo);
   if (!await exists(path)) {
@@ -59,7 +51,6 @@ const checkProviderLogo = async (logo: string): Promise<void> => {
   if (size === 0 || size > GUEST_PROVIDER_LOGO_BYTES_MAX) problems.push(`${logo} must be 1 byte to 1 MB.`);
 };
 
->>>>>>> bc50ba56a
 const manifestPath = join(root, 'package.json');
 if (!await exists(manifestPath)) {
   console.error(`No package.json in ${root}.`);
@@ -73,10 +64,7 @@ if (!parsed.ok) {
 const { contributes } = parsed.manifest;
 await Promise.all(pagesIn(JSON.stringify(contributes)).map(checkPage));
 if (contributes.service) await checkService(contributes.service.entry);
-<<<<<<< HEAD
-=======
 await Promise.all([...new Set(Object.values(contributes.providerLogos ?? {}))].map(checkProviderLogo));
->>>>>>> bc50ba56a
 if (problems.length > 0) {
   for (const problem of problems) console.error(problem);
   process.exit(1);

@@ -128,11 +128,7 @@ const main = async () => {
     ...extra,
   }, null, 2)}\n`)
   const processSampler = startProcessSampler({ outputDir, rootPid: appPid, excludePids: excluded })
-<<<<<<< HEAD
   const longLived = () => processSampler.tree().filter((row) => (row.depth <= 2 && row.command.includes("OpenChamber")) || /\bomp\b/.test(row.command) || row.command.includes("agent-service")).map((row) => row.pid)
-=======
-  const longLived = () => processSampler.tree().filter((row) => (row.depth <= 2 && row.command.includes("OpenChamber")) || /opencode serve/.test(row.command)).map((row) => row.pid)
->>>>>>> bc50ba56a
   await wait(1_000)
   const footprint = startFootprintSampler({ outputDir, pids: longLived })
   const nettop = [startNettop({ outputDir, kind: "loopback" }), startNettop({ outputDir, kind: "external" })]

@@ -12,13 +12,10 @@ import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useDeviceInfo } from '@/lib/device';
 import { useUIStore } from '@/stores/useUIStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-<<<<<<< HEAD
-=======
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { cn } from '@/lib/utils';
 import { SettingsInfoHint } from '../shared/SettingsInfoHint';
 import { ThemeSchematic } from './ThemeSchematic';
->>>>>>> bc50ba56a
 
 type Variants = Awaited<ReturnType<typeof readThemePackage>>;
 type Variant = Variants[number];
@@ -176,51 +173,6 @@ export function ThemeCatalogDialog({ pickFile, fileBusy, onClose }: { pickFile: 
     </Button>
   );
 
-<<<<<<< HEAD
-  const content = <>
-      {state.step === 'search' ? <>
-        <Input autoFocus aria-label={t('settings.themeImport.search')} placeholder={t('settings.themeImport.search')} value={query} maxLength={160} onChange={(event) => setQuery(event.target.value)} />
-        <ScrollableOverlay outerClassName={isMobile ? undefined : 'max-h-[45dvh]'} className="space-y-1" aria-live="polite" disableHorizontal>
-          {state.status === 'loading' && <p className="text-muted-foreground">{t('common.loading')}</p>}
-          {state.status === 'error' && <p role="alert" className="text-[var(--status-error-text)]">{t('settings.themeImport.catalogError')}</p>}
-          {state.status === 'ready' && !state.results.length && <p className="text-muted-foreground">{t('settings.themeImport.empty')}</p>}
-          {state.results.map((extension) => <Button key={`${extension.namespace}.${extension.name}`} variant="ghost" className="h-auto w-full justify-start py-2 text-start" onClick={() => void load(extension)}>
-            <ExtensionIcon extension={extension} />
-            <span className="min-w-0"><span className="block truncate">{extension.label}</span><span className="block truncate typography-meta text-muted-foreground">{extension.namespace}</span></span>
-          </Button>)}
-        </ScrollableOverlay>
-      </> : <>
-        <Button variant="ghost" size="sm" className="justify-start" disabled={saving || state.step === 'package' && state.status === 'loading'} onClick={() => setState({ step: 'search', status: 'idle', results: [] })}>
-          <Icon name="arrow-left" className="size-4" />{t('settings.themeImport.back')}
-        </Button>
-        <p className="typography-ui-label">{state.extension.label}</p>
-        {result === 'partial' && <p role="alert" className="text-[var(--status-error-text)]">{t('settings.themeImport.partialError')}</p>}
-        {state.step === 'package' ? state.status === 'loading'
-          ? <p role="status">{t('common.loading')}</p>
-          : <p role="alert" className="text-[var(--status-error-text)]">{t('settings.themeImport.catalogError')}</p>
-          : <>
-            {state.variants.length > 1 && <Button variant="ghost" size="sm" className="self-start" disabled={saving || fileBusy || !selectable.length}
-              onClick={() => setSelected(allSelected ? new Set() : new Set(selectable.map((variant) => variant.key)))}>
-              {t(allSelected ? 'settings.themeImport.deselectAll' : 'settings.themeImport.selectAll')}
-            </Button>}
-            <ScrollableOverlay outerClassName={isMobile ? undefined : 'max-h-[45dvh]'} className="space-y-2" disableHorizontal>
-              {state.variants.map((variant) => <div key={variant.key} className="flex items-center gap-3">
-                {variant.status === 'ready' && <div aria-hidden="true" className="flex w-20 shrink-0 items-center gap-2 rounded px-2 py-3" style={{ backgroundColor: variant.theme.colors.surface.background, color: variant.theme.colors.surface.foreground }}>
-                  <span>Aa</span><span className="space-y-1">{[variant.theme.colors.syntax.base.keyword, variant.theme.colors.syntax.base.string, variant.theme.colors.syntax.base.function].map((color, index) => <span key={index} className="block h-1 w-5 rounded" style={{ backgroundColor: color }} />)}</span>
-                </div>}
-                <div className="min-w-0 flex-1">
-                  {saved.has(variant.key)
-                    ? <div className="flex items-center gap-2 py-1"><Icon name="check" className="size-4 shrink-0 text-[var(--status-success-text)]" /><span className="typography-ui-label">{variant.name}</span></div>
-                    : <SettingsCheckboxRow checked={selected.has(variant.key)} disabled={variant.status !== 'ready' || saving || fileBusy} label={variant.name}
-                      onChange={(checked) => setSelected((current) => { const next = new Set(current); if (checked) next.add(variant.key); else next.delete(variant.key); return next; })} />}
-                  <p className={saved.has(variant.key) ? 'typography-meta font-medium text-[var(--status-success-text)]' : 'typography-meta text-muted-foreground'}>{variant.status !== 'ready' ? t('settings.themeImport.error.invalid') : saved.has(variant.key) ? t('settings.themeImport.installed') : t(variant.theme.metadata.variant === 'dark' ? 'settings.openchamber.visual.option.themeMode.dark' : 'settings.openchamber.visual.option.themeMode.light')}</p>
-                </div>
-              </div>)}
-            </ScrollableOverlay>
-          </>}
-      </>}
-  </>;
-=======
   const selectAll = state.step === 'variants' && selectable.length > 1 ? (
     <Button
       variant="ghost"
@@ -315,7 +267,6 @@ export function ThemeCatalogDialog({ pickFile, fileBusy, onClose }: { pickFile: 
       {result === 'partial' ? t('settings.themeImport.partialError') : null}
     </p>
   );
->>>>>>> bc50ba56a
 
   if (isMobile) {
     return (

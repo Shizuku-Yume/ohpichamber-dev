@@ -1,15 +1,13 @@
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey, isSessionPinnedInMetadata } from '@/lib/sessionPins';
-import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { forgetLegacyPins, getLegacyPins, setPendingPin, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { setSessionPinned } from './session-actions';
 
-export { setPendingPin };
-
-export type PinTarget = { directory: string; sessionId: string };
+type PinTarget = { directory: string; sessionId: string };
 
 // Clicks on one session run in order, so the last one wins on the server too.
-export const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
+const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
 
 /**
  * Pin or unpin a session. The row flips at once; the pin is stored in the
@@ -17,31 +15,6 @@ export const pinQueues = new Map<string, { tail: Promise<void>; count: number }>
  * when the server could not store it, and the row flips back.
  */
 export function toggleSessionPin(target: PinTarget): Promise<void> {
-<<<<<<< HEAD
- const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
- if (!key) return Promise.resolve();
- const pinned = !useSessionPinnedStore.getState().ids.has(key);
- setPendingPin(key, pinned);
-
- const queue = pinQueues.get(key) ?? { tail: Promise.resolve(), count: 0 };
- queue.count += 1;
- pinQueues.set(key, queue);
- const run = queue.tail.then(async () => {
-  try {
-   await setSessionPinned(target.sessionId, target.directory, pinned);
-   // An old local pin must not bring back a session the user just unpinned.
-   if (!pinned) forgetLegacyPins([key]);
-  } finally {
-   queue.count -= 1;
-   if (queue.count === 0) {
-    pinQueues.delete(key);
-    setPendingPin(key, null);
-   }
-  }
- });
- queue.tail = run.catch(() => undefined);
- return run;
-=======
   const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
   if (!key) return Promise.resolve();
   return writeSessionPin(key, target, !useSessionPinnedStore.getState().ids.has(key), null);
@@ -78,7 +51,6 @@ function writeSessionPin(key: string, target: PinTarget, pinned: boolean, list: 
   });
   queue.tail = run.catch(() => undefined);
   return run;
->>>>>>> bc50ba56a
 }
 
 const migratingRuntimes = new Set<string>();
@@ -89,38 +61,35 @@ const migratingRuntimes = new Set<string>();
  * metadata; a pin whose session is gone is dropped, and one that fails to
  * write stays local and is tried again on the next complete load.
  */
-export async function migrateLegacyPins(): Promise<void> {
- const state = useGlobalSessionsStore.getState();
- if (!state.hasLoaded || state.status !== 'ready') return;
- const runtimeKey = getRuntimeKey();
- const pins = getLegacyPins(runtimeKey);
- if (pins.length === 0 || migratingRuntimes.has(runtimeKey)) return;
- migratingRuntimes.add(runtimeKey);
- try {
-  for (const pin of pins) {
-   if (getRuntimeKey() !== runtimeKey) return;
-   const session = useGlobalSessionsStore.getState().entityById.get(pin.sessionId);
-   if (!session || isSessionPinnedInMetadata(session)) {
-    forgetLegacyPins([pin.key]);
-    continue;
-   }
-   try {
-    const directory = resolveGlobalSessionDirectory(session) ?? pin.directory;
-    if (await setSessionPinned(pin.sessionId, directory, true)) {
-     forgetLegacyPins([pin.key]);
+async function migrateLegacyPins(): Promise<void> {
+  const state = useGlobalSessionsStore.getState();
+  if (!state.hasLoaded || state.status !== 'ready') return;
+  const runtimeKey = getRuntimeKey();
+  const pins = getLegacyPins(runtimeKey);
+  if (pins.length === 0 || migratingRuntimes.has(runtimeKey)) return;
+  migratingRuntimes.add(runtimeKey);
+  try {
+    for (const pin of pins) {
+      if (getRuntimeKey() !== runtimeKey) return;
+      const session = useGlobalSessionsStore.getState().entityById.get(pin.sessionId);
+      if (!session || isSessionPinnedInMetadata(session)) {
+        forgetLegacyPins([pin.key]);
+        continue;
+      }
+      try {
+        if (await setSessionPinned(pin.sessionId, session.directory ?? pin.directory, true)) forgetLegacyPins([pin.key]);
+      } catch (error) {
+        console.warn('[session-pins] could not move a local pin to the server', error);
+      }
     }
-   } catch (error) {
-    console.warn('[session-pins] could not move a local pin to the server', error);
-   }
+  } finally {
+    migratingRuntimes.delete(runtimeKey);
   }
- } finally {
-  migratingRuntimes.delete(runtimeKey);
- }
 }
 
 useGlobalSessionsStore.subscribe((state, previous) => {
- if (state.hasLoaded && state.status === 'ready' && (previous.status !== 'ready' || !previous.hasLoaded)) {
-  void migrateLegacyPins();
- }
+  if (state.hasLoaded && state.status === 'ready' && (previous.status !== 'ready' || !previous.hasLoaded)) {
+    void migrateLegacyPins();
+  }
 });
 void migrateLegacyPins();

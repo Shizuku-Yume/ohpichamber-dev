@@ -29,15 +29,6 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.sticky-user-header', 'messages'],
   ['chat.inline-assistant-actions', 'messages'],
   ['chat.selection-approval-text', 'messages'],
-<<<<<<< HEAD
-  ['chat.streaming', 'messages'],
-  ['chat.tools-and-files', 'messages'],
-  ['chat.dotfiles', 'messages'],
-  ['chat.persist-drafts', 'composer'],
-  ['chat.mobile-return-key-sends', 'composer'],
-  ['chat.render-mode', 'messages'],
-=======
->>>>>>> bc50ba56a
   ['chat.user-message-rendering', 'messages'],
   ['chat.mermaid-rendering', 'messages'],
   ['chat.diff-layout', 'messages'],

@@ -36,8 +36,6 @@ test('a complete app has no problems', () => {
   assert.deepEqual(findPackagedAppContentProblems(completeApp()), []);
 });
 
-<<<<<<< HEAD
-=======
 test('Windows packages require an unpacked decoder for the target architecture', () => {
   for (const arch of ['x64', 'arm64']) {
     const target = { platform: 'win32', arch };
@@ -87,7 +85,6 @@ test('ripgrep platform packages inside the archive are rejected', () => {
   assert.deepEqual(findPackagedAppContentProblems([...completeApp(), { path: 'node_modules/@vscode/ripgrep/lib/index.js', unpacked: false }]), []);
 });
 
->>>>>>> bc50ba56a
 test('files copied from outside the allowlist are rejected', () => {
   const files = [...completeApp(), ...['main.mjs', '.cache/agent-runtime/staged'].map((filePath) => ({ path: filePath, unpacked: false }))];
   assert.deepEqual(findPackagedAppContentProblems(files), ['2 unexpected files outside node_modules (main.mjs, .cache/agent-runtime/staged)']);

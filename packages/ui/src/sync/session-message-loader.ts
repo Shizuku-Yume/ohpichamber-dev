@@ -1,13 +1,6 @@
-<<<<<<< HEAD
 import type { StoreApi } from "zustand"
 import type { HistoryPage, Message, Run, Session, SessionSnapshot, Turn } from "@openchamber/agent-contract"
 import type { CanonicalClient } from "@/api/canonicalClient"
-=======
-import type { Message, Part } from "@/lib/opencode/model"
-import type { MessagePage, PendingInboxMessage } from "@/lib/opencode/client"
-import { findCompletedReplyIds } from "@/lib/messages/latestReply"
-import { olderMessagesCursor } from "@/lib/opencode/messageCursor"
->>>>>>> bc50ba56a
 import type { ChildStoreManager, DirectoryStore } from "./child-store"
 import { compareCounters, installHostSession, installQueue, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
 import { findMessageIndex, insertMessageChronologically, sortMessagesChronologically } from "./message-ordering"
@@ -40,8 +33,6 @@ export type SessionMessageLoadState = {
   complete: boolean
   generation: number
   updatedAt: number | undefined
-  /** Completed replies fetched through older pages, never live completions. */
-  olderCompletedReplyIds: ReadonlySet<string>
 }
 export type LoaderConfiguration = {
   client: CanonicalClient
@@ -63,22 +54,9 @@ type ChildStore = StoreApi<DirectoryStore>
 type Branch = SessionSnapshot["branch"]
 
 const createDefaultState = (generation = 0): SessionMessageLoadState => ({
-<<<<<<< HEAD
   status: "idle", loadingKind: null, error: null, resolved: false,
   limit: isMobileSurfaceRuntime() ? 50 : 100, cursor: undefined, complete: false,
   generation, updatedAt: undefined,
-=======
-  status: "idle",
-  loadingKind: null,
-  error: null,
-  resolved: false,
-  limit: getInitialPageSize(),
-  cursor: undefined,
-  complete: false,
-  generation,
-  updatedAt: undefined,
-  olderCompletedReplyIds: new Set(),
->>>>>>> bc50ba56a
 })
 export const EMPTY_SESSION_MESSAGE_LOAD_STATE = createDefaultState()
 
@@ -374,24 +352,9 @@ export class SessionMessageLoader {
       }
       this.commitHistory(normalized, store, { ...page, messages, turns })
       this.patchEntry(entry, {
-<<<<<<< HEAD
         status: "ready", loadingKind: null, error: null, resolved: true,
         limit: Math.max(entry.snapshot.limit, store.getState().message[normalized.sessionId]?.length ?? 0),
         cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, updatedAt: Date.now(),
-=======
-        olderCompletedReplyIds: new Set([
-          ...entry.snapshot.olderCompletedReplyIds,
-          ...findCompletedReplyIds(page.session.map((info) => ({ info, parts: page.partsByMessageID.get(info.id) ?? [] }))),
-        ]),
-        status: "ready",
-        loadingKind: null,
-        error: null,
-        resolved: true,
-        limit: Math.max(entry.snapshot.limit, committed.messages.length),
-        cursor: page.cursor,
-        complete: page.complete,
-        updatedAt: Date.now(),
->>>>>>> bc50ba56a
       })
       this.persistCoverage(normalized, entry.snapshot)
     })

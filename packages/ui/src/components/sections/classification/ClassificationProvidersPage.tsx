@@ -27,7 +27,7 @@ const CLASSIFICATION_DOCS_URL = 'https://docs.openchamber.dev/classification-pro
 
 interface ClassificationProvidersPageProps {
   titleLeading: React.ReactNode;
-  /** Opens the native provider whose API key a source uses. */
+  /** Opens the OpenCode provider whose API key a source reads. */
   onOpenProvider: (providerId: string) => void;
 }
 
@@ -196,7 +196,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
                         <MissingKeyDescription
                           text={t('settings.classification.source.zenKey.missing')}
                           linkLabel={t('settings.classification.source.openProvider', { provider: 'OpenCode Zen' })}
-                          onOpen={() => onOpenProvider('opencode-zen')}
+                          onOpen={() => onOpenProvider('opencode')}
                         />
                       )}
                   />
@@ -226,7 +226,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
                         <MissingKeyDescription
                           text={t('settings.classification.source.vercel.missing')}
                           linkLabel={t('settings.classification.source.openProvider', { provider: 'Vercel AI Gateway' })}
-                          onOpen={() => onOpenProvider('vercel-ai-gateway')}
+                          onOpen={() => onOpenProvider('vercel')}
                         />
                       )}
                   />

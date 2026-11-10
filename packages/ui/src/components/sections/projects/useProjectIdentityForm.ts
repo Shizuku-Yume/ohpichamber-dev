@@ -5,16 +5,6 @@ import { useI18n } from '@/lib/i18n';
 import type { ProjectEntry } from '@/lib/api/types';
 import { useProjectsStore, resolveUploadMime } from '@/stores/useProjectsStore';
 
-const resolveUploadMime = (file: File): 'image/png' | 'image/jpeg' | 'image/svg+xml' | null => {
-  const rawType = typeof file.type === 'string' ? file.type.trim().toLowerCase() : '';
-  if (rawType === 'image/png' || rawType === 'image/jpeg' || rawType === 'image/svg+xml') return rawType;
-  const lowerName = file.name.toLowerCase();
-  if (lowerName.endsWith('.png')) return 'image/png';
-  if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg';
-  if (lowerName.endsWith('.svg')) return 'image/svg+xml';
-  return null;
-};
-
 const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
 
 const normalizeProjectIconBackground = (value: string | null | undefined): string | null => {
