@@ -20,7 +20,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsBackButton, SettingsCardChip, SettingsCardPill, SettingsCardSearch } from '@/components/sections/shared/SettingsCards';
 import {
-<<<<<<< HEAD
   SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsFieldRow,
   SettingsSection,
@@ -29,26 +28,6 @@ import {
 import { AUTOSAVE_SAVED, AUTOSAVE_UNCHANGED, autosaveFailed, useAutosave, type AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n } from '@/lib/i18n';
-=======
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { AddPluginDialog } from './AddPluginDialog';
-import { PluginsGrid, type PluginDeleteTarget } from './PluginsGrid';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
-import { useIntegrationPolicyState } from '@/components/sections/shared/useIntegrationPolicyBlock';
-import {
-  useAutosave,
-  AUTOSAVE_SAVED,
-  AUTOSAVE_UNCHANGED,
-  autosaveFailed,
-  type AutosaveResult,
-} from '@/components/sections/shared/SettingsAutosave';
->>>>>>> bc50ba56a
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
@@ -185,38 +164,11 @@ const ScopeChip: React.FC<{ scope: InstalledPluginEntry['scope'] }> = ({ scope }
   );
 };
 
-<<<<<<< HEAD
 const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: boolean }> = ({ plugin, disabled }) => {
   const { t } = useI18n();
   const baseline = React.useRef(JSON.stringify(plugin.globalSettings, null, 2));
   const [text, setText] = React.useState(baseline.current);
   const [secrets, setSecrets] = React.useState(() => new Map<string, string>());
-=======
-  const projectDirectory = useProjectsStore((state) => state.getActiveProject()?.path);
-  const configDirectory = projectDirectory?.trim() || getPluginsConfigDirectory();
-  const loadedDirectory = usePluginsStore((state) => state.loadedDirectory);
-  const loadedRuntimeKey = usePluginsStore((state) => state.loadedRuntimeKey);
-  const catalogIsCurrent = loadedDirectory === configDirectory && loadedRuntimeKey === getRuntimeKey();
-  const selectedId = usePluginsStore((s) => s.selectedId);
-  const entries = usePluginsStore((s) => s.entries);
-  const files = usePluginsStore((s) => s.files);
-  const draft = usePluginsStore((s) => s.draft);
-  const setDraft = usePluginsStore((s) => s.setDraft);
-  const updateEntry = usePluginsStore((s) => s.updateEntry);
-  const updateFile = usePluginsStore((s) => s.updateFile);
-  const readFile = usePluginsStore((s) => s.readFile);
-  const setSelected = usePluginsStore((s) => s.setSelected);
-  const deleteEntry = usePluginsStore((s) => s.deleteEntry);
-  const deleteFile = usePluginsStore((s) => s.deleteFile);
-  const [isAddOpen, setIsAddOpen] = React.useState(false);
-  const [deleteTarget, setDeleteTarget] = React.useState<PluginDeleteTarget | null>(null);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  // The switch that writes these policies lives in the grid, so this reads the
-  // same revision the grid and config events bump; otherwise the page keeps an
-  // old deny after the plugin is on again.
-  const policyRevision = usePluginsStore((state) => state.policyRevision);
-  const policy = useIntegrationPolicyState(configDirectory, policyRevision);
->>>>>>> bc50ba56a
 
   React.useEffect(() => {
     const next = JSON.stringify(plugin.globalSettings, null, 2);
@@ -697,7 +649,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     </Button>
   );
 
-<<<<<<< HEAD
   if (plugin) {
     const details = [plugin.description, ...(plugin.enabledFeatures ?? [])].filter(Boolean).join(' · ');
     const update = pluginUpdateFor(catalog.availableUpdates, plugin);
@@ -711,49 +662,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           titleLeading={backButton}
           headerEnd={deleteButton({ kind: 'plugin', plugin })}
           titleAccessory={<ScopeChip scope={plugin.scope} />}
-=======
-  if (selectedEntry && draft && draft.mode === 'entry') {
-    const optionsResult = parseOptionsJson(draft.optionsJson);
-    const optionsValid = optionsResult.ok;
-    // A row switched off here stays silent: the list already carries that
-    // state on its switch. Only a rule the user wrote themselves needs a
-    // sentence, because nothing on this page can flip it.
-    const blockedByConfig = selectedEntry.policyResource
-      ? policy.status === 'ready' && selectedEntry.switchState !== 'off' && policy.isBlockedByRule(selectedEntry.policyResource)
-      : false;
-
-    return (
-      <>
-      <SettingsPageLayout
-        title={t('settings.plugins.page.header.entry')}
-        titleLeading={backButton}
-        headerEnd={deleteButton}
-        titleAccessory={(
-          <ScopeBadge
-            scope={selectedEntry.scope}
-            label={
-              selectedEntry.scope === 'project'
-                ? t('settings.plugins.sidebar.group.projectEntries')
-                : t('settings.plugins.sidebar.group.userEntries')
-            }
-          />
-        )}
-        onBlurCapture={autosave.onBlurCapture}
-      >
-        <SettingsSection divider={false}>
-          <div className="flex flex-col gap-3">
-            <PluginStatusBanner target={selectedEntryTarget} name={selectedEntry.spec} />
-            {blockedByConfig ? (
-              <p className="typography-meta text-muted-foreground">{t('settings.plugins.switch.blockedByConfig')}</p>
-            ) : null}
-            <RegistryBanner entryId={selectedEntry.id} spec={selectedEntry.spec} />
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          title={t('settings.plugins.page.field.spec')}
-          settingsItem="plugins.spec"
->>>>>>> bc50ba56a
         >
           <SettingsSection divider={false} contentClassName="space-y-3">
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
@@ -785,7 +693,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             </div>
           </SettingsSection>
 
-<<<<<<< HEAD
           <SettingsSection
             title={t('settings.plugins.page.header.entry')}
             description={details || undefined}
@@ -816,47 +723,11 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           <RuntimeSection catalog={catalog} disabled={disabled} onApply={requestApply} />
         </SettingsPageLayout>
         {dialogs}
-=======
-        <SettingsSection
-          title={t('settings.plugins.page.field.options')}
-          settingsItem="plugins.options"
-        >
-          <Textarea
-            dir="ltr"
-            value={draft.optionsJson}
-            onChange={(e) =>
-              setDraft({ ...draft, optionsJson: e.target.value })
-            }
-            rows={10}
-            className={cn(
-              'font-mono typography-meta min-h-[200px]',
-              !optionsValid && 'border-[var(--status-error-border)]',
-            )}
-            spellCheck={false}
-            placeholder='{ }'
-          />
-          {!optionsValid && (
-            <p className="typography-micro text-[var(--status-error)]">
-              {t('settings.plugins.page.field.options.invalidJson')}
-            </p>
-          )}
-        </SettingsSection>
-      </SettingsPageLayout>
-      {dialogs}
->>>>>>> bc50ba56a
       </>
     );
   }
 
-<<<<<<< HEAD
   if (extension) {
-=======
-  if (selectedFile && draft && draft.mode === 'file') {
-    const blockedByConfig = selectedFile.policyResource
-      ? policy.status === 'ready' && selectedFile.switchState !== 'off' && policy.isBlockedByRule(selectedFile.policyResource)
-      : false;
-
->>>>>>> bc50ba56a
     return (
       <>
         <SettingsPageLayout
@@ -868,26 +739,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               <ScopeChip scope="workspace" />
               <SettingsCardChip>{extension.extensionId}</SettingsCardChip>
             </span>
-<<<<<<< HEAD
           )}
-=======
-          </>
-        )}
-        onBlurCapture={autosave.onBlurCapture}
-      >
-        <SettingsSection divider={false}>
-          <div className="flex flex-col gap-3">
-            <PluginStatusBanner target={selectedFileTarget} name={selectedFile.fileName} />
-            {blockedByConfig ? (
-              <p className="typography-meta text-muted-foreground">{t('settings.plugins.switch.blockedByConfig')}</p>
-            ) : null}
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          title={t('settings.plugins.page.field.content')}
-          settingsItem="plugins.content"
->>>>>>> bc50ba56a
         >
           <SettingsSection divider={false} contentClassName="space-y-3">
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}

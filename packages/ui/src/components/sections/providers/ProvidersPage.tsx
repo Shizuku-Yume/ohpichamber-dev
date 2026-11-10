@@ -1,5 +1,4 @@
 import React from 'react';
-<<<<<<< HEAD
 import { useStore } from 'zustand';
 import type {
   Model,
@@ -12,13 +11,6 @@ import type {
 } from '@openchamber/agent-contract';
 import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { createProviderSettingsStore } from '@/stores/useProviderSettingsStore';
-=======
-import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
-import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { selectSettingsOnlyProvidersForDirectory, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
->>>>>>> bc50ba56a
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useUIStore } from '@/stores/useUIStore';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
@@ -30,47 +22,11 @@ import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
-<<<<<<< HEAD
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SETTINGS_ICON_BUTTON_CLASS, SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
-=======
-import { Icon } from "@/components/icon/Icon";
-import type { IconName } from "@/components/icon/icons";
-import { cn } from '@/lib/utils';
-import { useDeviceInfo } from '@/lib/device';
-import type { ModelMetadata } from '@/types';
-import { useI18n } from '@/lib/i18n';
-import { formatCompactNumber } from '@/lib/numberFormat';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { updateDesktopSettings } from '@/lib/persistence';
-import { opencodeClient } from '@/lib/opencode/client';
-import { getIntegrationClient, loadIntegrationCatalog, peekIntegrationCatalog, subscribeCredentialChanges, type IntegrationCatalog } from '@/lib/opencode/integration-catalog';
-import { fetchDisabledProviders, setProviderDisabled as setProviderDisabledRequest } from '@/lib/disabledProviders';
-import { listConnectableProviders } from './connectableProviders';
-import { ProviderConnectPicker } from './ProviderConnectPicker';
-import {
-  providerHasCredentials,
-  providerHoldsStoredLogin,
-  shouldShowApiKeyAuth,
-  shouldShowModelsSection,
-  usesMachineCredentials,
-  findIntegrationForProvider,
-  getCredentialConnections,
-  getKeyMethod,
-  getSignInMethods,
-  getProviderConnections,
-  getSignInIntegrationId,
-  getAccountSwitching,
-  readProviderApiKeySetting,
-  type CredentialConnection,
-} from './providerAuth';
-import { ProviderGrid } from './ProviderGrid';
-import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
-import { ClassificationProvidersPage } from '@/components/sections/classification/ClassificationProvidersPage';
->>>>>>> bc50ba56a
 import { SettingsBackButton } from '@/components/sections/shared/SettingsCards';
 import { ClassificationProvidersPage } from '@/components/sections/classification/ClassificationProvidersPage';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -81,7 +37,6 @@ import { ProviderAccounts } from './ProviderAccounts';
 import { ProviderApiKeyForm } from './ProviderApiKeyForm';
 import { ProviderOAuthMethods } from './ProviderOAuthMethods';
 import { CustomProviderForm } from './CustomProviderForm';
-<<<<<<< HEAD
 import { listConnectableProviders } from './connectableProviders';
 import { oauthMethodsForProvider, requiresProviderAuth, shouldAutoOpenAuthPanel } from './providerAuth';
 import { CUSTOM_PROVIDER_ID, type CustomProviderPersistPlan } from './custom-provider-form';
@@ -90,28 +45,6 @@ const ADD_PROVIDER_ID = '__add_provider__';
 const CLASSIFICATION_PAGE_ID = '__classification__';
 
 type Detail = { accounts: Accounts; configuration: ProviderConfigurationRead | null };
-=======
-import { ProviderLogoImageControl } from './ProviderLogoImageControl';
-import { providerLogoUploadSupported, removeProviderLogo, uploadProviderLogo } from '@/lib/customProviderLogos';
-
-import { ProviderAuthMethodCards } from './ProviderAuthMethodCards';
-import type { IntegrationKeyRequest } from './ProviderApiKeyForm';
-import {
-  buildIntegrationKeyRequest,
-  buildProviderUpsertRequest,
-  storeKeyAfterConfigWrite,
-  CUSTOM_PROVIDER_ID,
-  isConfigDefinedCustomProvider,
-  providerToEditFormState,
-  resolveProviderConfigScope,
-  storedProviderEntrySchema,
-  type CustomProviderFormState,
-  type CustomProviderLogoPlan,
-  type CustomProviderPersistPlan,
-  type ProviderConfigScope,
-  type StoredProviderEntry,
-} from './custom-provider-form';
->>>>>>> bc50ba56a
 
 const formatTokens = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) return null;
@@ -120,7 +53,6 @@ const formatTokens = (value?: number | null) => {
   return formatted.endsWith('.0') ? formatted.slice(0, -2) : formatted;
 };
 
-<<<<<<< HEAD
 interface ProviderDetailProps {
   workspaceId: string;
   revision: string;
@@ -136,21 +68,6 @@ interface ProviderDetailProps {
   onRefresh: () => Promise<void>;
   onSave: (plan: CustomProviderPersistPlan) => Promise<void>;
   onClearAuthFailure: () => void;
-=======
-// OpenCode owns the credential and announces the catalog change itself
-// (`credential.updated` → catalog refresh); nothing to reload after it.
-const connectIntegrationKey = async (request: IntegrationKeyRequest): Promise<void> => {
-  await getIntegrationClient().integration.connect.key(request);
-};
-
-const ADD_PROVIDER_ID = '__add_provider__';
-/** Not an OpenCode provider id: the page for OpenChamber's own classification providers (Jev). */
-const CLASSIFICATION_PAGE_ID = '__classification__';
-
-interface ProviderSourceInfo {
-  exists: boolean;
-  path?: string | null;
->>>>>>> bc50ba56a
 }
 
 function ProviderDetail({
@@ -170,7 +87,6 @@ function ProviderDetail({
   onClearAuthFailure,
 }: ProviderDetailProps) {
   const { t } = useI18n();
-<<<<<<< HEAD
   const [detail, setDetail] = React.useState<Detail | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [retry, setRetry] = React.useState(0);
@@ -183,47 +99,6 @@ function ProviderDetail({
   const [disconnectBusy, setDisconnectBusy] = React.useState(false);
   const hiddenModels = useUIStore((state) => state.hiddenModels);
   const customProviderIcon = useUIStore((state) => state.customProviderIcons[provider.providerId]);
-=======
-  const { isMobile } = useDeviceInfo();
-  // Settings browses whichever project its own selector points at; the app
-  // stays where it is.
-  const settingsDirectory = useSettingsDirectory();
-  const chatProviders = useConfigStore((state) => selectProvidersForDirectory(state, settingsDirectory));
-  const settingsOnlyProviders = useConfigStore((state) => selectSettingsOnlyProvidersForDirectory(state, settingsDirectory));
-  // Which provider the page shows is its own state. The config store's
-  // selectedProviderId belongs to the chat's model selection; sharing it made
-  // Settings open on the chat's provider and marked the chat selection manual.
-  const connectRequested = useUIStore((state) => state.settingsProvidersConnectRequested);
-  const setConnectRequested = useUIStore((state) => state.setSettingsProvidersConnectRequested);
-  const classificationRequested = useUIStore((state) => state.settingsProvidersClassificationRequested);
-  const setClassificationRequested = useUIStore((state) => state.setSettingsProvidersClassificationRequested);
-  const openRequested = useUIStore((state) => state.settingsProvidersOpenRequested);
-  const setOpenRequested = useUIStore((state) => state.setSettingsProvidersOpenRequested);
-  const [selectedProviderId, setSelectedProvider] = React.useState(() => (
-    connectRequested ? ADD_PROVIDER_ID : classificationRequested ? CLASSIFICATION_PAGE_ID : openRequested ?? ''
-  ));
-  React.useEffect(() => {
-    if (!connectRequested) return;
-    setSelectedProvider(ADD_PROVIDER_ID);
-    setConnectRequested(false);
-  }, [connectRequested, setConnectRequested]);
-  React.useEffect(() => {
-    if (!classificationRequested) return;
-    setSelectedProvider(CLASSIFICATION_PAGE_ID);
-    setClassificationRequested(false);
-  }, [classificationRequested, setClassificationRequested]);
-  React.useEffect(() => {
-    if (!openRequested) return;
-    setSelectedProvider(openRequested);
-    setOpenRequested(null);
-  }, [openRequested, setOpenRequested]);
-  const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
-  const hiddenModels = useUIStore((state) => state.hiddenModels);
-  const customProviderIcons = useUIStore((state) => state.customProviderIcons);
-  const setCustomProviderIcon = useUIStore((state) => state.setCustomProviderIcon);
-  const customProviderLogos = useUIStore((state) => state.customProviderLogos);
-  const setCustomProviderLogo = useUIStore((state) => state.setCustomProviderLogo);
->>>>>>> bc50ba56a
   const toggleHiddenModel = useUIStore((state) => state.toggleHiddenModel);
   const hideAllModels = useUIStore((state) => state.hideAllModels);
   const showAllModels = useUIStore((state) => state.showAllModels);
@@ -237,30 +112,6 @@ function ProviderDetail({
     return () => { owner.active = false; };
   }, []);
 
-<<<<<<< HEAD
-=======
-  // Starts from the list read earlier in this app session (prefetched at
-  // startup or from the last visit), then reads it again below.
-  const [catalog, setCatalog] = React.useState<IntegrationCatalog | null>(() => peekIntegrationCatalog());
-  const [integrationsLoadFailed, setIntegrationsLoadFailed] = React.useState(false);
-  const integrations = catalog?.integrations ?? null;
-  // A provider with no model at all gets a card only while it holds a stored
-  // login: without one there is nothing on its page to act on. Joined so a
-  // re-read of the integrations that changes no card keeps the same array.
-  const storedLoginIds = settingsOnlyProviders
-    .filter((provider) => providerHoldsStoredLogin(integrations, provider))
-    .map((provider) => provider.id)
-    .join('\n');
-  const providers = React.useMemo(() => {
-    const loginIds = new Set(storedLoginIds.split('\n'));
-    const manageable = settingsOnlyProviders.filter(
-      (provider) => provider.models.length > 0 || loginIds.has(provider.id),
-    );
-    return manageable.length > 0 ? [...chatProviders, ...manageable] : chatProviders;
-  }, [chatProviders, settingsOnlyProviders, storedLoginIds]);
-  // Null until read, and where the runtime has no OpenChamber server (VS Code).
-  const [disabledProviders, setDisabledProviders] = React.useState<string[] | null>(null);
->>>>>>> bc50ba56a
   React.useEffect(() => {
     let active = true;
     const runtime = getRuntimeKey();
@@ -284,7 +135,6 @@ function ProviderDetail({
   const accounts = detail?.accounts.accounts ?? [];
   const methodsLoading = methods === null && !methodsFailed;
 
-<<<<<<< HEAD
   React.useEffect(() => {
     if (shouldAutoOpenAuthPanel({
       provider,
@@ -294,36 +144,6 @@ function ProviderDetail({
       setShowAuthPanel(true);
     }
   }, [provider, authPanelDismissed, editing]);
-=======
-  const [logoBusyId, setLogoBusyId] = React.useState<string | null>(null);
-  /** Uploads or removes the provider's logo image; a failure is a toast and leaves the stored logo as it was. */
-  const applyLogoPlan = async (providerId: string, logoPlan: CustomProviderLogoPlan) => {
-    if (logoPlan.kind === 'keep' || !providerLogoUploadSupported()) return;
-    if (logoPlan.kind === 'remove' && !useUIStore.getState().customProviderLogos[providerId]) return;
-    setLogoBusyId(providerId);
-    try {
-      if (logoPlan.kind === 'upload') {
-        setCustomProviderLogo(providerId, await uploadProviderLogo(providerId, logoPlan.file));
-      } else {
-        await removeProviderLogo(providerId);
-        setCustomProviderLogo(providerId, null);
-      }
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      toast.error(logoPlan.kind === 'upload'
-        ? t('settings.providers.page.logo.toast.uploadFailed', { reason })
-        : t('settings.providers.page.logo.toast.removeFailed', { reason }));
-    } finally {
-      setLogoBusyId(null);
-    }
-  };
-
-  const handleSaveCustomProvider = async (plan: CustomProviderPersistPlan) => {
-    const busyKey = `custom:${plan.providerID}`;
-    setAuthBusyKey(busyKey);
-    setLastCustomPersistId(plan.providerID);
-    setCustomAuthFailureHint(null);
->>>>>>> bc50ba56a
 
   // A successful sign-in closes the panel before the catalog refresh lands;
   // keep it closed while the old "missing credential" snapshot is still here.
@@ -360,7 +180,6 @@ function ProviderDetail({
         onClearAuthFailure();
         await onRefresh();
       }
-<<<<<<< HEAD
     } catch {
       if (current()) {
         setAccountError(t(request.action === 'label'
@@ -369,44 +188,6 @@ function ProviderDetail({
             ? 'settings.providers.accounts.toast.switchFailed'
             : 'settings.providers.accounts.toast.removeFailed'));
       }
-=======
-      if (keyRequest) {
-        try {
-          await storeKeyAfterConfigWrite(() => getIntegrationClient().integration.connect.key(keyRequest));
-        } catch (error) {
-          setCustomAuthFailureHint(t('settings.providers.page.custom.authFailure.keyAfterConfig'));
-          throw error;
-        }
-      }
-
-      // Only a chosen icon is stored; "default" removes the entry so the
-      // provider's own logo (or the generic fallback) shows again.
-      const nextCustomProviderIcons = { ...useUIStore.getState().customProviderIcons };
-      if (plan.icon) nextCustomProviderIcons[plan.providerID] = plan.icon;
-      else delete nextCustomProviderIcons[plan.providerID];
-      await updateDesktopSettings({ customProviderIcons: nextCustomProviderIcons });
-      setCustomProviderIcon(plan.providerID, plan.icon);
-      // The provider is saved by now; a failed image write is reported on its own
-      // and does not reopen the form, whose next Save would store the key again.
-      await applyLogoPlan(plan.providerID, plan.logo);
-
-      toast.success(t('settings.providers.page.toast.customProviderSaved', { provider: plan.name }));
-      setCandidateProviderId('');
-      setEditingCustomProviderId(null);
-      setEditingCustomFormInitial(null);
-      setEditingCustomScope(null);
-      setCustomAuthFailureHint(null);
-      setLastCustomPersistId(null);
-      // OpenCode watches its config file and rebuilds the catalog on its own.
-      markAuthWriteSucceeded(plan.providerID);
-    } catch (error) {
-      console.error('Failed to save custom provider:', error);
-      toast.error(
-        error instanceof Error && error.message
-          ? error.message
-          : t('settings.providers.page.toast.customProviderSaveFailed'),
-      );
->>>>>>> bc50ba56a
     } finally {
       if (current()) setAccountBusyId(null);
     }
@@ -490,7 +271,6 @@ function ProviderDetail({
     );
   }
 
-<<<<<<< HEAD
   const providerModels = models.filter((model) => model.provider === provider.providerId);
   const filteredModels = rankByQuery(providerModels, query, (model) => [model.name, model.modelId]);
   const hiddenModelIds = new Set(
@@ -500,118 +280,6 @@ function ProviderDetail({
   );
   const canConnect = !enterprise;
   const authStatusIncomplete = requiresProviderAuth(provider);
-=======
-  const providerModels = Array.isArray(selectedProvider.models) ? selectedProvider.models : [];
-  // Hiding a model only takes it out of the chat pickers, which never list image models.
-  const canHideModels = !settingsOnlyProviders.includes(selectedProvider);
-  const selectedIntegration = findIntegrationForProvider(integrations ?? [], selectedProvider.id);
-  const signInMethods = getSignInMethods(
-    findIntegrationForProvider(integrations ?? [], getSignInIntegrationId(selectedProvider.id)),
-  );
-  const showApiKeyAuth = shouldShowApiKeyAuth(selectedIntegration);
-  const integrationsLoaded = integrations !== null;
-  const sourcesLoaded = Boolean(selectedSources);
-  const isEditableCustomProvider = sourcesLoaded
-    && isConfigDefinedCustomProvider(selectedProvider, selectedSources);
-  const hasCredentials = providerHasCredentials({
-    connections: getProviderConnections(integrations ?? [], selectedProvider.id),
-    optionsApiKey: readProviderApiKeySetting(selectedProvider),
-    machineCredentials: usesMachineCredentials(selectedProvider),
-  });
-  const showModelsSection = shouldShowModelsSection({
-    modelCount: providerModels.length,
-    integrationsLoaded,
-    hasCredentials,
-    isEditableCustomProvider,
-  });
-  const providerConnections = getProviderConnections(integrations ?? [], selectedProvider.id) ?? [];
-  // Requests go through one integration only: the provider's own, or the one it
-  // is bound to (OpenCode Go moves to the Console once you are signed in there).
-  // Its first credential is the active account; credentials stored under the
-  // other integration stay listed so they can be removed, but are not in use.
-  const usedIntegrationId = selectedProvider.integrationID ?? selectedProvider.id;
-  const usedCredentials = getCredentialConnections(findIntegrationForProvider(integrations ?? [], usedIntegrationId));
-  const activeAccountId = usedCredentials[0]?.id ?? null;
-  const unusedAccountIds = new Set(
-    providerConnections.flatMap((connection) => (
-      connection.type === 'credential' && !usedCredentials.some((used) => used.id === connection.id)
-        ? [connection.id]
-        : []
-    )),
-  );
-  const storedCredentials = providerConnections.filter(
-    (connection): connection is CredentialConnection => connection.type === 'credential',
-  );
-  const environmentConnections = providerConnections.filter((connection) => connection.type === 'env');
-  // With no stored account in use, OpenCode can still use a key from an
-  // environment variable or the config, or credentials on the server machine.
-  const inUseWithoutCredential = activeAccountId !== null
-    ? null
-    : usesMachineCredentials(selectedProvider)
-      ? 'external'
-      : environmentConnections.length > 0 || readProviderApiKeySetting(selectedProvider) !== null
-        ? 'key'
-        : null;
-  const configSources = [
-    selectedSources?.user.exists ? t('settings.providers.page.connectionDetails.source.userConfig') : null,
-    selectedSources?.project.exists ? t('settings.providers.page.connectionDetails.source.projectConfig') : null,
-    selectedSources?.custom?.exists ? t('settings.providers.page.connectionDetails.source.customConfig') : null,
-  ].filter((source): source is string => source !== null);
-  const providerTitleLeading = (
-    <span className="flex items-center gap-2">
-      {backButton}
-      <ProviderLogo providerId={selectedProvider.id} className="h-5 w-5 shrink-0" />
-    </span>
-  );
-  const providerDescription = (
-    <span className="typography-settings-description text-muted-foreground">
-      <span className="font-mono">{selectedProvider.id}</span>
-      {configSources.length > 0
-        ? <> · {t('settings.providers.page.configuredIn', { sources: configSources.join(', ') })}</>
-        : null}
-    </span>
-  );
-
-  const modelCountAccessory = (
-    <span className="typography-micro text-muted-foreground font-normal">
-      ({providerModels.length})
-    </span>
-  );
-
-  const filteredModels = rankByQuery(providerModels, modelQuery, (model) => [
-    typeof model?.name === 'string' ? model.name : '',
-    typeof model?.id === 'string' ? model.id : '',
-  ]);
-
-  if (isCustomEditMode && isEditableCustomProvider && editingCustomFormInitial) {
-    return (
-      <SettingsPageLayout
-        title={selectedProvider.name || selectedProvider.id}
-        titleLeading={providerTitleLeading}
-        description={providerDescription}
-        showSaveStatus={false}
-      >
-        <CustomProviderForm
-          mode="edit"
-          existingProviderIDs={connectedProviderIds}
-          initialValues={editingCustomFormInitial}
-          allowExistingAuth={hasCredentials || !sourcesLoaded}
-          busy={authBusyKey?.startsWith('custom:') ?? false}
-          authFailureHint={customAuthFailureHint}
-          onCancel={() => {
-            setEditingCustomProviderId(null);
-            setEditingCustomFormInitial(null);
-            setEditingCustomScope(null);
-            setCustomAuthFailureHint(null);
-            setLastCustomPersistId(null);
-          }}
-          onDisconnect={() => void handleDisconnectCustomProvider(selectedProvider.id)}
-          onSubmit={handleSaveCustomProvider}
-        />
-      </SettingsPageLayout>
-    );
-  }
->>>>>>> bc50ba56a
 
   return (
     <>
@@ -691,7 +359,6 @@ function ProviderDetail({
             {t('settings.providers.page.auth.loadingMethods')}
           </div>
         ) : (
-<<<<<<< HEAD
           <div className="space-y-4">
             {provider.authMethods.includes('api-key') ? (
               <ProviderApiKeyForm
@@ -745,110 +412,6 @@ function ProviderDetail({
               >
                 {t('settings.providers.page.actions.showAll')}
               </Button>
-=======
-          <ProviderAuthMethodCards
-            key={selectedProvider.id}
-            integrationId={selectedProvider.id}
-            showApiKey={showApiKeyAuth}
-            keyMethod={getKeyMethod(selectedIntegration)}
-            signInIntegrationId={getSignInIntegrationId(selectedProvider.id)}
-            signInMethods={signInMethods}
-            credentials={storedCredentials}
-            accounts={{
-              activeId: activeAccountId,
-              unusedIds: unusedAccountIds,
-              busyId: accountBusyId,
-              ...getAccountSwitching(providerConnections, unusedAccountIds),
-              onActivate: (account) => void handleActivateAccount(account),
-              onRename: (account, label) => void handleRenameAccount(account, label),
-              onRemove: (account) => void handleRemoveAccount(account),
-            }}
-            inUseWithoutCredential={inUseWithoutCredential}
-            canAdd={!enterpriseLocked}
-            connectKey={connectIntegrationKey}
-            onKeySaved={() => markAuthWriteSucceeded(selectedProvider.id)}
-            onSignedIn={() => handleOAuthConnected(selectedProvider.id)}
-          />
-        )}
-
-        {/* The switch happens in the managed OpenCode plugin; VS Code runs its own OpenCode without it. */}
-        {usedCredentials.length > 0 && !isVSCodeRuntime() ? (
-          <ProviderAccountSwitchToggle providerId={selectedProvider.id} accountCount={usedCredentials.length} />
-        ) : null}
-
-        {enterpriseLocked ? (
-          <p className="typography-meta text-muted-foreground">{t('settings.providers.enterpriseMode')}</p>
-        ) : null}
-      </SettingsSection>
-
-      {/* A custom provider sets its logo in the edit form, unless enterprise mode hides the form. */}
-      {providerLogoUploadSupported() && sourcesLoaded && (!isEditableCustomProvider || enterpriseLocked) ? (
-        <SettingsSection
-          title={t('settings.providers.page.logo.title')}
-          info={t('settings.providers.page.logo.info')}
-          settingsItem="providers.logo"
-        >
-          <ProviderLogoImageControl
-            preview={customProviderLogos[selectedProvider.id]
-              ? <ProviderLogo providerId={selectedProvider.id} alt="" className="size-5" />
-              : null}
-            busy={logoBusyId === selectedProvider.id}
-            onPick={(file) => void applyLogoPlan(selectedProvider.id, { kind: 'upload', file })}
-            onRemove={() => void applyLogoPlan(selectedProvider.id, { kind: 'remove' })}
-          />
-        </SettingsSection>
-      ) : null}
-
-      {providerModels.length === 0 ? (
-        <SettingsSection
-          title={t('settings.providers.page.models.title')}
-          titleAccessory={modelCountAccessory}
-          settingsItem="providers.models"
-        >
-          <p className="typography-meta text-muted-foreground">{t('settings.providers.page.models.none')}</p>
-        </SettingsSection>
-      ) : null}
-
-      {showModelsSection ? (
-      <SettingsSection
-        title={t('settings.providers.page.models.title')}
-        titleAccessory={modelCountAccessory}
-        headerAction={canHideModels ? (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="xs"
-              className="!font-normal"
-              onClick={() => {
-                const allIds = providerModels
-                  .map((model) => (typeof model?.id === 'string' ? model.id : ''))
-                  .filter((id) => id.length > 0);
-                hideAllModels(selectedProvider.id, allIds);
-              }}
-            >
-              {t('settings.providers.page.actions.hideAll')}
-            </Button>
-            <Button
-              variant="outline"
-              size="xs"
-              className="!font-normal"
-              onClick={() => showAllModels(selectedProvider.id)}
-            >
-              {t('settings.providers.page.actions.showAll')}
-            </Button>
-          </div>
-        ) : undefined}
-        settingsItem="providers.models"
-      >
-            <div className="relative mb-2">
-              <Icon name="search" className="absolute inset-s-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={modelQuery}
-                onChange={(event) => setModelQuery(event.target.value)}
-                placeholder={t('settings.providers.page.models.filterPlaceholder')}
-                className="h-7 ps-8 w-full"
-              />
->>>>>>> bc50ba56a
             </div>
           )}
           settingsItem="providers.models"
@@ -863,7 +426,6 @@ function ProviderDetail({
             />
           </div>
 
-<<<<<<< HEAD
           {filteredModels.length === 0 ? (
             <p className="py-4 text-center typography-meta text-muted-foreground">
               {t('settings.providers.page.models.noModelsMatchFilter')}
@@ -882,19 +444,6 @@ function ProviderDetail({
                 if (model.toolsSupported) capabilities.push({ key: 'tools', icon: 'tools', label: t('settings.providers.page.models.capability.toolCalling') });
                 if (model.reasoningEffortSupported) capabilities.push({ key: 'reasoning', icon: 'brain-ai-3', label: t('settings.providers.page.models.capability.reasoning') });
                 if (model.modalities.includes('image')) capabilities.push({ key: 'image', icon: 'file-image', label: t('settings.providers.page.models.capability.imageInput') });
-=======
-            {filteredModels.length === 0 ? (
-              <p className="typography-meta text-muted-foreground py-4 text-center">{t('settings.providers.page.models.noModelsMatchFilter')}</p>
-            ) : (
-              <div className="divide-y divide-[var(--surface-subtle)]">
-                {filteredModels.map((model) => {
-                  const modelId = typeof model?.id === 'string' ? model.id : '';
-                  const modelName = typeof model?.name === 'string' ? model.name : modelId;
-                  const metadata = modelId ? getModelMetadata(selectedProvider.id, modelId) as ModelMetadata | undefined : undefined;
-                  const isHidden = canHideModels && hiddenModels.some(
-                    (item) => item.providerID === selectedProvider.id && item.modelID === modelId
-                  );
->>>>>>> bc50ba56a
 
                 return (
                   <div key={model.modelId} className="py-1.5">
@@ -916,7 +465,6 @@ function ProviderDetail({
                             </div>
                           </SettingsInfoHint>
                         ) : null}
-<<<<<<< HEAD
                         <div className="hidden shrink-0 items-center gap-2 @xl:flex">
                           {tokenSummary ? (
                             <span className="shrink-0 rounded bg-[var(--surface-muted)] px-1.5 py-0.5 typography-micro text-muted-foreground">
@@ -954,36 +502,6 @@ function ProviderDetail({
                             ? <Icon name="eye-off" className="size-3.5" />
                             : <Icon name="eye" className="size-3.5" />}
                         </Button>
-=======
-                        {capabilityIcons.length > 0 && (
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {capabilityIcons.map(({ key, icon: iconName, label }) => (
-                              <span
-                                key={key}
-                                className="flex h-5 w-5 rounded items-center justify-center text-muted-foreground oc-tile-inset"
-                                title={label}
-                                aria-label={label}
-                              >
-                                <Icon name={iconName} className="h-3 w-3" />
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                          </>
-                        )}
-                        {canHideModels ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleHiddenModel(selectedProvider.id, modelId)}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]/50"
-                          title={isHidden ? t('settings.providers.page.models.actions.showModelInSelectors') : t('settings.providers.page.models.actions.hideModelFromSelectors')}
-                          aria-label={isHidden ? t('settings.providers.page.models.actions.showModel') : t('settings.providers.page.models.actions.hideModel')}
-                        >
-                          {isHidden ? <Icon name="eye-off" className="h-3.5 w-3.5" /> : <Icon name="eye" className="h-3.5 w-3.5" />}
-                        </button>
-                        ) : null}
-                      </div>
->>>>>>> bc50ba56a
                       </div>
                     </div>
                   </div>

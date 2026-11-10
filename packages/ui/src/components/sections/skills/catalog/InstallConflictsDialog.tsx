@@ -19,7 +19,8 @@ import { useI18n } from '@/lib/i18n';
 
 export type SkillConflict = {
   skillName: string;
-  scope: 'workspace' | 'agent';
+  scope: 'user' | 'project';
+  source?: 'opencode' | 'agents';
 };
 
 export type ConflictDecision = 'skip' | 'overwrite';
@@ -87,16 +88,20 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
                 <div className="min-w-0">
                   <div className="typography-ui-label truncate">{conflict.skillName}</div>
                   <div className="typography-micro text-muted-foreground">
-                    {t(conflict.scope === 'workspace' ? 'settings.skills.catalog.conflicts.scope.project' : 'settings.skills.catalog.conflicts.scope.user')}
+                    {t('settings.skills.catalog.conflicts.installedIn', {
+                      scope: conflict.scope === 'project'
+                        ? t('settings.skills.catalog.conflicts.scope.project')
+                        : t('settings.skills.catalog.conflicts.scope.user'),
+                      source: conflict.source === 'agents'
+                        ? t('settings.skills.catalog.conflicts.source.agents')
+                        : t('settings.skills.catalog.conflicts.source.opencode'),
+                    })}
                   </div>
                 </div>
 
                 <Select
                   value={decisions[conflict.skillName] || 'skip'}
-                  onValueChange={(value) => {
-                    if (value !== 'skip' && value !== 'overwrite') return;
-                    setDecisions((prev) => ({ ...prev, [conflict.skillName]: value }));
-                  }}
+                  onValueChange={(v) => setDecisions((prev) => ({ ...prev, [conflict.skillName]: v as ConflictDecision }))}
                 >
                   <SelectTrigger className="w-fit">
                     <span className="capitalize">

@@ -1,6 +1,4 @@
-import { Input } from '@/components/ui/input';
 import React from 'react';
-
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
@@ -13,11 +11,9 @@ import {
   SettingsControlGroup,
   SettingsRadioGroup,
   SettingsRadioOption,
-  SettingsStackedField,
   SETTINGS_NUMBER_INPUT_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-  SettingsStackedField,
   SETTINGS_OPTION_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
@@ -86,45 +82,6 @@ const useChipOptions = <T extends string>(options: ChipOption<T>[]) => {
   return React.useMemo(() => options.map((option) => ({ value: option.id, label: t(option.labelKey) })), [options, t]);
 };
 
-export const DEFAULT_SELECTION_APPROVAL_TEXT = 'Sounds good';
-
-type UIStoreWithApproval = {
-  selectionApprovalText?: string;
-  setSelectionApprovalText?: (value: string) => void;
-};
-
-const setApprovalText = (val: string) => {
-  const store = useUIStore.getState() as unknown as UIStoreWithApproval;
-  if (typeof store.setSelectionApprovalText === 'function') {
-    store.setSelectionApprovalText(val);
-  } else {
-    useUIStore.setState({ selectionApprovalText: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
-  }
-};
-
-const SelectionApprovalField: React.FC = () => {
-  const { t } = useI18n();
-  const selectionApprovalText = useUIStore((state) => (state as unknown as UIStoreWithApproval).selectionApprovalText ?? '');
-
-  return (
-    <SettingsStackedField
-      className="pt-3"
-      label={t('settings.openchamber.visual.field.selectionApprovalText')}
-      info={t('settings.openchamber.visual.field.selectionApprovalTextInfo')}
-      settingsItem="chat.selection-approval-text"
-    >
-      <Input
-        value={selectionApprovalText}
-        placeholder={DEFAULT_SELECTION_APPROVAL_TEXT}
-        maxLength={1000}
-        onChange={(event) => setApprovalText(event.target.value)}
-        aria-label={t('settings.openchamber.visual.field.selectionApprovalText')}
-        dir="auto"
-      />
-    </SettingsStackedField>
-  );
-};
-
 /** How the transcript reads: agent activity, layout, formatting, search. */
 const SelectionApprovalField: React.FC = () => {
   const { t } = useI18n();
@@ -132,8 +89,7 @@ const SelectionApprovalField: React.FC = () => {
   const setSelectionApprovalText = useUIStore((state) => state.setSelectionApprovalText);
 
   return (
-    <SettingsStackedField
-      className="pt-3"
+    <SettingsFieldRow
       label={t('settings.openchamber.visual.field.selectionApprovalText')}
       info={t('settings.openchamber.visual.field.selectionApprovalTextInfo')}
       settingsItem="chat.selection-approval-text"
@@ -144,9 +100,10 @@ const SelectionApprovalField: React.FC = () => {
         maxLength={1000}
         onChange={(event) => setSelectionApprovalText(event.target.value)}
         aria-label={t('settings.openchamber.visual.field.selectionApprovalText')}
+        className="w-full"
         dir="auto"
       />
-    </SettingsStackedField>
+    </SettingsFieldRow>
   );
 };
 
@@ -652,49 +609,49 @@ const AssistanceTab: React.FC = () => {
 
       <SettingsSection
         title={t('settings.openchamber.visual.goal.sectionTitle')}
-          info={t('settings.openchamber.visual.goal.description')}
-          contentClassName="space-y-3"
-        >
-          <SettingsCheckboxRow
-            checked={sessionGoalEnabled}
-            onChange={setSessionGoalEnabled}
-            label={t('settings.openchamber.visual.field.sessionGoal')}
-            ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
-            settingsItem="chat.session-goal"
-          />
-          <div>
-            <SettingsFieldRow
-              label={(
-                <SettingsCheckboxRow
-                  checked={sessionGoalDefaultBudgetEnabled}
-                  onChange={setSessionGoalDefaultBudgetEnabled}
-                  disabled={!sessionGoalEnabled}
-                  label={t('settings.openchamber.visual.goal.budgetLabel')}
-                  ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
-                />
-              )}
-              settingsItem="chat.session-goal-budget"
-            >
-              {/* The field keeps its place while the budget is off, so
-                  turning it on does not move the rows around it. */}
-              <NumberInput
-                value={sessionGoalDefaultBudget}
-                onValueChange={(value) => {
-                  if (Number.isFinite(value) && value > 0) {
-                    setSessionGoalDefaultBudget(Math.floor(value));
-                  }
-                }}
-                min={1000}
-                max={100000000}
-                step={50000}
-                disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
-                className={SETTINGS_NUMBER_INPUT_CLASS}
-                aria-label={t('settings.openchamber.visual.goal.budgetAria')}
-              />
-            </SettingsFieldRow>
-          </div>
+        info={t('settings.openchamber.visual.goal.description')}
+        contentClassName="space-y-3"
+      >
+        <SettingsCheckboxRow
+          checked={sessionGoalEnabled}
+          onChange={setSessionGoalEnabled}
+          label={t('settings.openchamber.visual.field.sessionGoal')}
+          ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
+          settingsItem="chat.session-goal"
+        />
+        <div>
           <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
           <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
+          <SettingsFieldRow
+            label={(
+              <SettingsCheckboxRow
+                checked={sessionGoalDefaultBudgetEnabled}
+                onChange={setSessionGoalDefaultBudgetEnabled}
+                disabled={!sessionGoalEnabled}
+                label={t('settings.openchamber.visual.goal.budgetLabel')}
+                ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
+              />
+            )}
+            settingsItem="chat.session-goal-budget"
+          >
+            {/* The field keeps its place while the budget is off, so
+                turning it on does not move the rows around it. */}
+            <NumberInput
+              value={sessionGoalDefaultBudget}
+              onValueChange={(value) => {
+                if (Number.isFinite(value) && value > 0) {
+                  setSessionGoalDefaultBudget(Math.floor(value));
+                }
+              }}
+              min={1000}
+              max={100000000}
+              step={50000}
+              disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
+              className={SETTINGS_NUMBER_INPUT_CLASS}
+              aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+            />
+          </SettingsFieldRow>
+        </div>
       </SettingsSection>
     </>
   );

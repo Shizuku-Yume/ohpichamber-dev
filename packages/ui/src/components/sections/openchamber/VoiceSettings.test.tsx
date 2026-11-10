@@ -6,11 +6,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18nStore } from '@/lib/i18n/store';
-<<<<<<< HEAD
-=======
 import { dict as ukDict } from '@/lib/i18n/messages/uk';
 import { buildSettingsSearchResults } from '@/lib/settings/search';
->>>>>>> bc50ba56a
 
 import { VoiceSettings } from './VoiceSettings';
 
@@ -22,11 +19,7 @@ describe('VoiceSettings endpoint paths', () => {
   let initialConfig: ReturnType<typeof useConfigStore.getState>;
   let initialI18n: ReturnType<typeof useI18nStore.getState>;
 
-<<<<<<< HEAD
-  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT', 'fetch', 'requestAnimationFrame', 'cancelAnimationFrame'];
-=======
   const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
->>>>>>> bc50ba56a
 
   beforeEach(() => {
     windowInstance = new Window();
@@ -44,11 +37,6 @@ describe('VoiceSettings endpoint paths', () => {
       sessionStorage: windowInstance.sessionStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
       fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
-<<<<<<< HEAD
-      requestAnimationFrame: windowInstance.requestAnimationFrame.bind(windowInstance),
-      cancelAnimationFrame: windowInstance.cancelAnimationFrame.bind(windowInstance),
-=======
->>>>>>> bc50ba56a
     });
     host = document.createElement('div');
     document.body.append(host);
@@ -98,8 +86,6 @@ describe('VoiceSettings endpoint paths', () => {
 
     expect(inputWithPlaceholder('/audio/transcriptions')?.value).toBe('/speech_to_text');
   });
-<<<<<<< HEAD
-=======
 
   test('localized search results target rendered endpoint inputs and disappear with their controls', async () => {
     useI18nStore.setState({ locale: 'uk', dictionary: ukDict });
@@ -128,5 +114,4 @@ describe('VoiceSettings endpoint paths', () => {
     expect(host.querySelector('[data-settings-item="voice.tts-endpoint-path"]')).toBeNull();
     expect(host.querySelector('[data-settings-item="voice.stt-endpoint-path"]')).toBeNull();
   });
->>>>>>> bc50ba56a
 });
