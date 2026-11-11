@@ -87,7 +87,7 @@ test('notification navigation opens B through the session-link owner and keeps t
   expect(window.location.search).toBe('?session=ses_B');
 
   await act(async () => finishLoad({
-    activeSessions: [{ id: 'ses_B', directory: '/other-project' }], archivedSessions: [],
+    activeSessions: [{ sessionId: 'ses_B', directory: '/other-project' }], archivedSessions: [],
   }));
   expect(useSessionUIStore.getState().currentSessionDirectory).toBe('/other-project');
   expect(window.document).toBe(documentBefore);
