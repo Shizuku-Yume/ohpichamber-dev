@@ -4453,7 +4453,11 @@ export async function stashPush(directory, options = {}) {
  const message = typeof options.message === 'string' && options.message.trim()
   ? options.message.trim()
   : `OpenChamber stash ${new Date().toISOString()}`;
- const output = await git.raw(['stash', 'push', '--include-untracked', '-m', message]);
+ // Named paths are taken literally, so a name like `*.ts` matches only itself.
+ const paths = Array.isArray(options.paths) ? options.paths : [];
+ const output = await git.raw(paths.length > 0
+  ? ['--literal-pathspecs', 'stash', 'push', '--include-untracked', '-m', message, '--', ...paths]
+  : ['stash', 'push', '--include-untracked', '-m', message]);
  return {
   success: true,
   created: !/no local changes/i.test(String(output || '')),
@@ -7267,7 +7271,7 @@ export async function archiveWorktree(directory, input = {}, options = {}) {
  }
  // Only a checkout git registers here: the removal below would otherwise
  // treat the folder as a leftover and delete it without a trace in git.
- if (!(await isRegisteredWorktree(context.primaryWorktree, targetCanonical))) {
+ if (!(await findRegisteredWorktree(context.primaryWorktree, targetCanonical))) {
   throw worktreeArchiveError('Not a worktree of this repository', undefined, 400);
  }
  if ((await readWorktreeArchives(context.primaryWorktree)).some((entry) => entry.id === id)) {
@@ -7343,7 +7347,7 @@ export async function archiveWorktree(directory, input = {}, options = {}) {
    owner ??= error?.worktreeArchiveOwner;
    const snapshotTree = (await runGitCommand(context.primaryWorktree, ['rev-parse', `${snapshot.commit}^{tree}`])).stdout?.trim();
    const intact = await checkPathExists(worktreeDirectory)
-    && await isRegisteredWorktree(context.primaryWorktree, targetCanonical)
+    && await findRegisteredWorktree(context.primaryWorktree, targetCanonical)
     && (await readWorktreeStateTree(worktreeDirectory).catch(() => null))?.tree === snapshotTree;
    if (owner && !error?.worktreeArchiveOwner) await archiveSessions.rollbackWorktreeArchive(owner, !intact);
    if (intact) {
@@ -7457,6 +7461,44 @@ const archiveRegisteredWorktree = async ({ directory, id, worktreeDirectory, tar
  * conflict leaves git's conflict state, which holds both sides. When git
  * refuses to apply anything, the archive is kept and the call fails.
  */
+const prospectiveWorktreeRestore = async (directory, archive, before) => {
+ const temporary = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-restore-'));
+ const checkout = path.join(temporary, 'checkout');
+ let linked = false;
+ try {
+  const env = await buildGitEnv(directory);
+  const flags = await execFileAsync(getGitBinary(), ['ls-files', '-v', '-z'], { cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024 });
+  if (flags.stdout.toString('utf8').split('\0').some((entry) => entry && entry[0] !== 'H'))
+   throw worktreeArchiveError('The restore target has unsupported sparse or index state. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+  await runGitCommandOrThrow(directory, ['worktree', 'add', '--detach', checkout, before.head], 'Failed to create restore comparison checkout');
+  linked = true;
+  for (const entry of await fsp.readdir(checkout)) {
+   if (entry !== '.git') await fsp.rm(path.join(checkout, entry), { recursive: true, force: true });
+  }
+  for (const entry of await fsp.readdir(directory)) {
+   if (entry !== '.git') await fsp.cp(path.join(directory, entry), path.join(checkout, entry), { recursive: true, dereference: false, preserveTimestamps: true });
+  }
+  const indexPath = async (cwd) => {
+   const result = await runGitCommandOrThrow(cwd, ['rev-parse', '--git-path', 'index'], 'Failed to resolve restore index');
+   return path.resolve(cwd, result.stdout.trim());
+  };
+  await fsp.copyFile(await indexPath(directory), await indexPath(checkout));
+  const reconstructed = await fingerprintWorktreeRestore(checkout);
+  if (JSON.stringify(reconstructed) !== JSON.stringify(before))
+   throw worktreeArchiveError('The restore target could not be reproduced safely. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+  const conflicts = await applyWorktreeArchiveSnapshot(checkout, archive);
+  const expected = await fingerprintWorktreeRestore(checkout);
+  if (expected.conflicts !== conflicts) throw new Error('Restore comparison conflict state changed');
+  return expected;
+ } finally {
+  if (linked) {
+   await runGitCommand(directory, ['worktree', 'remove', '--force', checkout]).catch(() => undefined);
+   await runGitCommand(directory, ['worktree', 'prune']).catch(() => undefined);
+  }
+  await fsp.rm(temporary, { recursive: true, force: true });
+ }
+}
+
 export async function restoreWorktreeArchive(directory, input = {}, { archiveSessions } = {}) {
  const archiveId = assertWorktreeArchiveId(input?.id);
  let worktreeDirectory = normalizeDirectoryPath(directory);
