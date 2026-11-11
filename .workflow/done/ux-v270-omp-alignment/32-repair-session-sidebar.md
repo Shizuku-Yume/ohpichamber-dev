@@ -8,7 +8,6 @@
 **Read first:** spec "How it is built" (Merge); the archived task 16 record; `packages/ui/src/sync/DOCUMENTATION.md`; skills `ui-api-decoupling`, `sync-state-invariants`, `drag-to-reorder`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 32 files (about 257 errors in 50 files at scaffold `93a3c7549`, 215 of them under `session/sidebar`); `bun scripts/upstream-drift.mjs --check --slice 32` → 0 unexplained (37 `components/session` paths today); `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/session` → exit 0 (no config at the repo root resolves `@/` or `bun:test`; run it from `packages/web` with the alias config below, and the isolation-sensitive files with the repo's own `bun test` runner)
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** active
 
 - [x] Fix every type error in slice 32 files by porting merged upstream callers onto the fork's Canonical Client, Host session authority and stores. Do not change exported shapes in `src/sync`, `src/stores` or `src/api` (slice 34 owns them); record any missing data in `## Progress` instead.
 - [x] Keep upstream v2.7.0's sidebar header order, menus, sections manager, mark-all-read, worktree naming and row context menus working on the fork's session model.
