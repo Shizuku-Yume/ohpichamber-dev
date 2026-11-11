@@ -8,7 +8,6 @@
 **Read first:** spec "How it is built" (Merge); the archived task 14 and 18 records; `packages/sdk/DOCUMENTATION.md`; `packages/electron/README.md`; skills `desktop-shell`, `ui-api-decoupling`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 35 files (about 92 at scaffold `93a3c7549`: ui lib 37, web client 40, hooks 15); `bun scripts/upstream-drift.mjs --check --slice 35` → 0 unexplained (about 545 paths today: docs 453, sdk 38, electron 28, scripts 20, root config 6); `bun --cwd packages/sdk test && bun --cwd packages/electron test && bun run docs:validate` → exit 0
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** active
 
 - [x] Fix every type error in slice 35 files by porting merged callers onto the fork's contracts. Do not change exported shapes in `src/sync`, `src/stores` or `src/api`.
 - [x] For each unexplained path: take upstream's content when the fork's difference is accidental or stale, keep the fork's content with an `upstream-deltas.tsv` row citing a decision when it is OMP-specific. Product docs describe OMP behaviour where it differs and otherwise follow upstream. Group rows by decision; one row per path is still required.
