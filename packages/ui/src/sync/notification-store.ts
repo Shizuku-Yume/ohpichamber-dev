@@ -6,9 +6,9 @@
 // ---------------------------------------------------------------------------
 
 import { create } from "zustand"
-import { isSessionUnread, markSessionUnreadSeen } from "./session-unread"
 import { clearDesktopSessionNotifications } from "@/lib/desktop"
 import { runtimeFetch } from "@/lib/runtime-fetch"
+import { isSessionUnread, markSessionUnreadSeen } from "./session-unread"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 
 // ---------------------------------------------------------------------------
