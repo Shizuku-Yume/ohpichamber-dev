@@ -1,6 +1,6 @@
 ---
 title: Routage automatique des modèles
-description: Laissez OpenChamber choisir le modèle et le niveau de réflexion pour chaque prompt.
+description: Laissez OpenChamber choisir le modèle, le niveau de réflexion et l’agent pour chaque prompt.
 ---
 
 # Routage automatique des modèles
@@ -31,6 +31,7 @@ Pour chaque catégorie, vous pouvez définir :
 
 - **Modèle :** vide signifie le modèle de repli
 - **Réflexion :** le niveau de réflexion pour ce modèle
+- **Agent :** l’agent qui exécute ces tâches ; vide garde l’agent que le champ de saisie utiliserait
 
 Jev trie les prompts en lisant le nom et la description des catégories : les descriptions servent donc d’instructions. Écrivez ce qui appartient à la catégorie et ce qui n’y appartient pas. Vous pouvez modifier, désactiver, supprimer ou ajouter des catégories, et restaurer une catégorie intégrée si vous changez d’avis. Auto a besoin d’au moins deux catégories activées.
 
@@ -38,9 +39,9 @@ Jev trie les prompts en lisant le nom et la description des catégories : les de
 
 1. OpenChamber envoie à Jev votre message et un court extrait des derniers tours.
 2. Jev choisit une catégorie et indique son degré de certitude.
-3. La session passe au modèle et au niveau de réflexion de cette catégorie, puis votre message part.
+3. La session passe au modèle, au niveau de réflexion et à l’agent de cette catégorie, puis votre message part.
 
-Chaque message est trié à nouveau : une session peut donc passer d’un modèle bon marché pour une question rapide à votre modèle le plus puissant pour la demande suivante. Le champ de saisie continue d’afficher **Auto**, et le choix de réflexion est masqué, puisque la catégorie en décide.
+Chaque message est trié à nouveau : une session peut donc passer d’un modèle bon marché pour une question rapide à votre modèle le plus puissant pour la demande suivante. Le champ de saisie continue d’afficher **Auto**, et les choix d’agent et de réflexion sont masqués, puisque la catégorie en décide.
 
 Le modèle de repli répond quand :
 

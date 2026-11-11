@@ -7,23 +7,25 @@ description: Escolha, sessão por sessão, quanto o agente pode fazer sem pergun
 
 Cada ação do agente (executar um comando, editar um arquivo, chamar uma ferramenta MCP, buscar uma página) é avaliada pelo autorizador do Host e pela política de worker do Agent Service. Os modos de permissão do OpenChamber decidem o que acontece quando uma ação requer aprovação.
 
-## Autorização e aprovações
+## Allow, ask e deny
 
 O Host Gateway valida o acesso ao sistema de arquivos em relação ao diretório do projeto. Ações direcionadas a caminhos fora da raiz do projeto são negadas imediatamente. Dentro da raiz do projeto, leituras e edições rotineiras de arquivos ocorrem pelas ferramentas de arquivos do projeto sem pedidos adicionais de confirmação.
 
-Quando uma ação requer o consentimento do usuário, como executar um comando de shell não concedido, o agente pausa e cria uma solicitação de aprovação. Ao responder a uma solicitação, você pode permitir uma vez, permitir pelo restante da sessão ou negar em todo o espaço de trabalho. Políticas de aprovação persistentes armazenam permissões no escopo da sessão ou negações no escopo do espaço de trabalho.
+- **allow:** o agente segue em frente
+- **deny:** a ação é bloqueada
+- **ask:** o agente para e espera uma resposta
 
 Para configurar quais ferramentas um agente pode ver e chamar, use o campo **ferramentas permitidas** (allowed tools) em **Configurações → Agentes**. Para escolher o modo de permissão padrão para novas sessões, use **Configurações → Sessões**.
 
 ## Os três modos
 
-| Modo | Quem responde às solicitações de aprovação |
+| Modo | Quem responde ao "ask" |
 | --- | --- |
 | **Perguntar sempre** | Você. Cada pedido espera a sua resposta. |
 | **Rede de segurança** | O Jev deixa passar as ações rotineiras e guarda as arriscadas para você. |
-| **Aceitar tudo** | O OpenChamber aprova automaticamente os pedidos que exigem consentimento. |
+| **Aceitar tudo** | O OpenChamber, sempre com sim. Cada pedido é permitido na hora, sem verificação. |
 
-No modo **Aceitar tudo**, os pedidos que exigem consentimento são aprovados automaticamente para que o trabalho continue sem esperas. As verificações do limite de segurança do Host, incluindo a contenção no diretório do projeto e as políticas de negação do espaço de trabalho, continuam sendo executadas em todas as ações.
+**Aceitar tudo** não precisa de mais nada: esse modo simplesmente trata cada "ask" como permitido. Use quando você confia na tarefa e não quer interrupções.
 
 ## Trocar de modo
 
@@ -36,7 +38,7 @@ Os subagentes seguem a sessão que os iniciou.
 
 Nesse modo, o OpenChamber pergunta ao [Jev](/pt-br/classification-providers/) sobre cada pedido: é rotina ou a decisão é sua? Ler, compilar, rodar testes, editar arquivos do projeto e fazer commits comuns passam. Reescrever o histórico do git, apagar dados, mudar o sistema, fazer deploy, publicar algo em outro lugar ou enviar arquivos para fora esperam por você, assim como tudo o que não estiver claro.
 
-Um pedido retido exibe o cartão de aprovação no chat com o nome da ferramenta, resumo do comando e detalhes, onde você pode permitir ou negar. Se o Jev não responder em quatro segundos, a ação também espera por você. A rede de segurança nunca permite uma ação quando a classificação falha ou o tempo limite se esgota.
+Um pedido retido mostra o cartão de permissão de sempre com uma linha a mais, **A rede de segurança reteve esta ação para você decidir**, e o tipo de ação. Se o Jev não responder em quatro segundos, a ação também espera por você. A rede de segurança nunca permite algo só porque a verificação falhou.
 
 A rede de segurança precisa de um [provedor de classificação](/pt-br/classification-providers/). Sem ele, o botão de escudo pula esse modo e ele aparece desativado nas configurações.
 

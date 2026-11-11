@@ -12,7 +12,7 @@ La zone de chat comprend quelques symboles. Tapez-en un et un sélecteur s’ouv
 | `/` | une commande | tout au début du message |
 | `$` | un skill | n’importe où |
 | `#` | un snippet | n’importe où |
-| `@` | un fichier | n’importe où |
+| `@` | un fichier ou un agent | n’importe où |
 
 Un symbole qui ne nomme rien que vous avez reste du texte ordinaire : `$5` n’est que de l’argent et `a/b` n’est qu’un chemin.
 
@@ -22,7 +22,7 @@ Une commande est un prompt enregistré que vous lancez avec un slash, comme `/re
 
 1. Ouvrez **Paramètres → Commandes** et créez une commande.
 2. Donnez-lui un nom, une description et le texte de prompt qu’elle doit envoyer.
-3. Épinglez-la éventuellement à un modèle précis.
+3. Épinglez-la éventuellement à un agent ou modèle précis.
 4. Choisissez un scope personnel ou projet.
 
 Dans le chat, tapez `/` comme **premier** caractère du message pour afficher les commandes, puis choisissez-en une. Votre texte peut utiliser des placeholders :
@@ -49,11 +49,12 @@ Un snippet est un texte réutilisable que vous référencez inline avec un hasht
 
 Dans le chat, tapez `#` et choisissez un snippet. OpenChamber remplace ce raccourci par le texte complet avant l’envoi.
 
-## Fichiers
+## Fichiers et agents
 
-Tapez `@` pour joindre un fichier au message.
+Tapez `@` pour joindre un fichier ou exécuter le message avec un autre agent.
 
 - Un fichier, comme `@src/index.ts`, est joint au message comme si vous l’aviez choisi dans le menu **+**. Les images et les documents sont lus et envoyés avec lui.
+- Un agent, comme `@build`, exécute ce message avec cet agent. Sans mention, c’est l’agent sélectionné dans le composer qui l’exécute.
 
 ## Joindre des fichiers et du contexte
 

@@ -837,3 +837,48 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent (conservative option within the 2026-11-10 OMP TUI parity decision; the maintainer confirmed on 2026-11-11 that no instruction was given on the lane 13 ticket)
 - **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces
+
+- **Decided:** every `packages/docs` page keeps upstream v2.7.0's text and structure, and a fork difference survives only where it removes a retired surface (the VS Code extension, the OpenCode engine, isolated spaces) or states the fork's actual runtime (`OPENCODE_JWT_SECRET` still signs the Host session, Jev/OpenCode Zen are provider names, VS Code theme import is retained). Pages whose only fork change was a retired-term removal now read as upstream reads.
+- **Instead of:** merging upstream docs through a lane-level rule that keeps the fork wholesale, or restoring the 24 upstream-only pages (`opencode-server.mdx`, `troubleshooting/opencode-connection.mdx` in every locale) that document a retired engine.
+- **Because:** the fork's doc drift was mostly stale, not intentional: upstream v2.7.0 added Tailscale Serve/Funnel, the five-host Git board (GitHub, GitLab, Gitea, Forgejo, Gerrit), the worktree and work/session model, walkthrough observations, and project-knowledge pins that the fork already implements (`server/lib/tunnels/providers/tailscale.js`, `server/lib/{github,gitlab,gitea,forgejo,gerrit}/`, `session/sidebar/works/sidebarWorks.ts`, `lib/walkthrough/prompt.js`, `ProjectNotesTodoPanel.tsx`). Taking the fork's deletions and rewrites wholesale would have deleted documented, shipped behavior.
+- **Decided by:** agent (evidence in the source tree listed above; no maintainer question)
+- **Revisit when:** the retired-surface wording is purged from all 12 locales, or a docs page starts describing an OMP-only capability that upstream cannot express.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the fork Guest SDK bootstrap transport and regenerated example bundles
+
+- **Decided:** `packages/sdk` keeps its v2 Guest envelope: `OPENCHAMBER_SDK_API_VERSION = 2` in `src/api-version.ts`, the MessagePort bootstrap in `src/host.ts` and its `GUEST_BOOTSTRAP_*` exports in `src/index.ts`, the `3.0.0` `engines.openchamber` floor in `src/host-version.ts`, the fork's `examples/**/main.js` bundles compiled from that transport, `scripts/examples.test.ts`, the fork test files, and `src/ui/DOCUMENTATION.md`.
+- **Instead of:** taking upstream's v1 envelope and its `examples/**/main.js` bundles, which hand the guest the pre-M3 `window` handshake the fork removed.
+- **Because:** the Host and the Guest loader both speak the v2 envelope (`packages/sdk/src/host.ts`), so upstream's v1 bundles cannot load here, and the example bundles are build output: they are regenerated from source, never merged by hand. The `README.md`/`GUEST_SERVICES.md` differences state the same v2 contract and the removed VS Code extension form.
+- **Decided by:** agent (conservative option; no maintainer question)
+- **Revisit when:** upstream ships a v2 envelope of its own, or the example bundles are regenerated after a source merge.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the Electron shell on the in-process Host and the staged Agent Runtime
+
+- **Decided:** the desktop main process keeps its OMP lifecycle: `main.mjs` supervises the Bun Agent Service through `agent-runtime.mjs` and `server/lib/host/agent-service-supervisor.js` instead of spawning `opencode serve`; `after-pack.cjs` and `electron-dev.mjs` stage and verify `resources/agent-runtime/`; `ssh-manager.mjs` resolves the agent runtime on the remote; `server-shutdown.mjs` stops the Host and its supervised service; `remote-page-policy.mjs`, `guest-frame-navigation.mjs`, `packaged-ui-routing.mjs`, `prepare-ripgrep.mjs`, `verify-linux-appimage.mjs`, and their tests carry the fork's navigation guards, ripgrep staging, and AppImage verification.
+- **Instead of:** upstream's `opencode-readiness.mjs`, `opencode-cwd.mjs`, `opencode-cli` staging and `diagnostics/local-files.js`, which start and probe a retired engine, and upstream's `main.mjs` imports for them.
+- **Because:** the packaged app runs the Agent Service as a separate Bun process and the Host in-process (architecture ADR; `process-lifecycle.md` records the map), so an upstream `opencode serve` supervisor has no place to run. The fork's guards and packaging scripts are additions upstream does not have, and taking upstream would silently re-open guest navigation and drop the Agent Runtime payload check.
+- **Decided by:** agent (conservative option; no maintainer question)
+- **Revisit when:** upstream's Electron shell ships the same Agent Service boundary, making `main.mjs` a plain adoption.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the fork perf, bench, changelog, dev and icon scripts
+
+- **Decided:** `scripts/` keeps the fork's own tooling: `perf/**` measurement and soak scripts, `model-bench/**`, `changelog/{build,lib,lib.test}.mjs`, `bump-version.mjs`, `oc-dev.mjs`, `generate-icon-sprite.mjs`, `profile-compare.mjs`, `profile-soak.mjs`, `run-isolated-tests.mjs`, and `port-opencode-theme.ts` with its integration test.
+- **Instead of:** upstream's versions, which drop the Agent Service soak parameters, the worktree/`OPENCHAMBER_DATA_DIR` harness, the isolated-test runner, and the theme porter's fork target paths.
+- **Because:** these scripts measure and drive the fork's own runtime; upstream's copies predate the Agent Service and would exercise a process the fork no longer runs. `port-opencode-theme.ts` is retained on purpose: it imports a VS Code theme into OpenChamber tokens, and retiring the extension does not retire theme import.
+- **Decided by:** agent (conservative option; no maintainer question)
+- **Revisit when:** upstream's perf harness gains an Agent Service mode, or the theme porter is replaced by an in-app importer.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the fork toolchain, lint and container configuration
+
+- **Decided:** the root configuration keeps its OMP shape: `tsconfig.json`/`packages/electron/tsconfig.json`/`packages/ui/tsconfig.test.json` path and extension settings, `knip.json` without the retired `renderVSCodeApp.tsx` and vendor aliases, `oxlint.config.ts` with `no-physical-sides` wired off until the RTL conversion lands, `.gitignore` and `packages/electron/.gitignore` for `agent-runtime` staging, `docker-compose.yml` and `scripts/docker-entrypoint.sh` mounting `./data/omp` and creating `~/.omp` instead of the OpenCode share/state/config trees, `docs/CUSTOM_THEMES.md` without the VS Code runtime-adapter wording, `packages/extensions/{README,DOCUMENTATION}.md`, and `packages/mobile/HANDOFF.md`.
+- **Instead of:** upstream's copies, which reference the retired engine's directories, the VS Code renderer entry, and the OpenCode container mounts.
+- **Because:** the fork runs OMP, so its container and ignore rules point at `.omp` and the staged Agent Runtime; adopting upstream would ignore the staged payload and create empty OpenCode directories. `renovate.json` is the exception: it now takes upstream, because its only fork difference was a missing dependency-policy rule rather than OMP work.
+- **Decided by:** agent (conservative option; no maintainer question)
+- **Revisit when:** task 20 flips the physical-sides rule on, or the container image is rebuilt for the Agent Service.
+- **Effort:** ux-v270-omp-alignment

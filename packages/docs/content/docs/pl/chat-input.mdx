@@ -12,7 +12,7 @@ Pole czatu rozumie kilka symboli. Wpisz jeden, a otworzy się wybór; wybierz po
 | `/` | polecenie | na samym początku wiadomości |
 | `$` | skill | w dowolnym miejscu |
 | `#` | fragment | w dowolnym miejscu |
-| `@` | plik | w dowolnym miejscu |
+| `@` | plik lub agenta | w dowolnym miejscu |
 
 Symbol, który nie wskazuje niczego, co masz, pozostaje zwykłym tekstem: `$5` to po prostu pieniądze, a `a/b` to po prostu ścieżka.
 
@@ -22,7 +22,7 @@ Polecenie to zapisany prompt uruchamiany ukośnikiem, jak `/review`. Zarządzaj 
 
 1. Otwórz **Settings → Commands** i utwórz polecenie.
 2. Nadaj mu nazwę, opis i tekst promptu, który ma wysłać.
-3. Opcjonalnie przypnij je do konkretnego modelu.
+3. Opcjonalnie przypnij je do konkretnego agenta lub modelu.
 4. Wybierz zakres osobisty lub projektowy.
 
 W czacie wpisz `/` jako **pierwszy** znak wiadomości, aby otworzyć polecenia, a następnie wybierz jedno. Twój tekst może używać symboli zastępczych:
@@ -49,11 +49,12 @@ Fragment to wielokrotnego użytku tekst, do którego odwołujesz się w treści 
 
 W czacie wpisz `#` i wybierz fragment. OpenChamber podstawi pełny tekst przed wysłaniem.
 
-## Pliki
+## Pliki i agenci
 
-Wpisz `@`, aby załączyć plik do wiadomości.
+Wpisz `@`, aby załączyć plik albo uruchomić wiadomość innym agentem.
 
 - Plik, na przykład `@src/index.ts`, zostaje załączony do wiadomości tak samo, jak wybrany z menu **+**. Obrazy i dokumenty są odczytywane i wysyłane razem z nią.
+- Agent, na przykład `@build`, uruchamia tę wiadomość tym agentem. Bez wzmianki uruchamia ją agent wybrany w composerze.
 
 ## Załączanie plików i kontekstu
 

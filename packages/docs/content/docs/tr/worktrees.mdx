@@ -33,33 +33,15 @@ Bir projeyi `repo/ai` gibi deponun içindeki bir klasörde açtıysanız, yeni w
 
 İş hazır olduğunda, Git görünümündeki **Integrate** seçeneğini kullanarak worktree'nin commit'lerini başka bir branch'e, örneğin `main`'e taşıyın. Bir değişiklik çakışırsa, çakışmayı çözmesi için işi agent'a verebilirsiniz.
 
-## Temizleme ve arşivleme
+## Temizleme
 
-Görev bittiğinde, satırın menüsünden **Worktree'yi arşivle** seçeneğini belirleyin ya da Shift tuşunu basılı tutup satırdaki yeni oturum düğmesinin yerini alan arşivleme düğmesine tıklayın. OpenChamber onu arşivler:
+Görev bittiğinde satırın menüsünden **Worktree’yi arşivle** seçin ya da Shift tuşunu basılı tutup satırda yeni oturum düğmesinin yerine çıkan arşiv düğmesine tıklayın. OpenChamber worktree'yi arşivler: Klasör kaldırılır; oturumları, commit edilmemiş değişiklikleri ve branch'i Arşiv sayfasında bekler. Orada hâlâ çalışan bir oturum varsa worktree kalır.
 
-1. Host, worktree'yi doğrular ve tecrit eder (fence); dizini tutan her etkin worker'ı serbest bırakır ve arşivleme sırasında yeni komutların gelmesini engeller.
-2. Commit'lenmemiş değişiklikler ve branch durumları, `refs/openchamber/archive/<id>` altındaki snapshot referanslarına kaydedilir.
-3. Git branch'i, commit'lenmemiş snapshot ve ilişkili oturum kayıtları korunurken klasör diskten güvenli bir şekilde kaldırılır.
-4. Worktree'deki bir oturumda aktif akış (streaming) veya çalışma sürüyorsa, yürütme tamamlanana kadar arşivleme işlemi güvenli bir şekilde reddedilir.
+Satırı tamamlandı olarak işaretlemek onu yalnızca Devam eden bölümünden çıkarır. Bir worktree'yi her tamamlandı olarak işaretlediğinizde ya da PR'ı birleştirildiğinde arşivlemek için bunu **Ayarlar → Session'lar → Biten worktree’ler** bölümünden açın.
 
-Bir worktree satırını tamamlandı olarak işaretlemek onu yalnızca **Devam eden** bloğundan kaldırır. Bir worktree'yi tamamlandı olarak işaretlediğinizde veya pull request'i merge edildiğinde otomatik olarak arşivlemek için **Ayarlar → Session'lar → Biten worktree'ler** seçeneğini etkinleştirin.
+Arşiv sayfasında arşivlenen worktree'ler kendi projelerinin altında durur. **Geri yükle**, worktree'yi branch'iyle birlikte geri getirir, projenin kurulum komutlarını çalıştırır ve değişikliklerini ve oturumlarını yerine koyar; oturumlarından birini geri yüklemek de aynı şeyi yapar. `node_modules` ya da `.env` gibi git'in yok saydığı dosyalar saklanmaz, onları kurulum komutları yeniden oluşturur. Projenin Worktree'ler sayfası da arşivlenen worktree'leri listeler.
 
-### Arşivden geri yükleme
-
-**Arşiv** sayfası, arşivlenmiş worktree'leri ilgili projelerinin altında listeler:
-
-- **Geri yükle:** Arşivlenen worktree'yi çağıran tarafından oluşturulmuş bir checkout'a (`openchamber/worktree-...`) geri getirir. Host, snapshot referansındaki commit'lenmemiş dosyaları geri yükler, proje kurulum komutlarını yeniden uygular ve aktif oturumları yeni checkout konumuna taşır.
-- **Oturum durumunun korunması:** Değişiklikler uygulandıktan sonra, Host tarafından doğrulanmış aktif oturumlar geri yüklenen worktree'de yeniden açılır. Worktree arşivlenmeden önce zaten arşivlenmiş olan oturumlar arşiv listesinde arşivlenmiş olarak kalır. Git tarafından yoksayılan dosyalar (`node_modules` veya `.env` gibi) proje kurulum komutlarıyla yeniden oluşturulur.
-- **Doğrulanmış yeni checkout kurtarması:** Kurtarma akışı, oturumları yeniden açmadan önce yeni checkout dizininin Host çalışma alanı kapsamına kabul edilmesini otomatik olarak sağlar.
-
-### Worktree'leri silme ve branch güvenliği
-
-Bir worktree'yi kalıcı olarak kaldırmak için:
-
-- **Aktif kenar çubuğundan:** Worktree satır menüsünden **Sil**'i seçin.
-- **Arşiv sayfasından:** Arşivlenmiş bir worktree satırında **Sil**'e tıklayın.
-- **Branch silme varsayılanı korumadır:** Arşivlenmiş bir worktree'yi silmek, varsayılan olarak Git branch'ini ve commit geçmişini korur. Silme onay iletişim kutusunda, varsayılan olarak işaretlenmemiş açık bir **Yerel branch'i de sil** onay kutusu sunulur.
-- **Eski bağımsız, yalnızca Git arşivleri:** Host'a ait oturum durumu bağlamaları bulunmayan eski snapshot referansları yalnızca Git düzeyinde kurtarmaya izin verir. OpenChamber, ilişkili oturumların taşınmayacağı, arşivden çıkarılmayacağı veya silinmeyeceği konusunda açıkça uyarır. Bağımsız bir arşivi silmek, doğrulanmamış branch silme işlemi için açık onay gerektirir.
+Bir worktree'den tamamen kurtulmak için onu menüsünden silin ya da arşivlenmiş bir worktree'yi Arşiv sayfasından silin. Menüden silerken branch'i de silmek isteyip istemediğinizi siz seçersiniz. Yerelse yerel, varsa uzak depodaki branch de silinir.
 
 ## Bir şey ters görünüyorsa
 

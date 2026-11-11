@@ -11,9 +11,9 @@ OpenChamber'ın bir şey yapabilmesi için önce en az bir yapay zeka sağlayıc
 
 1. **Settings → Providers** bölümünü açın.
 2. **Add provider** menüsünü açın ve henüz bağlı olmayan bir sağlayıcı seçin ya da OpenAI uyumlu bir uç nokta için **Other / Custom** seçin.
-3. Sağlayıcının gerektirdiği yöntemle oturum açın:
+3. Sağlayıcıya göre iki yoldan biriyle oturum açın:
    - **API key** — anahtarınızı yapıştırın ve kaydedin.
-   - **OAuth ile oturum açma** — oturum açmak için tarayıcınızda yetkilendirme bağlantısını açın. İstenirse yetkilendirme kodunu OpenChamber'a yapıştırın ve bağlantıyı tamamlayın.
+   - **Sign-in (device flow)** — OpenChamber size bir bağlantı ve kısa bir kod gösterir. Bağlantıyı açın, kodu girin ve onaylayın. OpenChamber bağlantıyı kendi başına tamamlar.
 
 ### Custom / Other sağlayıcılar
 
@@ -26,7 +26,7 @@ Gateway'ler, kampüs LLM'leri, Ollama, LiteLLM ve benzeri OpenAI uyumlu API'ler 
 5. Kaydedin — OpenChamber sağlayıcıyı ve modelleri Agent Service üzerinden kaydeder ve API anahtarlarını salt yazılır kimlik bilgileri olarak saklar.
 6. Mevcut bir custom sağlayıcıyı değiştirmek için onu açın ve **Edit** seçin.
 
-API anahtarı isteğe bağlıdır. Anahtarsız yerel uç noktalar (Ollama, LiteLLM veya llama.cpp gibi) ve özel başlık kimlik doğrulaması kullanan servisler API anahtarı olmadan bağlanabilir.
+Custom sağlayıcılar, tam bağlı görünmeden önce bir API anahtarı ya da `{env:VAR_NAME}` ister. Kimlik bilgisi yoksa modeller görünse bile sohbet çağrıları başarısız olur.
 
 Bir sağlayıcı bağlı görünürse modelleri sohbette kullanılabilir hale gelir.
 
@@ -41,16 +41,16 @@ Modeli çalıştığınız yerde seçersiniz:
 
 ## Aracıları ayarlayın
 
-Aracı, adı olan bir yapılandırmadır — bir model, bir sistem istemi ve kullanımına açık araçlar birlikte tanımlanır.
+Aracı, adı olan bir ayardır. Bir model, bir kişilik ve ne yapmasına izin verildiği birlikte tanımlanır.
 
 1. **Settings → Agents** bölümünü açın.
 2. Bir aracı seçin ya da yenisini oluşturun.
 3. Şunlardan birini düzenleyin:
    - **description** — aracının ne için olduğu
-   - **model** — varsayılan sağlayıcı ve model geçersiz kılma
-   - **prompt** — her zaman izlediği sistem istemi ve kalıcı yönergeler
-   - **allowed tools** — aracının kullanabileceği araçlar (araç kullanılabilirliği: araçları burada listelemek modelin bunları çağırmasını sağlar; işlem yetkilendirmesi ise Host politikaları ve onaylar tarafından denetlenmeye devam eder)
-   - **permission preset** — profil için isteğe bağlı izin ön ayar kimliği
+   - **model** — varsayılan modeli
+   - **temperature** — yanıtlarının ne kadar yaratıcı olduğu
+   - **prompt** — her zaman izlediği kalıcı yönergeler
+   - **tool rules** — hangi araçları kullanabileceği
 
 ## Oturum açmalarınız nerede tutulur
 

@@ -153,22 +153,6 @@ host.onSessionLifecycle((event) => {
 
 `host.storage.get(key)`、`set(key, value)`、`delete(key)`、`keys()` 无需额外权限即可在连接的服务器保存扩展自己的 JSON。缺少的键返回 `undefined`，保存的 null 仍为 null。键长1到128字符，每个值最多64 KiB UTF-8，整个空间最多2 MiB及2,000个键。项目专属数据可将项目 ID 加入键名。写入串行且原子化，失败保留已有数据。卸载扩展会删除存储。
 
-## 后台 shell
-
-使用 `shells` 能力，观察在后台运行的 shell 命令，范围可限制在某个会话及其 subagent、已注册的项目或所有会话。OpenChamber 从其本地存储做出响应；不会发起网络读取。
-
-| 调用 | 作用 |
-| --- | --- |
-| `onRunningShells(scope, listener)` | 订阅指定范围内的 shell 命令：`{ kind: 'session', sessionId }` 涵盖该会话及其 subagent，`{ kind: 'project', projectId }` 涵盖已注册项目，`{ kind: 'global' }` 涵盖所有会话。按从早到晚的顺序获取运行中的命令（每条都带有 `background` 标志）以及已结束的命令。返回退订函数。 |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | 运行中或已结束命令的一页输出。没有 `cursor` 时，从末尾向前 `tailBytes`（最多 65536）处开始。返回 `{ output, cursor, skipped }`。 |
-| `stopShell(shellId)` | 先向 agent 发送停止通知，然后移除该命令。 |
-
-快照格式为 `{ kind: "shells", scope, shells, ended }`，其中 `scope` 与订阅的范围对应。每个运行中的 shell 为 `{ id, sessionID, command, startedAt, background }`，最多 200 个，按时间从早到晚排列。对于轮次无需等待完成的任务，`background` 为 `true`。
-
-`ended` 列出 OpenChamber 观测到已结束的命令，按结束时间从早到晚排列，最多保留 200 个（保留最新的）。如果命令退出时带有退出码，每项会包含 `status`、`endedAt` 和 `exit`。状态为 `exited`、`timeout`、被信号 `killed`、被用户 `stopped`，或在重新连接期间结束时的 `unknown`。OpenChamber 仅在内存中保留此列表。应用重新加载后列表为空，因此请把面板展示所需的内容保存在扩展存储中。
-
-Host 会为每个目录保留其最近 25 个已结束命令的输出。被停止的命令会立即丢失其输出。读取 OpenChamber 从未见过的 shell，或 host 已不再保留的输出，会返回 `NOT_FOUND`。停止未在运行的 shell 也是如此。未获批准的 `shells` 能力会返回 `NOT_GRANTED`。
-
 ## request
 
 ```ts

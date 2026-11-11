@@ -9,10 +9,10 @@ Os objetivos usam o modo Goal do OMP no worker do Agent Service. O OMP inicia as
 
 Um objetivo combina um prompt com uma condição de conclusão. O OMP continua até o agente declarar que concluiu, o orçamento de tokens acabar, não haver progresso ou você parar o objetivo.
 
-## Iniciar um objetivo
+1. Pressione o botão de alvo no compositor. Ele acende — o modo objetivo está armado.
+2. Escreva seu prompt e envie. Essa mensagem se torna o objetivo.
 
-1. Pressione o botão de alvo no compositor para ativar o modo Goal.
-2. Escreva e envie o objetivo. Em uma sessão nova, o objetivo é criado depois da sessão e antes do envio do primeiro prompt.
+Funciona igualmente em uma sessão existente e em um rascunho de sessão nova: arme o alvo, escreva a primeira mensagem, envie — a nova sessão começa com o objetivo já ativo.
 
 ### Mais formas de iniciar um objetivo
 
@@ -23,16 +23,18 @@ Um objetivo combina um prompt com uma condição de conclusão. O OMP continua a
 
 ## Escreva um objetivo autocontido
 
-Inclua um resultado final claro que o agente possa verificar sem depender do contexto oculto do chat.
+O auditor de progresso vê apenas o seu objetivo e a última resposta do agente — não o histórico do chat. Então formule a mensagem-objetivo de forma que alguém sem o contexto da conversa entenda como é o estado final.
 
 - Bom: "Adicione testes para o módulo de exportação e faça toda a suíte de testes passar."
 - Nem tanto: "Conserta isso" ou "Continua com aquela ideia."
+
+Para pequenos ajustes contextuais você não precisa de um objetivo — envie uma mensagem normal.
 
 ## Como funciona
 
 O OMP inicia cada continuação dentro da sessão. O agente declara a conclusão com a ferramenta de objetivos; o OMP também para quando o orçamento opcional acaba, uma continuação não avança, ou você pausa, remove ou aborta o objetivo.
 
-## Parar e retomar
+### Parar e retomar
 
 - O **botão de parar** aborta o turno em andamento; o OMP pausa o objetivo.
 - **Pausar** na faixa do objetivo também para o turno em andamento.

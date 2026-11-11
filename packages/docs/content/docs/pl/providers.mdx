@@ -10,8 +10,8 @@ Zanim OpenChamber cokolwiek zrobi, potrzebuje co najmniej jednego połączonego 
 ## Połącz dostawcę
 
 1. Otwórz **Settings → Providers**.
-2. Otwórz menu **Add provider** i wybierz dostawcę, który nie jest jeszcze połączony, lub wybierz **Other / Custom** dla punktu końcowego zgodnego z OpenAI.
-3. Zaloguj się metodą wymaganą przez dostawcę:
+2. Otwórz menu **Add provider** i wybierz dostawcę, który nie jest jeszcze połączony.
+3. Zaloguj się na jeden z dwóch sposobów, zależnie od dostawcy:
    - **Klucz API** — wklej swój klucz i zapisz.
    - **Logowanie OAuth** — otwórz link autoryzacyjny w przeglądarce, aby się zalogować. Jeśli pojawi się monit, wklej kod autoryzacji do OpenChamber i dokończ łączenie.
 
@@ -41,16 +41,16 @@ Model wybierasz tam, gdzie pracujesz:
 
 ## Skonfiguruj agentów
 
-Agent to nazwana konfiguracja — model, prompt systemowy oraz narzędzia, do których ma dostęp.
+Agent to nazwana konfiguracja — model, osobowość i to, co wolno mu robić.
 
 1. Otwórz **Settings → Agents**.
 2. Wybierz agenta lub utwórz nowego.
 3. Edytuj dowolne z poniższych:
    - **description** — do czego służy agent
-   - **model** — nadpisanie domyślnego dostawcy i modelu
-   - **prompt** — stałe instrukcje i prompt systemowy, których zawsze przestrzega
-   - **allowed tools** — narzędzia dostępne dla agenta (dostępność narzędzi: umieszczenie ich tutaj pozwala modelowi na ich wywołanie, podczas gdy autoryzacja operacji pozostaje kontrolowana przez polityki i zatwierdzenia Hosta)
-   - **permission preset** — opcjonalny identyfikator zestawu uprawnień (preset ID) dla profilu
+   - **model** — jego domyślny model
+   - **temperature** — jak kreatywne są jego odpowiedzi
+   - **prompt** — stałe instrukcje, których zawsze przestrzega
+   - **tool rules** — których narzędzi może używać
 
 ## Gdzie są przechowywane Twoje logowania
 

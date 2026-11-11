@@ -2,6 +2,7 @@
 title: Variables d’environnement
 description: Configurez OpenChamber avec des variables d’environnement.
 ---
+
 # Variables d’environnement
 
 OpenChamber lit ces variables d’environnement au démarrage. Pour les services de démarrage, `openchamber startup enable` capture l’environnement actuel par défaut ; relancez donc la commande après avoir changé les variables que le service doit utiliser.
@@ -38,10 +39,6 @@ Durée d’une connexion dans le navigateur, en heures, quand « faire confiance
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Durée d’une connexion, en jours, sur un appareil auquel vous faites confiance. La valeur par défaut est `7`.
-
-### `OPENCODE_JWT_SECRET`
-
-Remplace le secret utilisé pour signer les jetons de session de l’UI Host. Ce paramètre configure la signature des sessions du Host et n’affecte pas le runtime de l’agent. Gardez ce secret privé. Lorsqu’il est défini, la déconnexion globale n’est pas disponible car OpenChamber ne peut pas effectuer la rotation du secret de signature.
 
 ### `OPENCHAMBER_API_ONLY`
 

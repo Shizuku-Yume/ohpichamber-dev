@@ -33,33 +33,15 @@ Se você abre um projeto em uma pasta dentro de um repositório, como `repo/ai`,
 
 Quando o trabalho estiver bom, use **Integrate** na visão de Git para trazer os commits do worktree para outro branch (como `main`). Se uma mudança conflitar, você pode entregar o conflito ao agente para resolver.
 
-## Limpeza e arquivamento
+## Limpeza
 
-Quando a tarefa estiver concluída, escolha **Arquivar o worktree** no menu da linha ou segure Shift e clique no botão de arquivar que ocupa o lugar do botão de nova sessão na linha. O OpenChamber o arquiva:
+Quando a tarefa terminar, escolha **Arquivar o worktree** no menu da linha, ou segure Shift e clique no botão de arquivar que aparece na linha no lugar do botão de nova sessão. O OpenChamber arquiva o worktree: a pasta some, e as sessões, as mudanças sem commit e o branch dele ficam esperando na página Arquivo. Se uma sessão ainda estiver rodando ali, o worktree fica.
 
-1. O Host verifica o worktree e o isola (fence), liberando todos os workers ativos que estejam segurando o diretório e impedindo que novos comandos cheguem no meio do arquivamento.
-2. Alterações não commitadas e estados da branch são capturados em referências de snapshot em `refs/openchamber/archive/<id>`.
-3. A pasta é removida do disco com segurança, preservando a branch do Git, o snapshot não commitado e os registros de sessão associados.
-4. Se uma sessão no worktree estiver em streaming ativo ou em execução, a operação de arquivamento é recusada com segurança até que a execução termine.
+Marcar a linha como concluída só a tira de Em andamento. Para arquivar um worktree sempre que você o marcar como concluído, ou quando o PR dele for mesclado, ative isso em **Configurações → Sessões → Worktrees concluídos**.
 
-Marcar uma linha de worktree como concluída apenas a remove do bloco **Em andamento**. Para arquivar um worktree automaticamente sempre que você o marcar como concluído, ou assim que o pull request dele for mesclado, ative **Configurações → Sessões → Worktrees concluídos**.
+Na página Arquivo, os worktrees arquivados aparecem sob o projeto deles. **Restaurar** traz um de volta com o branch, roda os comandos de setup do projeto e devolve as mudanças e as sessões dele; restaurar uma das sessões dele faz o mesmo. Arquivos que o git ignora, como `node_modules` ou `.env`, não são guardados, então são os comandos de setup que os trazem de volta. A página Worktrees do projeto também lista os worktrees arquivados.
 
-### Restaurar do arquivo
-
-A página **Arquivo** lista os worktrees arquivados sob seus respectivos projetos:
-
-- **Restaurar:** Traz o worktree arquivado de volta para um checkout criado pelo chamador (`openchamber/worktree-...`). O Host restaura os arquivos não commitados a partir da ref do snapshot, reaplica os comandos de setup do projeto e realoca as sessões ativas para o novo local de checkout.
-- **Preservação de estado de sessão:** Sessões ativas verificadas pelo Host reabrem no worktree restaurado depois que as alterações são aplicadas. Sessões que já estavam arquivadas antes do arquivamento do worktree permanecem arquivadas na lista de arquivos. Arquivos ignorados pelo Git (como `node_modules` ou `.env`) são recriados pelos comandos de setup do projeto.
-- **Recuperação confirmada em novo checkout:** O fluxo de recuperação garante automaticamente que o novo diretório de checkout seja admitido no escopo de espaço de trabalho do Host antes de reabrir as sessões.
-
-### Exclusão de worktrees e segurança de branches
-
-Para remover um worktree permanentemente:
-
-- **Pela barra lateral ativa:** Escolha **Excluir** no menu da linha do worktree.
-- **Pela página Arquivo:** Clique em **Excluir** na linha de um worktree arquivado.
-- **Exclusão de branch padronizada como manter:** A exclusão de um worktree arquivado preserva, por padrão, a branch do Git e seu histórico de commits. A caixa de diálogo de confirmação de exclusão fornece uma caixa de seleção explícita **Excluir também a branch local**, que vem desmarcada por padrão.
-- **Arquivos legados não vinculados somente Git:** Refs de snapshot mais antigas que não possuem vinculações de estado de sessão pertencentes ao Host permitem apenas a recuperação do Git. O OpenChamber avisa explicitamente que as sessões associadas não serão movidas, desarquivadas ou excluídas. Excluir um arquivo não vinculado requer confirmação explícita para a exclusão de branch não verificada.
+Para se livrar de um worktree de vez, exclua-o pelo menu dele, ou exclua um arquivado na página Arquivo. Ao excluir pelo menu, você escolhe se também deve excluir o branch — local, e remoto se houver um.
 
 ## Se algo parecer errado
 
@@ -68,4 +50,4 @@ Um worktree pode precisar de atenção se sua pasta sumiu, se seu branch está e
 ## Relacionado
 
 - [Multi-run](/pt-br/multi-run/) — lance muitas sessões de worktree de uma vez
-- [Fluxos de Git e GitHub](/pt-br/git/) — faça commit e integre de dentro do OpenChamber
+- [Fluxos de Git](/pt-br/git/) — faça commit e integre de dentro do OpenChamber

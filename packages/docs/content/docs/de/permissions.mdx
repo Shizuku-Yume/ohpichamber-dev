@@ -7,23 +7,25 @@ description: Leg pro Sitzung fest, wie viel der Agent ohne Rückfrage tun darf.
 
 Jede Aktion des Agenten (einen Befehl ausführen, eine Datei bearbeiten, ein MCP-Tool aufrufen, eine Seite abrufen) wird von der Host-Autorisierung und der Worker-Richtlinie des Agent Service ausgewertet. Die Berechtigungsmodi von OpenChamber entscheiden, was passiert, wenn eine Aktion eine Bestätigung erfordert.
 
-## Autorisierung und Genehmigungen
+## Allow, ask und deny
 
 Das Host-Gateway prüft Dateisystemzugriffe anhand des Projektverzeichnisses. Aktionen, die auf Pfade außerhalb des Projektstamms zielen, werden direkt verweigert. Innerhalb des Projektstamms laufen routinemäßige Dateilesevorgänge und -bearbeitungen über Projekt-Dateitools ohne zusätzliche Rückfragen ab.
 
-Erfordert eine Aktion die Zustimmung des Benutzers, etwa das Ausführen eines nicht genehmigten Shell-Befehls, pausiert der Agent und erstellt eine Genehmigungsanfrage. Beim Beantworten einer Genehmigungsanfrage kannst du sie einmalig erlauben, für die restliche Sitzung erlauben oder arbeitsbereichsweit verweigern. Dauerhafte Genehmigungsrichtlinien speichern sitzungsbezogene Freigaben oder arbeitsbereichsbezogene Verweigerungen.
+- **allow:** Der Agent macht weiter
+- **deny:** Die Aktion ist blockiert
+- **ask:** Der Agent hält an und wartet auf eine Antwort
 
 Um zu konfigurieren, welche Tools ein Agent sehen und aufrufen kann, nutze das Feld **Erlaubte Tools** (allowed tools) unter **Einstellungen → Agenten**. Den Standard-Berechtigungsmodus für neue Sitzungen wählst du unter **Einstellungen → Sitzungen**.
 
 ## Die drei Modi
 
-| Modus | Wer Genehmigungsanfragen beantwortet |
+| Modus | Wer auf „ask“ antwortet |
 | --- | --- |
 | **Jedes Mal fragen** | Du. Jede Anfrage wartet auf deine Antwort. |
 | **Sicherheitsnetz** | Jev lässt Routineaktionen durch und hält riskante für dich zurück. |
-| **Alles akzeptieren** | OpenChamber genehmigt zustimmungsbedürftige Anfragen automatisch. |
+| **Alles akzeptieren** | OpenChamber, immer mit Ja. Jede Anfrage wird sofort erlaubt, ohne Prüfung. |
 
-Im Modus **Alles akzeptieren** werden zustimmungsbedürftige Anfragen automatisch genehmigt, sodass die Arbeit ohne Unterbrechung weiterläuft. Sicherheitsgrenzen des Hosts, einschließlich der Beschränkung auf das Projektverzeichnis und arbeitsbereichsweiter Verweigerungsrichtlinien, werden weiterhin bei jeder Aktion uneingeschränkt geprüft.
+**Alles akzeptieren** braucht nichts weiter: Der Modus behandelt jedes „ask“ einfach als erlaubt. Nutze ihn, wenn du der Aufgabe vertraust und keine Unterbrechungen willst.
 
 ## Modi wechseln
 
@@ -36,7 +38,7 @@ Subagenten folgen der Sitzung, die sie gestartet hat.
 
 In diesem Modus fragt OpenChamber [Jev](/de/classification-providers/) zu jeder Anfrage: Ist das Routine, oder solltest du entscheiden? Lesen, Bauen, Tests ausführen, Projektdateien bearbeiten und normale Commits gehen durch. Git-Verlauf umschreiben, Daten löschen, das System ändern, deployen, irgendwo etwas veröffentlichen oder Dateien nach außen schicken warten auf dich, genauso wie alles, was unklar ist.
 
-Eine zurückgehaltene Anfrage zeigt die Genehmigungskarte im Chat mit Tool-Namen, Befehlszusammenfassung und Details, auf der du sie erlauben oder ablehnen kannst. Antwortet Jev nicht innerhalb von vier Sekunden, wartet die Aktion ebenfalls auf dich. Das Sicherheitsnetz erlaubt nie eine Aktion, wenn die Klassifizierung fehlschlägt oder das Zeitlimit überschreitet.
+Eine zurückgehaltene Anfrage zeigt die übliche Berechtigungskarte mit einer zusätzlichen Zeile, **Das Sicherheitsnetz hat diese Aktion angehalten, damit Sie entscheiden**, und der Art der Aktion. Antwortet Jev nicht innerhalb von vier Sekunden, wartet die Aktion ebenfalls auf dich. Das Sicherheitsnetz erlaubt nie etwas, nur weil die Prüfung fehlgeschlagen ist.
 
 Das Sicherheitsnetz braucht einen [Klassifizierungsanbieter](/de/classification-providers/). Ohne ihn überspringt der Schild-Button diesen Modus, und in den Einstellungen ist er deaktiviert.
 

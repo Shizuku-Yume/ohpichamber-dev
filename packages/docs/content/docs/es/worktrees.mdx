@@ -33,33 +33,15 @@ Si abres un proyecto en una carpeta dentro de un repositorio, como `repo/ai`, lo
 
 Cuando el trabajo esté listo, usa **Integrate** en la vista de Git para traer los commits del worktree a otra rama (como `main`). Si un cambio entra en conflicto, puedes entregarle el conflicto al agente para que lo resuelva.
 
-## Limpieza y archivado
+## Limpieza
 
-Cuando la tarea esté terminada, elige **Archivar worktree** en el menú de la fila, o mantén pulsada la tecla Shift y haz clic en el botón de archivo que sustituye al botón de nueva sesión en la fila. OpenChamber lo archiva:
+Cuando termines la tarea, elige **Archivar el worktree** en el menú de la fila, o mantén pulsado Shift y haz clic en el botón de archivar que aparece en la fila en lugar del botón de nueva sesión. OpenChamber lo archiva: la carpeta desaparece, y sus sesiones, sus cambios sin commit y su rama esperan en la página Archivo. Si una sesión sigue en marcha allí, el worktree se queda.
 
-1. El Host verifica el worktree y lo aísla, liberando a todos los workers activos que retengan el directorio y evitando que entren nuevos comandos en pleno archivado.
-2. Los cambios sin confirmar y los estados de las ramas se guardan en referencias de instantánea bajo `refs/openchamber/archive/<id>`.
-3. La carpeta se elimina del disco de forma segura mientras se conservan la rama de Git, la instantánea sin confirmar y los registros de sesión asociados.
-4. Si una sesión en el worktree está transmitiendo o ejecutándose activamente, la operación de archivado se rechaza de forma segura hasta que finalice la ejecución.
+Marcar la fila como hecha solo la saca de En curso. Para archivar un worktree cada vez que lo marques como hecho, o cuando se fusione su PR, actívalo en **Configuración → Sesiones → Worktrees terminados**.
 
-Marcar la fila de un worktree como hecha solo la elimina del bloque **En curso**. Para archivar un worktree automáticamente cada vez que lo marques como hecho o una vez fusionado su pull request, activa **Configuración → Sesiones → Worktrees finalizados**.
+En la página Archivo, los worktrees archivados aparecen bajo su proyecto. **Restaurar** recupera uno con su rama, ejecuta los comandos de configuración del proyecto y devuelve sus cambios y sesiones; restaurar una de sus sesiones hace lo mismo. Los archivos que git ignora, como `node_modules` o `.env`, no se guardan, así que son los comandos de configuración los que los traen de vuelta. La página Worktrees del proyecto también muestra los worktrees archivados.
 
-### Restaurar desde el archivo
-
-La página **Archivo** enumera los worktrees archivados bajo sus respectivos proyectos:
-
-- **Restaurar:** Devuelve el worktree archivado a un checkout creado por el invocador (`openchamber/worktree-...`). El Host restaura los archivos sin confirmar desde la referencia de instantánea, vuelve a aplicar los comandos de configuración del proyecto y reubica las sesiones activas en la nueva ubicación del checkout.
-- **Conservación del estado de la sesión:** Las sesiones activas verificadas por el Host se vuelven a abrir en el worktree restaurado una vez aplicados los cambios. Las sesiones que ya estaban archivadas antes de archivar el worktree permanecen archivadas en la lista del archivo. Los archivos ignorados por Git (como `node_modules` o `.env`) se vuelven a crear mediante los comandos de configuración del proyecto.
-- **Recuperación con checkout nuevo confirmado:** El flujo de recuperación garantiza automáticamente que el nuevo directorio de checkout se admita en el alcance del espacio de trabajo del Host antes de reabrir las sesiones.
-
-### Eliminar worktrees y seguridad de las ramas
-
-Para eliminar un worktree de forma permanente:
-
-- **Desde la barra lateral activa:** Elige **Eliminar** en el menú de la fila del worktree.
-- **Desde la página Archivo:** Haz clic en **Eliminar** en la fila de un worktree archivado.
-- **Conservación de rama por defecto:** Al eliminar un worktree archivado, por defecto se conservan la rama de Git y su historial de commits. El cuadro de diálogo de confirmación de eliminación proporciona una casilla explícita **Eliminar también la rama local**, que está desactivada por defecto.
-- **Archivos antiguos sin vincular solo de Git:** Las referencias de instantánea anteriores que carecen de vinculaciones de estado de sesión propiedad del Host permiten únicamente la recuperación de Git. OpenChamber advierte de forma explícita que las sesiones asociadas no se moverán, no se desarchivarán ni se eliminarán. Eliminar un archivo sin vincular requiere confirmación explícita para eliminar ramas no verificadas.
+Para deshacerte de un worktree para siempre, elimínalo desde su menú, o elimina uno archivado desde la página Archivo. Al eliminarlo desde el menú, eliges si también eliminar la rama: local, y remota si la hay.
 
 ## Si algo no encaja
 
@@ -68,4 +50,4 @@ Un worktree puede requerir atención si su carpeta desapareció, su rama está e
 ## Relacionado
 
 - [Multi-run](/es/multi-run/) — lanza muchas sesiones de worktree a la vez
-- [Flujos de trabajo de Git y GitHub](/es/git/) — haz commit e integra desde dentro de OpenChamber
+- [Flujos de trabajo de Git](/es/git/) — haz commit e integra desde dentro de OpenChamber

@@ -2,6 +2,7 @@
 title: Umgebungsvariablen
 description: Konfiguriere OpenChamber mit Umgebungsvariablen.
 ---
+
 # Umgebungsvariablen
 
 OpenChamber liest diese Umgebungsvariablen beim Start. Für Startdienste speichert `openchamber startup enable` die aktuelle Umgebung standardmäßig als Schnappschuss, also führe den Befehl nach Änderungen an den Variablen, die der Dienst verwenden soll, erneut aus.
@@ -38,10 +39,10 @@ Wie lange eine Anmeldung im Browser gilt, in Stunden, wenn „Diesem Gerät vert
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Wie lange eine Anmeldung gilt, in Tagen, auf einem Gerät, dem du vertraust. Standard ist `7`.
-
 ### `OPENCODE_JWT_SECRET`
 
 Überschreibt das Geheimnis zum Signieren von Host-UI-Sitzungstokens. Diese Einstellung steuert die Sitzungssignierung des Hosts und betrifft nicht die Agent-Runtime. Halte diesen Wert geheim. Wenn gesetzt, ist die globale Abmeldung nicht verfügbar, da OpenChamber das Signiergeheimnis nicht rotieren kann.
+
 
 ### `OPENCHAMBER_API_ONLY`
 

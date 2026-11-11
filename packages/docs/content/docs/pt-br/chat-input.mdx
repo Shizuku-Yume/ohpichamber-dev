@@ -12,7 +12,7 @@ A caixa de chat entende alguns símbolos. Digite um e um seletor se abre; escolh
 | `/` | um comando | logo no início da mensagem |
 | `$` | uma skill | em qualquer lugar |
 | `#` | um snippet | em qualquer lugar |
-| `@` | um arquivo | em qualquer lugar |
+| `@` | um arquivo ou um agente | em qualquer lugar |
 
 Um símbolo que não nomeia nada que você tenha continua texto comum: `$5` é só dinheiro e `a/b` é só um caminho.
 
@@ -22,7 +22,7 @@ Um comando é um prompt salvo que você executa com uma barra, como `/review`. G
 
 1. Abra **Settings → Commands** e crie um comando.
 2. Dê a ele um nome, uma descrição e o texto do prompt que ele deve enviar.
-3. Opcionalmente, fixe-o em um modelo específico.
+3. Opcionalmente, fixe-o em um agente ou modelo específico.
 4. Escolha o escopo personal ou project.
 
 No chat, digite `/` como o **primeiro** caractere da mensagem para abrir os comandos e escolha um. Seu texto pode usar marcadores:
@@ -49,11 +49,12 @@ Um snippet é um texto reutilizável que você referencia inline com uma cerquil
 
 No chat, digite `#` e escolha um snippet. O OpenChamber substitui pelo texto completo antes de enviar.
 
-## Arquivos
+## Arquivos e agentes
 
-Digite `@` para anexar um arquivo à mensagem.
+Digite `@` para anexar um arquivo ou executar a mensagem com outro agente.
 
 - Um arquivo, como `@src/index.ts`, é anexado à mensagem assim como escolhê-lo no menu **+**. Imagens e documentos são lidos e enviados com ela.
+- Um agente, como `@build`, executa esta mensagem com esse agente. Sem menção, quem a executa é o agente selecionado no composer.
 
 ## Anexar arquivos e contexto
 

@@ -109,7 +109,6 @@ SDK 3 は SDK 2 の親ウィンドウ経由のトランスポートを、非公�
 | `sessions` | プロジェクト、worktree、セッション状態を一覧表示し、登録済みプロジェクトでセッションを作成して開く |
 | `files` | 開いているプロジェクト内のファイルを読み書きする(相対パス付きの `readFile`、`writeFile`、`listDir`、`stat`) |
 | `model` | セッションの外で、ユーザーの Small Model による一回限りのテキスト生成を行う(`generate`) |
-| `shells` | エージェントがバックグラウンドで実行するシェルコマンドを監視し、その出力を読み取り、停止する(`onRunningShells`、`readShellOutput`、`stopShell`) |
 
 さらに 11 個が自動で追加されます。`integration` を宣言すると `network`、`service` を宣言すると `service`、`filesystem` パターンを宣言すると `filesystem`、`origins` を宣言すると `origins`、セッションのアクションがメッセージを求めると `conversation`([アクション、コマンド、バッジ](#アクションコマンドバッジ) を参照)、`sessionEvents` または `sessionControl` が `content` を求めると `transcript`([セッションイベント](/sdk/host/#セッションイベント) を参照)、サービスがセッションを操作すると `sessionControl`([OpenChamber の呼び出し](/sdk/host/#サービスから-openchamber-を呼び出す) を参照)、サービスがユーザーの代わりにエージェントの権限リクエストやフォームに応答すると `sessionAnswers`(`sessionControl: { answers: true }`)、エージェントが読む内容に追加すると `instructions`、`contributes.skills` を宣言すると `skills` です。`contributes.skills` はパッケージ内のスキルのフォルダーで、拡張機能がオンの間、すべてのエージェントに届きます。`contributes.links` を宣言すると `links`（[チャットメッセージ内のリンク](#チャットメッセージ内のリンク) を参照）も追加されます。
 

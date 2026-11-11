@@ -2,6 +2,7 @@
 title: Variables de entorno
 description: Configura OpenChamber con variables de entorno.
 ---
+
 # Variables de entorno
 
 OpenChamber lee estas variables al arrancar. Para servicios de inicio, `openchamber startup enable` guarda por defecto una copia del entorno actual, así que vuelve a ejecutarlo después de cambiar variables que quieras usar en el servicio.
@@ -38,10 +39,6 @@ Cuánto dura un inicio de sesión en el navegador, en horas, cuando «confiar en
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Cuánto dura un inicio de sesión, en días, en un dispositivo marcado como de confianza. El valor por defecto es `7`.
-
-### `OPENCODE_JWT_SECRET`
-
-Sobrescribe el secreto utilizado para firmar los tokens de sesión de la UI del host. Este ajuste configura la firma de sesiones del host y no afecta al runtime del agente. Mantén este secreto privado. Cuando está definido, el cierre de sesión global no está disponible porque OpenChamber no puede rotar el secreto de firma.
 
 ### `OPENCHAMBER_API_ONLY`
 

@@ -1,6 +1,6 @@
 ---
 title: Automatyczny wybór modelu
-description: Pozwól OpenChamber wybierać model i poziom myślenia dla każdego promptu.
+description: Pozwól OpenChamber wybierać model, poziom myślenia i agenta dla każdego promptu.
 ---
 
 # Automatyczny wybór modelu
@@ -31,6 +31,7 @@ Dla każdej kategorii możesz ustawić:
 
 - **Model:** puste pole oznacza model zapasowy
 - **Myślenie:** poziom myślenia dla tego modelu
+- **Agent:** agent, który wykonuje te zadania; puste pole zostawia agenta, którego użyłoby pole wiadomości
 
 Jev sortuje prompty, czytając nazwy i opisy kategorii, więc opisy działają jak instrukcje. Napisz, co należy do kategorii, a co nie. Kategorie możesz edytować, wyłączać, usuwać i dodawać, a wbudowaną przywrócić, jeśli zmienisz zdanie. Auto potrzebuje co najmniej dwóch włączonych kategorii.
 
@@ -38,9 +39,9 @@ Jev sortuje prompty, czytając nazwy i opisy kategorii, więc opisy działają j
 
 1. OpenChamber wysyła do Jev Twoją wiadomość i krótki fragment kilku ostatnich tur.
 2. Jev wybiera kategorię i mówi, jak bardzo jest pewny.
-3. Sesja przełącza się na model i poziom myślenia tej kategorii, a Twoja wiadomość idzie dalej.
+3. Sesja przełącza się na model, poziom myślenia i agenta tej kategorii, a Twoja wiadomość idzie dalej.
 
-Każda wiadomość jest sortowana od nowa, więc sesja może przejść od taniego modelu przy szybkim pytaniu do najmocniejszego przy następnej prośbie. Pole wiadomości dalej pokazuje **Auto**, a wybór poziomu myślenia jest ukryty, bo decyduje o nim kategoria.
+Każda wiadomość jest sortowana od nowa, więc sesja może przejść od taniego modelu przy szybkim pytaniu do najmocniejszego przy następnej prośbie. Pole wiadomości dalej pokazuje **Auto**, a wybór agenta i poziomu myślenia jest ukryty, bo decyduje o nich kategoria.
 
 Model zapasowy odpowiada, gdy:
 

@@ -5,7 +5,7 @@ description: Install OpenChamber for desktop, web, or mobile.
 
 # Install
 
-OpenChamber runs as:
+Pick the app that fits how you work:
 
 - a desktop app for macOS, Windows, and Linux
 - a web app hosted by the CLI, which can also be installed as a PWA
@@ -22,7 +22,16 @@ openchamber --ui-password be-creative-here
 
 Open the URL the CLI prints (usually `http://localhost:3000`). Enter your UI password on the login screen to sign in. Once signed in, you will see the OpenChamber session list. To keep it handy, use your browser's "Install" option in the address bar to add it as an app.
 
-## Desktop
+Install the iPhone app through TestFlight or the Android app from the latest release, then pair it with your computer. [Mobile Apps](/mobile/) walks through both.
 
-Download the latest desktop build for your platform from the GitHub releases page or the OpenChamber download page. Launch the app and select your workspace or connect to a remote server.
+## Nix
+
+On NixOS, or any Linux with Nix, the flake in the OpenChamber repository builds the same apps:
+
+```bash
+nix run github:openchamber/openchamber        # web server on http://localhost:3000
+nix run github:openchamber/openchamber#gui    # desktop app
+```
+
+The flake also exposes `packages.openchamber` and `packages.openchamber-desktop`, and a `nixosModules.openchamber` systemd module with `host`, `port`, `openFirewall` and `uiPasswordFile`. The password file is read through systemd's `LoadCredential`, so a root-owned 0400 secret works with the default dynamic user.
 

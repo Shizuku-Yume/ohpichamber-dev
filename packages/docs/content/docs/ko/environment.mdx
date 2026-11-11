@@ -2,6 +2,7 @@
 title: 환경 변수
 description: 환경 변수로 OpenChamber를 설정합니다.
 ---
+
 # 환경 변수
 
 OpenChamber는 시작할 때 이 변수들을 읽습니다. 시작 서비스는 `openchamber startup enable` 실행 시 기본적으로 현재 환경의 snapshot을 저장하므로, 서비스에 적용할 변수를 바꾼 뒤에는 다시 실행하세요.
@@ -38,10 +39,6 @@ OpenChamber 웹 서버가 바인딩할 주소입니다. 다른 컴퓨터에서 �
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 신뢰하기로 한 기기에서 로그인이 유지되는 기간(일 단위)입니다. 기본값은 `7`입니다.
-
-### `OPENCODE_JWT_SECRET`
-
-Host UI 세션 토큰 서명에 사용하는 secret을 재정의합니다. 이 설정은 Host 세션 서명에만 적용되며 에이전트 런타임에는 영향을 주지 않습니다. 이 값은 비공개로 안전하게 유지하세요. 설정되어 있으면 OpenChamber가 서명 secret을 교체할 수 없으므로 전체 로그아웃(global sign-out)을 사용할 수 없습니다.
 
 ### `OPENCHAMBER_API_ONLY`
 

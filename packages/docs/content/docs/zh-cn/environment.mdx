@@ -2,6 +2,7 @@
 title: 环境变量
 description: 使用环境变量配置 OpenChamber。
 ---
+
 # 环境变量
 
 OpenChamber 会在启动时读取这些变量。对于开机启动服务，`openchamber startup enable` 默认会保存当前环境的 snapshot，所以如果要让服务使用新的变量，请重新运行它。
@@ -38,10 +39,6 @@ OpenChamber web 服务器监听的地址。使用 `0.0.0.0` 可允许其他机�
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 在你选择信任的设备上，登录的有效时长（天）。默认值为 `7`。
-
-### `OPENCODE_JWT_SECRET`
-
-覆盖用于对 Host UI 会话 Token 进行签名的 Secret。此设置仅配置 Host 会话签名，不影响 Agent 运行时。请妥善保管并保持私密。设置此变量后，由于 OpenChamber 无法轮换签名 Secret，全局退出登录将不可用。
 
 ### `OPENCHAMBER_API_ONLY`
 

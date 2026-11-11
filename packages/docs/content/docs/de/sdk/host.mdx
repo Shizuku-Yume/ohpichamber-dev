@@ -153,22 +153,6 @@ Ohne `send` ersetzt `prompt` den Text im Chatfeld. Mit `send: true` sendet es di
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` und `keys()` speichern eigenes JSON ohne weitere Berechtigung. Fehlende Schlüssel liefern `undefined`, gespeichertes null bleibt null. Schlüssel haben 1 bis 128 Zeichen, Werte höchstens 64 KiB UTF-8, der gesamte Speicher 2 MiB und 2.000 Schlüssel. Nutze Projekt-IDs im Schlüssel für projektspezifische Daten. Schreibvorgänge sind serialisiert und atomar; Fehler erhalten vorhandene Daten. Entfernen löscht den Speicher auf dem verbundenen Server.
 
-## Hintergrund-Shells
-
-Mit der Berechtigung `shells` beobachtest du die im Hintergrund laufenden Shell-Befehle, bezogen auf eine Session und ihre Sub-Agents, ein registriertes Projekt oder jede Session. OpenChamber antwortet aus seinem lokalen Speicher; es findet kein Netzwerkabruf statt.
-
-| Aufruf | Was er tut |
-| --- | --- |
-| `onRunningShells(scope, listener)` | abonniert die Shell-Befehle im Gültigkeitsbereich: `{ kind: 'session', sessionId }` deckt die Session und ihre Sub-Agents ab, `{ kind: 'project', projectId }` deckt ein registriertes Projekt ab und `{ kind: 'global' }` deckt jede Session ab. Du erhältst die laufenden Befehle in der Reihenfolge von alt nach neu, jeweils mit ihrem `background`-Flag, sowie die beendeten Befehle. Gibt eine Abmeldefunktion zurück. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | eine Seite der Ausgabe eines laufenden oder beendeten Befehls. Ohne `cursor` beginnt sie `tailBytes` (bis zu 65536) vor dem Ende. Gibt `{ output, cursor, skipped }` zurück. |
-| `stopShell(shellId)` | sendet dem Agent zuerst den Stop-Hinweis und entfernt danach den Befehl. |
-
-Der Snapshot ist `{ kind: "shells", scope, shells, ended }`, wobei `scope` den Bereich des Abonnements widerspiegelt. Jede laufende Shell ist `{ id, sessionID, command, startedAt, background }`, maximal 200, von alt nach neu geordnet. `background` ist `true` für einen Job, auf den der Durchlauf nicht wartet.
-
-`ended` listet die Befehle auf, deren Ende OpenChamber beobachtet hat, nach Beendigungszeit von alt nach neu geordnet, maximal 200, wobei die neuesten behalten werden. Jeder Eintrag enthält zusätzlich `status`, `endedAt` und `exit`, wenn der Befehl mit einem Exit-Code beendet wurde. Der Status ist `exited`, `timeout`, `killed` durch ein Signal, `stopped` durch einen Nutzer oder `unknown`, wenn das Beenden während einer Wiederverbindung stattfand. OpenChamber behält diese Liste nur im Arbeitsspeicher. Nach einem Neuladen der App ist sie leer; speichere daher, was dein Panel anzeigt, im Erweiterungsspeicher.
-
-Der Host behält die Ausgabe eines beendeten Befehls für die jeweils letzten 25 beendeten Befehle pro Verzeichnis. Ein gestoppter Befehl verliert seine Ausgabe sofort. Das Auslesen einer Shell, die OpenChamber nie gesehen hat, oder einer Ausgabe, die der Host nicht mehr hat, liefert `NOT_FOUND`. Ebenso das Stoppen einer Shell, die nicht läuft. Eine nicht bestätigte `shells`-Berechtigung liefert `NOT_GRANTED`.
-
 ## request
 
 ```ts

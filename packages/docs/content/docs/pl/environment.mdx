@@ -2,6 +2,7 @@
 title: Zmienne środowiskowe
 description: Skonfiguruj OpenChamber za pomocą zmiennych środowiskowych.
 ---
+
 # Zmienne środowiskowe
 
 OpenChamber odczytuje te zmienne przy starcie. Dla usług startowych `openchamber startup enable` domyślnie zapisuje snapshot bieżącego środowiska, więc uruchom tę komendę ponownie po zmianie zmiennych, których ma używać usługa.
@@ -13,7 +14,7 @@ Aby przekazać sesjom agenta, Git, terminalowi i [akcjom projektu](/pl/project-a
 - Sesje agenta otrzymują je przy starcie.
 - Git, terminal i akcje projektu otrzymują je przy kolejnym uruchomieniu.
 
-Projekt może dodać własne zmienne lub polecenie, które je wypisuje (np. `direnv export json`), w **Ustawienia → Projekty**. Zobacz [Projekty](/pl/projects/#środowisko-projektu).
+Projekt może dodać własne zmienne albo polecenie, które je wypisuje, na przykład `direnv export json`, w **Ustawienia → Projekty**. Zobacz [Projekty](/pl/projects/#środowisko-projektu).
 
 Wszystko poniżej jest odczytywane przez samo OpenChamber przy starcie.
 
@@ -38,10 +39,6 @@ Jak długo trwa logowanie w przeglądarce, w godzinach, gdy opcja „ufaj temu u
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Jak długo trwa logowanie, w dniach, na urządzeniu oznaczonym jako zaufane. Domyślnie `7`.
-
-### `OPENCODE_JWT_SECRET`
-
-Nadpisuje sekret używany do podpisywania tokenów sesji Host UI. To ustawienie konfiguruje podpisywanie sesji Hosta i nie wpływa na środowisko uruchomieniowe agenta. Zachowaj tę wartość w tajemnicy. Gdy jest ustawiona, wylogowanie globalne jest niedostępne, ponieważ OpenChamber nie może rotować sekretu podpisywania.
 
 ### `OPENCHAMBER_API_ONLY`
 

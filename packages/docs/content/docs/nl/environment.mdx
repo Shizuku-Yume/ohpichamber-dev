@@ -2,6 +2,7 @@
 title: Omgevingsvariabelen
 description: Stel OpenChamber in via omgevingsvariabelen.
 ---
+
 # Omgevingsvariabelen
 
 OpenChamber leest deze omgevingsvariabelen bij het starten. Voor opstartservices neemt `openchamber startup enable` standaard de huidige omgeving over. Voer die opdracht opnieuw uit nadat u variabelen wijzigt die de service moet gebruiken.
@@ -38,10 +39,10 @@ Hoe lang een aanmelding in de browser geldig blijft, in uren, als "dit apparaat 
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Hoe lang een aanmelding geldig blijft, in dagen, op een apparaat dat u vertrouwt. Standaard is `7`.
-
 ### `OPENCODE_JWT_SECRET`
 
 Overschrijft het geheim waarmee Host UI-sessietokens worden ondertekend. Deze instelling configureert de sessie-ondertekening van de Host en heeft geen invloed op de agent-runtime. Houd deze waarde geheim. Als deze is ingesteld, is globaal afmelden niet beschikbaar omdat OpenChamber het ondertekeningsgeheim niet kan roteren.
+
 
 ### `OPENCHAMBER_API_ONLY`
 

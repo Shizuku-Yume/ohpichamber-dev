@@ -2,6 +2,7 @@
 title: Environment Variables
 description: Configure OpenChamber with environment variables.
 ---
+
 # Environment Variables
 
 OpenChamber reads these environment variables at startup. For startup services, `openchamber startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use. Variables OpenChamber itself set in the shell you run it from, such as the desktop app's terminal or an agent's shell, stay out of the service; your own exports carry over from there too, unless you re-export a name OpenChamber already set in that shell, which a regular terminal avoids.
@@ -38,10 +39,10 @@ How long a browser sign-in lasts, in hours, when "trust this device" is off. The
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 How long a sign-in lasts, in days, on a device you chose to trust. The default is `7`.
-
 ### `OPENCODE_JWT_SECRET`
 
 Overrides the secret used to sign Host UI session tokens. This setting configures Host session signing rather than the agent runtime. Keep this secret private. When set, global sign-out is unavailable because OpenChamber cannot rotate the signing secret.
+
 
 ### `OPENCHAMBER_API_ONLY`
 

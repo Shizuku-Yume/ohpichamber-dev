@@ -12,7 +12,7 @@ Das Chat-Feld kennt ein paar Symbole. Gib eines ein und eine Auswahl öffnet sic
 | `/` | einen Befehl | ganz am Anfang der Nachricht |
 | `$` | einen Skill | überall |
 | `#` | ein Snippet | überall |
-| `@` | eine Datei | überall |
+| `@` | eine Datei oder einen Agenten | überall |
 
 Ein Symbol, das nichts benennt, das du hast, bleibt gewöhnlicher Text: `$5` ist nur Geld und `a/b` ist nur ein Pfad.
 
@@ -22,7 +22,7 @@ Ein Befehl ist ein gespeicherter Prompt, den du mit einem Slash aufrufst, etwa `
 
 1. Öffne **Einstellungen → Befehle** und erstelle einen Befehl.
 2. Gib ihm einen Namen, eine Beschreibung und den Prompt-Text, den er senden soll.
-3. Optional kannst du ihn an ein bestimmtes Modell binden.
+3. Optional kannst du ihn an einen bestimmten Agenten oder ein Modell binden.
 4. Wähle den Geltungsbereich: persönlich oder projektbezogen.
 
 Gib im Chat als **erstes** Zeichen der Nachricht `/` ein, um Befehle anzuzeigen, und wähle dann einen aus. Dein Text kann Platzhalter verwenden:
@@ -49,11 +49,12 @@ Ein Snippet ist wiederverwendbarer Text, auf den du inline mit einer Raute verwe
 
 Gib im Chat `#` ein und wähle ein Snippet aus. OpenChamber ersetzt es vor dem Senden durch den vollständigen Text.
 
-## Dateien
+## Dateien und Agenten
 
-Gib `@` ein, um eine Datei an die Nachricht anzuhängen.
+Gib `@` ein, um eine Datei anzuhängen oder die Nachricht mit einem anderen Agenten auszuführen.
 
 - Eine Datei wie `@src/index.ts` wird an die Nachricht angehängt, genau wie über das **+**-Menü. Bilder und Dokumente werden gelesen und mitgesendet.
+- Ein Agent wie `@build` führt diese Nachricht mit diesem Agenten aus. Ohne Erwähnung führt sie der im Composer gewählte Agent aus.
 
 ## Dateien und Kontext anhängen
 

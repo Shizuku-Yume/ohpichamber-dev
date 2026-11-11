@@ -11,22 +11,22 @@ Voordat u met OpenChamber aan de slag kunt, moet er minstens één AI-provider v
 
 1. Open **Instellingen → Providers**.
 2. Open **Provider toevoegen** en kies een provider die nog niet verbonden is, of kies **Overig / Aangepast** voor een OpenAI-compatibel adres.
-3. Meld u aan met de methode die de provider vereist:
+3. Meld u aan op een van de twee manieren die de provider ondersteunt:
    - **API-sleutel:** plak uw sleutel en sla deze op.
-   - **OAuth-aanmelding:** open de autorisatielink in uw browser om u aan te melden. Plak de autorisatiecode in OpenChamber als daarom wordt gevraagd en voltooi de verbinding.
+   - **Aanmelden via apparaatcode:** OpenChamber toont een link en een korte code. Open de link, voer de code in en geef toestemming. OpenChamber rondt de verbinding automatisch af.
 
 ### Aangepaste en overige providers
 
 Voor gateways, LLM's van onderwijsinstellingen, Ollama, LiteLLM en vergelijkbare OpenAI-compatibele API's:
 
 1. Kies **Overig / Aangepast** in de providerlijst.
-2. Vul een provider-ID, weergavenaam, basis-URL met `http://` of `https://`, een optionele API-sleutel en minstens één model-ID en modelnaam in.
-3. Geef het contextvenster en de maximale uitvoertokens van het model op. Geavanceerde metagegevens (zoals redeneringsopties, varianten en modaliteiten) kunt u als JSON configureren onder de modeldetails.
+2. Vul een provider-ID, weergavenaam, basis-URL met `http://` of `https://`, API-sleutel of `{env:VAR_NAME}` en minstens één model-ID en modelnaam in.
+3. Geef eventueel de denkniveaus van het model op, bijvoorbeeld `low, medium, high`. Elk niveau verschijnt in de variantkiezer van het model in de chat, net als bij ingebouwde providers.
 4. Voeg desgewenst verzoekheaders toe.
 5. Sla de instellingen op. OpenChamber registreert de provider en modellen via de Agent Service en bewaart API-sleutels als alleen-schrijven toegangsgegevens.
 6. Open een bestaande aangepaste provider en kies **Bewerken** om deze te wijzigen.
 
-Een API-sleutel is optioneel. Sleutelloze lokale eindpunten (zoals Ollama, LiteLLM of llama.cpp) en diensten met aangepaste headerauthenticatie kunnen zonder API-sleutel worden verbonden.
+Aangepaste providers hebben een API-sleutel of `{env:VAR_NAME}` nodig voordat ze als volledig verbonden worden getoond. Zonder aanmeldgegevens kunnen modellen wel verschijnen, maar mislukken chataanroepen.
 
 Zodra een provider verbonden is, zijn de modellen ervan beschikbaar in de chat.
 
@@ -41,16 +41,16 @@ U kiest het model op de plek waar u werkt:
 
 ## Agents instellen
 
-Een agent is een benoemde configuratie — een model, een systeemprompt en de tools die voor de agent beschikbaar zijn.
+Een agent is een benoemde combinatie van een model, gedragsinstructies en toegestane handelingen.
 
 1. Open **Instellingen → Agents**.
 2. Kies een agent of maak een nieuwe aan.
 3. Bewerk wat u wilt aanpassen:
    - **beschrijving:** waarvoor de agent dient
-   - **model:** de standaardprovider en model-override
-   - **prompt:** vaste instructies en systeemprompts die de agent altijd volgt
-   - **toegestane tools:** welke tools beschikbaar zijn voor de agent (tool-beschikbaarheid: door tools hier te vermelden kan het model ze aanroepen, terwijl de autorisatie van bewerkingen door het Host-beleid en goedkeuringen wordt bewaakt)
-   - **toestemmingsvoorinstelling:** optionele preset-ID voor toestemmingen van het agentprofiel
+   - **model:** het standaardmodel
+   - **temperatuur:** hoe creatief de antwoorden zijn
+   - **prompt:** vaste instructies die de agent altijd volgt
+   - **toolregels:** welke tools de agent mag gebruiken
 
 ## Waar uw aanmeldingen worden bewaard
 

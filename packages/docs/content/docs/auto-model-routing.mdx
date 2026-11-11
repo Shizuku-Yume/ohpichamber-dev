@@ -1,6 +1,6 @@
 ---
 title: Auto Model Routing
-description: Let OpenChamber pick the model and thinking level for each prompt.
+description: Let OpenChamber pick the model, thinking level and agent for each prompt.
 ---
 
 # Auto Model Routing
@@ -31,6 +31,7 @@ For each category you can set:
 
 - **Model:** empty means the fallback model
 - **Thinking:** the thinking level for that model
+- **Agent:** the agent that runs these tasks; empty keeps the agent the composer would use
 
 Jev sorts prompts by reading the category names and descriptions, so the descriptions work as instructions. Say what belongs in the category and what doesn't. You can edit, turn off, remove or add categories, and restore a built-in one if you change your mind. Auto needs at least two categories turned on.
 
@@ -38,9 +39,9 @@ Jev sorts prompts by reading the category names and descriptions, so the descrip
 
 1. OpenChamber sends your message and a short excerpt of the last few turns to Jev.
 2. Jev picks a category and says how sure it is.
-3. The session switches to that category's model and thinking level, and your message goes out.
+3. The session switches to that category's model, thinking level and agent, and your message goes out.
 
-Every message is sorted again, so a session can move from a cheap model for a quick question to your strongest one for the next request. The composer keeps showing **Auto**, and the thinking control is hidden because the category decides it.
+Every message is sorted again, so a session can move from a cheap model for a quick question to your strongest one for the next request. The composer keeps showing **Auto**, and the agent and thinking controls are hidden, because the category decides them.
 
 The fallback model answers when:
 

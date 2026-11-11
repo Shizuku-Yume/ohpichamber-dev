@@ -33,33 +33,15 @@ Open je een project op een map binnen een repository, zoals `repo/ai`, dan opene
 
 Is het werk klaar voor gebruik, kies dan **Integreren** in de Git-weergave om de commits uit de worktree naar een andere branch, zoals `main`, over te nemen. Bij een conflict kunt u de agent vragen het op te lossen.
 
-## Opruimen en archiveren
+## Opruimen
 
-Is de taak afgerond, kies dan **Worktree archiveren** in het menu van de rij, of houd Shift ingedrukt en klik op de archiveerknop die op de rij de plaats inneemt van de knop voor een nieuwe sessie. OpenChamber archiveert de worktree:
+Is de taak klaar, kies dan **Worktree archiveren** in het menu van de rij, of houd Shift ingedrukt en klik op de archiveerknop die op de rij in de plaats komt van de knop voor een nieuwe sessie. OpenChamber archiveert hem: de map verdwijnt, en de sessies, de niet-gecommitte wijzigingen en de branch wachten op de pagina Archief. Loopt daar nog een sessie, dan blijft de worktree staan.
 
-1. De Host verifieert de worktree en schermt deze af, waardoor elke actieve worker die de map vasthoudt wordt vrijgegeven en wordt voorkomen dat nieuwe commando's midden in het archiveren binnenkomen.
-2. Niet-gecommitte wijzigingen en branchstatussen worden vastgelegd in snapshotreferenties onder `refs/openchamber/archive/<id>`.
-3. De map wordt veilig van de schijf verwijderd, terwijl de Git-branch, de niet-gecommitte snapshot en de bijbehorende sessiegegevens behouden blijven.
-4. Als een sessie in de worktree actief streamt of wordt uitgevoerd, wordt de archiveerbewerking veilig geweigerd totdat de uitvoering is voltooid.
+Markeert u de rij als afgerond, dan haalt dat hem alleen uit In bewerking. Wilt u een worktree archiveren telkens als u hem als afgerond markeert, of zodra zijn PR is gemerged, zet dat dan aan bij **Instellingen → Sessies → Afgeronde worktrees**.
 
-Het als afgerond markeren van een worktree-rij verwijdert deze alleen uit het blok **In bewerking**. Om een worktree automatisch te archiveren zodra u deze als afgerond markeert of zodra de bijbehorende pull request is gemerged, schakelt u **Instellingen → Sessies → Afgeronde worktrees** in.
+Op de pagina Archief staan gearchiveerde worktrees onder hun project. **Herstellen** haalt er een terug met zijn branch, voert de setupcommando's van het project uit en zet de wijzigingen en sessies terug; een van zijn sessies herstellen doet hetzelfde. Bestanden die git negeert, zoals `node_modules` of `.env`, worden niet bewaard, dus de setupcommando's brengen ze terug. Ook de pagina Worktrees van het project toont gearchiveerde worktrees.
 
-### Herstellen vanuit het archief
-
-De pagina **Archief** toont gearchiveerde worktrees onder hun respectieve projecten:
-
-- **Herstellen:** Brengt de gearchiveerde worktree terug in een door de aanroeper gemaakte checkout (`openchamber/worktree-...`). De Host herstelt niet-gecommitte bestanden vanuit de snapshotreferentie, voert projectsetupcommando's opnieuw uit en verplaatst actieve sessies naar de nieuwe checkoutlocatie.
-- **Behoud van sessiestatus:** Door de Host geverifieerde actieve sessies worden opnieuw geopend in de herstelde worktree nadat wijzigingen zijn doorgevoerd. Sessies die al vóór de worktreearchivering waren gearchiveerd, blijven gearchiveerd in de archieflijst. Bestanden die door Git worden genegeerd (zoals `node_modules` of `.env`), worden opnieuw aangemaakt door projectsetupcommando's.
-- **Bevestigd herstel in nieuwe checkout:** Het herstelproces zorgt er automatisch voor dat de nieuwe checkoutmap wordt toegelaten tot het Host-workspacebereik voordat sessies opnieuw worden geopend.
-
-### Worktrees verwijderen en branchveiligheid
-
-Om een worktree definitief te verwijderen:
-
-- **Vanuit de actieve zijbalk:** Kies **Verwijderen** in het menu van de worktree-rij.
-- **Vanuit de Archief-pagina:** Klik op **Verwijderen** op een gearchiveerde worktree-rij.
-- **Branch behouden is de standaard:** Bij het verwijderen van een gearchiveerde worktree blijven de Git-branch en de bijbehorende commitgeschiedenis standaard behouden. Het bevestigingsvenster voor verwijderen bevat een expliciet selectievakje **Ook lokale branch verwijderen**, dat standaard niet is ingeschakeld.
-- **Verouderde niet-gebonden archieven (alleen Git):** Oudere snapshotreferenties zonder aan de Host gekoppelde sessiestatusbindingen staan alleen Git-herstel toe. OpenChamber waarschuwt expliciet dat bijbehorende sessies niet worden verplaatst, uit het archief gehaald of verwijderd. Het verwijderen van een niet-gebonden archief vereist expliciete bevestiging voor het verwijderen van niet-geverifieerde branches.
+Wilt u een worktree definitief kwijt, verwijder hem dan via zijn menu, of verwijder een gearchiveerde worktree op de pagina Archief. Verwijdert u via het menu, dan kiest u zelf of ook de branch wordt verwijderd, lokaal en eventueel op de remote.
 
 ## Als er iets niet klopt
 
@@ -68,4 +50,4 @@ Een worktree kan aandacht nodig hebben als de map is verdwenen, er geen actieve 
 ## Zie ook
 
 - [Parallelle runs](/nl/multi-run/) om meerdere worktree-sessies tegelijk te starten
-- [Git- & GitHub-workflows](/nl/git/) om vanuit OpenChamber te committen en integreren
+- [Git-workflows](/nl/git/) om vanuit OpenChamber te committen en integreren

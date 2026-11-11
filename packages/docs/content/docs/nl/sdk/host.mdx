@@ -166,22 +166,6 @@ Momentopnamen hebben `state: "loading" | "ready" | "error"`. Tijdens laden of bi
 
 `activity` is `unknown`, `idle`, `running`, `retrying`, `waiting-permission` of `waiting-question`. `outcome` is een waargenomen beurt met `completed` of `failed`, of `null`. Dit wordt niet uit de geschiedenis afgeleid en blijft voor maximaal 2.000 waargenomen sessies in het geheugen. Inactief worden na een fout behoudt de mislukte uitkomst totdat een nieuwe run begint. Noch `idle` noch `completed` markeert uw taak als klaar. Gebruik `host.openSession(sessionId)` om vanuit een kaart bewust naar de chat te gaan.
 
-## Achtergrondshells
-
-Met het recht `shells` volgt u de shellopdrachten die op de achtergrond worden uitgevoerd, binnen het bereik van een sessie en haar subagents, een geregistreerd project of alle sessies. OpenChamber antwoordt vanuit de lokale opslag; er vindt geen netwerkverzoek plaats.
-
-| Aanroep | Werking |
-| --- | --- |
-| `onRunningShells(scope, listener)` | abonneren op shellopdrachten binnen het bereik: `{ kind: 'session', sessionId }` dekt de sessie en haar subagents, `{ kind: 'project', projectId }` dekt een geregistreerd project en `{ kind: 'global' }` dekt alle sessies. U ontvangt de actieve opdrachten van oud naar nieuw, elk met de vlag `background`, en de beëindigde opdrachten. Geeft een functie terug om het abonnement op te zeggen. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | één pagina van de uitvoer van een actieve of beëindigde opdracht. Zonder `cursor` begint dit `tailBytes` (maximaal 65536) voor het einde. Geeft `{ output, cursor, skipped }` terug. |
-| `stopShell(shellId)` | stuurt eerst het stopbericht naar de agent en verwijdert daarna de opdracht. |
-
-De momentopname heeft de vorm `{ kind: "shells", scope, shells, ended }`, waarbij `scope` het bereik van het abonnement weerspiegelt. Elke actieve shell is `{ id, sessionID, command, startedAt, background }`, maximaal 200, van oud naar nieuw. `background` is `true` voor een taak waarop de beurt niet wacht.
-
-`ended` bevat de opdrachten waarvan OpenChamber het einde heeft waargenomen, van oud naar nieuw beëindigd, maximaal 200 waarbij de nieuwste worden bewaard. Elk item voegt `status`, `endedAt` en `exit` toe wanneer de opdracht met een afsluitcode is geëindigd. De status is `exited`, `timeout`, `killed` door een signaal, `stopped` door een gebruiker, of `unknown` als de beëindiging tijdens opnieuw verbinden plaatsvond. OpenChamber bewaart deze lijst alleen in het geheugen. Na het herladen van de app is deze leeg, dus sla wat uw paneel toont op in de extensieopslag.
-
-De host bewaart de uitvoer van een beëindigde opdracht voor de laatste 25 beëindigde opdrachten per map. Een gestopte opdracht verliest zijn uitvoer onmiddellijk. Het lezen van een shell die OpenChamber nooit heeft gezien, of uitvoer die de host niet meer heeft, geeft `NOT_FOUND`. Dat geldt ook voor het stoppen van een shell die niet actief is. Een niet-goedgekeurd recht `shells` geeft `NOT_GRANTED`.
-
 ## Blijvende extensiegegevens
 
 ```ts

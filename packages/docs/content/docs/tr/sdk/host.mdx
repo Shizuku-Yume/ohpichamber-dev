@@ -151,22 +151,6 @@ host.onSessionLifecycle((event) => {
 
 `activity`, `unknown`, `idle`, `running`, `retrying`, `waiting-permission` veya `waiting-question` olur. `outcome`, gözlemlenen `completed`, `failed` veya `null` değeridir; yalnızca bellekte en fazla 2.000 oturum için tutulur. Hata sonrası idle, sonraki çalışmaya kadar hatayı korur. Bu, görevin tamamlandığı anlamına gelmez. `openSession(sessionId)` sohbeti açıkça açar.
 
-## Arka plan kabukları
-
-`shells` yeteneğiyle, bir oturum ve alt ajanları, kayıtlı bir proje veya her oturum kapsamında arka planda çalışan kabuk komutlarını izleyin. OpenChamber yerel deposundan yanıt verir; ağ üzerinden okuma yapılmaz.
-
-| Çağrı | Ne yapar |
-| --- | --- |
-| `onRunningShells(scope, listener)` | kapsamdaki kabuk komutlarına abone olur: `{ kind: 'session', sessionId }` oturumu ve alt ajanlarını, `{ kind: 'project', projectId }` kayıtlı bir projeyi, `{ kind: 'global' }` ise tüm oturumları kapsar. En eskiden başlayarak çalışan komutları (her biri `background` bayrağıyla birlikte) ve sonlananları alırsınız. Bir abonelikten çıkma fonksiyonu döndürür. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | çalışan veya sonlanan bir komutun çıktısının bir sayfasıdır. `cursor` olmadan, sondan `tailBytes` (en fazla 65536) kadar önce başlar. `{ output, cursor, skipped }` döndürür. |
-| `stopShell(shellId)` | ajana önce durdurma bildirimini gönderir, ardından komutu kaldırır. |
-
-Anlık görüntü `{ kind: "shells", scope, shells, ended }` şeklindedir ve `scope` aboneliğin kapsamını yansıtır. Çalışan her kabuk en fazla 200 adet olmak üzere en eskiden yeniye doğru `{ id, sessionID, command, startedAt, background }` şeklindedir. Turun beklemediği bir iş için `background` değeri `true` olur.
-
-`ended`, OpenChamber'ın bittiğini gördüğü komutları, en eski bitenden yeniye doğru, en yeniler tutularak en fazla 200 adet listeler. Komut bir çıkış koduyla bittiğinde her biri `status`, `endedAt` ve `exit` ekler. Durum `exited`, `timeout`, bir sinyal tarafından `killed`, bir kullanıcı tarafından `stopped` veya yeniden bağlanma sırasında bitiş gerçekleştiğinde `unknown` olur. OpenChamber bu listeyi yalnızca bellekte tutar. Uygulama yeniden yüklendikten sonra boşalır, bu nedenle panelinizin gösterdiği verileri eklenti depolamasına kaydedin.
-
-Host, biten bir komutun çıktısını dizin başına en son biten 25 komut için tutar. Durdurulan bir komut çıktısını hemen kaybeder. OpenChamber'ın hiç görmediği bir kabuğu veya host'un artık tutmadığı bir çıktıyı okumak `NOT_FOUND` hatası verir. Çalışmayan bir kabuğu durdurmak da aynı şekildedir. Onaylanmamış bir `shells` yeteneği `NOT_GRANTED` ile sonuçlanır.
-
 ## Kalıcı uzantı verisi
 
 ```ts

@@ -33,16 +33,13 @@ If you open a project on a folder inside a repository, such as `repo/ai`, new wo
 
 When the work is good, use **Integrate** in the Git view to bring the worktree's commits onto another branch (like `main`). If a change conflicts, you can hand the conflict to the agent to resolve.
 
-## Clean up and archive
+## Clean up
 
-When the task is finished, pick **Archive worktree** in the row's menu, or hold Shift and click the archive button that takes the place of the new-session button on the row. OpenChamber archives it:
+When the task is finished, pick **Archive worktree** in the row's menu, or hold Shift and click the archive button that takes the place of the new-session button on the row. OpenChamber archives it: the folder goes, and its sessions, its uncommitted changes and its branch wait on the Archive page. If a session there is still running, the worktree stays.
 
-1. The Host verifies the worktree and fences it, releasing every active worker holding the directory and preventing new commands from landing mid-archive.
-2. Uncommitted changes and branch states are captured into snapshot references under `refs/openchamber/archive/<id>`.
-3. The folder is safely removed from disk while preserving the Git branch, uncommitted snapshot, and associated session records.
-4. If a session in the worktree is actively streaming or running, the archive operation is safely refused until execution finishes.
+Marking the row done only takes it out of In work. To archive a worktree whenever you mark it done, or once its PR is merged, turn that on in **Settings → Sessions → Finished worktrees**.
 
-Marking a worktree row done only removes it from the **In work** block. To archive a worktree automatically whenever you mark it done, or once its pull request is merged, enable **Settings → Sessions → Finished worktrees**.
+On the Archive page, archived worktrees sit under their project. **Restore** brings one back with its branch, runs the project's setup commands, and puts its changes and sessions back; restoring one of its sessions does the same. Files git ignores, such as `node_modules` or `.env`, aren't kept, so the setup commands are what bring them back. The project's Worktrees page lists archived worktrees too.
 
 ### Restore from archive
 
@@ -68,4 +65,4 @@ A worktree can need attention if its folder went missing, its branch is in a det
 ## Related
 
 - [Multi-run](/multi-run/) — launch many worktree sessions at once
-- [Git & GitHub Workflows](/git/) — commit and integrate from inside OpenChamber
+- [Git Workflows](/git/) — commit and integrate from inside OpenChamber
