@@ -24,7 +24,7 @@ export const getAuthoritativeSessionFolderOwnerKey = (
   owner: DirectoryOwner | undefined,
 ): string | null => {
   if (owner) return getSessionFolderOwnerKey(owner.projectId, owner.scopeDirectory);
-  const chatsRoot = getChatsRootFromDirectory(session.directory);
+  const chatsRoot = getChatsRootFromDirectory(resolveGlobalSessionDirectory(session));
   return chatsRoot ? getSessionFolderOwnerKey(null, chatsRoot) : null;
 };
 

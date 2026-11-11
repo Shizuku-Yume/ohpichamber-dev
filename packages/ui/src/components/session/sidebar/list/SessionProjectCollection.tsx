@@ -74,7 +74,7 @@ import { canRequestNativeDirectoryAccess } from '@/lib/desktop';
 import { useSidebarSpaces, useSpacesStore, type SpaceMark } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
-import { getSessionPinList, isSessionPinned } from '@/lib/sessionPins';
+import { isSessionPinned } from '@/lib/sessionPins';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
 import { useI18n } from '@/lib/i18n';
 
@@ -305,7 +305,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   // for every group the sidebar renders — the chats group included. A group the
   // hook never sees renders an empty list while a search is active.
   const chatGroup = React.useMemo<SessionGroup | null>(() => {
-    if (topology.isVSCode && !isVSCodeWithoutWorkspace()) return null;
+    if (topology.isVSCode && !canRequestNativeDirectoryAccess()) return null;
     const chatsRoot = knownChatsRoot
       ?? collection.chatSessions.map((session) => getChatsRootFromDirectory(resolveGlobalSessionDirectory(session))).find(Boolean)
       ?? null;
@@ -500,7 +500,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   ));
   // The space the open draft waits for while it is being made.
   const openDraftSpaceId = useSessionUIStore((state) => (
-    !state.currentSessionId && state.newSessionDraft.open ? spaceOfCreationRequest(state.newSessionDraft.pendingWorktreeRequestId) : null
+    !state.currentSessionId && state.newSessionDraft.open ? state.newSessionDraft.pendingWorktreeRequestId : null
   ));
   const draftPlacement = React.useMemo(() => {
     const byGroupKey = new Map<string, SessionDraft[]>();
@@ -537,14 +537,13 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
         ? ref
         : { kind: 'session', key: `session:${session.sessionId}`, projectId: ownership.bySessionId.get(session.sessionId)?.projectId ?? null, rootSessionId: session.sessionId };
     };
-    // Pinned lists the pins filed in Pinned; a pin in one of the user's lists
-    // goes to the sections that ask for that list.
+    // Pinned lists every pinned root session; the contract carries one pinned
+    // state, so the fork has no Pin-to lists to separate.
     const pinnedSessions = showPinned
       ? collection.orderedSessions.filter((session) => rootSessionIds.has(session.sessionId)
         && session.archivedAt === undefined
         && !isChatDirectoryPath(resolveGlobalSessionDirectory(session))
-        && isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(session), session.sessionId)
-        && (getSessionPinList(session) ?? DEFAULT_PIN_LIST) === DEFAULT_PIN_LIST)
+        && isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(session), session.sessionId))
       : [];
     // Pinned worktrees follow the pinned sessions, the latest pin first.
     const pinnedWorktrees = showPinned
@@ -1357,7 +1356,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     <SessionPrefetchProvider
       sortedSessions={collection.orderedSessions}
       workSessions={workSessions}
-      prefetchSession={prefetchSession}
+      prefetchSession={(target) => prefetchSession(target)}
     >
     <SessionRowOrderProvider
       entries={sidebarRowModel.selectionEntries}

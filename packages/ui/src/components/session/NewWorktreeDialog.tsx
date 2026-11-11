@@ -19,6 +19,7 @@ import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+import { useChangeRequestTerm } from '@/lib/source-control/providers/registry';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -245,8 +246,9 @@ export function NewWorktreeDialog({
   const githubContext = useGitHubReadContext(open ? projectDirectory : null);
   // A GitLab project's items are merge requests: the PR-or-issue copy says so.
   const itemProvider = useRepositoryReferenceProvider(open ? projectDirectory : null);
+  const changeRequestTerm = useChangeRequestTerm(itemProvider);
   const tItem = React.useCallback(
-    (key: I18nKey) => t(changeRequestCopy(key, itemProvider?.terminology?.changeRequest ?? null)),
+    (key: I18nKey) => t(changeRequestCopy(key, changeRequestTerm)),
     [itemProvider, t],
   );
   // The fields the visible tab edits.

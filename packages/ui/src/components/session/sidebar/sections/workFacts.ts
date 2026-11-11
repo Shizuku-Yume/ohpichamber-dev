@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Session } from '@openchamber/agent-contract';
 import { getLinkedIssues, isLinkedChange } from '@/lib/linkedIssues';
 import { getSessionGoal } from '@/lib/sessionGoalMetadata';
-import { getSessionPinList } from '@/lib/sessionPins';
+import { isSessionPinnedInMetadata } from '@/lib/sessionPins';
 import { getSessionWork, isDoneSuggested } from '@/lib/sessionWorkMetadata';
 import { DEFAULT_PIN_LIST, type SidebarWorkFacts } from '@/lib/sidebarSections';
 import type { SessionNode } from '../types';
@@ -52,7 +52,10 @@ const recordFacts = (session: Session): SessionRecordFacts => {
     work: getSessionWork(session)?.state ?? null,
     looksDone: isDoneSuggested(session),
     scheduled: scheduledRunSchema.safeParse(session.metadata).success,
-    pin: getSessionPinList(session),
+    // The fork keeps one pinned state on the session's metadata; upstream's
+    // named pin lists have no field in the contract, so a pinned work reads as
+    // filed in the default Pinned list.
+    pin: isSessionPinnedInMetadata(session) ? DEFAULT_PIN_LIST : null,
     openGoal: goal !== null && goal.status !== 'complete',
     hasChange: links.some(isLinkedChange),
     hasIssue: links.some((link) => !isLinkedChange(link) && link.kind !== 'tracker'),

@@ -38,7 +38,7 @@ const getPrefetchRequestKey = (request: Pick<PrefetchRequest, 'directory' | 'ses
 type PrefetchTarget = Session;
 
 const sessionDirectory = (session: PrefetchTarget | null | undefined): string | null => {
-  const directory = resolveGlobalSessionDirectory(session ?? null)?.trim();
+  const directory = session ? resolveGlobalSessionDirectory(session)?.trim() : undefined;
   return directory || null;
 };
 
