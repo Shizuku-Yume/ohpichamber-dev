@@ -48,7 +48,7 @@ export function withWorkbenchViewedAt(
  * unread.
  */
 export const isSessionUnread = (session: Session | undefined): boolean => (
- isUnreadTurn(session ?? null) && !session?.parentSessionId && session.archivedAt === undefined
+ !!session && !session.parentSessionId && session.archivedAt === undefined && isUnreadTurn(session)
 );
 
 /**
