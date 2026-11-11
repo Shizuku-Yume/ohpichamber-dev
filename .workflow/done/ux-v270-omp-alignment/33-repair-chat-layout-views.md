@@ -8,16 +8,19 @@
 **Read first:** spec "How it is built" (Merge); `decisions.md: 2026-11-11 - Chat presentation is ported onto the canonical contract…`; the archived task 13 and 16 records; skills `ui-api-decoupling`, `sync-state-invariants`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 33 files (about 190 errors at scaffold `93a3c7549`: chat 54, layout 46, views 28, multirun 13, apps 13, ui 11, the rest small); `bun scripts/upstream-drift.mjs --check --slice 33` → 0 unexplained; `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/chat packages/ui/src/components/layout packages/ui/src/components/views packages/ui/src/apps` → exit 0
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** active
 
 - [x] Fix every type error in slice 33 files by porting merged upstream callers onto the fork's contracts. Do not change exported shapes in `src/sync`, `src/stores` or `src/api` (slice 34 owns them).
 - [x] Chat: keep the presentation ported onto the canonical contract as lane 13 decided; do not start the R3 redesign (tasks 23-24).
 - [x] Every app root (`App`, `MobileApp`, `ElectronMiniChatApp`) compiles with the merged action sets.
-- [x] Tests: fix kept behaviour, delete tests pinning retired OpenCode behaviour (named in `## Progress
+- [x] Tests: fix kept behaviour, delete tests pinning retired OpenCode behaviour (named in `## Progress`).
+- [x] Give every slice 33 `unexplained` path a reason.
+- [x] Deletes: imports of removed OpenCode modules and their dead branches.
+
+## Progress
 
 **Check before** (whole-repo `bun check --all`, filtered to slice 33 rows): 173 errors in 47 files. `bun scripts/upstream-drift.mjs --check --slice 33`: no markers, 56 `unexplained` paths. Slice tests (`node scripts/run-isolated-tests.mjs packages/ui/src/components/chat … packages/ui/src/apps`): 176/232 chat files, 287/371 across the four roots.
 
-**Check after:** 0 slice-33 type errors; `drift check passed` with no unexplained slice-33 path and no contradicting row; 371/371 slice test files pass. `bunx oxlint` on every substantially rewritten file: clean.
+**Check after:** 0 slice-33 type errors out of `bun check --all`; `drift check passed` with no unexplained slice-33 path and no contradicting row; 371/371 slice test files pass. `bunx oxlint` on every substantially rewritten file: clean.
 
 **The task's `VITEST_MAX_WORKERS=2 bunx vitest run …` command cannot execute on this tree**: there is no root `vitest.config.ts` (the pre-merge one listed the retired `packages/vscode` and `packages/relay-server`), and every UI suite imports `bun:test`, so vitest fails with `Cannot find package 'bun:test'` before running a test. The repo's own runner, `node scripts/run-isolated-tests.mjs <roots>` (bun per file, framework read from the file's imports), is the substitute actually run above.
 
