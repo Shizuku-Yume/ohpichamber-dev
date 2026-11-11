@@ -1,5 +1,5 @@
-version: 2.10.0
-installed: 2026-11-03T11:13:18Z
+version: 2.11.0
+installed: 2026-11-11T01:21:09Z
 claude: yes
 skills:
   - flow-architect
@@ -13,30 +13,30 @@ skills:
   - flow-verify
 managed:
   1056250117 .agents/agents/security-reviewer.md
-  2525051741 .agents/agents/workflow-reviewer.md
-  2250345377 .agents/skills/flow-architect/SKILL.md
-  3446175969 .agents/skills/flow-break/SKILL.md
-  3027942443 .agents/skills/flow-close/SKILL.md
-  3193970523 .agents/skills/flow-grill/SKILL.md
-  1529136127 .agents/skills/flow-implement/SKILL.md
-  4140799125 .agents/skills/flow-retro/SKILL.md
-  3798833588 .agents/skills/flow-spec/SKILL.md
-  3477140599 .agents/skills/flow-start/SKILL.md
-  2912658814 .agents/skills/flow-verify/SKILL.md
+  2977457193 .agents/agents/workflow-reviewer.md
+  3300851704 .agents/skills/flow-architect/SKILL.md
+  3498564712 .agents/skills/flow-break/SKILL.md
+  3436853371 .agents/skills/flow-close/SKILL.md
+  3570893080 .agents/skills/flow-grill/SKILL.md
+  1375488265 .agents/skills/flow-implement/SKILL.md
+  2641185999 .agents/skills/flow-retro/SKILL.md
+  843827284 .agents/skills/flow-spec/SKILL.md
+  1039409533 .agents/skills/flow-start/SKILL.md
+  3944874641 .agents/skills/flow-verify/SKILL.md
   1250530786 .claude/agents/security-reviewer.md
-  4049568132 .claude/agents/workflow-reviewer.md
-  2250345377 .claude/skills/flow-architect/SKILL.md
-  3446175969 .claude/skills/flow-break/SKILL.md
-  3027942443 .claude/skills/flow-close/SKILL.md
-  3193970523 .claude/skills/flow-grill/SKILL.md
-  1529136127 .claude/skills/flow-implement/SKILL.md
-  4140799125 .claude/skills/flow-retro/SKILL.md
-  3798833588 .claude/skills/flow-spec/SKILL.md
-  3477140599 .claude/skills/flow-start/SKILL.md
-  2912658814 .claude/skills/flow-verify/SKILL.md
-  3214995136 .workflow/CONVENTIONS.md
+  1580258421 .claude/agents/workflow-reviewer.md
+  3300851704 .claude/skills/flow-architect/SKILL.md
+  3498564712 .claude/skills/flow-break/SKILL.md
+  3436853371 .claude/skills/flow-close/SKILL.md
+  3570893080 .claude/skills/flow-grill/SKILL.md
+  1375488265 .claude/skills/flow-implement/SKILL.md
+  2641185999 .claude/skills/flow-retro/SKILL.md
+  843827284 .claude/skills/flow-spec/SKILL.md
+  1039409533 .claude/skills/flow-start/SKILL.md
+  3944874641 .claude/skills/flow-verify/SKILL.md
+  250474687 .workflow/CONVENTIONS.md
   1681938684 .workflow/STYLE.md
-  4084749002 .workflow/bin/workflow
-  1438139708 .workflow/bin/workflow-core.py
-  3478117801 AGENTS.md#workflow-block
+  3508453433 .workflow/bin/workflow
+  3307388791 .workflow/bin/workflow-core.py
+  2383946745 AGENTS.md#workflow-block
   1826075349 CLAUDE.md#workflow-block
