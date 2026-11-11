@@ -66,6 +66,11 @@ mock.module('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({ children, onSelect }: { children: React.ReactNode; onSelect?: () => void }) => React.createElement('button', { type: 'button', onClick: onSelect }, children),
   DropdownMenuRadioGroup: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
   DropdownMenuRadioItem: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+  DropdownMenuSeparator: () => React.createElement('hr'),
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
 }));
 mock.module('@/components/ui/button', () => ({ Button: ({ children, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => React.createElement('button', { ...props, onClick, type: 'button' }, children) }));

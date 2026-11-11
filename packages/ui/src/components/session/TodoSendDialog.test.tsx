@@ -21,9 +21,9 @@ type Deferred = { directory: string; resolve: (value: DirectoryDefaults | null) 
 let pending: Deferred[] = [];
 const configState = {
   providers: [
-    { providerId: 'fallback', models: [{ modelId: 'first-model' }] },
-    { providerId: 'anthropic', models: [{ modelId: 'claude', variants: [{ id: 'high' }] }] },
-    { providerId: 'picked', models: [{ modelId: 'picked-model', variants: [{ id: 'picked-effort' }] }] },
+    { providerId: 'fallback', models: [{ modelId: 'first-model', variants: [] }] },
+    { providerId: 'anthropic', models: [{ modelId: 'claude', variants: [{ variant: 'high', label: 'High', reasoningEffort: 'high' }] }] },
+    { providerId: 'picked', models: [{ modelId: 'picked-model', variants: [{ variant: 'picked-effort', label: 'Picked', reasoningEffort: 'picked-effort' }] }] },
   ],
   agents: [],
   // The composer of whatever session is open; the dialog must not start from it.

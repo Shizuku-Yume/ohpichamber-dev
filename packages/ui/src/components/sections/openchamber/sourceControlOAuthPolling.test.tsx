@@ -125,7 +125,12 @@ function useSyncExternalStore<Value>(subscribe: (listener: () => void) => () => 
   return snapshot();
 }
 
-const ReactMock = { useCallback, useEffect, useLayoutEffect: useEffect, useRef, useState, useMemo, useSyncExternalStore };
+const memo = <Props extends object>(component: Component<Props>): Component<Props> => component;
+function createContext<Value>(defaultValue: Value) {
+  return { defaultValue, Provider: (props: { children: unknown }) => props.children };
+}
+function useContext<Value>(context: { defaultValue: Value }): Value { return context.defaultValue; }
+const ReactMock = { useCallback, useEffect, useLayoutEffect: useEffect, useRef, useState, useMemo, useSyncExternalStore, memo, createContext, useContext, useDebugValue: () => {} };
 const jsxRuntime = { Fragment: fragment, jsx, jsxs: jsx, jsxDEV: jsx };
 
 let runtimeKey = 'runtime-a';
@@ -328,6 +333,7 @@ mock.module('@/components/ui', () => ({
   },
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: () => null }));
+mock.module('@/components/ui/busy-dots', () => ({ BusyDots: () => null }));
 mock.module('@/components/ui/collapsible', () => ({
   Collapsible: ({ children }: ElementProps) => children ?? null,
   CollapsibleTrigger: ({ children }: ElementProps) => children ?? null,

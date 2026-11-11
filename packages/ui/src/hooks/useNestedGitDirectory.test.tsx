@@ -149,7 +149,7 @@ test('a root repository offers its nested repositories and keeps its selection (
     expect(current().repositoryOptions).toEqual([app, lib]);
 
     // App bootstrap asks for the home folder on its own; no git reads happened.
-    expect(requested.filter((path) => path !== '/api/fs/home')).toEqual([]);
+    expect(requested.filter((path) => path !== '/api/fs/home' && path !== '/api/session-folders')).toEqual([]);
 
     // A selected repository Git cannot read is dropped like a stale one, so
     // the picker stays reachable; only an unreadable root takes the surface.

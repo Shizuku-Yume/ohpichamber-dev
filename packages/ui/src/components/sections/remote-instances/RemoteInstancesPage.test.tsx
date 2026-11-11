@@ -84,7 +84,7 @@ for (const apiUrl of [undefined, 'http://192.0.2.10:3000/']) {
       Object.getOwnPropertyDescriptor(dom.HTMLInputElement.prototype, 'value')!.set!.call(inputs[0], 'Renamed server');
       inputs[0]!.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await act(async () => button('Save changes').click());
+    await act(async () => button('Save Changes').click());
     expect(saved).toEqual([{ ...host, label: 'Renamed server' }]);
   });
 }

@@ -196,7 +196,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
                         <MissingKeyDescription
                           text={t('settings.classification.source.zenKey.missing')}
                           linkLabel={t('settings.classification.source.openProvider', { provider: 'OpenCode Zen' })}
-                          onOpen={() => onOpenProvider('opencode')}
+                          onOpen={() => onOpenProvider('opencode-zen')}
                         />
                       )}
                   />
@@ -226,7 +226,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
                         <MissingKeyDescription
                           text={t('settings.classification.source.vercel.missing')}
                           linkLabel={t('settings.classification.source.openProvider', { provider: 'Vercel AI Gateway' })}
-                          onOpen={() => onOpenProvider('vercel')}
+                          onOpen={() => onOpenProvider('vercel-ai-gateway')}
                         />
                       )}
                   />

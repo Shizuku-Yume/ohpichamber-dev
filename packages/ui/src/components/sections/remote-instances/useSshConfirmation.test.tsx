@@ -67,7 +67,7 @@ test('SSH confirmations settle choices, keep the parent form focusable, and aban
     expect(document.activeElement).toBe(input);
 
     await click('Save');
-    await click('Save changes');
+    await click('Save Changes');
     expect(choices).toEqual([false, true]);
     await act(async () => { input.focus(); });
     expect(document.activeElement).toBe(input);
