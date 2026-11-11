@@ -5,7 +5,6 @@ import type { AdvisorNote, ApprovalRequest, CanonicalEvent, Message, Part, Quest
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
-import { isSurfaceAttended } from "@/lib/surfaceAttention"
 import { useAuthSessionStore } from "@/lib/runtime-auth-expiry"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
@@ -39,7 +38,7 @@ import { applyBackgroundShellEvents } from "./background-shells"
 import { collectScopedBlockingRequests, areRequestArraysReferentiallyEqual } from "./scoped-blocking-requests"
 import { buildUserMessageHistorySnapshot, EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, type TranscriptPrompt } from "./user-message-history"
 import { getSessionMaterializationStatus } from "./materialization"
-import { appendNotification } from "./notification-store"
+import { appendErrorNotification } from "./notification-store"
 import { recordSessionError, summarizeSessionError } from "./session-error-log"
 import type { State } from "./types"
 import { sessionEvents } from "@/lib/sessionEvents"
@@ -165,16 +164,13 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     applyGlobalSessionStatusEvents(target.directory, accepted)
     applyGlobalBlockingRequestEvents(target.directory, accepted)
     applyBackgroundShellEvents(target.directory, accepted)
-    const viewed = isSurfaceAttended() && (
-      activeTarget?.directory === target.directory && activeTarget.sessionId === target.sessionId
-      || (externallyViewedSessions.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now()
-    )
+    // A finished turn leaves its unread mark on the session record, which the
+    // server stamps; this store keeps only the error details the record lacks.
     for (const event of outcomes) {
-      if (event.type === "run.failed") {
-        const error = summarizeSessionError(event.error)
-        recordSessionError({ ...error, sessionId: target.sessionId, directory: target.directory })
-        appendNotification({ type: "error", directory: target.directory, session: target.sessionId, time: event.finishedAt, viewed, error })
-      } else appendNotification({ type: "turn-complete", directory: target.directory, session: target.sessionId, time: event.finishedAt, viewed })
+      if (event.type !== "run.failed") continue
+      const error = summarizeSessionError(event.error)
+      recordSessionError({ ...error, sessionId: target.sessionId, directory: target.directory })
+      appendErrorNotification({ directory: target.directory, session: target.sessionId, time: event.finishedAt, error })
     }
     if (next.session !== original.session) {
       const mutations: Array<{ type: "upsert"; session: Session } | { type: "remove"; sessionId: string }> = []

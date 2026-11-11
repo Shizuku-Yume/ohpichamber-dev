@@ -10,7 +10,8 @@
 import { create } from "zustand"
 import { clearDesktopSessionNotifications } from "@/lib/desktop"
 import { runtimeFetch } from "@/lib/runtime-fetch"
-import { getUnreadSessionIds, markSessionsUnreadSeen, markSessionUnreadSeen } from "./session-unread"
+import { isSessionUnread, markSessionUnreadSeen } from "./session-unread"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 
 export type ErrorNotification = {
   directory?: string
@@ -61,7 +62,13 @@ export function markSessionViewed(sessionId: string) {
 
 /** Every unread session the client knows of is marked seen, the same way opening each would. */
 export function markAllSessionsViewed() {
-  const marked = markSessionsUnreadSeen(getUnreadSessionIds())
+  const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState()
+  const marked: string[] = []
+  for (const session of [...activeSessions, ...archivedSessions]) {
+    if (!isSessionUnread(session)) continue
+    markSessionUnreadSeen(session.sessionId)
+    marked.push(session.sessionId)
+  }
   if (marked.length === 0) return
   for (const sessionId of marked) clearDesktopSessionNotifications(sessionId)
   // The route only resets the push badge, so one call covers them all.

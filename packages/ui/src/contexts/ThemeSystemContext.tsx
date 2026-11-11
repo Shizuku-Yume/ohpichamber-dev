@@ -246,14 +246,11 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     void reloadCustomThemes();
   }, [reloadCustomThemes]);
 
-  // The server announces edits to its themes folder; a reconnect may have
-  // missed one, so the themes are read again then too.
-  useEffect(() => {
-    if (isVSCode) return;
-    return subscribeOpenchamberEvents((event) => {
-      if (event.type === 'themes-changed' || event.type === 'event-stream-ready') void reloadCustomThemes();
-    });
-  }, [isVSCode, reloadCustomThemes]);
+  // A reconnect may have missed an edit to the server's themes folder, so the
+  // themes are read again once the event stream is back.
+  useEffect(() => subscribeOpenchamberEvents((event) => {
+    if (event.type === 'event-stream-ready') void reloadCustomThemes();
+  }), [reloadCustomThemes]);
 
   useEffect(() => {
     if (customThemesLoading) return;
