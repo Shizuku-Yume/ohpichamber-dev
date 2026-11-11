@@ -27,12 +27,11 @@ authority stay).
   mutators and the asymmetric matchers the fork's 186 suites use. Restored the
   fork's shim (`e04b3dfb`), which also keeps the owner's `decision` row intact.
 - **Production files back on `main`:** `selection-store.ts`, `session-pins.ts`,
-  `notification-store.ts`, `last-session-restore.ts`, `control-stream-sync.ts`,
-  `contexts/ThemeSystemContext.tsx`, and the quota pair
-  `stores/useQuotaStore.ts` + `lib/quota/fetchQuota.ts`. Upstream's versions
-  need `@/lib/opencode/*`, `getUnreadSessionIds`, pin lists or
-  `loadedWorkspaceId`; the fork's callers (sidebar, mobile, tray) use
-  `markAllSessionsViewed`, `useSessionUnread` and `toggleSessionPin`.
+  `notification-store.ts`, `last-session-restore.ts`, `control-stream-sync.ts`
+  and `contexts/ThemeSystemContext.tsx`. Upstream's versions need
+  `@/lib/opencode/*`, `getUnreadSessionIds` or the OpenCode page model; the
+  fork's callers (sidebar, mobile, tray) use `markAllSessionsViewed`,
+  `useSessionUnread` and `toggleSessionPin`.
 - **Deleted resurrected upstream modules (no fork caller):**
   `sync/background-images{,.test}.ts`, `form-request-error{,.test}.ts`,
   `recoverable-questions{,.test}.ts`, `reply-commands{,.test}.ts`,
@@ -49,7 +48,7 @@ authority stay).
   `stores/session-project-registration.test.js` (`server/lib/opencode` import),
   `stores/useQuotaAutoRefresh.test.tsx` and
   `stores/useQuotaStore.extensionProviders.test.ts` (upstream quota fields).
-- **Quota correction (second pass, after the reviewer's first checks).** The
+- **Quota correction (second pass).** The
   first pass restored `useQuotaStore.ts` and `lib/quota/fetchQuota.ts` to `main`
   as well, which broke outside-slice callers: `components/sections/usage/UsagePage.tsx`
   imports `useQuotaProviders`, `setProviderInDropdown` and `useQuotaAutoRefresh`,
@@ -74,10 +73,27 @@ authority stay).
 - **`safeStorage.ts`**: `StateStorage.getItem` returns `string | null |
   PromiseLike<string|null>`; narrowed on the synchronous value instead of
   `instanceof Promise`, which does not accept a `PromiseLike`.
-- No exported shape changed for outside callers: every restored file is the
-  `main` blob, so `markAllSessionsViewed`, `useSessionUnread`, `toggleSessionPin`
-  and `setSessionPinList` (their sidebar/mobile consumers) are exactly as on
-  `main`.
+- **Outside-slice regression fix (third pass).** Restoring the fork blobs
+  dropped three exports that other slices import, adding four outside-slice
+  errors: `markAllSessionsViewed` (`apps/MobileSessionsSheet.tsx`,
+  `components/session/sidebar/shell/SidebarHeader.tsx`), `setSessionPinList`
+  (`components/session/sidebar/sessions/SessionNodeItem.tsx`) and the scaffold
+  quota store's `useQuotaProviders`/`setProviderInDropdown`/`useQuotaAutoRefresh`
+  (`components/sections/usage/UsagePage.tsx`). Restored each at its source,
+  without editing any other slice's file:
+  `markAllSessionsViewed` walks the Host's unread sessions
+  (`isSessionUnread` over `useGlobalSessionsStore.entityById`), marks each
+  viewed, clears its native notification and posts one `/view`; `setSessionPinList`
+  shares the single `writeSessionPin` queue with `toggleSessionPin` and files
+  any list under `Pinned` because `packages/agent-contract` keeps
+  `openchamber.pinned = { at }` (recorded in `.workflow/decisions.md`,
+  2026-11-11). Outside-slice per-file error counts now equal the scaffold's
+  exactly: MobileSessionsSheet 2, SidebarHeader 2, SessionNodeItem 28,
+  UsagePage 0.
+- Exported shapes outside callers consume are unchanged from the scaffold:
+  `markAllSessionsViewed`, `useSessionUnread`, `toggleSessionPin`,
+  `setSessionPinList`, `useQuotaProviders`, `setProviderInDropdown` and
+  `useQuotaAutoRefresh` all carry the scaffold's signatures.
 - Slice-34 drift: `--check --slice 34` reports zero unexplained; every path the
   merge resurrected or restored now resolves to the fork's blob, so its class
   comes from the standing boundary/exclusion rule or the existing decision row.
@@ -87,11 +103,12 @@ authority stay).
 - **Check before:** `bun check --all` → 1,130 errors repo-wide, 310 in slice 34
   (46 files); `bun scripts/upstream-drift.mjs --check --slice 34` → 0 unexplained;
   `node scripts/run-isolated-tests.mjs packages/ui/src/{sync,stores,api}` → 6 files failing.
-- **Check after:** `bun check --all` → 780 errors repo-wide (all in other
-  slices), **0 in slice 34**; `bun scripts/upstream-drift.mjs --check --slice 34`
+- **Check after (final):** `bun check --all` → 777 errors repo-wide (all in
+  other slices; scaffold had 1,130), **0 in slice 34**, and no outside file has
+  more errors than at scaffold; `bun scripts/upstream-drift.mjs --check --slice 34`
   → `drift check passed`, exit 0;
   `node scripts/run-isolated-tests.mjs packages/ui/src/sync packages/ui/src/stores packages/ui/src/api`
-  → **169/169 test files passed**, exit 0 (this is the bun:test runner the
+  → **171/171 test files passed**, exit 0 (this is the bun:test runner the
   suites are written for; `bunx vitest run` on the same paths cannot load
   `bun:test` and no root Vitest config exists on this tree);
   `bunx oxlint` on the changed files → exit 0, no findings.
