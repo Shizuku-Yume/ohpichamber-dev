@@ -30,6 +30,7 @@
     "extensions:build": "bun scripts/build-builtin-extensions.mjs",
     "build:electron": "bun run --cwd packages/electron build",
     "build:mobile": "bun run --cwd packages/mobile build",
+    "check": "node scripts/check.mjs",
     "type-check": "bun check -b && bun run --cwd packages/electron type-check && bun run --cwd packages/agent-contract type-check && bun run --cwd packages/agent-service type-check && bun run --cwd packages/mobile type-check",
     "type-check:web": "bun run --cwd packages/web type-check",
     "type-check:ui": "bun run --cwd packages/ui type-check",

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// `bun scripts/upstream-drift.test.mjs` — plain asserts, no test runner, so the
-// gate runs the same way from a terminal and from the task's Check.
+// `bun test scripts/upstream-drift.test.mjs` — or `node --test`, which the
+// repository's isolated runner picks. Each case registers its own test, so a
+// failure names the case instead of aborting the file.
 //
 // The fixture is a real repository: three commits on one branch, an upstream
 // branch whose merge base is the second commit, and one path per state. The
 // ledger reads git, so git is what the test exercises.
 
 import assert from 'node:assert/strict';
+import { after, test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -105,16 +107,7 @@ const makeFixture = () => {
   return { root, fork, upstream };
 };
 
-const check = (name, run) => {
-  try {
-    run();
-    console.log(`ok  ${name}`);
-  } catch (error) {
-    console.error(`not ok  ${name}`);
-    console.error(error.message.split('\n').map((line) => `  ${line}`).join('\n'));
-    throw error;
-  }
-};
+const check = (name, run) => test(name, run);
 
 const fixture = makeFixture();
 const { root, upstream } = fixture;
@@ -329,5 +322,6 @@ check('--lane reads the merge lane table', () => {
   assert.equal(lanePaths(root, '11').includes('.workflow/'), true);
 });
 
-rmSync(root, { recursive: true, force: true });
-console.log('upstream-drift: all checks passed');
+after(() => {
+  rmSync(root, { recursive: true, force: true });
+});
