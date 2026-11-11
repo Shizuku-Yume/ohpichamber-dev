@@ -20,6 +20,23 @@ export function toggleSessionPin(target: PinTarget): Promise<void> {
  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
  if (!key) return Promise.resolve();
  const pinned = !useSessionPinnedStore.getState().ids.has(key);
+ return writeSessionPin(key, target, pinned);
+}
+
+/**
+ * Pin the session, or unpin it with `pinned` false. `list` is the pin list the
+ * user picked (Pin to); the Host stores one pin stamp per session and carries
+ * no list, so any list other than Pinned files the pin in Pinned until the
+ * metadata contract gains `openchamber.pinned.list` (2026-11-11 decision).
+ */
+export function setSessionPinList(target: PinTarget, pinned: boolean, list: string | null): Promise<void> {
+ const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
+ if (!key) return Promise.resolve();
+ void list;
+ return writeSessionPin(key, target, pinned);
+}
+
+function writeSessionPin(key: string, target: PinTarget, pinned: boolean): Promise<void> {
  setPendingPin(key, pinned);
 
  const queue = pinQueues.get(key) ?? { tail: Promise.resolve(), count: 0 };

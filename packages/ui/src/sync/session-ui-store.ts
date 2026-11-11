@@ -84,7 +84,7 @@ import {
 import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSessionGoalArmStore } from "@/stores/useSessionGoalArmStore"
 import { useUIStore } from "@/stores/useUIStore"
-import { useSelectionStore } from "./selection-store"
+import { ROOT_SELECTION_AGENT, useSelectionStore } from "./selection-store"
 import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
@@ -1921,12 +1921,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       }
       // The captured effort is this session's level from now on, including
       // OMP's own default when the composer sent it without an explicit pick.
-      // `off` is a real choice and must survive the reload too. The fork keeps
-      // it as the agent/model variant, the same slot the composition reads back
-      // (`useKeyboardShortcuts`), so a root chat with no agent uses the empty
-      // agent key.
+      // `off` is a real choice and must survive the reload too.
       if (reasoningEffort !== undefined) {
-        useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, effectiveAgent ?? "", providerID, modelID, reasoningEffort)
+        useSelectionStore.getState().saveAgentModelReasoningEffortForSession(sessionId, effectiveAgent ?? ROOT_SELECTION_AGENT, providerID, modelID, reasoningEffort)
       }
       const viewportState = useViewportStore.getState()
       const memState = getViewportSessionMemory(sessionId)
