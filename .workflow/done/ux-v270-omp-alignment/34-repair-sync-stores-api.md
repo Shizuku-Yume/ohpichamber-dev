@@ -89,11 +89,14 @@ authority stay).
   without editing any other slice's file:
   `markAllSessionsViewed` walks the Host's unread sessions
   (`isSessionUnread` over `useGlobalSessionsStore.entityById`), marks each
-  viewed, clears its native notification and posts one `/view`; `setSessionPinList`
+  viewed, clears its native notification and posts one `/view`; `markSessionViewed`
+  keeps the scaffold's per-session cleanup (native notification clear plus one
+  `/view` post) that the fork blob had dropped; `setSessionPinList`
   shares the single `writeSessionPin` queue with `toggleSessionPin` and files
   any list under `Pinned` because `packages/agent-contract` keeps
   `openchamber.pinned = { at }` (recorded in `.workflow/decisions.md`,
-  2026-11-11). Outside-slice per-file error counts now equal the scaffold's
+  2026-11-11). `ErrorNotification`/`appendErrorNotification` are exported again
+  so any caller written against the scaffold compiles. Outside-slice per-file error counts now equal the scaffold's
   exactly: MobileSessionsSheet 2, SidebarHeader 2, SessionNodeItem 28,
   UsagePage 0.
 - Exported shapes outside callers consume are unchanged from the scaffold:

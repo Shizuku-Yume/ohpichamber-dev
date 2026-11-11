@@ -159,9 +159,18 @@ export function appendErrorNotification(notification: ErrorNotification) {
   useNotificationStore.getState().append(notification)
 }
 
+/**
+ * The user saw the session: its unread mark clears on every device, and so do
+ * its native notifications, including ones that left no unread mark, such as a
+ * permission request. The server also resets the phone's push badge count,
+ * since the user is in the app.
+ */
 export function markSessionViewed(sessionId: string) {
   useNotificationStore.getState().markSessionViewed(sessionId)
   markSessionUnreadSeen(sessionId)
+  clearDesktopSessionNotifications(sessionId)
+  runtimeFetch(`/api/sessions/${encodeURIComponent(sessionId)}/view`, { method: "POST" })
+    .catch(() => { /* the badge resets on the next engagement signal */ })
 }
 
 /**
