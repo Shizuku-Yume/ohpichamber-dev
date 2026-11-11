@@ -130,6 +130,18 @@ authority stay).
   `session-ui-store.test.js` rejects. Landed as `0460ca3fb`; the target's
   pre-merge and post-merge `bun check --all` totals are identical (**261**,
   0 in slice 34), so the landing added no error anywhere.
+- **`bun-test.d.ts` each() overload.** Task 33's stricter shim declared only the
+  spread-tuple form `each<T extends Readonly<[unknown, ...unknown[]]>>`, which
+  rejected the slice's `test.each([...scalars])` call shape (31 slice errors on
+  the landed target). Added the flat-row overload beside it, which is what bun's
+  runtime does; slice 34 returns to 0.
+- **Scaffold comparisons after other slices landed.** The four files still
+  above their scaffold count on the target (`lib/modelRefs.test.ts`,
+  `lib/modelVariants.test.ts`, `sidebar/sessions/collapsedActivityIndicator.test.ts`,
+  `sidebar/projects/useSessionSidebarSections.ts`) are not in this branch's
+  diff (`git diff --name-only f3afaa8d6..HEAD` is empty for each); they came
+  from slices that landed after this one started. Task 34's landing moved the
+  target from 2,049 errors to 76 and added none.
 - **Out of slice, pre-existing:** `hooks/useTraySync.test.tsx` fails on
   `markSessionViewed` → `markSessionUnreadSeen` → `upsertSession`: the test's
   session fixture carries no `metadataRevision`/`epoch`, so
