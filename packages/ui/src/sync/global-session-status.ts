@@ -68,6 +68,19 @@ export const replaceGlobalSessionStatusById = (statusById: Map<string, GlobalSes
   setState(statusById, new Map());
 };
 
+type SessionStatusTransitionListener = (sessionId: string, activeSessionIds: ReadonlySet<string>) => void;
+const transitionListeners = new Set<SessionStatusTransitionListener>();
+
+/**
+ * Runs synchronously for each status event, before the batch is published, so a
+ * listener can react to a busy-and-idle pair that lands in the same payload.
+ * The active-ID set is a draft valid only during the callback.
+ */
+export const subscribeSessionStatusTransitions = (listener: SessionStatusTransitionListener): (() => void) => {
+  transitionListeners.add(listener);
+  return () => { transitionListeners.delete(listener); };
+};
+
 type SessionParentResolver = (sessionId: string) => string | undefined;
 let resolveSessionParentId: SessionParentResolver = () => undefined;
 export const setSessionParentResolver = (resolver: SessionParentResolver): void => { resolveSessionParentId = resolver; };
@@ -160,6 +173,10 @@ export const applyGlobalSessionStatusEvents = (rawDirectory: string, payloads: r
   const observed = new Map(state.observedById);
   const ordering: SessionOrderingMutation[] = [];
   const timing: SessionActivityTimingMutation[] = [];
+  const notifyTransition = (sessionId: string): void => {
+    const active = activeFromStatuses(statuses);
+    for (const listener of transitionListeners) listener(sessionId, active);
+  };
   const activeBefore = activeFromStatuses(statuses);
   const settle = (sessionId: string, outcome: 'completed' | 'failed' | 'cancelled' | null = null, status: SessionRuntimeStatus = 'idle', at?: number, runId?: string): void => {
     recordObserved(observed, sessionId, directory, outcome);
@@ -170,6 +187,9 @@ export const applyGlobalSessionStatusEvents = (rawDirectory: string, payloads: r
     if (!hasBackgroundWork(sessionId, activeFromStatuses(statuses))) timing.push({ type: 'settled', sessionId, at, runId });
   };
   for (const event of payloads) {
+    const transitioned = event.type === 'session.status' || event.type === 'session.updated'
+      || event.type === 'run.started' || event.type === 'run.completed'
+      || event.type === 'run.failed' || event.type === 'run.cancelled';
     switch (event.type) {
       case 'session.status': {
         const priorOutcome = observed.get(event.sessionId)?.outcome ?? null;
@@ -221,6 +241,7 @@ export const applyGlobalSessionStatusEvents = (rawDirectory: string, payloads: r
       default:
         break;
     }
+    if (transitioned) notifyTransition(event.sessionId);
   }
   const finalActive = activeFromStatuses(statuses);
   for (const id of activeBefore) if (!finalActive.has(id) && !hasBackgroundWork(id, finalActive)) timing.push({ type: 'settled', sessionId: id });

@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { applyGlobalSessionStatusEvents, replaceGlobalSessionStatusById, setSessionParentResolver } from '@/sync/global-session-status';
 import { buildMultiRunIndex } from './runs';
 import { withMultiRunMembership } from './identity';
@@ -37,10 +37,12 @@ async function checkAutoFusion(batched: boolean): Promise<void> {
   }
   const { createRoot } = await import('react-dom/client');
   const root = createRoot(document.createElement('div'));
-  const session = (id: string, parentID?: string): Session => ({
-    id, parentID, projectID: 'project', directory: parentID ? '/repo/child' : '/repo', title: id, cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 2, idle: 2 }, outcome: 'succeeded',
+  const session = (id: string, parentSessionId?: string): Session => ({
+    sessionId: id, parentSessionId, rootSessionId: parentSessionId ?? id,
+    projectId: 'project', workspaceId: 'workspace', displayPath: parentSessionId ? '/repo/child' : '/repo',
+    createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
+    runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    title: id, metadata: null, metadataRevision: '0', archiveRevision: '0',
   });
   for (const id of [laneA, laneB]) {
     sessionById.set(id, {
@@ -51,16 +53,32 @@ async function checkAutoFusion(batched: boolean): Promise<void> {
         groupSlug: 'fusion-test', role: 'run', providerID: 'test', modelID: id,
         autoFusion: { providerID: 'test', modelID: 'judge', launcherId: RUN_LAUNCHER_ID },
       }),
+      metadataRevision: '1',
     });
   }
   sessionById.set(child, session(child, laneA));
   sessionById.set(grandchild, session(grandchild, child));
-  // Deliberately leave the display resolver empty. Fusion has its own complete
-  // session map, including children outside the currently selected directory.
-  setSessionParentResolver(() => undefined);
+  setSessionParentResolver((id) => sessionById.get(id)?.parentSessionId);
+  const run = (sessionId: string, index: number) => `run-${batched}-${sessionId}-${index}`;
+  const startedRuns = new Map<string, string>();
+  let sequence = 0;
+  const started = (sessionId: string): Parameters<typeof applyGlobalSessionStatusEvents>[1][number] => {
+    sequence += 1;
+    const runId = run(sessionId, sequence);
+    startedRuns.set(sessionId, runId);
+    return { type: 'run.started', sessionId, epoch: 'epoch', sequence, timestamp: 3, runId, createdAt: 3 };
+  };
+  const completed = (sessionId: string): Parameters<typeof applyGlobalSessionStatusEvents>[1][number] => {
+    sequence += 1;
+    return { type: 'run.completed', sessionId, epoch: 'epoch', sequence, timestamp: 3, runId: startedRuns.get(sessionId) ?? 'missing', finishedAt: 3 };
+  };
   const update = async (...activeIds: string[]) => {
     await act(async () => {
-      replaceGlobalSessionStatusById(new Map(activeIds.map((id) => [id, { directory: sessionById.get(id)?.directory ?? '/repo', status: { type: 'busy' as const } }])));
+      const events = [
+        ...activeIds.map((id) => started(id)),
+        ...([...startedRuns.keys()].filter((id) => !activeIds.includes(id))).map((id) => completed(id)),
+      ];
+      if (events.length > 0) applyGlobalSessionStatusEvents('/repo', events);
       root.render(<RunAutoFusion />);
     });
   };
@@ -69,25 +87,19 @@ async function checkAutoFusion(batched: boolean): Promise<void> {
     expect(fusionCalls.length).toBe(0);
     await update(laneA, laneB, child);
     if (batched) {
-      // One reducer publication and React render for both completions.
+      // One reducer publication: the parent settles while its child is still
+      // busy, so both lanes have to keep waiting for a newer completion.
       await act(async () => {
-        applyGlobalSessionStatusEvents('/repo', [laneA, laneB, child].map((sessionID) => ({
-          type: 'session.idle' as const, properties: { sessionID },
-        })));
-        // Directory session records publish after the global status transitions.
-        const parent = sessionById.get(laneA);
-        if (!parent) throw new Error('Missing parent fixture');
-        sessionById.set(parent.id, { ...parent, time: { ...parent.time, updated: 3, idle: 3 } });
+        applyGlobalSessionStatusEvents('/repo', [completed(laneA), completed(laneB)]);
         root.render(<RunAutoFusion />);
       });
-    } else {
-      await update(child);
-      expect(fusionCalls.length).toBe(0);
-      await update(grandchild);
-      expect(fusionCalls.length).toBe(0);
-      // The child can settle before the parent receives and processes its result.
-      await update();
     }
+    await update(child);
+    expect(fusionCalls.length).toBe(0);
+    await update(grandchild);
+    expect(fusionCalls.length).toBe(0);
+    // The child can settle before the parent receives and processes its result.
+    await update();
     expect(fusionCalls.length).toBe(0);
     await update('unrelated');
     expect(fusionCalls.length).toBe(0);
@@ -95,13 +107,14 @@ async function checkAutoFusion(batched: boolean): Promise<void> {
     // Its newer completion is authoritative even without a busy render.
     const parent = sessionById.get(laneA);
     if (!parent) throw new Error('Missing parent fixture');
-    sessionById.set(parent.id, { ...parent, time: { ...parent.time, updated: 4, idle: 4 } });
+    sessionById.set(parent.sessionId, { ...parent, updatedAt: 4 });
     if (batched) {
       await act(async () => {
         applyGlobalSessionStatusEvents('/repo', [
-          { type: 'session.status', properties: { sessionID: laneA, status: { type: 'busy' } } },
-          { type: 'session.idle', properties: { sessionID: laneA } },
+          { type: 'session.status', sessionId: laneA, epoch: 'epoch', sequence: sequence + 1, timestamp: 5, runtimeStatus: 'running', activeRunId: 'resume-run' },
+          { type: 'session.status', sessionId: laneA, epoch: 'epoch', sequence: sequence + 2, timestamp: 6, runtimeStatus: 'idle', activeRunId: null },
         ]);
+        sequence += 2;
         root.render(<RunAutoFusion />);
       });
     } else await update('unrelated');
@@ -112,6 +125,8 @@ async function checkAutoFusion(batched: boolean): Promise<void> {
   } finally {
     await act(async () => root.unmount());
     replaceGlobalSessionStatusById(new Map());
+    setSessionParentResolver(() => undefined);
+    startedRuns.clear();
     sessionById.clear();
     for (const [name, descriptor] of originals) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -139,48 +154,59 @@ test('automatic fusion waits for an active goal to settle between its turns', as
   }
   const { createRoot } = await import('react-dom/client');
   const root = createRoot(document.createElement('div'));
-  const setLane = (id: string, goalStatus: string) => {
+  const setLane = (id: string, goalStatus: 'active' | 'complete') => {
     sessionById.set(id, {
-      id, projectID: 'project', directory: '/repo', title: id, cost: 0,
-      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-      time: { created: 1, updated: 2, idle: 2 }, outcome: 'succeeded',
-      metadata: {
-        ...withMultiRunMembership({}, {
-          version: 1, sessionID: id,
-          group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca1040' },
-          groupSlug: 'goal-fusion-test', role: 'run', providerID: 'test', modelID: id,
-          autoFusion: { providerID: 'test', modelID: 'judge', launcherId: RUN_LAUNCHER_ID },
-        }),
-      },
+      sessionId: id, rootSessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
+      createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
+      runtimeStatus: 'idle', activeRunId: null, title: id,
+      mode: { kind: 'goal', status: goalStatus, objective: 'ship it', tokenBudget: null, tokensUsed: 0 },
+      metadata: withMultiRunMembership({}, {
+        version: 1, sessionID: id,
+        group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca1040' },
+        groupSlug: 'goal-fusion-test', role: 'run', providerID: 'test', modelID: id,
+        autoFusion: { providerID: 'test', modelID: 'judge', launcherId: RUN_LAUNCHER_ID },
+      }),
+      metadataRevision: '1', archiveRevision: '0',
     });
-    const lane = sessionById.get(id);
-    const openchamber = lane?.metadata?.openchamber;
-    if (lane && openchamber && typeof openchamber === 'object' && !Array.isArray(openchamber)) {
-      lane.metadata = { ...lane.metadata, openchamber: { ...openchamber, goal: { id: 'g', objective: 'ship it', status: goalStatus } } };
-    }
   };
-  const update = async (...activeIds: string[]) => {
+  let sequence = 0;
+  const startedRuns = new Map<string, string>();
+  const started = (sessionId: string): Parameters<typeof applyGlobalSessionStatusEvents>[1][number] => {
+    sequence += 1;
+    const runId = `goal-run-${sessionId}`;
+    startedRuns.set(sessionId, runId);
+    return { type: 'run.started', sessionId, epoch: 'epoch', sequence, timestamp: 3, runId, createdAt: 3 };
+  };
+  const completed = (sessionId: string): Parameters<typeof applyGlobalSessionStatusEvents>[1][number] => {
+    sequence += 1;
+    return { type: 'run.completed', sessionId, epoch: 'epoch', sequence, timestamp: 3, runId: startedRuns.get(sessionId) ?? 'missing', finishedAt: 3 };
+  };
+  const settle = async () => {
     await act(async () => {
-      replaceGlobalSessionStatusById(new Map(activeIds.map((id) => [id, { directory: '/repo', status: { type: 'busy' as const } }])));
+      applyGlobalSessionStatusEvents('/repo', [...startedRuns.keys()].map(completed));
       root.render(<RunAutoFusion />);
     });
   };
   try {
-    setSessionParentResolver(() => undefined);
+    setSessionParentResolver((id) => sessionById.get(id)?.parentSessionId);
     for (const id of lanes) setLane(id, 'active');
-    await update(...lanes);
+    await act(async () => {
+      applyGlobalSessionStatusEvents('/repo', lanes.map(started));
+      root.render(<RunAutoFusion />);
+    });
     // Both turns ended and recorded an outcome; the goals go on.
-    await update();
+    await settle();
     expect(fusionCalls.length).toBe(0);
     setLane(lanes[0], 'complete');
-    await update();
+    await settle();
     expect(fusionCalls.length).toBe(0);
-    setLane(lanes[1], 'blocked');
-    await update();
+    setLane(lanes[1], 'complete');
+    await settle();
     expect(fusionCalls.length).toBe(1);
   } finally {
     await act(async () => root.unmount());
     replaceGlobalSessionStatusById(new Map());
+    setSessionParentResolver(() => undefined);
     sessionById.clear();
     for (const [name, descriptor] of originals) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);

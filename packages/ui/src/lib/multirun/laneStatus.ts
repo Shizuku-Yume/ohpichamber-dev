@@ -1,6 +1,12 @@
 import type { Session } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
+import { getSessionGoal } from '@/lib/sessionGoalMetadata';
 import type { LaneReplyState } from './useLaneSummaries';
+
+/** The server is still driving this lane: idle now means between two goal turns. */
+export const hasRunningGoal = (session: Pick<Session, 'mode'> | undefined): boolean => (
+  getSessionGoal(session as Session | undefined)?.status === 'active'
+);
 
 /**
  * What a run member is doing, from live and recorded facts only:
