@@ -291,6 +291,12 @@ check('a scoped check reports how many unexplained paths it cannot see', () => {
   // Two unexplained paths remain outside: `shared.txt` and `App.tsx`.
   assert.match(scoped.printed, /outside packages\/sdk: 2 unexplained paths not checked/);
 
+  // A trailing slash scopes the same directory, it does not match nothing.
+  const slash = cli(['--check', 'packages/sdk/']);
+  assert.equal(slash.code, 1);
+  assert.match(slash.printed, /in packages\/sdk\/ \(1\)/);
+  assert.match(slash.printed, /outside packages\/sdk\/: 2 unexplained paths not checked/);
+
   // A scope whose own paths are all explained passes and still names the rest.
   const clean = cli(['--check', 'packages/ui/src/api']);
   assert.equal(clean.code, 0);

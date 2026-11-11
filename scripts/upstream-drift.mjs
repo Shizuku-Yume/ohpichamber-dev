@@ -431,7 +431,15 @@ const scopeName = (options) => {
   return 'all files';
 };
 
-const inScope = (targets, file) => targets.some((target) => file === target || file.startsWith(`${target}/`));
+/** A scope target without its trailing slash, so `dir/` and `dir` scope alike. */
+const normalizeTarget = (target) => target.replace(/\/+$/u, '');
+
+const inScope = (targets, file) => targets.some((target) => {
+  const scope = normalizeTarget(target);
+  // `.` and `/` are the repository root, which scopes every path.
+  if (scope === '' || scope === '.') return true;
+  return file === scope || file.startsWith(`${scope}/`);
+});
 
 /**
  * What a scoped run owes and what it leaves unchecked. With no targets every
