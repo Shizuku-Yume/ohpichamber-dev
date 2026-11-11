@@ -965,7 +965,9 @@ describe('workflow runtime', () => {
     const first = await setup(agents);
     const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
     await first.runtime.approve({ runId });
-    await waitFor(async () => (await first.act('workflow.status', { runId })).agents.length === 1);
+    // A restart reports the session it interrupted, so wait until the agent has
+    // one: an agent saved without a session has nothing to report.
+    await waitFor(async () => (await first.act('workflow.status', { runId })).agents.some((agent) => agent.state === 'running' && agent.sessionId));
     await first.store.flush();
 
     // A second runtime over the same directory: the first one's worker is gone.
