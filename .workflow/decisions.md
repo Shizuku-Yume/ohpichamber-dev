@@ -853,4 +853,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Also recorded:** the identifier and error ports are mechanical by construction (`id` → `sessionId`, `time.archived` → `archivedAt`, `OpencodeApiError` → `CanonicalApiError`, `getUnreadSessionIds`/`markSessionsUnreadSeen` → `isSessionUnread`/`markSessionUnreadSeen`), so each row cites this decision rather than repeating the mapping.
 - **Decided by:** agent (maintainer confirmed the pin-list, dialog-catalog and space-affordance removals for task 32)
 - **Revisit when:** the contract carries named pin lists or space task titles, or the Agent Service exposes those behaviors as Canonical events.
+## 2026-11-11 - Session pins keep one Host stamp; a pin list collapses onto Pinned until the metadata contract carries it
+
+- **Decided:** `sync/session-pins.ts` keeps `setSessionPinList(target, pinned, list)` for its sidebar consumers, but the Host metadata contract stays `openchamber.pinned = { at }`, so a list other than `pinned` files the session under Pinned. Unpin writes the same stamp removal as before.
+- **Instead of:** adding `openchamber.pinned.list` to `packages/agent-contract`, which would change the metadata contract, the patch schema and the Host's validation surface for one sidebar affordance, or editing slice 32's `SessionNodeItem.tsx`/`workFacts.ts`/`SessionProjectCollection.tsx` to drop the list.
+- **Because:** one pin authority already exists (`setSessionPinned` over Host metadata plus the device-local legacy migration), and the pin-list affordance is a sidebar filing choice, not an agent fact. Keeping the exported shape identical to the scaffold leaves every caller compiling unchanged, and the choice can be revisited as a contract change on its own ticket.
+- **Decided by:** agent (conservative option; the alternative touched another package's contract)
+- **Revisit when:** a later milestone extends `SessionMetadataSchema.openchamber.pinned` with a list, or the sidebar drops user-created pin lists.
 - **Effort:** ux-v270-omp-alignment
