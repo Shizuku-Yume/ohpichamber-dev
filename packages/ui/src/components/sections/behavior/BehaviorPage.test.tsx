@@ -6,6 +6,7 @@ Object.assign(globalThis, {
   window: browser,
   document: browser.document,
   navigator: browser.navigator,
+  localStorage: browser.localStorage,
   Node: browser.Node,
   Element: browser.Element,
   HTMLElement: browser.HTMLElement,
@@ -92,7 +93,8 @@ test('a slow prompt save preserves and then persists the newer blurred draft', a
   await act(async () => { writes[0].finish(); });
   expect(prompt.value).toBe('newer');
 
-  // The shared settings mirror is debounced separately from the AGENTS.md PUT.
+  // A settings write happens only for the page's own preferences: AGENTS.md is
+  // the sole authority, so the prompt is never mirrored into settings.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
   expect(settingsWrites).toHaveLength(1);
   await act(async () => { settingsWrites[0](); });
@@ -101,10 +103,8 @@ test('a slow prompt save preserves and then persists the newer blurred draft', a
   // Each write names the file it replaces, so an edit made elsewhere is refused.
   expect(writes.map((write) => write.expectedContent)).toEqual(['initial', 'older\n']);
   await act(async () => { writes[1].finish(); });
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
-  expect(settingsWrites).toHaveLength(2);
-  await act(async () => { settingsWrites[1](); });
-  expect(prompt.value).toBe('newer\n');
+  await settle();
+  expect(prompt.value.trim()).toBe('newer');
   expect(persisted).toBe('newer\n');
 
   // An edit made in another editor shows up when the window is focused again.

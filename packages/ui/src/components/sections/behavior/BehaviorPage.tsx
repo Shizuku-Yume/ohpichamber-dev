@@ -166,6 +166,55 @@ export const BehaviorPage: React.FC = () => {
     return () => abort.abort();
   }, [readRules]);
 
+  // AGENTS.md is often edited in another editor while this page stays open, so
+  // coming back to the window re-reads both scopes. A draft with an edit of its
+  // own is kept; the pending save then names the stale text and is refused.
+  const globalRulesRef = React.useRef(globalRules);
+  globalRulesRef.current = globalRules;
+  const projectRulesRef = React.useRef(projectRules);
+  projectRulesRef.current = projectRules;
+  React.useEffect(() => {
+    let abort: AbortController | null = null;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible' || !savedRef.current) return;
+      abort?.abort();
+      const controller = new AbortController();
+      abort = controller;
+      try {
+        const [globalFile, projectFile] = await Promise.all([
+          readRules('global', controller.signal).catch(() => null),
+          readRules('project', controller.signal).catch(() => null),
+        ]);
+        const saved = savedRef.current;
+        if (controller.signal.aborted || !saved) return;
+        for (const [scope, file, ref, set] of [
+          ['global', globalFile, globalRulesRef, setGlobalRules],
+          ['project', projectFile, projectRulesRef, setProjectRules],
+        ] as const) {
+          const onDisk = agentsMdOnDiskRef.current[scope];
+          const content = file?.exists === true ? file.content : '';
+          if (file === null || content === onDisk) continue;
+          // A draft still holding exactly what was on disk has no edit of its
+          // own to keep; anything else is a pending edit the save coexists with.
+          const unchanged = normalizeAgentsMdContent(ref.current) === onDisk;
+          agentsMdOnDiskRef.current[scope] = content;
+          savedRef.current = { ...savedRef.current, [scope === 'global' ? 'globalRules' : 'projectRules']: content };
+          if (unchanged) set(content);
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) console.warn('Failed to refresh AGENTS.md:', error);
+      }
+    };
+    const onRefresh = () => { void refresh(); };
+    window.addEventListener('focus', onRefresh);
+    document.addEventListener('visibilitychange', onRefresh);
+    return () => {
+      abort?.abort();
+      window.removeEventListener('focus', onRefresh);
+      document.removeEventListener('visibilitychange', onRefresh);
+    };
+  }, [readRules]);
+
   // `null` means the draft matches the last saved text, so nothing is written.
   const saveRules = React.useCallback(async (
     scope: RulesScope,
