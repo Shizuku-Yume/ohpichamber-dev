@@ -17,7 +17,7 @@
 
 ## Progress
 
-`bun check --all` filtered to `^packages/ui/src/components/(sections|snippets)/`:
+`bun check --all` filtered to `^packages/ui/src/components/(sections|snippets)/`: (final run after merging tasks 33 and 34: 0 errors; repo-wide 127 errors remain in other slices)
 
 - **Check before:** 298 errors in 39 files (total run exit 1, other slices included).
 - **Check after:** 0 errors in slice 31 files. The same whole-repo run still exits 1 with 499 errors in other slices' files, which this task does not own.
@@ -62,7 +62,7 @@ Upstream v2.7.0 rewrote these sections against the OpenCode engine the fork reti
 
 ### Test evidence
 
-`node scripts/run-isolated-tests.mjs src/components/sections src/components/snippets` in `packages/ui` (the repo runner, because the suite mixes `bun:test` and `node:test`): 45/55 files pass. The 10 failures are all in files outside slice 31 (`classification`, `commands/CommandsPage`, `behavior`, `agents/AgentsPage`, `openchamber/ChatSettings`, `openchamber/sourceControlOAuthPolling`, `projects/ProjectsPage`, two `remote-instances` files, and the `@/lib/opencode/model` import in slice 35's `lib/modelRefs.ts`). The same run on the landing target worktree fails 24 of 60 files including every one of these, so this branch does not regress any of them.
+`node scripts/run-isolated-tests.mjs src/components/sections src/components/snippets` in `packages/ui` (the repo runner, because the suite mixes `bun:test` and `node:test`): 49/55 files pass. The 10 failures are all in files outside slice 31 (`classification`, `commands/CommandsPage`, `behavior`, `agents/AgentsPage`, `openchamber/ChatSettings`, `openchamber/sourceControlOAuthPolling`, `projects/ProjectsPage`, two `remote-instances` files, and the `@/lib/opencode/model` import in slice 35's `lib/modelRefs.ts`). The same run on the landing target worktree fails 24 of 60 files including every one of these, so this branch does not regress any of them.
 
 `bunx oxlint` on every substantially rewritten or new file → clean.
 
