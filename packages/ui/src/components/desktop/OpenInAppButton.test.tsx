@@ -7,14 +7,21 @@ import { I18nProvider } from '@/lib/i18n';
 import { OPEN_IN_APPS } from '@/lib/openInApps';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 
-const actualDropdown = await import('@/components/ui/dropdown-menu');
-mock.module('@/components/ui/dropdown-menu', () => ({
-  ...actualDropdown,
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
-  DropdownMenuContent: ({ children, ...props }: React.ComponentProps<'div'>) => React.createElement('div', props, children),
-  DropdownMenuItem: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => React.createElement('button', { type: 'button', onClick }, children),
-  DropdownMenuSeparator: () => React.createElement('hr'),
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+// The picker is a context menu; its popup renders into a body portal, so the
+// test keeps the parts and renders the content in place.
+const actualContextMenu = await import('@/components/ui/context-menu');
+mock.module('@/components/ui/context-menu', () => ({
+  ...actualContextMenu,
+  ContextMenu: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  ContextMenuContent: ({ children, ...props }: React.ComponentProps<'div'>) => React.createElement('div', props, children),
+  ContextMenuItem: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => React.createElement('button', { type: 'button', onClick }, children),
+  ContextMenuSeparator: () => React.createElement('hr'),
+  ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+}));
+mock.module('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  TooltipContent: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
 }));
 mock.module('@/components/ui', () => ({
   toast: {
@@ -88,8 +95,6 @@ describe('OpenInAppButton', () => {
         ),
       );
     });
-    await act(async () => { await Promise.resolve(); });
-
     expect(host.querySelector('[data-work-status-popup]')).not.toBeNull();
   });
 });

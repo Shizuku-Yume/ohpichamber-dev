@@ -87,7 +87,10 @@ const OpenInAppButtonComponent = ({ directory, buttonClassName }: OpenInAppButto
         </ContextMenuTrigger>
         <TooltipContent side="bottom">{t('openInApp.actions.openInAria', { app: selectedApp.label })}</TooltipContent>
       </Tooltip>
-      <ContextMenuContent className="w-56 max-h-[70vh] overflow-y-auto">
+      <ContextMenuContent
+        data-work-status-popup
+        className="w-56 max-h-[70vh] overflow-y-auto"
+      >
         <ContextMenuItem className="flex items-center gap-2" onClick={() => void handleCopyPath()}>
           <Icon name="file-copy" className="h-4 w-4" />
           <span className="typography-ui-label text-foreground">{t('openInApp.actions.copyPath')}</span>
