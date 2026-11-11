@@ -24,6 +24,7 @@ for (const [name, value] of Object.entries({
   HTMLElement: browser.HTMLElement,
   Element: browser.Element,
   Node: browser.Node,
+  Text: browser.Text,
   HTMLInputElement: browser.HTMLInputElement,
   HTMLTextAreaElement: browser.HTMLTextAreaElement,
   ResizeObserver: browser.ResizeObserver,
@@ -73,6 +74,7 @@ const { useProjectContextStore } = await import('@/stores/useProjectContextStore
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { ProjectNotesTodoPanel } = await import('./ProjectNotesTodoPanel');
+const { EditorView } = await import('@codemirror/view');
 
 const project = { id: 'chats', path: '/fixture/chats' };
 const host = document.createElement('div');
@@ -92,6 +94,16 @@ const announce = async (projectId = resolveProjectContextId(project)) => {
 const render = async (visible = true) => {
   await act(async () => root?.render(<I18nProvider><ProjectNotesTodoPanel projectRef={project} visible={visible} /></I18nProvider>));
   await settle();
+};
+/** Opens the only note from the list and returns its editor. */
+const openNoteEditor = async () => {
+  // The editor loads lazily.
+  await settle();
+  await settle();
+  const editorNode = host.querySelector<HTMLElement>('.cm-editor');
+  const view = editorNode ? EditorView.findFromDOM(editorNode) : null;
+  if (!view) throw new Error('Note editor missing');
+  return { view, text: () => view.state.doc.toString() };
 };
 const mount = async () => {
   root = createRoot(host);
@@ -164,14 +176,8 @@ test('refreshing an edited note preserves its unsaved draft and ignores another 
   const card = host.querySelector<HTMLElement>('li[role="button"]');
   if (!card) throw new Error('Note card missing');
   await act(async () => card.click());
-  const editor = Array.from(browser.document.querySelectorAll('textarea')).find(element => element.closest('li'));
-  const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
-  if (!editor || !setter) throw new Error('Note editor missing');
-  await act(async () => {
-    setter.call(editor, 'Unsaved local draft');
-    editor.dispatchEvent(new browser.Event('input', { bubbles: true }));
-    editor.dispatchEvent(new browser.Event('change', { bubbles: true }));
-  });
+  const { view } = await openNoteEditor();
+  await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'Unsaved local draft' } }));
 
   const initialReads = reads;
   serverContext = { ...serverContext, notes: [{ ...peerNote, body: 'Peer replacement', updatedAt: 2 }] };
@@ -179,7 +185,7 @@ test('refreshing an edited note preserves its unsaved draft and ignores another 
   expect(reads).toBe(initialReads);
   await announce();
   expect(useProjectContextStore.getState().getEntry(project).notes[0].body).toBe('Peer replacement');
-  expect(editor.value).toBe('Unsaved local draft');
+  expect(view.state.doc.toString()).toBe('Unsaved local draft');
 });
 
 test('peer refreshes do not postpone the local note autosave', async () => {
@@ -188,14 +194,8 @@ test('peer refreshes do not postpone the local note autosave', async () => {
   const card = host.querySelector<HTMLElement>('li[role="button"]');
   if (!card) throw new Error('Note card missing');
   await act(async () => card.click());
-  const editor = Array.from(browser.document.querySelectorAll('textarea')).find(element => element.closest('li'));
-  const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
-  if (!editor || !setter) throw new Error('Note editor missing');
-  await act(async () => {
-    setter.call(editor, 'Local autosave draft');
-    editor.dispatchEvent(new browser.Event('input', { bubbles: true }));
-    editor.dispatchEvent(new browser.Event('change', { bubbles: true }));
-  });
+  const { view } = await openNoteEditor();
+  await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'Local autosave draft' } }));
   for (let index = 0; index < 8; index += 1) {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 80)); });
     serverContext = { ...serverContext, todos: [{ id: 'peer-todo', text: `Peer edit ${index}`, completed: false, createdAt: 1 }] };
