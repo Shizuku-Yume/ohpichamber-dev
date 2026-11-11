@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -65,7 +66,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
   const current = useSessionUIStore((state): string | null => {
     if (state.currentSessionId) return sessions.some((session) => session.sessionId === state.currentSessionId) ? CURRENT_SESSION : null;
     if (!state.newSessionDraft.open) return null;
-    const draftForThisSpace = space !== null && state.newSessionDraft.pendingWorktreeRequestId === space.id;
+    const draftForThisSpace = space !== null && spaceOfCreationRequest(state.newSessionDraft.pendingWorktreeRequestId) === space.id;
     if (!draftForThisSpace && !isPathWithinProject(state.newSessionDraft.directoryOverride, directory)) return null;
     return state.newSessionDraft.workDraftId ?? '';
   });

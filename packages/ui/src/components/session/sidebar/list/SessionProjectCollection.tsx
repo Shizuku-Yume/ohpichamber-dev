@@ -71,6 +71,7 @@ import { useSidebarGroupStatus } from './useSidebarGroupStatus';
 import { getGroupFolderOwnerKey, getSessionFolderOwnerKey, getSessionFolderScopes } from '../sessions/sessionFolderIdentity';
 import { SessionRowOrderProvider } from '../sessions/sessionRowOrder';
 import { canRequestNativeDirectoryAccess } from '@/lib/desktop';
+import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { useSidebarSpaces, useSpacesStore, type SpaceMark } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
@@ -500,7 +501,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   ));
   // The space the open draft waits for while it is being made.
   const openDraftSpaceId = useSessionUIStore((state) => (
-    !state.currentSessionId && state.newSessionDraft.open ? state.newSessionDraft.pendingWorktreeRequestId : null
+    !state.currentSessionId && state.newSessionDraft.open ? spaceOfCreationRequest(state.newSessionDraft.pendingWorktreeRequestId) : null
   ));
   const draftPlacement = React.useMemo(() => {
     const byGroupKey = new Map<string, SessionDraft[]>();
