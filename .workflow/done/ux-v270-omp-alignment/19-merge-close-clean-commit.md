@@ -35,6 +35,6 @@
 
 Review: pass (base c4e6dc67cfc81276c93091d38de244ce47fb9a83). One `reviewer` pass over the close-out commits found one P2: the tray fixture answered every unrecognized request with 204, so an unexpected endpoint stayed green. Fixed by matching exactly the metadata read, its patch and the view POST, and failing everything else (`926a22980`). No other blocking finding.
 
-**Accepted limits.** The full `bun run test` on the tip first failed only `server/lib/workflows/runtime.test.js` "stops a run": its five-second probe covers two atomic run-file saves, and the same file flaps on `main`. The probe now waits twenty seconds (`48a089afa`); the suite passed three consecutive runs after.
+**Accepted limits.** The full `bun run test` on the tip first failed only `server/lib/workflows/runtime.test.js` "stops a run": its five-second probe covers two atomic run-file saves, and the same file flaps on `main`. The probes now allow twenty seconds (`48a089afa`, `692f6d95a`); the file passed three consecutive runs after, and the production workflow code is byte-identical to `main`.
 
  The AppImage was launched with `APPIMAGE_EXTRACT_AND_RUN=1` (no FUSE in this shell) and a short `TMPDIR` because Chromium's process-singleton socket path exceeded the limit; the packaged content gate, not the AppImage launcher, is what proves the payload. Two desktop sessions in that env hit `401 Invalid API key` before the seeded provider config was corrected; the successful turn above is the evidence that counts.
