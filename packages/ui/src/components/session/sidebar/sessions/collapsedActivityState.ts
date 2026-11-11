@@ -25,18 +25,16 @@ const getSessionNodeActivityState = (
   node: SessionNode,
   activeSessionIds: Set<string>,
   unreadSessionIds: Set<string>,
-  includeUnreadSubtasks: boolean,
 ): CollapsedActivityState => {
   if (activeSessionIds.has(node.session.sessionId)) return 'active';
 
   let state: CollapsedActivityState = null;
-  const isSubtask = Boolean(node.session.parentSessionId);
-  if (unreadSessionIds.has(node.session.sessionId) && (includeUnreadSubtasks || !isSubtask)) state = 'unread';
+  if (unreadSessionIds.has(node.session.sessionId)) state = 'unread';
 
   for (const child of node.children) {
     state = mergeCollapsedActivityStates(
       state,
-      getSessionNodeActivityState(child, activeSessionIds, unreadSessionIds, includeUnreadSubtasks),
+      getSessionNodeActivityState(child, activeSessionIds, unreadSessionIds),
     );
     if (state === 'active') return state;
   }
@@ -48,13 +46,12 @@ export const getSessionNodesActivityState = (
   nodes: SessionNode[],
   activeSessionIds: Set<string>,
   unreadSessionIds: Set<string>,
-  includeUnreadSubtasks: boolean,
 ): CollapsedActivityState => {
   let state: CollapsedActivityState = null;
   for (const node of nodes) {
     state = mergeCollapsedActivityStates(
       state,
-      getSessionNodeActivityState(node, activeSessionIds, unreadSessionIds, includeUnreadSubtasks),
+      getSessionNodeActivityState(node, activeSessionIds, unreadSessionIds),
     );
     if (state === 'active') return state;
   }
@@ -66,15 +63,20 @@ type SessionActivityProps = {
   // Sessions not present as nodes whose pending requests still count, such as
   // the hidden subagents of timeline rows.
   blockingSessionIds?: readonly string[];
-  includeUnreadSubtasks?: boolean;
 };
 
-const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks: boolean) => {
+/**
+ * Every session in the hidden subtrees, and the top-level ones among them:
+ * only those can be unread. The Host ends a turn on the root session, and the
+ * fork's unread watermark reads the session record alone, so a subtask carries
+ * no unread state of its own.
+ */
+const collectActivityIds = (nodes: readonly SessionNode[]) => {
   const active = new Set<string>();
   const unread = new Set<string>();
   const visit = (node: SessionNode, isSubtask: boolean): void => {
     active.add(node.session.sessionId);
-    if (!isSubtask || includeUnreadSubtasks) unread.add(node.session.sessionId);
+    if (!isSubtask) unread.add(node.session.sessionId);
     node.children.forEach((child) => visit(child, true));
   };
   nodes.forEach((node) => visit(node, false));
@@ -84,10 +86,9 @@ const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks
 export const useCollapsedSessionActivityState = ({
   nodes,
   blockingSessionIds,
-  includeUnreadSubtasks = false,
   enabled = true,
 }: SessionActivityProps & { enabled?: boolean }): CollapsedActivityState => {
-  const ids = React.useMemo(() => collectActivityIds(enabled ? nodes : [], includeUnreadSubtasks), [enabled, includeUnreadSubtasks, nodes]);
+  const ids = React.useMemo(() => collectActivityIds(enabled ? nodes : []), [enabled, nodes]);
   const blockingIds = React.useMemo(
     () => (blockingSessionIds && blockingSessionIds.length > 0 ? new Set([...ids.active, ...blockingSessionIds]) : ids.active),
     [blockingSessionIds, ids.active],

@@ -3,6 +3,8 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionGrouping } from './useSessionGrouping';
@@ -14,15 +16,28 @@ import { buildSidebarSessionProjection } from '../list/sessionCollection';
 // a real change to one project rebuilds that project only, and an update that
 // changes nothing a project renders keeps every reference.
 
-const session = (id: string, directory: string, title = id): Session => ({
-  id,
-  projectID: 'project',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  title,
-  directory,
-  time: { created: 1, updated: 1 },
-});
+const session = (sessionId: string, directory: string, title = sessionId): Session => {
+  const workspaceId = `ws_${sessionId}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId,
+    displayPath: directory,
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    title,
+  };
+};
 
 const worktree = (projectDirectory: string, name: string): WorktreeMetadata => ({
   source: 'sdk', name, path: `${projectDirectory}/.wt/${name}`, projectDirectory, branch: name, label: name,
@@ -61,7 +76,7 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
   const currentSessions = inputs.sessions ?? sessionsByProject;
   const allSessions = [...currentSessions.values()].flat();
   const projectIdBySessionId = new Map(
-    [...currentSessions].flatMap(([projectId, sessions]) => sessions.map((entry) => [entry.id, projectId] as const)),
+    [...currentSessions].flatMap(([projectId, sessions]) => sessions.map((entry) => [entry.sessionId, projectId] as const)),
   );
   const projection = buildSidebarSessionProjection({
     globalActiveSessions: allSessions,
@@ -73,12 +88,12 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
   });
   const projectedSessions = new Map(projects.map((project) => [
     project.id,
-    projection.projectSessions.filter((entry) => projectIdBySessionId.get(entry.id) === project.id),
+    projection.projectSessions.filter((entry) => projectIdBySessionId.get(entry.sessionId) === project.id),
   ]));
   const nestedSessionIds = new Set(
     [...projection.childrenMap]
       .filter(([parentId]) => projection.sessionById.has(parentId))
-      .flatMap(([, children]) => children.map((child) => child.id)),
+      .flatMap(([, children]) => children.map((child) => child.sessionId)),
   );
   const grouping = useSessionGrouping({
     homeDirectory: null,
@@ -223,7 +238,7 @@ describe('sidebar project sections keep references across unrelated updates', ()
 
   test('a cross-project sibling rank change rebuilds the parent tree in lifecycle order', async () => {
     const childOne = { ...b1, parentID: 'a1' };
-    const childTwo = { ...b2, parentID: 'a1' };
+    const childTwo = { ...b2, parentSessionId: 'a1', rootSessionId: 'a1' };
     const sessions = new Map([['a', [a1, a2]], ['b', [childOne, childTwo]]]);
     const owners = ownersFor(defaultScopes);
     const childIds = () => section('a')?.groups.flatMap((group) => group.sessions)
@@ -240,22 +255,23 @@ describe('sidebar project sections keep references across unrelated updates', ()
   });
 
   test('a foreign child arriving after a newer review invalidates only affected project trees', async () => {
-    const review = {
-      ...session('review', a1.directory),
+    const review: Session = {
+      ...session('review', resolveGlobalSessionDirectory(a1) ?? '/a/.wt/one'),
       metadata: { openchamber: { kind: 'review', originalSessionID: 'a1' } },
+      metadataRevision: '1',
     };
-    const owners = ownersFor({ ...defaultScopes, review: a1.directory });
+    const owners = ownersFor({ ...defaultScopes, review: resolveGlobalSessionDirectory(a1) ?? '/a/.wt/one' });
     const ranks = new Map([['review', 10], ['a1', 5]]);
-    const beforeSessions = new Map([['a', [a1, review, a2]], ['b', [b2]], ['c', [c1]]]);
+    const beforeSessions = new Map<string, Session[]>([['a', [a1, review, a2]], ['b', [b2]], ['c', [c1]]]);
     await render({ ranks, owners, sessions: beforeSessions });
     const beforeA = section('a');
     const beforeC = section('c');
 
-    const foreignChild = { ...b1, parentID: 'a1' };
+    const foreignChild = { ...b1, parentSessionId: 'a1', rootSessionId: 'a1' };
     await render({
       ranks,
       owners,
-      sessions: new Map([['a', [a1, review, a2]], ['b', [foreignChild, b2]], ['c', [c1]]]),
+      sessions: new Map<string, Session[]>([['a', [a1, review, a2]], ['b', [foreignChild, b2]], ['c', [c1]]]),
     });
 
     const original = section('a')?.groups.flatMap((group) => group.sessions)

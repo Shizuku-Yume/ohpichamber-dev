@@ -13,6 +13,7 @@ import {
   sessionSidebarRowSizeKey,
 } from './sessionSidebarVirtualization';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { SessionNode } from './types';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import { buildSessionSidebarRowModel, type SessionSidebarActivityItem, type SessionSidebarRow, type SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
@@ -39,9 +40,31 @@ describe('SessionSidebarRows initialization', () => {
   });
 });
 
+/** A contract session in `/repo`, registered the way bootstrap registers a workspace. */
+const sessionFixture = (sessionId: string, title = sessionId): Session => {
+  registerWorkspaceDirectory('workspace-repo', '/repo');
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId: 'workspace-repo',
+    displayPath: '/repo',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    title,
+  };
+};
+
 describe('SessionSidebarRows section spacing', () => {
-  // SAFETY: spacing reads only the row identity, kind, and position fields.
-  const node = (id: string): SessionNode => ({ session: { id, title: id, directory: '/repo', time: { created: 1, updated: 1 } } as Session, children: [], worktree: null });
+  const node = (id: string): SessionNode => ({ session: sessionFixture(id), children: [], worktree: null });
   const item = (id: string): SessionSidebarActivityItem => ({ node: node(id), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null });
   const input = (withChats: boolean): SessionSidebarRowModelArgs => {
     const sections: ProjectSection[] = [{
@@ -141,8 +164,7 @@ describe('SessionSidebarRows section spacing', () => {
 });
 
 describe('SessionSidebarRows scroll anchor', () => {
-  // SAFETY: the anchor reads only row keys and the size keys of the row model's own rows.
-  const node = (id: string, children: readonly string[] = []): SessionNode => ({ session: { id, title: id, directory: '/repo', time: { created: 1, updated: 1 } } as Session, children: children.map((child) => node(child)), worktree: null });
+  const node = (id: string, children: readonly string[] = []): SessionNode => ({ session: sessionFixture(id), children: children.map((child) => node(child)), worktree: null });
   type Options = { detailed?: boolean; collapsedProjects?: Set<string>; sessionIds?: string[]; visible?: number; mode?: 'normal' | 'search'; projectOrder?: string[]; childrenOf?: Record<string, string[]>; otherIds?: string[] };
   const ids = (count: number) => Array.from({ length: count }, (_, index) => `session-${index}`);
   const model = ({ detailed = true, collapsedProjects = new Set<string>(), sessionIds = ids(40), visible = 60, mode = 'normal', projectOrder = ['project-a', 'project-b'], childrenOf = {}, otherIds = ['other-0', 'other-1'] }: Options = {}) => {
