@@ -829,8 +829,10 @@ describe('workflow runtime', () => {
     const { runtime, act, finished } = await setup(agents);
     const { runId } = await act('workflow.run', { script: script("return parallel([() => agent('slow 1'), () => agent('slow 2')])") });
     await runtime.approve({ runId });
-    // Working means in a session: an agent is saved as running just before its session exists.
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.filter((agent) => agent.state === 'running' && agent.sessionId).length === 2);
+    // Working means in a session: an agent is saved as running just before its
+    // session exists. Each save is a real atomic write, so this waits longer
+    // than a poll-only assertion: a loaded machine can take seconds to fsync.
+    await waitFor(async () => (await act('workflow.status', { runId })).agents.filter((agent) => agent.state === 'running' && agent.sessionId).length === 2, 20_000);
 
     await runtime.stop({ runId });
     const status = await finished(runId);
