@@ -29,7 +29,7 @@ Eklemek için kenar çubuğunun üstündeki seçiciden projeyi seçin, sonra **K
 
 Proje override'ları, projenin checkout'undaki `.openchamber/project.json` dosyasının `magicPrompts` anahtarında saklanır. Bu, [depo yapılandırması](/tr/repository-config/) ile aynı dosyadır. İstemleri ekibinizle paylaşmak için dosyayı commit edin. Genel override'lar sunucunun veri klasöründeki `magic-prompts.json` dosyasında kalır.
 
-Bir worktree, ana checkout'undaki projenin istemlerini kullanır. Worktree'yi ayrı bir proje olarak eklediyseniz kendi istemlerini kullanır. Projesi olmayan bir sohbet, hiçbir projeye ait olmayan bir klasör ve yalıtılmış bir alandaki çalışma yalnızca genel istemleri kullanır.  Orada dosyaları elle düzenlersiniz ve genel dosya her zaman `~/.config/openchamber/magic-prompts.json` olur.
+Bir worktree, ana checkout'undaki projenin istemlerini kullanır. Worktree'yi ayrı bir proje olarak eklediyseniz kendi istemlerini kullanır. Projesi olmayan bir sohbet, hiçbir projeye ait olmayan bir klasör ve yalıtılmış bir alandaki çalışma yalnızca genel istemleri kullanır.  Genel dosya her zaman `~/.config/openchamber/magic-prompts.json` olur.
 
 Proje dosyası okunamazsa, örneğin geçerli bir JSON değilse, ona ihtiyaç duyan akışlar bir hatayla durur ve yerleşik metne geri dönmez. Settings nedeni ve bir **Yeniden dene** düğmesini gösterir. Proje dosyasının olmaması bir hata değildir. Bu durumda proje tüm istemleri devralır.
 
