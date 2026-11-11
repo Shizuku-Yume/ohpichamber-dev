@@ -38,11 +38,11 @@ How long a browser sign-in lasts, in hours, when "trust this device" is off. The
 
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
+How long a sign-in lasts, in days, on a device you chose to trust. The default is `7`.
+
 ### `OPENCODE_JWT_SECRET`
 
 Overrides the secret used to sign Host UI session tokens. This setting configures Host session signing rather than the agent runtime. Keep this secret private. When set, global sign-out is unavailable because OpenChamber cannot rotate the signing secret.
-
-How long a sign-in lasts, in days, on a device you chose to trust. The default is `7`.
 
 ### `OPENCHAMBER_API_ONLY`
 
@@ -129,4 +129,3 @@ Bun executable OpenChamber should use when spawning daemon processes.
 ### `BUN_INSTALL`
 
 Bun installation root. OpenChamber uses it to find `bin/bun` for daemon startup and updates.
-

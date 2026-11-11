@@ -29,7 +29,7 @@ Pour en créer un, choisissez le projet dans le sélecteur en haut de la barre l
 
 Les remplacements du projet sont enregistrés dans la clé `magicPrompts` de `.openchamber/project.json`, dans le checkout du projet. C’est le même fichier que la [configuration du dépôt](/fr/repository-config/). Committez-le pour partager les prompts avec votre équipe. Les remplacements globaux restent dans `magic-prompts.json`, dans le dossier de données du serveur.
 
-Un worktree utilise les prompts du projet de son checkout principal, sauf si vous avez ajouté le worktree comme projet à part entière. Un chat sans projet, un dossier qui n’appartient à aucun projet et le travail dans un espace isolé utilisent uniquement les prompts globaux. L’extension VS Code n’a pas de page Magic Prompts. Vous y modifiez les fichiers à la main, et le fichier global est toujours `~/.config/openchamber/magic-prompts.json`.
+Un worktree utilise les prompts du projet de son checkout principal, sauf si vous avez ajouté le worktree comme projet à part entière. Un chat sans projet, un dossier qui n’appartient à aucun projet et le travail dans un espace isolé utilisent uniquement les prompts globaux.  Vous y modifiez les fichiers à la main, et le fichier global est toujours `~/.config/openchamber/magic-prompts.json`.
 
 Si le fichier du projet ne peut pas être lu, par exemple parce qu’il n’est pas du JSON valide, les flux qui en ont besoin s’arrêtent avec une erreur et ne se rabattent pas sur le texte intégré. Les Paramètres affichent la raison et un bouton **Réessayer**. Un fichier de projet absent n’est pas une erreur. Le projet hérite alors de tous les prompts.
 

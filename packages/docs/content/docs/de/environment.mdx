@@ -38,11 +38,12 @@ Wie lange eine Anmeldung im Browser gilt, in Stunden, wenn „Diesem Gerät vert
 
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
+Wie lange eine Anmeldung gilt, in Tagen, auf einem Gerät, dem du vertraust. Standard ist `7`.
+
 ### `OPENCODE_JWT_SECRET`
 
 Überschreibt das Geheimnis zum Signieren von Host-UI-Sitzungstokens. Diese Einstellung steuert die Sitzungssignierung des Hosts und betrifft nicht die Agent-Runtime. Halte diesen Wert geheim. Wenn gesetzt, ist die globale Abmeldung nicht verfügbar, da OpenChamber das Signiergeheimnis nicht rotieren kann.
 
-Wie lange eine Anmeldung gilt, in Tagen, auf einem Gerät, dem du vertraust. Standard ist `7`.
 
 ### `OPENCHAMBER_API_ONLY`
 
@@ -127,4 +128,3 @@ Bun-Executable, die OpenChamber beim Starten von Daemon-Prozessen verwenden soll
 ### `BUN_INSTALL`
 
 Installationswurzel von Bun. OpenChamber verwendet sie, um `bin/bun` für Daemon-Start und Updates zu finden.
-

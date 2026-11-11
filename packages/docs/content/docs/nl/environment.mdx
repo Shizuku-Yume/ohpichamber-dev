@@ -38,11 +38,12 @@ Hoe lang een aanmelding in de browser geldig blijft, in uren, als "dit apparaat 
 
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
+Hoe lang een aanmelding geldig blijft, in dagen, op een apparaat dat u vertrouwt. Standaard is `7`.
+
 ### `OPENCODE_JWT_SECRET`
 
 Overschrijft het geheim waarmee Host UI-sessietokens worden ondertekend. Deze instelling configureert de sessie-ondertekening van de Host en heeft geen invloed op de agent-runtime. Houd deze waarde geheim. Als deze is ingesteld, is globaal afmelden niet beschikbaar omdat OpenChamber het ondertekeningsgeheim niet kan roteren.
 
-Hoe lang een aanmelding geldig blijft, in dagen, op een apparaat dat u vertrouwt. Standaard is `7`.
 
 ### `OPENCHAMBER_API_ONLY`
 
@@ -129,4 +130,3 @@ Uitvoerbaar Bun-programma dat OpenChamber gebruikt om daemonprocessen te starten
 ### `BUN_INSTALL`
 
 Hoofdmap van de Bun-installatie. OpenChamber zoekt hiermee `bin/bun` voor het starten en bijwerken van daemons.
-
