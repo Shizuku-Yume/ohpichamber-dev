@@ -49,6 +49,16 @@ authority stay).
   `stores/session-project-registration.test.js` (`server/lib/opencode` import),
   `stores/useQuotaAutoRefresh.test.tsx` and
   `stores/useQuotaStore.extensionProviders.test.ts` (upstream quota fields).
+- **Quota correction (second pass, after the reviewer's first checks).** The
+  first pass restored `useQuotaStore.ts` and `lib/quota/fetchQuota.ts` to `main`
+  as well, which broke outside-slice callers: `components/sections/usage/UsagePage.tsx`
+  imports `useQuotaProviders`, `setProviderInDropdown` and `useQuotaAutoRefresh`,
+  and the settings readout imports `refreshTrayQuotas`, all of which only the
+  merged store exports. The scaffold (upstream) quota store, `fetchQuota` and
+  `useQuotaStore.test.ts`/`.same-origin`/`.refresh`/`useQuotaAutoRefresh`/
+  `.extensionProviders` are kept instead; `useQuotaStore.refresh.test.ts` drops
+  the two workspace-scoped cases and the `loadedWorkspaceId` assertion that the
+  merge retired. `bun check --all` outside-slice errors go 791 -> 780.
 - **Kept tests brought onto fork shapes:** `stores/sessionLineage.test.ts`
   back to `main` (no `fork`/`btwPromoted` fields);
   `useAgentsStore.subagents.test.tsx`, `useSnippetsStore.test.ts`,
@@ -77,7 +87,7 @@ authority stay).
 - **Check before:** `bun check --all` → 1,130 errors repo-wide, 310 in slice 34
   (46 files); `bun scripts/upstream-drift.mjs --check --slice 34` → 0 unexplained;
   `node scripts/run-isolated-tests.mjs packages/ui/src/{sync,stores,api}` → 6 files failing.
-- **Check after:** `bun check --all` → 791 errors repo-wide (all in other
+- **Check after:** `bun check --all` → 780 errors repo-wide (all in other
   slices), **0 in slice 34**; `bun scripts/upstream-drift.mjs --check --slice 34`
   → `drift check passed`, exit 0;
   `node scripts/run-isolated-tests.mjs packages/ui/src/sync packages/ui/src/stores packages/ui/src/api`
