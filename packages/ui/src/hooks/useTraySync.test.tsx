@@ -35,12 +35,15 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   const intervals = () => { intervalCount += 1; return 1; };
   // Unread state lives on the session's metadata now: an idle turn whose
   // viewed watermark never caught up is what raises the badge.
-  const append = (id: string) => useGlobalSessionsStore.setState((state) => ({
-    entityById: new Map(state.entityById).set(id, { ...state.entityById.get(id)!, metadata: { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } } }),
-    activeSessions: state.activeSessions.map((entry) => entry.sessionId === id
-      ? { ...entry, metadata: { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } } }
-      : entry),
-  }));
+  const append = (id: string) => useGlobalSessionsStore.setState((state) => {
+    const unread = { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } };
+    const existing = state.entityById.get(id) ?? state.activeSessions.find((entry) => entry.sessionId === id) ?? session(id);
+    const marked = { ...existing, metadata: unread };
+    return {
+      entityById: new Map(state.entityById).set(id, marked),
+      activeSessions: state.activeSessions.map((entry) => (entry.sessionId === id ? { ...entry, metadata: unread } : entry)),
+    };
+  });
   const flush = async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
   };
