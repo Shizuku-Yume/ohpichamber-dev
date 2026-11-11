@@ -99,7 +99,9 @@ describe('hostState and unexpectedChanges', () => {
     const { repo } = makeBait(host);
     const before = hostState(repo);
     // A socket path has a short length limit, so it is made in a short folder and moved in.
-    const short = fs.mkdtempSync('/tmp/oc-');
+    // The folder has to share the repository's device: a rename cannot cross one, and the
+    // test must not depend on `/tmp` living on a second filesystem.
+    const short = fs.mkdtempSync(path.join(host.root, 'oc-'));
     const server = net.createServer();
     let writer = null;
     await new Promise((resolve) => { server.listen(path.join(short, 's'), resolve); });
