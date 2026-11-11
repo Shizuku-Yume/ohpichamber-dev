@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { I18nKey } from '@/lib/i18n';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -15,22 +16,45 @@ import {
 } from './sessionSubtreeActions';
 import type { SessionNode } from '../types';
 
-const session = (id: string): Session => ({
-  id,
-  projectID: 'project',
-  title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  directory: '/workspace',
-  time: { created: 1, updated: 1 },
-});
+const session = (sessionId: string): Session => {
+  const workspaceId = `ws_${sessionId}`;
+  registerWorkspaceDirectory(workspaceId, '/workspace');
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId,
+    displayPath: '/workspace',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    title: sessionId,
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+  };
+};
 
 const t = (key: I18nKey) => key;
 
-const linked = (id: string, parentID: string | null, archived?: number): Session => {
-  // SAFETY: the subtree walks read only id, parentID, and time.archived.
-  return { ...session(id), parentID, time: { created: 1, updated: 1, ...(archived ? { archived } : {}) } } as Session;
-};
+/** Metadata the server can write beyond the contract's named fields. */
+const metadataWith = (openchamber: Record<string, unknown>): Session['metadata'] => (
+  // SAFETY: the fixture stands in for a server record the sidebar parses itself.
+  { openchamber } as unknown as Session['metadata']
+);
+
+/** The subtree walks read the session identity, its parent link and archive state. */
+const linked = (sessionId: string, parentSessionId: string | null, archived?: number): Session => ({
+  ...session(sessionId),
+  parentSessionId: parentSessionId ?? undefined,
+  rootSessionId: parentSessionId ?? sessionId,
+  archiveRevision: archived === undefined ? '0' : '1',
+  archivedAt: archived,
+});
 
 const resetGlobalSessions = () => {
   useGlobalSessionsStore.setState({
@@ -181,8 +205,15 @@ describe('collectParentIdDescendantIds', () => {
     const root = node(linked('root', null));
     const subagent = node(linked('subagent', 'root'), [node(linked('grandchild', 'subagent'))]);
     const fork = node(linked('fork', null), [node(linked('fork-subagent', 'fork'))]);
-    const review = node({ ...linked('review', null), metadata: { openchamber: { kind: 'review', originalSessionID: 'root' } } });
-    const promoted = node({ ...linked('promoted', null), metadata: { openchamber: { btwPromoted: true } } });
+    const review: SessionNode = {
+      ...node(linked('review', null)),
+      session: { ...linked('review', null), metadata: { openchamber: { kind: 'review', originalSessionID: 'root' } }, metadataRevision: '1' },
+    };
+    const promoted: SessionNode = {
+      ...node(linked('promoted', null)),
+      // SAFETY: the fixture stands in for a server record the sidebar's own parser reads.
+      session: { ...linked('promoted', null), metadata: metadataWith({ btwPromoted: true }) },
+    };
     return node(root.session, [subagent, fork, review, promoted]);
   };
 
@@ -224,7 +255,7 @@ describe('buildActiveSessionTreeFromCache', () => {
 });
 
 describe('collectSessionMoveDescendants', () => {
-  const ids = (sessions: Session[]) => sessions.map((entry) => entry.id);
+  const ids = (sessions: Session[]) => sessions.map((entry) => entry.sessionId);
 
   beforeEach(resetGlobalSessions);
 
@@ -264,7 +295,7 @@ describe('collectSessionMoveDescendants', () => {
 });
 
 describe('the same root from the project tree and from a flat row', () => {
-  const ids = (sessions: readonly Session[]) => sessions.map((entry) => entry.id);
+  const ids = (sessions: readonly Session[]) => sessions.map((entry) => entry.sessionId);
   const sorted = (values: readonly string[]) => [...values].sort();
 
   beforeEach(resetGlobalSessions);

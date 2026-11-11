@@ -1,11 +1,4 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
-# OMP boundary needs a `.workflow/decisions.md` heading here, or
-# `bun scripts/upstream-drift.mjs --check` reports it as unexplained.
-#
-# `bun scripts/upstream-drift.mjs` derives `state` from git blobs against
-# `bc50ba56a`, so `state` may be left empty and is then only documented, not
-# asserted; a row that contradicts git fails `--check`.
-#
 path	state	class	decision	reason
 package.json	fork-differs	decision	2026-10-27 - Keep the fork version at 3.0.0	Fork release version, fork scripts and OMP overrides; upstream dependency bumps adopted over them.
 packages/electron/package.json	fork-differs	decision	2026-10-27 - Bump the toolchain before refreshing ui and web	Electron 44.9.3, unsigned fork packaging targets, no OpenCode CLI runtime; upstream's Electron 45 and signing gates are not adopted.

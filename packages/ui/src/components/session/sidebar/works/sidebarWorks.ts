@@ -59,7 +59,7 @@ export const collectSessionWorkInWork = (root: SessionNode): Session[] => {
     const current = stack.pop();
     if (!current) continue;
     if (isSessionInWork(current.session)) inWork.push(current.session);
-    for (const child of current.children) if (!session.parentSessionId) stack.push(child);
+    for (const child of current.children) if (!child.session.parentSessionId) stack.push(child);
   }
   return inWork;
 };
@@ -155,9 +155,9 @@ export const buildSessionRootIndex = (
     const stack: Session[] = [root];
     while (stack.length > 0) {
       const current = stack.pop();
-      if (!current || rootOf.has(current.id)) continue;
-      rootOf.set(current.id, root.id);
-      stack.push(...(childrenMap.get(current.id) ?? []));
+      if (!current || rootOf.has(current.sessionId)) continue;
+      rootOf.set(current.sessionId, root.sessionId);
+      stack.push(...(childrenMap.get(current.sessionId) ?? []));
     }
   }
   return rootOf;

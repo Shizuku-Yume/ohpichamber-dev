@@ -1,16 +1,34 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { buildSessionSidebarRowModel, type SessionSidebarBlock, type SessionSidebarRowModelArgs, type SessionSidebarWorkEntry } from './sessionSidebarRowModel';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import type { DirectoryOwner } from './sessions/sessionOwnership';
 import { getWorkFolderOwnerKey } from './sessions/sessionFolderIdentity';
 import type { SessionGroup, SessionNode } from './types';
 
-const session = (id: string, directory: string): Session => ({
-  id, projectID: 'p', directory, title: id, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-});
+const session = (sessionId: string, directory: string): Session => {
+  const workspaceId = `ws_${sessionId}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId,
+    projectId: 'p',
+    workspaceId,
+    displayPath: directory,
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    title: sessionId,
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+  };
+};
 const node = (id: string, directory = '/repo'): SessionNode => ({ session: session(id, directory), children: [], worktree: null });
 const rootGroup = (sessions: SessionNode[]): SessionGroup => ({
   id: 'main', label: 'main', branch: null, description: null, isMain: true, worktree: null,

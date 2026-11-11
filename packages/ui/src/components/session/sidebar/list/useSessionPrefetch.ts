@@ -5,6 +5,7 @@ import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getSettingsSurface } from '@/lib/settings/surface';
 import { isSpaceDirectoryStopped } from '@/lib/spaces/spaces-store';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 const SESSION_PREFETCH_HOVER_DELAY_MS = 180;
 const SESSION_PREFETCH_SETTLE_MS = 150;
@@ -21,7 +22,7 @@ type Args = {
   sortedSessions: Session[];
   /** Sessions in work, in their block's order: their neighbours there are prefetched too. */
   workSessions?: readonly Session[];
-  prefetchSession: (target: { directory: string; sessionID: string }) => Promise<void>;
+  prefetchSession: (target: { directory: string; sessionId: string }) => Promise<void>;
 };
 
 type PrefetchRequest = {
@@ -34,10 +35,10 @@ const getPrefetchRequestKey = (request: Pick<PrefetchRequest, 'directory' | 'ses
   `${request.directory}\n${request.sessionId}`
 );
 
-type PrefetchTarget = Pick<Session, 'id' | 'directory'>;
+type PrefetchTarget = Session;
 
 const sessionDirectory = (session: PrefetchTarget | null | undefined): string | null => {
-  const directory = session?.directory?.trim();
+  const directory = session ? resolveGlobalSessionDirectory(session)?.trim() : undefined;
   return directory || null;
 };
 
@@ -101,7 +102,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
 
       const key = getPrefetchRequestKey(request);
       sessionPrefetchInFlightRef.current.add(key);
-      void prefetchSession({ directory: request.directory, sessionID: request.sessionId })
+      void prefetchSession({ directory: request.directory, sessionId: request.sessionId })
         .catch(() => undefined)
         .finally(() => {
           sessionPrefetchInFlightRef.current.delete(key);
@@ -111,7 +112,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   }, [enabled, prefetchDisabled, prefetchSession]);
 
   const scheduleSessionPrefetch = React.useCallback((session: PrefetchTarget | null | undefined, origin: 'hover' | 'neighbor' = 'neighbor') => {
-    const sessionId = session?.id;
+    const sessionId = session?.sessionId;
     const directory = sessionDirectory(session);
     if (!enabled || prefetchDisabled || !sessionId || !directory || sessionId === currentSessionId || isSpaceDirectoryStopped(directory)) {
       return;

@@ -2,11 +2,12 @@ import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import React from 'react';
 import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
 import { toast } from '@/components/ui';
-import { canArchiveWorktrees, setGitWorktreePinned, setGitWorktreeTitle } from '@/lib/gitApi';
+import { canArchiveWorktrees, setGitWorktreeTitle } from '@/lib/gitApi';
 import { useI18n } from '@/lib/i18n';
 import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -45,7 +46,9 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
   const directory = normalizePath(group.directory ?? null);
   // A space whose making failed, whose container is gone or whose machine is
   // out of reach would open a new chat in an empty folder, or fail.
-  const spaceTakesNoNewSession = useSpaceTakesNoNewSession(space?.id);
+  // Isolated spaces are unreleased (`ISOLATED_SPACES_RELEASED = false`), so a
+  // space's work row offers the same actions as a worktree's.
+  const spaceTakesNoNewSession = space?.state === 'stale' || space?.state === 'unknown';
   const worktreeRemoving = useWorktreeRemoving(worktree ? worktree.path : null);
   const sessions = React.useMemo(() => collectWorkSessions(group.sessions), [group.sessions]);
   const project = useProjectsStore(React.useCallback(
@@ -79,7 +82,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
   const selected = isCurrent && (collapsed || (current !== CURRENT_SESSION && !openDraftHasRow));
   const [finishing, setFinishing] = React.useState(false);
 
-  const title = space ? space.taskTitle?.title?.trim() || null : worktree?.title?.trim() || null;
+  const title = worktree?.title?.trim() || null;
   const branch = group.branch?.trim() || worktree?.branch?.trim() || null;
   // The space's own name stands where a worktree's branch does: under the
   // task's name, and the row's name until there is a task.
@@ -118,30 +121,15 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     useSessionUIStore.getState().setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session) ?? directory);
   };
   // The pin lives in the branch's config, so a detached worktree has none.
-  // The row moves once the server's topology event lists the change.
+  // The row moves once the server's topology event lists the change. The fork's
+  // Git runtime contract has no worktree read/unpin write yet, so the row
+  // reports the state it is given and offers no write.
   const pinned = worktree?.pinnedAt !== undefined;
-  // The pin list it is filed in (Pin to), Pinned when none.
   const pinList = pinned ? worktree?.pinList ?? DEFAULT_PIN_LIST : null;
-  const canPin = Boolean(group.directory && worktree?.branch?.trim()) && !worktreeRemoving;
-  /** `list` null is Pinned; `pin` false unpins. */
-  const setPin = async (pin: boolean, list: string | null = null): Promise<void> => {
-    if (!group.directory || !canPin) return;
-    try {
-      await setGitWorktreePinned(group.directory, pin, list);
-    } catch (error) {
-      toast.error(pin ? t('sessions.sidebar.work.pin.failed') : t('sessions.sidebar.work.unpin.failed'), {
-        description: error instanceof Error ? error.message : undefined,
-      });
-    }
-  };
+  const canPin = false;
   const saveTitle = async (next: string): Promise<void> => {
     if (!group.directory || !next.trim() || next.trim() === (title ?? '')) return;
     try {
-      if (space) {
-        await setSpaceTaskTitle(space.id, next.trim());
-        await refreshSpacesJourney();
-        return;
-      }
       await setGitWorktreeTitle(group.directory, next.trim());
     } catch (error) {
       toast.error(t('sessions.sidebar.work.rename.failed'), { description: error instanceof Error ? error.message : undefined });
@@ -238,7 +226,6 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     open,
     newChat,
     saveTitle,
-    setPin,
     pinList,
     finish,
     toggleWork,

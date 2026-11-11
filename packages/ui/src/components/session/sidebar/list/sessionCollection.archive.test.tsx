@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { resetSessionOrdering } from '@/sync/session-ordering';
 import { SyncProvider, useDirectoryStore } from '@/sync/sync-context';
@@ -14,10 +15,14 @@ const ARCHIVED_ID = 'ses_archived';
 const ACTIVE_ID = 'ses_active';
 const UNKNOWN_ID = 'ses_unknown';
 
-const session = (id: string, updated: number, archived = false, directory = DIRECTORY): Session => ({
-  sessionId: id,
-  projectId: 'project',
-  workspaceId: 'workspace',
+/** Each fixture directory is its own workspace, so a session in a deleted worktree stays out. */
+const session = (id: string, updated: number, archived = false, directory = DIRECTORY): Session => {
+  const workspaceId = `workspace:${directory}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId: id,
+    projectId: 'project',
+    workspaceId,
   displayPath: directory,
   rootSessionId: id,
   createdAt: 1,
@@ -32,7 +37,8 @@ const session = (id: string, updated: number, archived = false, directory = DIRE
   metadata: null,
   metadataRevision: '0',
   archiveRevision: '0',
-});
+  };
+};
 
 type Collection = ReturnType<typeof useSessionProjectCollection>;
 

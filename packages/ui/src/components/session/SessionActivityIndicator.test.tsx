@@ -55,6 +55,8 @@ describe('SessionActivityIndicator', () => {
   const iconHref = (state: string): string | null | undefined => host
     .querySelector(`[data-session-activity-indicator="${state}"] use`)
     ?.getAttribute('href');
+  const spinner = (state: string): Element | null => host
+    .querySelector(`[data-session-activity-indicator="${state}"] [data-spinner]`);
 
   test('gives each state its own static icon when animated indicators are off', async () => {
     useSessionDisplayStore.setState({ animatedActivityIndicators: false });
@@ -101,21 +103,22 @@ describe('SessionActivityIndicator', () => {
 
     for (const state of ['running', 'subagent', 'shell'] as const) {
       await renderIndicator({ state });
-      expect(iconHref(state)).toBe('#oc-loader-4');
-      expect(host.querySelector('.activity-spinner')).not.toBeNull();
+      expect(spinner(state)).not.toBeNull();
+      expect(iconHref(state)).toBeUndefined();
     }
     await renderIndicator({ state: 'unread' });
     expect(iconHref('unread')).toBe('#oc-checkbox-circle');
-    expect(host.querySelector('.activity-spinner')).toBeNull();
+    expect(spinner('unread')).toBeNull();
   });
 
   test('switches a mounted running indicator immediately and restores the icon', async () => {
     useSessionDisplayStore.setState({ animatedActivityIndicators: false });
     await renderIndicator({ state: 'running' });
+    expect(spinner('running')).toBeNull();
     await act(async () => useSessionDisplayStore.getState().setAnimatedActivityIndicators(true));
-    expect(host.querySelector('.activity-spinner')?.classList).toContain('text-status-info');
+    expect(spinner('running')?.classList).toContain('text-status-info');
     await act(async () => useSessionDisplayStore.getState().setAnimatedActivityIndicators(false));
-    expect(host.querySelector('.activity-spinner')).toBeNull();
+    expect(spinner('running')).toBeNull();
     expect(iconHref('running')).toBe('#oc-circle');
   });
 });

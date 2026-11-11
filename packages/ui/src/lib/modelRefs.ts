@@ -1,7 +1,7 @@
 import type { Model, Provider } from '@openchamber/agent-contract';
 import type { ModelRef } from '@/lib/settings/parsers';
 
-// The config store lists each provider's canonical models under it.
+// The config store regroups the canonical catalog's flat model list under its provider.
 type ProviderWithModelList = Provider & { models: Model[] };
 
 /**
