@@ -74,4 +74,8 @@ Reviewer pass on the diff against `f3afaa8d6`. Round one raised three findings; 
 - `ModelSelector` took favorites and recents from `useModelLists`, whose resolver still reads the retired `provider.id`/`model.id`, so a saved favorite never matched a canonical model and its section disappeared. The selector now resolves both lists itself against the canonical catalog. The shared resolver is slice 35's file and stays untouched.
 - `sections/DOCUMENTATION.md` still described the deleted permissions editor and `agentPermissionModel.ts`; the section is rewritten and the entity table no longer claims a permissions field.
 
-Round two is recorded below.
+Round two found no broken assumption in the fixes; it confirmed the two code corrections and the documentation rewrite read correctly.
+
+### The Vitest command in the task's Check
+
+`VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/sections` cannot run in this repository: every section test imports `bun:test`, which Vitest cannot resolve, so all 55 files fail before a test executes (the same happens on the landing target). The repository's own runner, `node scripts/run-isolated-tests.mjs <roots>`, exists precisely because these suites mix `bun:test` and `node:test`. The task's test evidence above is that runner's result.
