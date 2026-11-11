@@ -102,7 +102,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
 
       const key = getPrefetchRequestKey(request);
       sessionPrefetchInFlightRef.current.add(key);
-      void prefetchSession({ directory: request.directory, sessionID: request.sessionId })
+      void prefetchSession({ directory: request.directory, sessionId: request.sessionId })
         .catch(() => undefined)
         .finally(() => {
           sessionPrefetchInFlightRef.current.delete(key);
