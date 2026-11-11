@@ -14,6 +14,7 @@ import { SessionDeleteConfirmDialog } from '../shell/ConfirmDialogs';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { sameMultiRunIdentity } from '@/lib/multirun/identity';
 import { normalizePath } from '../utils';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 type Context = {
   groupDirectory?: string | null;

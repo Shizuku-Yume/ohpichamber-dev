@@ -372,7 +372,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // finished with it, or one group would mix tracked and finished sessions.
   // Touch layouts keep their actions permanently visible, where an icon on
   // every row would be noise: there it lives in the session menu only.
-  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !session.parentSessionId && !isChatDirectoryPath(resolveGlobalSessionDirectory(node.session));
+  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !node.session.parentSessionId && !isChatDirectoryPath(resolveGlobalSessionDirectory(node.session));
   const showWorkAction = canTrackWork && !alwaysShowActions;
   // Hover-revealed actions besides the menu: work, quick archive, and in VS
   // Code open-in-editor.
@@ -720,7 +720,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     void runGuestSessionAction({
       entry,
       t,
-      session: { sessionId: session.sessionId, title: resolvedSession.title, directory: sessionDirectory },
+      session: { id: session.sessionId, title: resolvedSession.title, directory: sessionDirectory },
       loadRecords: () => (sessionDirectory
         ? loadExportRecords({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),

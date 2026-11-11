@@ -8,7 +8,7 @@
 **Read first:** spec "How it is built" (Merge); the archived task 16 record; `packages/ui/src/sync/DOCUMENTATION.md`; skills `ui-api-decoupling`, `sync-state-invariants`, `drag-to-reorder`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 32 files (about 257 errors in 50 files at scaffold `93a3c7549`, 215 of them under `session/sidebar`); `bun scripts/upstream-drift.mjs --check --slice 32` → 0 unexplained (37 `components/session` paths today); `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/session` → exit 0
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** blocked
+- **Status:** active
 
 - [ ] Fix every type error in slice 32 files by porting merged upstream callers onto the fork's Canonical Client, Host session authority and stores. Do not change exported shapes in `src/sync`, `src/stores` or `src/api` (slice 34 owns them); record any missing data in `## Progress` instead.
 - [ ] Keep upstream v2.7.0's sidebar header order, menus, sections manager, mark-all-read, worktree naming and row context menus working on the fork's session model.
@@ -32,6 +32,3 @@
 
 **Not finished (remaining 202 errors):** pin-list storage on sessions (`getSessionPinList` has no fork equivalent — the contract's `openchamber.pinned` carries only `at`, so `PinToMenu` currently offers Pinned only and `workFacts.pin` is `DEFAULT_PIN_LIST`; the fork needs a contract decision), provider/model catalog callers in the dialogs (`providers.find(item => item.id)` → `providerId`; `modelId`; `config.loadAgents` → `useAgentsStore.loadAgents`; `selectConfigAgentsForDirectory` removed), `MoveSessionDialog`/`SessionDialogs`/`TodoSendDialog`/`ForkSessionDialog`/`ReviewFlowDialog`/`ProjectNotesTodoPanel` (`PlanView` has no `leading`/`visible` in the fork), the spaces code in `useWorktreeWork`/`SidebarHeader` (fork `SpaceMark` has no `taskTitle`, no `setSpaceTaskTitle`, no `setGitWorktreePinned` in `gitApi`, no `useHasUnreadSession`), the remaining test fixtures (contract session shape), and cross-component props (`notifyOnSubtasks`, `hideDirectoryControls`, `sessionOwnerById`). No deletes of retired OpenCode imports or drift-reason rows have been made yet, so the 37 unexplained paths and the deletes box stay open.
 
-## Blocked
-
-Not a false task assumption: the run hit its forced budget stop with the work half done. The branch is committed (`b69d42496` code, `b56a0b898` this record) and not landed. Resume from "Not finished" above: 202 slice-32 error blocks remain, 37 drift paths unexplained, the vitest check unrun, and no retired-module deletes made. The one genuine design gap to settle first is pin lists: the contract's `openchamber.pinned` carries only `at`, while upstream files sessions into named pin lists.
