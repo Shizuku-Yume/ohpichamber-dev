@@ -593,7 +593,7 @@ only ever sends v2.
 
 | Entity | What the page reads and writes |
 |---|---|
-| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `mode`, `steps`, `hidden`, `color`, `request.body.temperature` / `request.body.top_p`, and an ordered `permissions` rule list |
+| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `mode`, `steps`, `hidden`, `color`, `request.body.temperature` / `request.body.top_p` |
 | Command | `template` (the markdown body), `description`, `agent`, `model` with `#variant`, `subagent` |
 | MCP server | `type` (required), `command` / `url`, `environment`, `headers`, `disabled`, `codemode`, `timeout: { startup, catalog, execution }`, snake_case `oauth` |
 | Provider | `package` with the `aisdk:` prefix, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
@@ -617,34 +617,11 @@ no page exposes it as an on/off switch for agents. For MCP servers `disabled` is
 the documented way to keep a server configured but inactive, and the page's
 "Enable" checkbox writes it.
 
-### Agent permissions
+### Hidden agents
 
 Settings lists hidden custom agents so their files remain editable, renameable, and deletable. Hidden built-in agents stay out of Settings, and all hidden agents stay out of the composer pickers. Duplicate and rename read the stored entry and preserve its `hidden` flag.
 
-OpenCode 2 replaced the v1 `permission` map (`bash`/`task`/`list`/`lsp` keys with
-allow/deny/ask per pattern) with an ORDERED list of `{ action, resource, effect }`
-rules where the LAST match wins. The user does not think in ordered rules, so
-the editor keeps the v1 mental model: one row per tool with inherit / allow /
-ask / deny, an arrow showing what OpenCode will actually do for that tool right
-now, and resource patterns under an expanded row. `agents/agentPermissionModel.ts`
-translates this view to and from the rule list. Because order is part of the
-policy, a save edits the stored list in place: changed effects replace their
-rule where it stands, removed rows drop theirs, rules the view cannot show (an
-`*` action with a resource pattern) pass through untouched, and only new rules
-are inserted (agent wildcard first, a tool's wildcard before its patterns, a
-pattern last), so decisions for tools the user did not touch never change. The
-arrow is computed from OpenCode's built-in defaults
-(`OPENCODE_DEFAULT_RULES`), the global `opencode.json` rules and the agent's
-own wildcard, in that order. v1-only keys (`LEGACY_ACTIONS`) are neither shown
-nor written back.
-
-Below the built-in tools the editor lists one row per MCP server from the
-Settings directory's config (`useMcpConfigStore`), keyed `<server>_*`, which
-OpenCode matches against every tool the server exposes. Every configured server
-is listed, not only the connected ones, so a rule can be set while a server is
-disabled or failing; the live status from `useMcpStore` is shown beside the
-name as a hint. A single MCP tool (`<server>_<tool>`) is still reachable
-through the custom key input.
+Agent permissions are not edited here: the fork's agents store and the agent contract carry no permission field, so the page reads and writes only the fields the contract owns.
 
 ### The legacy-format note
 

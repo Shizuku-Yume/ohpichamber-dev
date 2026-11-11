@@ -307,9 +307,14 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     const refreshedSources = new Set<string>();
     for (const item of uninstallItems) {
       const installed = item.installed?.isInstalled === true ? item.installed : null;
-      const directory = installed?.scope === 'workspace' ? settingsDirectory : null;
-      const success = (installed?.scope !== 'workspace' || Boolean(directory))
-        && await deleteSkill(item.skillName, directory);
+      if (!installed) {
+        remaining.push(item);
+        continue;
+      }
+      // The store deletes by the authored reference the catalog reports, and
+      // needs the workspace regardless of which scope the skill lives in.
+      const success = Boolean(settingsDirectory)
+        && await deleteSkill({ scope: installed.scope, authoredSkillId: installed.authoredSkillId }, settingsDirectory);
       if (success) {
         refreshedSources.add(item.sourceId);
         setSelectedSkillKeys((current) => {

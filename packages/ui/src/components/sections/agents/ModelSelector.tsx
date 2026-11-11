@@ -9,7 +9,6 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Icon } from '@/components/icon/Icon';
 import { Spinner } from '@/components/ui/spinner';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
-import { useModelLists } from '@/hooks/useModelLists';
 import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
@@ -20,6 +19,26 @@ import { useUIStore } from '@/stores/useUIStore';
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
+
+/** The catalog rows the picker lists: a provider with its models under the picker's ids. */
+type CatalogProvider = {
+    providerId: string;
+    name: string;
+    models: readonly { modelId: string; name: string }[];
+};
+
+/** A stored provider/model ref resolved to the picker row shape, or dropped. */
+const resolvePickerRefs = (
+    refs: readonly { providerID: string; modelID: string }[],
+    providers: readonly CatalogProvider[],
+    hidden: readonly { providerID: string; modelID: string }[],
+): ModelPickerEntry[] => refs.flatMap((ref) => {
+    if (hidden.some((item) => item.providerID === ref.providerID && item.modelID === ref.modelID)) return [];
+    const provider = providers.find((item) => item.providerId === ref.providerID);
+    const model = provider?.models.find((item) => item.modelId === ref.modelID);
+    if (!provider || !model) return [];
+    return [{ providerID: ref.providerID, modelID: ref.modelID, model: { ...model, id: model.modelId } }];
+});
 
 interface ModelSelectorProps {
     providerId: string;
@@ -93,7 +112,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
     const addRecentModel = useUIStore((state) => state.addRecentModel);
     const providerOrder = useUIStore((state) => state.providerOrder);
-    const { favoriteModelsList, recentModelsList } = useModelLists(directory);
+    const favoriteModels = useUIStore((state) => state.favoriteModels);
+    const recentModels = useUIStore((state) => state.recentModels);
+    // Favorites and recents are stored as provider/model refs. They resolve
+    // against the same canonical catalog the picker lists, so a ref whose
+    // provider or model the catalog no longer offers drops out, as does a
+    // hidden one.
+    const favoriteModelsList = React.useMemo(
+        () => resolvePickerRefs(favoriteModels, catalogProviders, hiddenModels),
+        [favoriteModels, catalogProviders, hiddenModels],
+    );
+    const recentModelsList = React.useMemo(
+        () => resolvePickerRefs(recentModels, catalogProviders, hiddenModels)
+            .filter((entry) => !favoriteModelsList.some((favorite) => favorite.providerID === entry.providerID && favorite.modelID === entry.modelID)),
+        [recentModels, catalogProviders, hiddenModels, favoriteModelsList],
+    );
     const { isMobile: deviceIsMobile } = useDeviceInfo();
     const isActuallyMobile = isMobile || deviceIsMobile;
 
