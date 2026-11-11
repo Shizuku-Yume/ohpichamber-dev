@@ -88,20 +88,6 @@ export const createConfiguredWebAPIs = () => {
     apiBaseUrl,
     runtimeKey: sameOrigin(apiBaseUrl, localOrigin) ? 'local' : (desktopHostId ? `host:${desktopHostId}` : null),
   });
-  // Tell the desktop shell which instance this window shows, at boot and on
-  // every switch. A window opened for a saved host, or one switched to a host
-  // in place, carries no host tag of its own, so without the report the shell's
-  // window-reuse lookup (a notification click, a session link) opens another
-  // window instead of reusing this one. The bridge is absent off desktop, so
-  // the report is a no-op there.
-  const reportWindowRuntimeKey = (runtimeKey: string): void => {
-    const key = runtimeKey.trim();
-    const invoke = window.__OPENCHAMBER_DESKTOP__?.invoke;
-    if (!key || !invoke) return;
-    void invoke('desktop_set_window_runtime_key', { runtimeKey: key }).catch(() => {});
-  };
-  reportWindowRuntimeKey(getRuntimeKey());
-  subscribeRuntimeEndpointChanged((detail) => reportWindowRuntimeKey(detail.runtimeKey));
   setRuntimeBearerToken(clientToken || null);
   setRuntimeExtraHeaders(runtimeHeaders || null);
   void refreshRuntimeUrlAuthToken(apiBaseUrl || undefined).catch(() => {});

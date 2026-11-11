@@ -24,9 +24,11 @@ declare module "bun:test" {
     toBeDefined(): void;
     toBeUndefined(): void;
     toMatchObject(expected: unknown): void;
+    resolves: { toEqual(expected: unknown): Promise<void>; toMatchObject(expected: unknown): Promise<void> };
     rejects: {
       toThrow(expected?: string | RegExp | (new (...args: never[]) => unknown)): Promise<void>;
       toBeInstanceOf(expected: new (...args: never[]) => object): Promise<void>;
+      toMatchObject(expected: unknown): Promise<void>;
     };
     toBeGreaterThan(expected: number): void;
     toBeGreaterThanOrEqual(expected: number): void;

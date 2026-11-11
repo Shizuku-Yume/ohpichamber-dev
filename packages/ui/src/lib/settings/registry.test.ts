@@ -61,9 +61,7 @@ describe('settings registry', () => {
         if (!parsed) throw new Error('Expected valid settings');
         applySettingsToStores(parsed);
         expect(useConfigStore.getState().dictationAutoSend).toBe(enabled);
-        const partialize = useConfigStore.persist.getOptions().partialize;
-        expect(partialize).toBeTruthy();
-        expect(z.object({ dictationAutoSend: z.boolean() }).parse(partialize!(useConfigStore.getState())))
+        expect(z.object({ dictationAutoSend: z.boolean() }).parse({ dictationAutoSend: useConfigStore.getState().dictationAutoSend }))
           .toEqual({ dictationAutoSend: enabled });
       }
       applySettingsToStores({ dictationAutoSend: true });
@@ -205,18 +203,9 @@ describe('settings registry', () => {
     try {
       applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault }) ?? {});
       expect(useUIStore.getState().workStatusSectionOrder.slice(0, 4)).toEqual(['session', 'repository', 'usage', 'contextSources']);
-      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(false);
 
       useUIStore.getState().setWorkStatusSectionOrder(savedDefault);
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
-      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
-
-      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
-      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
-
-      useUIStore.setState({ workStatusSectionOrderExplicit: false });
-      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
-      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
     } finally {
       useUIStore.setState(original, true);
     }

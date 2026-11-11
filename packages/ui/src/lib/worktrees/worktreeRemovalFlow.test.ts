@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import { GitWorktreeRequestError } from '@/lib/api/types';
-
-import { GitWorktreeRequestError } from '@/lib/api/types';
 import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast } from './worktreeRemovalFlow';
 
 describe('deleteWithoutTeardownToast', () => {

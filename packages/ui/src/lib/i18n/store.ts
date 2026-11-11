@@ -8,6 +8,8 @@ import { hasRightToLeftText, isolateInsertedText } from './textDirection';
 
 export type I18nParams = Record<string, string | number | boolean | null | undefined>;
 export type I18nDictionary = Record<I18nKey, string>;
+/** A dictionary read for one message: a locale may still lack keys, and `en` answers for them. */
+export type I18nLookup = Partial<I18nDictionary>;
 
 type I18nState = {
   locale: Locale;
@@ -106,7 +108,7 @@ export function initializeLocale(): void {
   useI18nStore.getState().setLocale(detectInitialLocale());
 }
 
-export function formatMessage(dictionary: I18nDictionary, key: I18nKey, params?: I18nParams): string {
+export function formatMessage(dictionary: I18nLookup, key: I18nKey, params?: I18nParams): string {
   const template = dictionary[key] ?? enDict[key] ?? key;
   if (!params) {
     return template;

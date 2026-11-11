@@ -1,7 +1,6 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { normalizePath } from '@/lib/pathNormalization';
-import { getSessionActivityTime } from '@/sync/session-ordering';
 
 /**
  * Which working set of header tabs a place in the app shows, with separate
@@ -33,7 +32,7 @@ export const sessionTabSeedFor = (
   if (!normalized || isChatDirectoryPath(normalized)) return [];
   if (projectRoots.some((root) => normalizePath(root) === normalized)) return [];
   return sessions
-    .filter((session) => !session.parentID && !session.time?.archived && normalizePath(session.directory ?? null) === normalized)
-    .sort((left, right) => getSessionActivityTime(right) - getSessionActivityTime(left))
-    .map((session) => session.id);
+    .filter((session) => !session.parentSessionId && !session.archivedAt && normalizePath(session.displayPath) === normalized)
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .map((session) => session.sessionId);
 };

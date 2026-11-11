@@ -1338,12 +1338,6 @@ export const createWebSourceControlAPI = (options: WebSourceControlAPIOptions = 
       return { disabled: Boolean(payload.disabled) };
     },
 
-    authSetSshUrl: async (identity, sshUrl) => {
-      const normalized = normalizeIdentity(identity);
-      const payload = await post<{ sshUrl?: string | null; error?: string }>(fetch, normalized, '/auth/ssh-url', { sshUrl });
-      return { sshUrl: typeof payload.sshUrl === 'string' ? payload.sshUrl : null };
-    },
-
     changeRequestStatus: async (context, branch, requestOptions): Promise<ChangeRequestStatus> => {
       const normalized = normalizeIdentity(context);
       const query = boundReadQuery(context);

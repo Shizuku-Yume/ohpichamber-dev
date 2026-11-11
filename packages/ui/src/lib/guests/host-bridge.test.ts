@@ -135,7 +135,7 @@ describe('answerGuestMessage', () => {
   });
 
   test('a block answer reaches the block, and a refusal tells the frame why', async () => {
-    const message: GuestMessage = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'block-answer', id: 'answer-1', payload: { text: 'Explain' } };
+    const message: GuestMessage = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'block-answer', id: 'answer-1', payload: { text: 'Explain' } };
     const seen: string[] = [];
     const sent = await answerGuestMessage(message, effects({ answerBlock: async (text) => { seen.push(text); } }));
     expect(seen).toEqual(['Explain']);

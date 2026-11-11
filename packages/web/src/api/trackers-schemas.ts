@@ -10,11 +10,8 @@ import type {
   TrackerAccount,
   TrackerAuthStart,
   TrackerAuthStatus,
-  TrackerConnectFailureCode,
-  TrackerConnectResult,
   TrackerComment,
   TrackerConnectFailureCode,
-  TrackerConnectInfo,
   TrackerConnectResult,
   TrackerItem,
   TrackerItemResult,
@@ -27,6 +24,7 @@ import type {
   TrackerStatesResult,
   TrackerWorkflowState,
 } from '@openchamber/ui/lib/api/types';
+import type { TrackerConnectInfo } from '@openchamber/ui/lib/trackers/types';
 
 export type TrackerFetch = (input: string, init?: RuntimeFetchOptions) => Promise<Response>;
 
