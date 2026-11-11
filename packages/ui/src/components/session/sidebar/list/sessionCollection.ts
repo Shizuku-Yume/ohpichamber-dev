@@ -218,6 +218,14 @@ const orderSidebarSessionStructure = (
   };
 };
 
+export type SidebarSessionProjection = {
+  chatSessions: Session[];
+  childrenMap: Map<string, Session[]>;
+  orderedSessions: Session[];
+  projectSessions: Session[];
+  sessionById: Map<string, Session>;
+};
+
 export const buildSidebarSessionProjection = ({
   globalActiveSessions,
   liveSessions,
@@ -225,7 +233,7 @@ export const buildSidebarSessionProjection = ({
   isVSCode,
   pinnedSessionIds,
   sessionOrderRanks,
-}: SidebarSessionProjectionArgs) => {
+}: SidebarSessionProjectionArgs): SidebarSessionProjection => {
   const structure = buildSidebarSessionStructure({
     globalActiveSessions,
     liveSessions,
@@ -250,11 +258,26 @@ type UseSessionProjectCollectionArgs = {
 // The collection owns the global-first/live-gap merge and lifecycle ordering.
 // Selection state intentionally never enters this boundary: rows subscribe to
 // active state themselves, leaving this projection referentially stable.
+export type UseSessionProjectCollectionResult = {
+  archivedSessions: readonly Session[];
+  childrenMap: Map<string, Session[]>;
+  chatSessions: Session[];
+  getDescendantIds: (sessionId: string, options: { includeArchived: boolean }) => string[];
+  hasAuthoritativeGlobalSessions: boolean;
+  nestedSessionIds: Set<string>;
+  orderedSessions: Session[];
+  pinnedSessionIds: Set<string>;
+  sessionOrderRanks: ReadonlyMap<string, number>;
+  sessions: Session[];
+  rootSessions: Session[];
+  sessionById: Map<string, Session>;
+};
+
 export const useSessionProjectCollection = ({
   knownDirectories,
   isVSCode,
   isVisible,
-}: UseSessionProjectCollectionArgs) => {
+}: UseSessionProjectCollectionArgs): UseSessionProjectCollectionResult => {
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const globalStructure = useGlobalSessionsStore((state) => state.structure);
   const rawArchivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);

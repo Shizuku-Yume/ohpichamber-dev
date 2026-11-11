@@ -17,7 +17,12 @@ import { isSessionUnread } from '@/sync/session-unread';
 import { useCollapsedSessionActivityState } from '../sessions/collapsedActivityState';
 import { useGroupRefs } from '../projects/useGroupRefs';
 import type { SessionGroup } from '../types';
+import type { WorktreeMetadata } from '@/types/worktree';
+import type { SpaceMark } from '@/lib/spaces/spaces-store';
+import type { ProjectEntry } from '@/lib/api/types';
+import type { Session } from '@openchamber/agent-contract';
 import { formatProjectLabel, isPathWithinProject, normalizePath } from '../utils';
+import type { CollapsedActivityState } from '../sessions/collapsedActivityState';
 import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork } from './workActions';
 
 const CURRENT_SESSION = '\u0000session';
@@ -39,7 +44,42 @@ type Args = {
  * name lives on the space record, its own name stands where a branch would, it has
  * no pin or archive, and its Done leaves the space as it is.
  */
-export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Args) {
+export type UseWorktreeWorkResult = {
+  worktree: WorktreeMetadata | null | undefined;
+  space: SpaceMark | null;
+  spaceName: string | null;
+  canRename: true;
+  canNewChat: boolean;
+  directory: string | null;
+  worktreeRemoving: boolean;
+  sessions: Session[];
+  project: ProjectEntry | null;
+  projectLabel: string | null;
+  refs: ReturnType<typeof useGroupRefs>;
+  sessionWorkEnabled: boolean;
+  inWork: boolean;
+  selected: boolean;
+  title: string | null;
+  branch: string | null;
+  label: string;
+  secondName: string | null;
+  finishing: boolean;
+  canArchive: boolean;
+  pinned: boolean;
+  canPin: false;
+  pinList: string | null;
+  workAction: boolean;
+  activityState: CollapsedActivityState;
+  runningSessionId: string | null;
+  durationSessionId: string | null;
+  open: () => void;
+  newChat: () => void;
+  saveTitle: (name: string) => Promise<void>;
+  finish: (archive: boolean) => Promise<void>;
+  toggleWork: () => void;
+};
+
+export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Args): UseWorktreeWorkResult {
   const { t } = useI18n();
   const worktree = group.worktree;
   const space = group.space ?? null;
