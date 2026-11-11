@@ -10,11 +10,11 @@
 - **Status:** active
 
 - [x] Lanes 12-18 and repair slices 30-35 are already on the scaffold. Fix only what remains when they are combined: `bun check --all` must report 0 errors repo-wide, and lint and the full test suite must pass. Name every leftover you fix in `## Progress` with the slice it belonged to.
-- [ ] Rebuild `ux-v270-omp-alignment/integration` as `main` plus one merge commit with parents `main` and `bc50ba56a`, whose tree equals the resolved scaffold tip. The scaffold branch is not merged anywhere.
+- [x] Rebuild `ux-v270-omp-alignment/integration` as `main` plus one merge commit with parents `main` and `bc50ba56a`, whose tree equals the resolved scaffold tip. The scaffold branch is not merged anywhere.
 - [x] Add `scripts/upstream-drift.mjs --check` and the marker check to `bun run check`.
 - [x] Run `bun run dead-code`; findings introduced by the merge are fixed, and inherited ones are left as they were.
-- [ ] Real path: build and launch Web and packaged Electron, open every Settings page without errors, and send a chat that completes through the real provider.
-- [ ] Record the merge, drift counts before and after, and the real-path result in `development.md`.
+- [x] Real path: build and launch Web and packaged Electron, open every Settings page without errors, and send a chat that completes through the real provider.
+- [x] Record the merge, drift counts before and after, and the real-path result in `development.md`.
 
 ## Progress
 
@@ -27,3 +27,7 @@
 **Parents.** `main` had two workflow-only commits past the scaffold's merge base, so `e04b3dfb7` was merged into the scaffold before landing.
 
 **Checks.** `bun check --all` exit 0; `bun run lint` exit 0 (seven workspaces); `bun scripts/upstream-drift.mjs --check` exit 0; `VITEST_MAX_WORKERS=2 bun run test` see `## Verification`; `bun run dead-code` exit 1 on the inherited inventory.
+
+**Real path (2026-11-11).** Web: built `packages/web/dist`, served on `127.0.0.1:4119` with an isolated HOME/data dir and the maintainer's provider env (key never printed); all 27 Settings pages rendered through the router with headings and items, 0 failed pages, and the only renderer log entries are `/api/quota/*` 503s from the unconfigured quota credentials. A real-provider turn completed in the Host (`/api/agent/v1/sessions/:id/history` carries a `completed` turn and assistant content) in ~3.6 s. Desktop: built `OpenChamber-3.0.0-linux-x86_64.AppImage` (sha256 `f08a904a1a9915ea2b5c669a043d1e64947c2096c3b023cff3a33930ad2867b3`), launched under Xvfb with CDP 9551 after resolving first-run onboarding to the local host; all 27 Settings pages rendered, and a real-provider turn finished with `stopReason: stop`, `contentBlocks: 2`, `hasText: true` and a generated session title. Evidence: `sweep-web/`, `chat-out/`, `desktop-out/`, `desktop-check.log`, `final-check.log` under `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-v270-task19-2026-11-11/`.
+
+**Accepted limits.** The AppImage was launched with `APPIMAGE_EXTRACT_AND_RUN=1` (no FUSE in this shell) and a short `TMPDIR` because Chromium's process-singleton socket path exceeded the limit; the packaged content gate, not the AppImage launcher, is what proves the payload. Two desktop sessions in that env hit `401 Invalid API key` before the seeded provider config was corrected; the successful turn above is the evidence that counts.
