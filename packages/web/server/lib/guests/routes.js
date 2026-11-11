@@ -36,6 +36,10 @@ import { runGuestFileOperation } from './files.js';
 import { createGuestFrameGrants } from './frame-grants.js';
 import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
 import { injectGuestDocumentStyles } from './html-styles.js';
+import { injectSvgRootColor } from '../host/project-icon-routes.js';
+
+// The background colours a provider logo is drawn on; `theme=light|dark` names one.
+const SVG_THEME_COLORS = new Map([['light', '#111111'], ['dark', '#f5f5f5']]);
 import { installGuest, installGuestFromZipBuffer, parseInstallRequest, uninstallGuest } from './install.js';
 import { enterpriseBlockedCapabilities } from './enterprise.js';
 import { guestUploadMaxBytes, readGuestUploadBody } from './upload.js';
@@ -1060,7 +1064,10 @@ export const registerGuestRoutes = (app, {
   // One extension file, as a frame loads it. `token` is the legacy query
   // credential copied onto the page's relative URLs; `connectSource` is the
   // one path the page may fetch from.
-  const sendGuestFile = async (res, guest, rawPath, { token = '', connectSource }) => {
+  // A `theme` query colours a provider logo's SVG, whose `currentColor` an
+ // <img> cannot set from outside. Any other value, and every file type but
+ // SVG, is sent as the package shipped it.
+ const sendGuestFile = async (res, guest, rawPath, { token = '', connectSource, theme }) => {
     let relativePath;
     try {
       relativePath = decodeURIComponent(Array.isArray(rawPath) ? rawPath.join('/') : (rawPath || ''));
@@ -1080,9 +1087,11 @@ export const registerGuestRoutes = (app, {
     } catch {
       return res.status(404).end();
     }
+    // Only `light` and `dark` name a background the logo must read on.
+    const logoThemeColor = contentType === 'image/svg+xml' ? SVG_THEME_COLORS.get(theme) : undefined;
     const body = contentType.startsWith('text/html')
       ? injectGuestDocumentStyles(injectGuestAssetTokens(raw.toString('utf8'), token))
-      : raw;
+      : logoThemeColor ? injectSvgRootColor(raw.toString('utf8'), logoThemeColor) : raw;
     res.setHeader('Content-Type', contentType);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store');
@@ -1164,6 +1173,7 @@ export const registerGuestRoutes = (app, {
       return await sendGuestFile(res, guest, req.params.filePath, {
         token: parseGuestUrlToken(req.query.oc_url_token),
         connectSource: connectSourceFor(req, `/api/guests/${guest.id}/`),
+        theme: req.query.theme,
       });
     } catch (error) {
       console.error('Failed to serve guest asset:', error);

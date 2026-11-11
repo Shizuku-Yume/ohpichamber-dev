@@ -182,6 +182,23 @@ const envString = (env, name) => (env[name] ?? '').trim() || null;
 const envList = (env, name) => (env[name] ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
 
 /**
+ * Calls `onChange` whenever the policy in effect differs from the last one
+ * seen, and never for a poll that found nothing new. The watcher owns only the
+ * polling: its caller decides what a changed policy means. `read` is for tests.
+ */
+export const watchEnterprisePolicy = ({ onChange, intervalMs = 15_000, read = readEnterprisePolicy }) => {
+ let last = JSON.stringify(read());
+ const timer = setInterval(() => {
+  const next = JSON.stringify(read());
+  if (next === last) return;
+  last = next;
+  onChange();
+ }, intervalMs);
+ timer.unref?.();
+ return () => clearInterval(timer);
+};
+
+/**
  * The policy in effect, from the file and the environment together.
  * `relayUrl` and `jev` are the raw pinned values; their consumers validate
  * them and treat an invalid one as unset. `source` says where enterprise mode
