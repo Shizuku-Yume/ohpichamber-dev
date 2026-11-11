@@ -8,7 +8,6 @@
 **Read first:** spec "How it is built" (Merge); the archived task 15 record; `packages/ui/src/sync/DOCUMENTATION.md`; `packages/ui/src/stores/DOCUMENTATION.md`; skills `sync-state-invariants`, `ui-api-decoupling`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 34 files (about 310 errors at scaffold `93a3c7549`: sync 187 in 27 files, stores 107 in 15 files, api 13, contexts 3; most are in tests); `bun scripts/upstream-drift.mjs --check --slice 34` → 0 unexplained; `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/sync packages/ui/src/stores packages/ui/src/api` → exit 0
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** active
 
 - [x] Fix every type error in slice 34 files. Production code keeps the Canonical Client event model and Host session authority; tests are brought onto the shapes production now has.
 - [x] Exported shapes other slices consume stay as they are on the scaffold. If a shape must change to fix an error here, update every caller outside this slice in the same commit and list them in `## Progress`.
