@@ -70,8 +70,8 @@ const EMPTY_GROUP_SEARCH_DATA = new WeakMap<SessionGroup, GroupSearchData>();
 
 type Args = {
   normalizedProjects: ProjectItem[];
-  getSessionsForProject: (projectId: string) => Session[];
-  getArchivedSessionsForProject: (projectId: string) => Session[];
+  getSessionsForProject: (projectId: string) => readonly Session[];
+  getArchivedSessionsForProject: (projectId: string) => readonly Session[];
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
   projectRepoStatus: Map<string, boolean | null>;
   projectRootBranches: Map<string, string | null>;

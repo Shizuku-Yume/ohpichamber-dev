@@ -54,8 +54,8 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
-  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
+
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
@@ -90,9 +90,8 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'forkSessionDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgents(projectDirectory);
+  }, [open, loadProviders, loadAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open || !resolvedWorktreeProjectDirectory || !git) return;
@@ -117,21 +116,21 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === providerID) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === providerID) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === modelID);
-    const fallbackModelID = models[0]?.id ?? '';
+    const hasModel = models.some((item) => item.modelId === modelID);
+    const fallbackModelID = models[0]?.modelId ?? '';
 
-    if (provider?.id === providerID && hasModel) return;
+    if (provider?.providerId === providerID && hasModel) return;
 
-    setProviderID(provider?.id ?? '');
+    setProviderID(provider?.providerId ?? '');
     setModelID(hasModel ? modelID : fallbackModelID);
     setVariant('');
   }, [open, providers, providerID, modelID]);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === providerID);
-    const model = provider?.models?.find((item) => item.id === modelID) as { variants?: ModelVariantSource } | undefined;
+    const provider = providers.find((item) => item.providerId === providerID);
+    const model = provider?.models?.find((item) => item.modelId === modelID) as { variants?: ModelVariantSource } | undefined;
     return listModelVariantIds(model?.variants);
   }, [providers, providerID, modelID]);
 

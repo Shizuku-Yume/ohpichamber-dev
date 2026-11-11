@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
+import type { CanonicalEvent } from '@openchamber/agent-contract';
 import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
 import { replaceGlobalSessionStatusById, setSessionParentResolver, useFirstSessionWithOpenTurn } from '@/sync/global-session-status';
 import { applyPrWatch, resetPrWatchesForRuntimeSwitch } from '@/sync/pr-watch';
@@ -43,21 +44,27 @@ afterEach(async () => {
 });
 
 test('a session running or holding a running subagent is found', async () => {
-  await act(async () => replaceGlobalSessionStatusById(new Map([['second', { directory: '/repo', status: { type: 'busy' } }]])));
+  await act(async () => replaceGlobalSessionStatusById(new Map([['second', { directory: '/repo', status: 'running' }]])));
   expect(found).toBe('second');
 
   await act(async () => {
     setSessionParentResolver((id) => (id === 'child' ? 'first' : undefined));
-    replaceGlobalSessionStatusById(new Map([['child', { directory: '/repo', status: { type: 'busy' } }]]));
+    replaceGlobalSessionStatusById(new Map([['child', { directory: '/repo', status: 'running' }]]));
   });
   expect(found).toBe('first');
 });
 
 test('an idle session waiting on a command, a workflow or a pull request is found', async () => {
-  await act(async () => applyBackgroundShellEvents('/repo', [{
-    type: 'shell.started',
-    properties: { shell: { id: 'sh_1', sessionID: 'second', command: 'sleep 300', file: '/tmp/sh_1.out', startedAt: 1 } },
-  }]));
+  const runningShell: CanonicalEvent = {
+    type: 'shell.updated',
+    sessionId: 'second', epoch: '1', sequence: '1', timestamp: 1,
+    job: {
+      jobId: 'sh_1', sessionId: 'second', epoch: '1', workerGeneration: 'worker-1',
+      workspaceId: 'workspace-repo', projectId: 'p', command: 'sleep 300', background: true,
+      startedAt: 1, outputCursor: '0', status: 'running',
+    },
+  };
+  await act(async () => applyBackgroundShellEvents('/repo', [runningShell]));
   expect(found).toBe('second');
   await act(async () => resetBackgroundShells());
   expect(found).toBeNull();

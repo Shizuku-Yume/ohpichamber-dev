@@ -46,7 +46,7 @@ export const collectWorkSessions = (nodes: readonly SessionNode[]): Session[] =>
 };
 
 /** A session that grew out of another one (a review, a fork, a promoted `/btw`), not the work itself. */
-const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.fork?.sessionID);
+const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.metadata?.openchamber?.originalSessionID);
 
 /**
  * The session a click on a worktree work opens: the one the user last worked

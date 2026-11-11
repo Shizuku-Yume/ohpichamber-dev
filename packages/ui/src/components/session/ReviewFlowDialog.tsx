@@ -59,8 +59,8 @@ function ReviewFlowDialogView({
 }: ReviewFlowDialogProps) {
   const { t } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
-  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
+
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
@@ -77,9 +77,8 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'reviewFlowDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgents(projectDirectory);
+  }, [open, loadProviders, loadAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -94,24 +93,24 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === execution.providerID) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === execution.providerID) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === execution.modelID);
-    const fallbackModelID = models[0]?.id ?? '';
+    const hasModel = models.some((item) => item.modelId === execution.modelID);
+    const fallbackModelID = models[0]?.modelId ?? '';
 
-    if (provider?.id === execution.providerID && hasModel) return;
+    if (provider?.providerId === execution.providerID && hasModel) return;
 
     setExecution((prev) => ({
       ...prev,
-      providerID: provider?.id ?? '',
+      providerID: provider?.providerId ?? '',
       modelID: hasModel ? prev.modelID : fallbackModelID,
       variant: '',
     }));
   }, [open, providers, execution.providerID, execution.modelID]);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerID);
-    const model = provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
+    const provider = providers.find((item) => item.providerId === execution.providerID);
+    const model = provider?.models?.find((item) => item.modelId === execution.modelID) as { variants?: ModelVariantSource } | undefined;
     return listModelVariantIds(model?.variants);
   }, [providers, execution.providerID, execution.modelID]);
 

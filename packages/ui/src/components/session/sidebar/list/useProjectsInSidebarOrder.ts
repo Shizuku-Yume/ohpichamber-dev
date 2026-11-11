@@ -49,7 +49,7 @@ export const useProjectsInSidebarOrder = <T extends { id: string }>(
     const sorted = sortProjectsByOrder(projects, order, manualOrder);
     const ranked = recent
       ? rankByLatestActivity(sorted, order, (project) => project.id, createSessionOwnershipIndex(
-        partitionSidebarSessions(sessions).projectSessions,
+        partitionSidebarSessions(sessions, false).projectSessions,
         sorted.flatMap((project) => {
           const normalizedPath = normalizePath(project.path);
           return normalizedPath ? [{ id: project.id, normalizedPath }] : [];

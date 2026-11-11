@@ -3,7 +3,7 @@ import { buildKnownSessionDirectories } from './sessionListDirectories';
 import { buildSessionBootstrapDemands } from './sessionBootstrapDemands';
 
 describe('buildKnownSessionDirectories', () => {
-  test('normalizes project roots and includes known worktrees', () => {
+  test('normalizes project roots and optionally includes worktrees', () => {
     const worktrees = new Map([
       ['/Repo', [{ path: '/repo/worktree', projectDirectory: '/Repo', branch: 'worktree', label: 'worktree' }]],
     ]);
@@ -12,7 +12,7 @@ describe('buildKnownSessionDirectories', () => {
       '/Repo',
       '/repo/worktree',
     ]);
-    expect([...buildKnownSessionDirectories([{ path: '/Repo' }], new Map())]).toEqual([
+    expect([...buildKnownSessionDirectories([{ path: '/Repo' }], worktrees, { includeWorktrees: false })]).toEqual([
       '/Repo',
     ]);
   });

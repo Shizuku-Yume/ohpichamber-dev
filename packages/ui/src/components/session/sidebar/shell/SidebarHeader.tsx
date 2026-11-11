@@ -33,7 +33,8 @@ import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useUIStore } from '@/stores/useUIStore';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { markAllSessionsViewed } from '@/sync/notification-store';
-import { useHasUnreadSession } from '@/sync/session-unread';
+import { isSessionUnread } from '@/sync/session-unread';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 type Props = {
   hideDirectoryControls: boolean;
@@ -68,7 +69,9 @@ const IDLE_PAGE_BUTTON_CLASS = 'text-muted-foreground hover:text-foreground hove
  */
 function MarkAllReadItem(): React.ReactNode {
   const { t } = useI18n();
-  const hasUnread = useHasUnreadSession();
+  // Any session with an unread ending enables the action; the store holds the
+  // same records the rows read, so the menu needs no second index.
+  const hasUnread = useGlobalSessionsStore((state) => state.activeSessions.some(isSessionUnread));
   return (
     <DropdownMenuItem disabled={!hasUnread} onClick={markAllSessionsViewed} className="flex items-center gap-2">
       <Icon name="check-double" className="h-4 w-4" />
@@ -232,9 +235,10 @@ export function SidebarHeader(props: Props): React.ReactNode {
         setDetailedZoneRows(!detailedZoneRows);
         void updateDesktopSettings({ sidebarDetailedZoneRows: !detailedZoneRows });
       })}
+      {/* The display store owns this preference and persists it as part of
+          `session-display-mode`; the fork's settings registry has no key for it. */}
       {toggleItem({ labelKey: 'sessions.sidebar.header.displayMode.worktreeNameByBranch', icon: 'git-branch' }, worktreeNameByBranch, () => {
         setWorktreeNameByBranch(!worktreeNameByBranch);
-        void updateDesktopSettings({ sidebarWorktreeNameByBranch: !worktreeNameByBranch });
       })}
     </>);
   }

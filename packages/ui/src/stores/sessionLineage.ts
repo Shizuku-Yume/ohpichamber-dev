@@ -1,4 +1,5 @@
 import type { Session } from '@openchamber/agent-contract';
+import { getOriginalSessionID, isReviewSession } from '@/lib/sessionReviewMetadata';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 
 /**
@@ -11,6 +12,11 @@ import { useGlobalSessionsStore } from './useGlobalSessionsStore';
  * - `all`: every session at any depth, archived ones included. Delete.
  * - `archived`: archived sessions, stopping at an active one. Restore, which
  *   brings back the archived subsessions of a root.
+ *
+ * Archive, delete and restore also follow review metadata: a review of a
+ * session is its work, so an action on the session reaches it. The `active`
+ * policy keeps the subagent graph alone: move, export and activity read what a
+ * row renders.
  */
 type SessionLineagePolicy = 'active' | 'activeThroughArchived' | 'all' | 'archived';
 
@@ -41,12 +47,14 @@ const keeps = {
  */
 export const createSessionLineage = (sessions: readonly Session[]): SessionLineage => {
   const childrenByParentId = new Map<string, Session[]>();
+  const reviewsByOriginalId = new Map<string, Session[]>();
   for (const session of sessions) {
-    const parentId = session.parentSessionId;
+    const parentId = session.parentSessionId ?? (isReviewSession(session) ? getOriginalSessionID(session) : null);
     if (!parentId) continue;
-    const siblings = childrenByParentId.get(parentId);
+    const index = session.parentSessionId ? childrenByParentId : reviewsByOriginalId;
+    const siblings = index.get(parentId);
     if (siblings) siblings.push(session);
-    else childrenByParentId.set(parentId, [session]);
+    else index.set(parentId, [session]);
   }
 
   return {
@@ -56,7 +64,8 @@ export const createSessionLineage = (sessions: readonly Session[]): SessionLinea
       const descendants: Session[] = [];
       const visited = new Set<string>([rootId]);
       const visit = (parentId: string): void => {
-        for (const child of childrenByParentId.get(parentId) ?? []) {
+        const reviews = policy === 'active' ? [] : reviewsByOriginalId.get(parentId) ?? [];
+        for (const child of [...(childrenByParentId.get(parentId) ?? []), ...reviews]) {
           if (visited.has(child.sessionId) || !walk(child)) continue;
           visited.add(child.sessionId);
           if (keep(child)) descendants.push(child);
