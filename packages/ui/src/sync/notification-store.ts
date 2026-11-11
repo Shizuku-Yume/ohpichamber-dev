@@ -26,7 +26,7 @@ type TurnCompleteNotification = NotificationBase & {
   type: "turn-complete"
 }
 
-type ErrorNotification = NotificationBase & {
+export type ErrorNotification = NotificationBase & {
   type: "error"
   /** What OpenCode reported for the failed turn; both null when it gave no details. */
   error?: { name: string | null; message: string | null; responseBody?: string | null }
@@ -151,6 +151,11 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
 // ---------------------------------------------------------------------------
 
 export function appendNotification(notification: Notification) {
+  useNotificationStore.getState().append(notification)
+}
+
+/** Report a failed turn, the way `appendNotification` reports any notification. */
+export function appendErrorNotification(notification: ErrorNotification) {
   useNotificationStore.getState().append(notification)
 }
 
