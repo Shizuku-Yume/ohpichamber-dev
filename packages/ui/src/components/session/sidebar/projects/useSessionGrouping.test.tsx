@@ -186,7 +186,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const worktree = (name: string): WorktreeMetadata => ({
       source: 'sdk', name, path: `/workspace/.wt/${name}`, projectDirectory: '/workspace', branch: name, label: name,
     });
-    const busy = { ...session('busy'), directory: '/workspace/.wt/zeta', time: { created: 1, updated: 99 } };
+    const busy = session('busy', undefined, { updatedAt: 99 }, '/workspace/.wt/zeta');
     const worktreeOrder = () => {
       const state: BuildCapture = {};
       const Harness = () => {
@@ -215,7 +215,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const alpha: WorktreeMetadata = {
       source: 'sdk', name: 'alpha', path: '/workspace/.wt/alpha', projectDirectory: '/workspace', branch: 'alpha', label: 'alpha',
     };
-    const inSubfolder = { ...session('sub'), directory: '/workspace/.wt/alpha/ai', time: { created: 1, updated: 1 } };
+    const inSubfolder = session('sub', undefined, { updatedAt: 1 }, '/workspace/.wt/alpha/ai');
     const state: GroupingCapture = {};
     const Harness = () => {
       state.buildGroupedSessions = useSessionGrouping({
@@ -351,9 +351,9 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
 
   test('nests a lifecycle-ordered cross-project subtree under its parent and leaves the child worktree empty', () => {
     const parent = session('parent');
-    const older = { ...session('older', 'parent'), directory: '/workspace/.wt/child' };
-    const newer = { ...session('newer', 'parent'), directory: '/workspace/.wt/child' };
-    const grandchild = { ...session('grandchild', 'newer'), directory: '/workspace/.wt/grandchild' };
+    const older = session('older', 'parent', {}, '/workspace/.wt/child');
+    const newer = session('newer', 'parent', {}, '/workspace/.wt/child');
+    const grandchild = session('grandchild', 'newer', { rootSessionId: 'parent' }, '/workspace/.wt/grandchild');
     const all = [parent, older, grandchild, newer];
     const ranks = new Map([['newer', 3], ['older', 2]]);
     const fixture = groupingFixture(all, ranks);
@@ -424,16 +424,9 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
   });
 
   test('hides an active grandchild below an archived intermediate known only globally', () => {
-    const root = { ...session('root'), directory: '/workspace' };
-    const intermediate = {
-      ...session('archived-intermediate', 'root'),
-      directory: '/workspace/.wt/archived',
-      time: { created: 1, updated: 1, archived: 2 },
-    };
-    const grandchild = {
-      ...session('grandchild', 'archived-intermediate'),
-      directory: '/workspace/.wt/active',
-    };
+    const root = session('root');
+    const intermediate = session('archived-intermediate', 'root', { archivedAt: 2, archiveRevision: '1' }, '/workspace/.wt/archived');
+    const grandchild = session('grandchild', 'archived-intermediate', { rootSessionId: 'root' }, '/workspace/.wt/active');
     const fixture = groupingFixture([root, grandchild], new Map(), [intermediate]);
     const activeWorktree: WorktreeMetadata = {
       source: 'sdk', name: 'active', path: '/workspace/.wt/active', projectDirectory: '/workspace', branch: 'active', label: 'active',

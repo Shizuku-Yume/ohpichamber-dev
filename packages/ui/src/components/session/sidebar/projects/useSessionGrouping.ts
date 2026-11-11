@@ -145,7 +145,7 @@ export const useSessionGrouping = (args: Args) => {
       }
 
       const getSessionWorktree = (session: Session): WorktreeMetadata | null => {
-        const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+        const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session));
         const sessionWorktreeMeta = args.worktreeMetadata.get(session.sessionId) ?? null;
         if (sessionWorktreeMeta) return sessionWorktreeMeta;
         if (sessionDirectory) {

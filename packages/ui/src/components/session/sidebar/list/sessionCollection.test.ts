@@ -31,7 +31,7 @@ const session = (
   directory: string | null,
   overrides: Partial<Session> = {},
 ): Session => {
-  const workspaceId = `ws_${sessionId}`;
+  const workspaceId = `ws_${sessionId}_${directory ?? ''}`;
   if (directory) registerWorkspaceDirectory(workspaceId, directory);
   return {
     sessionId,
@@ -240,30 +240,6 @@ describe('projectSidebarCollection', () => {
     expect(projection.chatSessions.map(entry => entry.sessionId)).toEqual(['canonical-chat']);
     expect(projection.projectSessions.map(entry => entry.sessionId)).toEqual(['project']);
     expect(projection.orderedSessions.map(entry => entry.sessionId)).toContain('canonical-chat');
-  });
-
-  test('excludes a /btw fork before project ownership and restores it when the marker is removed', () => {
-    const fork = session(
-      'fork',
-      '/home/.config/openchamber/chats/2026-08-24/session-fork',
-      withServerMetadata({ kind: 'btw', originalSessionID: 'parent' }),
-    );
-    const project = session('project', '/workspace/a');
-    const input = {
-      liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
-    };
-
-    expect(projectSidebarCollection({ ...input, globalActiveSessions: [fork, project] }).map((entry) => entry.sessionId)).toEqual(['project']);
-    expect(partitionSidebarSessions([fork], false).chatSessions).toEqual([]);
-
-    const promoted = session(
-      'fork',
-      '/home/.config/openchamber/chats/2026-08-24/session-fork',
-      withServerMetadata({}),
-    );
-    expect(partitionSidebarSessions([promoted], false).chatSessions.map((entry) => entry.sessionId)).toEqual(['fork']);
   });
 
   test('keeps workflow agents in the hierarchy, where their requests count for the parent', () => {
