@@ -121,6 +121,15 @@ authority stay).
   suites are written for; `bunx vitest run` on the same paths cannot load
   `bun:test` and no root Vitest config exists on this tree);
   `bunx oxlint` on the changed files → exit 0, no findings.
+- **Landing (target had moved past task 31).** The landing merge conflicted on
+  `.workflow/upstream-deltas.tsv` (two rows) and on
+  `sync/notification-store.ts`: the target's task-31 handoff had already
+  resolved that file to the error-only store, so the target side won, and
+  `session-ui-store.ts` keeps the branch's scaffold blob because the target's
+  partial edit saved effort as the agent/model variant, which its own
+  `session-ui-store.test.js` rejects. Landed as `0460ca3fb`; the target's
+  pre-merge and post-merge `bun check --all` totals are identical (**261**,
+  0 in slice 34), so the landing added no error anywhere.
 - **Out of slice, pre-existing:** `hooks/useTraySync.test.tsx` fails on
   `markSessionViewed` → `markSessionUnreadSeen` → `upsertSession`: the test's
   session fixture carries no `metadataRevision`/`epoch`, so
