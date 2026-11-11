@@ -27,9 +27,7 @@ The contract, implemented by `shared/SettingsAutosave.tsx`:
   something the user waits for. A failure is an error toast,
   "Couldn't save: <reason>", raised by the hook itself.
 - **One page, one save routine.** A section that writes its own request still
-  reports through the page: `agents/AgentPermissionsEditor.tsx` hands its save
-  routine to `AgentsPage` via `registerSave`, and the page's save runs it, so a
-  failure is reported once.
+  reports through the page, so a failure is reported once.
 - Saves run serially. A save request received during a write queues one follow-up
   using the latest committed form state. Unmounting prevents that follow-up.
 
@@ -259,8 +257,7 @@ starts with no tokens (it reuses only the earlier client registration) and
 its new credential is the one the next connect uses, so signing in is the
 whole recovery; no sign-out call is needed.
 
-So for a `failed` server whose OAuth integration exists
-(`useMcpOAuthIntegration`), the header's primary button is "Sign in again" in
+So for a `failed` server the header's primary button is "Sign in again" in
 place of Connect, and the card shows no second sign-in row: each press mounts
 a fresh `McpOAuthSignIn` with `autoStart`. A single method starts immediately
 with its start button hidden; multiple methods keep their start controls so
@@ -569,7 +566,7 @@ The page is hidden in VS Code (`metadata.ts`).
 
 ## Plugin duplicate sources
 
-`plugins/PluginsGrid.tsx` keeps every configuration entry and its editing target.
+`plugins/PluginsGrid.tsx` keeps every catalog entry and its editing target.
 A discovered package card is hidden when its normalized target is already
 represented by a declaration or another discovery record. Distinct declarations
 and their options remain separate, including declarations of the same target.
@@ -607,10 +604,10 @@ Two consequences worth knowing:
 - **Edit the stored entry, never the resolved one.** `AgentInfo` and the model
   catalog are what OpenCode resolved: built-in defaults, global config and live
   session grants are already merged in. Writing that back would bake them into
-  the file. `agents/AgentsPage.tsx` and `AgentPermissionsEditor.tsx` therefore
-  read `GET /api/config/agents/:name/config` and `…/permissions`, and the
-  commands store reads `GET /api/config/commands/:name/config` because the v2
-  `CommandInfo` carries only a name and a description.
+  the file. `agents/AgentsPage.tsx` therefore reads
+  `GET /api/config/agents/:name/config`, and the commands store reads
+  `GET /api/config/commands/:name/config` because the v2 `CommandInfo` carries
+  only a name and a description.
 - **`request` is replaced wholesale.** A PATCH that sends `request` overwrites
   the whole block, so `AgentsPage` merges the fields it owns into the stored
   `request` instead of sending only what changed.

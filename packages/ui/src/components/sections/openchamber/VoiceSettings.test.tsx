@@ -6,10 +6,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18nStore } from '@/lib/i18n/store';
-import { dict as ukDict } from '@/lib/i18n/messages/uk';
+import { dict as enDict } from '@/lib/i18n/messages/en';
+import { dict as ukLocaleDict } from '@/lib/i18n/messages/uk';
 import { buildSettingsSearchResults } from '@/lib/settings/search';
 
 import { VoiceSettings } from './VoiceSettings';
+
+// Locale modules carry the translated entries; `formatMessage` falls back to
+// English for the rest, so this is the dictionary the runtime actually shows.
+const ukDict = { ...enDict, ...ukLocaleDict };
 
 describe('VoiceSettings endpoint paths', () => {
   let windowInstance: Window;
@@ -97,7 +102,7 @@ describe('VoiceSettings endpoint paths', () => {
       query: ukDict['settings.voice.page.field.endpointPath'],
       t: (key) => ukDict[key], getPageTitle: (page) => page,
       runtimeCtx: {
-        isVSCode: false, isWeb: true, isDesktop: false, isMobile: false,
+        isWeb: true, isDesktop: false, isMobile: false,
         isDesktopLocalOrigin: false, isMac: false, isWindows: false, isLinux: false,
         routingAvailable: false, enterpriseMode: false, jevBlockedByEnterprise: false,
       },

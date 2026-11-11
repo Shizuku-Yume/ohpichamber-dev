@@ -10,7 +10,10 @@ const { flushSync } = await import('react-dom');
 const { UsageCard } = await import('./UsageCard');
 const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 const { dict: enDict } = await import('@/lib/i18n/messages/en');
-const { dict: ukDict } = await import('@/lib/i18n/messages/uk');
+const { dict: ukLocaleDict } = await import('@/lib/i18n/messages/uk');
+// Locale modules carry the translated entries; `formatMessage` falls back to
+// English for the rest, so this is the dictionary the runtime actually shows.
+const ukDict = { ...enDict, ...ukLocaleDict };
 
 const balanceWindow: UsageWindow = {
   usedPercent: null,
@@ -59,7 +62,7 @@ test('changes the credits-used message when locale changes with the same quota s
 
 test('cached Zen values update when the locale changes without another quota request', async () => {
   const originalLocale = useI18nStore.getState();
-  const { dict: ukDictionary } = await import('@/lib/i18n/messages/uk');
+  const ukDictionary = ukDict;
   const count = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'requests', count: 292 } });
   const spend = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'spend', spent: 2, limit: null } });
   const capped = render({ ...percentWindow, value: { kind: 'spend', spent: 2, limit: 10 } });

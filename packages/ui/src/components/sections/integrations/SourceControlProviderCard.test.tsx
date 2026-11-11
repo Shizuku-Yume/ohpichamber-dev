@@ -590,7 +590,7 @@ describe('SourceControlProviderCard', () => {
     const input = container.querySelector<HTMLInputElement>('input[aria-label="SSH URL"]');
     if (!input) throw new Error('Missing SSH URL input');
     await type(input, 'ssh://git@forge-ssh.example.com:2222');
-    await click('Save changes');
+    await click('Save Changes');
 
     expect(savedSshUrls).toEqual([['https://forge.example.com', 'ssh://git@forge-ssh.example.com:2222']]);
   });
@@ -611,7 +611,7 @@ describe('SourceControlProviderCard', () => {
     expect(input.value).toBe(sshUrl);
 
     await type(input, '');
-    await click('Save changes');
+    await click('Save Changes');
     expect(document.body.textContent).toContain('Clear the SSH URL?');
     expect(savedSshUrls).toEqual([]);
 
@@ -619,7 +619,7 @@ describe('SourceControlProviderCard', () => {
     expect(savedSshUrls).toEqual([]);
     expect(useSourceControlAuthStore.getState().identities).toEqual([{ provider: 'gitlab', instance, instanceSshUrl: sshUrl }]);
 
-    await click('Save changes');
+    await click('Save Changes');
     await clickInDialog('Clear SSH URL');
     expect(savedSshUrls).toEqual([[instance, null]]);
     expect(useSourceControlAuthStore.getState().identities).toEqual([{ provider: 'gitlab', instance }]);
