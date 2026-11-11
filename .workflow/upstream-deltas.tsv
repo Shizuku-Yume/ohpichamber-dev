@@ -15,7 +15,7 @@ bun.lock	fork-differs	decision	2026-10-27 - Bump the toolchain before refreshing
 packages/sdk/src/manifest.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Upstream v2.7.0 guest surfaces minus the OpenCode plugin role and capability the fork retired.
 packages/sdk/src/parse.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Parses upstream v2.7.0 manifest shapes without `contributes.opencodePlugin`.
 packages/web/server/lib/guests/routes.js	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Host routes without the OpenCode plugin global-config surface.
-packages/ui/src/lib/opencode/events.ts	fork-differs	omp-boundary		Canonical Client event names; the OpenCode event payloads it replaced are gone.
+packages/ui/src/lib/opencode/events.ts	fork-differs	excluded		The OpenCode event module is a standing exclusion; the fork keeps only the Canonical Client event shape it still needs.
 .openchamber/project.json	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Fork project launcher: the HMR dev command, the fork plan directory and the retired OpenCode deploy, VS Code and mobile-build launchers.
 CHANGELOG.md	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Legacy copy kept for older installs; upstream release entries are not carried into it.
 README.md	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	OhPiChamber fork README: the OMP migration status and development-document links replace upstream branding.

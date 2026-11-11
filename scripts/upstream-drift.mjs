@@ -11,20 +11,21 @@
 //   fork-differs   both sides have the path with different blobs
 //
 // A `fork-differs` path also gets a class, so a review can tell a deliberate
-// OMP-boundary fork from an unexplained one:
+// OMP-boundary fork from a standing exclusion from an unexplained one:
 //
 //   omp-boundary        the path belongs to the Canonical Client, the agent
-//                       contract, the Agent Service, the Host gateway, or one
-//                       of the standing exclusions the merge keeps on the fork
-//                       side
+//                       contract, the Agent Service, or the Host gateway
+//   excluded            a standing exclusion: the merge keeps the fork's copy of
+//                       a retired surface whatever upstream did
 //   decision            `.workflow/upstream-deltas.tsv` names a
 //                       `.workflow/decisions.md` heading for it
-//   unexplained         neither
+//   unexplained         none of the above
 //
 // A path only one side has needs no decision: upstream's additions were either
 // adopted (and are then identical) or excluded by the standing-exclusion rule
 // (`upstream-excluded`), and a fork-only path is the fork's own work
-// (`fork-added`). Both are still `omp-boundary` when the boundary owns them.
+// (`fork-added`). Both are `excluded` or `omp-boundary` when either rule claims
+// them.
 //
 // The merge base decides which side moved, not what the state is: a path the
 // fork changed and upstream left alone is `fork-differs` all the same.
@@ -37,6 +38,13 @@
 //   bun scripts/upstream-drift.mjs --check              fail on conflict markers, on
 //                                                      any unexplained path, and on
 //                                                      ledger rows that contradict git
+//   bun scripts/upstream-drift.mjs --check --slice 32   the same check over repair
+//                                                      slice 32's paths; a scoped
+//                                                      check also reports how many
+//                                                      unexplained paths it cannot see
+//
+// An argument the parser does not know is an error, never a path filter: a typo
+// must not turn a failing check into a pass. Usage problems exit 2.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -46,6 +54,7 @@ import { fileURLToPath } from 'node:url';
 export const UPSTREAM = 'bc50ba56a';
 export const DELTAS_FILE = '.workflow/upstream-deltas.tsv';
 export const LANES_FILE = '.workflow/research/ux-v270-omp-alignment/merge-lanes.tsv';
+export const SLICES_FILE = '.workflow/research/ux-v270-omp-alignment/repair-slices.tsv';
 export const DECISIONS_FILE = '.workflow/decisions.md';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,35 +64,48 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const MARKER_LINE = /^(?:<<<<<<< |=======$|>>>>>>> )/u;
 
 /**
- * Paths the merge keeps on the fork side regardless of what upstream did.
- * Each entry is a decision, not a heuristic: the OMP boundary owns them, or a
- * recorded decision removed them, and upstream's changes to them never land.
+ * Paths the merge keeps on the fork side because they are the OMP boundary:
+ * the Canonical Client, the agent contract, the Agent Service, the Host
+ * gateway, and the vendored OMP runtime that boundary is built on. Upstream's
+ * changes to them never land (decision 2026-11-10, merge upstream with a real
+ * git merge).
  */
 export const BOUNDARY_PREFIXES = [
   'packages/agent-contract/',
   'packages/agent-service/',
   'packages/ui/src/api/',
   'packages/web/server/lib/host/',
+  'vendor/omp/',
+];
+
+/**
+ * Standing exclusions: the upstream surfaces the merge keeps on the fork side
+ * whatever upstream did, because a recorded decision retired them (`packages/vscode`,
+ * the OpenCode engine, folder trust, isolated-spaces code, `.github` collaboration/CI,
+ * `changelog/`, `nix/`, and upstream agent guidance; decision 2026-11-10, merge
+ * upstream OpenChamber with a real git merge; `specs/upstream-refresh.md`, "Excluded
+ * on purpose").
+ */
+export const EXCLUDED_PREFIXES = [
+  'packages/vscode/',
   'packages/web/server/lib/opencode/',
   'packages/ui/src/lib/opencode/',
+  'packages/web/server/lib/opencode-trust/',
   'packages/web/server/lib/spaces/',
   'packages/ui/src/lib/spaces/',
   'packages/ui/src/components/session/spaces/',
-  'packages/vscode/',
-  'packages/web/server/lib/opencode-trust/',
   'nix/',
   'changelog/',
-  '.workflow/',
   '.agents/',
   '.claude/',
   '.opencode/',
   '.github/',
-  'vendor/omp/',
+  '.workflow/',
   'scripts/omp-m0/',
 ];
 
-/** Files the boundary owns by name; prefixes are directories, these are paths. */
-export const BOUNDARY_FILES = new Set([
+/** Root files the exclusion rule keeps; prefixes are directories, these are paths. */
+export const EXCLUDED_FILES = new Set([
   'flake.nix',
   'flake.lock',
   'AGENTS.md',
@@ -104,9 +126,14 @@ const BOUNDARY_TOKENS = [
   '@openchamber/agent-service',
 ];
 
-/** Whether a path belongs to the OMP boundary or a standing exclusion. */
+/** Whether a path belongs to the OMP boundary. */
 export const isBoundaryPath = (file) => (
-  BOUNDARY_FILES.has(file) || BOUNDARY_PREFIXES.some((prefix) => file.startsWith(prefix))
+  BOUNDARY_PREFIXES.some((prefix) => file.startsWith(prefix))
+);
+
+/** Whether a path is a standing exclusion the merge never adopts. */
+export const isExcludedPath = (file) => (
+  EXCLUDED_FILES.has(file) || EXCLUDED_PREFIXES.some((prefix) => file.startsWith(prefix))
 );
 
 const git = (root, args) => execFileSync('git', args, {
@@ -217,10 +244,11 @@ export const buildLedger = ({ root = REPO_ROOT, upstream = UPSTREAM, forkRef = '
     const row = rowByPath.get(file);
     let reason = null;
     if (isBoundaryPath(file)) reason = 'omp-boundary';
+    else if (isExcludedPath(file)) reason = 'excluded';
     else if (state !== 'fork-differs') reason = state === 'upstream-only' ? 'upstream-excluded' : 'fork-added';
     else if (row && headings.has(row.decision)) reason = 'decision';
-    // A row's `omp-boundary` label documents the class, it does not create it:
-    // the path itself has to carry the boundary (prefix, name, or content token).
+    // A row's label documents the class, it does not create it: the path itself
+    // has to carry the boundary (prefix or content token).
     else if (boundaryToken(root, forkRef, file)) reason = 'omp-boundary';
     ledger.push({
       path: file,
@@ -249,10 +277,11 @@ export const contradictingRows = (ledger, rows, headings) => {
       problems.push({ row, why: `${row.path} is ${entry.state} in git, the row says ${row.state}` });
       continue;
     }
-    if (row['class'] === 'omp-boundary' && entry.class !== 'omp-boundary') {
+    const claimed = row['class'];
+    if ((claimed === 'omp-boundary' || claimed === 'excluded') && entry.class !== claimed) {
       problems.push({
         row,
-        why: `${row.path} claims omp-boundary, but neither its path, its content nor a decision shows the boundary (class ${entry.class})`,
+        why: `${row.path} claims ${claimed}, but neither its path, its content nor a decision shows that class (class ${entry.class})`,
       });
       continue;
     }
@@ -267,12 +296,14 @@ export const contradictingRows = (ledger, rows, headings) => {
 };
 
 /**
- * What lane 11 owns: the standing exclusions, the manifests, the lockfile and
- * the ledger itself. The later lanes read their paths from `merge-lanes.tsv`;
- * this one is fixed because it is the lane that writes that table.
+ * What lane 11 owns: the standing exclusions, the boundary trees, the manifests,
+ * the lockfile and the ledger itself. The later lanes read their paths from
+ * `merge-lanes.tsv`; this one is fixed because it is the lane that writes those
+ * tables.
  */
 export const SCAFFOLD_PATHS = [
-  ...BOUNDARY_FILES,
+  ...EXCLUDED_FILES,
+  ...EXCLUDED_PREFIXES,
   ...BOUNDARY_PREFIXES,
   'package.json',
   'packages/ui/package.json',
@@ -283,16 +314,22 @@ export const SCAFFOLD_PATHS = [
   'bun.lock',
   DELTAS_FILE,
   LANES_FILE,
+  SLICES_FILE,
   'scripts/upstream-drift.mjs',
   'scripts/upstream-drift.test.mjs',
 ];
 
-/** Paths lane N owns; lane 11 is the scaffold lane, the rest come from the table. */
+/** Paths one lane owns; lane 11 is the scaffold lane, the rest come from the table. */
 export const lanePaths = (root, lane) => (String(lane) === '11'
   ? SCAFFOLD_PATHS
   : readTsv(root, LANES_FILE)
     .filter((row) => String(row.lane) === String(lane))
     .map((row) => row.path));
+
+/** Paths one repair slice owns, from `repair-slices.tsv`. */
+export const slicePaths = (root, slice) => readTsv(root, SLICES_FILE)
+  .filter((row) => String(row.slice) === String(slice))
+  .map((row) => row.path);
 
 /** `path:line` for every conflict marker under the given paths. */
 export const findMarkers = ({ root = REPO_ROOT, paths = [] } = {}) => {
@@ -313,75 +350,184 @@ export const findMarkers = ({ root = REPO_ROOT, paths = [] } = {}) => {
   return found;
 };
 
+const USAGE = `Usage:
+  bun scripts/upstream-drift.mjs                      print the ledger
+  bun scripts/upstream-drift.mjs --markers            fail on conflict markers
+  bun scripts/upstream-drift.mjs --markers --lane 14  markers in lane 14's paths
+  bun scripts/upstream-drift.mjs --markers <paths…>   markers in those paths
+  bun scripts/upstream-drift.mjs --check              fail on conflict markers, on
+                                                      any unexplained path, and on
+                                                      ledger rows that contradict git
+  bun scripts/upstream-drift.mjs --check --slice 32   the same check over repair
+                                                      slice 32's paths; a scoped
+                                                      check also reports how many
+                                                      unexplained paths it cannot see
+
+Paths, --lane and --slice are alternative scopes. An argument the parser does not
+know is a usage error (exit 2), never a path filter.`;
+
+class UsageError extends Error { }
+
 const parseArgs = (argv) => {
-  const options = { markers: false, check: false, lane: null, paths: [] };
+  const options = { markers: false, check: false, lane: null, slice: null, paths: [] };
+  const takeValue = (name, index) => {
+    const value = argv[index];
+    if (value === undefined || value === '' || value.startsWith('-')) {
+      throw new UsageError(`${name} needs a value`);
+    }
+    return value;
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === '--') {
+      options.paths.push(...argv.slice(index + 1));
+      break;
+    }
     if (arg === '--markers') options.markers = true;
     else if (arg === '--check') options.check = true;
     else if (arg === '--lane') {
       index += 1;
-      options.lane = argv[index];
+      options.lane = takeValue('--lane', index);
     } else if (arg.startsWith('--lane=')) options.lane = arg.slice('--lane='.length);
+    else if (arg === '--slice') {
+      index += 1;
+      options.slice = takeValue('--slice', index);
+    } else if (arg.startsWith('--slice=')) options.slice = arg.slice('--slice='.length);
+    else if (arg.startsWith('-')) throw new UsageError(`unknown argument: ${arg}`);
     else options.paths.push(arg);
   }
+  if (options.lane !== null && options.lane === '') throw new UsageError('--lane needs a value');
+  if (options.slice !== null && options.slice === '') throw new UsageError('--slice needs a value');
+  const scopes = [options.paths.length > 0, options.lane !== null, options.slice !== null].filter(Boolean);
+  if (scopes.length > 1) throw new UsageError('pass one scope: paths, --lane or --slice');
   return options;
 };
 
+/** Paths the options scope the run to, or `[]` for the whole repository. */
+const scopedTargets = (options, root) => {
+  if (options.paths.length > 0) {
+    // A path scope that matches no tracked file is a typo, not an empty pass.
+    const tracked = git(root, ['ls-files', '-z', '--', ...options.paths]).split('\0').filter(Boolean);
+    if (tracked.length === 0) throw new UsageError(`no tracked file under: ${options.paths.join(', ')}`);
+    return options.paths;
+  }
+  if (options.lane !== null) {
+    const paths = lanePaths(root, options.lane);
+    if (paths.length === 0) throw new UsageError(`${LANES_FILE} has no paths for lane ${options.lane}`);
+    return paths;
+  }
+  if (options.slice !== null) {
+    const paths = slicePaths(root, options.slice);
+    if (paths.length === 0) throw new UsageError(`${SLICES_FILE} has no paths for slice ${options.slice}`);
+    return paths;
+  }
+  return [];
+};
+
+const scopeName = (options) => {
+  if (options.paths.length > 0) return options.paths.join(', ');
+  if (options.lane !== null) return `lane ${options.lane}`;
+  if (options.slice !== null) return `slice ${options.slice}`;
+  return 'all files';
+};
+
+/** A scope target without its trailing slash, so `dir/` and `dir` scope alike. */
+const normalizeTarget = (target) => target.replace(/\/+$/u, '');
+
+const inScope = (targets, file) => targets.some((target) => {
+  const scope = normalizeTarget(target);
+  // `.` and `/` are the repository root, which scopes every path.
+  if (scope === '' || scope === '.') return true;
+  return file === scope || file.startsWith(`${scope}/`);
+});
+
+/**
+ * What a scoped run owes and what it leaves unchecked. With no targets every
+ * path is in scope; with targets `outside` counts the unexplained paths the
+ * scope cannot see, so a scoped pass is never read as a global one.
+ */
+export const scopeReport = (ledger, targets = []) => {
+  const owed = targets.length > 0 ? ledger.filter((entry) => inScope(targets, entry.path)) : ledger;
+  const unexplained = owed.filter((entry) => entry.class === 'unexplained');
+  const outside = targets.length > 0
+    ? ledger.filter((entry) => entry.class === 'unexplained' && !inScope(targets, entry.path)).length
+    : 0;
+  return { owed, unexplained, outside };
+};
+
 const main = () => {
-  const options = parseArgs(process.argv.slice(2));
-  const targets = options.paths.length > 0 ? options.paths
-    : options.lane !== null ? lanePaths(REPO_ROOT, options.lane) : [];
+  const exitCode = runCli({ root: REPO_ROOT, argv: process.argv.slice(2), log: console.log, error: console.error });
+  process.exit(exitCode);
+};
+
+/**
+ * The command, with the repository root and output sinks supplied so a test can
+ * run it against a fixture. Returns the exit code and never exits the process:
+ * usage errors are 2, a failed check is 1, a pass is 0.
+ */
+export const runCli = ({ root = REPO_ROOT, upstream = UPSTREAM, argv = [], log = () => { }, error = () => { } } = {}) => {
+  let options;
+  let targets;
+  try {
+    options = parseArgs(argv);
+    targets = scopedTargets(options, root);
+  } catch (exception) {
+    if (!(exception instanceof UsageError)) throw exception;
+    error(exception.message);
+    error(USAGE);
+    return 2;
+  }
   let failed = false;
 
-  if (options.lane !== null && targets.length === 0) {
-    console.error(`${LANES_FILE} has no paths for lane ${options.lane}`);
-    process.exit(2);
-  }
-
   if (options.markers || options.check) {
-    const markers = findMarkers({ root: REPO_ROOT, paths: targets });
+    const markers = findMarkers({ root, paths: targets });
     if (markers.length > 0) {
       failed = true;
-      console.error(`conflict markers (${markers.length}):`);
-      for (const marker of markers) console.error(`  ${marker}`);
+      error(`conflict markers (${markers.length}):`);
+      for (const marker of markers) error(`  ${marker}`);
     } else {
-      const scope = options.lane !== null ? `lane ${options.lane}` : targets.length > 0 ? targets.join(', ') : 'all files';
-      console.log(`no conflict markers (${scope})`);
+      log(`no conflict markers (${scopeName(options)})`);
     }
   }
 
-  const { base, ledger } = buildLedger({ root: REPO_ROOT });
+  const { base, ledger } = buildLedger({ root, upstream });
   if (options.check) {
-    const rows = readTsv(REPO_ROOT, DELTAS_FILE);
-    const headings = readDecisionHeadings(REPO_ROOT);
+    const rows = readTsv(root, DELTAS_FILE);
+    const headings = readDecisionHeadings(root);
     const contradictions = contradictingRows(ledger, rows, headings);
     if (contradictions.length > 0) {
       failed = true;
-      console.error(`${DELTAS_FILE} rows that git contradicts (${contradictions.length}):`);
-      for (const { row, why } of contradictions) console.error(`  ${why} (decision "${row.decision}")`);
+      error(`${DELTAS_FILE} rows that git contradicts (${contradictions.length}):`);
+      for (const { row, why } of contradictions) error(`  ${why} (decision "${row.decision}")`);
     }
-    const scope = targets.length > 0 ? new Set(targets) : null;
-    const unexplained = ledger.filter((entry) => entry.class === 'unexplained'
-      && (scope === null || [...scope].some((target) => entry.path === target || entry.path.startsWith(`${target}/`))));
+    // A scoped check only owes the scope; everything outside it is reported as a
+    // count so a scoped pass cannot be read as a global pass.
+    const { unexplained, outside } = scopeReport(ledger, targets);
     if (unexplained.length > 0) {
       failed = true;
-      console.error(`paths that differ from ${UPSTREAM} with no OMP-boundary or decision reason (${unexplained.length}):`);
-      for (const entry of unexplained.slice(0, 20)) console.error(`  ${entry.state}\t${entry.path}`);
-      if (unexplained.length > 20) console.error(`  … ${unexplained.length - 20} more`);
+      error(`paths that differ from ${upstream} with no boundary, exclusion or decision reason, in ${scopeName(options)} (${unexplained.length}):`);
+      for (const entry of unexplained.slice(0, 20)) error(`  ${entry.state}\t${entry.path}`);
+      if (unexplained.length > 20) error(`  … ${unexplained.length - 20} more`);
     }
-    if (!failed) console.log(`drift check passed: no conflict markers, no unexplained path, no contradicting row (base ${base.slice(0, 7)})`);
+    if (targets.length > 0) {
+      log(`outside ${scopeName(options)}: ${outside} unexplained path${outside === 1 ? '' : 's'} not checked`);
+    }
+    if (!failed) log(`drift check passed: no conflict markers, no unexplained path in ${scopeName(options)}, no contradicting row (base ${base.slice(0, 7)})`);
   } else if (!options.markers) {
-    const counts = ledger.reduce((tally, entry) => {
+    const { owed, outside } = scopeReport(ledger, targets);
+    const counts = owed.reduce((tally, entry) => {
       tally[entry.class] = (tally[entry.class] ?? 0) + 1;
       return tally;
     }, {});
-    console.log(`upstream ${UPSTREAM}, merge base ${base.slice(0, 7)}, ${ledger.length} differing paths`);
-    console.log(`  ${Object.entries(counts).map(([name, count]) => `${name}: ${count}`).join(', ')}`);
-    for (const entry of ledger) console.log(`${entry.state}\t${entry.class}\t${entry.path}\t${entry.decision}`);
+    log(`upstream ${upstream}, merge base ${base.slice(0, 7)}, ${owed.length} differing paths in ${scopeName(options)}`);
+    log(`  ${Object.entries(counts).map(([name, count]) => `${name}: ${count}`).join(', ')}`);
+    for (const entry of owed) log(`${entry.state}\t${entry.class}\t${entry.path}\t${entry.decision}`);
+    if (targets.length > 0) {
+      log(`outside ${scopeName(options)}: ${outside} unexplained path${outside === 1 ? '' : 's'} not listed`);
+    }
   }
 
-  process.exit(failed ? 1 : 0);
+  return failed ? 1 : 0;
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
