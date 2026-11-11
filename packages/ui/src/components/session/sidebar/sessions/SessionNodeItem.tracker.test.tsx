@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { I18nProvider } from '@/lib/i18n';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import type { SessionNodeItemProps } from './SessionNodeItem';
 import type { SessionRefLine } from './useSessionRefLines';
@@ -68,6 +69,7 @@ test(`a child displayed in A opens ${kind} with owner ${ownerProjectId} through 
     { id: 'project-a', path: '/project-a' },
     { id: 'project-b', path: '/project-b' },
   ] });
+  registerWorkspaceDirectory('workspace-b', '/project-b/worktree');
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -75,10 +77,10 @@ test(`a child displayed in A opens ${kind} with owner ${ownerProjectId} through 
   const props: SessionNodeItemProps = {
     node: {
       session: {
-        id: 'child', parentID: 'parent', projectID: 'project-b', title: 'Child',
-        directory: '/project-b/worktree', cost: 0,
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        time: { created: 1, updated: 1 },
+        sessionId: 'child', parentSessionId: 'parent', rootSessionId: 'parent', projectId: 'project-b', title: 'Child',
+        workspaceId: 'workspace-b', displayPath: '/project-b/worktree', createdAt: 1, updatedAt: 1,
+        epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+        metadata: null, metadataRevision: '0', archiveRevision: '0',
       },
       children: [], worktree: null,
     },

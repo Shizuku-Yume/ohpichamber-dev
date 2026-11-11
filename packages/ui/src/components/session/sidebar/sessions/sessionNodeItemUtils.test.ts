@@ -2,6 +2,7 @@ import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey } from '@/lib/sessionPins';
@@ -17,11 +18,28 @@ import {
 } from './sessionNodeItemUtils';
 import type { SessionNode } from '../types';
 
-const session = (id: string, title: string): Session => ({
-  id,
-  title,
-  time: { created: 1, updated: 1 },
-} as Session);
+const session = (sessionId: string, title: string, overrides: Partial<Session> = {}): Session => {
+  registerWorkspaceDirectory('workspace-repo', '/repo');
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId: 'workspace-repo',
+    displayPath: '/repo',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    title,
+    ...overrides,
+  };
+};
 
 const rootWithChild = (childSession: Session): SessionNode => ({
   session: session('root', 'Root'),
@@ -73,7 +91,12 @@ describe('selectBlockingBadgeSessionScopes', () => {
   test('an expanded row still counts the workflow agents under it, which have no rows', () => {
     const agentChild = withDirectory({ session: session('agent-child', 'Agent child'), children: [], worktree: null }, '/repo');
     const agent = withDirectory({
-      session: { ...session('agent', 'Agent'), metadata: { openchamber: { kind: 'workflow-agent' } } },
+      session: {
+        ...session('agent', 'Agent'),
+        // SAFETY: the fixture stands in for a server record the sidebar's own parser reads.
+        metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'],
+        metadataRevision: '1',
+      },
       children: [agentChild],
       worktree: null,
     }, '/repo');
