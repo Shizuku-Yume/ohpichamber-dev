@@ -59,14 +59,23 @@ describe('Dock badge with the macOS menu bar disabled', () => {
       window: dom, document: dom.document, navigator: dom.navigator,
       IS_REACT_ACT_ENVIRONMENT: true,
     });
-    // The unread watermark is written to the host; answer the metadata read and
-    // write, and the view endpoint, so a mark clears instead of rolling back.
-    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    // The unread watermark is written to the host; answer exactly the metadata
+    // read/write and the view POST, so a mark clears instead of rolling back.
+    // Any other request fails, so an unexpected endpoint surfaces here.
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
-      if (url.includes('/metadata')) {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const metadata = /\/api\/agent\/v1\/sessions\/[^/]+\/metadata$/.test(url);
+      if (metadata && method === 'GET') {
         return Response.json({ sessionId: 'root', revision: '1', metadata: { openchamber: { workbench: { lastIdleAt: 1, viewedAt: 1 } } } });
       }
-      return new Response(null, { status: 204 });
+      if (metadata && method === 'PATCH') {
+        return Response.json({ sessionId: 'root', revision: '2', metadata: { openchamber: { workbench: { lastIdleAt: 1, viewedAt: 1 } } } });
+      }
+      if (method === 'POST' && /\/api\/sessions\/[^/]+\/view$/.test(url)) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response('unexpected request', { status: 500 });
     });
     useNotificationStore.setState(useNotificationStore.getInitialState());
     const seeded = [session('root'), session('child', 'root')];
