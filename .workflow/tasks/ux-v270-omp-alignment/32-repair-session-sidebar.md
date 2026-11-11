@@ -15,3 +15,19 @@
 - [ ] Tests: fix tests for behaviour the merged code keeps; delete tests pinning retired OpenCode behaviour (named in `## Progress`).
 - [ ] Give every slice 32 `unexplained` path a reason (adopt upstream or cite a decision).
 - [ ] Deletes: imports of removed OpenCode modules and their dead branches.
+
+## Progress
+
+**Check before:** `bun check --all --no-pretty` (whole repo) → exit 1, 1,130 error blocks / 1,591 output lines; filtered by the 85 slice-32 paths from `repair-slices.tsv` → **257 error blocks in 50 files** (matches the task's scaffold number). `bun scripts/upstream-drift.mjs --check --slice 32` → no conflict markers, **37 unexplained paths** (609 unexplained outside the slice, unchecked).
+
+**Check after (partial, this run):** same whole-repo `bun check --all` filtered to slice 32 paths → **202 error blocks in 47 files** (repo total 1,075). Drift check still 37 unexplained; **vitest for `packages/ui/src/components/session` not run**.
+
+**Done so far (committed as `fix(session-sidebar): port sidebar callers onto the canonical session shape`):**
+- `sidebar/list/sessionCollection.ts`: `child.id` → `child.sessionId`, `session.time.archived` → `archivedAt`.
+- `sidebar/list/useSessionPrefetch.ts`: `PrefetchTarget` back to the contract `Session`; directory through `resolveGlobalSessionDirectory`.
+- `sidebar/list/useSessionListSync.ts`: removed upstream's `authoritativeSessions` (not on the fork store); cleanup reads `activeSessions` + `archivedSessions` gated on `status === 'ready'`.
+- `sidebar/list/sessionListDirectories.test.ts`, `session/SessionSidebar.tsx`: restored the `includeWorktrees` option both sides need.
+- `sidebar/sessionSidebarRowModel.ts`, `sidebar/sessions/SessionTreeItem.tsx`, `sidebar/projects/useSessionGrouping.test.tsx`, `sidebar/sessions/SessionNodeItem.tsx`: `node.resolveGlobalSessionDirectory(session)` (upstream's broken call, also present pre-merge) → `resolveGlobalSessionDirectory(node.session)`.
+- `SessionNodeItem.tsx`: `parentID`→`parentSessionId`, `sessionID`→`sessionId` for the record loaders, `entry.id`/`entry.directory` → `sessionId`/resolver, `getSessionWorktreeMenuState` gets `isRefreshing`, `areSessionRenderSemanticsEqual` rewritten on contract fields, `getSessionPinList` dropped (see below).
+
+**Not finished (remaining 202 errors):** pin-list storage on sessions (`getSessionPinList` has no fork equivalent — the contract's `openchamber.pinned` carries only `at`, so `PinToMenu` currently offers Pinned only and `workFacts.pin` is `DEFAULT_PIN_LIST`; the fork needs a contract decision), provider/model catalog callers in the dialogs (`providers.find(item => item.id)` → `providerId`; `modelId`; `config.loadAgents` → `useAgentsStore.loadAgents`; `selectConfigAgentsForDirectory` removed), `MoveSessionDialog`/`SessionDialogs`/`TodoSendDialog`/`ForkSessionDialog`/`ReviewFlowDialog`/`ProjectNotesTodoPanel` (`PlanView` has no `leading`/`visible` in the fork), the spaces code in `useWorktreeWork`/`SidebarHeader` (fork `SpaceMark` has no `taskTitle`, no `setSpaceTaskTitle`, no `setGitWorktreePinned` in `gitApi`, no `useHasUnreadSession`), the remaining test fixtures (contract session shape), and cross-component props (`notifyOnSubtasks`, `hideDirectoryControls`, `sessionOwnerById`). No deletes of retired OpenCode imports or drift-reason rows have been made yet, so the 37 unexplained paths and the deletes box stay open.
