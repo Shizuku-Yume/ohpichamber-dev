@@ -32,6 +32,8 @@ Decisions: `decisions.md: 2026-11-10 - Merge upstream OpenChamber with a real gi
 
 **Merge (R1).** A scaffold branch records `git merge bc50ba56a` with conflict markers committed, so lanes can resolve disjoint areas in parallel worktrees. Resolution rule: upstream wins unless the fork's delta is required by the OMP boundary (Canonical Client, `@openchamber/agent-contract`, Host gateway) or by a recorded decision. Standing exclusions resolve to the fork side. Auto-merged files that reintroduce OpenCode SDK calls are cut over in the owning lane. The integration branch is then rebuilt as `main` plus one clean merge commit (parents `main`, `bc50ba56a`; tree = resolved scaffold tip), so no marker commit reaches `main`. `scripts/upstream-drift` replaces the hand-kept TSV: it derives each path's state from git blobs and lists every differing path with its reason class (OMP boundary, decision, or unexplained).
 
+Conflict lanes could only check their own paths while other lanes still held markers, and they owned only conflicted paths. Once all lanes landed, the scaffold had 1,130 type errors in 214 files and 646 differing paths no lane owned. A repair round follows the lanes: task 30 makes the drift check reject unknown arguments and assigns every type error and unexplained path to one repair slice (31-35, split by area); the slices land on the scaffold before task 19 builds the clean merge commit.
+
 **Class cutovers (R2-R8)** start from the merged tree:
 
 - **R7** `packages/agent-contract` gains one model-selector module porting OMP's `parseModelString`/`splitThinkingSuffix` grammar (`:level`, `:auto`, `:max` literal guard, abbreviations, `#variant`, `@upstream`). All UI, Host and service parsers, formatters and ad-hoc comparisons route through it.
