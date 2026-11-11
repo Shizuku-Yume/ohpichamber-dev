@@ -19,8 +19,7 @@ import { useI18n } from '@/lib/i18n';
 
 export type SkillConflict = {
   skillName: string;
-  scope: 'user' | 'project';
-  source?: 'opencode' | 'agents';
+  scope: 'workspace' | 'agent';
 };
 
 export type ConflictDecision = 'skip' | 'overwrite';
@@ -88,14 +87,9 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
                 <div className="min-w-0">
                   <div className="typography-ui-label truncate">{conflict.skillName}</div>
                   <div className="typography-micro text-muted-foreground">
-                    {t('settings.skills.catalog.conflicts.installedIn', {
-                      scope: conflict.scope === 'project'
-                        ? t('settings.skills.catalog.conflicts.scope.project')
-                        : t('settings.skills.catalog.conflicts.scope.user'),
-                      source: conflict.source === 'agents'
-                        ? t('settings.skills.catalog.conflicts.source.agents')
-                        : t('settings.skills.catalog.conflicts.source.opencode'),
-                    })}
+                    {conflict.scope === 'workspace'
+                      ? t('settings.skills.catalog.conflicts.scope.project')
+                      : t('settings.skills.catalog.conflicts.scope.user')}
                   </div>
                 </div>
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
-import type { Mock } from 'bun:test';
+import type { Spy } from 'bun:test';
 import type { Root } from 'react-dom/client';
 import type { CanonicalClient } from '@/api/canonicalClient';
 import { Window } from 'happy-dom';
@@ -128,10 +128,10 @@ const stateWithRoles = {
   ],
 };
 
-let resolveWorkspace: Mock<CanonicalClient['resolveWorkspace']>;
-let getSettings: Mock<CanonicalClient['getOmpSettings']>;
-let updateSettings: Mock<CanonicalClient['updateOmpSettings']>;
-let getModels: Mock<CanonicalClient['getModels']>;
+let resolveWorkspace: Spy<CanonicalClient['resolveWorkspace']>;
+let getSettings: Spy<CanonicalClient['getOmpSettings']>;
+let updateSettings: Spy<CanonicalClient['updateOmpSettings']>;
+let getModels: Spy<CanonicalClient['getModels']>;
 let container: HTMLDivElement;
 let root: Root;
 

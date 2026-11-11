@@ -15,8 +15,8 @@ import { openClassificationProviders } from '@/components/sections/classificatio
 import { useI18n } from '@/lib/i18n';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
-import { DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT } from '@/lib/sessionGoalTurnLimit';
-import { useUIStore, type SessionGoalChecker } from '@/stores/useUIStore';
+import { DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker } from '@/lib/sessionGoalTurnLimit';
+import { useUIStore } from '@/stores/useUIStore';
 
 const openSmallModelSettings = (): void => {
   useUIStore.getState().requestSettingsJump('sessions', 'sessions.small-model');

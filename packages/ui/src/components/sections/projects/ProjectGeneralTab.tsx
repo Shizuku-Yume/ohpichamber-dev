@@ -13,7 +13,7 @@ import {
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { modelVariantNames } from '@/lib/modelVariants';
+
 import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
 import { ensureSharedSetupTrusted, resetSharedSetupTrust } from '@/lib/sharedTrustConfirmation';
 import { useI18n } from '@/lib/i18n';
@@ -38,9 +38,9 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
     const { providerId, modelId } = parsedDefaultModel;
     if (!providerId || !modelId) return [];
     const model = providers
-      .find((provider) => provider.id === providerId)
-      ?.models.find((entry) => entry.id === modelId);
-    return modelVariantNames(model);
+      .find((provider) => provider.providerId === providerId)
+      ?.models.find((entry) => entry.modelId === modelId);
+    return model?.variants.map((variant) => variant.variant) ?? [];
   }, [parsedDefaultModel, providers]);
 
   if (!form.project) return null;
