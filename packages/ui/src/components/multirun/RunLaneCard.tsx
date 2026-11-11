@@ -53,22 +53,6 @@ function LaneGoalMark({ status }: { status: SessionGoalStatus }): React.ReactNod
   );
 }
 
-/** The goal this lane runs under; the sidebar's mark, in the same colours. */
-function LaneGoalMark({ status }: { status: SessionGoalStatus }): React.ReactNode {
-  const { t } = useI18n();
-  const label = t(sessionGoalMarkLabelKey[status]);
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0 items-center" role="img" aria-label={label}>
-          <Icon name="target" className="size-3.5" style={{ color: sessionGoalStatusColor[status] }} />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 export type RunLaneCardProps = {
   session: Session;
   providerID: string;

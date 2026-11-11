@@ -336,10 +336,8 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
               const totalSameModel = modelCounts.get(key) || 1;
               const instanceIndex = getInstanceIndex(model);
 
-              const provider = providers.find((p) => p.id === model.providerId);
-              const providerModel = provider?.models?.find((m: Record<string, unknown>) => (m as { id?: string }).id === model.modelId) as
-                | { variants?: ModelVariantSource }
-                | undefined;
+              const provider = providers.find((p) => p.providerId === model.providerId);
+              const providerModel = provider?.models?.find((m) => m.modelId === model.modelId);
               const variantKeys = listModelVariantIds(providerModel?.variants);
               const hasVariants = variantKeys.length > 0;
 

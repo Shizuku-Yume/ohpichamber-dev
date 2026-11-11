@@ -773,7 +773,7 @@ const SourceBoardBody: React.FC<{
                     onLatestRevision={browser.previewRevision === null}
                 />
             ) : undefined}
-            pullLinks={previewItem?.source === 'repository' && previewItem.reference.kind === 'pull' && actionProject && readContext ? (
+            pullLinks={previewItem?.source === 'repository' && previewItem.reference.kind === 'pull' && actionProject && context ? (
                 <SourceBoardPullLinks
                     pull={previewItem.reference}
                     project={actionProject}

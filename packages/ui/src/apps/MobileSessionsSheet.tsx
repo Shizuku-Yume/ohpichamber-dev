@@ -50,7 +50,7 @@ import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/short
 import { seedGlobalSessionStatusFromHost } from '@/sync/host-session-status-seed';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { markAllSessionsViewed } from '@/sync/notification-store';
-import { useHasUnreadSession } from '@/sync/session-unread';
+import { isSessionUnread, markSessionUnreadSeen } from '@/sync/session-unread';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
 
@@ -113,7 +113,9 @@ const MOBILE_MENU_ITEM_CLASS = 'min-h-10 items-center justify-between';
 /** Mounts only with the open menu, so the sheet does not watch every session for it. */
 function MobileMarkAllReadItem(): React.ReactNode {
   const { t } = useI18n();
-  const hasUnread = useHasUnreadSession();
+  // The store already knows every session; the menu row only has to know
+  // whether marking all read would change anything.
+  const hasUnread = useGlobalSessionsStore((state) => state.activeSessions.some((session) => isSessionUnread(session)));
   return (
     <DropdownMenuItem disabled={!hasUnread} onClick={markAllSessionsViewed} className={MOBILE_MENU_ITEM_CLASS}>
       <span className="flex items-center gap-2">
@@ -296,9 +298,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     // Project order means nothing without project headers.
     if (next === 'time') setEditingOrder(false);
   };
-  const toggleSetting = (current: boolean, set: (next: boolean) => void, persist: (next: boolean) => void) => () => {
+  const toggleSetting = (current: boolean, set: (next: boolean) => void, persist?: (next: boolean) => void) => () => {
     set(!current);
-    persist(!current);
+    persist?.(!current);
   };
 
   /** One choice or switch in the display menu, checked when it is in effect. */
@@ -377,9 +379,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         {renderMenuChoice('detailed', 'sessions.sidebar.header.displayMode.detailedZoneRows', detailedZoneRows, toggleSetting(detailedZoneRows, setDetailedZoneRows, (next) => {
           void updateDesktopSettings({ sidebarDetailedZoneRows: next });
         }))}
-        {renderMenuChoice('branch-names', 'sessions.sidebar.header.displayMode.worktreeNameByBranch', worktreeNameByBranch, toggleSetting(worktreeNameByBranch, setWorktreeNameByBranch, (next) => {
-          void updateDesktopSettings({ sidebarWorktreeNameByBranch: next });
-        }))}
+        {renderMenuChoice('branch-names', 'sessions.sidebar.header.displayMode.worktreeNameByBranch', worktreeNameByBranch, toggleSetting(worktreeNameByBranch, setWorktreeNameByBranch))}
         <DropdownMenuSeparator />
         {canEditOrder ? (
           <DropdownMenuItem onClick={() => setEditingOrder(true)} className={MOBILE_MENU_ITEM_CLASS}>

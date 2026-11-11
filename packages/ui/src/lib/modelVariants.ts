@@ -7,15 +7,15 @@
  * Every place that needs the ids goes through here.
  */
 export type ModelVariantSource =
-  | ReadonlyArray<{ readonly id: string }>
-  | Readonly<Record<string, { readonly id?: string } | null>>
+  | ReadonlyArray<{ readonly variant: string }>
+  | Readonly<Record<string, { readonly variant?: string } | null>>
   | null
   | undefined;
 
 export const listModelVariantIds = (variants: ModelVariantSource): string[] => {
   if (!variants) return [];
   if (Array.isArray(variants)) {
-    return variants.map((variant) => variant.id).filter((id) => id.length > 0);
+    return variants.map((variant) => variant.variant).filter((id) => id.length > 0);
   }
   return Object.keys(variants);
 };

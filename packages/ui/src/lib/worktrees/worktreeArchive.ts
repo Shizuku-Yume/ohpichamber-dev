@@ -250,7 +250,12 @@ async function restoreArchivedWorktreeOnce(input: {
  * conflicts) is not the archive's to delete. Sessions go first: one that will
  * not delete stops it, so the archive that explains it stays.
  */
-export async function deleteArchivedWorktree(input: { project: ProjectRef; archive: GitWorktreeArchive }): Promise<void> {
+export async function deleteArchivedWorktree(input: {
+  project: ProjectRef;
+  archive: GitWorktreeArchive;
+  /** The local branch too, when the user asked; a branch a checkout uses again stays. */
+  deleteBranch?: boolean;
+}): Promise<void> {
   const { entityById } = useGlobalSessionsStore.getState();
   // A session another archive of the project also holds is that archive's.
   const others = useWorktreeArchivesStore.getState().byProject.get(normalizePath(input.project.path) ?? '')?.archives ?? [];
@@ -261,7 +266,10 @@ export async function deleteArchivedWorktree(input: { project: ProjectRef; archi
     if (failedIds.length > 0) throw new Error(`Could not delete ${failedIds.length} session(s)`);
   }
   try {
-    await git.worktree.deleteArchive(normalizePath(input.project.path) ?? input.project.path, { id: input.archive.id, deleteBranch: true });
+    await git.worktree.deleteArchive(normalizePath(input.project.path) ?? input.project.path, {
+      id: input.archive.id,
+      deleteBranch: input.deleteBranch === true,
+    });
   } finally {
     void loadWorktreeArchives(input.project.path).catch(() => undefined);
   }

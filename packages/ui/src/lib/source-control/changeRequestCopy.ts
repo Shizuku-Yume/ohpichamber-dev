@@ -134,5 +134,5 @@ export const changeRequestCopyKeys = (term: Exclude<ChangeRequestTerm, 'pullRequ
  * The message to show for `key` where change requests go by `term`: its
  * wording for that term where one exists, else the key itself.
  */
-export const changeRequestCopy = (key: I18nKey, term: ChangeRequestTerm): I18nKey =>
-  term === 'pullRequest' ? key : TERM_COPY[term].get(key) ?? key;
+export const changeRequestCopy = (key: I18nKey, term?: ChangeRequestTerm | string | null): I18nKey =>
+  !term || term === 'pullRequest' ? key : (TERM_COPY as Record<string, Map<I18nKey, I18nKey>>)[term]?.get(key) ?? key;
