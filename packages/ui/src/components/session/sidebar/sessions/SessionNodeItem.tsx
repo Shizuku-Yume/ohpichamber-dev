@@ -27,7 +27,7 @@ import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isVSCo
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { isSessionPinned, isSessionPinnedInMetadata } from '@/lib/sessionPins';
+import { isSessionPinned } from '@/lib/sessionPins';
 import { setSessionPinList } from '@/sync/session-pins';
 import { PinToMenu } from '../sections/PinToMenu';
 import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';

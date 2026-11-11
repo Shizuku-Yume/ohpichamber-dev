@@ -6,7 +6,6 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useGitStore } from '@/stores/useGitStore';
 import { installHookTestDom } from '../test-utils/testDom';
 import { useProjectRepoStatus } from './useProjectRepoStatus';
-import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 
 type Project = { id: string; path: string; normalizedPath: string; sidebarCollapsed?: boolean };
 

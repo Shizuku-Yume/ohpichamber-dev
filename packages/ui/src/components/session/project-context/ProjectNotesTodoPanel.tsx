@@ -388,7 +388,9 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   }, [activeTab, counts, setStoredTab, trimmedQuery]);
 
   const handlePersistTodos = React.useCallback(
-    (nextTodos: ProjectTodoItem[], change?: ProjectTodoChange) => {
+    // The change kind is part of the section's callback contract; the store
+    // serializes and rolls back the whole list itself.
+    (nextTodos: ProjectTodoItem[], _change?: ProjectTodoChange) => {
       if (!projectRef) {
         return;
       }
