@@ -197,15 +197,17 @@ describe('settings registry', () => {
     }
   });
 
-  test('section order: a saved default moves on apply, a dragged order stays', () => {
+  test('section order: a saved order applies as stored and a dragged order stays', () => {
     const original = useUIStore.getState();
-    const savedDefault = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+    const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
     try {
-      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault }) ?? {});
-      expect(useUIStore.getState().workStatusSectionOrder.slice(0, 4)).toEqual(['session', 'repository', 'usage', 'contextSources']);
+      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: saved }) ?? {});
+      // The fork's store has one sanitized order and no explicit marker.
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(saved);
 
-      useUIStore.getState().setWorkStatusSectionOrder(savedDefault);
-      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
+      const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'];
+      useUIStore.getState().setWorkStatusSectionOrder(dragged);
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(dragged);
     } finally {
       useUIStore.setState(original, true);
     }
