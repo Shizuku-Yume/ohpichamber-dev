@@ -921,3 +921,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes (conservative options inside the 2026-11-10 merge and 2026-11-11 sidebar decisions)
 - **Revisit when:** the unread contract gains a subtask-aware field, or the fork adds a settings-mirror for the Behavior prompt.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Move the integration branch to the final merge tree instead of preserving a superseded attempt
+
+- **Decided:** `ux-v270-omp-alignment/integration` is moved with a non-fast-forward update (`git reset --hard` under `/tmp/v270-integration.lock`, from a clean worktree) to the merge commit built from the final scaffold tip. The commit it replaces, `700b8449a`, was built by this window alone and is referenced by no other branch, done file, ref or worktree.
+- **Instead of:** keeping `700b8449a` and stacking the final tree on top, or leaving integration short of the scaffold tip. Both would break the task's requirement that the integration tree equal the resolved and tested scaffold tip byte for byte.
+- **Because:** `700b8449a` predated four commits that fixed a test-only race in the workflow runtime probes and the archived records; a fast-forward is impossible once integration holds a commit that is not an ancestor of the new one, and nothing depends on that superseded attempt.
+- **Also recorded:** no other branch was touched; the new commit keeps `main`'s tip (`e04b3dfb7`) and `bc50ba56a` as its parents, and the previous move to `700b8449a` was the same kind of replaceable attempt.
+- **Mine:** yes (conservative option within the 2026-11-10 merge decision)
+- **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
+- **Effort:** ux-v270-omp-alignment
