@@ -34,6 +34,9 @@ const REQUIRED_FILES = [
   // server/index.js reads the version from the package manifest.
   `${WEB_PACKAGE}/package.json`,
   `${WEB_PACKAGE}/server/index.js`,
+  // Loaded by server/lib/host/agent-runtime.js when the Host starts the Agent
+  // Service; a packaged app without it fails every launch.
+  `${WEB_PACKAGE}/scripts/standalone-loader.mjs`,
 ];
 
 // Run by git and ssh as separate processes, so they must exist on disk.
