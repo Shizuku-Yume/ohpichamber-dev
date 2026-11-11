@@ -6,6 +6,7 @@ import { useQuotaStore } from './useQuotaStore';
 test('Electron dev loads usage through its same-origin proxy before Settings opens', async () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const previousInitialized = useConfigStore.getState().isInitialized;
+  const previousWorkspaceId = useConfigStore.getState().workspaceId;
   const events = new EventTarget();
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -22,20 +23,23 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
   const network = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const path = input.toString();
     requests.push(path);
-    if (path === '/api/config/settings?surface=desktop') {
-      return Response.json({ usageDropdownProviders: ['codex'] });
-    }
     if (path === '/api/quota/extensions') {
       return Response.json({ extensions: [] });
     }
-    if (path === '/api/quota/providers') return Response.json({ providers: ['codex'] });
-    if (path === '/api/quota/codex') {
+    if (path === '/api/config/settings?surface=desktop') {
+      return Response.json({ usageDropdownProviders: ['codex'] });
+    }
+    if (path === '/api/quota/codex?workspaceId=workspace-local') {
       return Response.json({
         providerId: 'codex', providerName: 'Codex', ok: true, configured: true, fetchedAt: 123,
-        usage: { windows: { '5h': {
-          usedPercent: 42, remainingPercent: 58, windowSeconds: 18000,
-          resetAfterSeconds: 100, resetAt: 1000, resetAtFormatted: null, resetAfterFormatted: null,
-        } } },
+        usage: {
+          windows: {
+            '5h': {
+              usedPercent: 42, remainingPercent: 58, windowSeconds: 18000,
+              resetAfterSeconds: 100, resetAt: 1000, resetAtFormatted: null, resetAfterFormatted: null,
+            }
+          }
+        },
       });
     }
     throw new Error(`Unexpected request: ${path}`);
@@ -44,21 +48,24 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
   try {
     // Electron deliberately omits the API base when Vite proxies the backend.
     initializeRuntimeEndpoint({ apiBaseUrl: '', runtimeKey: null });
-    useConfigStore.setState({ isInitialized: true });
+    useConfigStore.setState({ isInitialized: true, workspaceId: 'workspace-local' });
     useQuotaStore.getState().resetForRuntimeSwitch();
     await useQuotaStore.getState().ensureLoadedForRuntime();
 
-    expect(requests).toEqual(['/api/config/settings?surface=desktop', '/api/quota/extensions', '/api/quota/providers', '/api/quota/codex']);
+    expect(requests).toEqual(['/api/quota/extensions', '/api/config/settings?surface=desktop', '/api/quota/codex?workspaceId=workspace-local']);
     expect(getRuntimeKey()).toBe('local');
     expect(getRuntimeApiBaseUrl()).toBe('');
     expect(useQuotaStore.getState().loadedRuntimeKey).toBe('local');
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe('workspace-local');
     expect(useQuotaStore.getState().results[0]?.usage?.windows['5h'].remainingPercent).toBe(58);
 
+    // A second ask for the loaded instance fetches nothing more: these are
+    // still the three reads of the first load (providers, settings, quotas).
     await useQuotaStore.getState().ensureLoadedForRuntime();
-    expect(requests).toHaveLength(4);
+    expect(requests).toHaveLength(3);
   } finally {
     useQuotaStore.getState().resetForRuntimeSwitch();
-    useConfigStore.setState({ isInitialized: previousInitialized });
+    useConfigStore.setState({ isInitialized: previousInitialized, workspaceId: previousWorkspaceId });
     network.mockRestore();
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
     else Reflect.deleteProperty(globalThis, 'window');

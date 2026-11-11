@@ -3,14 +3,15 @@ import type { ProviderResult } from "@/types"
 
 let runtimeKey = "url:https://instance-a"
 let isInitialized = true
+let workspaceId = "workspace-a"
 const fetched: string[] = []
 
-type StubPayload = { usageDropdownProviders: string[] } | { extensions: never[] } | ProviderResult
+type StubPayload =
+  | { usageDropdownProviders: string[] }
+  | { extensions: unknown[] }
+  | ProviderResult
 let quotaRequestsFail = false
 let quotaFails = false;
-// What `/api/quota/providers` names; null answers 500, as a restarting OpenCode does.
-let configuredProviders: string[] | null = []
-let listGate: Promise<void> | null = null
 // Holds a quota request open until the test lets it answer.
 let quotaGate: (() => Promise<void>) | null = null
 const json = (body: StubPayload) => new Response(
@@ -30,11 +31,10 @@ mock.module("@/lib/runtime-fetch", () => ({
   runtimeFetch: async (path: string) => {
     fetched.push(path)
     if (quotaRequestsFail) throw new Error("network down")
-    if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: ["claude"] })
-    // The extensions' usage providers, read beside the settings; none installed here.
+    // The instance's usage providers are read before its settings: the saved
+    // selection is narrowed against them.
     if (path === "/api/quota/extensions") return json({ extensions: [] })
-    if (path === "/api/quota/providers" && listGate) await listGate
-    if (path === "/api/quota/providers") return configuredProviders ? Response.json({ providers: configuredProviders }) : new Response("{}", { status: 500 })
+    if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: ["claude"] })
     if (quotaGate) await quotaGate()
     // A reachable instance reporting a provider failure, which is different
     // from the transport failure `quotaRequestsFail` models.
@@ -46,7 +46,7 @@ mock.module("@/lib/runtime-fetch", () => ({
 const configStoreModule = await import("@/stores/useConfigStore")
 mock.module("@/stores/useConfigStore", () => ({
   ...configStoreModule,
-  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized }) },
+  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized, workspaceId }) },
 }))
 
 const { useQuotaStore } = await import("./useQuotaStore")
@@ -55,9 +55,9 @@ describe("Usage quotas are loaded once per ready instance", () => {
   beforeEach(() => {
     runtimeKey = "url:https://instance-a"
     isInitialized = true
+    workspaceId = "workspace-a"
     fetched.length = 0
     quotaRequestsFail = false
-    configuredProviders = ["claude"]
     useQuotaStore.getState().resetForRuntimeSwitch()
   })
 
@@ -83,6 +83,35 @@ describe("Usage quotas are loaded once per ready instance", () => {
     await useQuotaStore.getState().ensureLoadedForRuntime()
 
     expect(fetched.length).toBe(afterFirst)
+  })
+
+  test("nothing is fetched before the instance publishes its workspace", async () => {
+    workspaceId = ""
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+
+    expect(fetched).toHaveLength(0)
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBeNull()
+
+    workspaceId = "workspace-a"
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+
+    expect(fetched.length).toBeGreaterThan(0)
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-a")
+  })
+
+  test("a workspace change reloads the same instance for the new workspace", async () => {
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+    const afterFirst = fetched.length
+    expect(afterFirst).toBeGreaterThan(0)
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-a")
+
+    workspaceId = "workspace-b"
+    fetched.length = 0
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+
+    expect(fetched.length).toBeGreaterThan(0)
+    expect(useQuotaStore.getState().loadedRuntimeKey).toBe("url:https://instance-a")
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-b")
   })
 
   test("a switch drops the previous instance's quotas and reloads for the new one", async () => {
@@ -136,6 +165,7 @@ describe("Usage quotas are loaded once per ready instance", () => {
       useQuotaStore.getState().ensureLoadedForRuntime(),
     ])
 
+    expect(fetched.filter((path) => path === "/api/quota/extensions")).toHaveLength(1)
     expect(fetched.filter((path) => path === "/api/quota/claude")).toHaveLength(1)
   })
 
@@ -153,94 +183,6 @@ describe("Usage quotas are loaded once per ready instance", () => {
   })
 })
 
-describe("Quotas are requested only for providers with a credential", () => {
-  const requested = () => fetched.filter((path) => path.startsWith("/api/quota/") && path !== "/api/quota/providers" && path !== "/api/quota/extensions")
-
-  beforeEach(() => {
-    fetched.length = 0
-    quotaRequestsFail = false
-    quotaFails = false
-    configuredProviders = ["claude", "github-copilot-addon"]
-    useQuotaStore.getState().resetForRuntimeSwitch()
-  })
-
-  test("one list read replaces a request per unconfigured provider, and they still have results", async () => {
-    await useQuotaStore.getState().fetchAllQuotas()
-
-    expect(requested()).toEqual(["/api/quota/claude"])
-    const { results } = useQuotaStore.getState()
-    expect(results.find((entry) => entry.providerId === "claude")?.configured).toBe(true)
-    expect(results.find((entry) => entry.providerId === "codex")).toMatchObject({ configured: false, usage: null, error: "Not configured" })
-  })
-
-  test("a list that failed asks every provider and reads as no credential on none", async () => {
-    configuredProviders = null
-    await useQuotaStore.getState().fetchQuotas(["claude", "codex"])
-
-    expect(requested()).toEqual(["/api/quota/claude", "/api/quota/codex"])
-  })
-
-  test("a removed credential clears the sample and the error of the account it belonged to", async () => {
-    await useQuotaStore.getState().fetchQuotas(["claude"])
-    useQuotaStore.setState({ refreshErrors: { claude: "boom" }, error: "boom" })
-    configuredProviders = []
-    await useQuotaStore.getState().fetchQuotas(["claude"])
-
-    const state = useQuotaStore.getState()
-    expect(state.results.find((entry) => entry.providerId === "claude")?.configured).toBe(false)
-    expect(state.refreshErrors).toEqual({})
-    expect(state.error).toBeNull()
-  })
-
-  test("an instance with no credentials counts as answered, so the load is not retried", async () => {
-    configuredProviders = []
-    await useQuotaStore.getState().ensureLoadedForRuntime()
-
-    expect(useQuotaStore.getState().loadedRuntimeKey).toBe(runtimeKey)
-    expect(requested()).toEqual([])
-  })
-
-  test("a load whose configured providers all failed stays unloaded, so the next ask retries", async () => {
-    configuredProviders = ["claude"]
-    quotaRequestsFail = false
-    const failing = useQuotaStore.getState().fetchProviderQuota
-    useQuotaStore.setState({ fetchProviderQuota: async () => false })
-    await useQuotaStore.getState().ensureLoadedForRuntime()
-    useQuotaStore.setState({ fetchProviderQuota: failing })
-
-    expect(useQuotaStore.getState().loadedRuntimeKey).toBeNull()
-  })
-
-  test("overlapping loads share one list read and show as loading while it runs", async () => {
-    let release = () => {}
-    listGate = new Promise((resolve) => { release = resolve })
-    const load = useQuotaStore.getState().fetchAllQuotas()
-    const second = useQuotaStore.getState().fetchAllQuotas()
-    await Promise.resolve()
-
-    expect(useQuotaStore.getState().isLoading).toBe(true)
-    release()
-    listGate = null
-    await Promise.all([load, second])
-    expect(fetched.filter((path) => path === "/api/quota/providers")).toHaveLength(1)
-    expect(useQuotaStore.getState().isLoading).toBe(false)
-  })
-
-  test("an instance with no credentials stops showing as loading", async () => {
-    configuredProviders = []
-    await useQuotaStore.getState().fetchQuotas(["claude"])
-
-    expect(useQuotaStore.getState().isLoading).toBe(false)
-  })
-
-  test("an account switch goes straight to the provider it names", async () => {
-    configuredProviders = []
-    await useQuotaStore.getState().fetchQuotas(["claude"], { invalidate: true })
-
-    expect(fetched).toEqual(["/api/quota/claude"])
-  })
-})
-
 describe("A provider-account switch re-reads the trackers", () => {
   beforeEach(() => {
     runtimeKey = "url:https://instance-a"
@@ -249,7 +191,6 @@ describe("A provider-account switch re-reads the trackers", () => {
     quotaRequestsFail = false
     quotaFails = false
     quotaGate = null
-    configuredProviders = ["claude"]
     useQuotaStore.getState().resetForRuntimeSwitch()
   })
 
@@ -291,7 +232,7 @@ describe("A provider-account switch re-reads the trackers", () => {
     // The stub resolves synchronously, so the in-flight request is stood in for
     // with one that has not answered yet. What matters is that the switch does
     // not hand back that request's promise.
-    let release = (): void => {}
+    let release = (): void => { }
     const gate = new Promise<void>((resolve) => { release = resolve })
     const realFetch = runtimeFetchModule.runtimeFetch
     mock.module("@/lib/runtime-fetch", () => ({
