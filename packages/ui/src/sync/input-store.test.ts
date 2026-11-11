@@ -93,41 +93,10 @@ describe("input-store attachments", () => {
       pendingSyntheticParts: null,
       pendingGuestIssue: null,
       pendingBtwComposerRequest: null,
-      activeEditorFile: null,
       attachmentDraftKey: null,
       attachmentDrafts: new Map(),
     })
     useInputStore.getState().setAttachedFiles([])
-  })
-
-  testWithMockFileReader("refuses a file over 10 MB without reading it when it has no path on disk", async () => {
-    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "place.rbxl")
-
-    await expect(useInputStore.getState().addAttachedFile(big)).rejects.toThrow("place.rbxl")
-
-    expect(pendingReaders).toHaveLength(0)
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
-  testWithMockFileReader("refuses a file over 20 MB without suggesting an @-mention, which OpenCode would refuse too", async () => {
-    const huge = new File([new Uint8Array(20 * 1024 * 1024 + 1)], "map.png", { type: "image/png" })
-
-    let message = ""
-    try {
-      await useInputStore.getState().addAttachedFile(huge)
-    } catch (error) {
-      message = error instanceof Error ? error.message : ""
-    }
-
-    expect(message.includes("map.png")).toBe(true)
-    expect(message.includes("@")).toBe(false)
-    expect(pendingReaders).toHaveLength(0)
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
-  test("refuses a VS Code file over 20 MB, which OpenCode would refuse on every send", () => {
-    expect(() => useInputStore.getState().addVSCodeFileAttachment("/workspace/map.bin", "map.bin", 20 * 1024 * 1024 + 1)).toThrow("map.bin")
-    expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
   testWithMockFileReader("does not attach a local file that finishes reading after attachments are cleared", async () => {
@@ -141,64 +110,22 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
-  testWithMockFileReader("rejects pending file and selection reads after switching drafts, even after returning", async () => {
+  testWithMockFileReader("rejects pending local file reads after switching drafts, even after returning", async () => {
     const source = { runtimeKey: "runtime", directory: "/repo", sessionId: "source" }
     const input = useInputStore.getState()
     input.selectAttachmentDraft(source)
     input.addRestoredAttachment({ url: "data:text/plain;base64,aGVsbG8=", mimeType: "text/plain", filename: "ready.txt" })
     const ready = useInputStore.getState().attachedFiles
     const local = input.addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
-    const selection = input.addVSCodeSelectionAttachment("/repo/code.ts", new File(["hello"], "selection.ts", { type: "text/plain" }))
+    const code = input.addAttachedFile(new File(["hello"], "code.ts", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(2)
     input.selectAttachmentDraft({ ...source, sessionId: "other" })
     expect(useInputStore.getState().attachedFiles).toEqual([])
     input.selectAttachmentDraft(source)
     for (const reader of pendingReaders) resolveReader(reader, "data:text/plain;base64,aGVsbG8=")
     expect(await local).toBe(false)
-    await selection
+    expect(await code).toBe(false)
     expect(useInputStore.getState().attachedFiles).toBe(ready)
-  })
-
-  testWithMockFileReader("files an attachment into the named slot without taking the current one", async () => {
-    const current = { runtimeKey: "runtime", directory: "/repo", sessionId: "current" }
-    const composer = { runtimeKey: "runtime", directory: "/repo", sessionId: "fork" }
-    const input = useInputStore.getState()
-    input.selectAttachmentDraft(current)
-
-    const addPromise = input.addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }), composer)
-    await waitForReaderCount(1)
-    resolveReader(pendingReaders[0], "data:text/plain;base64,aGVsbG8=")
-    await addPromise
-
-    expect(input.getAttachedFiles()).toEqual([])
-    expect(input.getAttachedFiles(composer).map((attachment) => attachment.filename)).toEqual(["hello.txt"])
-    expect(useInputStore.getState().attachmentDraftKey).toBe(getChatDraftIdentityKey(current))
-  })
-
-  testWithMockFileReader("restores an attachment into the named slot", async () => {
-    const current = { runtimeKey: "runtime", directory: "/repo", sessionId: "current" }
-    const composer = { runtimeKey: "runtime", directory: "/repo", sessionId: "fork" }
-    const input = useInputStore.getState()
-    input.selectAttachmentDraft(current)
-
-    input.addRestoredAttachment({ url: "data:text/plain;base64,aGVsbG8=", mimeType: "text/plain", filename: "ready.txt" }, composer)
-
-    expect(input.getAttachedFiles()).toEqual([])
-    expect(input.getAttachedFiles(composer).map((attachment) => attachment.filename)).toEqual(["ready.txt"])
-  })
-
-  testWithMockFileReader("keeps concurrent appends into the selected named slot", async () => {
-    const target = { runtimeKey: "runtime", directory: "/repo", sessionId: "fork" }
-    const input = useInputStore.getState()
-    input.selectAttachmentDraft(target)
-    const first = input.addAttachedFile(new File(["one"], "one.txt", { type: "text/plain" }), target)
-    const second = input.addAttachedFile(new File(["two"], "two.txt", { type: "text/plain" }), target)
-    await waitForReaderCount(2)
-    resolveReader(pendingReaders[0], "data:text/plain;base64,b25l")
-    expect(await first).toBe(true)
-    resolveReader(pendingReaders[1], "data:text/plain;base64,dHdv")
-    expect(await second).toBe(true)
-    expect(input.getAttachedFiles(target).map((file) => file.filename)).toEqual(["one.txt", "two.txt"])
   })
 
   testWithMockFileReader("does not attach a local file after attached files are replaced", async () => {
@@ -212,21 +139,21 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
-  testWithMockFileReader("a pending selection in another draft does not block the same selection here", async () => {
+  testWithMockFileReader("a pending local file in another draft does not affect a read here", async () => {
     const source = { runtimeKey: "runtime", directory: "/repo", sessionId: "source" }
     const input = useInputStore.getState()
-    const file = new File(["hello"], "selection.ts", { type: "text/plain" })
+    const file = new File(["hello"], "code.ts", { type: "text/plain" })
     input.selectAttachmentDraft(source)
-    const first = input.addVSCodeSelectionAttachment("/repo/code.ts", file)
+    const first = input.addAttachedFile(file)
     input.selectAttachmentDraft({ ...source, sessionId: "other" })
-    const second = input.addVSCodeSelectionAttachment("/repo/code.ts", file)
+    const second = input.addAttachedFile(file)
     expect(pendingReaders).toHaveLength(2)
     // A repeated selection of the current identity must not cancel its read.
     input.selectAttachmentDraft({ ...source, sessionId: "other" })
     input.clearAttachedFiles(source)
     for (const reader of pendingReaders) resolveReader(reader, "data:text/plain;base64,aGVsbG8=")
-    await Promise.all([first, second])
-    expect(useInputStore.getState().attachedFiles.map((attachment) => attachment.filename)).toEqual(["selection.ts"])
+    expect(await Promise.all([first, second])).toEqual([false, true])
+    expect(useInputStore.getState().attachedFiles.map((attachment) => attachment.filename)).toEqual(["code.ts"])
     input.selectAttachmentDraft(source)
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
@@ -251,47 +178,6 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["restored.txt"])
   })
 
-  testWithMockFileReader("does not attach a VS Code selection that finishes reading after attachments are cleared", async () => {
-    const addPromise = useInputStore.getState().addVSCodeSelectionAttachment(
-      "/workspace/hello.txt",
-      new File(["hello"], "hello.txt", { type: "text/plain" })
-    )
-    expect(pendingReaders).toHaveLength(1)
-
-    useInputStore.getState().clearAttachedFiles()
-    resolveReader(pendingReaders[0], "data:text/plain;base64,aGVsbG8=")
-    await addPromise
-
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
-  test("moves the selected draft's files onto another draft, merged with its own", () => {
-    const parent = { runtimeKey: "runtime", directory: "/repo", sessionId: "parent" }
-    const btw = { ...parent, sessionId: "btw-pending:parent" }
-    const input = useInputStore.getState()
-    input.selectAttachmentDraft(btw)
-    input.addRestoredAttachment({ url: "data:text/plain;base64,aGVsbG8=", mimeType: "text/plain", filename: "earlier.txt" })
-    input.selectAttachmentDraft(parent)
-    input.addRestoredAttachment({ url: "data:image/png;base64,AQID", mimeType: "image/png", filename: "image-1.png" })
-
-    input.moveAttachedFiles(parent, btw)
-
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-    input.selectAttachmentDraft(btw)
-    expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["earlier.txt", "image-1.png"])
-    input.selectAttachmentDraft(parent)
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
-  test("leaves files in place when the drafts are the same", () => {
-    const parent = { runtimeKey: "runtime", directory: "/repo", sessionId: "parent" }
-    const input = useInputStore.getState()
-    input.selectAttachmentDraft(parent)
-    input.addRestoredAttachment({ url: "data:image/png;base64,AQID", mimeType: "image/png", filename: "image-1.png" })
-    input.moveAttachedFiles(parent, { ...parent })
-    expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["image-1.png"])
-  })
-
   test("does not leave local file reads pending after a reader error", async () => {
     const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
@@ -300,22 +186,6 @@ describe("input-store attachments", () => {
     await addPromise
 
     expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
-  test("cleans up pending VS Code selection keys after a reader error", async () => {
-    const file = new File(["hello"], "hello.txt", { type: "text/plain" })
-    const firstAdd = useInputStore.getState().addVSCodeSelectionAttachment("/workspace/hello.txt", file)
-    expect(pendingReaders).toHaveLength(1)
-
-    rejectReader(pendingReaders[0])
-    await firstAdd
-
-    const secondAdd = useInputStore.getState().addVSCodeSelectionAttachment("/workspace/hello.txt", file)
-    expect(pendingReaders).toHaveLength(2)
-    resolveReader(pendingReaders[1], "data:text/plain;base64,aGVsbG8=")
-    await secondAdd
-
-    expect(useInputStore.getState().attachedFiles.map((attached) => attached.filename)).toEqual(["hello.txt"])
   })
 
   testWithMockFileReader("normalizes code files to text/plain", async () => {
@@ -347,23 +217,30 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles[0]?.dataUrl).toBe("data:text/plain;base64,e30=")
   })
 
-  test("rejects an unknown binary file after inspecting its contents", async () => {
-    const attached = await useInputStore.getState().addAttachedFile(
+  testWithMockFileReader("keeps an unknown binary file attachable so the worker can hand it to read", async () => {
+    const addPromise = useInputStore.getState().addAttachedFile(
       new File([new Uint8Array([0, 1, 2, 3])], "archive.bin", { type: "application/octet-stream" })
     )
+    await waitForReaderCount(1)
 
-    expect(attached).toBe(false)
-    expect(pendingReaders).toHaveLength(0)
-    expect(useInputStore.getState().attachedFiles).toEqual([])
+    resolveReader(pendingReaders[0], "data:application/octet-stream;base64,AAECAw==")
+
+    expect(await addPromise).toBe(true)
+    expect(useInputStore.getState().attachedFiles[0]?.filename).toBe("archive.bin")
+    expect(useInputStore.getState().attachedFiles[0]?.mimeType).toBe("application/octet-stream")
+    expect(useInputStore.getState().attachedFiles[0]?.size).toBe(4)
   })
 
-  test("rejects unknown content with too many control bytes", async () => {
-    const attached = await useInputStore.getState().addAttachedFile(
+  testWithMockFileReader("keeps content with many control bytes attachable under its declared type", async () => {
+    const addPromise = useInputStore.getState().addAttachedFile(
       new File([new Uint8Array([1, 2, 3, 65])], "encoded.custom", { type: "application/octet-stream" })
     )
+    await waitForReaderCount(1)
 
-    expect(attached).toBe(false)
-    expect(pendingReaders).toHaveLength(0)
+    resolveReader(pendingReaders[0], "data:application/octet-stream;base64,AQIDQQ==")
+
+    expect(await addPromise).toBe(true)
+    expect(useInputStore.getState().attachedFiles[0]?.mimeType).toBe("application/octet-stream")
   })
 
   testWithMockFileReader("accepts an unknown MIME type when its contents are text", async () => {
@@ -432,7 +309,7 @@ describe("input-store attachments", () => {
     await waitForReaderCount(1)
     resolveReader(pendingReaders[0], "data:text/plain;base64,RG9jdW1lbnQ=")
     await waitForReaderCount(2)
-    useInputStore.getState().addVSCodeFileAttachment("/workspace/design-image-1.png", "design-image-1.png", 1)
+    useInputStore.getState().addRestoredAttachment({ url: "data:image/png;base64,AQID", mimeType: "image/png", filename: "design-image-1.png" })
     resolveReader(pendingReaders[1], "data:image/png;base64,AQID")
 
     await waitForReaderCount(3)
@@ -666,28 +543,5 @@ describe("input-store pinned composer addressing", () => {
     useInputStore.getState().selectAttachmentDraft(main)
     expect(useInputStore.getState().attachedFiles.map((entry) => entry.id)).toEqual(["a"])
     expect(useInputStore.getState().attachmentDrafts.get(getChatDraftIdentityKey(pinned))?.map((entry) => entry.id)).toEqual(["b"])
-  })
-})
-
-describe("input-store draft submit", () => {
-  beforeEach(() => {
-    useInputStore.setState({ pendingDraftSubmit: null })
-  })
-
-  test("the requested draft takes its first message once", () => {
-    useInputStore.getState().requestDraftSubmit(7, "Fix the build")
-
-    expect(useInputStore.getState().consumePendingDraftSubmit(7)).toBe("Fix the build")
-    expect(useInputStore.getState().consumePendingDraftSubmit(7)).toBeNull()
-  })
-
-  test("another draft or a session drops the message instead of sending it", () => {
-    useInputStore.getState().requestDraftSubmit(7, "Fix the build")
-    expect(useInputStore.getState().consumePendingDraftSubmit(8)).toBeNull()
-    expect(useInputStore.getState().pendingDraftSubmit).toBeNull()
-
-    useInputStore.getState().requestDraftSubmit(7, "Fix the build")
-    expect(useInputStore.getState().consumePendingDraftSubmit(null)).toBeNull()
-    expect(useInputStore.getState().pendingDraftSubmit).toBeNull()
   })
 })
