@@ -47,8 +47,17 @@ export function withWorkbenchViewedAt(
  * archived session is put away, whichever path archived it, so it is never
  * unread.
  */
-export const isSessionUnread = (session: Session | undefined): boolean => {
- if (!session || session.parentSessionId || session.archivedAt !== undefined) return false;
+export const isSessionUnread = (session: Session | undefined): boolean => (
+ isUnreadTurn(session ?? null) && !session?.parentSessionId && session.archivedAt === undefined
+);
+
+/**
+ * The turn itself, whatever the session's place in a tree: a subtask's unread
+ * mark rolls up to its parent, so the parent's badge needs it without the
+ * top-level-only rule `isSessionUnread` applies.
+ */
+export const isUnreadTurn = (session: Session | null | undefined): boolean => {
+ if (!session) return false;
  const workbench = session.metadata?.openchamber?.workbench;
  const legacyTime = 'time' in session && session.time && typeof session.time === 'object'
   ? (session.time as { idle?: number; viewed?: number })

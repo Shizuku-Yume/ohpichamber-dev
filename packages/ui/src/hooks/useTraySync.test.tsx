@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -26,6 +26,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   const counts: number[] = [];
   let listenerCount = 0;
   let intervalCount = 0;
+  let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, 'fetch'>>;
   const invoke = async (command: string, args?: { dockBadgeCount?: number }) => {
     expect(command).toBe('desktop_tray_update');
     if (args?.dockBadgeCount !== undefined) counts.push(args.dockBadgeCount);
@@ -35,15 +36,13 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   const intervals = () => { intervalCount += 1; return 1; };
   // Unread state lives on the session's metadata now: an idle turn whose
   // viewed watermark never caught up is what raises the badge.
-  const append = (id: string) => useGlobalSessionsStore.setState((state) => {
+  // Upserting through the store keeps its record map and its ordered view in
+  // agreement, so the badge reads the same unread state the row does.
+  const append = (id: string) => {
     const unread = { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } };
-    const existing = state.entityById.get(id) ?? state.activeSessions.find((entry) => entry.sessionId === id) ?? session(id);
-    const marked = { ...existing, metadata: unread };
-    return {
-      entityById: new Map(state.entityById).set(id, marked),
-      activeSessions: state.activeSessions.map((entry) => (entry.sessionId === id ? { ...entry, metadata: unread } : entry)),
-    };
-  });
+    const existing = useGlobalSessionsStore.getState().entityById.get(id) ?? session(id);
+    useGlobalSessionsStore.getState().upsertSession({ ...existing, metadata: unread });
+  };
   const flush = async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
   };
@@ -60,8 +59,23 @@ describe('Dock badge with the macOS menu bar disabled', () => {
       window: dom, document: dom.document, navigator: dom.navigator,
       IS_REACT_ACT_ENVIRONMENT: true,
     });
+    // The unread watermark is written to the host; answer the metadata read and
+    // write, and the view endpoint, so a mark clears instead of rolling back.
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/metadata')) {
+        return Response.json({ sessionId: 'root', revision: '1', metadata: { openchamber: { workbench: { lastIdleAt: 1, viewedAt: 1 } } } });
+      }
+      return new Response(null, { status: 204 });
+    });
     useNotificationStore.setState(useNotificationStore.getInitialState());
-    useGlobalSessionsStore.setState({ activeSessions: [session('root'), session('child', 'root')] });
+    const seeded = [session('root'), session('child', 'root')];
+    // The global store keeps `entityById` as the record and `activeSessions` as
+    // its ordered view, so a fixture that writes one has to write both.
+    useGlobalSessionsStore.setState({
+      activeSessions: seeded,
+      entityById: new Map(seeded.map((entry) => [entry.sessionId, entry])),
+    });
     useUIStore.setState({ dockBadgeEnabled: true, notifyOnSubtasks: false });
     counts.length = 0;
     listenerCount = 0;
@@ -71,6 +85,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount());
+    fetchSpy.mockRestore();
     await dom.happyDOM.close();
   });
 

@@ -11,7 +11,7 @@ import {
   type BlockingPermissionRequest,
 } from '@/sync/global-blocking-requests';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
-import { isSessionUnread, isSessionUnreadWithError } from '@/sync/session-unread';
+import { isSessionUnread, isSessionUnreadWithError, isUnreadTurn } from '@/sync/session-unread';
 import { useNotificationStore } from '@/sync/notification-store';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { respondToPermission } from '@/sync/session-actions';
@@ -323,7 +323,7 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       let familyUnseen = isUnread ? 1 : 0;
       if (familyUnseen === 0 && ui.notifyOnSubtasks) {
         familyUnseen = collectDescendants(session.sessionId)
-          .reduce((sum, id) => sum + (isSessionUnread(useGlobalSessionsStore.getState().entityById.get(id)) ? 1 : 0), 0);
+          .reduce((sum, id) => sum + (isUnreadTurn(useGlobalSessionsStore.getState().entityById.get(id)) ? 1 : 0), 0);
       }
       if (familyUnseen > 0) dockBadgeCount += 1;
     }
