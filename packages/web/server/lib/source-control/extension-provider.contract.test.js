@@ -456,7 +456,9 @@ describe('a service-owned source-control login through the running host', () => 
     expect(retained.body.binding.providers.find((item) => item.provider === providerId).readiness).toBe('ready');
 
     writeState({ unreachable: true });
-    expect((await authStatus()).status).toBeGreaterThanOrEqual(500);
+    const dbg = await authStatus();
+    console.log('[dbg-status]', JSON.stringify({ status: dbg.status, body: dbg.body }));
+    expect(dbg.status).toBeGreaterThanOrEqual(500);
     expect((await request('GET', `/api/source-control/binding?directory=${encodeURIComponent(repository)}`)).body.binding.providers
       .find((item) => item.provider === providerId).readiness).toBe('ready');
 

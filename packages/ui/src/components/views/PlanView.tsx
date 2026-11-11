@@ -41,6 +41,8 @@ import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { fetchProjectPlan, parsePlanMarkdown, resolveProjectContextId, type SavedProjectPlanTarget } from '@/lib/projectContextApi';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { createPlanSaveQueue } from '@/lib/planSaveQueue';
+import { observeProjectContext } from '@/lib/projectContextSync';
+import { createFileContentPoller } from './fileContentPoller';
 import { getRuntimeKey, getRuntimeSwitchRevision, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
@@ -137,6 +139,9 @@ type SelectedLineRange = {
   start: number;
   end: number;
 };
+
+/** The poll only covers a change no event announced. */
+const WATCHED_PLAN_POLL_MS = 2_000;
 
 export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProjectPlan = null, onNavigatedToChat }) => {
   const { t } = useI18n();
@@ -614,8 +619,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
 
   // Synchronous buffer tracking: if an edit and an unmount land in the same
   // batch, the passive content effect would never run and a flush would save
-  // a stale buffer.
+  // a stale buffer. The editor echoes text it was given as a change; that echo
+  // is not an edit and must not schedule a save or mark the document dirty.
   const handleContentChange = React.useCallback((next: string) => {
+    if (next === docRef.current.content) return;
     docRef.current.content = next;
     docRef.current.editRevision += 1;
     setContent(next);
@@ -637,6 +644,59 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       window.clearTimeout(controller);
     };
   }, [content, loadedProjectPlanId, resolvedPath, scheduleSave]);
+
+  // A plan the agent rewrote on disk must reach the open editor without a
+  // reload. Its own save announces itself through the project context,
+  // which this view listens to, and the poll covers an edit that announces
+  // nothing. Unsaved typing wins: the check skips a dirty document.
+  React.useEffect(() => {
+    if (!savedPlanProjectRef || !savedPlanId || !savedPlanKey || loadedProjectPlanId !== savedPlanId) return;
+    const doc = docRef.current;
+    if (doc.key !== savedPlanKey) return;
+    const poller = createFileContentPoller({
+      readContent: async () => {
+        await saveQueue.pendingFor(savedPlanKey);
+        const plan = await fetchProjectPlan(savedPlanProjectRef, savedPlanId);
+        // A deleted plan keeps its text on screen; the next save reports it gone.
+        if (!plan) throw new Error('Plan not found');
+        return plan.raw;
+      },
+      getLoadedContent: () => doc.content,
+      getLoadedRevision: () => doc.editRevision,
+      isDirty: () => docRef.current !== doc || doc.editRevision > doc.savedRevision,
+      applyContent: (raw) => {
+        doc.content = raw;
+        setContent(raw);
+      },
+    });
+    let polling = false;
+    // A change reported while a check runs gets a check of its own after it.
+    let pollAgain = false;
+    const poll = async () => {
+      if (document.visibilityState === 'hidden') return;
+      if (polling) {
+        pollAgain = true;
+        return;
+      }
+      polling = true;
+      try {
+        await poller.poll();
+      } finally {
+        polling = false;
+        if (pollAgain) {
+          pollAgain = false;
+          void poll();
+        }
+      }
+    };
+    const release = observeProjectContext(savedPlanProjectRef, poll);
+    const interval = window.setInterval(() => { void poll(); }, WATCHED_PLAN_POLL_MS);
+    return () => {
+      window.clearInterval(interval);
+      release();
+      poller.dispose();
+    };
+  }, [loadedProjectPlanId, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue]);
 
   // Closing the view inside the 350ms debounce window would drop the last
   // edits: the cleanup above cancels the timer. Same for switching documents,
@@ -947,7 +1007,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
         target={pendingPlanSend?.target ?? 'session'}
         projectDirectory={savedPlanProjectRef?.path ?? currentProjectRef?.path ?? null}
         submitting={isPlanSendSubmitting}
-        allowRunAsGoal
+        allowRunAsGoal={pendingPlanSend?.action === 'implement'}
         onConfirm={handleConfirmPlanSend}
       />
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { sourceControlProviderListSchema } from '@openchamber/ui/lib/source-control/providers/descriptor';
 import { buildExtensionDescriptor } from './extension-descriptor.js';
 import { publicProviderDescriptor, sourceControlProviderDescriptors } from './provider-descriptors.js';
 import { detachExtensionDescriptors } from './provider-descriptors.test-support.js';
@@ -234,16 +235,11 @@ describe('extension source-control descriptors', () => {
       instances: { format: 'origin', defaultInstance: 'https://forge.example.com', multiple: false },
       icon: { path: 'M2 6h15v5.5z' },
     });
-    // The UI's published-descriptor schema (`packages/ui/lib/source-control/
-    // providers/descriptor`) lands with the UI task; until then the same shape
-    // is pinned here.
-    expect(published).toMatchObject({ id: 'ext-forge', label: 'Forge', order: 3, auth: { methods: ['pat'] } });
-    expect(Object.keys(published).sort()).toEqual([
-      'auth', 'extension', 'features', 'icon', 'id', 'instances', 'label', 'order', 'repository', 'settings', 'terminology', 'urls',
-    ]);
+    const [parsed] = sourceControlProviderListSchema.parse([published]);
+    expect(parsed).toMatchObject({ id: 'ext-forge', label: 'Forge', order: 3, auth: { methods: ['pat'] } });
 
     const markless = build({ presentation: { ...contribution().presentation, iconPath: undefined } });
-    expect(publicProviderDescriptor(markless, 4).icon).toEqual({ sprite: 'git-branch' });
+    expect(sourceControlProviderListSchema.parse([publicProviderDescriptor(markless, 4)])[0].icon).toEqual({ sprite: 'git-branch' });
   });
 
   it('publishes the change-based features only when declared', () => {
