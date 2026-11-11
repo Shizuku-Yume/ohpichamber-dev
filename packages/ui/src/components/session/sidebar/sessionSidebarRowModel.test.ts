@@ -88,6 +88,7 @@ const args = (sections: ProjectSection[]): SessionSidebarRowModelArgs => ({
   pinnedSessionIds: new Set(),
   sessionOrderIndex: new Map(),
   groupStatusByKey: new Map(),
+  sessionOwnerById: new Map(),
   folderAuthorityByOwner: new Map([['project-a', { scopeKeys: ['/repo'], complete: true }]]),
   activeProjectId: 'project-a',
   singleProjectMode: false,

@@ -27,15 +27,14 @@ describe('getSessionNodesActivityState', () => {
     )).toBe('active');
   });
 
-  test('includes unread subtasks only when subtask notifications are enabled', () => {
+  test('reads an unread descendant from the session records alone', () => {
     const nodes = [node('root', undefined, [node('unread-child', 'root')])];
     const unread = new Set(['unread-child']);
 
-    expect(getSessionNodesActivityState(nodes, new Set(), unread, false)).toBeNull();
-    expect(getSessionNodesActivityState(nodes, new Set(), unread, true)).toBe('unread');
+    expect(getSessionNodesActivityState(nodes, new Set(), unread)).toBe('unread');
   });
 
   test('returns null when no descendant has activity', () => {
-    expect(getSessionNodesActivityState([node('idle')], new Set(), new Set(), true)).toBeNull();
+    expect(getSessionNodesActivityState([node('idle')], new Set(), new Set())).toBeNull();
   });
 });

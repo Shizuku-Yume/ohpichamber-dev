@@ -32,8 +32,8 @@ export function useReviewFlowStart(
       await startReviewFlow({
         originalSessionID: sessionId,
         directory,
-        providerId: execution.providerId,
-        modelId: execution.modelId,
+        providerId: execution.providerID,
+        modelId: execution.modelID,
         variant: execution.variant || undefined,
         generateHandoff: execution.generateHandoff,
         returnAfterHandoffRequest: execution.generateHandoff,

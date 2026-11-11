@@ -9,25 +9,6 @@ import {
   type RemoteTraits,
 } from '@/lib/source-control/identity';
 
-const gitRemoteHost = (remoteUrl: string): string | null => {
-  const value = remoteUrl.trim();
-  if (!value) return null;
-  const scpLike = /^[^/@]+@([^/:]+):/.exec(value);
-  if (scpLike) return scpLike[1].toLowerCase();
-  try {
-    return new URL(value).hostname.toLowerCase() || null;
-  } catch {
-    return null;
-  }
-};
-
-const instanceSshHostsFrom = (identities: ReadonlyArray<{ instance: string; instanceSshUrl?: string }>): Record<string, string> => {
-  const addresses: Record<string, string> = {};
-  for (const identity of identities) {
-    if (identity.instanceSshUrl) addresses[identity.instance] = identity.instanceSshUrl;
-  }
-  return addresses;
-};
 import { Button } from '@/components/ui/button';
 import {
   Select,

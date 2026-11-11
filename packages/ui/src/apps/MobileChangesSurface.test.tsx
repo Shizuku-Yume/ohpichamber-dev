@@ -178,7 +178,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const render = () => act(async () => {
     root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
       <MobileChangesPane rootDirectory={directory}
-        repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true }}
+        repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true, unreadable: null }}
         visible={visible} initialDiff={initialDiff} />
     </RuntimeAPIContext.Provider></I18nProvider>);
   });
@@ -450,7 +450,7 @@ test('bounds Revert All fan-out to two in-flight revert requests', async () => {
     await act(async () => {
       root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
         <MobileChangesPane rootDirectory="/repo"
-          repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true }}
+          repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true, unreadable: null }}
           visible />
       </RuntimeAPIContext.Provider></I18nProvider>);
     });

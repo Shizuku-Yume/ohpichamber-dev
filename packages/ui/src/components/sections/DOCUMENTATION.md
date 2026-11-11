@@ -27,9 +27,7 @@ The contract, implemented by `shared/SettingsAutosave.tsx`:
   something the user waits for. A failure is an error toast,
   "Couldn't save: <reason>", raised by the hook itself.
 - **One page, one save routine.** A section that writes its own request still
-  reports through the page: `agents/AgentPermissionsEditor.tsx` hands its save
-  routine to `AgentsPage` via `registerSave`, and the page's save runs it, so a
-  failure is reported once.
+  reports through the page, so a failure is reported once.
 - Saves run serially. A save request received during a write queues one follow-up
   using the latest committed form state. Unmounting prevents that follow-up.
 
@@ -259,8 +257,7 @@ starts with no tokens (it reuses only the earlier client registration) and
 its new credential is the one the next connect uses, so signing in is the
 whole recovery; no sign-out call is needed.
 
-So for a `failed` server whose OAuth integration exists
-(`useMcpOAuthIntegration`), the header's primary button is "Sign in again" in
+So for a `failed` server the header's primary button is "Sign in again" in
 place of Connect, and the card shows no second sign-in row: each press mounts
 a fresh `McpOAuthSignIn` with `autoStart`. A single method starts immediately
 with its start button hidden; multiple methods keep their start controls so
@@ -569,7 +566,7 @@ The page is hidden in VS Code (`metadata.ts`).
 
 ## Plugin duplicate sources
 
-`plugins/PluginsGrid.tsx` keeps every configuration entry and its editing target.
+`plugins/PluginsGrid.tsx` keeps every catalog entry and its editing target.
 A discovered package card is hidden when its normalized target is already
 represented by a declaration or another discovery record. Distinct declarations
 and their options remain separate, including declarations of the same target.
@@ -596,7 +593,7 @@ only ever sends v2.
 
 | Entity | What the page reads and writes |
 |---|---|
-| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `mode`, `steps`, `hidden`, `color`, `request.body.temperature` / `request.body.top_p`, and an ordered `permissions` rule list |
+| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `allowedTools`, `permissionPresetId`, `color` |
 | Command | `template` (the markdown body), `description`, `agent`, `model` with `#variant`, `subagent` |
 | MCP server | `type` (required), `command` / `url`, `environment`, `headers`, `disabled`, `codemode`, `timeout: { startup, catalog, execution }`, snake_case `oauth` |
 | Provider | `package` with the `aisdk:` prefix, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
@@ -607,10 +604,10 @@ Two consequences worth knowing:
 - **Edit the stored entry, never the resolved one.** `AgentInfo` and the model
   catalog are what OpenCode resolved: built-in defaults, global config and live
   session grants are already merged in. Writing that back would bake them into
-  the file. `agents/AgentsPage.tsx` and `AgentPermissionsEditor.tsx` therefore
-  read `GET /api/config/agents/:name/config` and `…/permissions`, and the
-  commands store reads `GET /api/config/commands/:name/config` because the v2
-  `CommandInfo` carries only a name and a description.
+  the file. `agents/AgentsPage.tsx` therefore reads
+  `GET /api/config/agents/:name/config`, and the commands store reads
+  `GET /api/config/commands/:name/config` because the v2 `CommandInfo` carries
+  only a name and a description.
 - **`request` is replaced wholesale.** A PATCH that sends `request` overwrites
   the whole block, so `AgentsPage` merges the fields it owns into the stored
   `request` instead of sending only what changed.
@@ -620,34 +617,11 @@ no page exposes it as an on/off switch for agents. For MCP servers `disabled` is
 the documented way to keep a server configured but inactive, and the page's
 "Enable" checkbox writes it.
 
-### Agent permissions
+### Hidden agents
 
-Settings lists hidden custom agents so their files remain editable, renameable, and deletable. Hidden built-in agents stay out of Settings, and all hidden agents stay out of the composer pickers. Duplicate and rename read the stored entry and preserve its `hidden` flag.
+Settings lists custom agents so their files remain editable, renameable, and deletable. Hidden built-in agents stay out of Settings and out of the composer pickers, and duplicate and rename read the stored entry so its `hidden` flag survives.
 
-OpenCode 2 replaced the v1 `permission` map (`bash`/`task`/`list`/`lsp` keys with
-allow/deny/ask per pattern) with an ORDERED list of `{ action, resource, effect }`
-rules where the LAST match wins. The user does not think in ordered rules, so
-the editor keeps the v1 mental model: one row per tool with inherit / allow /
-ask / deny, an arrow showing what OpenCode will actually do for that tool right
-now, and resource patterns under an expanded row. `agents/agentPermissionModel.ts`
-translates this view to and from the rule list. Because order is part of the
-policy, a save edits the stored list in place: changed effects replace their
-rule where it stands, removed rows drop theirs, rules the view cannot show (an
-`*` action with a resource pattern) pass through untouched, and only new rules
-are inserted (agent wildcard first, a tool's wildcard before its patterns, a
-pattern last), so decisions for tools the user did not touch never change. The
-arrow is computed from OpenCode's built-in defaults
-(`OPENCODE_DEFAULT_RULES`), the global `opencode.json` rules and the agent's
-own wildcard, in that order. v1-only keys (`LEGACY_ACTIONS`) are neither shown
-nor written back.
-
-Below the built-in tools the editor lists one row per MCP server from the
-Settings directory's config (`useMcpConfigStore`), keyed `<server>_*`, which
-OpenCode matches against every tool the server exposes. Every configured server
-is listed, not only the connected ones, so a rule can be set while a server is
-disabled or failing; the live status from `useMcpStore` is shown beside the
-name as a hint. A single MCP tool (`<server>_<tool>`) is still reachable
-through the custom key input.
+Permissions are edited as the agent contract states them, not as an ordered rule list: `allowedTools` (the tools the agent may call) and the optional `permissionPresetId`, both written through `updateAgent`. The ordered `{ action, resource, effect }` rule editor and its translator were retired with the OpenCode engine, so no editor derives rules from built-in defaults.
 
 ### The legacy-format note
 

@@ -2,15 +2,10 @@
 // directory: a chat tab may show a session from another project, so the
 // panel's own directory is not enough.
 
-type TitledSession = {
-  id: string;
-  title?: string | null;
-  time?: { updated?: number } | null;
-};
+import type { Session } from '@openchamber/agent-contract';
 
-type SessionSlice = {
-  session: readonly TitledSession[];
-};
+/** What a directory child store holds for the tab titles: canonical sessions. */
+type SessionSlice = { session: readonly Session[] };
 
 export const EMPTY_SESSION_TITLE_MAP: ReadonlyMap<string, string> = new Map<string, string>();
 
@@ -22,10 +17,9 @@ export const areTitleMapsEqual = (a: ReadonlyMap<string, string>, b: ReadonlyMap
   return true;
 };
 
-const getSessionUpdatedAt = (session: TitledSession): number => {
-  const updatedAt = session.time?.updated;
-  return typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : 0;
-};
+const getSessionUpdatedAt = (session: Session): number => (
+  Number.isFinite(session.updatedAt) ? session.updatedAt : 0
+);
 
 // A project's store also holds its worktrees' sessions, so one session can
 // appear in more than one store; the most recently updated copy wins, like
@@ -37,14 +31,14 @@ export const buildSessionTitleMap = (states: Iterable<SessionSlice>, sessionIDs:
   const next = new Map<string, string>();
   for (const state of states) {
     for (const session of state.session) {
-      if (!wanted.has(session.id)) continue;
+      if (!wanted.has(session.sessionId)) continue;
       const title = session.title?.trim();
       if (!title) continue;
       const updatedAt = getSessionUpdatedAt(session);
-      const seenAt = updatedAtById.get(session.id);
+      const seenAt = updatedAtById.get(session.sessionId);
       if (seenAt !== undefined && seenAt > updatedAt) continue;
-      updatedAtById.set(session.id, updatedAt);
-      next.set(session.id, title);
+      updatedAtById.set(session.sessionId, updatedAt);
+      next.set(session.sessionId, title);
     }
   }
   return next.size === 0 ? EMPTY_SESSION_TITLE_MAP : next;

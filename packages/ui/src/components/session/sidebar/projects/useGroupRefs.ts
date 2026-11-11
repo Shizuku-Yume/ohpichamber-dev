@@ -28,7 +28,7 @@ export const useGroupRefs = (group: SessionGroup, sessions: readonly Session[], 
   const prSummary = useFreshestSourceControlVisualSummaryForBranch(prDirectory, prBranch);
   const prColor = prSummary ? `var(--pr-${prSummary.visualState})` : undefined;
   const prDescriptor = urlMatcher.descriptorOf(prSummary?.provider ?? '');
-  const prStatusLabel = getPrStatusLabel(prSummary, t);
+  const prStatusLabel = getPrStatusLabel(prSummary, prDescriptor.terminology.changeRequest, t);
   const prReference = prSummary ? formatChangeRequestReference(prDescriptor, prSummary.number) : '';
   const prLabel = prSummary
     ? (prStatusLabel ? `${prReference} · ${prStatusLabel}` : prReference)

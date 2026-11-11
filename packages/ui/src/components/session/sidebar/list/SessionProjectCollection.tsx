@@ -71,10 +71,11 @@ import { useSidebarGroupStatus } from './useSidebarGroupStatus';
 import { getGroupFolderOwnerKey, getSessionFolderOwnerKey, getSessionFolderScopes } from '../sessions/sessionFolderIdentity';
 import { SessionRowOrderProvider } from '../sessions/sessionRowOrder';
 import { canRequestNativeDirectoryAccess } from '@/lib/desktop';
+import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { useSidebarSpaces, useSpacesStore, type SpaceMark } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
-import { getSessionPinList, isSessionPinned } from '@/lib/sessionPins';
+import { isSessionPinned } from '@/lib/sessionPins';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
 import { useI18n } from '@/lib/i18n';
 
@@ -204,7 +205,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     return byProject;
   }, [spaceList]);
   const ownership = React.useMemo(
-    () => createSessionOwnershipIndex(collection.sessions, topology.projects, topology.availableWorktreesByProject, topology.isVSCode, collection.archivedSessions, authoritativeProjects, spaceList),
+    () => createSessionOwnershipIndex(collection.sessions, topology.projects, topology.availableWorktreesByProject, collection.archivedSessions, spaceList),
     [authoritativeProjects, collection.archivedSessions, collection.sessions, spaceList, topology.availableWorktreesByProject, topology.isVSCode, topology.projects],
   );
   const [visibleSessionCountByGroup, setVisibleSessionCountByGroup] = React.useState<Map<string, number>>(new Map());
@@ -305,7 +306,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   // for every group the sidebar renders — the chats group included. A group the
   // hook never sees renders an empty list while a search is active.
   const chatGroup = React.useMemo<SessionGroup | null>(() => {
-    if (topology.isVSCode && !isVSCodeWithoutWorkspace()) return null;
+    if (topology.isVSCode && !canRequestNativeDirectoryAccess()) return null;
     const chatsRoot = knownChatsRoot
       ?? collection.chatSessions.map((session) => getChatsRootFromDirectory(resolveGlobalSessionDirectory(session))).find(Boolean)
       ?? null;
@@ -537,14 +538,13 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
         ? ref
         : { kind: 'session', key: `session:${session.sessionId}`, projectId: ownership.bySessionId.get(session.sessionId)?.projectId ?? null, rootSessionId: session.sessionId };
     };
-    // Pinned lists the pins filed in Pinned; a pin in one of the user's lists
-    // goes to the sections that ask for that list.
+    // Pinned lists every pinned root session; the contract carries one pinned
+    // state, so the fork has no Pin-to lists to separate.
     const pinnedSessions = showPinned
       ? collection.orderedSessions.filter((session) => rootSessionIds.has(session.sessionId)
         && session.archivedAt === undefined
         && !isChatDirectoryPath(resolveGlobalSessionDirectory(session))
-        && isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(session), session.sessionId)
-        && (getSessionPinList(session) ?? DEFAULT_PIN_LIST) === DEFAULT_PIN_LIST)
+        && isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(session), session.sessionId))
       : [];
     // Pinned worktrees follow the pinned sessions, the latest pin first.
     const pinnedWorktrees = showPinned

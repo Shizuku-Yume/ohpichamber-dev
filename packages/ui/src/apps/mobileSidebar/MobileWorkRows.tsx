@@ -1,5 +1,4 @@
 import React from 'react';
-import { requestPinTo } from '@/components/session/sidebar/sections/sectionActions';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { Icon } from '@/components/icon/Icon';
 import { Spinner } from '@/components/ui/spinner';
@@ -188,7 +187,9 @@ export const MobileWorktreeRow: React.FC<{
     </>;
   }
 
-  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canPin ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
+  // The fork's worktree model offers no pin write (`useWorktreeWork` reports
+  // `canPin` false), so the row has no pin action to swipe.
+  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
   return (
     <MobileSwipeActionsRow
       actionsWidth={slots * ROW_ACTION_SLOT_WIDTH}
@@ -213,14 +214,6 @@ export const MobileWorktreeRow: React.FC<{
             label={t('sessions.sidebar.work.menu.rename')}
             revealed={revealed}
             onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}
-          />
-        ) : null}
-        {work.canPin ? (
-          <MobileSwipeAction
-            icon={work.pinned ? 'unpin' : 'pushpin'}
-            label={work.pinned ? t('sessions.sidebar.work.menu.unpin') : t('sessions.sidebar.work.menu.pin')}
-            revealed={revealed}
-            onClick={after(() => requestPinTo({ current: work.pinList, pin: (list) => { void work.setPin(true, list); }, unpin: () => { void work.setPin(false); } }))}
           />
         ) : null}
         {work.canArchive ? (

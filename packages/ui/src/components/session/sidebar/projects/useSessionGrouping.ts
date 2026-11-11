@@ -87,7 +87,7 @@ export const useSessionGrouping = (args: Args) => {
   }, []);
 
   const buildSessionSearchText = React.useCallback((session: Session): string => {
-    const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null) ?? '';
+    const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session) ?? null) ?? '';
     const sessionTitle = (session.title || t('sessions.sidebar.session.untitled')).trim();
     return `${sessionTitle} ${sessionDirectory}`.toLowerCase();
   }, [t]);
@@ -145,7 +145,7 @@ export const useSessionGrouping = (args: Args) => {
       }
 
       const getSessionWorktree = (session: Session): WorktreeMetadata | null => {
-        const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+        const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session));
         const sessionWorktreeMeta = args.worktreeMetadata.get(session.sessionId) ?? null;
         if (sessionWorktreeMeta) return sessionWorktreeMeta;
         if (sessionDirectory) {
@@ -163,7 +163,7 @@ export const useSessionGrouping = (args: Args) => {
         const children = isArchivedSession(session) ? [] : childrenMapRef.current.get(session.sessionId) ?? [];
         const childNodes: SessionNode[] = [];
         for (const child of children) {
-          if (isArchivedSession(child) || claimedSessionIds.has(child.id)) continue;
+          if (isArchivedSession(child) || claimedSessionIds.has(child.sessionId)) continue;
           childNodes.push(buildProjectNode(child));
         }
         return { session, children: childNodes, worktree: getSessionWorktree(session) };
@@ -190,8 +190,8 @@ export const useSessionGrouping = (args: Args) => {
         const seen = new Set<string>();
         let current: Session | undefined = session;
         while (current && !isArchivedSession(current)) {
-          if (seen.has(current.id)) return true;
-          seen.add(current.id);
+          if (seen.has(current.sessionId)) return true;
+          seen.add(current.sessionId);
           const parentId = resolveSessionNestingParentId(current, (id) => sessionMap.get(id));
           current = parentId && sessionMap.has(parentId) ? sessionMap.get(parentId) : undefined;
         }
@@ -405,8 +405,8 @@ export const useSessionGrouping = (args: Args) => {
       while (true) {
         const parentId = resolveSessionNestingParentId(current, (id) => sessionMap.get(id));
         const parent = parentId ? sessionMap.get(parentId) : undefined;
-        if (!parent || ancestors.has(parent.id)) break;
-        ancestors.add(parent.id);
+        if (!parent || ancestors.has(parent.sessionId)) break;
+        ancestors.add(parent.sessionId);
         add(parent);
         current = parent;
       }

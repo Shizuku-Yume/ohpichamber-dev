@@ -28,8 +28,8 @@ export type SessionRefLine = SidebarRefLink;
 export function useSessionRefLines(session: Session, worktree: WorktreeMetadata | null | undefined, isVSCode: boolean) {
   const { t } = useI18n();
   const prLookup = React.useMemo(
-    () => resolveSessionPrLookup(worktree),
-    [worktree],
+    () => resolveSessionPrLookup(worktree, isVSCode),
+    [isVSCode, worktree],
   );
   const branchPrSummary = useFreshestSourceControlVisualSummaryForBranch(prLookup?.directory ?? null, prLookup?.branch ?? null);
   const urlMatcher = useRepositoryUrlMatcher();
@@ -82,7 +82,7 @@ export function useSessionRefLines(session: Session, worktree: WorktreeMetadata 
     if (prSummaries.length > 0 || linkedPrsWithoutState.length > 0 || uncolouredChanges.length > 0) {
       const summaryLines = prSummaries.map((summary): SessionRefLine => {
         const descriptor = urlMatcher.descriptorOf(summary.provider ?? '');
-        const label = getPrStatusLabel(summary, t);
+        const label = getPrStatusLabel(summary, descriptor.terminology.changeRequest, t);
         const reference = formatChangeRequestReference(descriptor, summary.number);
         return {
           key: `${summary.provider ?? ''}:${summary.repo?.owner ?? ''}/${summary.repo?.repo ?? ''}#${summary.number}`,

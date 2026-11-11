@@ -1,5 +1,4 @@
 import React from 'react';
-import { PinToMenu } from '../sections/PinToMenu';
 import { Icon } from '@/components/icon/Icon';
 import {
   DropdownMenu,
@@ -131,7 +130,7 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
   });
   const {
     worktree, directory, worktreeRemoving, sessions, project, projectLabel, refs, selected,
-    title, branch, label, secondName, finishing, canArchive, canRename, canNewChat, pinned, canPin, workAction, inWork, activityState,
+    title, branch, label, secondName, finishing, canArchive, canRename, canNewChat, pinned, workAction, inWork, activityState,
     runningSessionId, durationSessionId,
   } = work;
   // With the Pinned section shown a pinned work is listed there, whose header
@@ -341,14 +340,6 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
           <Icon name="edit" className="h-4 w-4" />
           <span>{t('sessions.sidebar.work.menu.rename')}</span>
         </Slots.Item>
-      ) : null}
-      {canPin ? (
-        <PinToMenu
-          slots={Slots}
-          current={work.pinList}
-          onPin={(list) => { void work.setPin(true, list); }}
-          onUnpin={() => { void work.setPin(false); }}
-        />
       ) : null}
       {canFile ? (
         <Slots.Sub>

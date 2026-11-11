@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, mock, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { MobileAppActions } from '@/apps/mobileAppContext';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import * as actualEffectiveDirectory from '@/hooks/useEffectiveDirectory';
 
@@ -155,7 +156,7 @@ test('on the phone a file link also opens the files drawer (#5486)', async () =>
   const open = spyOn(state, 'openContextFile');
   const { DedicatedMobileAppProvider } = await import('@/apps/mobileAppContext');
   let filesOpened = 0;
-  const actions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openSettings: () => undefined, openSourceBoard: () => undefined };
+  const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openPlan: () => undefined, openSourceBoard: () => undefined };
   try {
     const content = React.createElement(Renderer.MarkdownContent, { content: '[View README.md](README.md)', directory: '/project', enableFileReferences: true, settled: true });
     await act(() => root.render(React.createElement(I18nProvider, null, React.createElement(DedicatedMobileAppProvider, { actions, children: content }))));

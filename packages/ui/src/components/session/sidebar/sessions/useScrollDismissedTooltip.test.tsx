@@ -24,10 +24,25 @@ const installDom = () => {
   } };
 };
 
-const Row = ({ label }: { label: string }) => {
+/**
+ * Whether this row's tooltip is open, by the same controlled state the row
+ * hands its `Tooltip`. The popup's data attribute is base-ui's business; what
+ * this hook promises is that the open state it is given matches the scroll.
+ */
+const Row = ({ label, onOpen }: { label: string; onOpen: (open: boolean) => void }) => {
   const tooltip = useScrollDismissedTooltip();
+  const [open, setOpen] = React.useState(false);
   return (
-    <Tooltip actionsRef={tooltip.actionsRef} onOpenChange={tooltip.onOpenChange}>
+    <Tooltip
+      actionsRef={tooltip.actionsRef}
+      open={open}
+      onOpenChange={(next, details) => {
+        tooltip.onOpenChange(next, details);
+        if (details.isCanceled) return;
+        setOpen(next);
+        onOpen(next);
+      }}
+    >
       <TooltipTrigger asChild><button type="button" data-row={label}>{label}</button></TooltipTrigger>
       <TooltipContent>{`${label} details`}</TooltipContent>
     </Tooltip>
@@ -40,14 +55,18 @@ describe('session row tooltips while the list scrolls', () => {
   let root: Root;
   let dom: ReturnType<typeof installDom>;
 
+  const openByRow = new Map<string, boolean>();
+  const rowIsOpen = (label: string): boolean => openByRow.get(label) ?? false;
+
   beforeEach(async () => {
     dom = installDom();
     root = createRoot(dom.container);
+    openByRow.clear();
     await act(async () => root.render(
       <TooltipProvider delay={0} closeDelay={0}>
         <div data-list="">
-          <Row label="first" />
-          <Row label="second" />
+          <Row label="first" onOpen={(open) => openByRow.set('first', open)} />
+          <Row label="second" onOpen={(open) => openByRow.set('second', open)} />
         </div>
         <div data-elsewhere="" />
       </TooltipProvider>,
@@ -80,25 +99,25 @@ describe('session row tooltips while the list scrolls', () => {
 
   test('scrolling the list closes the open row tooltip', async () => {
     await hover(row('first'));
-    expect(row('first').hasAttribute('data-popup-open')).toBe(true);
+    expect(rowIsOpen('first')).toBe(true);
 
     await scroll('[data-list]');
-    expect(row('first').hasAttribute('data-popup-open')).toBe(false);
+    expect(rowIsOpen('first')).toBe(false);
   });
 
   test('a row that arrives under the pointer mid-scroll stays closed until the scroll settles', async () => {
     await scroll('[data-list]');
     await hover(row('second'));
-    expect(row('second').hasAttribute('data-popup-open')).toBe(false);
+    expect(rowIsOpen('second')).toBe(false);
 
     await act(async () => { await wait(200); });
     await hover(row('first'));
-    expect(row('first').hasAttribute('data-popup-open')).toBe(true);
+    expect(rowIsOpen('first')).toBe(true);
   });
 
   test('scrolling something outside the list leaves the tooltip open', async () => {
     await hover(row('first'));
     await scroll('[data-elsewhere]');
-    expect(row('first').hasAttribute('data-popup-open')).toBe(true);
+    expect(rowIsOpen('first')).toBe(true);
   });
 });

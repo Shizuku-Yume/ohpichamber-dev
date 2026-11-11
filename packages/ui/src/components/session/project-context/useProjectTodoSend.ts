@@ -149,13 +149,25 @@ export const useProjectTodoSend = (options: {
 
         const selectionState = useSelectionStore.getState();
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
+        const agentName = execution.agent.trim();
+        if (agentName) {
+          selectionState.saveSessionAgentSelection(sessionId, agentName);
+          selectionState.saveAgentModelForSession(sessionId, agentName, execution.providerID, execution.modelID);
+          selectionState.saveAgentModelVariantForSession(
+            sessionId,
+            agentName,
+            execution.providerID,
+            execution.modelID,
+            execution.variant || undefined,
+          );
+        }
 
         setCurrentSession(sessionId, directoryHint);
         await sendMessage(
           visiblePrompt,
           execution.providerID,
           execution.modelID,
-          undefined,
+          execution.agent.trim() || undefined,
           undefined,
           undefined,
           syntheticParts,

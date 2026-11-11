@@ -95,7 +95,7 @@ export const finishZoneDrag = (directory: string | null | undefined): boolean =>
   return true;
 };
 
-type ZoneDragGesture = {
+export type ZoneDragGesture = {
   /**
    * Ends the gesture. True when it ended outside the source: the drop was
    * the zone drag's, on a target or not, and the source does nothing more.

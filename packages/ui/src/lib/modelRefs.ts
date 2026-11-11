@@ -17,7 +17,7 @@ export const resolveModelRefs = <P extends ProviderWithModelList>(
   hiddenModels: readonly ModelRef[],
 ): Array<ModelRef & { provider: P; model: Model }> => refs.flatMap(({ providerID, modelID }) => {
   const provider = providers.find((p) => p.providerId === providerID);
-  const model = provider ? provider.models.find((entry) => entry.modelId === modelID) : undefined;
+  const model = provider?.models.find((entry) => entry.modelId === modelID);
   if (!provider || !model) return [];
   if (hiddenModels.some((item) => item.providerID === providerID && item.modelID === modelID)) return [];
   return [{ provider, model, providerID, modelID }];

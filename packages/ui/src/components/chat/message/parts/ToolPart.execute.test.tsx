@@ -157,7 +157,7 @@ test('native bash calls and results retain separate identities and paired comman
     const openedFiles: Array<{ path: string; line?: number }> = [];
     const unexpectedRuntimeCall = (): never => { throw new Error('Read navigation must only open the requested file'); };
     const runtime: RuntimeAPIs = {
-      runtime: { platform: 'web', isDesktop: false },
+      runtime: { platform: 'web', isDesktop: false, isVSCode: false },
       get terminal() { return unexpectedRuntimeCall(); },
       get git() { return unexpectedRuntimeCall(); },
       get sourceControl() { return unexpectedRuntimeCall(); },

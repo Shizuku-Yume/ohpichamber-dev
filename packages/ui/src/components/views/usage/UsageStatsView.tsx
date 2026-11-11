@@ -233,6 +233,17 @@ type Formats = {
 
 type ToolsState = { entry: UsageToolsEntry | undefined; load: () => void };
 
+/** Some sessions could not be read; the totals shown are those that could. */
+function PartialUsageNotice({ errors }: { errors?: Record<string, string> }): React.ReactNode {
+  const { t } = useI18n();
+  return (
+    <div role="status" className="rounded-lg border border-border/60 px-3 py-2 typography-micro text-muted-foreground">
+      <p>{t('usageStats.partial')}</p>
+      {errors ? <ul>{Object.entries(errors).map(([sessionId, error]) => <li key={sessionId} className="break-words">{sessionId}: {error}</li>)}</ul> : null}
+    </div>
+  );
+}
+
 function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; range: UsageRange; formats: Formats; tools: ToolsState }): React.ReactNode {
   const { t } = useI18n();
   const cache = stats.tokens.cacheRead + stats.tokens.cacheWrite;

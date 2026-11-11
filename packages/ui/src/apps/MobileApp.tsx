@@ -344,6 +344,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         openChangesSurface(diffPath ? { path: diffPath, staged: staged === true } : null);
       },
       openFiles: () => openFilesSurface(),
+      openPlan: (plan) => setOpenPlan(plan),
       openSettings: () => openSettingsSurface('nav'),
       openSourceBoard: () => openSurface('board'),
     }),
@@ -742,7 +743,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             title={t('sourceBoard.title')}
           >
             <ErrorBoundary>
-              <MobileSourceBoard onLeave={leaveSourceBoard} />
+              <MobileSourceBoard onLeave={leaveSourceBoard} onClose={closeSurface} />
             </ErrorBoundary>
           </MobileFullscreenSurface>
         ) : null}

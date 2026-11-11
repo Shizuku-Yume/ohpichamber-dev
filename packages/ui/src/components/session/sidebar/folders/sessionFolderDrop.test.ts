@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { SessionSidebarFolderTarget, SessionSidebarRow } from '../sessionSidebarRowModel';
 import { getSessionDragId, getSessionFolderDropId } from '../sessions/sessionFolderIdentity';
 import { applySessionFolderDrop, resolveCurrentSessionFolderDropSource, resolveCurrentSessionFolderDropTarget } from './sessionFolderDrop';
@@ -7,14 +8,23 @@ import { applySessionFolderDrop, resolveCurrentSessionFolderDropSource, resolveC
 type SessionRow = Extract<SessionSidebarRow, { kind: 'session' }>;
 
 const sessionRow = (ownerKey: string | null, archived = false): SessionRow => {
+  registerWorkspaceDirectory('workspace-b', '/b-worktree');
   const session: Session = {
-    id: 'child-b',
-    projectID: 'project',
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    title: 'Child',
-    directory: '/b-worktree',
-    time: { created: 1, updated: 1 },
+    sessionId: 'child-b',
+    projectId: 'project',
+    workspaceId: 'workspace-b',
+    displayPath: '/b-worktree',
+    rootSessionId: 'child-b',
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
   };
   return {
     kind: 'session',

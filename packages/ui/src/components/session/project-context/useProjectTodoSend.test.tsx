@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, expect, mock, test } from 'bun:test';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { TodoSendExecution } from '../todoSendExecution';
 
 const dom = new Window();
@@ -26,11 +27,34 @@ const sends: Array<{ providerID: string; modelID: string; agent?: string; varian
 const savedSelections: string[] = [];
 const createdSessions: string[] = [];
 
+const session = (sessionId: string, directory: string) => {
+  const workspaceId = `workspace:${directory}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId,
+    projectId: 'project-1',
+    workspaceId,
+    displayPath: directory,
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle' as const,
+    activeRunId: null,
+    mode: { kind: 'main' as const },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+  };
+};
+
 const sessionState = {
   currentSessionId: 'session-elsewhere',
   createSession: async (_title: string | undefined, directory: string) => {
     createdSessions.push(directory);
-    return { id: 'session-plain', directory };
+    // The fork creates a session and answers its contract record.
+    return session('session-plain', directory);
   },
   initializeNewOpenChamberSession: () => undefined,
   sendMessage: async (

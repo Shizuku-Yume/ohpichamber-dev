@@ -17,16 +17,13 @@ import { DedicatedMobileAppProvider, type MobileAppActions } from '@/apps/mobile
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
 import type { ChatMessageEntry, TurnChangedFile, TurnRecord } from '../lib/turns/types';
-import { LiveTurnActivity } from './LiveTurnActivity';
+
 
 plugin({
     name: 'live-activity-worker-url',
     setup(build) {
-        build.onResolve({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, (args) => ({
-            path: args.path, namespace: 'worker-url-stub',
-        }));
-        build.onLoad({ filter: /.*/, namespace: 'worker-url-stub' }, () => ({
-            contents: 'export default "blob:test-shiki-worker";', loader: 'js',
+        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
+            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
         }));
         // Bun. This is a loader transform, not a replacement of the logo hook.
         build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
@@ -39,9 +36,12 @@ plugin({
     },
 });
 
+// Loaded after the plugin above, so the worker URL resolves through its stub.
+const { LiveTurnActivity } = await import('./LiveTurnActivity');
+
 const unavailable = (): never => { throw new Error('Activity rendering must not call runtime APIs'); };
 const runtimeApis: RuntimeAPIs = {
-    runtime: { platform: 'web', isDesktop: false },
+    runtime: { platform: 'web', isDesktop: false, isVSCode: false },
     get terminal() { return unavailable(); },
     get git() { return unavailable(); },
     get sourceControl() { return unavailable(); },
@@ -299,7 +299,7 @@ describe('live Activity with the real message body', () => {
         const mobileActions: MobileAppActions = {
             openFiles: () => { filesOpened += 1; },
             openChanges: () => { changesOpened += 1; },
-            openSettings: () => undefined,
+            openPlan: () => undefined,
             openSourceBoard: () => undefined,
         };
         useUIStore.setState({ isMobile: true });

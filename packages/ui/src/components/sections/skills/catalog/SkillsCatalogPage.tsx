@@ -17,13 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { Icon } from '@/components/icon/Icon';
 
-import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useSkillsCatalogStore, type SkillsCatalogItem, type SkillsCatalogSource } from '@/stores/useSkillsCatalogStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { toast } from '@/components/ui';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
-import type { SkillsCatalogItem, SkillsCatalogSource } from '@/lib/api/types';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 
@@ -307,9 +306,15 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     const remaining: SkillsCatalogItem[] = [];
     const refreshedSources = new Set<string>();
     for (const item of uninstallItems) {
-      const directory = item.installed?.scope === 'project' ? settingsDirectory : null;
-      const success = (item.installed?.scope !== 'project' || Boolean(directory))
-        && await deleteSkill(item.skillName, directory);
+      const installed = item.installed?.isInstalled === true ? item.installed : null;
+      if (!installed) {
+        remaining.push(item);
+        continue;
+      }
+      // The store deletes by the authored reference the catalog reports, and
+      // needs the workspace regardless of which scope the skill lives in.
+      const success = Boolean(settingsDirectory)
+        && await deleteSkill({ scope: installed.scope, authoredSkillId: installed.authoredSkillId }, settingsDirectory);
       if (success) {
         refreshedSources.add(item.sourceId);
         setSelectedSkillKeys((current) => {
@@ -380,26 +385,26 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
         showSaveStatus={false}
         namedBySidebar
       >
-      {showModeTabs && (
-            <div className="mb-4">
-              <div className="h-7">
-                <SortableTabsStrip
-                  items={[
-                    { id: 'manual', label: t('settings.skills.catalog.page.mode.manual') },
-                    { id: 'external', label: t('settings.skills.catalog.page.mode.external') },
-                  ]}
-                  activeId={mode}
-                  onSelect={(next) => {
-                    if (next === 'manual' || next === 'external') onModeChange(next);
-                  }}
-                  layoutMode="fit"
-                  variant="animated"
-                  animateActivePill={false}
-                  className="h-full"
-                />
-              </div>
+        {showModeTabs && (
+          <div className="mb-4">
+            <div className="h-7">
+              <SortableTabsStrip
+                items={[
+                  { id: 'manual', label: t('settings.skills.catalog.page.mode.manual') },
+                  { id: 'external', label: t('settings.skills.catalog.page.mode.external') },
+                ]}
+                activeId={mode}
+                onSelect={(next) => {
+                  if (next === 'manual' || next === 'external') onModeChange(next);
+                }}
+                layoutMode="fit"
+                variant="animated"
+                animateActivePill={false}
+                className="h-full"
+              />
             </div>
-          )}
+          </div>
+        )}
 
         <div data-settings-item="skills.catalog.search" className="mb-5">
           <div className="relative max-w-md">
@@ -583,182 +588,182 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           )}
 
           {isSelectedSourceLoading || (isLoadingSource && filtered.length === 0) || (isLoadingCatalog && sources.length === 0) ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <Icon name="refresh" className="mx-auto mb-3 h-5 w-5 animate-spin opacity-50" />
-                <p className="typography-meta">{t('settings.skills.catalog.page.loading.skills')}</p>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <p className="typography-ui-label">{t('settings.skills.catalog.page.empty.noSkillsTitle')}</p>
-                <p className="typography-meta mt-1 opacity-75">{t('settings.skills.catalog.page.empty.noSkillsDescription')}</p>
-              </div>
-            ) : (
-              <SkillsCatalogRows
-                items={filtered}
-                itemKey={itemKey}
-                renderRow={(item) => {
-                  const installed = item.installed?.isInstalled;
-                  const installedScope = item.installed?.scope;
-                  const skillUrl = skillCatalogUrl(item);
+            <div className="py-8 text-center text-muted-foreground">
+              <Icon name="refresh" className="mx-auto mb-3 h-5 w-5 animate-spin opacity-50" />
+              <p className="typography-meta">{t('settings.skills.catalog.page.loading.skills')}</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              <p className="typography-ui-label">{t('settings.skills.catalog.page.empty.noSkillsTitle')}</p>
+              <p className="typography-meta mt-1 opacity-75">{t('settings.skills.catalog.page.empty.noSkillsDescription')}</p>
+            </div>
+          ) : (
+            <SkillsCatalogRows
+              items={filtered}
+              itemKey={itemKey}
+              renderRow={(item) => {
+                const installed = item.installed?.isInstalled;
+                const installedScope = item.installed?.isInstalled ? item.installed.scope : null;
+                const skillUrl = skillCatalogUrl(item);
 
-                  return (
-                    <div className="py-2">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={selectedSkillKeys.has(itemKey(item))}
-                              onChange={(checked) => toggleSelectedSkill(item, checked)}
-                              disabled={(!installed && !item.installable) || Boolean(selectedItems.length > 0 && selectedSourceForBatch !== item.sourceId)}
-                              ariaLabel={`${installed ? t('settings.skills.catalog.page.actions.delete') : t('settings.skills.catalog.shared.actions.install')} ${item.skillName}`}
-                            />
-                            <span className="typography-ui-label font-medium text-foreground truncate">{item.skillName}</span>
-                            {installed && (
-                              <span className="typography-micro text-[var(--status-success)] bg-[var(--status-success)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
-                                {t('settings.skills.catalog.page.badge.installed', { scope: installedScope || t('settings.skills.catalog.page.badge.unknown') })}
-                              </span>
-                            )}
-                            {!item.installable && (
-                              <span className="typography-micro text-[var(--status-warning)] bg-[var(--status-warning)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
-                                {t('settings.skills.catalog.page.badge.notInstallable')}
-                              </span>
-                            )}
-                          </div>
-
-                          {item.description ? (
-                            <div className="typography-meta text-muted-foreground mt-0.5 line-clamp-2">{item.description}</div>
-                          ) : (
-                            <div className="typography-meta text-muted-foreground mt-0.5 italic">{t('settings.skills.catalog.shared.noDescription')}</div>
+                return (
+                  <div className="py-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={selectedSkillKeys.has(itemKey(item))}
+                            onChange={(checked) => toggleSelectedSkill(item, checked)}
+                            disabled={(!installed && !item.installable) || Boolean(selectedItems.length > 0 && selectedSourceForBatch !== item.sourceId)}
+                            ariaLabel={`${installed ? t('settings.skills.catalog.page.actions.delete') : t('settings.skills.catalog.shared.actions.install')} ${item.skillName}`}
+                          />
+                          <span className="typography-ui-label font-medium text-foreground truncate">{item.skillName}</span>
+                          {installed && (
+                            <span className="typography-micro text-[var(--status-success)] bg-[var(--status-success)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
+                              {t('settings.skills.catalog.page.badge.installed', { scope: installedScope || t('settings.skills.catalog.page.badge.unknown') })}
+                            </span>
                           )}
-
-                          <div className="typography-micro text-muted-foreground mt-1 flex items-center gap-2 min-w-0">
-                            {skillUrl ? (
-                              <a
-                                href={skillUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-mono hover:underline truncate inline-flex items-center gap-1"
-                                title={t('settings.skills.catalog.page.skill.viewOnGithub')}
-                              >
-                                <Icon name="github" className="h-3 w-3 shrink-0" />
-                                {item.repoSource}
-                              </a>
-                            ) : (
-                              <span className="font-mono truncate">{item.repoSource}</span>
-                            )}
-                            {item.skillDir && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span className="truncate">{item.skillDir}</span>
-                              </>
-                            )}
-                          </div>
-
-                          {item.warnings?.length ? (
-                            <div className="typography-micro text-[var(--status-warning)] mt-1.5 bg-[var(--status-warning)]/10 px-2 py-1 rounded w-fit">
-                              {item.warnings.join(' · ')}
-                            </div>
-                          ) : null}
+                          {!item.installable && (
+                            <span className="typography-micro text-[var(--status-warning)] bg-[var(--status-warning)]/10 px-1.5 py-0.5 rounded flex-shrink-0">
+                              {t('settings.skills.catalog.page.badge.notInstallable')}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {skillUrl && (
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              className="!font-normal h-6 w-6 px-0"
-                              onClick={() => window.open(skillUrl, '_blank', 'noreferrer')}
+                        {item.description ? (
+                          <div className="typography-meta text-muted-foreground mt-0.5 line-clamp-2">{item.description}</div>
+                        ) : (
+                          <div className="typography-meta text-muted-foreground mt-0.5 italic">{t('settings.skills.catalog.shared.noDescription')}</div>
+                        )}
+
+                        <div className="typography-micro text-muted-foreground mt-1 flex items-center gap-2 min-w-0">
+                          {skillUrl ? (
+                            <a
+                              href={skillUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono hover:underline truncate inline-flex items-center gap-1"
                               title={t('settings.skills.catalog.page.skill.viewOnGithub')}
                             >
-                              <Icon name="external-link" className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {installed ? (
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              className="!font-normal h-7 w-7 px-0 text-[var(--status-success)] hover:text-[var(--status-error)]"
-                              onClick={() => setUninstallItems([item])}
-                              title={t('settings.skills.sidebar.deleteDialog.title')}
-                            >
-                              <Icon name="check" className="h-4 w-4" />
-                            </Button>
+                              <Icon name="github" className="h-3 w-3 shrink-0" />
+                              {item.repoSource}
+                            </a>
                           ) : (
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              className="!font-normal"
-                              disabled={!item.installable}
-                              onClick={() => {
-                                openInstallDialog([item]);
-                              }}
-                            >
-                              {t('settings.skills.catalog.shared.actions.install')}
-                            </Button>
+                            <span className="font-mono truncate">{item.repoSource}</span>
+                          )}
+                          {item.skillDir && (
+                            <>
+                              <span className="opacity-40">·</span>
+                              <span className="truncate">{item.skillDir}</span>
+                            </>
                           )}
                         </div>
+
+                        {item.warnings?.length ? (
+                          <div className="typography-micro text-[var(--status-warning)] mt-1.5 bg-[var(--status-warning)]/10 px-2 py-1 rounded w-fit">
+                            {item.warnings.join(' · ')}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {skillUrl && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="!font-normal h-6 w-6 px-0"
+                            onClick={() => window.open(skillUrl, '_blank', 'noreferrer')}
+                            title={t('settings.skills.catalog.page.skill.viewOnGithub')}
+                          >
+                            <Icon name="external-link" className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {installed ? (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="!font-normal h-7 w-7 px-0 text-[var(--status-success)] hover:text-[var(--status-error)]"
+                            onClick={() => setUninstallItems([item])}
+                            title={t('settings.skills.sidebar.deleteDialog.title')}
+                          >
+                            <Icon name="check" className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            className="!font-normal"
+                            disabled={!item.installable}
+                            onClick={() => {
+                              openInstallDialog([item]);
+                            }}
+                          >
+                            {t('settings.skills.catalog.shared.actions.install')}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                  );
-                }}
-              />
-            )}
+                  </div>
+                );
+              }}
+            />
+          )}
         </SettingsSection>
       </SettingsPageLayout>
 
-        {/* Dialogs */}
-        <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
-        <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
+      {/* Dialogs */}
+      <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
+      <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
 
-        <Dialog open={uninstallItems.length > 0} onOpenChange={(open) => !open && !isUninstalling && setUninstallItems([])}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{t('settings.skills.sidebar.deleteDialog.title')}</DialogTitle>
-              <DialogDescription>
-                {uninstallItems.length === 1
-                  ? t('settings.skills.sidebar.deleteDialog.description', { name: uninstallItems[0].skillName })
-                  : uninstallItems.map((item) => item.skillName).join(', ')}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button size="sm" variant="ghost" onClick={() => setUninstallItems([])} disabled={isUninstalling}>
-                {t('settings.common.actions.cancel')}
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => void uninstallSelectedSkill()} disabled={isUninstalling}>
-                {t('settings.common.actions.delete')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <Dialog open={uninstallItems.length > 0} onOpenChange={(open) => !open && !isUninstalling && setUninstallItems([])}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('settings.skills.sidebar.deleteDialog.title')}</DialogTitle>
+            <DialogDescription>
+              {uninstallItems.length === 1
+                ? t('settings.skills.sidebar.deleteDialog.description', { name: uninstallItems[0].skillName })
+                : uninstallItems.map((item) => item.skillName).join(', ')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setUninstallItems([])} disabled={isUninstalling}>
+              {t('settings.common.actions.cancel')}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => void uninstallSelectedSkill()} disabled={isUninstalling}>
+              {t('settings.common.actions.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Dialog
-          open={isRemoveCatalogDialogOpen}
-          onOpenChange={(open) => {
-            if (!isRemovingCatalog) {
-              setIsRemoveCatalogDialogOpen(open);
-            }
-          }}
-        >
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{t('settings.skills.catalog.page.removeDialog.title')}</DialogTitle>
-              <DialogDescription>{t('settings.skills.catalog.page.removeDialog.description')}</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setIsRemoveCatalogDialogOpen(false)}
-                disabled={isRemovingCatalog}
-              >
-                {t('settings.common.actions.cancel')}
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
-                {t('settings.skills.catalog.page.actions.removeCatalog')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <Dialog
+        open={isRemoveCatalogDialogOpen}
+        onOpenChange={(open) => {
+          if (!isRemovingCatalog) {
+            setIsRemoveCatalogDialogOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('settings.skills.catalog.page.removeDialog.title')}</DialogTitle>
+            <DialogDescription>{t('settings.skills.catalog.page.removeDialog.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsRemoveCatalogDialogOpen(false)}
+              disabled={isRemovingCatalog}
+            >
+              {t('settings.common.actions.cancel')}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
+              {t('settings.skills.catalog.page.actions.removeCatalog')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </>
   );

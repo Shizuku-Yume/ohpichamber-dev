@@ -2,6 +2,7 @@ import { getChatsRootFromDirectory } from '@/lib/chatDirectories';
 import type { SessionGroup, SessionGroupFolderScope } from '../types';
 import { normalizePath } from '../utils';
 import type { Session } from '@openchamber/agent-contract';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { DirectoryOwner } from './sessionOwnership';
 
 export const getSessionFolderIdentityKey = (scopeKey: string, folderId: string): string => (
@@ -24,7 +25,7 @@ export const getAuthoritativeSessionFolderOwnerKey = (
   owner: DirectoryOwner | undefined,
 ): string | null => {
   if (owner) return getSessionFolderOwnerKey(owner.projectId, owner.scopeDirectory);
-  const chatsRoot = getChatsRootFromDirectory(session.directory);
+  const chatsRoot = getChatsRootFromDirectory(resolveGlobalSessionDirectory(session));
   return chatsRoot ? getSessionFolderOwnerKey(null, chatsRoot) : null;
 };
 

@@ -84,7 +84,7 @@ describe('OpenInAppButton', () => {
     await act(async () => {
       root.render(
         React.createElement(I18nProvider, null,
-          React.createElement(OpenInAppButton, { directory: '/repo' }),
+          React.createElement(OpenInAppButton, { directory: '/repo', buttonClassName: '' }),
         ),
       );
     });
