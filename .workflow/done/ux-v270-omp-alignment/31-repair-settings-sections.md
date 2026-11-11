@@ -57,6 +57,7 @@ Upstream v2.7.0 rewrote these sections against the OpenCode engine the fork reti
 - `useSnippetsStore` has no `previewSnippet`, `setHasUnsavedChanges`, `aliases` or `filePath`; the canonical prompt-template model was restored.
 - `usePluginsStore` has no `createEntry`, `createFile`, `PluginScope`, `entries` or `selectedId`; the fork dialogs were restored.
 - `lib/settings/search.ts` (another slice) has no `voice.*-endpoint-path` row, so the search assertion upstream added has no fork target.
+- `useSkillsCatalogStore` resolves its own catalog directory (`settingsProjectPath`, then the app's `currentDirectory`, then the active project) and `SkillRepositoryItem` carries no workspace id, while the page deletes through `useSettingsDirectory`. The two can name different workspaces when no settings project is picked. Deleting through the page's directory is the closest existing call; tying the catalog load and the delete to one workspace needs the store to expose its resolved directory, which is outside this task's files.
 - `lib/modelRefs.ts` (slice 35) still imports `@/lib/opencode/model`; it fails four section tests that render the model picker's surroundings. Not changed here because the file belongs to slice 35.
 
 ### Test evidence
@@ -72,6 +73,8 @@ Reviewer pass on the diff against `f3afaa8d6`. Round one raised three findings; 
 - The catalog's uninstall passed `item.skillName` to `deleteSkill` and a null directory for an agent-scoped install, which the store rejects as a missing workspace and a read-only skill. It now passes the authored reference from the installed union and the settings workspace directory.
 - `ModelSelector` took favorites and recents from `useModelLists`, whose resolver still reads the retired `provider.id`/`model.id`, so a saved favorite never matched a canonical model and its section disappeared. The selector now resolves both lists itself against the canonical catalog. The shared resolver is slice 35's file and stays untouched.
 - `sections/DOCUMENTATION.md` still described the deleted permissions editor and `agentPermissionModel.ts`; the section is rewritten and the entity table no longer claims a permissions field.
+
+Round two confirmed both code fixes and found the documentation still wrong in one place: the agent contract does keep `allowedTools` and an optional `permissionPresetId`, which `AgentsPage` edits, so the section now describes those instead of claiming the contract has no permission field. It also raised the catalog-workspace caveat recorded under contract gaps.
 
 Round two found no broken assumption in the fixes; it confirmed the two code corrections and the documentation rewrite read correctly.
 
