@@ -405,7 +405,12 @@ const parseArgs = (argv) => {
 
 /** Paths the options scope the run to, or `[]` for the whole repository. */
 const scopedTargets = (options, root) => {
-  if (options.paths.length > 0) return options.paths;
+  if (options.paths.length > 0) {
+    // A path scope that matches no tracked file is a typo, not an empty pass.
+    const tracked = git(root, ['ls-files', '-z', '--', ...options.paths]).split('\0').filter(Boolean);
+    if (tracked.length === 0) throw new UsageError(`no tracked file under: ${options.paths.join(', ')}`);
+    return options.paths;
+  }
   if (options.lane !== null) {
     const paths = lanePaths(root, options.lane);
     if (paths.length === 0) throw new UsageError(`${LANES_FILE} has no paths for lane ${options.lane}`);

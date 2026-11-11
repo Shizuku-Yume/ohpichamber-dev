@@ -277,6 +277,9 @@ check('an argument the parser does not know exits 2 with usage instead of becomi
   assert.equal(cli(['--slice', '--check']).code, 2);
   assert.equal(cli(['--slice', '99']).code, 2);
   assert.match(cli(['--slice', '99']).printed, /repair-slices\.tsv has no paths for slice 99/);
+  // A path scope that matches nothing is a typo, not a vacuous pass.
+  assert.equal(cli(['--check', 'no-such-path']).code, 2);
+  assert.match(cli(['--check', 'no-such-path']).printed, /no tracked file under: no-such-path/);
 });
 
 check('a scoped check reports how many unexplained paths it cannot see', () => {
