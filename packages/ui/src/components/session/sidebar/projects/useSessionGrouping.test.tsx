@@ -10,24 +10,35 @@ import { createSessionOwnershipIndex } from '../sessions/sessionOwnership';
 import { buildSidebarSessionProjection } from '../list/sessionCollection';
 import { useSessionGrouping } from './useSessionGrouping';
 import type { SessionNode } from '../types';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
-type FixtureSession = Session & { parentID?: string };
+/** A contract session in the fixture's `/workspace` (or `directory`) workspace. */
+const session = (sessionId: string, parentSessionId?: string, overrides: Partial<Session> = {}, directory = '/workspace'): Session => {
+  const workspaceId = `ws_${sessionId}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId,
+    displayPath: directory,
+    parentSessionId,
+    rootSessionId: parentSessionId ?? sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: 'epoch_1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    ...overrides,
+  };
+};
 type GroupingCapture = { buildGroupedSessions?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] };
 type BuildCapture = { build?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] };
-const session = (id: string, parentID?: string): Session => {
-  const value: FixtureSession = {
-    id,
-    projectID: 'project',
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    title: id,
-    directory: '/workspace',
-    time: { created: 1, updated: 1 },
-  };
-  if (parentID) value.parentID = parentID;
-  return value;
-};
-
 const collectIds = (nodes: SessionNode[]): string[] => {
   const ids: string[] = [];
   const visit = (items: SessionNode[]): void => {
@@ -55,21 +66,21 @@ const groupingFixture = (
   });
   const sessionById = new Map([
     ...projection.sessionById,
-    ...archivedSessions.map((entry) => [entry.id, entry] as const),
+    ...archivedSessions.map((entry) => [entry.sessionId, entry] as const),
   ]);
   const childrenMap = new Map(
     [...projection.childrenMap].map(([parentId, children]) => [parentId, [...children]]),
   );
   for (const archived of archivedSessions) {
-    if (!archived.parentID) continue;
-    const children = childrenMap.get(archived.parentID) ?? [];
+    if (!archived.parentSessionId) continue;
+    const children = childrenMap.get(archived.parentSessionId) ?? [];
     children.push(archived);
-    childrenMap.set(archived.parentID, children);
+    childrenMap.set(archived.parentSessionId, children);
   }
   const nestedSessionIds = new Set(
     [...childrenMap]
       .filter(([parentId]) => sessionById.has(parentId))
-      .flatMap(([, children]) => children.map((child) => child.id)),
+      .flatMap(([, children]) => children.map((child) => child.sessionId)),
   );
   return {
     orderedProjectSessions: projection.projectSessions,
@@ -262,14 +273,12 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
 
   test('keeps active unknown-directory sessions in their resolved project root group', () => {
     const state: GroupingCapture = {};
-    const restored = { ...session('restored'), directory: '/deleted/worktree', time: { created: 1, updated: 1 } };
+    const restored = session('restored', undefined, {}, '/deleted/worktree');
     const ownership = createSessionOwnershipIndex(
       [restored],
       [{ id: 'configured-workspace', normalizedPath: '/workspace' }],
       new Map(),
-      false,
       [],
-      [{ id: 'project', worktree: '/workspace' }],
     );
     const Harness = () => {
       state.buildGroupedSessions = useSessionGrouping({
@@ -296,7 +305,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
   });
 
   test('shows subsessions only nested under an active parent, never in the archive or as rows of their own', () => {
-    const archived = (value: Session): Session => ({ ...value, time: { ...value.time, archived: 2 } });
+    const archived = (value: Session): Session => ({ ...value, archivedAt: 2 });
     const sessions = [
       session('active-parent'),
       session('active-child', 'active-parent'),
@@ -306,8 +315,8 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
       session('live-child-of-archived', 'archived-parent'),
       session('child-of-unloaded', 'not-loaded'),
     ];
-    const activeSessions = sessions.filter((entry) => !entry.time.archived);
-    const archivedSessions = sessions.filter((entry) => Boolean(entry.time.archived));
+    const activeSessions = sessions.filter((entry) => entry.archivedAt === undefined);
+    const archivedSessions = sessions.filter((entry) => entry.archivedAt !== undefined);
     const state: GroupingCapture = {};
     const Harness = () => {
       state.buildGroupedSessions = useSessionGrouping({
@@ -370,9 +379,9 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     renderToStaticMarkup(<I18nProvider><Harness /></I18nProvider>);
     if (!state.build) throw new Error('grouping callback was not mounted');
 
-    const parentGroups = state.build(fixture.orderedProjectSessions.filter((entry) => entry.id === 'parent'), '/workspace', [childWorktree, grandchildWorktree], null, true);
+    const parentGroups = state.build(fixture.orderedProjectSessions.filter((entry) => entry.sessionId === 'parent'), '/workspace', [childWorktree, grandchildWorktree], null, true);
     const parentNode = parentGroups.find((group) => group.isMain)?.sessions[0];
-    const childGroups = state.build(fixture.orderedProjectSessions.filter((entry) => entry.id !== 'parent'), '/workspace/.wt/child', [], null, true);
+    const childGroups = state.build(fixture.orderedProjectSessions.filter((entry) => entry.sessionId !== 'parent'), '/workspace/.wt/child', [], null, true);
 
     expect(parentNode?.children.map((node) => node.session.sessionId)).toEqual(['newer', 'older']);
     expect(parentNode?.children[0]?.children.map((node) => node.session.sessionId)).toEqual(['grandchild']);
@@ -385,7 +394,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
   test('promotes a child only until its active or archived parent becomes known', () => {
     const child = session('child', 'parent');
     const activeParent = session('parent');
-    const archivedParent = { ...activeParent, time: { ...activeParent.time, archived: 2 } };
+    const archivedParent = { ...activeParent, archivedAt: 2 };
     const renderRoots = (known: readonly Session[]) => {
       const state: BuildCapture = {};
       const Harness = () => {
@@ -397,9 +406,9 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
           gitBranches: new Map(),
           isVSCode: false,
           ...groupingFixture(
-            known.filter((entry) => !entry.time.archived),
+            known.filter((entry) => entry.archivedAt === undefined),
             new Map(),
-            known.filter((entry) => Boolean(entry.time.archived)),
+            known.filter((entry) => entry.archivedAt !== undefined),
           ).authority,
         }).buildGroupedSessions;
         return null;
