@@ -344,7 +344,7 @@ export const Header: React.FC = () => {
 
   const sessionDirectory = React.useMemo(() => {
     return normalize(currentSession?.directory || '');
-  }, [currentSessionSnapshot]);
+  }, [currentSession]);
   const isCurrentSessionAiRenaming = useIsSessionAiRenamePending(currentSessionId ?? '', sessionDirectory);
 
   const draftDirectory = useSessionUIStore((state) => {
