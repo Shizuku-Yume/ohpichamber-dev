@@ -65,3 +65,13 @@ Upstream v2.7.0 rewrote these sections against the OpenCode engine the fork reti
 `node scripts/run-isolated-tests.mjs src/components/sections src/components/snippets` in `packages/ui` (the repo runner, because the suite mixes `bun:test` and `node:test`): 45/55 files pass. The 10 failures are all in files outside slice 31 (`classification`, `commands/CommandsPage`, `behavior`, `agents/AgentsPage`, `openchamber/ChatSettings`, `openchamber/sourceControlOAuthPolling`, `projects/ProjectsPage`, two `remote-instances` files, and the `@/lib/opencode/model` import in slice 35's `lib/modelRefs.ts`). The same run on the landing target worktree fails 24 of 60 files including every one of these, so this branch does not regress any of them.
 
 `bunx oxlint` on every substantially rewritten or new file → clean.
+
+### Review
+
+Reviewer pass on the diff against `f3afaa8d6`. Round one raised three findings; all were confirmed and fixed in `cbdb556be`:
+
+- The catalog's uninstall passed `item.skillName` to `deleteSkill` and a null directory for an agent-scoped install, which the store rejects as a missing workspace and a read-only skill. It now passes the authored reference from the installed union and the settings workspace directory.
+- `ModelSelector` took favorites and recents from `useModelLists`, whose resolver still reads the retired `provider.id`/`model.id`, so a saved favorite never matched a canonical model and its section disappeared. The selector now resolves both lists itself against the canonical catalog. The shared resolver is slice 35's file and stays untouched.
+- `sections/DOCUMENTATION.md` still described the deleted permissions editor and `agentPermissionModel.ts`; the section is rewritten and the entity table no longer claims a permissions field.
+
+Round two is recorded below.
