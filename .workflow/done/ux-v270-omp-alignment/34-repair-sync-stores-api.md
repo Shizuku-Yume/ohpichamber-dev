@@ -42,7 +42,8 @@ authority stay).
   `sendRecoveredFormAnswer`), `sync/session-actions.compact.test.ts`,
   `sync/session-actions.retry-pick.test.ts` (`applyModelPickToRetry`),
   `sync/session-admission.test.ts` (`@/lib/opencodeTrust`, `session-event-router`),
-  `sync/input-store.desktopPath.test.ts` (desktop byte payload),
+  `sync/input-store.desktopPath.test.ts` — **restored**, see below (it asserts
+  `pathForDroppedFile` → `agentPath`, which fork production still does),
   `stores/useGlobalSessionsStore-head.test.ts` and
   `stores/useGlobalSessionsStore.runtime.test.ts` (`SessionPage`/`time` model),
   `stores/session-project-registration.test.js` (`server/lib/opencode` import),
@@ -58,6 +59,11 @@ authority stay).
   `.extensionProviders` are kept instead; `useQuotaStore.refresh.test.ts` drops
   the two workspace-scoped cases and the `loadedWorkspaceId` assertion that the
   merge retired. `bun check --all` outside-slice errors go 791 -> 780.
+- **Wrongly deleted test restored.** `sync/input-store.desktopPath.test.ts`
+  was deleted as "desktop byte payload", but its 18 cases exercise
+  `pathForDroppedFile` → `agentPath` and the oversized-file note path, which
+  `sync/input-store.ts` still implements. It passes unchanged against the
+  current store, so the fork's own blob is back.
 - **Kept tests brought onto fork shapes:** `stores/sessionLineage.test.ts`
   back to `main` (no `fork`/`btwPromoted` fields);
   `useAgentsStore.subagents.test.tsx`, `useSnippetsStore.test.ts`,
@@ -108,7 +114,7 @@ authority stay).
   more errors than at scaffold; `bun scripts/upstream-drift.mjs --check --slice 34`
   → `drift check passed`, exit 0;
   `node scripts/run-isolated-tests.mjs packages/ui/src/sync packages/ui/src/stores packages/ui/src/api`
-  → **171/171 test files passed**, exit 0 (this is the bun:test runner the
+  → **172/172 test files passed**, exit 0 (this is the bun:test runner the
   suites are written for; `bunx vitest run` on the same paths cannot load
   `bun:test` and no root Vitest config exists on this tree);
   `bunx oxlint` on the changed files → exit 0, no findings.
