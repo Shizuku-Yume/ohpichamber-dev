@@ -68,7 +68,7 @@ test('quote reveal opens real folded Activity, including a source prepended from
     globalThis.fetch = () => new Promise(() => { });
     const unavailable = (): never => { throw new Error('Quote navigation must not call runtime APIs'); };
     const runtime: RuntimeAPIs = {
-        runtime: { platform: 'web', isDesktop: false },
+        runtime: { platform: 'web', isDesktop: false, isVSCode: false },
         get terminal() { return unavailable(); }, get git() { return unavailable(); },
         get files() { return unavailable(); }, get settings() { return unavailable(); },
         get permissions() { return unavailable(); }, get notifications() { return unavailable(); },

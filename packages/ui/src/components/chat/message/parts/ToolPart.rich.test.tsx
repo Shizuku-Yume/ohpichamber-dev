@@ -155,7 +155,7 @@ const sentinelEditResult = (path: string): ToolResultPart => ({
 const runtimeForEditor = (openFile: (path: string, line?: number) => Promise<void>): RuntimeAPIs => {
     const unexpected = (): never => { throw new Error('File navigation must only use the editor'); };
     return {
-        runtime: { platform: 'web', isDesktop: false },
+        runtime: { platform: 'web', isDesktop: false, isVSCode: false },
         get terminal() { return unexpected(); },
         get git() { return unexpected(); },
         get sourceControl() { return unexpected(); },

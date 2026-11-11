@@ -24,6 +24,11 @@ declare module "bun:test" {
     toBeDefined(): void;
     toBeUndefined(): void;
     toMatchObject(expected: unknown): void;
+    resolves: {
+      toBe(expected: unknown): Promise<void>;
+      toEqual(expected: unknown): Promise<void>;
+      toThrow(expected?: string | RegExp | (new (...args: never[]) => unknown)): Promise<void>;
+    },
     rejects: {
       toThrow(expected?: string | RegExp | (new (...args: never[]) => unknown)): Promise<void>;
       toBeInstanceOf(expected: new (...args: never[]) => object): Promise<void>;
@@ -82,8 +87,16 @@ declare module "bun:test" {
   export interface Mock<T extends (...args: never[]) => unknown> {
     (...args: Parameters<T>): ReturnType<T>;
     mockImplementation(fn: T): Mock<T>;
+    mockImplementationOnce(fn: T): Mock<T>;
     mockReturnValue(value: ReturnType<T>): Mock<T>;
+    mockReturnValueOnce(value: ReturnType<T>): Mock<T>;
+    mockResolvedValue(value: Awaited<ReturnType<T>>): Mock<T>;
+    mockResolvedValueOnce(value: Awaited<ReturnType<T>>): Mock<T>;
+    mockRejectedValue(value: unknown): Mock<T>;
+    mockRejectedValueOnce(value: unknown): Mock<T>;
+    mockClear(): Mock<T>;
     mockReset(): Mock<T>;
+    mockRestore(): void;
   }
   export interface Spy<T extends (...args: never[]) => void> extends Mock<T> {
     mock: { calls: Parameters<T>[] };

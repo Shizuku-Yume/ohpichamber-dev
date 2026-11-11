@@ -41,7 +41,7 @@ plugin({
 
 const unavailable = (): never => { throw new Error('Activity rendering must not call runtime APIs'); };
 const runtimeApis: RuntimeAPIs = {
-    runtime: { platform: 'web', isDesktop: false },
+    runtime: { platform: 'web', isDesktop: false, isVSCode: false },
     get terminal() { return unavailable(); },
     get git() { return unavailable(); },
     get sourceControl() { return unavailable(); },
@@ -299,7 +299,7 @@ describe('live Activity with the real message body', () => {
         const mobileActions: MobileAppActions = {
             openFiles: () => { filesOpened += 1; },
             openChanges: () => { changesOpened += 1; },
-            openSettings: () => undefined,
+            openPlan: () => undefined,
             openSourceBoard: () => undefined,
         };
         useUIStore.setState({ isMobile: true });
