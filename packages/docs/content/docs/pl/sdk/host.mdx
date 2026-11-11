@@ -153,22 +153,6 @@ Bez `send` `prompt` zastępuje tekst w polu czatu. Z `send: true` wysyła wiadom
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` i `keys()` zapisują własny JSON na połączonym serwerze bez dodatkowego uprawnienia. Brak klucza daje `undefined`, zapisane null pozostaje null. Klucze mają od 1 do 128 znaków, wartość do 64 KiB UTF-8, całość do 2 MiB i 2 000 kluczy. Dla danych projektu umieść jego ID w kluczu. Zapisy są serializowane i atomowe, a błędy zachowują poprzednie dane. Usunięcie rozszerzenia usuwa pamięć.
 
-## Powłoki w tle
-
-Dzięki uprawnieniu `shells` możesz monitorować polecenia powłoki działające w tle, zawężone do sesji i jej podagentów, zarejestrowanego projektu lub wszystkich sesji. OpenChamber odpowiada ze swojego lokalnego magazynu; nie dochodzi do odczytów przez sieć.
-
-| Wywołanie | Co robi |
-| --- | --- |
-| `onRunningShells(scope, listener)` | subskrybuje polecenia powłoki w danym zakresie: `{ kind: 'session', sessionId }` obejmuje sesję i jej podagentów, `{ kind: 'project', projectId }` obejmuje zarejestrowany projekt, a `{ kind: 'global' }` obejmuje każdą sesję. Otrzymujesz działające polecenia od najstarszych, każde z flagą `background`, oraz te, które się zakończyły. Zwraca funkcję anulującą subskrypcję. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | jedna strona wyjścia działającego lub zakończonego polecenia. Bez `cursor` zaczyna się `tailBytes` (do 65536) przed końcem. Zwraca `{ output, cursor, skipped }`. |
-| `stopShell(shellId)` | najpierw wysyła agentowi informację o zatrzymaniu, a następnie usuwa polecenie. |
-
-Migawka ma postać `{ kind: "shells", scope, shells, ended }`, gdzie `scope` odpowiada zakresowi subskrypcji. Każda działająca powłoka to `{ id, sessionID, command, startedAt, background }`, maksymalnie 200, od najstarszych. `background` ma wartość `true` dla zadania, na którego zakończenie tura nie czeka.
-
-`ended` zawiera listę poleceń, których zakończenie zaobserwował OpenChamber, od najwcześniej zakończonych, maksymalnie 200 z zachowaniem najnowszych. Każde z nich dodaje `status`, `endedAt` oraz `exit`, gdy polecenie zakończyło się z kodem wyjścia. Status to `exited`, `timeout`, `killed` przez sygnał, `stopped` przez użytkownika lub `unknown`, gdy zakończenie nastąpiło podczas ponownego łączenia. OpenChamber przechowuje tę listę wyłącznie w pamięci. Po przeładowaniu aplikacji jest pusta, dlatego zapisz to, co pokazuje Twój panel, w magazynie rozszerzenia.
-
-Host przechowuje wyjście zakończonego polecenia dla ostatnich 25 zakończonych poleceń na katalog. Zatrzymane polecenie natychmiast traci swoje wyjście. Próba odczytu powłoki, której OpenChamber nigdy nie widział, lub wyjścia, którego host już nie posiada, zwraca błąd `NOT_FOUND`. Podobnie zatrzymanie powłoki, która nie działa. Niezatwierdzone uprawnienie `shells` zwraca `NOT_GRANTED`.
-
 ## request
 
 ```ts

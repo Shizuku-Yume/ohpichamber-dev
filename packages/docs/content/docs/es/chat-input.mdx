@@ -12,7 +12,7 @@ El cuadro de chat entiende unos cuantos símbolos. Escribe uno y se abre un sele
 | `/` | un comando | justo al principio del mensaje |
 | `$` | una skill | en cualquier parte |
 | `#` | un fragmento | en cualquier parte |
-| `@` | un archivo | en cualquier parte |
+| `@` | un archivo o un agente | en cualquier parte |
 
 Un símbolo que no nombra nada que tengas se queda como texto normal: `$5` es solo dinero y `a/b` es solo una ruta.
 
@@ -22,7 +22,7 @@ Un comando es un prompt guardado que ejecutas con una barra, como `/review`. Ges
 
 1. Abre **Settings → Commands** y crea un comando.
 2. Dale un nombre, una descripción y el texto del prompt que debe enviar.
-3. Opcionalmente, fíjalo a un modelo concreto.
+3. Opcionalmente, fíjalo a un agente o modelo concreto.
 4. Elige el ámbito personal o de proyecto.
 
 En el chat, escribe `/` como **primer** carácter del mensaje para abrir los comandos y elige uno. Tu texto puede usar marcadores de posición:
@@ -49,11 +49,12 @@ Un fragmento es texto reutilizable que referencias en línea con una almohadilla
 
 En el chat, escribe `#` y elige un fragmento. OpenChamber inserta el texto completo antes de enviar.
 
-## Archivos
+## Archivos y agentes
 
-Escribe `@` para adjuntar un archivo al mensaje.
+Escribe `@` para adjuntar un archivo o ejecutar el mensaje con otro agente.
 
 - Un archivo, como `@src/index.ts`, se adjunta al mensaje igual que si lo eligieras en el menú **+**. Las imágenes y los documentos se leen y se envían con él.
+- Un agente, como `@build`, ejecuta este mensaje con ese agente. Sin mención, lo ejecuta el agente seleccionado en el composer.
 
 ## Adjuntar archivos y contexto
 

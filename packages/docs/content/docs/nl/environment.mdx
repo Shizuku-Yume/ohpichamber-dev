@@ -2,6 +2,7 @@
 title: Omgevingsvariabelen
 description: Stel OpenChamber in via omgevingsvariabelen.
 ---
+
 # Omgevingsvariabelen
 
 OpenChamber leest deze omgevingsvariabelen bij het starten. Voor opstartservices neemt `openchamber startup enable` standaard de huidige omgeving over. Voer die opdracht opnieuw uit nadat u variabelen wijzigt die de service moet gebruiken.
@@ -42,6 +43,7 @@ Hoe lang een aanmelding geldig blijft, in dagen, op een apparaat dat u vertrouwt
 ### `OPENCODE_JWT_SECRET`
 
 Overschrijft het geheim waarmee Host UI-sessietokens worden ondertekend. Deze instelling configureert de sessie-ondertekening van de Host en heeft geen invloed op de agent-runtime. Houd deze waarde geheim. Als deze is ingesteld, is globaal afmelden niet beschikbaar omdat OpenChamber het ondertekeningsgeheim niet kan roteren.
+
 
 ### `OPENCHAMBER_API_ONLY`
 
@@ -128,4 +130,3 @@ Uitvoerbaar Bun-programma dat OpenChamber gebruikt om daemonprocessen te starten
 ### `BUN_INSTALL`
 
 Hoofdmap van de Bun-installatie. OpenChamber zoekt hiermee `bin/bun` voor het starten en bijwerken van daemons.
-

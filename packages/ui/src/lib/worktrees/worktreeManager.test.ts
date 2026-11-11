@@ -174,7 +174,6 @@ mock.module('@/lib/gitApi', () => ({
         createPayloads.push(payload);
         return Promise.resolve(createdWorktreeResult);
       }),
-      teardown: mock(() => Promise.resolve({ success: true })),
       validate: mock((_directory: string, payload: unknown) => {
         validatePayloads.push(payload);
         return Promise.resolve({ ok: true, errors: [] });

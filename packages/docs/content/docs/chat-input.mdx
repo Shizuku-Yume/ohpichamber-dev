@@ -12,7 +12,7 @@ The chat box understands a few symbols. Type one and a picker opens; choose an e
 | `/` | a command | the very start of the message |
 | `$` | a skill | anywhere |
 | `#` | a snippet | anywhere |
-| `@` | a file | anywhere |
+| `@` | a file or an agent | anywhere |
 
 A symbol that names nothing you have stays ordinary text: `$5` is just money, and `a/b` is just a path.
 
@@ -22,7 +22,7 @@ A command is a saved prompt you run with a slash, like `/review`. Manage them at
 
 1. Open **Settings → Commands** and create a command.
 2. Give it a name, a description, and the prompt text it should send.
-3. Optionally pin it to a specific model.
+3. Optionally pin it to a specific agent or model.
 4. Choose personal or project scope.
 
 In chat, type `/` as the **first** character of the message to bring up commands, then pick one. Your text can use placeholders:
@@ -49,11 +49,12 @@ A snippet is reusable text you reference inline with a hashtag, like `#signoff`.
 
 In chat, type `#` and pick a snippet. OpenChamber swaps in the full text before sending.
 
-## Files
+## Files and agents
 
-Type `@` to attach a file to the message.
+Type `@` to attach a file or run the message with a different agent.
 
 - A file, like `@src/index.ts`, is attached to the message the same way as picking it from the **+** menu. Images and documents are read and sent with it.
+- An agent, like `@build`, runs this message with that agent. Without a mention, the composer's selected agent runs it.
 
 ## Attach files and context
 
@@ -84,4 +85,4 @@ On a phone, Enter always starts a new line. The send button or **Ctrl/Cmd+Enter*
 
 - [Skills](/skills/): load larger instruction sets on demand
 - [Magic Prompts](/magic-prompts/): the built-in commands and where each one runs
-- [GitHub Issues & PRs](/github/): attach issues and pull requests
+- [Git hosts](/github/): attach issues and pull requests

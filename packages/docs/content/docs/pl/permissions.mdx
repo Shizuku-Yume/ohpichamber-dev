@@ -7,23 +7,25 @@ description: Zdecyduj osobno dla każdej sesji, ile agent może zrobić bez pyta
 
 Każde działanie agenta (uruchomienie polecenia, edycja pliku, wywołanie narzędzia MCP, pobranie strony) jest oceniane przez autoryzator Hosta oraz zasady procesu roboczego (worker policy) w Agent Service. Tryby uprawnień OpenChamber decydują o tym, co się dzieje, gdy działanie wymaga zatwierdzenia.
 
-## Autoryzacja i zatwierdzenia
+## Allow, ask i deny
 
 Host Gateway weryfikuje dostęp do systemu plików względem katalogu projektu. Działania skierowane do ścieżek poza katalogiem głównym projektu są od razu odrzucane. Wewnątrz katalogu głównego projektu rutynowe odczyty i edycje plików odbywają się za pośrednictwem narzędzi plików projektu bez dodatkowych pytań.
 
-Gdy działanie wymaga zgody użytkownika, na przykład uruchomienie niezatwierdzonego polecenia powłoki, agent zatrzymuje się i tworzy prośbę o zatwierdzenie. Odpowiadając na prośbę, możesz zezwolić jednorazowo, zezwolić na resztę sesji lub odmówić w całym obszarze roboczym. Trwałe zasady zatwierdzania przechowują zezwolenia w zakresie sesji lub odmowy w zakresie obszaru roboczego.
+- **allow:** agent działa dalej
+- **deny:** działanie jest zablokowane
+- **ask:** agent zatrzymuje się i czeka na odpowiedź
 
 Aby skonfigurować, jakie narzędzia agent widzi i może wywoływać, użyj pola **dozwolone narzędzia** (allowed tools) w **Ustawienia → Agenci**. Domyślny tryb uprawnień dla nowych sesji wybiera się w **Ustawienia → Sesje**.
 
 ## Trzy tryby
 
-| Tryb | Kto odpowiada na prośby o zatwierdzenie |
+| Tryb | Kto odpowiada na „ask” |
 | --- | --- |
 | **Pytaj za każdym razem** | Ty. Każda prośba czeka na Twoją odpowiedź. |
 | **Siatka bezpieczeństwa** | Jev przepuszcza rutynowe działania, a ryzykowne zostawia Tobie. |
-| **Akceptuj wszystko** | OpenChamber automatycznie zatwierdza prośby wymagające zgody. |
+| **Akceptuj wszystko** | OpenChamber, zawsze na tak. Każda prośba jest od razu dozwolona, bez sprawdzania. |
 
-W trybie **Akceptuj wszystko** prośby wymagające zgody są automatycznie zatwierdzane, dzięki czemu praca trwa bez przerw. Kontrole granic bezpieczeństwa Hosta, w tym ograniczenie do katalogu projektu oraz zasady odmowy obszaru roboczego, są nadal wykonywane przy każdym działaniu.
+**Akceptuj wszystko** nie potrzebuje niczego więcej: ten tryb po prostu traktuje każde „ask” jako dozwolone. Używaj go, gdy ufasz zadaniu i nie chcesz, żeby coś Ci przerywało.
 
 ## Zmiana trybu
 
@@ -36,7 +38,7 @@ Subagenci idą za sesją, która ich uruchomiła.
 
 W tym trybie OpenChamber pyta [Jev](/pl/classification-providers/) o każdą prośbę: czy to rutyna, czy decyzja należy do Ciebie? Czytanie, budowanie, uruchamianie testów, edycja plików projektu i zwykłe commity przechodzą. Przepisywanie historii git, usuwanie danych, zmiany w systemie, wdrożenia, publikowanie czegoś gdzieś albo wysyłanie plików na zewnątrz czekają na Ciebie, podobnie jak wszystko, co niejasne.
 
-Wstrzymana prośba wyświetla w czacie kartę zatwierdzenia z nazwą narzędzia, podsumowaniem polecenia i szczegółami, gdzie możesz na nią zezwolić lub odmówić. Jeśli Jev nie odpowie w ciągu czterech sekund, działanie również czeka na Ciebie. Siatka bezpieczeństwa nigdy nie pozwala na działanie, gdy klasyfikacja zakończy się niepowodzeniem lub przekroczy limit czasu.
+Wstrzymana prośba pokazuje zwykłą kartę uprawnień z jedną dodatkową linią, **Siatka bezpieczeństwa wstrzymała to działanie, żebyś zdecydował**, i rodzajem działania. Jeśli Jev nie odpowie w ciągu czterech sekund, działanie też czeka na Ciebie. Siatka bezpieczeństwa nigdy nie pozwala na coś tylko dlatego, że sprawdzenie się nie udało.
 
 Siatka bezpieczeństwa potrzebuje [dostawcy klasyfikacji](/pl/classification-providers/). Bez niego przycisk z tarczą pomija ten tryb, a w ustawieniach jest on wyłączony.
 

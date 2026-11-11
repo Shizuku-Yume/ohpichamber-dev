@@ -11,8 +11,10 @@ Un objetivo reúne un prompt y una condición de finalización. OMP continúa ha
 
 ## Iniciar un objetivo
 
-1. Pulsa el botón de diana en el compositor para armar el modo Goal.
-2. Escribe y envía el objetivo. En una sesión nueva, el objetivo se crea después de crear la sesión y antes de enviar el primer prompt.
+1. Pulsa el botón de diana en el compositor. Se ilumina — el modo objetivo está armado.
+2. Escribe tu prompt y envíalo. Ese mensaje se convierte en el objetivo.
+
+Funciona igual en una sesión existente y en un borrador de sesión nueva: arma la diana, escribe el primer mensaje, envía — la nueva sesión arranca con el objetivo ya activo.
 
 ### Más formas de iniciar un objetivo
 
@@ -23,16 +25,18 @@ Un objetivo reúne un prompt y una condición de finalización. OMP continúa ha
 
 ## Escribe un objetivo autocontenido
 
-Incluye un resultado final claro que el agente pueda verificar sin depender del contexto oculto del chat.
+El auditor de progreso solo ve tu objetivo y la última respuesta del agente — no el historial del chat. Redacta el mensaje-objetivo de forma que alguien sin el contexto de la conversación entienda cómo es el estado final.
 
 - Bien: "Añade tests para el módulo de exportación y haz que toda la suite pase."
 - No tan bien: "Arréglalo" o "Continúa con esa idea."
+
+Para pequeños ajustes contextuales no necesitas un objetivo — envía un mensaje normal.
 
 ## Cómo funciona
 
 OMP inicia cada continuación dentro de la sesión. El agente declara que terminó con la herramienta de objetivos; OMP también se detiene al alcanzar el presupuesto opcional, cuando una continuación no logra avanzar, o cuando pausas, eliminas o abortas el objetivo.
 
-## Detener y reanudar
+### Detener y reanudar
 
 - El **botón de detener** aborta el turno en curso; OMP pausa el objetivo.
 - **Pausar** en el panel del objetivo también detiene el turno en curso.

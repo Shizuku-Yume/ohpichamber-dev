@@ -1,6 +1,7 @@
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
-import { opencodeClient } from './opencode/client';
+import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { captureChatDirectoryCleanup } from './chatDirectories';
+import { captureRuntimeCleanup } from './runtime-cleanup';
 import { installRuntimeFetchBridge } from './runtime-fetch';
 import { getRuntimeKey, switchRuntimeEndpoint } from './runtime-switch';
 import { adoptRelayTunnel } from './relay/runtime-tunnel';
@@ -29,12 +30,12 @@ Object.defineProperty(globalThis, 'window', { configurable: true, writable: true
 installRuntimeFetchBridge();
 globalThis.fetch = runtimeWindow.fetch;
 
+
 beforeEach(() => {
   calls = [];
   failDelete = false;
   onDelete = undefined;
   switchRuntimeEndpoint({ apiBaseUrl: 'https://origin.test', runtimeKey: 'owner-a', clientToken: 'token-a', requestHeaders: { 'X-Owner': 'A' } });
-  opencodeClient.reconnectToRuntimeBaseUrl();
 });
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -42,48 +43,56 @@ afterAll(() => {
 });
 const deletes = () => calls.filter(call => call.method === 'DELETE' || call.url.endsWith('/api/fs/delete'));
 const switchToB = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'owner-b', clientToken: 'token-b' });
-const roots = opencodeClient.getFilesystemHomeInfo;
 
 describe('cleanup on the runtime that created the resource', () => {
-  test('SDK removal and chat deletion keep the original URL and auth after A to B', async () => {
-    opencodeClient.getFilesystemHomeInfo = async () => ({ home: '/home/user', chatsRoot: '/srv/chats' });
+  test('a direct cleanup keeps the original URL and auth after A to B', async () => {
+    const remove = await captureRuntimeCleanup(getRuntimeKey());
+    switchToB();
+    await remove(async ({ fetch }) => {
+      await fetch('/api/session/ses-created', { method: 'DELETE' });
+    });
+    expect(deletes().map(call => [call.url, call.headers.get('authorization'), call.headers.get('x-owner')])).toEqual([
+      ['https://origin.test/api/session/ses-created', 'Bearer token-a', 'A'],
+    ]);
+  });
+
+  test('chat deletion goes through the same captured transport', async () => {
+    const home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+    let removeChat: (directory: string) => Promise<void>;
     try {
-      const removeSession = await opencodeClient.captureSessionCleanup('/repo', getRuntimeKey());
-      const removeChat = await captureChatDirectoryCleanup(getRuntimeKey());
-      switchToB();
-      await removeSession('ses-created');
-      await removeChat('/srv/chats/day/session-a');
-      await removeChat('/srv/chats');
-      expect(deletes().map(call => [call.url, call.headers.get('authorization'), call.headers.get('x-owner')])).toEqual([
-        ['https://origin.test/api/session/ses-created', 'Bearer token-a', 'A'],
-        ['https://origin.test/api/fs/delete', 'Bearer token-a', 'A'],
-      ]);
-      expect(deletes()[0].headers.get('x-opencode-directory')).toBe('%2Frepo');
-      expect(JSON.parse(deletes()[1].body)).toEqual({ path: '/srv/chats/day/session-a' });
+      removeChat = await captureChatDirectoryCleanup(getRuntimeKey());
     } finally {
-      opencodeClient.getFilesystemHomeInfo = roots;
+      home.mockRestore();
     }
+    switchToB();
+    await removeChat('/srv/chats/day/session-a');
+    await removeChat('/srv/chats');
+    expect(deletes().map(call => [call.url, call.headers.get('authorization'), call.headers.get('x-owner')])).toEqual([
+      ['https://origin.test/api/fs/delete', 'Bearer token-a', 'A'],
+    ]);
+    expect(JSON.parse(deletes()[0].body)).toEqual({ path: '/srv/chats/day/session-a' });
   });
 
   test('same-origin cleanup waits for A and uses its refreshed credentials', async () => {
     switchRuntimeEndpoint({ apiBaseUrl: '', runtimeKey: 'same-origin-a', clientToken: 'token-a' });
-    opencodeClient.reconnectToRuntimeBaseUrl();
-    const remove = await opencodeClient.captureSessionCleanup('/repo', getRuntimeKey());
-    opencodeClient.getFilesystemHomeInfo = async () => ({ home: '/home/user', chatsRoot: '/srv/chats' });
-    let removeChat: Awaited<ReturnType<typeof captureChatDirectoryCleanup>>;
+    const remove = await captureRuntimeCleanup(getRuntimeKey());
+    const home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+    let removeChat: (directory: string) => Promise<void>;
     try {
       removeChat = await captureChatDirectoryCleanup(getRuntimeKey());
     } finally {
-      opencodeClient.getFilesystemHomeInfo = roots;
+      home.mockRestore();
     }
     switchToB();
-    await remove('ses-deferred');
+    await remove(async ({ fetch }) => {
+      await fetch('/api/session/ses-deferred', { method: 'DELETE' });
+    });
     await removeChat('/srv/chats/day/session-a');
-    await removeChat('/srv/chats');
     expect(deletes()).toHaveLength(0);
-    const deleted = new Promise<void>(resolve => { onDelete = () => { if (deletes().length === 2) resolve(); }; });
+    const deleted = Promise.withResolvers<void>();
+    onDelete = () => { if (deletes().length === 2) deleted.resolve(); };
     switchRuntimeEndpoint({ apiBaseUrl: '', runtimeKey: 'same-origin-a', clientToken: 'refreshed-a' });
-    await deleted;
+    await deleted.promise;
     expect(deletes().map(call => [call.url, call.headers.get('authorization')])).toEqual([
       ['https://origin.test/api/session/ses-deferred', 'Bearer refreshed-a'],
       ['https://origin.test/api/fs/delete', 'Bearer refreshed-a'],
@@ -91,17 +100,21 @@ describe('cleanup on the runtime that created the resource', () => {
   });
 
   test('failed direct cleanup remains pending and retries when its owner returns', async () => {
-    const remove = await opencodeClient.captureSessionCleanup('/repo', getRuntimeKey());
+    const home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+    const removeChat = await captureChatDirectoryCleanup(getRuntimeKey());
+    home.mockRestore();
     switchToB();
     failDelete = true;
-    await remove('ses-retry');
+    // Chat deletion rejects a non-ok response, which is what keeps the job pending.
+    await removeChat('/srv/chats/day/session-retry');
     expect(deletes()).toHaveLength(1);
     failDelete = false;
-    const deleted = new Promise<void>(resolve => { onDelete = resolve; });
+    const deleted = Promise.withResolvers<void>();
+    onDelete = deleted.resolve;
     switchRuntimeEndpoint({ apiBaseUrl: 'https://returned.test/host', runtimeKey: 'owner-a', clientToken: 'refreshed-a' });
-    await deleted;
+    await deleted.promise;
     expect(deletes()).toHaveLength(2);
-    expect(deletes()[1].url).toBe('https://returned.test/host/api/session/ses-retry');
+    expect(deletes()[1].url).toBe('https://returned.test/host/api/fs/delete');
     expect(deletes()[1].headers.get('authorization')).toBe('Bearer refreshed-a');
   });
 
@@ -113,12 +126,14 @@ describe('cleanup on the runtime that created the resource', () => {
         if ((init?.method ?? (input instanceof Request ? input.method : 'GET')) === 'DELETE') tunneledDeletes += 1;
         return network(input, init);
       }, openWebSocket() { throw new Error('unused'); },
-      getStatus: () => ({ state: 'connected' }), subscribeStatus: () => () => {}, retry() {}, close() {},
+      getStatus: () => ({ state: 'connected' }), subscribeStatus: () => () => { }, retry() { }, close() { },
     };
     adoptRelayTunnel(descriptor, tunnel);
-    const remove = await opencodeClient.captureSessionCleanup('/repo', getRuntimeKey());
+    const remove = await captureRuntimeCleanup(getRuntimeKey());
     switchToB();
-    await remove('ses-relay');
+    await remove(async ({ fetch }) => {
+      await fetch('/api/session/ses-relay', { method: 'DELETE' });
+    });
     expect(deletes()).toHaveLength(0);
     // Replay the endpoint event after adopting the test tunnel, as a real
     // switch activates its tunnel before publishing the endpoint change.
@@ -130,9 +145,10 @@ describe('cleanup on the runtime that created the resource', () => {
     } finally {
       runtimeWindow.dispatchEvent = dispatchEvent;
     }
-    const deleted = new Promise<void>(resolve => { onDelete = resolve; });
+    const deleted = Promise.withResolvers<void>();
+    onDelete = deleted.resolve;
     runtimeWindow.dispatchEvent(new CustomEvent('openchamber:runtime-endpoint-changed', { detail: { runtimeKey: 'owner-a' } }));
-    await deleted;
+    await deleted.promise;
     expect(deletes()).toHaveLength(1);
     expect(tunneledDeletes).toBe(1);
     expect(deletes()[0].headers.get('authorization')).toBe('Bearer refreshed-a');

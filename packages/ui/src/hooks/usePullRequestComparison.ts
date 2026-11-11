@@ -6,7 +6,7 @@ import { mergeIncompleteSourceControlPage, sourceControlReadContextParts } from 
 import type { PageResult } from '@/lib/source-control/types';
 import { useI18n } from '@/lib/i18n';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
-import { useChangeRequestDiffServing } from '@/lib/source-control/providers/registry';
+import { useChangeRequestDiffServing, useChangeRequestTerm } from '@/lib/source-control/providers/registry';
 import { useRepositoryHost } from '@/components/references/referenceSources';
 import { useGitStore } from '@/stores/useGitStore';
 import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
@@ -98,6 +98,7 @@ export function usePullRequestComparison(
   // Known even with no working account, so the messages name the right host.
   const hostProvider = useRepositoryHost(directory)?.provider;
   const provider = context?.provider ?? hostProvider ?? null;
+  const changeRequestTerm = useChangeRequestTerm(provider);
   // A served host may list its change requests and still not serve their diff.
   const diffServing = useChangeRequestDiffServing(provider);
   const diffUnavailable = context !== null && diffServing === 'not-served';
@@ -175,8 +176,8 @@ export function usePullRequestComparison(
     }
     try {
       const context = contextRef.current;
-      if (!sourceControl) throw new Error(t(changeRequestCopy('session.githubPrPicker.error.runtimeUnavailable', provider)));
-      if (!context || !auth.connected) throw new Error(t(changeRequestCopy('session.githubPrPicker.empty.notConnected', provider)));
+      if (!sourceControl) throw new Error(t(changeRequestCopy('session.githubPrPicker.error.runtimeUnavailable', changeRequestTerm)));
+      if (!context || !auth.connected) throw new Error(t(changeRequestCopy('session.githubPrPicker.empty.notConnected', changeRequestTerm)));
       const page = previous ? previous.page + 1 : 1;
       const result = await sourceControl.changeRequestsList(context, { page, query: search || undefined });
       if (requestId.current !== id || getRuntimeKey() !== runtime || owner.current.key !== key || !owner.current.enabled) return;
@@ -186,13 +187,13 @@ export function usePullRequestComparison(
       setList(ready);
     } catch (error) {
       if (requestId.current === id && getRuntimeKey() === runtime && owner.current.key === key && owner.current.enabled) {
-        const message = error instanceof Error ? error.message : t(changeRequestCopy('session.githubPrPicker.toast.loadMoreFailed', provider));
+        const message = error instanceof Error ? error.message : t(changeRequestCopy('session.githubPrPicker.toast.loadMoreFailed', changeRequestTerm));
         setList(previous ? { ...previous, error: message } : { key, status: 'error', message });
       }
     } finally {
       if (requestId.current === id) setLoadingMore(false);
     }
-  }, [auth.connected, directory, enabled, key, provider, search, sourceControl, t]);
+  }, [auth.connected, changeRequestTerm, directory, enabled, key, search, sourceControl, t]);
 
   // Shows a list another surface read, and reads again only what is stale.
   const revalidate = useCallback(() => {

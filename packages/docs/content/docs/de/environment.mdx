@@ -2,6 +2,7 @@
 title: Umgebungsvariablen
 description: Konfiguriere OpenChamber mit Umgebungsvariablen.
 ---
+
 # Umgebungsvariablen
 
 OpenChamber liest diese Umgebungsvariablen beim Start. Für Startdienste speichert `openchamber startup enable` die aktuelle Umgebung standardmäßig als Schnappschuss, also führe den Befehl nach Änderungen an den Variablen, die der Dienst verwenden soll, erneut aus.
@@ -42,6 +43,7 @@ Wie lange eine Anmeldung gilt, in Tagen, auf einem Gerät, dem du vertraust. Sta
 ### `OPENCODE_JWT_SECRET`
 
 Überschreibt das Geheimnis zum Signieren von Host-UI-Sitzungstokens. Diese Einstellung steuert die Sitzungssignierung des Hosts und betrifft nicht die Agent-Runtime. Halte diesen Wert geheim. Wenn gesetzt, ist die globale Abmeldung nicht verfügbar, da OpenChamber das Signiergeheimnis nicht rotieren kann.
+
 
 ### `OPENCHAMBER_API_ONLY`
 
@@ -126,4 +128,3 @@ Bun-Executable, die OpenChamber beim Starten von Daemon-Prozessen verwenden soll
 ### `BUN_INSTALL`
 
 Installationswurzel von Bun. OpenChamber verwendet sie, um `bin/bun` für Daemon-Start und Updates zu finden.
-

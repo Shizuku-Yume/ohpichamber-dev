@@ -29,7 +29,7 @@ Para crear una, elige el proyecto en el selector de la parte superior de la barr
 
 Las sobrescrituras del proyecto se guardan en la clave `magicPrompts` de `.openchamber/project.json`, en el checkout del proyecto. Es el mismo archivo que la [configuración en el repositorio](/es/repository-config/). Haz commit de él para compartir los prompts con tu equipo. Las sobrescrituras globales siguen en `magic-prompts.json`, en la carpeta de datos del servidor.
 
-Un worktree usa los prompts del proyecto de su checkout principal, salvo que hayas añadido el worktree como proyecto propio. Un chat sin proyecto, una carpeta que no pertenece a ningún proyecto y el trabajo en un espacio aislado usan solo prompts globales. La extensión de VS Code no tiene la página Magic Prompts. Allí editas los archivos a mano, y el archivo global siempre es `~/.config/openchamber/magic-prompts.json`.
+Un worktree usa los prompts del proyecto de su checkout principal, salvo que hayas añadido el worktree como proyecto propio. Un chat sin proyecto, una carpeta que no pertenece a ningún proyecto y el trabajo en un espacio aislado usan solo prompts globales.  Allí editas los archivos a mano, y el archivo global siempre es `~/.config/openchamber/magic-prompts.json`.
 
 Si no se puede leer el archivo del proyecto, por ejemplo porque no es JSON válido, los flujos que lo necesitan se detienen con un error y no recurren al texto integrado. Settings muestra el motivo y un botón **Reintentar**. Que falte el archivo del proyecto no es un error. El proyecto hereda entonces todos los prompts.
 

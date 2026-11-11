@@ -42,7 +42,6 @@ import {
   mappingResultSchema,
   preferencesSchema,
   sessionStatusResultSchema,
-  connectResultOf,
   failureOf,
   requestJson,
   statesResultSchema,

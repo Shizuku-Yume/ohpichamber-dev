@@ -49,12 +49,12 @@ unsaved-changes prompt that may come first) goes through `onCloseFile` to
 including the panel's open state, its active tab, and the editor toggle, to each file surface.
 Hidden surfaces retain drafts, loaded content and scroll state. They stop
 directory and file metadata polling; reopening checks freshness once before
-normal polling resumes. The visible open file is watched by OpenCode
-(`lib/watchedFiles.ts`, OpenCode 2.2): its `filesystem.changed` event starts
-the same freshness check at once, and the check otherwise runs every 30
-seconds instead of every 2, only to cover a watch OpenCode lost. A file
-outside the project folder, or an OpenCode that refuses the watch, keeps the
-2-second poll. An open plan in the repository is watched the same way. Autosave is independent of visibility.
+normal polling resumes. Expanded directories poll every 8 seconds while the
+tree is active, and a hidden document pauses them. The visible open file
+polls every 2 seconds and skips a tick while the document is hidden. Agent file writes do not wait for the poll: `lib/fileTreeChanges.ts`
+notifies the tree from the run's tool parts and `useFileTreeChanges` batches
+a re-list 2 seconds after the first change. Autosave is independent of
+visibility.
 
 Background polling never supersedes an in-flight directory read. Explicit
 refresh after file mutations does. Each directory failure remains local and

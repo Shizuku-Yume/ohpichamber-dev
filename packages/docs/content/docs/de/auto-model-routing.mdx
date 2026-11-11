@@ -1,6 +1,6 @@
 ---
 title: Automatische Modellwahl
-description: Lass OpenChamber für jeden Prompt Modell und Denkstufe wählen.
+description: Lass OpenChamber für jeden Prompt Modell, Denkstufe und Agent wählen.
 ---
 
 # Automatische Modellwahl
@@ -31,6 +31,7 @@ Für jede Kategorie kannst du festlegen:
 
 - **Modell:** leer heißt Fallback-Modell
 - **Denken:** die Denkstufe für dieses Modell
+- **Agent:** der Agent, der diese Aufgaben ausführt; leer behält den Agenten, den das Eingabefeld nutzen würde
 
 Jev ordnet Prompts anhand der Namen und Beschreibungen der Kategorien ein, die Beschreibungen wirken also wie Anweisungen. Schreib hinein, was in die Kategorie gehört und was nicht. Du kannst Kategorien bearbeiten, ausschalten, entfernen oder hinzufügen und eine eingebaute wiederherstellen, wenn du es dir anders überlegst. Auto braucht mindestens zwei eingeschaltete Kategorien.
 
@@ -38,9 +39,9 @@ Jev ordnet Prompts anhand der Namen und Beschreibungen der Kategorien ein, die B
 
 1. OpenChamber schickt deine Nachricht und einen kurzen Auszug der letzten Züge an Jev.
 2. Jev wählt eine Kategorie und sagt, wie sicher es sich ist.
-3. Die Sitzung wechselt auf Modell und Denkstufe dieser Kategorie, und deine Nachricht geht raus.
+3. Die Sitzung wechselt auf Modell, Denkstufe und Agent dieser Kategorie, und deine Nachricht geht raus.
 
-Jede Nachricht wird neu eingeordnet, eine Sitzung kann also für eine kurze Frage ein günstiges Modell nutzen und für die nächste Anfrage dein stärkstes. Das Eingabefeld zeigt weiter **Auto**, und die Auswahl für die Denkstufe ist ausgeblendet, weil die Kategorie sie bestimmt.
+Jede Nachricht wird neu eingeordnet, eine Sitzung kann also für eine kurze Frage ein günstiges Modell nutzen und für die nächste Anfrage dein stärkstes. Das Eingabefeld zeigt weiter **Auto**, und die Auswahl für Agent und Denkstufe ist ausgeblendet, weil die Kategorie sie bestimmt.
 
 Das Fallback-Modell antwortet, wenn:
 

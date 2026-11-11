@@ -12,7 +12,7 @@ Sohbet kutusu birkaç simge anlar. Birini yazınca bir seçici açılır; bir ö
 | `/` | bir komutu | mesajın en başı |
 | `$` | bir skill'i | her yerde |
 | `#` | bir snippet'i | her yerde |
-| `@` | bir dosyayı | her yerde |
+| `@` | bir dosyayı ya da agent'ı | her yerde |
 
 Sizde olmayan bir şeyi gösteren simge düz metin olarak kalır: `$5` sadece para, `a/b` ise sadece bir yoldur.
 
@@ -22,7 +22,7 @@ Komut, `/review` gibi eğik çizgiyle çalıştırdığınız kayıtlı bir iste
 
 1. **Settings → Commands** bölümünü açın ve bir komut oluşturun.
 2. Ona bir ad, açıklama ve göndermesi gereken istem metnini verin.
-3. İsterseniz belirli bir modele sabitleyin.
+3. İsterseniz belirli bir agent'a ya da modele sabitleyin.
 4. Kişisel ya da proje kapsamını seçin.
 
 Sohbette, komutları açmak için mesajın **ilk** karakteri olarak `/` yazın ve ardından birini seçin. Metniniz şu yer tutucuları kullanabilir:
@@ -49,11 +49,12 @@ Snippet, `#signoff` gibi bir etiketle satır içinde çağırdığınız yeniden
 
 Sohbette `#` yazın ve bir snippet seçin. OpenChamber gönderimden önce tam metni yerine yerleştirir.
 
-## Dosyalar
+## Dosyalar ve agent'lar
 
-Mesaja bir dosya eklemek için `@` yazın.
+Bir dosya eklemek ya da mesajı başka bir agent'la çalıştırmak için `@` yazın.
 
 - `@src/index.ts` gibi bir dosya, **+** menüsünden seçilmiş gibi mesaja eklenir. Görseller ve belgeler okunur ve onunla birlikte gönderilir.
+- `@build` gibi bir agent, bu mesajı o agent'la çalıştırır. Bahsetme yoksa composer'da seçili agent çalıştırır.
 
 ## Dosya ve bağlam ekleme
 

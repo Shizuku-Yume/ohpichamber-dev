@@ -1,6 +1,6 @@
 ---
 title: Enrutamiento automático de modelos
-description: Deja que OpenChamber elija el modelo y el nivel de razonamiento para cada prompt.
+description: Deja que OpenChamber elija el modelo, el nivel de razonamiento y el agente para cada prompt.
 ---
 
 # Enrutamiento automático de modelos
@@ -31,6 +31,7 @@ Para cada categoría puedes definir:
 
 - **Modelo:** vacío significa el modelo de respaldo
 - **Razonamiento:** el nivel de razonamiento de ese modelo
+- **Agente:** el agente que ejecuta estas tareas; vacío mantiene el agente que usaría el campo de mensaje
 
 Jev clasifica los prompts leyendo los nombres y las descripciones de las categorías, así que las descripciones funcionan como instrucciones. Escribe qué entra en la categoría y qué no. Puedes editar, desactivar, quitar o añadir categorías, y restaurar una integrada si cambias de idea. Auto necesita al menos dos categorías activadas.
 
@@ -38,9 +39,9 @@ Jev clasifica los prompts leyendo los nombres y las descripciones de las categor
 
 1. OpenChamber envía a Jev tu mensaje y un fragmento breve de los últimos turnos.
 2. Jev elige una categoría y dice qué tan seguro está.
-3. La sesión cambia al modelo y al nivel de razonamiento de esa categoría, y tu mensaje sale.
+3. La sesión cambia al modelo, al nivel de razonamiento y al agente de esa categoría, y tu mensaje sale.
 
-Cada mensaje se clasifica de nuevo, así que una sesión puede pasar de un modelo barato para una pregunta rápida al más potente para la siguiente petición. El campo de mensaje sigue mostrando **Auto**, y el control de razonamiento se oculta, porque lo decide la categoría.
+Cada mensaje se clasifica de nuevo, así que una sesión puede pasar de un modelo barato para una pregunta rápida al más potente para la siguiente petición. El campo de mensaje sigue mostrando **Auto**, y los controles de agente y razonamiento se ocultan, porque los decide la categoría.
 
 El modelo de respaldo responde cuando:
 

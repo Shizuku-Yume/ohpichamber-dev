@@ -7,6 +7,27 @@ description: OpenChamber’ın birlikte çalıştığı hizmetleri ve abonelikle
 
 **Settings → Integrations**, OpenChamber’ın birlikte çalıştığı servislere giriş yaptığınız yerdir. Giriş OpenChamber sunucusunda saklanır; böylece web, masaüstü ve eşleştirilmiş telefon aynı girişi paylaşır.
 
+## Entegrasyon kataloğu
+
+Entegrasyon kataloğu, ajana tek tıkla verebileceğiniz 150'den fazla servisi listeler: Linear, Notion, Sentry, Supabase, Figma, gözlemlenebilirlik araçları, CRM'ler, toplantı notları ve daha fazlası. Bir servisi kurmak genellikle o servisin MCP sunucusunu ekler, yani ajanın orada bir şeyleri okumak ve değiştirmek için kullandığı bağlantıyı. Bazen yanında gelen skill'ler ya da bir eklenti de eklenir. Kurulum kullanıcı düzeyinde yapılır, bu yüzden her projede kullanılabilir.
+
+1. Kenar çubuğu başlığındaki mağaza simgesini seçin.
+2. Bir servis bulun: adıyla arayın ya da listeyi **Kod** veya **Kalite ve operasyon** gibi bir kategoriyle daraltın. **OpenChamber** kendi uzantılarımızı ve eklentilerimizi listeler.
+3. Satırındaki **+** düğmesini seçin ya da servisi açıp **Kur** seçin.
+4. Servisin istediği şekilde giriş yapın:
+   - **OAuth**: servisin giriş sayfası tarayıcınızda açılır. Erişimi orada onaylayın.
+   - **Token**: bir API token'ını **API token** alanına yapıştırın. **Token alın**, servisin token verdiği sayfayı açar.
+   - **Oturumsuz**: yapmanız gereken bir şey yok.
+
+İşlem bittiğinde servis bir onay işareti gösterir ve soldaki **Kurulu** altında görünür. Araçları bir sonraki mesajınızda kullanılabilir. Sarı bir nokta ya da **Oturum açma gerekli**, girişin tamamlanmadığı anlamına gelir. Servisi açın ve yeniden giriş yapın.
+
+Bazı girdiler girişten fazlasını ister:
+
+
+Bir servisi kaldırmak için onu açın, **Diğer işlemler** (**⋯**) ve ardından **Kaldır** seçin. Bu yalnızca kataloğun eklediklerini kaldırır. Servisteki hesabınız olduğu gibi kalır. MCP sunucularını, eklentileri ve skill'leri her zamanki gibi Settings'ten de yönetebilirsiniz.
+
+Katalog web uygulamasında ve masaüstü uygulamasında bulunur. [Kurumsal modda](/tr/security/#kurumsal-mod) gizlidir.
+
 ## GitHub
 
 **GitHub** kartını genişletin ve kısa bir cihaz koduyla giriş yapmak için **Connect GitHub** seçin. Bağlandıktan sonra OpenChamber issue’lardan ve pull request’lerden oturum başlatabilir, onları mesajlara ekleyebilir ve PR açıp güncelleyebilir. Git sunucularının yapabildiği her şey [Git sunucuları](/tr/github/) sayfasında.
@@ -103,7 +124,14 @@ Excalidraw, `.excalidraw` dosyalarında ve Obsidian `.excalidraw.md` çizimlerin
 
 Kart, yeni bir sürüm çıktığında uzantıyı günceller, duraklattıysanız yeniden açar ve kaldırır. Kaldırdığınızda çizimleriniz olduğu gibi kalır; yalnızca metin olarak açılır. Yalnızca web ve masaüstü.
 
+## Resource Monitor
+
+
+1. **Settings → Integrations** sayfasını açın ve Resource Monitor kartında **Install** seçeneğini seçin.
+2. Yerel hizmetini **Settings → Extensions** içinde onaylayın. Sayılar, OpenChamber'ın panelin yanında başlattığı küçük bir süreçten gelir. Bu süreç yalnızca panel veya **Resources** bölümü ekrandayken ölçer.
+3. Sağdaki çubuktan **Resource Monitor**'ı açın. Work Status panelinde **Resources** altında kısa bir özet de görünür.
+
 ## İlgili
 
-- [GitHub Issues & PRs](/tr/github/) — GitHub’ın OpenChamber’da yapabildiği her şey
+- [Git sunucuları](/tr/github/) — GitHub, GitLab, Gitea, Forgejo ve Gerrit'in OpenChamber'da yapabildiği her şey
 - [Worktree oturumları](/tr/worktrees/) — issue oturumlarının başlayabileceği yer

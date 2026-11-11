@@ -12,7 +12,7 @@ Het chatvak begrijpt een paar symbolen. Typ er een en er opent een kiezer; kies 
 | `/` | een opdracht | het allereerste begin van het bericht |
 | `$` | een skill | overal |
 | `#` | een snippet | overal |
-| `@` | een bestand | overal |
+| `@` | een bestand of een agent | overal |
 
 Een symbool dat niets aanwijst dat u hebt, blijft gewone tekst: `$5` is gewoon geld en `a/b` is gewoon een pad.
 
@@ -22,7 +22,7 @@ Een opdracht is een opgeslagen prompt die u met een slash uitvoert, zoals `/revi
 
 1. Open **Instellingen → Opdrachten** en maak een opdracht aan.
 2. Geef deze een naam, een beschrijving en de prompttekst die moet worden verstuurd.
-3. Koppel de opdracht eventueel aan een specifiek model.
+3. Koppel de opdracht eventueel aan een specifieke agent of een specifiek model.
 4. Kies of de opdracht persoonlijk is of bij het project hoort.
 
 Typ `/` als **eerste** teken van een chatbericht om de opdrachten te openen en kies er een. De tekst kan placeholders bevatten:
@@ -49,11 +49,12 @@ Een snippet is herbruikbare tekst waarnaar u in een bericht verwijst met een has
 
 Typ `#` in de chat en kies een snippet. OpenChamber vervangt de verwijzing vóór het versturen door de volledige tekst.
 
-## Bestanden
+## Bestanden en agents
 
-Typ `@` om een bestand aan het bericht toe te voegen.
+Typ `@` om een bestand bij te voegen of het bericht met een andere agent uit te voeren.
 
 - Een bestand, zoals `@src/index.ts`, wordt aan het bericht gekoppeld, net als wanneer u het via het **+**-menu kiest. Afbeeldingen en documenten worden gelezen en meegestuurd.
+- Een agent, zoals `@build`, voert dit bericht uit met die agent. Zonder vermelding voert de agent die in de composer is gekozen het uit.
 
 ## Bestanden en context toevoegen
 

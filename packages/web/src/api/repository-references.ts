@@ -174,7 +174,8 @@ const referencesAcrossResultSchema = z.strictObject({
   hasMore: z.boolean(),
   total: z.number().int().nonnegative(),
   repositories: z.array(z.union([
-    z.strictObject({ directory: z.string().min(1), status: z.literal('included'),
+    z.strictObject({
+      directory: z.string().min(1), status: z.literal('included'),
       repo: z.strictObject({ owner: z.string(), repo: z.string(), url: z.string(), host: z.string().optional() }),
     }),
     z.strictObject({ directory: z.string().min(1), status: z.enum(['no-repo', 'disconnected', 'invalid-context', 'error']) }),
@@ -305,7 +306,6 @@ export const fetchChangeRequestReviewState = async (
   const response = await fetch(providerPath(context, '/pr/review/state'), { query, headers: { Accept: 'application/json' } });
   return readPayload(response, reviewStateResultSchema, 'Failed to load the review');
 };
-
 
 /** One provider per page: every context must name the same provider, whose route serves the search. */
 export const fetchRepositoryReferencesAcross = async (

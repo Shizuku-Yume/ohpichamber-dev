@@ -33,33 +33,15 @@ Jeśli otwierasz projekt na folderze wewnątrz repozytorium, na przykład `repo/
 
 Gdy praca jest gotowa, użyj **Integrate** w widoku Git, aby przenieść commity worktree na inną gałąź (jak `main`). Jeśli zmiana powoduje konflikt, możesz przekazać konflikt agentowi do rozwiązania.
 
-## Posprzątaj i zarchiwizuj
+## Posprzątaj
 
-Gdy zadanie jest ukończone, wybierz **Zarchiwizuj worktree** w menu wiersza albo przytrzymaj klawisz Shift i kliknij przycisk archiwizacji, który zastępuje przycisk nowej sesji w tym wierszu. OpenChamber go archiwizuje:
+Gdy zadanie jest skończone, wybierz **Zarchiwizuj worktree** w menu wiersza albo przytrzymaj Shift i kliknij przycisk archiwizacji, który pojawia się w wierszu w miejscu przycisku nowej sesji. OpenChamber archiwizuje worktree: folder znika, a jego sesje, niezacommitowane zmiany i gałąź czekają na stronie Archiwum. Jeśli działa w nim jeszcze sesja, worktree zostaje.
 
-1. Host weryfikuje worktree i nakłada na niego blokadę (fence), zwalniając każdego aktywnego workera zajmującego ten katalog i uniemożliwiając wykonanie nowych poleceń w trakcie archiwizacji.
-2. Niezatwierdzone zmiany i stany gałęzi są zapisywane w referencjach migawek pod `refs/openchamber/archive/<id>`.
-3. Folder jest bezpiecznie usuwany z dysku z zachowaniem gałęzi Git, migawki niezatwierdzonych zmian oraz powiązanych rekordów sesji.
-4. Jeśli sesja w worktree aktywnie przesyła strumień danych lub działa, operacja archiwizacji zostaje bezpiecznie odrzucona do czasu zakończenia jej wykonywania.
+Oznaczenie wiersza jako gotowego tylko zabiera go z W toku. Żeby archiwizować worktree za każdym razem, gdy oznaczasz go jako gotowy, albo po scaleniu jego PR, włącz to w **Ustawienia → Sesje → Zakończone worktree**.
 
-Oznaczenie wiersza worktree jako gotowego usuwa go jedynie z bloku **W toku**. Aby automatycznie archiwizować worktree po oznaczeniu go jako gotowy lub po scaleniu jego pull requesta, włącz **Ustawienia → Sesje → Zakończone worktree**.
+Na stronie Archiwum zarchiwizowane worktree są pod swoim projektem. **Przywróć** przywraca worktree razem z gałęzią, uruchamia polecenia konfiguracyjne projektu i przywraca jego zmiany i sesje; przywrócenie jednej z jego sesji działa tak samo. Pliki ignorowane przez git, takie jak `node_modules` czy `.env`, nie są zachowywane, więc odtwarzają je polecenia konfiguracyjne. Zarchiwizowane worktree pokazuje też strona Worktree projektu.
 
-### Przywróć z archiwum
-
-Strona **Archiwum** wyświetla zarchiwizowane worktree w podziale na odpowiadające im projekty:
-
-- **Przywróć:** Przenosi zarchiwizowane worktree z powrotem do utworzonego przez wywołującego checkoutu (`openchamber/worktree-...`). Host przywraca niezatwierdzone pliki z referencji migawki, ponownie wykonuje polecenia konfiguracji projektu i przenosi aktywne sesje do nowej lokalizacji checkoutu.
-- **Zachowanie stanu sesji:** Zweryfikowane przez Hosta aktywne sesje otwierają się ponownie w przywróconym worktree po wprowadzeniu zmian. Sesje, które zostały zarchiwizowane przed archiwizacją worktree, pozostają zarchiwizowane na liście archiwum. Pliki ignorowane przez Git (takie jak `node_modules` czy `.env`) są tworzone na nowo przez polecenia konfiguracji projektu.
-- **Potwierdzone odzyskiwanie w nowym checkoucie:** Przepływ odzyskiwania automatycznie dba o to, aby katalog nowego checkoutu został dołączony do zakresu obszaru roboczego Hosta przed ponownym otwarciem sesji.
-
-### Usuwanie worktree i bezpieczeństwo gałęzi
-
-Aby trwale usunąć worktree:
-
-- **Z aktywnego paska bocznego:** Wybierz **Usuń** w menu wiersza worktree.
-- **Ze strony Archiwum:** Kliknij **Usuń** w wierszu zarchiwizowanego worktree.
-- **Domyślne zachowanie gałęzi przy usuwaniu:** Usunięcie zarchiwizowanego worktree domyślnie zachowuje gałąź Git i jej historię commitów. Okno dialogowe potwierdzenia usunięcia zawiera wyraźne pole wyboru **Usuń także lokalną gałąź**, które jest domyślnie odznaczone.
-- **Starsze, niepowiązane archiwa wyłącznie dla Gita:** Starsze referencje migawek, które nie mają powiązań stanu sesji zarządzanych przez Hosta, pozwalają wyłącznie na odzyskanie danych Gita. OpenChamber wyraźnie ostrzega, że powiązane sesje nie zostaną przeniesione, przywrócone z archiwum ani usunięte. Usunięcie niepowiązanego archiwum wymaga wyraźnego potwierdzenia niezweryfikowanego usunięcia gałęzi.
+Aby pozbyć się worktree na dobre, usuń go z jego menu albo usuń zarchiwizowany worktree na stronie Archiwum. Przy usuwaniu z menu sam decydujesz, czy usunąć również gałąź — lokalną, a zdalną, jeśli istnieje.
 
 ## Jeśli coś wygląda nie tak
 
@@ -68,4 +50,4 @@ Worktree może wymagać uwagi, jeśli jego folder zniknął, jego gałąź jest 
 ## Powiązane
 
 - [Multi-run](/pl/multi-run/) — uruchom wiele sesji worktree naraz
-- [Przepływy Git i GitHub](/pl/git/) — commituj i integruj z wnętrza OpenChamber
+- [Przepływy Git](/pl/git/) — commituj i integruj z wnętrza OpenChamber

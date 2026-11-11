@@ -7,21 +7,23 @@ description: Choose how much the agent may do without asking, per session.
 
 Every action the agent takes (running a command, editing a file, calling an MCP tool, fetching a page) is evaluated by the Host authorizer and Agent Service worker policy. OpenChamber's permission modes decide what happens when an action requires approval.
 
-## Authorization and approvals
+## Allow, ask and deny
 
 The Host Gateway validates filesystem access against the project directory. Actions that target paths outside the project root are denied outright. Inside the project root, routine file reads and edits proceed through project file tools without extra prompts.
 
-When an action requires user consent, such as running an ungranted shell command, the agent pauses and creates an approval request. When you answer an approval request, you can allow it once, allow it for the rest of the session, or deny it across the workspace. Persistent approval policies store session-scoped allowances or workspace-scoped denials.
+- **allow:** the agent goes ahead
+- **deny:** the action is blocked
+- **ask:** the agent stops and waits for an answer
 
 To configure which tools an agent can see and call, use the **allowed tools** field in **Settings → Agents**. To pick the default permission mode for new sessions, use **Settings → Sessions**.
 
 ## The three modes
 
-| Mode | Who answers approval requests |
+| Mode | Who answers "ask" |
 | --- | --- |
 | **Ask every time** | You. Every request waits for your answer. |
 | **Safety net** | Jev lets routine actions through and keeps risky ones for you. |
-| **Accept everything** | OpenChamber auto-approves requests that require consent. |
+| **Accept everything** | OpenChamber, always yes. Every request is allowed right away, no checks. |
 
 In **Accept everything** mode, requests that require consent are automatically approved so work continues without waiting. Host boundary checks, including workspace containment and workspace deny policies, still run on every action.
 
@@ -36,7 +38,7 @@ Subagents follow the session that started them.
 
 In this mode OpenChamber asks [Jev](/classification-providers/) about each request: is this routine, or should you decide? Reading, building, running tests, editing project files and ordinary commits go through. Rewriting git history, deleting data, changing the system, deploying, posting somewhere or sending files outside wait for you, and so does anything unclear.
 
-A held request displays the approval card in chat with the tool name, command summary, and details, where you can allow or deny it. If Jev cannot answer within four seconds, the action waits for you. The safety net never allows an action when classification fails or times out.
+A held request shows the usual permission card with one extra line, **The safety net held this action for you to decide**, and what kind of action it is. If Jev can't answer within four seconds, the action waits for you too. The safety net never allows something because the check failed.
 
 The safety net needs a [classification provider](/classification-providers/). Without one it's skipped by the shield button and disabled in Settings.
 

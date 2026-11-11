@@ -2,6 +2,7 @@
 title: Variáveis de ambiente
 description: Configure o OpenChamber com variáveis de ambiente.
 ---
+
 # Variáveis de ambiente
 
 O OpenChamber lê estas variáveis na inicialização. Para serviços de inicialização, `openchamber startup enable` salva por padrão um snapshot do ambiente atual, então execute de novo após mudar variáveis que o serviço deve usar.
@@ -13,7 +14,7 @@ Para dar às sessões de agentes, ao Git, ao terminal e às [ações de projeto]
 - As sessões de agentes as recebem na inicialização.
 - O Git, o terminal e as ações de projeto as recebem na próxima execução.
 
-Um projeto pode adicionar suas próprias variáveis, ou um comando que as imprima como `direnv export json`, em **Configurações → Projetos**. Veja [Projetos](/pt-br/projects/#ambiente-do-projeto).
+Um projeto pode adicionar variáveis próprias, ou um comando que as imprime, como `direnv export json`, em **Configurações → Projetos**. Veja [Projetos](/pt-br/projects/#ambiente-do-projeto).
 
 Tudo abaixo é lido pelo próprio OpenChamber na inicialização.
 
@@ -38,10 +39,6 @@ Quanto tempo dura o login no navegador, em horas, quando "confiar neste disposit
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Quanto tempo dura o login, em dias, num dispositivo marcado como confiável. O padrão é `7`.
-
-### `OPENCODE_JWT_SECRET`
-
-Substitui o segredo usado para assinar tokens de sessão da UI do Host. Essa configuração afeta a assinatura de sessões do Host e não altera o runtime do agente. Mantenha esse segredo privado. Quando definido, o encerramento global de sessão fica indisponível porque o OpenChamber não pode rotacionar o segredo de assinatura.
 
 ### `OPENCHAMBER_API_ONLY`
 

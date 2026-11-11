@@ -33,33 +33,15 @@ Ein Worktree ist eine Zeile in der Seitenleiste, darunter alle Sitzungen darin. 
 
 Wenn die Arbeit gut ist, verwende **Integrate** in der Git-Ansicht, um die Commits des Worktrees auf einen anderen Branch (etwa `main`) zu übertragen. Wenn ein Konflikt auftritt, kannst du den Konflikt dem Agenten zur Lösung geben.
 
-## Aufräumen und archivieren
+## Aufräumen
 
-Wenn die Aufgabe abgeschlossen ist, wähle **Worktree archivieren** im Menü der Zeile oder halte Shift gedrückt und klicke auf die Archiv-Schaltfläche, die anstelle der Schaltfläche für eine neue Sitzung in der Zeile angezeigt wird. OpenChamber archiviert ihn:
+Wenn die Aufgabe fertig ist, wähle **Worktree archivieren** im Menü der Zeile, oder halte Shift gedrückt und klicke auf die Archivieren-Schaltfläche, die in der Zeile an die Stelle der Schaltfläche für eine neue Sitzung tritt. OpenChamber archiviert ihn: Der Ordner verschwindet, und seine Sitzungen, seine nicht committeten Änderungen und sein Branch warten auf der Seite Archiv. Läuft dort noch eine Sitzung, bleibt der Worktree.
 
-1. Der Host verifiziert den Worktree und riegelt ihn ab, gibt jeden aktiven Worker frei, der das Verzeichnis belegt, und verhindert, dass mitten im Archivieren neue Befehle eintreffen.
-2. Nicht committete Änderungen und Branch-Zustände werden in Snapshot-Referenzen unter `refs/openchamber/archive/<id>` erfasst.
-3. Der Ordner wird sicher vom Datenträger entfernt, während der Git-Branch, der uncommittete Snapshot und die zugehörigen Sitzungsdatensätze erhalten bleiben.
-4. Wenn eine Sitzung im Worktree aktiv streamt oder ausgeführt wird, wird der Archivierungsvorgang sicher verweigert, bis die Ausführung beendet ist.
+Markierst du die Zeile als erledigt, verlässt sie nur den Bereich In Arbeit. Um einen Worktree jedes Mal zu archivieren, wenn du ihn als erledigt markierst, oder sobald sein PR gemergt ist, schalte das unter **Einstellungen → Sitzungen → Abgeschlossene Worktrees** ein.
 
-Wenn du eine Worktree-Zeile als erledigt markierst, wird sie lediglich aus dem Block **In Arbeit** entfernt. Um einen Worktree automatisch zu archivieren, sobald du ihn als erledigt markierst oder sein Pull Request gemergt wurde, aktiviere **Einstellungen → Sitzungen → Abgeschlossene Worktrees**.
+Auf der Seite Archiv stehen archivierte Worktrees unter ihrem Projekt. **Wiederherstellen** holt einen mit seinem Branch zurück, führt die Setup-Befehle des Projekts aus und bringt seine Änderungen und Sitzungen zurück; das Wiederherstellen einer seiner Sitzungen macht dasselbe. Dateien, die git ignoriert, etwa `node_modules` oder `.env`, werden nicht aufbewahrt, also bringen die Setup-Befehle sie zurück. Auch die Seite Worktrees des Projekts listet archivierte Worktrees.
 
-### Aus dem Archiv wiederherstellen
-
-Die Seite **Archiv** listet archivierte Worktrees unter ihren jeweiligen Projekten auf:
-
-- **Wiederherstellen:** Bringt den archivierten Worktree in ein vom Aufrufer erstelltes Checkout (`openchamber/worktree-...`) zurück. Der Host stellt nicht committete Dateien aus der Snapshot-Referenz wieder her, führt die Setup-Befehle des Projekts erneut aus und verlegt aktive Sitzungen an den neuen Checkout-Ort.
-- **Erhalt des Sitzungszustands:** Vom Host verifizierte aktive Sitzungen werden im wiederhergestellten Worktree wieder geöffnet, sobald Änderungen übernommen wurden. Sitzungen, die bereits vor der Worktree-Archivierung archiviert waren, bleiben in der Archivliste archiviert. Von Git ignorierte Dateien (wie `node_modules` oder `.env`) werden durch die Projekt-Setup-Befehle neu erstellt.
-- **Bestätigte Wiederherstellung in neuem Checkout:** Der Wiederherstellungsablauf stellt automatisch sicher, dass das neue Checkout-Verzeichnis in den Workspace-Geltungsbereich des Hosts aufgenommen wird, bevor Sitzungen wieder geöffnet werden.
-
-### Worktrees löschen und Branch-Sicherheit
-
-Um einen Worktree dauerhaft zu entfernen:
-
-- **Aus der aktiven Seitenleiste:** Wähle **Löschen** im Menü der Worktree-Zeile.
-- **Von der Archiv-Seite:** Klicke auf **Löschen** in der Zeile eines archivierten Worktrees.
-- **Branch-Löschung standardmäßig deaktiviert:** Beim Löschen eines archivierten Worktrees bleiben der Git-Branch und sein Commit-Verlauf standardmäßig erhalten. Der Bestätigungsdialog zum Löschen bietet das Kontrollkästchen **Lokalen Branch auch löschen**, das standardmäßig nicht aktiviert ist.
-- **Ältere ungebundene reine Git-Archive:** Ältere Snapshot-Referenzen ohne Host-eigene Bindungen an den Sitzungszustand erlauben nur eine reine Git-Wiederherstellung. OpenChamber warnt ausdrücklich davor, dass zugehörige Sitzungen weder verschoben noch dearchiviert oder gelöscht werden. Das Löschen eines ungebundenen Archivs erfordert eine ausdrückliche Bestätigung für das Löschen nicht verifizierter Branches.
+Um einen Worktree endgültig loszuwerden, lösche ihn über sein Menü oder lösche einen archivierten auf der Seite Archiv. Beim Löschen über das Menü entscheidest du, ob auch der Branch gelöscht werden soll — lokal und, falls vorhanden, remote.
 
 ## Wenn etwas seltsam aussieht
 
@@ -68,4 +50,4 @@ Ein Worktree braucht möglicherweise Aufmerksamkeit, wenn sein Ordner fehlt, sei
 ## Verwandt
 
 - [Multi-run](/multi-run/) — viele Worktree-Sitzungen gleichzeitig starten
-- [Git- & GitHub-Workflows](/git/) — von innen in OpenChamber committen und integrieren
+- [Git-Workflows](/git/) — von innen in OpenChamber committen und integrieren

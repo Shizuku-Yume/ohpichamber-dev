@@ -153,22 +153,6 @@ host.onSessionLifecycle((event) => {
 
 `host.storage.get(key)`、`set(key, value)`、`delete(key)`、`keys()` は追加権限なしで独自 JSON を接続先サーバーに保存します。未保存は `undefined`、保存した null は null です。キーは1〜128文字、値は UTF-8 で64 KiB、全体は2 MiB・2,000キーまでです。プロジェクト別データにはキーにプロジェクト ID を含めます。書き込みは直列化されアトミックで、失敗時は既存データを保持します。アンインストールで削除されます。
 
-## バックグラウンドシェル
-
-`shells` 権限を使うと、セッションとそのサブエージェント、登録済みプロジェクト、またはすべてのセッションを対象として、バックグラウンドで実行中のシェルコマンドを監視できます。OpenChamber はローカルストアから応答し、ネットワーク経由の読み取りは発生しません。
-
-| 呼び出し | 動作 |
-| --- | --- |
-| `onRunningShells(scope, listener)` | スコープ内のシェルコマンドを購読します。`{ kind: 'session', sessionId }` はセッションとそのサブエージェント、`{ kind: 'project', projectId }` は登録済みプロジェクト、`{ kind: 'global' }` はすべてのセッションを対象とします。古い順に並んだ実行中のコマンド(各 `background` フラグ付き)と終了したコマンドを受け取ります。購読解除関数を返します。 |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | 実行中または終了したコマンドの出力を 1 ページ分読み取ります。`cursor` を指定しない場合、末尾から `tailBytes`(最大 65536) 前から開始します。`{ output, cursor, skipped }` を返します。 |
-| `stopShell(shellId)` | エージェントに停止通知を先に送り、その後コマンドを削除します。 |
-
-スナップショットは `{ kind: "shells", scope, shells, ended }` で、`scope` は購読のスコープを反映します。実行中の各シェルは `{ id, sessionID, command, startedAt, background }` で、最大 200 件、古い順です。`background` はターンが終了を待たないジョブの場合に `true` です。
-
-`ended` は OpenChamber が終了を確認したコマンドを、終了が古い順に最大 200 件(最新のものが残る)リストします。各項目には、コマンドが終了コードを返して終了した場合に `status`、`endedAt`、`exit` が追加されます。ステータスは `exited`、`timeout`、シグナルによる `killed`、ユーザーによる `stopped`、または再接続中に終了が発生した場合の `unknown` です。OpenChamber はこのリストをメモリ内にのみ保持します。アプリのリロード後は空になるため、パネルで表示する内容は拡張機能ストレージに保存してください。
-
-ホストは終了したコマンドの出力を、ディレクトリあたり最新 25 件の終了コマンド分保持します。停止されたコマンドの出力は直ちに破棄されます。OpenChamber が認識したことのないシェル、またはホストが保持しなくなった出力を読み取ろうとすると `NOT_FOUND` になります。実行中でないシェルを停止しようとした場合も同様です。未承認の `shells` 権限は `NOT_GRANTED` になります。
-
 ## request
 
 ```ts

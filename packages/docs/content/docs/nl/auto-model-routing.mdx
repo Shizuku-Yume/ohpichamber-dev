@@ -1,6 +1,6 @@
 ---
 title: Automatische modelkeuze
-description: Laat OpenChamber voor elke prompt het model en het denkniveau kiezen.
+description: Laat OpenChamber voor elke prompt het model, denkniveau en de agent kiezen.
 ---
 
 # Automatische modelkeuze
@@ -31,6 +31,7 @@ Per categorie kunt u instellen:
 
 - **Model:** leeg laten gebruikt het terugvalmodel.
 - **Denken:** het denkniveau voor dat model.
+- **Agent:** de agent die deze taken uitvoert. Leeg laten behoudt de agent die het invoerveld zou gebruiken.
 
 Jev deelt prompts in op basis van de categorienamen en beschrijvingen. Die beschrijvingen werken dus als instructies: vermeld wat wel en niet bij een categorie hoort. U kunt categorieën bewerken, uitschakelen, verwijderen of toevoegen en ingebouwde categorieën herstellen. Auto heeft minstens twee ingeschakelde categorieën nodig.
 
@@ -38,9 +39,9 @@ Jev deelt prompts in op basis van de categorienamen en beschrijvingen. Die besch
 
 1. OpenChamber stuurt uw bericht en een kort fragment van de laatste beurten naar Jev.
 2. Jev kiest een categorie en geeft aan hoe zeker het daarvan is.
-3. De sessie schakelt naar het model en het denkniveau van die categorie. Daarna wordt uw bericht verstuurd.
+3. De sessie schakelt naar het model, denkniveau en de agent van die categorie. Daarna wordt uw bericht verstuurd.
 
-Elk bericht wordt opnieuw ingedeeld. Een sessie kan dus een goedkoop model gebruiken voor een korte vraag en uw krachtigste model voor het volgende verzoek. Het invoerveld blijft **Auto** tonen. De keuze voor het denkniveau is verborgen, omdat de categorie die bepaalt.
+Elk bericht wordt opnieuw ingedeeld. Een sessie kan dus een goedkoop model gebruiken voor een korte vraag en uw krachtigste model voor het volgende verzoek. Het invoerveld blijft **Auto** tonen. De keuzen voor agent en denkniveau zijn verborgen, omdat de categorie die bepaalt.
 
 Het terugvalmodel antwoordt wanneer:
 

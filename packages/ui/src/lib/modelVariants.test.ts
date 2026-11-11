@@ -17,12 +17,16 @@ describe('nextThinkingVariant', () => {
 });
 
 describe('listModelVariantIds', () => {
-  test('reads ids from the OpenCode 2 array, not array indices', () => {
-    const variants = [{ id: 'none' }, { id: 'low' }, { id: 'high' }];
+  test('reads identities from the canonical variant array, not array indices', () => {
+    const variants = [
+      { variant: 'none', label: 'None', reasoningEffort: null },
+      { variant: 'low', label: 'Low', reasoningEffort: 'low' },
+      { variant: 'high', label: 'High', reasoningEffort: 'high' },
+    ];
     expect(listModelVariantIds(variants)).toEqual(['none', 'low', 'high']);
   });
 
-  test('reads keys from the v1 record', () => {
+  test('reads keys from a record of variants', () => {
     expect(listModelVariantIds({ low: {}, high: {} })).toEqual(['low', 'high']);
   });
 

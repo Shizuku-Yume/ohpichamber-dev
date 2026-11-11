@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { getSafeStorage } from '@/stores/utils/safeStorage';
+import {
+  resolveWorkStatusSectionOrder,
+  sanitizeWorkStatusSectionOrder,
+} from '@/components/chat/work-status/sections';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
 import {
   AUTO_SAVE_KEYS,
@@ -61,10 +66,11 @@ describe('settings registry', () => {
         if (!parsed) throw new Error('Expected valid settings');
         applySettingsToStores(parsed);
         expect(useConfigStore.getState().dictationAutoSend).toBe(enabled);
-        const partialize = useConfigStore.persist.getOptions().partialize;
-        expect(partialize).toBeTruthy();
-        expect(z.object({ dictationAutoSend: z.boolean() }).parse(partialize!(useConfigStore.getState())))
-          .toEqual({ dictationAutoSend: enabled });
+        // The registry mirrors the field; the store's own setter is what persists
+        // it, so the preference survives the next launch.
+        useConfigStore.getState().setDictationAutoSend(enabled);
+        expect(getSafeStorage().getItem('dictationAutoSend')).toBe(String(enabled));
+        expect(useConfigStore.getState().dictationAutoSend).toBe(enabled);
       }
       applySettingsToStores({ dictationAutoSend: true });
       applySettingsToStores({});
@@ -199,24 +205,24 @@ describe('settings registry', () => {
     }
   });
 
-  test('section order: a saved default moves on apply, a dragged order stays', () => {
+  test('section order: a saved order applies as stored and a dragged order stays', () => {
     const original = useUIStore.getState();
-    const savedDefault = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+    const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
     try {
-      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault }) ?? {});
-      expect(useUIStore.getState().workStatusSectionOrder.slice(0, 4)).toEqual(['session', 'repository', 'usage', 'contextSources']);
-      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(false);
+      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: saved }) ?? {});
+      // The fork's store has one sanitized order and no explicit marker.
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(saved);
 
-      useUIStore.getState().setWorkStatusSectionOrder(savedDefault);
-      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
-      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
+      const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'];
+      useUIStore.getState().setWorkStatusSectionOrder(dragged);
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(dragged);
 
-      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
-      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
-
-      useUIStore.setState({ workStatusSectionOrderExplicit: false });
-      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
-      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
+      // Obsolete ids are dropped and sections the build gained are appended.
+      expect(sanitizeWorkStatusSectionOrder(['session', 'legacy-id', 'repository']))
+        .toEqual(resolveWorkStatusSectionOrder(['session', 'repository'], []));
+      // An order the user never arranged follows the default's Context sources move.
+      expect(sanitizeWorkStatusSectionOrder(['session', 'repository', 'usage', 'subagents', 'mcp', 'pinned', 'contextSources'], false))
+        .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'mcp', 'pinned', 'telemetry', 'workflows']);
     } finally {
       useUIStore.setState(original, true);
     }

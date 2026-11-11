@@ -10,8 +10,8 @@ Avant qu’OpenChamber puisse faire quoi que ce soit, au moins un fournisseur IA
 ## Connecter un fournisseur
 
 1. Ouvrez **Paramètres → Fournisseurs**.
-2. Ouvrez le menu **Add provider** et choisissez un fournisseur qui n’est pas encore connecté, ou choisissez **Other / Custom** pour un endpoint compatible OpenAI.
-3. Connectez-vous selon la méthode requise par le fournisseur :
+2. Ouvrez le menu **Add provider** et choisissez un fournisseur qui n’est pas encore connecté.
+3. Connectez-vous de l’une des deux façons, selon le fournisseur :
    - **API key** — collez votre clé et enregistrez.
    - **Connexion OAuth** — ouvrez le lien d’autorisation dans votre navigateur pour vous connecter. Si demandé, collez le code d’autorisation dans OpenChamber, puis finalisez la connexion.
 
@@ -41,16 +41,16 @@ Vous choisissez le modèle là où vous travaillez :
 
 ## Configurer des agents
 
-Un agent est une configuration nommée — un modèle, une invite système et les outils mis à sa disposition.
+Un agent est une configuration nommée — un modèle, une personnalité et ce qu’il est autorisé à faire.
 
 1. Ouvrez **Paramètres → Agents**.
 2. Choisissez un agent ou créez-en un nouveau.
 3. Modifiez au besoin :
    - **description** — à quoi sert l’agent
-   - **model** — son fournisseur et modèle par défaut
-   - **prompt** — les instructions permanentes et l'invite système qu’il suit toujours
-   - **allowed tools** — les outils disponibles pour l'agent (disponibilité des outils : les lister ici permet au modèle de les appeler, tandis que l'autorisation des opérations reste contrôlée par les règles et approbations du Host)
-   - **permission preset** — identifiant facultatif de préréglage de permissions pour le profil
+   - **model** — son modèle par défaut
+   - **temperature** — le niveau de créativité de ses réponses
+   - **prompt** — les instructions permanentes qu’il suit toujours
+   - **tool rules** — les outils qu’il peut utiliser
 
 ## Où vivent vos connexions
 

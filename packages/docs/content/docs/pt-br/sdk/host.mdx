@@ -153,22 +153,6 @@ Sem `send`, `prompt` substitui o texto da caixa de chat. Com `send: true` ele en
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` e `keys()` guardam JSON próprio no servidor conectado sem outra permissão. Chave ausente retorna `undefined`; null salvo continua null. Chaves têm 1 a 128 caracteres, cada valor até 64 KiB UTF-8, o total até 2 MiB e 2.000 chaves. Inclua o ID do projeto na chave para dados por projeto. Escritas são serializadas e atômicas; falhas preservam os dados. Desinstalar remove o armazenamento.
 
-## Shells em segundo plano
-
-Com a capacidade `shells`, monitore os comandos de shell em execução em segundo plano, no escopo de uma sessão e seus subagentes, de um projeto registrado ou de todas as sessões. O OpenChamber responde a partir do seu armazenamento local; nenhuma leitura de rede ocorre.
-
-| Chamada | O que faz |
-| --- | --- |
-| `onRunningShells(scope, listener)` | inscreve-se nos comandos de shell no escopo: `{ kind: 'session', sessionId }` cobre a sessão e seus subagentes, `{ kind: 'project', projectId }` cobre um projeto registrado e `{ kind: 'global' }` cobre todas as sessões. Você recebe os comandos em execução dos mais antigos aos mais recentes, cada um com sua flag `background`, e os que já terminaram. Retorna uma função para cancelar a inscrição. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | uma página da saída de um comando em execução ou finalizado. Sem `cursor`, começa `tailBytes` (até 65536) antes do final. Retorna `{ output, cursor, skipped }`. |
-| `stopShell(shellId)` | envia primeiro o aviso de parada ao agente e depois remove o comando. |
-
-O snapshot é `{ kind: "shells", scope, shells, ended }`, com `scope` refletindo o escopo da inscrição. Cada shell em execução é `{ id, sessionID, command, startedAt, background }`, no máximo 200, do mais antigo ao mais recente. `background` é `true` para uma tarefa pela qual o turno não espera.
-
-`ended` lista os comandos cujo término o OpenChamber observou, do término mais antigo ao mais recente, no máximo 200 com os mais novos mantidos. Cada um adiciona `status`, `endedAt` e `exit` quando o comando terminou com um código. O status é `exited`, `timeout`, `killed` por um sinal, `stopped` por um usuário ou `unknown` quando o término ocorreu durante uma reconexão. O OpenChamber mantém essa lista apenas em memória. Ela fica vazia após a recarga do app, portanto salve o que seu painel exibe no armazenamento da extensão.
-
-O host mantém a saída de um comando finalizado para seus 25 comandos finalizados mais recentes por diretório. Um comando interrompido perde sua saída imediatamente. Ler uma shell que o OpenChamber nunca viu, ou uma saída que o host não tem mais, retorna `NOT_FOUND`. O mesmo vale para parar uma shell que não está rodando. Uma capacidade `shells` não aprovada retorna `NOT_GRANTED`.
-
 ## request
 
 ```ts

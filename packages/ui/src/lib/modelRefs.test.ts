@@ -1,26 +1,28 @@
 import { describe, expect, test } from 'bun:test';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import { getNextFavoriteModel, resolveModelRefs } from './modelRefs';
 
-const model = (providerId: string, modelId: string) => ({
-  id: `${providerId}/${modelId}`,
-  modelID: modelId,
-  providerID: providerId,
+const model = (providerId: string, modelId: string): Model => ({
+  modelId,
+  provider: providerId,
   name: modelId,
-  capabilities: { tools: true, input: ['text'], output: ['text'] },
+  modalities: ['text'],
+  contextWindow: 1024,
+  maxOutputTokens: 512,
+  reasoningEffortSupported: false,
+  reasoningOptions: [],
   variants: [],
-  time: { released: 0 },
-  cost: [{ input: 0, output: 0, cache: { read: 0, write: 0 } }],
-  status: 'active' as const,
-  enabled: true,
-  limit: { context: 0, output: 0 },
+  pricing: null,
 });
 
-const provider = (id: string, modelIds: string[]) => ({
-  id,
-  name: id,
-  activation: 'enabled' as const,
-  package: id,
-  models: modelIds.map((modelId) => model(id, modelId)),
+const provider = (providerId: string, modelIds: string[]): Provider & { models: Model[] } => ({
+  providerId,
+  name: providerId,
+  endpoint: null,
+  protocol: null,
+  authMethods: [],
+  auth: { status: 'missing' },
+  models: modelIds.map((modelId) => model(providerId, modelId)),
 });
 
 const ref = (providerID: string, modelID: string) => ({ providerID, modelID });

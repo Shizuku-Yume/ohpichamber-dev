@@ -37,15 +37,14 @@ description: 将你的工作组织成项目并在它们之间切换。
 
 这些变量会传给 Git、终端、项目操作、worktree 设置和针对该项目的智能体 worker，并叠加在 **设置 → 通用 → 环境变量** 中的变量之上（参阅[环境变量](/zh-cn/environment/)）。项目环境与 worktree 设置遵循主机项目配置，且仅作用于该项目。
 
-这条命令只能由你自己设置。它不会从仓库中读取，所以克隆下来的仓库无法让 OpenChamber 运行任何东西。
-
 ## 仓库配置与资源
 
-若要与克隆该代码库的团队成员共享工作树设置命令、项目操作、计划或草稿启动项，可将其移入 `.openchamber/project.json`（参阅[仓库配置](/zh-cn/repository-config/)）。项目作用域的斜杠命令与技能保存在仓库内的 `.omp/commands/` 和 `.omp/skills/` 目录中（参阅[命令](/zh-cn/commands-snippets/)与[技能](/zh-cn/skills/)）。
+若要与克隆该代码库的团队成员共享工作树设置命令、项目操作、计划或草稿启动项，可将其移入 `.openchamber/project.json`（参阅[仓库配置](/zh-cn/repository-config/)）。项目作用域的斜杠命令与技能保存在仓库内的 `.omp/commands/` 和 `.omp/skills/` 目录中（参阅[命令](/zh-cn/chat-input/)与[技能](/zh-cn/skills/)）。
+
+这条命令只能由你自己设置。它不会从仓库中读取，所以克隆下来的仓库无法让 OpenChamber 运行任何东西。
 
 ## 相关内容
 
-- [仓库配置](/zh-cn/repository-config/) — 在仓库中共享设置命令、操作、启动项和计划
 - [聊天](/zh-cn/chats/) — 不属于项目的会话，适合随手提问
 - [项目笔记、待办与计划](/zh-cn/notes-todos-plans/) — 为每个项目保留工作笔记
 - [项目操作](/zh-cn/project-actions/) — 保存你经常运行的命令

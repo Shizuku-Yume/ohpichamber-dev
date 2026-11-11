@@ -2,6 +2,7 @@
 title: Environment Değişkenleri
 description: Ortam değişkenleriyle OpenChamber'ı yapılandırın.
 ---
+
 # Environment Değişkenleri
 
 OpenChamber bu environment değişkenlerini başlangıçta okur. Başlangıç servisleri için `openchamber startup enable` varsayılan olarak mevcut environment'ı anlık görüntü olarak kaydeder. Servisin kullanmasını istediğiniz değişkenleri değiştirdikten sonra bunu yeniden çalıştırın.
@@ -38,10 +39,6 @@ Tarayıcı arayüzü için parola. Bunu localhost dışına bind ederken, tünel
 ### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
 
 Güvendiğiniz bir cihazda oturumun kaç gün geçerli kalacağı. Varsayılan `7`.
-
-### `OPENCODE_JWT_SECRET`
-
-Host UI oturum belirteçlerini imzalamak için kullanılan gizli anahtarı geçersiz kılar. Bu ayar Host oturum imzalamasını yapılandırır ve agent çalışma zamanını etkilemez. Bu değeri gizli tutun. Ayarlandığında, OpenChamber imzalama anahtarını döndüremediği için genel oturum kapatma kullanılamaz.
 
 ### `OPENCHAMBER_API_ONLY`
 
