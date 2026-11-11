@@ -7,6 +7,8 @@ declare module "bun:test" {
     (name: string, fn: TestBody, timeoutMs?: number): void;
     /** A row spreads into the callback's parameters, as the runtime does. */
     each<T extends Readonly<[unknown, ...unknown[]]>>(cases: readonly T[]): (name: string, fn: (...row: T) => void | Promise<void>, timeoutMs?: number) => void;
+    /** A flat row (`test.each(values)` of scalars) reaches the callback as one argument. */
+    each<T>(cases: readonly T[]): (name: string, fn: (row: T) => void | Promise<void>, timeoutMs?: number) => void;
   }
   export const describe: EachCase;
   export const test: EachCase;
