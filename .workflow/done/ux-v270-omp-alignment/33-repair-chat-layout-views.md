@@ -58,3 +58,7 @@ A new decision heading was added — `2026-11-11 - Keep the slice 33 chat, layou
 - `bun scripts/upstream-drift.mjs --check --slice 33`: passed.
 - `node scripts/run-isolated-tests.mjs packages/ui/src/components/{chat,layout,views,apps}`: 371/371 files pass.
 - `bunx oxlint` on the rewritten and restored files: clean.
+
+### After re-merging the scaffold
+
+The scaffold advanced twice while this task ran (`f57e72c82` → `d13f58a11`), and both tips were merged back into this branch before landing. The merges resolved the drift ledger (keeping every row and dropping the rows git contradicts) and one blank-line conflict in `DefaultsSettings`; the scaffold's `notification-store`, `modelRefs` and `SidebarHeader` already carry the same fork fixes. The same four checks were rerun after each merge and stayed green.
