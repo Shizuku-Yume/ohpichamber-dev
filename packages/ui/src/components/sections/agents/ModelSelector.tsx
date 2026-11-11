@@ -10,6 +10,7 @@ import { Icon } from '@/components/icon/Icon';
 import { Spinner } from '@/components/ui/spinner';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
+import { useModelLists } from '@/hooks/useModelLists';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -19,26 +20,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
-
-/** The catalog rows the picker lists: a provider with its models under the picker's ids. */
-type CatalogProvider = {
-    providerId: string;
-    name: string;
-    models: readonly { modelId: string; name: string }[];
-};
-
-/** A stored provider/model ref resolved to the picker row shape, or dropped. */
-const resolvePickerRefs = (
-    refs: readonly { providerID: string; modelID: string }[],
-    providers: readonly CatalogProvider[],
-    hidden: readonly { providerID: string; modelID: string }[],
-): ModelPickerEntry[] => refs.flatMap((ref) => {
-    if (hidden.some((item) => item.providerID === ref.providerID && item.modelID === ref.modelID)) return [];
-    const provider = providers.find((item) => item.providerId === ref.providerID);
-    const model = provider?.models.find((item) => item.modelId === ref.modelID);
-    if (!provider || !model) return [];
-    return [{ providerID: ref.providerID, modelID: ref.modelID, model: { ...model, id: model.modelId } }];
-});
 
 interface ModelSelectorProps {
     providerId: string;
@@ -89,19 +70,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const { t } = useI18n();
     const autoReady = useRoutingStore(selectAutoReady);
     const autoEntry = React.useMemo<ModelPickerEntry | null>(() => (offerAuto && autoReady
-        ? { providerID: AUTO_PROVIDER_ID, modelID: AUTO_MODEL_ID, model: { id: AUTO_MODEL_ID, name: t('chat.modelControls.autoModel') } }
+        ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
     const { isReady, isUnavailable } = useCatalogReadiness('models', directory);
     const catalogProviders = useConfigStore((state) => directory === undefined
         ? state.providers : selectProvidersForDirectory(state, directory));
-    // The picker speaks the provider/model id pair it renders; the catalog calls
-    // them `providerId`/`modelId` and nests a model's id inside its record.
-    const providers = React.useMemo<ModelPickerProvider[]>(() => catalogProviders.map((provider) => ({
-        id: provider.providerId,
-        name: provider.name,
-        models: provider.models.map((model) => ({ ...model, id: model.modelId })),
-    })), [catalogProviders]);
+    const providers: ModelPickerProvider[] = catalogProviders;
     const loadProviders = useConfigStore((state) => state.loadProviders);
     React.useEffect(() => {
         if (directory !== undefined) void loadProviders({ directory });
@@ -112,21 +87,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
     const addRecentModel = useUIStore((state) => state.addRecentModel);
     const providerOrder = useUIStore((state) => state.providerOrder);
-    const favoriteModels = useUIStore((state) => state.favoriteModels);
-    const recentModels = useUIStore((state) => state.recentModels);
-    // Favorites and recents are stored as provider/model refs. They resolve
-    // against the same canonical catalog the picker lists, so a ref whose
-    // provider or model the catalog no longer offers drops out, as does a
-    // hidden one.
-    const favoriteModelsList = React.useMemo(
-        () => resolvePickerRefs(favoriteModels, catalogProviders, hiddenModels),
-        [favoriteModels, catalogProviders, hiddenModels],
-    );
-    const recentModelsList = React.useMemo(
-        () => resolvePickerRefs(recentModels, catalogProviders, hiddenModels)
-            .filter((entry) => !favoriteModelsList.some((favorite) => favorite.providerID === entry.providerID && favorite.modelID === entry.modelID)),
-        [recentModels, catalogProviders, hiddenModels, favoriteModelsList],
-    );
+    const { favoriteModelsList, recentModelsList } = useModelLists(directory);
     const { isMobile: deviceIsMobile } = useDeviceInfo();
     const isActuallyMobile = isMobile || deviceIsMobile;
 
@@ -141,9 +102,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }, []);
 
     const handleSelect = React.useCallback((entry: ModelPickerEntry) => {
-        onChange(entry.providerID, entry.modelID);
+        onChange(entry.providerId, entry.modelId);
         // Auto has its own pinned row; it does not belong in Recent.
-        if (!isAutoModel(entry.providerID, entry.modelID)) addRecentModel(entry.providerID, entry.modelID);
+        if (!isAutoModel(entry.providerId, entry.modelId)) addRecentModel(entry.providerId, entry.modelId);
         closePicker();
     }, [addRecentModel, closePicker, onChange]);
 
@@ -179,8 +140,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             return placeholder || t('settings.agents.modelSelector.notSelected');
         }
         if (isAutoSelected) return t('chat.modelControls.autoModel');
-        const provider = providers.find((entry) => entry.id === providerId);
-        const model = provider?.models?.find((entry) => entry.id === modelId);
+        const provider = providers.find((entry) => entry.providerId === providerId);
+        const model = provider?.models?.find((entry) => entry.modelId === modelId);
         return (typeof model?.name === 'string' && model.name.trim()) || modelId;
     }, [isAutoSelected, modelId, placeholder, providerId, providers, t]);
 
@@ -203,8 +164,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             onSelectNone={handleSelectNone}
             onEscape={closePicker}
             tooltipsEnabled={tooltipsEnabled && (isActuallyMobile ? isMobilePanelOpen : isDropdownOpen)}
-            isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-            onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
+            isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
+            onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
             {...(isActuallyMobile ? {
                 autoFocus: false,
                 maxHeightClassName: 'min-h-0 flex-1',
