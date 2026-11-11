@@ -18,7 +18,10 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 })));
 });
 
-const waitFor = async (check, timeoutMs = 5_000) => {
+// These probes wait on real atomic run-file writes, so a loaded machine can
+// take seconds where a quiet one takes milliseconds. The budget is patience,
+// not a weaker assertion: every check still requires the same end state.
+const waitFor = async (check, timeoutMs = 20_000) => {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await check();
@@ -832,7 +835,7 @@ describe('workflow runtime', () => {
     // Working means in a session: an agent is saved as running just before its
     // session exists. Each save is a real atomic write, so this waits longer
     // than a poll-only assertion: a loaded machine can take seconds to fsync.
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.filter((agent) => agent.state === 'running' && agent.sessionId).length === 2, 20_000);
+    await waitFor(async () => (await act('workflow.status', { runId })).agents.filter((agent) => agent.state === 'running' && agent.sessionId).length === 2);
 
     await runtime.stop({ runId });
     const status = await finished(runId);
