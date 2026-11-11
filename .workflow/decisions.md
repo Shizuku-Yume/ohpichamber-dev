@@ -837,3 +837,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent (conservative option within the 2026-11-10 OMP TUI parity decision; the maintainer confirmed on 2026-11-11 that no instruction was given on the lane 13 ticket)
 - **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Session pins keep one Host stamp; a pin list collapses onto Pinned until the metadata contract carries it
+
+- **Decided:** `sync/session-pins.ts` keeps `setSessionPinList(target, pinned, list)` for its sidebar consumers, but the Host metadata contract stays `openchamber.pinned = { at }`, so a list other than `pinned` files the session under Pinned. Unpin writes the same stamp removal as before.
+- **Instead of:** adding `openchamber.pinned.list` to `packages/agent-contract`, which would change the metadata contract, the patch schema and the Host's validation surface for one sidebar affordance, or editing slice 32's `SessionNodeItem.tsx`/`workFacts.ts`/`SessionProjectCollection.tsx` to drop the list.
+- **Because:** one pin authority already exists (`setSessionPinned` over Host metadata plus the device-local legacy migration), and the pin-list affordance is a sidebar filing choice, not an agent fact. Keeping the exported shape identical to the scaffold leaves every caller compiling unchanged, and the choice can be revisited as a contract change on its own ticket.
+- **Decided by:** agent (conservative option; the alternative touched another package's contract)
+- **Revisit when:** a later milestone extends `SessionMetadataSchema.openchamber.pinned` with a list, or the sidebar drops user-created pin lists.
+- **Effort:** ux-v270-omp-alignment

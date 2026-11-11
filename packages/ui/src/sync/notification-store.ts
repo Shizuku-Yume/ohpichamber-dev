@@ -6,7 +6,10 @@
 // ---------------------------------------------------------------------------
 
 import { create } from "zustand"
-import { markSessionUnreadSeen } from "./session-unread"
+import { clearDesktopSessionNotifications } from "@/lib/desktop"
+import { runtimeFetch } from "@/lib/runtime-fetch"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { isSessionUnread, markSessionUnreadSeen } from "./session-unread"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -154,6 +157,25 @@ export function appendNotification(notification: Notification) {
 export function markSessionViewed(sessionId: string) {
   useNotificationStore.getState().markSessionViewed(sessionId)
   markSessionUnreadSeen(sessionId)
+}
+
+/**
+ * The user opened the sessions surface and looked: every unread session the
+ * client knows of is marked seen, the same way opening each would. The route
+ * only resets the phone's push badge, so one call covers them all.
+ */
+export function markAllSessionsViewed(): void {
+  const unread = [...useGlobalSessionsStore.getState().entityById.values()]
+    .filter(isSessionUnread)
+    .map((session) => session.sessionId)
+  if (unread.length === 0) return
+  for (const sessionId of unread) {
+    useNotificationStore.getState().markSessionViewed(sessionId)
+    markSessionUnreadSeen(sessionId)
+    clearDesktopSessionNotifications(sessionId)
+  }
+  runtimeFetch(`/api/sessions/${encodeURIComponent(unread[0])}/view`, { method: "POST" })
+    .catch(() => { /* the badge resets on the next engagement signal */ })
 }
 
 // ---------------------------------------------------------------------------
