@@ -343,7 +343,7 @@ export const Header: React.FC = () => {
   }, [worktreePath]);
 
   const sessionDirectory = React.useMemo(() => {
-    return normalize((currentSession ? resolveGlobalSessionDirectory(currentSession) : '') || '');
+    return normalize(currentSession?.directory || '');
   }, [currentSession]);
   const isCurrentSessionAiRenaming = useIsSessionAiRenamePending(currentSessionId ?? '', sessionDirectory);
 
@@ -489,7 +489,7 @@ export const Header: React.FC = () => {
       toast.error(t('sessions.sidebar.session.export.nothingToExport'));
       return;
     }
-    const records = await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory }).catch(() => null);
+    const records = await loadSessionRecords({ sessionId: currentSessionId, directory: openDirectory }).catch(() => null);
     if (!records) {
       toast.error(t('sessions.sidebar.session.export.failedLoadHistory'));
       return;
@@ -518,7 +518,7 @@ export const Header: React.FC = () => {
       loadRecords: async () => {
         if (!openDirectory) return null;
         try {
-          return await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory });
+          return await loadSessionRecords({ sessionId: currentSessionId, directory: openDirectory });
         } catch {
           return null;
         }
@@ -532,7 +532,9 @@ export const Header: React.FC = () => {
     </Item>
   )), [guestSessionActionEntries, runCurrentSessionGuestAction]);
 
-  const isCurrentSessionActive = currentSessionStatus?.type === 'busy' || currentSessionStatus?.type === 'retry';
+  const isCurrentSessionActive = currentSessionStatus === 'running'
+    || currentSessionStatus === 'awaiting_approval'
+    || currentSessionStatus === 'awaiting_input';
   const moveCurrentSessionToWorktree = React.useCallback(() => {
     if (!currentSessionId || !sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree) return;
     const sessions = useGlobalSessionsStore.getState().activeSessions;
@@ -663,7 +665,7 @@ export const Header: React.FC = () => {
   }, [currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, selectedSessionDirectory, sessionDirectory, worktreeDirectory]);
   const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
 
-  const openSessionInMiniChat = React.useCallback((sessionId: string, directory: string) => {
+  const openSessionInMiniChat = React.useCallback((sessionId: string, directory: string | undefined) => {
     void invokeDesktop('desktop_open_session_mini_chat_window', {
       sessionId,
       directory,
@@ -942,7 +944,7 @@ export const Header: React.FC = () => {
           </SessionMenuItemHint>
         ) : null}
         {hasElectronDesktopIPC ? (
-          <Item onClick={() => openSessionInMiniChat(session.sessionId, isActive ? currentSessionOpenDirectory : resolveGlobalSessionDirectory(session))}>
+          <Item onClick={() => openSessionInMiniChat(session.sessionId, isActive ? currentSessionOpenDirectory : resolveGlobalSessionDirectory(session) ?? undefined)}>
             <Icon name="picture-in-picture-2" className="me-1 size-4" />{t('sessions.sidebar.session.menu.openInMiniChat')}
           </Item>
         ) : null}

@@ -6,9 +6,13 @@
  * DOCUMENTATION.md next to this file.
  *
  * An entry is one integration and may bundle several components: an MCP
- * server, an OpenCode plugin, and skills can arrive together the way vendors
+ * server, a native OMP plugin, and skills can arrive together the way vendors
  * ship them. Field names follow the official MCP Registry `server.json`
  * where they overlap, so importing from it stays possible.
+ *
+ * OpenCode-only npm plugins are not listed: this app runs OMP native plugins
+ * from `@oh-my-pi/pi-coding-agent`, which does not load them. The `plugin`
+ * component kind stays for native plugin packages that support OMP.
  *
  * Vendor URLs were checked against vendor docs on 2026-10-01 (OPE-282 launch
  * list); the entries added on 2026-10-15 come from integrations.sh and passed
@@ -2426,46 +2430,10 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     components: [{ kind: 'skill', source: 'openai/skills', subpath: 'skills/.curated/pdf', skillDir: 'pdf' }],
   },
 
-  // --- OpenCode plugins (npm, pinned to a major, explicit confirmation) ---
-  {
-    id: 'langfuse-plugin',
-    name: 'Langfuse',
-    publisher: 'Langfuse',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.langfuse-plugin.description',
-    detailsKey: 'integrationsCatalog.entry.langfuse-plugin.details',
-    categories: ['ai'],
-    icon: 'pulse',
-    homepage: 'https://langfuse.com',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@langfuse/opencode-observability-plugin@^1', license: 'MIT' }],
-  },
-  {
-    id: 'langsmith-plugin',
-    name: 'LangSmith',
-    publisher: 'LangChain',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.langsmith-plugin.description',
-    detailsKey: 'integrationsCatalog.entry.langsmith-plugin.details',
-    categories: ['ai'],
-    icon: 'pulse',
-    homepage: 'https://smith.langchain.com',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@langchain/langsmith-opencode@^1', license: 'MIT' }],
-  },
-  {
-    id: 'opencode-search-providers',
-    name: 'Search Providers',
-    publisher: 'OpenChamber',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.opencode-search-providers.description',
-    detailsKey: 'integrationsCatalog.entry.opencode-search-providers.details',
-    categories: ['openchamber', 'ai'],
-    icon: 'search',
-    homepage: 'https://github.com/openchamber/opencode-search-providers',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@openchamber/opencode-search-providers@^1', license: 'MIT' }],
-  },
+  // --- Native OMP plugins (npm, pinned to a major, explicit confirmation) ---
+  // No entry yet: the upstream OpenCode plugins in this catalog position
+  // (Langfuse, LangSmith, Claude Code, Search Providers) load only in
+  // OpenCode's plugin runtime, which OMP does not provide.
 
   // --- OpenChamber extensions (installed from Git like Settings → Integrations) ---
   {

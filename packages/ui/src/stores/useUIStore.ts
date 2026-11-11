@@ -7,6 +7,7 @@ import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey 
 import type { ShortcutCombo } from '@/lib/shortcuts';
 import type { DraftStarterRef } from '@/lib/draftStarters';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
+import type { CustomProviderLogo } from '@/lib/customProviderLogos';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, DEFAULT_UI_FONT_WEIGHT, type MonoFontOption, type UiFontOption, type UiFontWeight } from '@/lib/fontOptions';
 import {
   DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker,
@@ -918,6 +919,8 @@ interface UIStore {
      every surface the zone shows, so neither switching folders nor
      switching surfaces moves the zone's edge; unset opens at the default. */
  contextZoneSizes: Partial<Record<ContextZone, number>>;
+ /** Expanded, a zone leaves the chat this many px as the user resized it there. */
+ contextZoneExpandedChatSizes: Partial<Record<ContextZone, number>>;
  /** Expanded collapsible sections of the in-chat work-status panel, by id. */
  workStatusExpandedSections: Record<string, boolean>;
  /**
@@ -1101,6 +1104,8 @@ interface UIStore {
  providerOrder: string[];
  collapsedModelProviders: string[];
  customProviderIcons: Record<string, CustomProviderIcon>;
+ /** Uploaded logos by provider ID; the server writes them with the image. */
+ customProviderLogos: Record<string, CustomProviderLogo>;
  recentModels: Array<{ providerID: string; modelID: string }>;
  /** `provider/model` last picked in a chat composer; a new session starts on it when nothing is configured. */
  lastSelectedModel: string | undefined;
@@ -1159,6 +1164,8 @@ interface UIStore {
  showTerminalQuickKeysOnDesktop: boolean;
  /** Header session tabs (web/desktop), opt-in. Off keeps the plain session title. */
  sessionTabsEnabled: boolean;
+ /** Separate header tabs for each project root, worktree and space (`lib/sessionTabs.ts`). */
+ sessionTabsPerWorkspace: boolean;
  showOpenCodeUpdateNotifications: boolean;
  agentControlToolEnabled: boolean;
  agentScheduleToolEnabled: boolean;
@@ -1304,6 +1311,7 @@ interface UIStore {
  toggleContextPanelExpanded: (directory: string, zone?: ContextZone) => void;
  /** Width for a side zone, height for the bottom one; shared by its surfaces and folders. */
  setContextZoneSize: (zone: ContextZone, size: number) => void;
+ setContextZoneExpandedChatSize: (zone: ContextZone, size: number) => void;
  /**
   * Places a surface in a zone for every project on this device. Where it is
   * on screen it goes along: the zone it left closes and the new one opens on it.
@@ -1588,6 +1596,7 @@ export const useUIStore = create<UIStore>()(
     contextEditorVisible: true,
     contextEditorTreeWidth: 240,
     contextZoneSizes: {},
+    contextZoneExpandedChatSizes: {},
     workStatusExpandedSections: {},
     messageQueueExpanded: false,
     workStatusScrollTop: 0,
@@ -1699,6 +1708,7 @@ export const useUIStore = create<UIStore>()(
     providerOrder: [],
     collapsedModelProviders: [],
     customProviderIcons: {},
+    customProviderLogos: {},
     recentModels: [],
     lastSelectedModel: undefined,
     recentAgents: [],
@@ -1743,6 +1753,7 @@ export const useUIStore = create<UIStore>()(
 
     showTerminalQuickKeysOnDesktop: false,
     sessionTabsEnabled: false,
+    sessionTabsPerWorkspace: false,
     showOpenCodeUpdateNotifications: true,
     agentControlToolEnabled: true,
     agentScheduleToolEnabled: true,
@@ -2363,6 +2374,10 @@ export const useUIStore = create<UIStore>()(
 
     setContextZoneSize: (zone, size) => {
      set((state) => ({ contextZoneSizes: { ...state.contextZoneSizes, [zone]: clampContextZoneSize(zone, size) } }));
+    },
+
+    setContextZoneExpandedChatSize: (zone, size) => {
+     set((state) => ({ contextZoneExpandedChatSizes: { ...state.contextZoneExpandedChatSizes, [zone]: Math.max(0, Math.round(size)) } }));
     },
 
     moveContextSurfaceToZone: (mode, zone) => {
@@ -3929,6 +3944,7 @@ export const useUIStore = create<UIStore>()(
       contextPanelByDirectory: sanitizeContextPanelByDirectory(persisted.contextPanelByDirectory),
       contextSurfaceZones: zonePlacementSchema.parse(persisted.contextSurfaceZones) as ContextZonePlacement,
       contextZoneSizes: sanitizeContextZoneSizes(persisted.contextZoneSizes),
+      contextZoneExpandedChatSizes: sanitizeContextZoneSizes(persisted.contextZoneExpandedChatSizes),
       contextRailOrder,
       fileTreeSide: persisted.fileTreeSide === 'left' ? 'left' : 'right',
       sidebarFoldedForExpandedZone: persisted.sidebarFoldedForExpandedZone === true,
@@ -3951,6 +3967,7 @@ export const useUIStore = create<UIStore>()(
      contextEditorVisible: state.contextEditorVisible,
      contextEditorTreeWidth: state.contextEditorTreeWidth,
      contextZoneSizes: state.contextZoneSizes,
+     contextZoneExpandedChatSizes: state.contextZoneExpandedChatSizes,
      workStatusExpandedSections: state.workStatusExpandedSections,
      messageQueueExpanded: state.messageQueueExpanded,
      workStatusScrollTop: state.workStatusScrollTop,
@@ -4014,6 +4031,7 @@ export const useUIStore = create<UIStore>()(
      providerOrder: state.providerOrder,
      collapsedModelProviders: state.collapsedModelProviders,
      customProviderIcons: state.customProviderIcons,
+     customProviderLogos: state.customProviderLogos,
      recentModels: state.recentModels,
      lastSelectedModel: state.lastSelectedModel,
      recentAgents: state.recentAgents,
@@ -4032,6 +4050,7 @@ export const useUIStore = create<UIStore>()(
      notificationMode: state.notificationMode,
      showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
      sessionTabsEnabled: state.sessionTabsEnabled,
+     sessionTabsPerWorkspace: state.sessionTabsPerWorkspace,
      notifyOnSubtasks: state.notifyOnSubtasks,
      dockBadgeEnabled: state.dockBadgeEnabled,
      alwaysShowScrollbars: state.alwaysShowScrollbars,

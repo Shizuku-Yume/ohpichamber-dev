@@ -647,7 +647,6 @@ export const DefaultsSettings: React.FC = () => {
           />
         </SettingsInset>
       </SettingsSection>
-
     </>
   );
 };

@@ -9,6 +9,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -49,10 +50,13 @@ import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
 import { useWorkflowsSurfaceShown } from '@/lib/workflows/panel';
 import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
+import { shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
 import { ContextRailTooltipDetails } from './ContextRailUsage';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { ZoneMoveMenuItems } from './ZoneMoveMenuItems';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+import { useChangeRequestTerm } from '@/lib/source-control/providers/registry';
+import { startZoneDragGesture, type ZoneDragGesture } from './zoneDrag';
 
 const RAIL_TOOLTIP_DELAY_MS = 150;
 // Hold the surface-switch modifier for this long before revealing the order
@@ -318,7 +322,34 @@ export const ContextPanelRail: React.FC = () => {
 
   const [isSurfacesDialogOpen, setIsSurfacesDialogOpen] = React.useState(false);
 
+  // An icon dragged out of the rail toward the workspace moves its surface to a
+  // zone instead of reordering the rail (`zoneDrag.ts`).
+  const railRef = React.useRef<HTMLElement | null>(null);
+  const zoneGestureRef = React.useRef<ZoneDragGesture | null>(null);
+  const changeRequestTerm = useChangeRequestTerm(repositoryProvider);
+  const handleDragStart = React.useCallback((event: DragStartEvent) => {
+    const surface = surfaces.find((entry) => entry.id === event.active.id);
+    const railLeft = railRef.current?.getBoundingClientRect().left;
+    if (!surface || railLeft === undefined) return;
+    zoneGestureRef.current?.cancel();
+    zoneGestureRef.current = startZoneDragGesture({
+      mode: surface.mode,
+      label: surface.label ?? t(changeRequestCopy(surface.labelKey, changeRequestTerm)),
+      from: zoneOfMode(useUIStore.getState().contextSurfaceZones, surface.mode),
+    }, (point) => point.x < railLeft - 16);
+  }, [changeRequestTerm, surfaces, t]);
+  const handleDragCancel = React.useCallback(() => {
+    zoneGestureRef.current?.cancel();
+    zoneGestureRef.current = null;
+  }, []);
+  React.useEffect(() => () => zoneGestureRef.current?.cancel(), []);
+
   const handleDragEnd = React.useCallback((event: DragEndEvent) => {
+    const gesture = zoneGestureRef.current;
+    zoneGestureRef.current = null;
+    if (gesture?.finish(directoryKey)) {
+      return;
+    }
     const { active, over } = event;
     if (!over || active.id === over.id) {
       return;
@@ -375,6 +406,7 @@ export const ContextPanelRail: React.FC = () => {
 
   return (
     <nav
+      ref={railRef}
       aria-label={t('contextRail.aria.rail')}
       className="flex h-full w-11 flex-shrink-0 flex-col items-center gap-1 bg-background py-2"
     >
@@ -405,7 +437,7 @@ export const ContextPanelRail: React.FC = () => {
                 isActive={shownModes.has(surface.mode)}
                 showActivityDot={false}
                 label={label}
-                description={t(changeRequestCopy(surface.descriptionKey, repositoryProvider))}
+                description={t(changeRequestCopy(surface.descriptionKey, changeRequestTerm))}
                 badgeCount={badgeCount}
                 badgeAriaLabel={badgeCount !== null
                   ? t(

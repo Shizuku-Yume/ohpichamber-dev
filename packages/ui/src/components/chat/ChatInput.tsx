@@ -89,6 +89,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { ReferencePickerDialog } from '@/components/references/ReferencePickerDialog';
 import { useAttachReferences } from '@/components/references/useAttachReferences';
 import { useRepositoryReferenceProvider } from '@/components/references/referenceSources';
+import { useSourceControlDescriptorOf } from '@/lib/source-control/providers/registry';
 import {
     composerReferenceKey,
     toContextReference,
@@ -765,8 +766,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             await startReviewFlow({
                 originalSessionID: currentSessionId,
                 directory,
-                providerId: execution.providerId,
-                modelId: execution.modelId,
+                providerId: execution.providerID,
+                modelId: execution.modelID,
                 variant: execution.variant || undefined,
                 generateHandoff: execution.generateHandoff,
                 returnAfterHandoffRequest: execution.generateHandoff,
@@ -1716,6 +1717,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, []);
     const referencePickerDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
     const repositoryProvider = useRepositoryReferenceProvider(referencePickerDirectory);
+    const descriptorOf = useSourceControlDescriptorOf();
     const addLinkedReferences = React.useCallback((references: ComposerReference[]) => {
         setLinkedReferences((current) => withComposerReferences(current, references));
     }, []);
@@ -3811,8 +3813,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 url={reference.url}
                                 author={reference.author}
                                 branches={reference.head && reference.base ? { head: reference.head, base: reference.base } : undefined}
-                                openInBrowserLabel={t(changeRequestCopy('chat.chatInput.linked.pr.openInBrowserAria', reference.provider))}
-                                removeLabel={t(changeRequestCopy('chat.chatInput.linked.pr.removeAria', reference.provider))}
+                                openInBrowserLabel={t(changeRequestCopy('chat.chatInput.linked.pr.openInBrowserAria', descriptorOf(reference.provider).terminology.changeRequest))}
+                                removeLabel={t(changeRequestCopy('chat.chatInput.linked.pr.removeAria', descriptorOf(reference.provider).terminology.changeRequest))}
                                 onReopenPicker={() => setReferencePicker({ source: 'repository', kind: 'pull' })}
                                 onRemove={remove}
                             />

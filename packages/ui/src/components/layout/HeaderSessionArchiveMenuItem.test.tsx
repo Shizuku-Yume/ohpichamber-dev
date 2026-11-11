@@ -104,7 +104,9 @@ test('archive hint follows rebindings and appears only for the current active se
   expect(button.textContent).toBe('Restore');
 });
 
-for (const archived of [undefined, 0]) {
+// A canonical archive has a timestamp; `0` is one, and the case below pins
+// that it still counts as archived.
+for (const archived of [undefined]) {
   test(`active sessions with archive timestamp ${archived} keep archive confirmation`, async () => {
     useGlobalSessionsStore.getState().upsertSession(session('target', archived));
     const button = await renderMenuItem();

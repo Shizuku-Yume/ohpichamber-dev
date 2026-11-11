@@ -2,10 +2,16 @@ import React, { act } from 'react';
 import { expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
-test.each([
+// A row is one case of the matrix, named so the callback destructures it
+// instead of each element arriving as `any`.
+type ConflictCase = ['merge' | 'cherry-pick', 'current' | 'new', boolean];
+
+const CONFLICT_CASES: readonly ConflictCase[] = [
   ['merge', 'current', false], ['merge', 'current', true], ['merge', 'new', false], ['merge', 'new', true],
   ['cherry-pick', 'current', false], ['cherry-pick', 'current', true], ['cherry-pick', 'new', false], ['cherry-pick', 'new', true],
-] as const)('%s %s destination rejects a runtime switch (return=%s) during prompt read', async (surface, destination, returnToA) => {
+];
+
+test.each(CONFLICT_CASES)('%s %s destination rejects a runtime switch (return=%s) during prompt read', async ([surface, destination, returnToA]) => {
   const dom = new Window({ url: 'http://localhost' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [name, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, location: dom.location, localStorage: dom.localStorage, Element: dom.Element, HTMLElement: dom.HTMLElement, Node: dom.Node, Event: dom.Event, CustomEvent: dom.CustomEvent, KeyboardEvent: dom.KeyboardEvent, MouseEvent: dom.MouseEvent, MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {

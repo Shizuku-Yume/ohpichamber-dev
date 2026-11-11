@@ -72,6 +72,7 @@ import {
   type SettingsPageMeta,
 } from '@/lib/settings/metadata';
 import { buildSettingsSearchResults, type SettingsSearchResult } from '@/lib/settings/search';
+import { settingsPageTitleKey } from '@/lib/settings/pageTitle';
 import { acknowledgeNewSettingPage, getNewSettingPages } from '@/lib/settings/newSettings';
 import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS, MOBILE_HEADER_TITLE_CLASS } from '@/components/ui/mobileHeader';
 
@@ -376,7 +377,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       t,
       getPageTitle,
     });
-  }, [getPageTitle, searchAvailabilityCtx, settingsSearchQuery, sourceControlProviders, t, trackers, visiblePageSlugs]);
+  }, [getPageTitle, searchAvailabilityCtx, settingsSearchQuery, t, visiblePageSlugs]);
 
   const prepareSettingsSearchTarget = React.useCallback((result: SettingsSearchResult): string => {
     if (result.id.startsWith('agents.')) {
@@ -738,7 +739,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     : t('settings.view.actions.closeSettings');
 
   const pushMobileSplitDetailHistory = React.useCallback((slug: SettingsPageSlug) => {
-    if (runtimeCtx.isVSCode || registerBackHandler) {
+    if (registerBackHandler) {
       return;
     }
 
@@ -755,7 +756,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       '',
       window.location.href,
     );
-  }, [registerBackHandler, runtimeCtx.isVSCode]);
+  }, [registerBackHandler]);
 
   const handleMobilePageSidebarItemSelect = React.useCallback(() => {
     shouldFocusMobilePageContentRef.current = true;
@@ -812,7 +813,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   }, [handleBack, isMobile, mobileStage, registerBackHandler]);
 
   React.useEffect(() => {
-    if (!isMobile || runtimeCtx.isVSCode || registerBackHandler) {
+    if (!isMobile || registerBackHandler) {
       return;
     }
 
@@ -834,7 +835,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [isMobile, registerBackHandler, runtimeCtx.isVSCode, settingsSlug]);
+  }, [isMobile, registerBackHandler, settingsSlug]);
 
   const renderSettingsNav = () => {
     const hasSearchQuery = settingsSearchQuery.trim().length > 0;
