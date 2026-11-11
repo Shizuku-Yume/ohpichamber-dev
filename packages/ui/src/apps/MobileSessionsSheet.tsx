@@ -50,7 +50,7 @@ import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/short
 import { seedGlobalSessionStatusFromHost } from '@/sync/host-session-status-seed';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { markAllSessionsViewed } from '@/sync/notification-store';
-import { isSessionUnread, markSessionUnreadSeen } from '@/sync/session-unread';
+import { isSessionUnread } from '@/sync/session-unread';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
 

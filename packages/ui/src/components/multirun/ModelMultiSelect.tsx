@@ -11,7 +11,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { isRightToLeft, useI18n } from '@/lib/i18n';
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
+import { listModelVariantIds } from '@/lib/modelVariants';
 import type { MultiRunModelSelection } from '@/types/multirun';
 
 /** Chip height class - shared between chips and add button */
