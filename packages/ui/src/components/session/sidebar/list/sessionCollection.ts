@@ -296,8 +296,6 @@ export const useSessionProjectCollection = ({
   const childrenMap = React.useMemo(() => {
     const children = new Map(ordering.childrenMap);
     for (const session of archivedSessions) {
-      // SAFETY: OpenCode's session records carry parentID for sub-session
-      // hierarchy; the SDK's base Session type does not currently expose it.
       const parentID = session.parentSessionId;
       if (!parentID) continue;
       const siblings = children.get(parentID) ?? [];

@@ -216,7 +216,7 @@ describe('sidebar project sections keep references across unrelated updates', ()
   });
 
   test('a same-ID descendant update rebuilds its parent project tree', async () => {
-    const child = { ...b1, parentID: 'a1' };
+    const child = { ...b1, parentSessionId: 'a1', rootSessionId: 'a1' };
     const beforeSessions = new Map([['a', [a1, a2]], ['b', [child, b2]]]);
     const owners = ownersFor(defaultScopes);
     await render({ ranks: new Map(), owners, sessions: beforeSessions });
@@ -237,7 +237,7 @@ describe('sidebar project sections keep references across unrelated updates', ()
   });
 
   test('a cross-project sibling rank change rebuilds the parent tree in lifecycle order', async () => {
-    const childOne = { ...b1, parentID: 'a1' };
+    const childOne = { ...b1, parentSessionId: 'a1', rootSessionId: 'a1' };
     const childTwo = { ...b2, parentSessionId: 'a1', rootSessionId: 'a1' };
     const sessions = new Map([['a', [a1, a2]], ['b', [childOne, childTwo]]]);
     const owners = ownersFor(defaultScopes);

@@ -128,9 +128,9 @@ describe('sidebar works', () => {
     const anchors = buildWorktreeArchiveAnchors({
       groupWorks: index.groupWorks,
       archivedSessions: [
-        session('archived', { workspaceId: 'workspace-wt' }),
-        session('old', { workspaceId: 'workspace-empty-wt' }),
-        session('elsewhere', { workspaceId: 'workspace-elsewhere' }),
+        session('archived', { displayPath: '/wt' }),
+        session('old', { displayPath: '/empty-wt' }),
+        session('elsewhere', { displayPath: '/elsewhere' }),
       ],
       orderedSessions: order,
       orderValueOf: (entry) => values.get(entry.sessionId) ?? 0,
