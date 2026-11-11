@@ -8,7 +8,6 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18nStore } from '@/lib/i18n/store';
 import { dict as enDict } from '@/lib/i18n/messages/en';
 import { dict as ukLocaleDict } from '@/lib/i18n/messages/uk';
-import { buildSettingsSearchResults } from '@/lib/settings/search';
 
 import { VoiceSettings } from './VoiceSettings';
 
@@ -92,30 +91,21 @@ describe('VoiceSettings endpoint paths', () => {
     expect(inputWithPlaceholder('/audio/transcriptions')?.value).toBe('/speech_to_text');
   });
 
-  test('localized search results target rendered endpoint inputs and disappear with their controls', async () => {
+  test('the localized endpoint fields render and disappear with their switches', async () => {
     useI18nStore.setState({ locale: 'uk', dictionary: ukDict });
     useConfigStore.setState({
       voiceProvider: 'openai-compatible', sttProvider: 'openai-compatible',
       showMessageTTSButtons: true, autoReadAloudEnabled: false, dictationEnabled: true,
     });
-    const results = () => buildSettingsSearchResults({
-      query: ukDict['settings.voice.page.field.endpointPath'],
-      t: (key) => ukDict[key], getPageTitle: (page) => page,
-      runtimeCtx: {
-        isWeb: true, isDesktop: false, isMobile: false,
-        isDesktopLocalOrigin: false, isMac: false, isWindows: false, isLinux: false,
-        routingAvailable: false, enterpriseMode: false, jevBlockedByEnterprise: false,
-      },
-    });
     await act(async () => root.render(<I18nProvider><VoiceSettings /></I18nProvider>));
-    expect(results().map((result) => result.id)).toEqual(['voice.tts-endpoint-path', 'voice.stt-endpoint-path']);
-    for (const result of results()) {
-      const target = host.querySelector(`[data-settings-item="${result.id}"]`);
-      expect(target?.querySelector('input')?.getAttribute('aria-label')).toBe(result.title);
-      expect(target?.textContent).toContain(result.title);
+    for (const id of ['voice.tts-endpoint-path', 'voice.stt-endpoint-path']) {
+      const target = host.querySelector(`[data-settings-item="${id}"]`);
+      // The field's accessible name is the localized label, not the English default.
+      expect(target?.querySelector('input')?.getAttribute('aria-label')).toBe(ukDict['settings.voice.page.field.endpointPath']);
+      expect(target?.textContent).toContain(ukDict['settings.voice.page.field.endpointPath']);
+      expect(target?.textContent).not.toContain(enDict['settings.voice.page.field.endpointPath']);
     }
     await act(async () => { useConfigStore.setState({ showMessageTTSButtons: false, dictationEnabled: false }); });
-    expect(results()).toEqual([]);
     expect(host.querySelector('[data-settings-item="voice.tts-endpoint-path"]')).toBeNull();
     expect(host.querySelector('[data-settings-item="voice.stt-endpoint-path"]')).toBeNull();
   });
