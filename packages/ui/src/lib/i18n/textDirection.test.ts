@@ -25,7 +25,9 @@ describe('formatMessage isolates inserted values when directions mix', () => {
   const FSI = '⁨';
   const PDI = '⁩';
   const en = enDict;
-  const ar = arDict;
+  // A locale supplies only its translated keys; the runtime dictionary is the
+  // locale merged over `en`, which is where missing keys fall back.
+  const ar = { ...enDict, ...arDict };
 
   test('a right-to-left value in a left-to-right sentence', () => {
     expect(formatMessage(en, 'chat.folderMissing.text', { name: 'پوشه (2)' })).toBe(`Folder ${FSI}پوشه (2)${PDI} no longer exists`);

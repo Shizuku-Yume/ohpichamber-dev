@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { getSafeStorage } from '@/stores/utils/safeStorage';
+import {
+  resolveWorkStatusSectionOrder,
+  sanitizeWorkStatusSectionOrder,
+} from '@/components/chat/work-status/sections';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
 import {
   AUTO_SAVE_KEYS,
@@ -61,8 +66,11 @@ describe('settings registry', () => {
         if (!parsed) throw new Error('Expected valid settings');
         applySettingsToStores(parsed);
         expect(useConfigStore.getState().dictationAutoSend).toBe(enabled);
-        expect(z.object({ dictationAutoSend: z.boolean() }).parse({ dictationAutoSend: useConfigStore.getState().dictationAutoSend }))
-          .toEqual({ dictationAutoSend: enabled });
+        // The registry mirrors the field; the store's own setter is what persists
+        // it, so the preference survives the next launch.
+        useConfigStore.getState().setDictationAutoSend(enabled);
+        expect(getSafeStorage().getItem('dictationAutoSend')).toBe(String(enabled));
+        expect(useConfigStore.getState().dictationAutoSend).toBe(enabled);
       }
       applySettingsToStores({ dictationAutoSend: true });
       applySettingsToStores({});
@@ -208,6 +216,13 @@ describe('settings registry', () => {
       const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'];
       useUIStore.getState().setWorkStatusSectionOrder(dragged);
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(dragged);
+
+      // Obsolete ids are dropped and sections the build gained are appended.
+      expect(sanitizeWorkStatusSectionOrder(['session', 'legacy-id', 'repository']))
+        .toEqual(resolveWorkStatusSectionOrder(['session', 'repository'], []));
+      // An order the user never arranged follows the default's Context sources move.
+      expect(sanitizeWorkStatusSectionOrder(['session', 'repository', 'usage', 'subagents', 'mcp', 'pinned', 'contextSources'], false))
+        .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'mcp', 'pinned', 'telemetry', 'workflows']);
     } finally {
       useUIStore.setState(original, true);
     }

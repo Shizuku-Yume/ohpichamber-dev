@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -11,7 +11,14 @@ const session = (sessionId: string, workspaceId: string): Session => ({
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
-afterEach(() => resetWorkspaceDirectories());
+const initialGlobalSessions = useGlobalSessionsStore.getState();
+beforeEach(() => {
+  useGlobalSessionsStore.setState(initialGlobalSessions, true);
+});
+afterEach(() => {
+  useGlobalSessionsStore.setState(initialGlobalSessions, true);
+  resetWorkspaceDirectories();
+});
 
 describe('withSessionsNowInWorktree', () => {
   test('keeps the first attempt\'s sessions and adds the ones started in the worktree since, once each', () => {
