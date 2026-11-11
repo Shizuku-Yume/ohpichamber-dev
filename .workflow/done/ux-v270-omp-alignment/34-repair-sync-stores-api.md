@@ -121,3 +121,9 @@ authority stay).
   suites are written for; `bunx vitest run` on the same paths cannot load
   `bun:test` and no root Vitest config exists on this tree);
   `bunx oxlint` on the changed files → exit 0, no findings.
+- **Out of slice, pre-existing:** `hooks/useTraySync.test.tsx` fails on
+  `markSessionViewed` → `markSessionUnreadSeen` → `upsertSession`: the test's
+  session fixture carries no `metadataRevision`/`epoch`, so
+  `compareSessionRevision` throws and the `/view` POST has no base URL. It
+  fails identically at scaffold `f3afaa8d6` and at `0834b96f0` before the
+  notification restore, so it is not caused here; slice 32/35 owns the hook.
