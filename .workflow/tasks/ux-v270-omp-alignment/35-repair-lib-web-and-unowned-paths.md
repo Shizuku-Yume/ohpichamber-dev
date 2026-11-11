@@ -19,14 +19,14 @@
 
 **Check before:** `bun check --all` in this worktree at `f3afaa8d6` reported 92 errors in slice 35 files (`packages/ui/src/{lib,hooks,types}/**`, `packages/web/src/**`): ui lib 37, web client 40, hooks 15. `bun scripts/upstream-drift.mjs --check --slice 35` reported 553 unexplained paths in the slice (none under `packages/ui/src/{lib,hooks,types}` or `packages/web/src`).
 
-**Check after:** on the scaffold-merged tree (`a86ca9f10`, scaffold `f57e72c82`):
-- `bun check --all` → 0 errors in slice 35 files (692 errors remain elsewhere in the repo, all outside this slice's paths).
-- `bun scripts/upstream-drift.mjs --check --slice 35` → exit 0: no conflict markers, no unexplained path in slice 35, no contradicting ledger row. The whole-repo variant still reports 94 unexplained paths outside the slice, and no unexplained path under this slice's code paths.
+**Check after:** on the final scaffold-merged tree (`53d5f82bf`, scaffold `c6dc82c15`):
+- `bun check --all` → 0 errors in slice 35 files (8 errors remain in 2 files elsewhere: `components/session/sidebar/projects/useSessionSidebarSections.ts` and `components/session/sidebar/sessions/collapsedActivityIndicator.test.ts`, both slice 32/33 territory).
+- `bun scripts/upstream-drift.mjs --check --slice 35` → exit 0: no conflict markers, no unexplained path in slice 35, no contradicting ledger row. The whole-repo variant reports 32 unexplained paths outside the slice (docs locales and section/components surfaces the other lanes' merges changed), none under this slice's code paths.
 - `bun --cwd packages/sdk test` → 32/32 files pass; `VITEST_MAX_WORKERS=2 bun --cwd packages/electron test` → 71/71 files pass; `bun run docs:validate` → 696 pages, 58 sidebar links.
 - `VITEST_MAX_WORKERS=2 bun test` in `packages/ui` over the eleven touched unit-test files (`modelRefs`, `sessionTabScope`, `sidebarSessionRows`, `worktrees/worktreeUse`, `i18n/textDirection`, `guests/host-bridge`, `guests/files`, `search/subsequenceSearch`, `lib/settings/registry`, `lib/runtime-cleanup`, `hooks/useRouter`) → 101 pass, 0 fail.
-- `bunx oxlint` → exit 0 on every file created or substantially rewritten.
+- `bunx oxlint` → exit 0 on every file created or substantially rewritten, including the final merge resolutions.
 
-**Commits:** `a5f056844` (callers ported onto the fork contracts), `a86ca9f10` (scaffold merged into the branch; conflicts resolved in `.workflow/upstream-deltas.tsv` by keeping both sides' rows and in `packages/ui/src/types/bun-test.d.ts` by taking the scaffold's fuller matcher set).
+**Commits:** `a5f056844` (callers ported onto the fork contracts), `a86ca9f10` and `53d5f82bf` (scaffold merged into the branch; the ledger keeps both sides' rows collapsed to one per path, `modelRefs.ts` takes the optional-chained lookup, and `repository-references.ts` imports the review-state result type from its `source-control/types` owner), `69fd9b34e` (review-round test restorations and the session-tab scope fix), `19ab4c55f` (docs and evidence), plus the archive commit.
 
 **Ports, each deleting what it replaced:**
 - `lib/modelRefs.ts`, `lib/sessionTabScope.ts`, `lib/sessionWorkflowMetadata.ts` and their tests now read `@openchamber/agent-contract` `Session`/`Model`/`Provider` (`sessionId`, `workspaceId`, `updatedAt`, `archivedAt`, `parentSessionId`, `displayPath`) instead of the retired `@/lib/opencode/model`.
@@ -39,9 +39,12 @@
 - Duplicate declarations removed: `packages/web/src/api/repository-references.ts` review block, `source-control.ts` second `authSetSshUrl`, `trackers-schemas.ts` repeated type imports (with `TrackerConnectInfo` now read from `lib/trackers/types`), `trackers.ts` repeated `connectResultOf`, `runtimeConfig.ts` second `reportWindowRuntimeKey`, and `worktreeManager.test.ts`/`worktreeRemovalFlow.test.ts` duplicate mock/import lines.
 - Deleted upstream-only files with no fork consumer: `hooks/useComposerConfigDirectory.ts`, `hooks/useRetryModelPick.ts`, `lib/watchedFiles.ts` + test. `hooks/useRouter.test.tsx` and `lib/runtime-cleanup.test.ts` were initially deleted on the false premise that their modules were gone; both modules are live (`apps/MobileApp.tsx` calls `useRouter`, `lib/chatDirectories.ts` calls `captureRuntimeCleanup`), so both tests were restored on the fork contracts. Only the VS Code navigation block and the `@/lib/opencode/client` parts were dropped with them.
 
-**Behaviours dropped with the reported fixes** (the fork store contract has no field for them; stores were not edited):
-- `preloadProviderLogo` no longer skips an uploaded logo or an extension's logo before preloading (no `customProviderLogos` on `UIStore`); a stored logo still draws from the server in `ProviderLogo`.
-- `closeSessionTabAndActivateNeighbour` opens a plain draft instead of a draft in the closed tab's workspace (no `sessionTabsPerWorkspace`).
+**Behaviours restored once the scaffold returned the fields:** the advanced scaffold (`c6dc82c15`) puts `customProviderLogos`, `sessionTabsPerWorkspace` and `contextZoneExpandedChatSizes` back on `useUIStore`'s persisted slice, so the ports were completed rather than left dropped:
+- `hooks/useProviderLogo.ts` `preloadProviderLogo` skips an uploaded logo and an extension's logo before preloading again, through `providerLogoUploadSupported()` and `guestProviderLogoOf`.
+- `lib/sessionTabs.ts` `closeSessionTabAndActivateNeighbour` opens the new draft in the closed tab's workspace when tabs are per workspace and the directory is not a chats root.
+- `lib/settings/registry.ts` carries the `sessionTabsPerWorkspace`, `customProviderLogos` and `contextZoneExpandedChatSizes` rows again, so the store's persisted keys and the registry agree.
+
+**Behaviours that stay dropped** (the fork has no field for them):
 - The settings-registry test does not read `ConfigStore.persist.getOptions().partialize` (the fork's config store exposes only `hasHydrated`/`onFinishHydration`/`rehydrate`) and there is no `workStatusSectionOrderExplicit` flag. The test instead asserts that `setDictationAutoSend` writes the preference to device storage, and that `sanitizeWorkStatusSectionOrder`/`resolveWorkStatusSectionOrder` drop obsolete ids, append gained sections, and still move Context sources out of an unarranged default.
 
 **Review round 1 fixes (same slice, ledger and docs left to t35-drift):**

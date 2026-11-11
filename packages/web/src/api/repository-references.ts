@@ -20,6 +20,7 @@ import type {
   RepositoryReferencesAcrossResult,
   SourceControlReadContext,
 } from '@openchamber/ui/lib/api/types';
+import type { ChangeRequestReviewStateResult } from '@openchamber/ui/lib/source-control/types';
 import type { RuntimeFetchOptions } from '@openchamber/ui/lib/runtime-fetch';
 import { z } from 'zod';
 import { providerPath } from './source-control-providers';
