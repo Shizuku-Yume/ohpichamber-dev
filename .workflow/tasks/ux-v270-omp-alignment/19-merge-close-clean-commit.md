@@ -9,9 +9,21 @@
 - **Base commit:** c4e6dc67cfc81276c93091d38de244ce47fb9a83
 - **Status:** active
 
-- [ ] Lanes 12-18 and repair slices 30-35 are already on the scaffold. Fix only what remains when they are combined: `bun check --all` must report 0 errors repo-wide, and lint and the full test suite must pass. Name every leftover you fix in `## Progress` with the slice it belonged to.
+- [x] Lanes 12-18 and repair slices 30-35 are already on the scaffold. Fix only what remains when they are combined: `bun check --all` must report 0 errors repo-wide, and lint and the full test suite must pass. Name every leftover you fix in `## Progress` with the slice it belonged to.
 - [ ] Rebuild `ux-v270-omp-alignment/integration` as `main` plus one merge commit with parents `main` and `bc50ba56a`, whose tree equals the resolved scaffold tip. The scaffold branch is not merged anywhere.
-- [ ] Add `scripts/upstream-drift.mjs --check` and the marker check to `bun run check`.
-- [ ] Run `bun run dead-code`; findings introduced by the merge are fixed, and inherited ones are left as they were.
+- [x] Add `scripts/upstream-drift.mjs --check` and the marker check to `bun run check`.
+- [x] Run `bun run dead-code`; findings introduced by the merge are fixed, and inherited ones are left as they were.
 - [ ] Real path: build and launch Web and packaged Electron, open every Settings page without errors, and send a chat that completes through the real provider.
 - [ ] Record the merge, drift counts before and after, and the real-path result in `development.md`.
+
+## Progress
+
+**Combined-tree fixes, by slice.** Slice 30 (UI library): `lib/settings/search.ts` gained the six chat rows whose anchors exist (`chat.diff-layout`, `chat.mermaid-rendering`, `chat.selection-approval-text`, `chat.session-goal-checker`, `chat.session-goal-max-turns`, `chat.user-message-rendering`), dropped the four orphans (`chat.render-mode`, `chat.streaming`, `chat.tools-and-files`, `chat.persist-drafts`) and filed `chat.dotfiles` under General; `lib/gitApi.ts` regained the fifteen `unsupportedByRuntime` guards and `getCommitFileDiff`'s `previousPath` argument. Slice 31 (hooks): `useGlobalSessionsPolling.ts` keeps `missedWhileHidden` and `scheduleNext`; the sidebar hooks declare `SidebarSessionProjection`, `UseSessionProjectCollectionResult`, `MatchedZoneSessions` and `UseWorktreeWorkResult` so the merged zod shapes stop leaking into the portability check. Slice 32 (sync/stores): `global-session-status.ts` regains `subscribeSessionStatusTransitions`, emitted synchronously per event before publication; `session-unread.ts` gains `isUnreadTurn`; the tray badge rolls a subtask's unread turn up to its parent. Slice 33 (chat/layout/view): `OpenInAppButton` marks its menu `data-work-status-popup` so the work panel ignores the pick. Slice 34 (settings pages): `ClassificationProvidersPage` opens the canonical `opencode-zen`/`vercel-ai-gateway` ids. Lane 16: the merged OAuth harness gained `memo`, `createContext`, `useContext`, `useDebugValue` and a `busy-dots` stub; the source-board launch mock gained the dropdown subcomponents `action-toolbar` imports. Lane 17: `multirun/autoFusion.ts` keeps the subagent wait, the active-goal check and the transition subscription, on the canonical `parentSessionId` and `mode` record; `multirun/laneStatus.ts` regains `hasRunningGoal`. Test contracts: canonical `ModelVariantSchema` fixtures, canonical `Session` records in the tray fixture, the effective `Save Changes` label, `/api/session-folders` as bootstrap, and an awaited guest `ready()`.
+
+**Environment.** A stray `/tmp/.git-quarantine-v270-19` (a git-init-shaped folder in `/tmp`) made every Web git test fail with `fatal: detected dubious ownership`; removed and preserved in the artifacts directory. `code-in.test.js` made its socket directory under `/tmp` while the repository lived under `TMPDIR`, so the rename crossed devices; the socket now shares the repository's device.
+
+**Drift.** 33 unexplained paths of 4,373 differing at the scaffold start became 0 of 4,387; the six authored `fork-differs` paths cite `2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities` in `.workflow/upstream-deltas.tsv`.
+
+**Parents.** `main` had two workflow-only commits past the scaffold's merge base, so `e04b3dfb7` was merged into the scaffold before landing.
+
+**Checks.** `bun check --all` exit 0; `bun run lint` exit 0 (seven workspaces); `bun scripts/upstream-drift.mjs --check` exit 0; `VITEST_MAX_WORKERS=2 bun run test` see `## Verification`; `bun run dead-code` exit 1 on the inherited inventory.
