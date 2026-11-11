@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 let fetchImpl: (input: string, init?: RequestInit) => Promise<Response>;
+const runtimeFetchModule = await import('@/lib/runtime-fetch');
 mock.module('@/lib/runtime-fetch', () => ({
+  ...runtimeFetchModule,
   runtimeFetch: (input: string, init?: RequestInit) => fetchImpl(input, init),
 }));
 mock.module('@/sync/sync-refs', () => ({ getAllSyncSessionMap: () => new Map() }));
