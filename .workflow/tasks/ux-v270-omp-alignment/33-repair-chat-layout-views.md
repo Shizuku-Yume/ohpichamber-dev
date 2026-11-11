@@ -33,7 +33,9 @@
 
 ## Blocked
 
-The repair cannot complete inside slice 33's paths, and the stop came before any slice-33 file was changed.
+Forced run stop mid-repair; the repair is incomplete. 173 slice-33 type errors remain in 47 files, 56 slice-33 drift paths are still `unexplained`, slice tests are unrun to green, and nothing was landed. The work done was measurement only: no slice-33 production file was changed, and the probe edits I had staged in cross-slice files were reverted.
+
+The blocking shape of the remaining work:
 
 - `sync/selection-store.ts` dropped the fork's `ROOT_SELECTION_AGENT` and `save/getAgentModelReasoningEffortForSession` APIs (lane 15 took upstream's blob). Slice 34 owns `src/sync`; four slice-33 files call them.
 - `components/model-picker/ModelPickerList.tsx` carries upstream's `providerID/modelID` + `Provider.id` contract (lane 14 path, outside slice 33) while slice-33 consumers use the fork's `providerId/modelId`; 37 of the 173 errors are this one mismatch.
