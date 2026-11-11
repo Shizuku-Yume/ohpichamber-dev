@@ -2,6 +2,7 @@ import { getChatsRootFromDirectory } from '@/lib/chatDirectories';
 import type { SessionGroup, SessionGroupFolderScope } from '../types';
 import { normalizePath } from '../utils';
 import type { Session } from '@openchamber/agent-contract';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { DirectoryOwner } from './sessionOwnership';
 
 export const getSessionFolderIdentityKey = (scopeKey: string, folderId: string): string => (

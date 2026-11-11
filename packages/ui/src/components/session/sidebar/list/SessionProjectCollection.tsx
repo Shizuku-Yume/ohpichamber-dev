@@ -204,7 +204,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     return byProject;
   }, [spaceList]);
   const ownership = React.useMemo(
-    () => createSessionOwnershipIndex(collection.sessions, topology.projects, topology.availableWorktreesByProject, topology.isVSCode, collection.archivedSessions, authoritativeProjects, spaceList),
+    () => createSessionOwnershipIndex(collection.sessions, topology.projects, topology.availableWorktreesByProject, collection.archivedSessions, spaceList),
     [authoritativeProjects, collection.archivedSessions, collection.sessions, spaceList, topology.availableWorktreesByProject, topology.isVSCode, topology.projects],
   );
   const [visibleSessionCountByGroup, setVisibleSessionCountByGroup] = React.useState<Map<string, number>>(new Map());
@@ -1356,7 +1356,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     <SessionPrefetchProvider
       sortedSessions={collection.orderedSessions}
       workSessions={workSessions}
-      prefetchSession={(target) => prefetchSession(target)}
+      prefetchSession={prefetchSession}
     >
     <SessionRowOrderProvider
       entries={sidebarRowModel.selectionEntries}

@@ -47,7 +47,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
   // out of reach would open a new chat in an empty folder, or fail.
   // Isolated spaces are unreleased (`ISOLATED_SPACES_RELEASED = false`), so a
   // space's work row offers the same actions as a worktree's.
-  const spaceTakesNoNewSession = space?.state === 'failed' || space?.state === 'missing';
+  const spaceTakesNoNewSession = space?.state === 'stale' || space?.state === 'unknown';
   const worktreeRemoving = useWorktreeRemoving(worktree ? worktree.path : null);
   const sessions = React.useMemo(() => collectWorkSessions(group.sessions), [group.sessions]);
   const project = useProjectsStore(React.useCallback(
@@ -225,7 +225,6 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     open,
     newChat,
     saveTitle,
-    setPin,
     pinList,
     finish,
     toggleWork,
