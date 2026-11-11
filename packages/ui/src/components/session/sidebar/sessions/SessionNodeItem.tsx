@@ -28,7 +28,7 @@ import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { isSessionPinned } from '@/lib/sessionPins';
-import { setSessionPinList } from '@/sync/session-pins';
+import { toggleSessionPin } from '@/sync/session-pins';
 import { PinToMenu } from '../sections/PinToMenu';
 import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
 import { Icon } from "@/components/icon/Icon";
@@ -1249,14 +1249,14 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         current={isPinnedSession ? DEFAULT_PIN_LIST : null}
         triggerClassName="[&>svg]:me-1"
         itemClassName="[&>svg]:me-1"
-        onPin={(list) => {
+        onPin={() => {
           if (!sessionDirectory) return;
-          setSessionPinList({ directory: sessionDirectory, sessionId: session.sessionId }, true, list)
+          toggleSessionPin({ directory: sessionDirectory, sessionId: session.sessionId })
             .catch(() => toast.error(t('sessions.sidebar.session.pin.pinFailed')));
         }}
         onUnpin={() => {
           if (!sessionDirectory) return;
-          setSessionPinList({ directory: sessionDirectory, sessionId: session.sessionId }, false, null)
+          toggleSessionPin({ directory: sessionDirectory, sessionId: session.sessionId })
             .catch(() => toast.error(t('sessions.sidebar.session.pin.unpinFailed')));
         }}
       />

@@ -215,7 +215,9 @@ mock.module('@/contexts/runtimeAPIRegistry', () => ({
   getRegisteredRuntimeAPIs: mock(() => null),
 }));
 
+const runtimeFetchModule = await import('@/lib/runtime-fetch');
 mock.module('@/lib/runtime-fetch', () => ({
+  ...runtimeFetchModule,
   runtimeFetch: mock(async () => new Response(JSON.stringify({}), {
     headers: { 'Content-Type': 'application/json' },
   })),

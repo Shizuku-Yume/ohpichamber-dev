@@ -24,7 +24,6 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { themeSchema, themeListSchema, type ThemeDefinition } from '@/lib/theme/definition';
 import { ThemeImportError } from '@/lib/theme/importErrors';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import {
   adoptThemePreferencesForRuntime,
   resolveThemePreferencesForRuntime,
@@ -245,12 +244,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   useEffect(() => {
     void reloadCustomThemes();
   }, [reloadCustomThemes]);
-
-  // A reconnect may have missed an edit to the server's themes folder, so the
-  // themes are read again once the event stream is back.
-  useEffect(() => subscribeOpenchamberEvents((event) => {
-    if (event.type === 'event-stream-ready') void reloadCustomThemes();
-  }), [reloadCustomThemes]);
 
   useEffect(() => {
     if (customThemesLoading) return;
