@@ -837,3 +837,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent (conservative option within the 2026-11-10 OMP TUI parity decision; the maintainer confirmed on 2026-11-11 that no instruction was given on the lane 13 ticket)
 - **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the slice 33 chat, layout, view and app-shell surfaces on the fork's contracts in the v2.7.0 merge
+
+- **Decided:** the repair slice 33 files outside lane 13's presentation port keep the fork implementation where upstream v2.7.0's copy reads the retired OpenCode engine or an upstream-only contract: the app shells (`apps/**`), `components/{comments,layout,onboarding,projects,references,sourceBoard,ui}`, the views outside the chat port, and their tests. Upstream wins only where its change is a pure presentation or type alignment the fork's contracts already accept, and there the fork's blob is replaced.
+- **Instead of:** taking upstream's `@opencode/client` sync bootstrap in the app-shell and view tests, upstream's page/forms pending-request aggregator, the VS Code branches and RTL pair in the layout shells, upstream's `opencodeBinary` setup and project-config-error onboarding surfaces, or upstream's `OpenCode.make(...)` test doubles.
+- **Because:** those upstream paths import the retired OpenCode runtime or name a surface the fork removed, and the remaining differences are the fork's own fixes: runtime-switch ownership in the git dialogs, the archive's optional `deleteBranch`, the tolerant `changeRequestCopy` signature, canonical session fields in the mobile shell and memory panel, and the physical-side layout the RTL conversion (task 20) has not reached.
+- **Also recorded:** the deleted upstream-only surfaces and the ported presentation the slice adopted (the walkthrough trio, the partial usage notice, the guest-frame `incompatible` state) are named in the task's `## Progress`.
+- **Decided by:** agent (conservative option within the 2026-11-10 merge decision and the 2026-11-11 chat port decision)
+- **Revisit when:** the RTL conversion lands, or the Agent Service exposes those behaviors as Canonical events.
+- **Effort:** ux-v270-omp-alignment

@@ -113,6 +113,13 @@ export async function getGitRangeFiles(
   return gitHttp.getGitRangeFiles(directory, options);
 }
 
+export async function getGitRangeFileVersions(
+  directory: string,
+  options: { base: string; head: string; path: string; previousPath?: string; includeWorkingTree?: boolean },
+): Promise<{ original: string; modified: string }> {
+  return gitHttp.getGitRangeFileVersions(directory, options);
+}
+
 export async function getBranchBase(
   directory: string,
   branch: string

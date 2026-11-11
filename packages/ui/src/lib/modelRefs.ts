@@ -1,7 +1,7 @@
-import { findCatalogModel, type Model, type Provider } from '@/lib/opencode/model';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import type { ModelRef } from '@/lib/settings/parsers';
 
-// The config store regroups OpenCode v2's flat model list under its provider.
+// The config store lists each provider's canonical models under it.
 type ProviderWithModelList = Provider & { models: Model[] };
 
 /**
@@ -16,8 +16,8 @@ export const resolveModelRefs = <P extends ProviderWithModelList>(
   providers: readonly P[],
   hiddenModels: readonly ModelRef[],
 ): Array<ModelRef & { provider: P; model: Model }> => refs.flatMap(({ providerID, modelID }) => {
-  const provider = providers.find((p) => p.id === providerID);
-  const model = provider ? findCatalogModel(provider.models, modelID) : undefined;
+  const provider = providers.find((p) => p.providerId === providerID);
+  const model = provider?.models.find((entry) => entry.modelId === modelID);
   if (!provider || !model) return [];
   if (hiddenModels.some((item) => item.providerID === providerID && item.modelID === modelID)) return [];
   return [{ provider, model, providerID, modelID }];
