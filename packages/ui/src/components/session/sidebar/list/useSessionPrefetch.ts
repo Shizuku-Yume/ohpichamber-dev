@@ -5,6 +5,7 @@ import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getSettingsSurface } from '@/lib/settings/surface';
 import { isSpaceDirectoryStopped } from '@/lib/spaces/spaces-store';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 const SESSION_PREFETCH_HOVER_DELAY_MS = 180;
 const SESSION_PREFETCH_SETTLE_MS = 150;
@@ -34,10 +35,10 @@ const getPrefetchRequestKey = (request: Pick<PrefetchRequest, 'directory' | 'ses
   `${request.directory}\n${request.sessionId}`
 );
 
-type PrefetchTarget = Pick<Session, 'id' | 'directory'>;
+type PrefetchTarget = Session;
 
 const sessionDirectory = (session: PrefetchTarget | null | undefined): string | null => {
-  const directory = session?.directory?.trim();
+  const directory = resolveGlobalSessionDirectory(session ?? null)?.trim();
   return directory || null;
 };
 
@@ -111,7 +112,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   }, [enabled, prefetchDisabled, prefetchSession]);
 
   const scheduleSessionPrefetch = React.useCallback((session: PrefetchTarget | null | undefined, origin: 'hover' | 'neighbor' = 'neighbor') => {
-    const sessionId = session?.id;
+    const sessionId = session?.sessionId;
     const directory = sessionDirectory(session);
     if (!enabled || prefetchDisabled || !sessionId || !directory || sessionId === currentSessionId || isSpaceDirectoryStopped(directory)) {
       return;

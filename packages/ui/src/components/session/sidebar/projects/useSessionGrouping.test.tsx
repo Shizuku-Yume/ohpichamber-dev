@@ -376,7 +376,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
 
     expect(parentNode?.children.map((node) => node.session.sessionId)).toEqual(['newer', 'older']);
     expect(parentNode?.children[0]?.children.map((node) => node.session.sessionId)).toEqual(['grandchild']);
-    expect(parentNode?.children[0]?.resolveGlobalSessionDirectory(session)).toBe('/workspace/.wt/child');
+    expect(resolveGlobalSessionDirectory(parentNode!.children[0]!.session)).toBe('/workspace/.wt/child');
     expect(parentNode?.children[0]?.worktree?.path).toBe('/workspace/.wt/child');
     expect(parentNode?.children[0]?.children[0]?.worktree?.path).toBe('/workspace/.wt/grandchild');
     expect(childGroups.find((group) => group.isMain)?.sessions).toEqual([]);

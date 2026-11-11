@@ -120,10 +120,10 @@ export const getDescendantIds = (
   const visited = new Set<string>([sessionId]);
   const visit = (parentId: string): void => {
     for (const child of childrenMap.get(parentId) ?? []) {
-      if (visited.has(child.id)) continue;
-      visited.add(child.id);
-      descendants.push(child.id);
-      visit(child.id);
+      if (visited.has(child.sessionId)) continue;
+      visited.add(child.sessionId);
+      descendants.push(child.sessionId);
+      visit(child.sessionId);
     }
   };
   visit(sessionId);
@@ -143,9 +143,9 @@ export const buildActiveSessionNode = (
   const visited = new Set<string>([session.sessionId]);
   const build = (current: Session): SessionNode => ({
     session: current,
-    children: (childrenMap.get(current.id) ?? []).flatMap((child) => {
-      if (child.archivedAt !== undefined || visited.has(child.id)) return [];
-      visited.add(child.id);
+    children: (childrenMap.get(current.sessionId) ?? []).flatMap((child) => {
+      if (child.archivedAt !== undefined || visited.has(child.sessionId)) return [];
+      visited.add(child.sessionId);
       return [build(child)];
     }),
     worktree: null,
@@ -313,7 +313,7 @@ export const useSessionProjectCollection = ({
     const nested = new Set<string>();
     for (const [parentId, children] of childrenMap) {
       if (!sessionById.has(parentId)) continue;
-      for (const child of children) nested.add(child.id);
+      for (const child of children) nested.add(child.sessionId);
     }
     return nested;
   }, [childrenMap, sessionById]);
@@ -331,7 +331,7 @@ export const useSessionProjectCollection = ({
   );
   const getDescendantIdsForAction = React.useCallback(
     (sessionId: string, options: { includeArchived: boolean }) => getDescendantIds(childrenMap, sessionId)
-      .filter((id) => options.includeArchived || !sessionById.get(id)?.time?.archived),
+      .filter((id) => options.includeArchived || sessionById.get(id)?.archivedAt === undefined),
     [childrenMap, sessionById],
   );
 

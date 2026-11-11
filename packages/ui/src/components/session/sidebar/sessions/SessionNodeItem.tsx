@@ -27,7 +27,7 @@ import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isVSCo
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getSessionPinList, isSessionPinned } from '@/lib/sessionPins';
+import { isSessionPinned, isSessionPinnedInMetadata } from '@/lib/sessionPins';
 import { setSessionPinList } from '@/sync/session-pins';
 import { PinToMenu } from '../sections/PinToMenu';
 import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
@@ -82,6 +82,7 @@ import { collectSessionWorkInWork } from '../works/sidebarWorks';
 import { isRowBoxClick } from './rowBoxClick';
 import { setSessionWorkState } from '@/sync/session-actions';
 import { sessionGoalMarkLabelKey, sessionGoalStatusColor } from '@/lib/sessionGoalPresentation';
+import { isSpaceDirectory } from '@/lib/spaces/space-route';
 import { getChatsRootFromDirectory, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { getMultiRunIdentity, sameMultiRunIdentity } from '@/lib/multirun/identity';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
@@ -371,7 +372,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // finished with it, or one group would mix tracked and finished sessions.
   // Touch layouts keep their actions permanently visible, where an icon on
   // every row would be noise: there it lives in the session menu only.
-  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !session.parentSessionId && !isChatDirectoryPath(node.resolveGlobalSessionDirectory(session));
+  const canTrackWork = sessionWorkEnabled && ownsWork && !archivedBucket && !session.parentSessionId && !isChatDirectoryPath(resolveGlobalSessionDirectory(node.session));
   const showWorkAction = canTrackWork && !alwaysShowActions;
   // Hover-revealed actions besides the menu: work, quick archive, and in VS
   // Code open-in-editor.
@@ -563,10 +564,10 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         return;
       }
       for (const entry of workSessionsInWork) {
-        await setSessionWorkState(entry.id, normalizePath(entry.directory ?? null) ?? sessionDirectory, 'done');
+        await setSessionWorkState(entry.sessionId, normalizePath(resolveGlobalSessionDirectory(entry) ?? null) ?? sessionDirectory, 'done');
       }
       // Done work leaves the working set, as Mark done in the composer does.
-      leaveFinishedSessions(workSessionsInWork.map((entry) => entry.id));
+      leaveFinishedSessions(workSessionsInWork.map((entry) => entry.sessionId));
     } catch {
       toast.error(t('sessions.sidebar.session.work.updateFailed'));
     }
@@ -598,7 +599,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   );
   const hasPendingPermission = pendingPermissionCount > 0;
   const hasPendingForm = pendingFormCount > 0;
-  const isSubtaskSession = Boolean(resolvedSession.parentID);
+  const isSubtaskSession = Boolean(resolvedSession.parentSessionId);
   const needsAttention = useSessionUnread(session.sessionId);
   // The last conversation, as the list orders by: a rename or a metadata
   // write must not make an old session read as just used.
@@ -637,7 +638,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     for (const child of children) {
       try {
         if (!sessionDirectory) throw new Error('Session directory is required for export');
-        const childRecords = await loadExportRecords({ directory: sessionDirectory, sessionID: child.session.sessionId });
+        const childRecords = await loadExportRecords({ directory: sessionDirectory, sessionId: child.session.sessionId });
         if (!childRecords) throw new Error('Session runtime changed during export');
         const childTitle = child.session.title || t('sessions.sidebar.session.export.untitledSubagent');
         // SAFETY: OpenCode session payloads may carry the optional agent label used by exports.
@@ -670,7 +671,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       return;
     }
 
-    const records = await loadExportRecords({ directory: sessionDirectory, sessionID: session.sessionId }).catch(() => null);
+    const records = await loadExportRecords({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => null);
     if (!records) {
       toast.error(t('sessions.sidebar.session.export.failedLoadHistory'));
       return;
@@ -719,9 +720,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     void runGuestSessionAction({
       entry,
       t,
-      session: { id: session.sessionId, title: resolvedSession.title, directory: sessionDirectory },
+      session: { sessionId: session.sessionId, title: resolvedSession.title, directory: sessionDirectory },
       loadRecords: () => (sessionDirectory
-        ? loadExportRecords({ directory: sessionDirectory, sessionID: session.sessionId }).catch(() => null)
+        ? loadExportRecords({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });
@@ -1150,7 +1151,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       && sessionDirectory
       && !getSyncSessionMaterializationStatus(session.sessionId, sessionDirectory).renderable
     ) {
-      void prefetchSessionMessages({ directory: sessionDirectory, sessionID: session.sessionId }).catch(() => undefined);
+      void prefetchSessionMessages({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => undefined);
     }
   };
   // Resting the pointer on a row, or reaching it with the keyboard, starts
@@ -1158,7 +1159,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // follows opens a warm session. Touch has no hover: a tap's enter event
   // lands with the press, which the press prefetch above already covers.
   const hoverPrefetchTarget = !isActive && !selectionModeEnabled && sessionDirectory
-    ? { id: session.sessionId, directory: sessionDirectory }
+    ? session
     : null;
   const handleRowPointerEnter = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || !hoverPrefetchTarget) return;
@@ -1245,7 +1246,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       </SessionMenuItemHint>
       <PinToMenu
         slots={{ Item, Separator, Sub, SubTrigger, SubContent }}
-        current={isPinnedSession ? getSessionPinList(session) ?? DEFAULT_PIN_LIST : null}
+        current={isPinnedSession ? DEFAULT_PIN_LIST : null}
         triggerClassName="[&>svg]:me-1"
         itemClassName="[&>svg]:me-1"
         onPin={(list) => {
@@ -1287,6 +1288,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         });
         const worktreeMenuState = getSessionWorktreeMenuState({
           targets: worktreeTargets,
+          isRefreshing: false,
           loadFailed: worktreeTargetsLoadFailed,
         });
         const worktreeSubTrigger = (
@@ -2034,7 +2036,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
 }
 
 const getNodeSessionDirectory = (node: SessionNode): string | null => {
-  return normalizePath(node.resolveGlobalSessionDirectory(session) ?? null);
+  return normalizePath(resolveGlobalSessionDirectory(node.session) ?? null);
 };
 
 const isSecondaryMetaEqual = (prev?: SecondaryMeta | null, next?: SecondaryMeta | null): boolean => {
@@ -2109,17 +2111,16 @@ const hasExpansionMembershipChange = (prev: SessionNodeItemProps, next: SessionN
 };
 
 const areSessionRenderSemanticsEqual = (prev: Session, next: Session): boolean => (
-  prev.id === next.id
+  prev.sessionId === next.sessionId
   && prev.title === next.title
-  && prev.directory === next.directory
-  && session.parentSessionId === session.parentSessionId
+  && resolveGlobalSessionDirectory(prev) === resolveGlobalSessionDirectory(next)
+  && prev.parentSessionId === next.parentSessionId
   && prev.createdAt === next.createdAt
   && prev.updatedAt === next.updatedAt
-  && prev.time?.archived === next.time?.archived
+  && (prev.archivedAt !== undefined) === (next.archivedAt !== undefined)
   // The row renders from metadata (goal, in-work state, the recap tooltip) and
-  // judges the done hint and the recap against `time.idle`. A metadata change
-  // arrives as a new object, so the reference is the cheap exact signal.
-  && prev.time?.idle === next.time?.idle
+  // judges the done hint and the recap against the unread watermark. A metadata
+  // change arrives as a new object, so the reference is the cheap exact signal.
   && prev.metadata === next.metadata
   && sameMultiRunIdentity(prev, next)
 );

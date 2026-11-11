@@ -184,8 +184,8 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const knownSessionDirectories = React.useMemo(
-    () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
-    [availableWorktreesByProject, projects],
+    () => buildKnownSessionDirectories(projects, availableWorktreesByProject, { includeWorktrees: !isVSCode }),
+    [availableWorktreesByProject, isVSCode, projects],
   );
   // The sidebar tree's +-buttons (project / group / folder) open a draft but,
   // unlike selecting an existing session, don't navigate. VS Code's compact view

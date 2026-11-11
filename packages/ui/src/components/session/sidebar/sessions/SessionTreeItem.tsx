@@ -155,7 +155,7 @@ function SessionTreeItemComponent({
   });
   const childRenderExtrasFor = renderExtras?.childRenderExtrasFor;
   const childContext: Context = {
-    groupDirectory: node.resolveGlobalSessionDirectory(session) ?? groupDirectory,
+    groupDirectory: resolveGlobalSessionDirectory(node.session) ?? groupDirectory,
     projectId,
     archivedBucket,
     renderContext,
@@ -255,7 +255,7 @@ function SessionTreeItemComponent({
 const isSameSessionForRow = (prev: SessionNode, next: SessionNode): boolean => (
   prev.session.sessionId === next.session.sessionId
   && prev.session.title === next.session.title
-  && prev.resolveGlobalSessionDirectory(session) === next.resolveGlobalSessionDirectory(session)
+  && resolveGlobalSessionDirectory(prev.session) === resolveGlobalSessionDirectory(next.session)
   && prev.session.parentSessionId === next.session.parentSessionId
   && prev.session.createdAt === next.session.createdAt
   && prev.session.updatedAt === next.session.updatedAt
