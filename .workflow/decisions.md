@@ -912,3 +912,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes (conservative option; the alternative touched another package's contract)
 - **Revisit when:** a later milestone extends `SessionMetadataSchema.openchamber.pinned` with a list, or the sidebar drops user-created pin lists.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities
+
+- **Decided:** the last six `fork-differs` files keep the fork's behavior where upstream's copy depended on something the fork no longer has: `components/desktop/OpenInAppButton.tsx` carries `data-work-status-popup` so the chat work panel does not close when the app picker is used; `components/sections/behavior/BehaviorPage.test.tsx` asserts AGENTS.md as the sole prompt authority (no settings mirror) and seeds `localStorage`; `components/sections/classification/ClassificationProvidersPage.tsx` opens the Host's canonical provider ids (`opencode-zen`, `vercel-ai-gateway`) instead of upstream's `opencode`/`vercel`; `hooks/useGlobalSessionsPolling.ts` keeps `missedWhileHidden` so a refresh that came due while hidden runs once on return; `useNestedGitDirectory.test.tsx` treats `/api/session-folders` as bootstrap, like `/api/fs/home`; `useSshConfirmation.test.tsx` clicks the dictionary's effective `Save Changes`. Alongside it, `sync/session-unread.ts` gains `isUnreadTurn` (the turn's own watermark, without the top-level-only rule) so the dock badge can roll a subtask's unread turn up to its parent, `sync/global-session-status.ts` regains `subscribeSessionStatusTransitions` for `multirun/autoFusion.ts`, and `multirun/laneStatus.ts` regains `hasRunningGoal`.
+- **Instead of:** adopting upstream's provider ids, its settings-mirrored Behavior prompt, its visibility-blind polling, upstream's `id`/`time.*` session fields in the autoFusion and unread paths, or dropping the subtask badge rollup because the top-level rule cannot express it.
+- **Because:** the Host's routing table (`server/lib/routing/runtime.js`) and private-credential module name the canonical ids; the fork has one unread authority in Host metadata and one settings authority for AGENTS.md; and a hidden app owes the refresh its cadence promised rather than silently skipping it.
+- **Mine:** yes (conservative options inside the 2026-11-10 merge and 2026-11-11 sidebar decisions)
+- **Revisit when:** the unread contract gains a subtask-aware field, or the fork adds a settings-mirror for the Behavior prompt.
+- **Effort:** ux-v270-omp-alignment
