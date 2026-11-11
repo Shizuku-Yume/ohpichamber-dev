@@ -18,8 +18,9 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 })));
 });
 
-// These probes wait on real atomic run-file writes, so a loaded machine can
-// take seconds where a quiet one takes milliseconds. The budget is patience,
+// A state probe waits on the run's own announcement: the runtime broadcasts
+// the summary it just saved, so a match is already durable and no re-read of
+// the run file can be overtaken by a save in flight. The budget is patience,
 // not a weaker assertion: every check still requires the same end state.
 const waitFor = async (check, timeoutMs = 20_000) => {
   const deadline = Date.now() + timeoutMs;
@@ -30,6 +31,10 @@ const waitFor = async (check, timeoutMs = 20_000) => {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 };
+
+// Whether the runtime broadcast a run whose summary matches; the broadcast is
+// sent after the save it describes, so a match is already durable.
+const announced = (events, match) => events.some((event) => event.type === 'openchamber:workflow-run' && match(event.properties.run));
 
 /**
  * Agent sessions without OpenCode: `answer(prompt, attempt)` decides each
@@ -56,6 +61,7 @@ const fakeAgentSessions = ({ answer = (prompt) => `done: ${prompt}`, hang = [], 
       try {
         await duringTurn(sessionId, text);
         if (hang.some((prompt) => text.startsWith(prompt))) {
+          if (signal.aborted) throw new WorkflowAgentStopped();
           await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new WorkflowAgentStopped()), { once: true }));
         }
         await new Promise((resolve) => setTimeout(resolve, 5));
@@ -641,11 +647,11 @@ describe('workflow runtime', () => {
 
   it('counts an agent against the limit only once it starts, and moves the run to the phase its agent names', async () => {
     const agents = fakeAgentSessions({ hang: ['slow'] });
-    const { runtime, act, finished, store } = await setup(agents, { maxConcurrentAgents: 1 });
+    const { runtime, act, finished, store, events } = await setup(agents, { maxConcurrentAgents: 1 });
     const body = "return parallel([() => agent('slow', { phase: 'Verify' }), () => agent('b'), () => agent('c')])";
     const { runId } = await act('workflow.run', { script: script(body) });
     await runtime.approve({ runId });
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.some((agent) => agent.state === 'running'));
+    await waitFor(() => announced(events, (run) => run.agents.some((agent) => agent.state === 'running' && agent.sessionId)));
     const running = await act('workflow.status', { runId });
     expect(running.currentPhase).toBe('Verify');
     expect(running.phases).toEqual(['Work', 'Verify']);
@@ -746,10 +752,10 @@ describe('workflow runtime', () => {
 
   it('refuses to delete a run that is still working', async () => {
     const agents = fakeAgentSessions({ hang: ['slow'] });
-    const { runtime, act, finished } = await setup(agents);
+    const { runtime, act, finished, events } = await setup(agents);
     const { runId } = await act('workflow.run', { script: script("return agent('slow 1')") });
     await runtime.approve({ runId });
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.some((agent) => agent.state === 'running' && agent.sessionId));
+    await waitFor(() => announced(events, (run) => run.agents.some((agent) => agent.state === 'running' && agent.sessionId)));
 
     await expect(runtime.remove({ runId })).rejects.toThrow('Stop or decline the run before deleting it');
     await runtime.stop({ runId });
@@ -829,13 +835,13 @@ describe('workflow runtime', () => {
 
   it('stops a run: running agents are interrupted and the report does not wake the session', async () => {
     const agents = fakeAgentSessions({ hang: ['slow'] });
-    const { runtime, act, finished } = await setup(agents);
+    const { runtime, act, finished, events } = await setup(agents);
     const { runId } = await act('workflow.run', { script: script("return parallel([() => agent('slow 1'), () => agent('slow 2')])") });
     await runtime.approve({ runId });
     // Working means in a session: an agent is saved as running just before its
-    // session exists. Each save is a real atomic write, so this waits longer
-    // than a poll-only assertion: a loaded machine can take seconds to fsync.
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.filter((agent) => agent.state === 'running' && agent.sessionId).length === 2);
+    // session exists, and that save is announced, so the probe waits on both
+    // agents' announcements rather than on a re-read of the run.
+    await waitFor(() => announced(events, (run) => run.agents.filter((agent) => agent.state === 'running' && agent.sessionId).length === 2));
 
     await runtime.stop({ runId });
     const status = await finished(runId);
@@ -945,7 +951,7 @@ describe('workflow runtime', () => {
     const first = await setup(agents);
     const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
     await first.runtime.approve({ runId });
-    await waitFor(async () => (await first.act('workflow.status', { runId })).agents.length === 1);
+    await waitFor(() => announced(first.events, (run) => run.agents.some((agent) => agent.state === 'running' && agent.sessionId)));
     await first.store.flush();
 
     // A second OpenChamber over the same data directory, while the first still runs it.
@@ -956,7 +962,8 @@ describe('workflow runtime', () => {
     expect(await second.executeAction('workflow.status', { runId }, { sessionId: 'ses_parent', directory: first.dataDir })).toMatchObject({ state: 'running' });
 
     first.runtime.shutdown();
-    await waitFor(async () => (await first.act('workflow.status', { runId })).state !== 'running');
+    // The stop the shutdown asks for settles into a save and its announcement.
+    await waitFor(() => announced(first.events, (run) => run.state === 'stopped'));
     await first.store.flush();
   });
 
@@ -965,9 +972,9 @@ describe('workflow runtime', () => {
     const first = await setup(agents);
     const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
     await first.runtime.approve({ runId });
-    // A restart reports the session it interrupted, so wait until the agent has
-    // one: an agent saved without a session has nothing to report.
-    await waitFor(async () => (await first.act('workflow.status', { runId })).agents.some((agent) => agent.state === 'running' && agent.sessionId));
+    // A restart reports the session it interrupted, so wait until the agent's
+    // session is announced: an agent saved without one has nothing to report.
+    await waitFor(() => announced(first.events, (run) => run.agents.some((agent) => agent.state === 'running' && agent.sessionId)));
     await first.store.flush();
 
     // A second runtime over the same directory: the first one's worker is gone.
