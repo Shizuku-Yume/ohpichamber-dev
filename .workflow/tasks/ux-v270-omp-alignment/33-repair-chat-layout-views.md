@@ -8,7 +8,7 @@
 **Read first:** spec "How it is built" (Merge); `decisions.md: 2026-11-11 - Chat presentation is ported onto the canonical contract…`; the archived task 13 and 16 records; skills `ui-api-decoupling`, `sync-state-invariants`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 33 files (about 190 errors at scaffold `93a3c7549`: chat 54, layout 46, views 28, multirun 13, apps 13, ui 11, the rest small); `bun scripts/upstream-drift.mjs --check --slice 33` → 0 unexplained; `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/chat packages/ui/src/components/layout packages/ui/src/components/views packages/ui/src/apps` → exit 0
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** active
+- **Status:** blocked
 
 - [ ] Fix every type error in slice 33 files by porting merged upstream callers onto the fork's contracts. Do not change exported shapes in `src/sync`, `src/stores` or `src/api` (slice 34 owns them).
 - [ ] Chat: keep the presentation ported onto the canonical contract as lane 13 decided; do not start the R3 redesign (tasks 23-24).
@@ -30,3 +30,14 @@
 - `bunx vitest run` cannot run at all on this tree: there is no root `vitest.config.ts` and no vitest `projects` config (the pre-merge `vitest.config.ts` at `05fe1b888` listed `packages/vscode` and `packages/relay-server`, both retired by this fork). The UI tests are `bun:test`, so the task's `VITEST_MAX_WORKERS=2 bunx vitest run …` check cannot execute as written; the repo's own runner (`scripts/run-isolated-tests.mjs`) is the working equivalent.
 - The store fields the merged layout/views files read (`customProviderLogos`, `contextZoneExpandedChatSizes`, `setContextZoneExpandedChatSize`, `sessionTabsPerWorkspace`, `projectConfigErrors`) exist only in upstream's `stores/useUIStore.ts`/`useConfigStore.ts`; the scaffold kept the fork blobs. Same cross-slice shape: `src/stores` is slice 34's.
 - Slice 33's own errors then split into: (a) upstream-only modules in slice-33 paths (`PluginPane` incompatibility state, `WalkthroughToc`/`WalkthroughStream` whole-file comment props, `UsageStatsView` `PartialUsageNotice`, `SettingsView` `isVSCode`/`settingsPageTitleKey`, `ContextPanelRail` unbound drag handlers) that need a port or deletion; (b) upstream test fixtures on fork shapes (`RuntimeDescriptor.isVSCode`, `MobileAppActions.openPlan`, `ChangeRequestTerm` non-null); (c) `main`-side leftovers (`FilesView` icons `menu-fold-2`/`file-transfer`/`file-check*`, `RunLaneCard` duplicate functions, `useWorktreeArchiveActions` `deleteBranch` argument).
+
+## Blocked
+
+The repair cannot complete inside slice 33's paths, and the stop came before any slice-33 file was changed.
+
+- `sync/selection-store.ts` dropped the fork's `ROOT_SELECTION_AGENT` and `save/getAgentModelReasoningEffortForSession` APIs (lane 15 took upstream's blob). Slice 34 owns `src/sync`; four slice-33 files call them.
+- `components/model-picker/ModelPickerList.tsx` carries upstream's `providerID/modelID` + `Provider.id` contract (lane 14 path, outside slice 33) while slice-33 consumers use the fork's `providerId/modelId`; 37 of the 173 errors are this one mismatch.
+- The five store fields the merged layout/views files read (`customProviderLogos`, `contextZoneExpandedChatSizes`, `setContextZoneExpandedChatSize`, `sessionTabsPerWorkspace`, `projectConfigErrors`) exist only in upstream's `useUIStore`/`useConfigStore`; `src/stores` is slice 34's.
+- The task's test check cannot run: there is no root Vitest project config on this tree (the retired `vitest.config.ts` named the removed `packages/vscode` and `packages/relay-server`), and the UI suites are `bun:test`. The repo runner is `node scripts/run-isolated-tests.mjs`.
+
+Restoring the fork's `selection-store.ts`, `model-picker/ModelPickerList.tsx` and the fork/upstream store union is a prerequisite for slice 33 to reach zero; each is owned by lane/slice work outside this task's file list.
