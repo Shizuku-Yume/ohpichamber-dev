@@ -15,6 +15,7 @@ import { EMPTY_MULTI_RUN_INDEX, type MultiRunIndex, type MultiRunSummary } from 
 import { isGroupWork, worktreeFolderMemberId } from './works/sidebarWorks';
 import type { SessionDraft } from '@/stores/useSessionDraftsStore';
 import type { DirectoryOwner } from './sessions/sessionOwnership';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 export type SessionSidebarActivityItem = {
   node: SessionNode;
@@ -613,7 +614,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
       const current = stack.pop();
       if (!current) continue;
       const rowKey = keyFor(`${options.containerKey}:session:${current.node.session.sessionId}`);
-      const directory = current.node.resolveGlobalSessionDirectory(session) ?? current.directory;
+      const directory = resolveGlobalSessionDirectory(current.node.session) ?? current.directory;
       sessionById.set(current.node.session.sessionId, current.node.session);
       const detailed = options.detailedRoots === true && current.depth === baseDepth;
       // Only a zone's works take its two lines; what nests under one stays a
@@ -871,7 +872,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     // Pinned sessions are the user's own always-on shortlist: they stay
     // visible whatever the reveal limit is, and they do not spend it.
     const isPinnedNode = (entry: ListedEntry): boolean => !isWorktreeEntry(entry) && !isRunEntry(entry) && limits?.pinnedAlwaysVisible === true
-      && isSessionPinned(pinned, entry.resolveGlobalSessionDirectory(session) ?? group.directory, entry.session.sessionId);
+      && isSessionPinned(pinned, resolveGlobalSessionDirectory(entry.session) ?? group.directory, entry.session.sessionId);
     // A run spends one slot of the reveal limit, whatever its lane count, and
     // so does a worktree work.
     const ungroupedEntries = mergeWorktreeEntries(collapseRunEntries(ungrouped, runIndex, group.isArchivedBucket === true), listedWorktrees, args.sessionOrderIndex, args.worktreeArchiveAnchors ?? EMPTY_ARCHIVE_ANCHORS, args.liveSpaceIds ?? EMPTY_SPACE_IDS);

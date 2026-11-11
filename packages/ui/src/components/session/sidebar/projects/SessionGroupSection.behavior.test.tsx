@@ -128,7 +128,7 @@ const createProps = (): SessionGroupSectionProps => ({
   openNewSessionDraft: () => undefined,
   pinnedSessionIds: new Set(),
   sessionOrderIndex: new Map(),
-  notifyOnSubtasks: false,
+  hideDirectoryControls: false,
   expandedParents: new Set(),
   editingId: null,
   editingRowKey: null,

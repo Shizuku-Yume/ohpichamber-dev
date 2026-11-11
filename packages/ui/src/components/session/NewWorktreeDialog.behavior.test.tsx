@@ -102,7 +102,10 @@ mock.module('@/components/ui/command', () => ({
 }));
 
 mock.module('@/components/ui/MobileOverlayPanel', () => ({
-  MobileOverlayPanel: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) => open ? <div>{children}</div> : null,
+  // The phone branch picker keeps its search in the sheet's subheader.
+  MobileOverlayPanel: ({ children, subheader, open }: React.PropsWithChildren<{ subheader?: React.ReactNode; open: boolean }>) => (
+    open ? <div>{subheader}{children}</div> : null
+  ),
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: () => null }));
 mock.module('@/components/ui/dropdown-trigger', () => ({ dropdownTriggerVariants: () => '' }));

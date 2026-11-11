@@ -7,7 +7,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { buildSessionTreeMoveMessages, requestSessionTreeMove } from '@/lib/worktrees/sessionWorktreeMove';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useProjectsInSidebarOrder } from '@/components/session/sidebar/list/useProjectsInSidebarOrder';
 import { collectSessionMoveDescendants } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
@@ -43,7 +43,10 @@ export const MoveSessionDialog: React.FC<{
     const { entityById } = useGlobalSessionsStore.getState();
     let root = entityById.get(sessionId);
     if (!root) return;
-    for (let parent = entityById.get(session.parentSessionId ?? ''); parent?.directory === root.directory; parent = entityById.get(session.parentSessionId ?? '')) {
+    const rootDirectory = resolveGlobalSessionDirectory(root);
+    while (root.parentSessionId) {
+      const parent = entityById.get(root.parentSessionId);
+      if (!parent || resolveGlobalSessionDirectory(parent) !== rootDirectory) break;
       root = parent;
     }
     requestSessionTreeMove({
@@ -97,10 +100,6 @@ export const MoveSessionDialog: React.FC<{
         <DirectoryExplorerDialog
           open
           onOpenChange={setChoosingFolder}
-          onProjectAdded={(project) => {
-            setChoosingFolder(false);
-            moveTo(project.path);
-          }}
         />
       ) : null}
     </>

@@ -16,8 +16,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
-import { selectConfigAgentsForDirectory, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
+import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { useI18n } from '@/lib/i18n';
 import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 import { resolveEffortForModelSelection } from '@/lib/modelEfforts';
@@ -66,36 +65,31 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
   const showRunAsGoal = allowRunAsGoal && !isVSCodeRuntime();
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
-  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
+
   // The catalogs of the project the dialog sends to, which need not be the active one.
   const pickerDirectory = projectDirectory ?? undefined;
   const providers = useConfigStore((state) => selectProvidersForDirectory(state, projectDirectory));
-  const agents = useConfigStore((state) => selectConfigAgentsForDirectory(state, pickerDirectory));
+
   const resolveDirectoryDefaultSelection = useConfigStore((state) => state.resolveDirectoryDefaultSelection);
 
   const [execution, setExecution] = React.useState<TodoSendExecution>(EMPTY_EXECUTION);
   const [defaultsResolved, setDefaultsResolved] = React.useState(false);
 
-  const resolveVariantForModel = React.useCallback((providerID: string, modelID: string, agentName: string) => {
-    const provider = providers.find((item) => item.id === providerID);
-    const model = provider?.models?.find((item) => item.id === modelID) as { variants?: ModelVariantSource } | undefined;
+  const resolveVariantForModel = React.useCallback((providerID: string, modelID: string) => {
+    const provider = providers.find((item) => item.providerId === providerID);
+    const model = provider?.models?.find((item) => item.modelId === modelID) as { variants?: ModelVariantSource } | undefined;
     return resolveEffortForModelSelection({
       providerID,
       modelID,
       variants: listModelVariantIds(model?.variants),
-      agents,
-      agentName,
-      configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID, projectDirectory),
+      configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID),
     }) ?? '';
-  }, [agents, projectDirectory, providers]);
+  }, [projectDirectory, providers]);
 
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'todoSendDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+  }, [open, loadProviders, projectDirectory]);
 
   // The dialog starts on the defaults of the project it sends to. The
   // composer's pick belongs to whatever session is open, often in another
@@ -133,18 +127,18 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
     if (!open || !defaultsResolved || providers.length === 0 || execution.providerID) return;
 
     const provider = providers[0];
-    const nextModelID = provider?.models?.[0]?.id ?? '';
+    const nextModelID = provider?.models?.[0]?.modelId ?? '';
     setExecution((prev) => ({
       ...prev,
-      providerID: provider?.id ?? '',
+      providerID: provider?.providerId ?? '',
       modelID: nextModelID,
-      variant: resolveVariantForModel(provider?.id ?? '', nextModelID, prev.agent),
+      variant: resolveVariantForModel(provider?.providerId ?? '', nextModelID),
     }));
   }, [open, defaultsResolved, providers, execution.providerID, resolveVariantForModel]);
 
   const selectedModel = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerID);
-    return provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
+    const provider = providers.find((item) => item.providerId === execution.providerID);
+    return provider?.models?.find((item) => item.modelId === execution.modelID) as { variants?: ModelVariantSource } | undefined;
   }, [providers, execution.providerID, execution.modelID]);
   const variantOptions = React.useMemo(() => listModelVariantIds(selectedModel?.variants), [selectedModel]);
 
@@ -201,7 +195,7 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
                   ...prev,
                   providerID,
                   modelID,
-                  variant: resolveVariantForModel(providerID, modelID, prev.agent),
+                  variant: resolveVariantForModel(providerID, modelID),
                   picked: { ...prev.picked, model: true },
                 }));
               }}

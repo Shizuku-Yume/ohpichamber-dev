@@ -86,7 +86,7 @@ type GroupProps = Pick<SessionGroupSectionProps,
   | 'setEditingId' | 'setEditingRowKey' | 'setEditTitle' | 'toggleParent' | 'allowReselect'
   | 'onSessionSelected' | 'resetSessionSearch' | 'deleteSessionConfirm'
   | 'setDeleteSessionConfirm' | 'startFolderRename'
-  | 'startSessionWorktreeMenuLoad'
+  | 'startSessionWorktreeMenuLoad' | 'hideDirectoryControls'
 > & { pinnedSessionIds: Set<string>; sessionOrderIndex: Map<string, number> };
 
 type GroupActions = Pick<SessionGroupSectionProps,

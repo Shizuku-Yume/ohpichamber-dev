@@ -176,7 +176,7 @@ export const SessionDialogs: React.FC = () => {
 
         if (payload.sessions.length === 1) {
             const target = payload.sessions[0];
-            const success = await deleteSession(target.id);
+            const success = await deleteSession(target.sessionId);
             if (success) {
                 toast.success(t('sessions.sidebar.session.delete.success'));
             } else {
@@ -539,7 +539,7 @@ export const SessionDialogs: React.FC = () => {
 
             if (deleteDialog.sessions.length === 1) {
                 const target = deleteDialog.sessions[0];
-                const success = await deleteSession(target.id);
+                const success = await deleteSession(target.sessionId);
                 if (!success) {
                     toast.error(t('sessions.sidebar.session.delete.error'));
                     setIsProcessingDelete(false);

@@ -1,5 +1,4 @@
 import React from 'react';
-import type { Session } from '@openchamber/agent-contract';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { refreshGlobalSessions, refreshGlobalSessionsForDirectories, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useChildStoreManager } from '@/sync/sync-context';
@@ -12,7 +11,6 @@ import { buildKnownSessionDirectories } from './sessionListDirectories';
 import { useAuthoritativeSessionCleanup } from './useAuthoritativeSessionCleanup';
 
 const EMPTY_WORKTREES_BY_PROJECT = new Map();
-const EMPTY_SESSIONS: Session[] = [];
 
 type UseSessionListSyncOptions = {
   isVSCode: boolean;
@@ -30,7 +28,9 @@ export const useSessionListSync = ({
     () => buildKnownSessionDirectories(projects, availableWorktreesByProject, { includeWorktrees: !isVSCode }),
     [availableWorktreesByProject, isVSCode, projects],
   );
-  const authoritativeSessions = useGlobalSessionsStore((state) => state.authoritativeSessions);
+  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
+  const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
+  const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
   const bootstrapDemandOwner = `session-list-sync:${React.useId()}`;
 
   // The only bootstrap demand owner. Known projects and worktrees are not
@@ -83,9 +83,15 @@ export const useSessionListSync = ({
     };
   }, []);
 
+  // The fork's global list is authoritative as a whole once its status is
+  // ready; there is no separate snapshot to prefer.
+  const cleanupSessions = React.useMemo(
+    () => [...globalActiveSessions, ...archivedSessions],
+    [archivedSessions, globalActiveSessions],
+  );
   useAuthoritativeSessionCleanup({
     enabled: true,
-    hasAuthoritativeGlobalSessions: authoritativeSessions != null,
-    sessions: authoritativeSessions ?? EMPTY_SESSIONS,
+    hasAuthoritativeGlobalSessions,
+    sessions: cleanupSessions,
   });
 };

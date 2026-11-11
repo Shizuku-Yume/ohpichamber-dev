@@ -837,3 +837,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent (conservative option within the 2026-11-10 OMP TUI parity decision; the maintainer confirmed on 2026-11-11 that no instruction was given on the lane 13 ticket)
 - **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
 - **Effort:** ux-v270-omp-alignment
+## 2026-11-11 - Repair the merged session sidebar on the fork's session model
+
+- **Decided:** the upstream v2.7.0 `packages/ui/src/components/session` surface keeps its layout, menus, sections manager, mark-all-read, worktree naming and row context menus, ported onto the fork's contract `Session` (`sessionId`/`parentSessionId`/`archivedAt`/`createdAt`/`updatedAt`, directory through `resolveGlobalSessionDirectory`), its Canonical Client errors and its Host-owned unread/catalog stores.
+- **Instead of:** adopting upstream's `session.id`/`time.*`/`directory`/`session.fork` reads, `@/lib/opencode/*` imports, `OpencodeApiError`, `isVSCodeRuntime` branches, named pin lists (`openchamber.pinned` carries only `at` on the contract), the `/btw`-session marker and the `SpaceMark.taskTitle` field; upstream's `.vitest.tsx`-mixed app shell is not imported either.
+- **Because:** the fork has one agent runtime on `/api/agent/v1` and one unread authority (`openchamber.workbench.lastIdleAt`/`viewedAt`), one error type (`CanonicalApiError`), and no VS Code runtime target. Where upstream had a genuine capability the fork lacks (named pin lists, space task titles, worktree pin writes, batched project-status prefetch, `checkIsGitRepository` gating) the dependent branch is removed and the loss recorded in the task, rather than shaping `sync`, `stores` or `api` exports to carry it.
+- **Also recorded:** the identifier and error ports are mechanical by construction (`id` → `sessionId`, `time.archived` → `archivedAt`, `OpencodeApiError` → `CanonicalApiError`, `getUnreadSessionIds`/`markSessionsUnreadSeen` → `isSessionUnread`/`markSessionUnreadSeen`), so each row cites this decision rather than repeating the mapping.
+- **Decided by:** agent (maintainer confirmed the pin-list, dialog-catalog and space-affordance removals for task 32)
+- **Revisit when:** the contract carries named pin lists or space task titles, or the Agent Service exposes those behaviors as Canonical events.
+- **Effort:** ux-v270-omp-alignment

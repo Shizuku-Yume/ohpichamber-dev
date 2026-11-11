@@ -42,15 +42,12 @@ describe('collapsed activity scalar selector', () => {
     const dom = installHookTestDom();
     const root = createRoot(dom.container);
     replaceGlobalSessionStatusById(new Map());
-    useNotificationStore.setState({
-      list: [],
-      index: { session: { unseenCount: {}, unseenHasError: {} }, project: { unseenCount: {}, unseenHasError: {} } },
-    });
+    useNotificationStore.setState({ list: [] });
     type ActivityCapture = { renders: number; state: string | null };
     const capture: ActivityCapture = { renders: 0, state: null };
     const Harness = () => {
       capture.renders += 1;
-      capture.state = useCollapsedSessionActivityState({ nodes: [node('relevant')], includeUnreadSubtasks: true });
+      capture.state = useCollapsedSessionActivityState({ nodes: [node('relevant')] });
       return null;
     };
     try {
@@ -100,10 +97,7 @@ describe('collapsed activity scalar selector', () => {
       await act(async () => root.unmount());
       replaceGlobalSessionStatusById(new Map());
       resetGlobalBlockingRequests();
-      useNotificationStore.setState({
-        list: [],
-        index: { session: { unseenCount: {}, unseenHasError: {} }, project: { unseenCount: {}, unseenHasError: {} } },
-      });
+      useNotificationStore.setState({ list: [] });
       dom.restore();
     }
   });
@@ -117,7 +111,6 @@ describe('collapsed activity scalar selector', () => {
       capture.state = useCollapsedSessionActivityState({
         nodes: [node('lane')],
         blockingSessionIds: ['lane', 'lane-subagent'],
-        includeUnreadSubtasks: true,
       });
       return null;
     };

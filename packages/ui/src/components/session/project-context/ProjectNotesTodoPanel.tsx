@@ -20,7 +20,6 @@ import { ContextPanelHeaderSlotProvider, ContextPanelHeaderToolbar } from '@/com
 import { useInContextPanelHeader } from '@/components/layout/contextPanelHeaderSlotContext';
 import { useProjectTodoSend } from './useProjectTodoSend';
 import { KnowledgeSearchBar } from './KnowledgeSearchBar';
-import { KnowledgeBackButton } from './KnowledgeEntryView';
 import { KnowledgeSplit } from './KnowledgeSplit';
 import { Button } from '@/components/ui/button';
 import { DelegatedTooltip } from '@/components/ui/row-tooltip';
@@ -389,13 +388,15 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   }, [activeTab, counts, setStoredTab, trimmedQuery]);
 
   const handlePersistTodos = React.useCallback(
-    (nextTodos: ProjectTodoItem[], change?: ProjectTodoChange) => {
+    // The change kind is part of the section's callback contract; the store
+    // serializes and rolls back the whole list itself.
+    (nextTodos: ProjectTodoItem[], _change?: ProjectTodoChange) => {
       if (!projectRef) {
         return;
       }
       // The store owns per-project write serialization and rollback; the panel
       // only decides what to persist and how to report a failure.
-      void saveTodos(projectRef, nextTodos, change).then((saved) => {
+      void saveTodos(projectRef, nextTodos).then((saved) => {
         if (!saved) {
           toast.error(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
         }
@@ -548,19 +549,12 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     />
   );
 
-  const planView = (planId: string, withBack: boolean) => (
+  const planView = (planId: string) => (
     <React.Suspense fallback={null}>
       {/* The panel header belongs to this panel's tabs; the plan keeps its
           own title row inside the panel body. */}
       <ContextPanelHeaderSlotProvider value={null}>
         <PlanView
-          visible={visible}
-          leading={withBack ? (
-            <KnowledgeBackButton
-              label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
-              onClick={() => setOpenEntry(null)}
-            />
-          ) : null}
           savedProjectPlan={{ projectRef, planId }}
           onNavigatedToChat={() => setOpenEntry(null)}
         />
@@ -646,10 +640,10 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           split ? (
             <KnowledgeSplit
               list={plansList}
-              detail={openPlanId ? planView(openPlanId, false) : null}
+              detail={openPlanId ? planView(openPlanId) : null}
               emptyLabel={t('rightSidebar.contextNotesTodo.plans.selectHint')}
             />
-          ) : openPlanId ? planView(openPlanId, true) : plansList
+          ) : openPlanId ? planView(openPlanId) : plansList
         ) : null}
       </ScrollableOverlay>
       </div>
