@@ -46,6 +46,7 @@ Upstream v2.7.0 rewrote these sections against the OpenCode engine the fork reti
 - `providers/CustomProviderForm.test.tsx` — upstream's form only; the fork's `custom-provider-form.test.ts` covers the fork form.
 - `snippets/SnippetAliasesField.tsx` — no importer on `main` either; the fork's snippet model has no aliases.
 - `openchamber/CompactionSettings.tsx` and its `<CompactionSettings />` mount in `DefaultsSettings.tsx` — read `PUT /api/config/compaction`, a route the fork does not serve; OMP compaction settings live on the OMP Settings page.
+- `providers/ProviderLogoImageControl.tsx` — upstream-only, imported only by upstream's custom provider form; the fork's restored form never asks for a logo upload, so it had no importer.
 
 `sections/DOCUMENTATION.md` no longer describes the deleted permissions editor or the deleted MCP OAuth hook.
 
