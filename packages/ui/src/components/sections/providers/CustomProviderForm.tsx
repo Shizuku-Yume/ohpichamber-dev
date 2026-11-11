@@ -1,12 +1,15 @@
 import React from 'react';
+import type { ProviderConfigurationRead, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import {
+  SettingsCheckboxRow,
   SettingsSection,
   SettingsStackedField,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_CONTROL_CLUSTER_CLASS,
   SETTINGS_FIELD_LABEL_CLASS,
+  SETTINGS_FIELDS_STACK_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
-  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -16,182 +19,152 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { CUSTOM_PROVIDER_ICONS } from '@/lib/customProviderIcons';
-import { providerLogoUploadSupported } from '@/lib/customProviderLogos';
-import { useUIStore } from '@/stores/useUIStore';
-import { ProviderLogoImageControl } from './ProviderLogoImageControl';
+import { getRuntimeKey } from '@/lib/runtime-switch';
+import { canonicalClient } from '@/api/canonicalClient';
+import { CUSTOM_PROVIDER_ICONS, type CustomProviderIcon } from '@/lib/customProviderIcons';
 import { cn } from '@/lib/utils';
 import {
   CUSTOM_PROVIDER_PROTOCOLS,
+  buildCustomProviderRequest,
+  buildProviderDiscoveryRequest,
   createEmptyCustomProviderForm,
   createHeaderRow,
   createModelRow,
-  modelDiscoveryErrorSchema,
-  modelDiscoveryResponseSchema,
-  modelRowFromDiscovery,
-  validateCustomProvider,
-  type DiscoveredModel,
+  isCustomProviderProtocol,
+  validateCustomProviderForm,
   type CustomProviderFormState,
   type CustomProviderPersistPlan,
+  type CustomProviderFieldErrors,
+  type CustomProviderProtocol,
   type CustomProviderTranslator,
-  type FieldErrors,
   type HeaderFieldErrors,
   type ModelFieldErrors,
 } from './custom-provider-form';
 import { CustomProviderModelDiscovery } from './CustomProviderModelDiscovery';
-import { CustomProviderModelRow, type ModelCapabilityList, type ModelTextField } from './CustomProviderModelRow';
+import { CustomProviderModelRow } from './CustomProviderModelRow';
 
-type CustomProviderFormProps = {
+interface CustomProviderFormProps {
+  workspaceId: string;
+  revision: string;
+  initial?: ProviderConfigurationRead;
+  initialIcon?: CustomProviderIcon | null;
   existingProviderIDs: ReadonlySet<string>;
-  disabledProviders?: readonly string[];
   busy?: boolean;
-  mode?: 'create' | 'edit';
-  initialValues?: CustomProviderFormState;
-  allowExistingAuth?: boolean;
   authFailureHint?: string | null;
-  onSubmit: (plan: CustomProviderPersistPlan) => void | Promise<void>;
-  onCancel?: () => void;
+  onSubmit: (plan: CustomProviderPersistPlan) => Promise<void>;
+  onCancel: () => void;
   onDisconnect?: () => void | Promise<void>;
+}
+
+const protocolLabel = (protocol: CustomProviderProtocol, t: CustomProviderTranslator): string => {
+  switch (protocol) {
+    case 'chat-completions':
+      return t('settings.providers.page.custom.field.protocol.openaiChat');
+    case 'responses':
+      return t('settings.providers.page.custom.field.protocol.openaiResponses');
+    case 'messages':
+      return t('settings.providers.page.custom.field.protocol.anthropicMessages');
+    case 'generate-content':
+      return protocol;
+    default:
+      return protocol;
+  }
 };
 
 export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
+  workspaceId,
+  revision,
+  initial,
+  initialIcon = null,
   existingProviderIDs,
-  disabledProviders = [],
   busy = false,
-  mode = 'create',
-  initialValues,
-  allowExistingAuth = false,
   authFailureHint = null,
   onSubmit,
   onCancel,
   onDisconnect,
 }) => {
   const { t } = useI18n();
-  const isEdit = mode === 'edit';
-  const [form, setForm] = React.useState<CustomProviderFormState>(
-    () => initialValues ?? createEmptyCustomProviderForm(),
-  );
-  const [err, setErr] = React.useState<FieldErrors>({});
+  const isEdit = Boolean(initial);
+  const [form, setForm] = React.useState<CustomProviderFormState>(() => createEmptyCustomProviderForm(initial, initialIcon));
+  const [fieldErrors, setFieldErrors] = React.useState<CustomProviderFieldErrors>({});
   const [modelErrors, setModelErrors] = React.useState<ModelFieldErrors[]>([]);
   const [headerErrors, setHeaderErrors] = React.useState<HeaderFieldErrors[]>([]);
+  const [formError, setFormError] = React.useState<string | null>(null);
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveryError, setDiscoveryError] = React.useState<string | null>(null);
-  const [discoveredModels, setDiscoveredModels] = React.useState<DiscoveredModel[] | null>(null);
+  const [discoveredModels, setDiscoveredModels] = React.useState<ProviderModelDiscoveryResult['models'] | null>(null);
   // Rows open for editing. A provider can carry dozens of imported models, so
   // saved and imported rows start collapsed; a row added by hand opens.
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(() => (
-    new Set(initialValues ? [] : form.models.map((model) => model.row))
+    new Set(initial ? [] : form.models.map((model) => model.row))
   ));
-  const seededEditProviderIdRef = React.useRef<string | null>(null);
-  const logoProviderId = form.providerID.trim() || 'custom';
+  const lifetime = React.useRef(true);
+  React.useEffect(() => { lifetime.current = true; return () => { lifetime.current = false; }; }, []);
+
+  const logoProviderId = form.providerId.trim() || 'custom';
   const { hasLogo: providerHasLogo } = useProviderLogo(logoProviderId);
-  // A logo stored under the typed ID: kept when the provider was removed and is added again.
-  const storedLogo = useUIStore((state) => state.customProviderLogos[logoProviderId]);
-  const pickedLogoFile = form.logo instanceof File ? form.logo : null;
-  const [pickedLogoUrl, setPickedLogoUrl] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    if (!pickedLogoFile) {
-      setPickedLogoUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(pickedLogoFile);
-    setPickedLogoUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [pickedLogoFile]);
+  const disabled = busy || discovering;
 
-  React.useEffect(() => {
-    if (!initialValues) {
-      return;
-    }
-    // Edit mode: seed once per provider id so parent re-renders (new object
-    // identity for the same snapshot) do not wipe in-progress edits.
-    if (isEdit && seededEditProviderIdRef.current === initialValues.providerID) {
-      return;
-    }
-    seededEditProviderIdRef.current = isEdit ? initialValues.providerID : null;
-    setForm(initialValues);
-    setErr({});
-    setModelErrors([]);
-    setHeaderErrors([]);
-    setExpandedRows(new Set());
-    setDiscoveredModels(null);
-  }, [initialValues, isEdit]);
-
-  const setField = (key: keyof Pick<CustomProviderFormState, 'providerID' | 'name' | 'baseURL' | 'apiKey'>, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    setErr((prev) => ({ ...prev, [key]: undefined }));
+  const setField = (key: 'providerId' | 'name' | 'endpoint' | 'apiKey', value: string) => {
+    setForm((previous) => ({ ...previous, [key]: value }));
+    if (key === 'apiKey') return;
+    setFieldErrors((previous) => ({ ...previous, [key]: undefined }));
   };
 
-  const setModel = (index: number, key: ModelTextField, value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      models: prev.models.map((row, rowIndex) => (
-        rowIndex === index ? { ...row, [key]: value, metadataSource: 'manual' } : row
+  const setProtocol = (protocol: CustomProviderProtocol) => {
+    setForm((previous) => ({ ...previous, protocol }));
+  };
+
+  const setModel = (index: number, key: keyof ModelFieldErrors, value: string) => {
+    setForm((previous) => ({
+      ...previous,
+      models: previous.models.map((row, rowIndex) => (
+        rowIndex === index ? { ...row, [key]: value } : row
       )),
     }));
-    setModelErrors((prev) => {
-      const next = [...prev];
+    setModelErrors((previous) => {
+      const next = [...previous];
       next[index] = { ...(next[index] ?? {}), [key]: undefined };
       return next;
     });
   };
 
-  const setHeader = (index: number, key: 'key' | 'value', value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      headers: prev.headers.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)),
+  const toggleModality = (index: number, modality: CustomProviderFormState['models'][number]['modalities'][number]) => {
+    setForm((previous) => ({
+      ...previous,
+      models: previous.models.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const selected = row.modalities.includes(modality);
+        if (selected && row.modalities.length === 1) return row;
+        return {
+          ...row,
+          modalities: selected
+            ? row.modalities.filter((value) => value !== modality)
+            : [...row.modalities, modality],
+        };
+      }),
     }));
-    setHeaderErrors((prev) => {
-      const next = [...prev];
+  };
+
+  const setTools = (index: number, toolsSupported: boolean) => {
+    setForm((previous) => ({
+      ...previous,
+      models: previous.models.map((row, rowIndex) => (
+        rowIndex === index ? { ...row, toolsSupported } : row
+      )),
+    }));
+  };
+
+  const setHeader = (index: number, key: 'name' | 'value', value: string) => {
+    setForm((previous) => ({
+      ...previous,
+      headers: previous.headers.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)),
+    }));
+    setHeaderErrors((previous) => {
+      const next = [...previous];
       next[index] = { ...(next[index] ?? {}), [key]: undefined };
       return next;
     });
-  };
-
-  const discoverModels = async () => {
-    setDiscovering(true);
-    setDiscoveryError(null);
-    try {
-      const headers = Object.fromEntries(form.headers
-        .map((header) => [header.key.trim(), header.value.trim()] as const)
-        .filter(([key, value]) => key && value));
-      const response = await runtimeFetch('/api/provider/discover-models', {
-        method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          providerID: isEdit ? form.providerID : undefined,
-          baseURL: form.baseURL,
-          apiKey: form.apiKey,
-          headers,
-          enrich: true,
-          metadataProviderID: form.providerID,
-        }),
-      });
-      const payload: unknown = await response.json().catch(() => null);
-      const parsed = modelDiscoveryResponseSchema.safeParse(payload);
-      if (!response.ok || !parsed.success) {
-        throw new Error(modelDiscoveryErrorSchema.safeParse(payload).data?.error
-          || t('settings.providers.page.custom.discovery.failed'));
-      }
-      setDiscoveredModels(parsed.data.models);
-    } catch (error) {
-      setDiscoveryError(error instanceof Error ? error.message : t('settings.providers.page.custom.discovery.failed'));
-    } finally {
-      setDiscovering(false);
-    }
-  };
-
-  const addDiscoveredModels = (selected: DiscoveredModel[]) => {
-    setForm((previous) => {
-      const existing = new Set(previous.models.map((model) => model.id.trim()).filter(Boolean));
-      const added = selected.filter((model) => !existing.has(model.id)).map(modelRowFromDiscovery);
-      // The blank starter row of a new form gives way to the imported models.
-      const kept = previous.models.filter((model) => model.id.trim() || model.name.trim());
-      return { ...previous, models: [...kept, ...added] };
-    });
-    setModelErrors([]);
-    setDiscoveredModels(null);
   };
 
   const toggleRow = (row: string) => setExpandedRows((previous) => {
@@ -201,57 +174,75 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     return next;
   });
 
-  const toggleCapability = (index: number, target: ModelCapabilityList, capability: string) => {
-    setForm((previous) => ({
-      ...previous,
-      models: previous.models.map((model, rowIndex) => {
-        if (rowIndex !== index) return model;
-        const values = model[target];
-        const next = values.includes(capability) ? values.filter((value) => value !== capability) : [...values, capability];
-        return { ...model, [target]: next, capabilitiesKnown: true, metadataSource: 'manual' };
-      }),
-    }));
+  const discoverModels = async () => {
+    setDiscovering(true);
+    setDiscoveryError(null);
+    const runtime = getRuntimeKey();
+    try {
+      const result = await canonicalClient.discoverProviderModels(workspaceId, buildProviderDiscoveryRequest(form, isEdit));
+      if (lifetime.current && runtime === getRuntimeKey()) setDiscoveredModels(result.models);
+    } catch {
+      if (lifetime.current && runtime === getRuntimeKey()) {
+        setDiscoveryError(t('settings.providers.page.custom.discovery.failed'));
+      }
+    } finally {
+      if (lifetime.current) setDiscovering(false);
+    }
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (busy) {
-      return;
-    }
-
-    const output = validateCustomProvider({
-      form,
-      t: ((key, vars) => t(key as Parameters<typeof t>[0], vars)) as CustomProviderTranslator,
-      existingProviderIDs,
-      disabledProviders,
-      editingProviderID: isEdit ? form.providerID : undefined,
-      allowExistingAuth: isEdit && allowExistingAuth,
+  const addDiscoveredModels = (models: ProviderModelDiscoveryResult['models']) => {
+    setForm((previous) => {
+      const existing = new Set(previous.models.map((model) => model.modelId.trim()).filter(Boolean));
+      const added = models.filter((model) => !existing.has(model.modelId)).map((model) => createModelRow(model));
+      // The blank starter row of a new form gives way to the imported models.
+      const kept = previous.models.filter((model) => model.modelId.trim() || model.name.trim());
+      return { ...previous, models: [...kept, ...added] };
     });
-    setErr(output.err);
-    setModelErrors(output.models);
-    setHeaderErrors(output.headers);
+    setModelErrors([]);
+    setDiscoveredModels(null);
+  };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy || discovering) return;
+    setFormError(null);
+    const validation = validateCustomProviderForm(form, existingProviderIDs, isEdit, t);
+    setFieldErrors(validation.fields);
+    setModelErrors(validation.models);
+    setHeaderErrors(validation.headers);
     // A collapsed row would hide its own error.
     const rowsWithErrors = form.models
-      .filter((_, index) => Object.values(output.models[index] ?? {}).some(Boolean))
+      .filter((_, index) => Object.values(validation.models[index] ?? {}).some(Boolean))
       .map((model) => model.row);
     if (rowsWithErrors.length > 0) {
       setExpandedRows((previous) => new Set([...previous, ...rowsWithErrors]));
     }
-    if (!output.result) {
+    if (!validation.valid) return;
+
+    let plan: CustomProviderPersistPlan;
+    try {
+      plan = buildCustomProviderRequest(form, revision);
+    } catch {
+      setFormError(t('settings.providers.native.invalidConfiguration'));
       return;
     }
-    await onSubmit(output.result);
+    try {
+      await onSubmit(plan);
+      if (lifetime.current) setForm((previous) => ({ ...previous, apiKey: '' }));
+    } catch {
+      if (lifetime.current) setFormError(t('settings.providers.page.toast.customProviderSaveFailed'));
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-0">
+    <form onSubmit={submit} className="space-y-0">
       <SettingsSection
         title={isEdit ? t('settings.providers.page.custom.editTitle') : t('settings.providers.page.custom.title')}
         divider={false}
         settingsItem="providers.custom"
         contentClassName={SETTINGS_FIELDS_STACK_CLASS}
       >
-        <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.description')}</p>
+        <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.native.customDescription')}</p>
 
         {authFailureHint ? (
           <p className="typography-meta text-[var(--status-warning)]" role="status">
@@ -264,16 +255,16 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           info={t('settings.providers.page.custom.field.providerID.info')}
         >
           <Input
-            value={form.providerID}
-            onChange={(event) => setField('providerID', event.target.value)}
+            value={form.providerId}
+            onChange={(event) => setField('providerId', event.target.value)}
             placeholder={t('settings.providers.page.custom.field.providerID.placeholder')}
-            className="h-8 rounded-md px-3 font-mono text-xs"
+            className="h-7 rounded-md px-3 font-mono text-xs"
             autoFocus={!isEdit}
             disabled={isEdit || busy}
-            aria-invalid={Boolean(err.providerID)}
+            aria-invalid={Boolean(fieldErrors.providerId)}
             aria-label={t('settings.providers.page.custom.field.providerID.label')}
           />
-          {err.providerID ? <p className="mt-1 typography-meta text-[var(--status-error)]">{err.providerID}</p> : null}
+          {fieldErrors.providerId ? <p className="mt-1 typography-meta text-[var(--status-error)]">{fieldErrors.providerId}</p> : null}
         </SettingsStackedField>
 
         <SettingsStackedField
@@ -283,31 +274,21 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           <Select
             value={form.protocol}
             onValueChange={(protocol) => {
-              if (!(protocol in CUSTOM_PROVIDER_PROTOCOLS)) {
-                return;
+              if (isCustomProviderProtocol(protocol)) {
+                setProtocol(protocol);
               }
-              // Saved levels were spelled for the old protocol; rebuild them for the new one.
-              setForm((prev) => ({
-                ...prev,
-                protocol,
-                models: prev.models.map((row) => (row.savedVariants ? { ...row, savedVariants: {} } : row)),
-              }));
             }}
             disabled={busy}
           >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className="w-full">
-              <SelectValue>
-                {form.protocol === 'openai-responses'
-                  ? t('settings.providers.page.custom.field.protocol.openaiResponses')
-                  : form.protocol === 'anthropic-messages'
-                    ? t('settings.providers.page.custom.field.protocol.anthropicMessages')
-                    : t('settings.providers.page.custom.field.protocol.openaiChat')}
-              </SelectValue>
+            <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+              <SelectValue>{protocolLabel(form.protocol, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="openai-chat">{t('settings.providers.page.custom.field.protocol.openaiChat')}</SelectItem>
-              <SelectItem value="openai-responses">{t('settings.providers.page.custom.field.protocol.openaiResponses')}</SelectItem>
-              <SelectItem value="anthropic-messages">{t('settings.providers.page.custom.field.protocol.anthropicMessages')}</SelectItem>
+              {CUSTOM_PROVIDER_PROTOCOLS.map((protocol) => (
+                <SelectItem key={protocol} value={protocol}>
+                  {protocolLabel(protocol, t)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </SettingsStackedField>
@@ -319,12 +300,13 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           <Input
             value={form.name}
             onChange={(event) => setField('name', event.target.value)}
+            disabled={busy}
             placeholder={t('settings.providers.page.custom.field.name.placeholder')}
-            className="h-8 rounded-md px-3"
-            aria-invalid={Boolean(err.name)}
+            className="h-7 rounded-md px-3"
+            aria-invalid={Boolean(fieldErrors.name)}
             aria-label={t('settings.providers.page.custom.field.name.label')}
           />
-          {err.name ? <p className="mt-1 typography-meta text-[var(--status-error)]">{err.name}</p> : null}
+          {fieldErrors.name ? <p className="mt-1 typography-meta text-[var(--status-error)]">{fieldErrors.name}</p> : null}
         </SettingsStackedField>
 
         <SettingsStackedField
@@ -341,6 +323,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               aria-label={t('settings.providers.page.custom.field.icon.option.default')}
               title={t('settings.providers.page.custom.field.icon.option.default')}
               aria-pressed={form.icon === null}
+              disabled={busy}
               onClick={() => setForm((previous) => ({ ...previous, icon: null }))}
             >
               {providerHasLogo
@@ -357,6 +340,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                 aria-label={t(`settings.providers.page.custom.field.icon.option.${entry.id}`)}
                 title={t(`settings.providers.page.custom.field.icon.option.${entry.id}`)}
                 aria-pressed={form.icon === entry.id}
+                disabled={busy}
                 onClick={() => setForm((previous) => ({ ...previous, icon: entry.id }))}
               >
                 <Icon name={entry.icon} className="size-4" />
@@ -365,60 +349,41 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           </div>
         </SettingsStackedField>
 
-        {providerLogoUploadSupported() ? (
-          <SettingsStackedField
-            label={t('settings.providers.page.logo.title')}
-            info={t('settings.providers.page.logo.info')}
-            settingsItem="providers.logo"
-          >
-            <ProviderLogoImageControl
-              preview={pickedLogoUrl
-                ? <img src={pickedLogoUrl} alt="" className="size-5 object-contain" />
-                : form.logo === null && storedLogo ? <ProviderLogo providerId={logoProviderId} alt="" className="size-5" /> : null}
-              busy={busy}
-              onPick={(file) => setForm((previous) => ({ ...previous, logo: file }))}
-              onRemove={() => setForm((previous) => ({ ...previous, logo: 'removed' }))}
-            />
-          </SettingsStackedField>
-        ) : null}
-
         <SettingsStackedField
           label={t('settings.providers.page.custom.field.baseURL.label')}
           info={t('settings.providers.page.custom.field.baseURL.info')}
         >
           <Input
-            value={form.baseURL}
-            onChange={(event) => setField('baseURL', event.target.value)}
+            value={form.endpoint}
+            onChange={(event) => setField('endpoint', event.target.value)}
+            disabled={busy}
             placeholder={t('settings.providers.page.custom.field.baseURL.placeholder')}
-            className="h-8 rounded-md px-3 font-mono text-xs"
-            aria-invalid={Boolean(err.baseURL)}
+            className="h-7 rounded-md px-3 font-mono text-xs"
+            aria-invalid={Boolean(fieldErrors.endpoint)}
             aria-label={t('settings.providers.page.custom.field.baseURL.label')}
           />
-          {err.baseURL ? <p className="mt-1 typography-meta text-[var(--status-error)]">{err.baseURL}</p> : null}
+          {fieldErrors.endpoint ? <p className="mt-1 typography-meta text-[var(--status-error)]">{fieldErrors.endpoint}</p> : null}
         </SettingsStackedField>
 
         <SettingsStackedField
           label={t('settings.providers.page.custom.field.apiKey.label')}
-          info={
-            isEdit && allowExistingAuth
-              ? t('settings.providers.page.custom.field.apiKey.editInfo')
-              : t('settings.providers.page.custom.field.apiKey.info')
-          }
+          info={isEdit
+            ? t('settings.providers.page.custom.field.apiKey.editInfo')
+            : t('settings.providers.page.custom.field.apiKey.info')}
+          description={t('settings.providers.native.secretHint')}
         >
           <Input
             type="password"
             value={form.apiKey}
             onChange={(event) => setField('apiKey', event.target.value)}
-            placeholder={
-              isEdit && allowExistingAuth
-                ? t('settings.providers.page.custom.field.apiKey.editPlaceholder')
-                : t('settings.providers.page.custom.field.apiKey.placeholder')
-            }
-            className="h-8 rounded-md px-3 font-mono text-xs"
-            aria-invalid={Boolean(err.apiKey)}
+            disabled={busy}
+            placeholder={isEdit
+              ? t('settings.providers.page.custom.field.apiKey.editPlaceholder')
+              : t('settings.providers.page.custom.field.apiKey.placeholder')}
+            autoComplete="new-password"
+            className="h-7 rounded-md px-3 font-mono text-xs"
             aria-label={t('settings.providers.page.custom.field.apiKey.label')}
           />
-          {err.apiKey ? <p className="mt-1 typography-meta text-[var(--status-error)]">{err.apiKey}</p> : null}
         </SettingsStackedField>
       </SettingsSection>
 
@@ -432,22 +397,21 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               type="button"
               variant="outline"
               size="xs"
-              className="!font-normal"
               onClick={() => void discoverModels()}
-              disabled={busy || discovering || !form.baseURL.trim()}
+              disabled={disabled || !form.endpoint.trim()}
             >
               <Icon name="search" className="size-3.5" />
               {discovering
                 ? t('settings.providers.page.custom.discovery.fetching')
                 : t('settings.providers.page.custom.discovery.fetch')}
             </Button>
-            <SettingsInfoHint>{t('settings.providers.page.custom.discovery.info')}</SettingsInfoHint>
+            <SettingsInfoHint>{t('settings.providers.native.discoveryHint')}</SettingsInfoHint>
           </div>
           {discoveryError ? <p className="typography-meta text-[var(--status-error)]" role="alert">{discoveryError}</p> : null}
           {discoveredModels ? (
             <CustomProviderModelDiscovery
               models={discoveredModels}
-              existingIds={new Set(form.models.map((model) => model.id.trim()).filter(Boolean))}
+              existingIds={new Set(form.models.map((model) => model.modelId.trim()).filter(Boolean))}
               onAdd={addDiscoveredModels}
               onCancel={() => setDiscoveredModels(null)}
             />
@@ -461,25 +425,17 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               model={model}
               errors={modelErrors[index]}
               expanded={expandedRows.has(model.row)}
+              disabled={busy}
               onToggle={() => toggleRow(model.row)}
               onChange={(key, value) => setModel(index, key, value)}
-              onToggleCapability={(target, capability) => toggleCapability(index, target, capability)}
-              onToolsChange={(tools) => setForm((previous) => ({
-                ...previous,
-                models: previous.models.map((entry, rowIndex) => rowIndex === index ? { ...entry, tools, capabilitiesKnown: true, metadataSource: 'manual' } : entry),
-              }))}
-              // Unchecked writes `chat` explicitly: the save merges over the
-              // stored entry, so leaving `type` out would keep `image`.
-              onImageGenerationChange={(imageGeneration) => setForm((previous) => ({
-                ...previous,
-                models: previous.models.map((entry, rowIndex) => rowIndex === index ? { ...entry, type: imageGeneration ? 'image' : 'chat' } : entry),
-              }))}
+              onToggleModality={(modality) => toggleModality(index, modality)}
+              onToolsChange={(tools) => setTools(index, tools)}
               onRemove={form.models.length > 1 ? () => {
-                setForm((prev) => ({
-                  ...prev,
-                  models: prev.models.filter((_, rowIndex) => rowIndex !== index),
+                setForm((previous) => ({
+                  ...previous,
+                  models: previous.models.filter((_, rowIndex) => rowIndex !== index),
                 }));
-                setModelErrors((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+                setModelErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
               } : undefined}
             />
           ))}
@@ -488,11 +444,11 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           type="button"
           variant="outline"
           size="xs"
-          className="!font-normal"
+          disabled={disabled}
           onClick={() => {
             const row = createModelRow();
-            setForm((prev) => ({ ...prev, models: [...prev.models, row] }));
-            setModelErrors((prev) => [...prev, {}]);
+            setForm((previous) => ({ ...previous, models: [...previous.models, row] }));
+            setModelErrors((previous) => [...previous, {}]);
             setExpandedRows((previous) => new Set([...previous, row.row]));
           }}
         >
@@ -505,95 +461,126 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         contentClassName={SETTINGS_FIELDS_STACK_CLASS}
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
-        {form.headers.map((header, index) => (
-          <div key={header.row} className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1 space-y-2">
-                <div>
-                  <label className={SETTINGS_FIELD_LABEL_CLASS}>
-                    {t('settings.providers.page.custom.headers.keyLabel')}
-                  </label>
-                  <Input
-                    value={header.key}
-                    onChange={(event) => setHeader(index, 'key', event.target.value)}
-                    placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
-                    className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
-                    aria-label={t('settings.providers.page.custom.headers.keyLabel')}
-                  />
-                  {headerErrors[index]?.key ? (
-                    <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.key}</p>
-                  ) : null}
-                </div>
-                <div>
-                  <label className={SETTINGS_FIELD_LABEL_CLASS}>
-                    {t('settings.providers.page.custom.headers.valueLabel')}
-                  </label>
-                  <Input
-                    value={header.value}
-                    onChange={(event) => setHeader(index, 'value', event.target.value)}
-                    placeholder={t('settings.providers.page.custom.headers.valuePlaceholder')}
-                    className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
-                    aria-label={t('settings.providers.page.custom.headers.valueLabel')}
-                  />
-                  {headerErrors[index]?.value ? (
-                    <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
-                  ) : null}
+        {isEdit ? (
+          <div className="space-y-2">
+            {form.headerNames.length > 0 ? (
+              <p className="typography-meta text-muted-foreground">
+                {t('settings.providers.native.configuredHeaders', { names: form.headerNames.join(', ') })}
+              </p>
+            ) : null}
+            <SettingsCheckboxRow
+              checked={form.replaceHeaders}
+              onChange={(replaceHeaders) => setForm((previous) => ({
+                ...previous,
+                replaceHeaders,
+                headers: replaceHeaders ? previous.headers : [],
+              }))}
+              label={t('settings.providers.native.replaceHeaders')}
+              ariaLabel={t('settings.providers.native.replaceHeaders')}
+            />
+          </div>
+        ) : null}
+        {form.replaceHeaders ? (
+          <>
+            {form.headers.map((header, index) => (
+              <div key={header.row} className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div>
+                      <label className={SETTINGS_FIELD_LABEL_CLASS}>
+                        {t('settings.providers.page.custom.headers.keyLabel')}
+                      </label>
+                      <Input
+                        value={header.name}
+                        onChange={(event) => setHeader(index, 'name', event.target.value)}
+                        disabled={busy}
+                        placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
+                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
+                        aria-invalid={Boolean(headerErrors[index]?.name)}
+                        aria-label={t('settings.providers.page.custom.headers.keyLabel')}
+                      />
+                      {headerErrors[index]?.name ? (
+                        <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
+                      ) : null}
+                    </div>
+                    <div>
+                      <label className={SETTINGS_FIELD_LABEL_CLASS}>
+                        {t('settings.providers.page.custom.headers.valueLabel')}
+                      </label>
+                      <Input
+                        type="password"
+                        value={header.value}
+                        onChange={(event) => setHeader(index, 'value', event.target.value)}
+                        disabled={busy}
+                        placeholder={t('settings.providers.page.custom.headers.valuePlaceholder')}
+                        autoComplete="new-password"
+                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
+                        aria-invalid={Boolean(headerErrors[index]?.value)}
+                        aria-label={t('settings.providers.page.custom.headers.valueLabel')}
+                      />
+                      {headerErrors[index]?.value ? (
+                        <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={SETTINGS_ICON_BUTTON_CLASS}
+                    disabled={form.headers.length <= 1}
+                    onClick={() => {
+                      if (form.headers.length <= 1) return;
+                      setForm((previous) => ({
+                        ...previous,
+                        headers: previous.headers.filter((_, rowIndex) => rowIndex !== index),
+                      }));
+                      setHeaderErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
+                    }}
+                    aria-label={t('settings.providers.page.custom.headers.remove')}
+                  >
+                    <Icon name="delete-bin" className="size-4" />
+                  </Button>
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={SETTINGS_ICON_BUTTON_CLASS}
-                disabled={form.headers.length <= 1}
-                onClick={() => {
-                  if (form.headers.length <= 1) return;
-                  setForm((prev) => ({
-                    ...prev,
-                    headers: prev.headers.filter((_, rowIndex) => rowIndex !== index),
-                  }));
-                  setHeaderErrors((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
-                }}
-                aria-label={t('settings.providers.page.custom.headers.remove')}
-              >
-                <Icon name="delete-bin" className="size-4" />
-              </Button>
-            </div>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="!font-normal"
-          onClick={() => {
-            setForm((prev) => ({ ...prev, headers: [...prev.headers, createHeaderRow()] }));
-            setHeaderErrors((prev) => [...prev, {}]);
-          }}
-        >
-          {t('settings.providers.page.custom.headers.add')}
-        </Button>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={disabled}
+              onClick={() => {
+                setForm((previous) => ({
+                  ...previous,
+                  headers: [...previous.headers, createHeaderRow()],
+                }));
+                setHeaderErrors((previous) => [...previous, {}]);
+              }}
+            >
+              {t('settings.providers.page.custom.headers.add')}
+            </Button>
+          </>
+        ) : null}
       </SettingsSection>
 
+      {formError ? <p className="py-3 typography-meta text-[var(--status-error)]" role="alert">{formError}</p> : null}
+
       <div className="flex flex-wrap items-center gap-2 py-4">
-        {onCancel ? (
-          <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={onCancel} disabled={busy}>
-            {t('settings.providers.page.custom.actions.back')}
-          </Button>
-        ) : null}
+        <Button type="button" variant="outline" size="xs" onClick={onCancel} disabled={busy}>
+          {t('settings.providers.page.custom.actions.back')}
+        </Button>
         {onDisconnect ? (
           <Button
             type="button"
             variant="destructive"
             size="xs"
-            className="!font-normal"
             onClick={() => void onDisconnect()}
             disabled={busy}
           >
             {t('settings.providers.page.actions.disconnect')}
           </Button>
         ) : null}
-        <Button type="submit" size="xs" className="!font-normal" disabled={busy}>
+        <Button type="submit" size="xs" disabled={busy || discovering}>
           {busy
             ? t('settings.providers.page.actions.saving')
             : isEdit

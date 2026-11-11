@@ -168,7 +168,7 @@ describe('RoutingPage', () => {
       root.render(<RoutingPage />);
     });
     const toggleButton = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('Hard'));
-    expect(toggleButton).not.toBeUndefined();
+    expect(toggleButton).toBeDefined();
     await act(async () => {
       toggleButton?.click();
     });

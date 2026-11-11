@@ -24,7 +24,6 @@ const CAPABILITY_ROWS = {
   shells: { icon: 'terminal-box', titleKey: 'settings.extensions.capability.shells', detailKey: 'settings.extensions.capability.shells.detail' },
   conversation: { icon: 'chat-history', titleKey: 'settings.extensions.capability.conversation', detailKey: 'settings.extensions.capability.conversation.detail' },
   filesystem: { icon: 'hard-drive-2', titleKey: 'settings.extensions.capability.filesystem', detailKey: 'settings.extensions.capability.filesystem.detail' },
-  opencode: { icon: 'plug', titleKey: 'settings.extensions.capability.opencode', detailKey: 'settings.extensions.capability.opencode.detail' },
   service: { icon: 'terminal', titleKey: 'settings.extensions.capability.service', detailKey: 'settings.extensions.capability.service.detail' },
   network: { icon: 'plug', titleKey: 'settings.extensions.capability.network', detailKey: 'settings.extensions.capability.network.detail' },
   origins: { icon: 'global', titleKey: 'settings.extensions.capability.origins', detailKey: 'settings.extensions.capability.origins.detail' },
@@ -33,7 +32,6 @@ const CAPABILITY_ROWS = {
   sessionAnswers: { icon: 'shield-check', titleKey: 'settings.extensions.capability.sessionAnswers', detailKey: 'settings.extensions.capability.sessionAnswers.detail' },
   instructions: { icon: 'book-open', titleKey: 'settings.extensions.capability.instructions', detailKey: 'settings.extensions.capability.instructions.detail' },
   skills: { icon: 'sparkling', titleKey: 'settings.extensions.capability.skills', detailKey: 'settings.extensions.capability.skills.detail' },
-  opencodePlugin: { icon: 'puzzle', titleKey: 'settings.extensions.capability.opencodePlugin', detailKey: 'settings.extensions.capability.opencodePlugin.detail' },
   links: { icon: 'link', titleKey: 'settings.extensions.capability.links', detailKey: 'settings.extensions.capability.links.detail' },
 } satisfies Record<GuestCapability, { icon: IconName; titleKey: I18nKey; detailKey: I18nKey }>;
 

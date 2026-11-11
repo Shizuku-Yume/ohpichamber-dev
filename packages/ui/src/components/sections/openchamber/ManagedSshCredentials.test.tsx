@@ -56,7 +56,7 @@ const mount = async (initialSelection = '') => {
   // SAFETY: Every other Git method is a throwing function supplied by the proxy above.
   const gitApi = git as GitAPI;
   const apis: RuntimeAPIs = {
-    runtime: { platform: 'web', isDesktop: false }, git: gitApi,
+    runtime: { platform: 'web', isDesktop: false, isVSCode: false }, git: gitApi,
     get sourceControl() { return unused(); }, get terminal() { return unused(); }, get files() { return unused(); },
     get settings() { return unused(); }, get permissions() { return unused(); }, get notifications() { return unused(); },
   };

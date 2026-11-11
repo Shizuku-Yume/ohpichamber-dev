@@ -43,8 +43,12 @@ export const SettingsCardPill: React.FC<{ tone: SettingsCardTone; children: Reac
 );
 
 /** Small outlined chip for the card footer (scope, source). */
-export const SettingsCardChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
+export const SettingsCardChip: React.FC<{ children: React.ReactNode; className?: string; title?: string }> = ({
+  children,
+  className,
+  title,
+}) => (
+  <span title={title} className={cn('oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium', className)}>
     {children}
   </span>
 );
