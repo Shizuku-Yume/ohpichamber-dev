@@ -202,7 +202,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
       if (!summary) return;
       const descriptor = urlMatcher.descriptorOf(ref.provider);
       const reference = formatChangeRequestReference(descriptor, ref.number);
-      const label = getPrStatusLabel(summary, t);
+      const label = getPrStatusLabel(summary, descriptor.terminology.changeRequest, t);
       looks.set(ref.key, { color: `var(--pr-${summary.visualState})`, text: label ? `${reference} · ${label}` : reference });
     });
     repositoryIssueRefs.forEach((ref, index) => {

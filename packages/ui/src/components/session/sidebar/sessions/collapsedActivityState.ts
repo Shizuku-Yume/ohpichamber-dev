@@ -5,7 +5,7 @@ import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests'
 import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { usePrWatchStore } from '@/sync/pr-watch';
-import { useNotificationStore } from '@/sync/notification-store';
+
 import { isSessionUnread } from '@/sync/session-unread';
 
 // Ordered by how much the user is needed: a blocked turn outranks a running
@@ -117,9 +117,8 @@ export const useCollapsedSessionActivityState = ({
     return null;
   }, [enabled, ids.active]));
   // The Host ends turns on the root session, so a subtask's record never
-  // carries its own idle mark. A subtask turn is known from the client's
-  // notification index, which is why `notifyOnSubtasks` reads both sources —
-  // the same union the tray counts with.
+  // carries its own idle mark; the unread mark is read from the session
+  // record alone, as every other view reads it.
   const unreadFromMetadata = useGlobalSessionsStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.unread) {
@@ -127,14 +126,7 @@ export const useCollapsedSessionActivityState = ({
     }
     return null;
   }, [enabled, ids.unread]));
-  const unreadFromNotifications = useNotificationStore(React.useCallback((state): CollapsedActivityState => {
-    if (!enabled) return null;
-    for (const sessionId of ids.unread) {
-      if ((state.index.session.unseenCount[sessionId] ?? 0) > 0) return 'unread';
-    }
-    return null;
-  }, [enabled, ids.unread]));
-  const unread = unreadFromMetadata ?? unreadFromNotifications;
+  const unread = unreadFromMetadata;
   // Pending requests come from the cross-directory index, which every
   // directory feeds live and the host seeds, so a collapsed group in a project
   // that was never opened still shows the request. Subtasks count too: a

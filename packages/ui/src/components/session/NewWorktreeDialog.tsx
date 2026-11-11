@@ -246,7 +246,7 @@ export function NewWorktreeDialog({
   // A GitLab project's items are merge requests: the PR-or-issue copy says so.
   const itemProvider = useRepositoryReferenceProvider(open ? projectDirectory : null);
   const tItem = React.useCallback(
-    (key: I18nKey) => t(changeRequestCopy(key, itemProvider)),
+    (key: I18nKey) => t(changeRequestCopy(key, itemProvider?.terminology?.changeRequest ?? null)),
     [itemProvider, t],
   );
   // The fields the visible tab edits.
