@@ -27,9 +27,9 @@ type ProjectSection = {
 
 type ProjectSectionCacheEntry = {
   project: ProjectItem;
-  activeSessions: Session[];
-  archivedSessions: Session[];
-  groupingSessions: Session[];
+  activeSessions: readonly Session[];
+  archivedSessions: readonly Session[];
+  groupingSessions: readonly Session[];
   availableWorktrees: WorktreeMetadata[];
   rootBranch: string | null;
   /** Current branch of every worktree directory the section renders. */
@@ -54,7 +54,7 @@ const worktreeBranchesKeyFor = (
 // Ranks only order worktree groups, so a project without worktrees has none
 // to compare.
 const worktreeRanksKeyFor = (
-  sessions: Session[],
+  sessions: readonly Session[],
   worktrees: WorktreeMetadata[],
   sessionOrderRanks: ReadonlyMap<string, number>,
 ): string => worktrees.length === 0
@@ -128,7 +128,7 @@ export const useSessionSidebarSections = (args: Args) => {
     const nextCache = new Map<string, ProjectSectionCacheEntry>();
     let reusedSections = 0;
     let rebuiltSections = 0;
-    const sameSessions = (left: Session[], right: Session[]): boolean => (
+    const sameSessions = (left: readonly Session[], right: readonly Session[]): boolean => (
       left.length === right.length && left.every((session, index) => session === right[index])
     );
 

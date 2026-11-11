@@ -10,7 +10,7 @@ import {
   withReviewSessionMarker,
 } from '@/lib/sessionReviewMetadata';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAutoReviewStore, type AutoReviewRun } from '@/stores/useAutoReviewStore';
+import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { usePermissionStore } from '@/stores/permissionStore';
@@ -44,11 +44,6 @@ type StartReviewFlowInput = SessionModelContext & {
   autoReview?: boolean;
 };
 
-type AssistantTextMessage = {
-  id: string;
-  text: string;
-};
-
 const getMessageCreatedAt = (message: Message): number => message.createdAt;
 
 const getMessageRole = (message: Message): string => message.role;
@@ -60,25 +55,6 @@ const getAssistantText = (message: Message): string => message.parts
 
 const isCompactionCommandMessage = (message: Message): boolean => message.parts.some((part) =>
   part.type === 'step_summary' && part.title.toLowerCase().includes('compact'));
-const getLatestAssistantTextMessage = (
-  sessionID: string,
-  directory: string,
-  lastForwardedMessageID?: string,
-  afterCreatedAt = 0,
-): AssistantTextMessage | null => {
-  const messages = getSyncMessages(sessionID, directory);
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message.messageId === lastForwardedMessageID) return null;
-    if (getMessageRole(message) !== 'assistant') continue;
-    if (getMessageCreatedAt(message) < afterCreatedAt - 1000) continue;
-    if (isCompactionCommandMessage(message)) continue;
-    const text = getAssistantText(message).trim();
-    if (!text) continue;
-    return { id: message.messageId, text };
-  }
-  return null;
-};
 
 /** A session is ready for handoff only after its latest native turn is terminal. */
 const isSessionIdle = (sessionID: string, directory: string): boolean => {

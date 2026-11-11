@@ -23,7 +23,6 @@ describe('getSessionNodesActivityState', () => {
       nodes,
       new Set(['active-child']),
       new Set(['unread']),
-      false,
     )).toBe('active');
   });
 

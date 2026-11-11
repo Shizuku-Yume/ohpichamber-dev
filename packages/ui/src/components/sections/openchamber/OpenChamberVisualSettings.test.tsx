@@ -8,7 +8,6 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import { useUIStore } from '@/stores/useUIStore';
 
 import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 
