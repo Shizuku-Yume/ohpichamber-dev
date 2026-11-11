@@ -1,7 +1,7 @@
 import React from 'react';
 import { measureElement, useVirtualizer } from '@tanstack/react-virtual';
 
-import type { SkillsCatalogItem } from '@/lib/api/types';
+import type { SkillsCatalogItem } from '@/stores/useSkillsCatalogStore';
 
 // A source or a search can hold thousands of skills (one repository has 8,451),
 // and mounting every row froze the page for half a minute on a source click
