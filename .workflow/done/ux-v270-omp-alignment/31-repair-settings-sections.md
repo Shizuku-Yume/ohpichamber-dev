@@ -8,7 +8,6 @@
 **Read first:** spec "How it is built" (Merge); `decisions.md: 2026-11-10 - OMP TUI parity…`; the archived task 17 record; `packages/ui/src/components/sections/PATTERNS.md`; skills `ui-api-decoupling`, `locale-ui-patterns`, `openchamber-change-discipline`
 **Check:** in your worktree, `bun check --all` → 0 errors in slice 31 files (about 298 errors in 39 files at scaffold `93a3c7549`; largest: `mcp` 76, `providers` 56, `openchamber` 35, `plugins` 30, `agents` 23, `skills` 20, `snippets` 26, `commands` 13); `bun scripts/upstream-drift.mjs --check --slice 31` → 0 unexplained; `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/sections` → exit 0
 - **Base commit:** f3afaa8d6504b5eb2f9a1fd8e7de4184ca551f31
-- **Status:** active
 
 - [x] Fix every type error in slice 31 files by porting the merged upstream callers onto the fork's existing Canonical Client, Host and store contracts. Do not change exported shapes in `src/sync`, `src/stores` or `src/api` (slice 34 owns them); when a caller needs data the contract does not provide, record it in `## Progress` and keep the upstream UI behaviour behind the closest existing call.
 - [x] Plugins, Agents, Commands and OMP Settings pages get the minimum change that compiles and keeps current behaviour; tasks 25-26 rebuild them, so do not redesign them here.
