@@ -22,7 +22,7 @@ type Args = {
   sortedSessions: Session[];
   /** Sessions in work, in their block's order: their neighbours there are prefetched too. */
   workSessions?: readonly Session[];
-  prefetchSession: (target: { directory: string; sessionID: string }) => Promise<void>;
+  prefetchSession: (target: { directory: string; sessionId: string }) => Promise<void>;
 };
 
 type PrefetchRequest = {
