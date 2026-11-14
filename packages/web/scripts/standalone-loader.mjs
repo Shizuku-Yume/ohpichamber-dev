@@ -14,7 +14,6 @@ export function findRuntimeRoot(packageRoot = webRoot) {
 }
 
 export function ensureAgentRuntimeSymlinks(root) {
-  if (root.includes('.asar')) return;
   const manifestPath = path.join(root, 'manifest.json');
   if (!fs.existsSync(manifestPath)) return;
   let manifest;
@@ -34,7 +33,7 @@ export function ensureAgentRuntimeSymlinks(root) {
       } catch {
         // missing or mismatched link
       }
-      try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch { }
+      fs.mkdirSync(path.dirname(file), { recursive: true });
       try { fs.rmSync(file, { force: true, recursive: true }); } catch { }
       try {
         fs.symlinkSync(item.link, file);
