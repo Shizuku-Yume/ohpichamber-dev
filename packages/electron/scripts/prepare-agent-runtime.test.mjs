@@ -4,9 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { stageDependencyClosure } from './prepare-agent-runtime.mjs';
+import { assertNativeRuntimePackageAvailable, stageDependencyClosure } from './prepare-agent-runtime.mjs';
 
 const fixture = t => {
+
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-closure-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const pkg = (directory, manifest, source = 'module.exports = {};') => {
@@ -17,6 +18,15 @@ const fixture = t => {
   return { root, pkg, source: path.join(root, 'input'), output: path.join(root, 'payload') };
 };
 
+test('requires a pinned source-built native leaf for the target before staging', () => {
+  assertNativeRuntimePackageAvailable({ overrides: {
+    '@oh-my-pi/pi-natives-linux-x64': 'file:vendor/omp/pi-natives-linux-x64.tgz',
+  } }, { platform: 'linux', architecture: 'x64' });
+  assert.throws(
+    () => assertNativeRuntimePackageAvailable({ overrides: {} }, { platform: 'darwin', architecture: 'arm64' }),
+    /darwin-arm64.*source-built.*post-m3-hardening\/29-vendor-native-leaves/,
+  );
+});
 test('relocated closure resolves conflicting versions, cycles, peers and native assets without source node_modules', t => {
   const { root, pkg, source, output } = fixture(t);
   pkg(source, { name: 'service', version: '1', dependencies: { a: '1', b: '1' } }, 'module.exports = [require("a"), require("b")];');
