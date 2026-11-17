@@ -1,5 +1,5 @@
 import { ModelSchema, ProviderConfigureRequestSchema, ProviderModelDiscoveryRequestSchema } from '@openchamber/agent-contract';
-import type { Model, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
+import type { ImageModelConfigureRequest, Model, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 
@@ -19,6 +19,7 @@ export interface ModelRow {
   maxOutputTokens: string;
   modalities: Model['modalities'];
   toolsSupported?: boolean;
+  isImage?: boolean;
   /** Canonical fields the controls do not edit (reasoning, pricing, status, enabled). */
   base?: Model;
 }
@@ -40,6 +41,7 @@ export interface CustomProviderPersistPlan {
   request: ProviderConfigureRequest;
   apiKey: string;
   icon: CustomProviderIcon | null;
+  imageModels?: Array<ImageModelConfigureRequest['model']>;
 }
 
 export type CustomProviderTranslator = (key: I18nKey) => string;
@@ -119,7 +121,20 @@ export function createEmptyCustomProviderForm(
     replaceHeaders: !initial,
     headerNames: initial?.headerNames ?? [],
     headers: initial ? [] : [createHeaderRow()],
-    models: initial ? initial.models.map(createModelRow) : [createModelRow()],
+    models: initial
+      ? [
+          ...initial.models.map(createModelRow),
+          ...(initial.imageModels ?? []).map((m) => ({
+            row: crypto.randomUUID(),
+            modelId: m.modelId,
+            name: m.name,
+            contextWindow: '',
+            maxOutputTokens: '',
+            modalities: ['image'] as Model['modalities'],
+            isImage: true,
+          })),
+        ]
+      : [createModelRow()],
     icon,
   };
 }
@@ -167,12 +182,14 @@ export function validateCustomProviderForm(
     const errors: ModelFieldErrors = {};
     if (!row.modelId.trim()) errors.modelId = t('settings.providers.page.custom.error.required');
     if (!row.name.trim()) errors.name = t('settings.providers.page.custom.error.required');
-    if (!row.contextWindow.trim()) errors.contextWindow = t('settings.providers.page.custom.error.required');
-    else if (!positiveInteger(row.contextWindow)) errors.contextWindow = t('settings.providers.page.custom.error.positiveInteger');
-    if (!row.maxOutputTokens.trim()) errors.maxOutputTokens = t('settings.providers.page.custom.error.required');
-    else if (!positiveInteger(row.maxOutputTokens)) errors.maxOutputTokens = t('settings.providers.page.custom.error.positiveInteger');
-    else if (positiveInteger(row.contextWindow) && Number(row.maxOutputTokens) > Number(row.contextWindow)) {
-      errors.maxOutputTokens = t('settings.providers.native.invalidConfiguration');
+    if (!row.isImage) {
+      if (!row.contextWindow.trim()) errors.contextWindow = t('settings.providers.page.custom.error.required');
+      else if (!positiveInteger(row.contextWindow)) errors.contextWindow = t('settings.providers.page.custom.error.positiveInteger');
+      if (!row.maxOutputTokens.trim()) errors.maxOutputTokens = t('settings.providers.page.custom.error.required');
+      else if (!positiveInteger(row.maxOutputTokens)) errors.maxOutputTokens = t('settings.providers.page.custom.error.positiveInteger');
+      else if (positiveInteger(row.contextWindow) && Number(row.maxOutputTokens) > Number(row.contextWindow)) {
+        errors.maxOutputTokens = t('settings.providers.native.invalidConfiguration');
+      }
     }
     return errors;
   });
@@ -214,7 +231,10 @@ export function validateCustomProviderForm(
 export function buildCustomProviderRequest(form: CustomProviderFormState, expectedRevision: string): CustomProviderPersistPlan {
   const providerId = form.providerId.trim();
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerId)) throw new Error('Invalid provider ID');
-  const models = form.models.map((row) => {
+  const textRows = form.models.filter((row) => !row.isImage);
+  const imageRows = form.models.filter((row) => row.isImage);
+
+  const models = textRows.map((row) => {
     // All canonical metadata survives editing. Discovery supplies no fabricated limits.
     const model = {
       ...(row.base ?? { reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }),
@@ -230,9 +250,18 @@ export function buildCustomProviderRequest(form: CustomProviderFormState, expect
     return ModelSchema.parse({ ...model, toolsSupported: row.toolsSupported });
   });
   if (new Set(models.map((model) => model.modelId)).size !== models.length) throw new Error('Duplicate model ID');
+
+  const imageModels: Array<ImageModelConfigureRequest['model']> = imageRows.map((row) => ({
+    modelId: row.modelId.trim(),
+    provider: providerId,
+    name: row.name.trim(),
+    enabled: true,
+  }));
+
   return {
     apiKey: form.apiKey,
     icon: form.icon,
+    imageModels,
     request: ProviderConfigureRequestSchema.parse({
       expectedRevision,
       configuration: {
