@@ -47,6 +47,9 @@ const customProviderIconsSchema = z.record(
 const CUSTOM_PROVIDER_ICONS_MAX = 256;
 // `provider/model` last picked in a chat composer.
 const lastSelectedModelSchema = z.string().trim().min(1).max(512);
+// Shortcut id -> keys combo, as the settings payload may carry them; each
+// value is decoded individually below because a client can send any JSON.
+const shortcutOverridesRecordSchema = z.record(z.string(), z.unknown());
 
 // Boolean settings the registry lists; each is accepted as a plain boolean.
 const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
@@ -116,14 +119,16 @@ export const createSettingsHelpers = (dependencies) => {
   const HIDDEN_MODELS_MAX = 1024;
 
   const sanitizeShortcutOverrides = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return null;
-    }
+    // Decoded at the boundary: a record of string keys, entries the registry
+    // does not name are dropped one by one below.
+    const record = shortcutOverridesRecordSchema.safeParse(value);
+    if (!record.success) return null;
     const sanitized = {};
-    for (const [rawKey, rawValue] of Object.entries(value)) {
-      if (typeof rawKey !== 'string' || typeof rawValue !== 'string') continue;
+    for (const [rawKey, rawValue] of Object.entries(record.data)) {
+      const parsed = z.string().safeParse(rawValue);
+      if (!parsed.success) continue;
       const key = rawKey.trim();
-      const combo = rawValue.trim();
+      const combo = parsed.data.trim();
       if (!key || !combo) continue;
       sanitized[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
     }

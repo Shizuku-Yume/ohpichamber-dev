@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseExternalUrl } from './external-url-policy.mjs';
+import { parseExternalUrl, tryParseExternalUrl } from './external-url-policy.mjs';
 
 test('preserves editor file paths, lines and columns for the OS handler', () => {
   for (const url of [
@@ -31,4 +31,13 @@ test('rejects dangerous, internal and non-app protocols at the native boundary',
   ]) {
     assert.throws(() => parseExternalUrl(url), undefined, url);
   }
+});
+
+test('tryParseExternalUrl validates URLs or returns null', () => {
+  assert.equal(tryParseExternalUrl('https://google.com')?.toString(), 'https://google.com/');
+  assert.equal(tryParseExternalUrl('file:///etc/passwd'), null);
+  assert.equal(tryParseExternalUrl('ms-msdt:id=helper'), null);
+  assert.equal(tryParseExternalUrl('search-ms:query=test'), null);
+  assert.equal(tryParseExternalUrl('javascript:alert(1)'), null);
+  assert.equal(tryParseExternalUrl('not a url'), null);
 });

@@ -1531,13 +1531,16 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** `@oh-my-pi/pi-coding-agent` exposes a two-phase session-graph API that separates workspace tool, extension, and prompt construction from `SessionManager`, `MCPManager`, `AgentRegistry` `sessionFile`, and `getApiKey` binding, or the unprepared `POST /sessions` path becomes a user-facing path whose 600 ms first-delta budget is unwaived.
 - **Effort:** tech-debt-sweep
+
 ## 2026-11-18 - Remove OpenCode service and environment variables
 
-- **Decided:** Remove OpenCode service-env and environment variables from `packages/web/server/lib/environment/runtime.js` and its test, and update `packages/web/package.json` to reflect OhPiChamber identity.
-- **Instead of:** Keeping the OpenCode-shaped environment surface and dependencies.
-- **Because:** OhPiChamber does not support OpenCode service-env or its dependencies.
+- **Decided:** delete `packages/web/server/lib/environment/opencode-service-env.js` and `packages/web/server/lib/environment/opencode-service-env.test.js`, remove `readOpenCodeServiceEnv` and `forOpenCode` from `packages/web/server/lib/environment/runtime.js` and `packages/web/server/lib/environment/runtime.test.js`, and update `packages/web/server/lib/environment/DOCUMENTATION.md`.
+- **Instead of:** keeping the OpenCode service-env reader and `forOpenCode` hook on `createEnvironmentRuntime`.
+- **Because:** OhPiChamber runs the OMP Agent Service rather than a managed OpenCode process, so `opencode service set env` variables are unused.
+- **Decided by:** agent
 - **Mine:** yes
-- **Revisit when:** OhPiChamber adopts a similar service-env runtime or OpenCode-compat surface.
+- **Revisit when:** never; OpenCode service-env compatibility is retired.
+- **Effort:** final-main-audit
 
 ## 2026-11-18 - Stage standalone SDK, exclude agent-runtime from ASAR, and configure standalone loader roots
 
