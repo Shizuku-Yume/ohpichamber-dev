@@ -240,7 +240,7 @@ export class WorkerSession {
     });
     // SAFETY: Input received from the subagent lifecycle event bus.
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
-      // SAFETY: Input received from the subagent lifecycle event bus.
+       // SAFETY: Input received from the subagent lifecycle event bus.
       const payload = data as SubagentLifecyclePayload;
       this.onSubagent(payload);
       this.handleSubagentLifecycle(payload);
