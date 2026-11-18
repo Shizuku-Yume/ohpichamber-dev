@@ -5,8 +5,17 @@ import type { GitNetworkOperation, GitNetworkOperationPlan } from '@/lib/api/typ
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useGitOperationRecovery } from './useGitOperationRecovery';
 import { createGitOperationRecoveryOwner } from '@/lib/source-control/git-operation-recovery';
+import { useGitStore } from '@/stores/useGitStore';
 
 type Recovery = ReturnType<typeof useGitOperationRecovery>;
+
+/** The probe's answer for a directory, without any Git data behind it. */
+const directoryState = (isGitRepo: boolean) => ({
+  isGitRepo, repoUnreadable: null, status: null, branches: null, log: null, identity: null,
+  diffCache: new Map(), indexRevision: 0, lastRepoCheckAt: 0, lastStatusFetch: 0, lastStatusChange: 0,
+  lastLogFetch: 0, lastBranchesFetch: 0, lastIdentityFetch: 0, logMaxCount: 25, askedRemoteOnlyBranches: [],
+  isLoadingStatus: false, isLoadingLog: false, isLoadingBranches: false, isLoadingIdentity: false,
+});
 
 const plan: GitNetworkOperationPlan = {
   state: 'planned', operationId: 'git_original', runtimeIdentity: { id: 'server-a', platform: 'web' },
@@ -64,8 +73,7 @@ const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnTy
   const Probe = () => { recovery = useGitOperationRecovery(directory, git, sourceControl, { owner }); return null; };
   // The hook waits for Git's probe before reading the binding route, which
   // answers 422 for a folder outside a repository.
-  const { useGitStore } = await import('@/stores/useGitStore');
-  useGitStore.setState({ directories: new Map([['/repo', { isGitRepo: initial.isGitRepo ?? true }]]) });
+  useGitStore.setState({ directories: new Map([['/repo', directoryState(initial.isGitRepo ?? true)]]) });
   const render = () => act(() => { root.render(React.createElement(Probe)); });
   render();
   const settle = async () => {
@@ -112,7 +120,7 @@ const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnTy
     setRepository: (next: string) => { repositoryId = next; },
     setDirectory: async (next: string) => {
       useGitStore.setState((state) => ({
-        directories: new Map([...state.directories, [next, { isGitRepo: true }]]),
+        directories: new Map([...state.directories, [next, directoryState(true)]]),
       }));
       directory = next; render(); await settle(); calls.length = 0;
     },
