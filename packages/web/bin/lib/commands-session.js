@@ -1,4 +1,3 @@
-import { formatModelRef } from '@openchamber/agent-contract';
 import { TunnelCliError, EXIT_CODE } from './cli-errors.js';
 import { resolveTargetPort } from './cli-api-target.js';
 import { parseGoalTokenBudget } from './cli-goal.js';
@@ -64,14 +63,14 @@ const formatTextMessage = (message) => {
   return `**${label}**${details ? `\n\n*${details}*` : ''}\n\n${message.text}`;
 };
 
-const formatSessionModel = (session) => {
+const formatSessionModel = (session, formatModelRef) => {
   if (!session?.model) return null;
   return formatModelRef(session.model) || null;
 };
 
-const formatSessionLine = (session) => {
+const formatSessionLine = (session, formatModelRef) => {
   const title = asNonEmptyString(session?.title) || asNonEmptyString(session?.slug) || asNonEmptyString(session?.id) || 'untitled';
-  const model = formatSessionModel(session) || 'unknown-model';
+  const model = formatSessionModel(session, formatModelRef) || 'unknown-model';
   const agent = asNonEmptyString(session?.agent) || 'unknown-agent';
   const variant = asNonEmptyString(session?.model?.variant);
   const directory = asNonEmptyString(session?.directory) || 'unknown-directory';
@@ -182,9 +181,12 @@ async function sessionCommand(options = {}, action = 'help') {
       printJson(body);
       return;
     }
-    process.stdout.write(sessions.length > 0
-      ? `${sessions.map(formatSessionLine).join('\n')}\n`
-      : 'No sessions found.\n');
+    if (sessions.length === 0) {
+      process.stdout.write('No sessions found.\n');
+      return;
+    }
+    const { formatModelRef } = await import('@openchamber/agent-contract');
+    process.stdout.write(`${sessions.map((session) => formatSessionLine(session, formatModelRef)).join('\n')}\n`);
     return;
   }
 

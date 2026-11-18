@@ -1,4 +1,3 @@
-import { formatModelRef } from '@openchamber/agent-contract';
 import { TunnelCliError, EXIT_CODE } from './cli-errors.js';
 import { resolveTargetPort } from './cli-api-target.js';
 import { requestControlAction } from './cli-control.js';
@@ -18,7 +17,7 @@ const formatDefaultLine = ({ defaultModel, defaultAgent, defaultVariant }) => {
   return `Default: \`${model}${variant ? ` (${variant})` : ''}\` / \`${agent}\``;
 };
 
-const formatModelsOutput = (settings = {}) => {
+const formatModelsOutput = (settings = {}, formatModelRef) => {
   const favorites = Array.isArray(settings.favoriteModels)
     ? settings.favoriteModels.map(formatModelRef).filter(Boolean)
     : [];
@@ -53,7 +52,8 @@ async function modelsCommand(options = {}, action = 'show') {
     printJson(result);
     return;
   }
-  process.stdout.write(formatModelsOutput(result));
+  const { formatModelRef } = await import('@openchamber/agent-contract');
+  process.stdout.write(formatModelsOutput(result, formatModelRef));
 }
 
 export { modelsCommand, formatModelsOutput };
