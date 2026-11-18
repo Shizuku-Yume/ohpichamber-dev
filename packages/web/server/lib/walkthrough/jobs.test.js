@@ -23,6 +23,7 @@ const {
   generateWalkthrough,
   getWalkthrough,
   cancelWalkthroughGeneration,
+  getRepositoryRootFor,
   isGenerating,
   getGenerationStage,
   __testing: walkthroughTesting,
@@ -313,6 +314,42 @@ describe('generation jobs', () => {
 // A fixed deadline made a three-hunk edit and a 500-hunk pull request wait the
 // same, so the small case guarded nothing and the big case died just short of
 // the finish line.
+describe('non-repository directories', () => {
+  // The routes map this code to 422; a plain "not a git repository" would reach
+  // them as an untyped error and answer 500.
+  const gitRefusal = () => Object.assign(new Error('fatal: not a git repository (or any of the parent directories): .git'), { exitCode: 128 });
+
+  it('reports Git\'s refusal for a directory outside a repository as a typed precondition', async () => {
+    const { getRepositoryRoot } = await import('../git/service.js');
+    getRepositoryRoot.mockRejectedValueOnce(gitRefusal());
+
+    await expect(getWalkthrough({ directory: '/not-a-repo', workspaceId: 'workspace-1', source: SOURCE }))
+      .rejects.toMatchObject({ code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY', reason: 'not-a-git-repository' });
+  });
+
+  it('does the same for every entrypoint that keys work by repository root', async () => {
+    const { getRepositoryRoot } = await import('../git/service.js');
+    for (const run of [
+      () => getWalkthrough({ directory: '/not-a-repo', workspaceId: 'workspace-1', source: SOURCE }),
+      () => generateWalkthrough({ directory: '/not-a-repo', workspaceId: 'workspace-1', source: SOURCE }),
+      () => cancelWalkthroughGeneration({ directory: '/not-a-repo', source: SOURCE }),
+      () => getRepositoryRootFor('/not-a-repo', SOURCE),
+    ]) {
+      getRepositoryRoot.mockRejectedValueOnce(gitRefusal());
+      await expect(run()).rejects.toMatchObject({ code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY' });
+    }
+  });
+
+  it('leaves a repository it cannot read as the failure Git reported', async () => {
+    const { getRepositoryRoot } = await import('../git/service.js');
+    const unreadable = Object.assign(new Error('Permission denied'), { code: 'GIT_REPOSITORY_UNREADABLE' });
+    getRepositoryRoot.mockRejectedValueOnce(unreadable);
+
+    await expect(getWalkthrough({ directory: '/repo', workspaceId: 'workspace-1', source: SOURCE }))
+      .rejects.toBe(unreadable);
+  });
+});
+
 describe('generation timeout', () => {
   const { generationTimeoutMs } = walkthroughTesting;
 
