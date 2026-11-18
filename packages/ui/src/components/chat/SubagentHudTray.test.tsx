@@ -4,9 +4,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { canonicalClient } from '@/api/canonicalClient';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import { SubagentHudTray } from './SubagentHudTray';
-import type { Subagent } from '@openchamber/agent-contract';
+import type { Session, Subagent } from '@openchamber/agent-contract';
 
 describe('SubagentHudTray', () => {
   let windowInstance: Window;
@@ -24,6 +25,7 @@ describe('SubagentHudTray', () => {
       IS_REACT_ACT_ENVIRONMENT: true,
     });
     useSubagentsStore.setState({ byParent: {} });
+    useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [], entityById: new Map() });
     host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
@@ -33,6 +35,7 @@ describe('SubagentHudTray', () => {
     await act(async () => root.unmount());
     host.remove();
     useSubagentsStore.setState({ byParent: {} });
+    useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [], entityById: new Map() });
   });
 
   test('renders null when there are no subagents', async () => {
@@ -58,6 +61,89 @@ describe('SubagentHudTray', () => {
       });
       expect(list).not.toHaveBeenCalled();
       expect(host.querySelector('[data-testid="subagent-hud-tray"]')).toBeNull();
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  const listedRoot = (sessionId: string, parentSessionId?: string): void => {
+    const base = {
+      sessionId, rootSessionId: sessionId, projectId: 'project_1', workspaceId: 'workspace_1',
+      displayPath: '.', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0',
+      mode: { kind: 'main' as const }, runtimeStatus: 'idle' as const, activeRunId: null,
+      metadata: null, metadataRevision: '0', archiveRevision: '0',
+    };
+    // SAFETY: Session's only optional field here is parentSessionId; the rest of
+    // the fixture is spelled out above, so the composed object is a Session.
+    const session: Session = parentSessionId ? { ...base, parentSessionId } : base;
+    useGlobalSessionsStore.setState({ activeSessions: [session], entityById: new Map([[sessionId, session]]) });
+  };
+
+  test('a listed root session reads its subagents', async () => {
+    const list = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+    try {
+      listedRoot('ses_root');
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <SubagentHudTray sessionId="ses_root" />
+          </I18nProvider>,
+        );
+      });
+      expect(list).toHaveBeenCalledWith('ses_root');
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  test('a child session id never asks the root-only subagent route', async () => {
+    const list = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+    try {
+      listedRoot('ses_child_1', 'ses_parent');
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <SubagentHudTray sessionId="ses_child_1" />
+          </I18nProvider>,
+        );
+      });
+      expect(list).not.toHaveBeenCalled();
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  test('an id the Host has not listed is not asked for subagents', async () => {
+    const list = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <SubagentHudTray sessionId="ses_unlisted" />
+          </I18nProvider>,
+        );
+      });
+      expect(list).not.toHaveBeenCalled();
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  test('asks once discovery lists the session after mount', async () => {
+    const list = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <SubagentHudTray sessionId="ses_late" />
+          </I18nProvider>,
+        );
+      });
+      expect(list).not.toHaveBeenCalled();
+      await act(async () => {
+        listedRoot('ses_late');
+      });
+      expect(list).toHaveBeenCalledWith('ses_late');
     } finally {
       list.mockRestore();
     }

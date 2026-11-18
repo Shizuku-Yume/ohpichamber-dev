@@ -94,6 +94,18 @@ describe("canonical session snapshot loading", () => {
     expect(store.getState().snapshot[target.sessionId]?.session.headSequence).toBe("5")
   })
 
+  test("a draft session id never requests a snapshot and stays idle-empty, not error", async () => {
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => { calls += 1; throw new Error("Host has no snapshot for a draft") } }) })
+    const draft = { directory: "/loader-repo", sessionId: "draft_2" }
+    await loader.ensure(draft, { reason: "navigation" })
+    await loader.refresh(draft)
+    await loader.prefetch(draft)
+    expect(calls).toBe(0)
+    expect(loader.getSnapshot(draft)).toMatchObject({ status: "idle", error: null, resolved: true, complete: true, loadingKind: null })
+    expect(store.getState().snapshot[draft.sessionId]).toBeUndefined()
+  })
+
   test("snapshot failure preserves authoritative state and reports one load failure without retry", async () => {
     let calls = 0
     const error = new Error("Host unavailable")

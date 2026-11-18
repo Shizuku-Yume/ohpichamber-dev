@@ -8,6 +8,7 @@ import { mergeMessages, mergeOptimisticPage, type OptimisticItem } from "./optim
 import { clearDirectorySessionPrefetch, clearRuntimeSessionPrefetch, clearSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
+import { isDraftSessionId } from "@/lib/sessionIdentity"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
@@ -618,6 +619,15 @@ export class SessionMessageLoader {
   }
 
   private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot, recovered = false): Promise<void> {
+    // A composer draft is a local `draft_<draftId>` identity the Host has never
+    // seen. Its transcript is the optimistic echo in the child store, so there
+    // is no snapshot to request and no failure to report.
+    if (isDraftSessionId(target.sessionId)) {
+      if (!entry.snapshot.resolved || entry.snapshot.status !== "idle" || entry.snapshot.error !== null) {
+        this.patchEntry(entry, { status: "idle", loadingKind: null, error: null, resolved: true, complete: true, limit: store.getState().message[target.sessionId]?.length ?? 0 })
+      }
+      return Promise.resolve()
+    }
     if (this.knownChild(target, store)) return this.startChildHistoryLoad(target, entry, store, kind)
     const client = this.configuration.client
     const onSnapshot = this.configuration.onSnapshot

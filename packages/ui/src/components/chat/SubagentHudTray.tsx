@@ -5,11 +5,23 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { canonicalClient } from '@/api/canonicalClient';
+import { isDraftSessionId } from '@/lib/sessionIdentity';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import type { Subagent } from '@openchamber/agent-contract';
 import { AgentHubModal } from '@/components/chat/AgentHubModal';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
+
+/**
+ * The subagent route is root-only and authorized per session: a known child
+ * answers 403 and an id the Host has not listed answers 404. Only an
+ * unarchived root already in the global session index may be asked.
+ */
+const isKnownRootSession = (sessionId: string): boolean => {
+  const session = useGlobalSessionsStore.getState().entityById.get(sessionId);
+  return Boolean(session && !session.parentSessionId && session.rootSessionId === sessionId && session.archivedAt === undefined);
+};
 
 interface SubagentHudTrayProps {
   sessionId: string | null;
@@ -175,8 +187,13 @@ export const SubagentHudTray: React.FC<SubagentHudTrayProps> = React.memo(({ ses
   const subagents = useSubagentsStore(
     React.useCallback((state) => (sessionId && state.byParent[sessionId]) ? state.byParent[sessionId] : EMPTY_SUBAGENTS, [sessionId]),
   );
+  // Discovery can land after the chat mounts, so this re-runs when the
+  // session becomes a known root rather than only on a session switch.
+  const knownRoot = useGlobalSessionsStore(
+    React.useCallback(() => (sessionId ? isKnownRootSession(sessionId) : false), [sessionId]),
+  );
   React.useEffect(() => {
-    if (!sessionId || sessionId.startsWith('draft_')) return;
+    if (!sessionId || isDraftSessionId(sessionId) || !knownRoot) return;
     void canonicalClient.listSubagents(sessionId).then((list) => {
       if (list.length > 0) {
         for (const sub of list) {
@@ -184,7 +201,7 @@ export const SubagentHudTray: React.FC<SubagentHudTrayProps> = React.memo(({ ses
         }
       }
     }).catch(() => { });
-  }, [sessionId]);
+  }, [sessionId, knownRoot]);
 
   if (!sessionId || subagents.length === 0) return null;
 
