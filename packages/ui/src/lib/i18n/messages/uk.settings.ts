@@ -1467,6 +1467,7 @@ export const settingsDict = {
   "settings.projects.page.toast.discoverIconFailed": "Не вдалося знайти значок проєкту",
   "settings.projects.page.toast.customIconAlreadySet": "Спеціальна піктограма вже встановлена для цього проєкту",
   "settings.projects.page.toast.iconDiscovered": "Виявлено значок проєкту",
+  "settings.projects.page.toast.iconNotFound": "У цьому проєкті не знайдено фавікону",
   "settings.projects.page.toast.iconUnsupportedFormat": "Підтримуються лише PNG, JPEG і SVG",
   "settings.projects.page.toast.iconEmpty": "Файл піктограми порожній",
   "settings.projects.page.toast.iconTooLarge": "Піктограма перевищує обмеження розміру (5 МБ)",

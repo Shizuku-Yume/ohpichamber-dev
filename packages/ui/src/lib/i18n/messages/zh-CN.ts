@@ -7986,6 +7986,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "发现项目图标失败",
   "projectEditDialog.toast.customIconAlreadySet": "该项目已设置自定义图标",
   "projectEditDialog.toast.iconDiscovered": "项目图标已发现",
+  "projectEditDialog.toast.iconNotFound": "在此项目中未找到网站图标",
   "openInApp.actions.open": "打开",
   "openInApp.actions.openInAria": "在 {app} 中打开",
   "openInApp.actions.chooseAppAria": "选择要打开的应用",

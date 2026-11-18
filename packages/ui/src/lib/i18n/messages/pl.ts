@@ -8119,6 +8119,7 @@ export const dict = {
   "projectEditDialog.toast.failedToRemoveIcon": "Nie udało się usunąć ikony projektu",
   "projectEditDialog.toast.failedToUploadIcon": "Nie udało się przesłać ikony projektu",
   "projectEditDialog.toast.iconDiscovered": "Wykryto ikonę projektu",
+  "projectEditDialog.toast.iconNotFound": "Nie znaleziono favikony w tym projekcie",
   "projectEditDialog.toast.iconRemoved": "Usunięto ikonę projektu",
   "projectEditDialog.toast.iconUpdated": "Zaktualizowano ikonę projektu",
   "rightSidebar.contextNotesTodo.empty.selectProject": "Wybierz projekt, aby dodać notatki i zadania.",

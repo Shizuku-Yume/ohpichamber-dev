@@ -1500,6 +1500,7 @@ export const settingsDict = {
   'settings.projects.page.toast.discoverIconFailed': 'Kan het projecticoon niet vinden',
   'settings.projects.page.toast.customIconAlreadySet': 'Er is al een aangepast icoon ingesteld voor dit project',
   'settings.projects.page.toast.iconDiscovered': 'Projecticoon gevonden',
+  "settings.projects.page.toast.iconNotFound": "Geen favicon gevonden in dit project",
   'settings.projects.page.toast.iconUnsupportedFormat': 'Alleen PNG, JPEG en SVG worden ondersteund',
   'settings.projects.page.toast.iconEmpty': 'Het iconbestand is leeg',
   'settings.projects.page.toast.iconTooLarge': 'Het icoon overschrijdt de groottelimiet (5 MB)',

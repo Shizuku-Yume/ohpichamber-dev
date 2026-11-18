@@ -1467,6 +1467,7 @@ export const settingsDict = {
   "settings.projects.page.toast.discoverIconFailed": "Não foi possível descobrir o ícone do projeto",
   "settings.projects.page.toast.customIconAlreadySet": "Ícone personalizado já definido para este projeto",
   "settings.projects.page.toast.iconDiscovered": "Ícone do projeto descoberto",
+  "settings.projects.page.toast.iconNotFound": "Nenhum favicon encontrado neste projeto",
   "settings.projects.page.toast.iconUnsupportedFormat": "Apenas PNG, JPEG e SVG são suportados",
   "settings.projects.page.toast.iconEmpty": "O arquivo de ícone está vazio",
   "settings.projects.page.toast.iconTooLarge": "O ícone excede o limite de tamanho (5 MB)",

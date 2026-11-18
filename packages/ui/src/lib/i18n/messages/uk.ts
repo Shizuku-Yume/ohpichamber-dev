@@ -7977,6 +7977,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "Не вдалося знайти значок проєкту",
   "projectEditDialog.toast.customIconAlreadySet": "Спеціальна піктограма вже встановлена для цього проєкту",
   "projectEditDialog.toast.iconDiscovered": "Виявлено значок проєкту",
+  "projectEditDialog.toast.iconNotFound": "У цьому проєкті не знайдено фавікону",
   "openInApp.actions.open": "Відкрити",
   "openInApp.actions.openInAria": "Відкрити в {app}",
   "openInApp.actions.chooseAppAria": "Вибрати програму для відкриття",

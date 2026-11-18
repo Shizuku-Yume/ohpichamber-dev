@@ -8021,6 +8021,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "프로젝트 아이콘 찾기 실패",
   "projectEditDialog.toast.customIconAlreadySet": "이 프로젝트에는 이미 사용자 지정 아이콘이 설정되어 있습니다",
   "projectEditDialog.toast.iconDiscovered": "프로젝트 아이콘을 찾았습니다",
+  "projectEditDialog.toast.iconNotFound": "이 프로젝트에서 파비콘을 찾지 못했습니다",
   "openInApp.actions.open": "열기",
   "openInApp.actions.openInAria": "{app}에서 열기",
   "openInApp.actions.chooseAppAria": "열 앱 선택",

@@ -1500,6 +1500,7 @@ export const settingsDict = {
   'settings.projects.page.toast.discoverIconFailed': 'プロジェクトアイコンの検出に失敗しました',
   'settings.projects.page.toast.customIconAlreadySet': 'このプロジェクトには既にカスタムアイコンが設定されています',
   'settings.projects.page.toast.iconDiscovered': 'プロジェクトアイコンを検出しました',
+  "settings.projects.page.toast.iconNotFound": "このプロジェクトにファビコンが見つかりません",
   'settings.projects.page.toast.iconUnsupportedFormat': 'PNG、JPEG、SVG のみサポートされています',
   'settings.projects.page.toast.iconEmpty': 'アイコンファイルが空です',
   'settings.projects.page.toast.iconTooLarge': 'アイコンがサイズ制限（5 MB）を超えています',

@@ -7989,6 +7989,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "發現專案圖示失敗",
   "projectEditDialog.toast.customIconAlreadySet": "該專案已設定自訂圖示",
   "projectEditDialog.toast.iconDiscovered": "專案圖示已發現",
+  "projectEditDialog.toast.iconNotFound": "在此專案中找不到網站圖示",
   "openInApp.actions.open": "開啟",
   "openInApp.actions.openInAria": "在 {app} 中開啟",
   "openInApp.actions.chooseAppAria": "選擇要開啟的應用程式",

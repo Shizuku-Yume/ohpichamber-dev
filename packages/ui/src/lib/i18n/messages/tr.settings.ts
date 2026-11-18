@@ -1402,6 +1402,7 @@ export const settingsDict = {
   'settings.projects.page.toast.discoverIconFailed': 'Proje simgesi bulunamadı',
   'settings.projects.page.toast.customIconAlreadySet': 'Bu proje için zaten özel simge ayarlanmış',
   'settings.projects.page.toast.iconDiscovered': 'Proje simgesi bulundu',
+  "settings.projects.page.toast.iconNotFound": "Bu projede favicon bulunamadı",
   'settings.projects.page.toast.iconUnsupportedFormat': 'Yalnızca PNG, JPEG ve SVG desteklenir',
   'settings.projects.page.toast.iconEmpty': 'Simge dosyası boş',
   'settings.projects.page.toast.iconTooLarge': 'Simge boyut sınırını (5 MB) aşıyor',

@@ -3128,6 +3128,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "איתור סמל הפרויקט נכשל",
   "projectEditDialog.toast.customIconAlreadySet": "כבר הוגדר סמל מותאם אישית לפרויקט זה",
   "projectEditDialog.toast.iconDiscovered": "סמל הפרויקט אותר",
+  "projectEditDialog.toast.iconNotFound": "לא נמצא פביקון בפרויקט הזה",
   "openInApp.actions.open": "פתח",
   "openInApp.actions.openInAria": "פתח ב-{app}",
   "openInApp.actions.chooseAppAria": "בחר יישום לפתיחה",

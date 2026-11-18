@@ -7977,6 +7977,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "No se pudo descubrir el icono del proyecto",
   "projectEditDialog.toast.customIconAlreadySet": "Icono personalizado ya establecido para este proyecto",
   "projectEditDialog.toast.iconDiscovered": "Icono del proyecto descubierto",
+  "projectEditDialog.toast.iconNotFound": "No se encontró ningún favicon en este proyecto",
   "openInApp.actions.open": "Abrir",
   "openInApp.actions.openInAria": "Abrir en {app}",
   "openInApp.actions.chooseAppAria": "Elegir aplicación para abrir",

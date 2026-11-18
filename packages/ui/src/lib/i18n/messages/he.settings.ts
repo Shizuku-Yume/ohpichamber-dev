@@ -1499,6 +1499,7 @@ export const settingsDict = {
   'settings.projects.page.toast.discoverIconFailed': 'לא ניתן היה לאתר סמל לפרויקט',
   'settings.projects.page.toast.customIconAlreadySet': 'לפרויקט הזה כבר הוגדר סמל מותאם אישית',
   'settings.projects.page.toast.iconDiscovered': 'נמצא סמל לפרויקט',
+  "settings.projects.page.toast.iconNotFound": "לא נמצא פביקון בפרויקט הזה",
   'settings.projects.page.toast.iconUnsupportedFormat': 'נתמכים רק PNG, JPEG ו-SVG',
   'settings.projects.page.toast.iconEmpty': 'קובץ הסמל ריק',
   'settings.projects.page.toast.iconTooLarge': 'הסמל חורג ממגבלת הגודל (5 MB)',

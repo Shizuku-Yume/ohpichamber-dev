@@ -1692,6 +1692,7 @@ export const settingsDict = {
   'settings.projects.page.toast.customIconAlreadySet': 'Dla tego projektu ustawiono już własną ikonę',
   'settings.projects.page.toast.discoverIconFailed': 'Nie udało się wykryć ikony projektu',
   'settings.projects.page.toast.iconDiscovered': 'Wykryto ikonę projektu',
+  "settings.projects.page.toast.iconNotFound": "Nie znaleziono favikony w tym projekcie",
   'settings.projects.page.toast.iconUnsupportedFormat': 'Obsługiwane są tylko PNG, JPEG i SVG',
   'settings.projects.page.toast.iconEmpty': 'Plik ikony jest pusty',
   'settings.projects.page.toast.iconTooLarge': 'Ikona przekracza limit rozmiaru (5 MB)',

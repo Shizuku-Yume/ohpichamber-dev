@@ -1499,6 +1499,7 @@ export const settingsDict = {
   'settings.projects.page.toast.discoverIconFailed': 'تعذّر اكتشاف أيقونة المشروع',
   'settings.projects.page.toast.customIconAlreadySet': 'تم تعيين أيقونة مخصصة لهذا المشروع بالفعل',
   'settings.projects.page.toast.iconDiscovered': 'تم اكتشاف أيقونة المشروع',
+  "settings.projects.page.toast.iconNotFound": "لم يُعثر على أيقونة موقع في هذا المشروع",
   'settings.projects.page.toast.iconUnsupportedFormat': 'يُدعم فقط PNG و JPEG و SVG',
   'settings.projects.page.toast.iconEmpty': 'ملف الأيقونة فارغ',
   'settings.projects.page.toast.iconTooLarge': 'الأيقونة تتجاوز حد الحجم (5 ميجابايت)',

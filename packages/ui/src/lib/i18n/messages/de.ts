@@ -7733,6 +7733,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "Fehler bei der Erkennung des Projekt-Symbols",
   "projectEditDialog.toast.customIconAlreadySet": "Benutzerdefiniertes Symbol bereits für dieses Projekt festgelegt",
   "projectEditDialog.toast.iconDiscovered": "Projekt-Symbol entdeckt",
+  "projectEditDialog.toast.iconNotFound": "Kein Favicon in diesem Projekt gefunden",
   "openInApp.actions.open": "Öffnen",
   "openInApp.actions.openInAria": "In {app} öffnen",
   "openInApp.actions.chooseAppAria": "App zum Öffnen auswählen",

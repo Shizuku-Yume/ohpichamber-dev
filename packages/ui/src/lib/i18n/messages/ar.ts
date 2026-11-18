@@ -3128,6 +3128,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "تعذّر اكتشاف أيقونة المشروع",
   "projectEditDialog.toast.customIconAlreadySet": "تم تعيين أيقونة مخصصة لهذا المشروع بالفعل",
   "projectEditDialog.toast.iconDiscovered": "تم اكتشاف أيقونة المشروع",
+  "projectEditDialog.toast.iconNotFound": "لم يُعثر على أيقونة موقع في هذا المشروع",
   "openInApp.actions.open": "فتح",
   "openInApp.actions.openInAria": "فتح في {app}",
   "openInApp.actions.chooseAppAria": "اختيار التطبيق للفتح",

@@ -8021,6 +8021,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "プロジェクトアイコンの検出に失敗しました",
   "projectEditDialog.toast.customIconAlreadySet": "このプロジェクトにはカスタムアイコンがすでに設定されています",
   "projectEditDialog.toast.iconDiscovered": "プロジェクトアイコンを検出しました",
+  "projectEditDialog.toast.iconNotFound": "このプロジェクトにファビコンが見つかりません",
   "openInApp.actions.open": "開く",
   "openInApp.actions.openInAria": "{app}で開く",
   "openInApp.actions.chooseAppAria": "開くアプリを選択",

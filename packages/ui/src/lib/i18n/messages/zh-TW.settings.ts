@@ -1345,6 +1345,7 @@ export const settingsDict = {
   'settings.projects.page.toast.discoverIconFailed': '發現專案圖示失敗',
   'settings.projects.page.toast.customIconAlreadySet': '該專案已設定自訂圖示',
   'settings.projects.page.toast.iconDiscovered': '專案圖示已發現',
+  "settings.projects.page.toast.iconNotFound": "在此專案中找不到網站圖示",
   'settings.projects.page.toast.iconUnsupportedFormat': '僅支援 PNG、JPEG 與 SVG',
   'settings.projects.page.toast.iconEmpty': '圖示檔案為空',
   'settings.projects.page.toast.iconTooLarge': '圖示超過大小限制（5 MB）',
