@@ -1539,3 +1539,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OhPiChamber adopts a similar service-env runtime or OpenCode-compat surface.
 
+
+## 2026-11-19 - Task 04 walkthrough rework fixes
+
+- **Decided:** the three fork-differs paths the Task 04 rework left without a class keep the fork blob and are recorded as `decision` rows: `MobileEffortButton.tsx` passes `t` into `formatEffortLabel`, `ProjectsPage.test.tsx` asserts the project page's `data-settings-page-heading` target, and `useProviderLogo.ts` builds a `models.dev` URL only for a provider the catalog or the bundled map knows.
+- **Instead of:** reverting them to upstream's unlocalized label, test without the heading assertion, and unguarded `https://models.dev/logos/<id>.svg` probe.
+- **Because:** each file carries a fix from this effort rather than an unrelated drift: the effort button rendered the effort level in the default locale (`faf0189437`), the project page's heading focus target is a settings-page contract its test must pin (`10fc8d746e`), and a custom `models.yml` provider such as `CLIProxyAPI` gave a failed remote image request in every session (`ff73f5ba9e`).
+- **Mine:** yes
+- **Revisit when:** upstream localizes effort labels itself, or its settings pages stamp the heading target so the fork's test assertion has nothing to pin.
+- **Effort:** final-main-audit
