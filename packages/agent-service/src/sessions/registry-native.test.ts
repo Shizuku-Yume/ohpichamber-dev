@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
-import { JsonValueSchema, RuntimeSessionSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
+import { JsonValueSchema, RuntimeSessionSchema, SessionControlAckSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
 import type { WorkerBootstrap, WorkerOperationResult } from '../protocol.ts';
 import { z } from 'zod';
 import { WorkerRegistry } from '../supervisor/workers.ts';
@@ -807,7 +807,7 @@ test('btwBranch rekeys live session entry, worker, journal and reference to new 
           sessionId: newSessionId,
           rootSessionId: newSessionId,
           sessionFile: newFile,
-          branch: { branchId: 'b-1', branchVersion: 1, leafTurnId: null },
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
         };
       }
       return origRequest(sessionId, op);
@@ -827,7 +827,37 @@ test('btwBranch rekeys live session entry, worker, journal and reference to new 
     expect(harness.workers.info(newSessionId)).toBeDefined();
     const newRef = harness.sessions['references'].get(newSessionId);
     expect(newRef?.sessionFile).toBe(newFile);
+    // The rekey moves the identity, so the pre-branch reference must not stay
+    // listed: it would answer every root-addressed read with 404 for a session
+    // the Host still binds.
+    expect(harness.sessions['references'].get(rootSessionId)).toBeNull();
   } finally {
     await harness.close();
   }
+}, 60000);
+
+test('btwBranch returns an ack the strict public SessionControlAckSchema accepts', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-ack-session-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          // The worker replies with a projection seed the strict public ack does
+          // not carry; a real branch reply always includes it.
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    const ack = SessionControlAckSchema.parse(await harness.sessions.btwBranch(rootSessionId, 'rec-1'));
+    expect(ack.type).toBe('btw.branch');
+    expect(ack.type === 'btw.branch' && ack.sessionId).toBe(newSessionId);
+  } finally { await harness.close(); }
 }, 60000);

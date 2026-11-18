@@ -1338,9 +1338,17 @@ export class SessionRegistry {
             sessionFile: result.sessionFile,
             parentSessionId: reference.parentSessionId ?? sessionId,
           });
+          // The rekey moves the identity; the old reference would otherwise stay
+          // listed with no entry, so every root-addressed read answered 404 for a
+          // session the Host still binds.
+          await this.references.remove(sessionId);
         }
       }
-      return result;
+      // The projection seed is already applied to the journal above; the public
+      // control ack is strict and carries no seed, so returning it turned a
+      // completed branch into a 503 the client could not act on.
+      const { seed: _seed, ...ack } = result;
+      return ack;
     } finally {
       this.controls.delete(sessionId);
       this.controls.delete(targetSessionId);
