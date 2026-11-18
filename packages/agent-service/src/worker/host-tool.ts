@@ -29,9 +29,10 @@ const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Ob
   openchamber_render: true,
   openchamber_workflow: true,
 });
-const HostToolEnablementInputSchema = z.record(z.string(), z.boolean()).optional();
+const HostToolEnablementInputSchema = z.record(z.string(), z.boolean().optional().catch(undefined)).optional();
+export type HostToolEnablementInput = z.infer<typeof HostToolEnablementInputSchema>;
 
-export function normalizeHostToolEnablement(input?: unknown): Record<HostToolName, boolean> {
+export function normalizeHostToolEnablement(input?: HostToolEnablementInput): Record<HostToolName, boolean> {
   const parsed = HostToolEnablementInputSchema.safeParse(input);
   const record = parsed.success ? parsed.data : undefined;
 
@@ -39,14 +40,14 @@ export function normalizeHostToolEnablement(input?: unknown): Record<HostToolNam
   if (!record) return result;
 
   for (const name of HOST_TOOL_NAMES) {
-    if (typeof record[name] === 'boolean') result[name] = record[name];
+    if (record[name] !== undefined) result[name] = record[name];
   }
-  if (typeof record.agentControlToolEnabled === 'boolean') result.openchamber = record.agentControlToolEnabled;
-  if (typeof record.agentWebToolEnabled === 'boolean') result.web = record.agentWebToolEnabled;
-  if (typeof record.agentKnowledgeToolEnabled === 'boolean') result.openchamber_knowledge = record.agentKnowledgeToolEnabled;
-  if (typeof record.agentNotifyToolEnabled === 'boolean') result.notify = record.agentNotifyToolEnabled;
-  if (typeof record.agentRenderToolEnabled === 'boolean') result.openchamber_render = record.agentRenderToolEnabled;
-  if (typeof record.agentWorkflowToolEnabled === 'boolean') result.openchamber_workflow = record.agentWorkflowToolEnabled;
+  if (record.agentControlToolEnabled !== undefined) result.openchamber = record.agentControlToolEnabled;
+  if (record.agentWebToolEnabled !== undefined) result.web = record.agentWebToolEnabled;
+  if (record.agentKnowledgeToolEnabled !== undefined) result.openchamber_knowledge = record.agentKnowledgeToolEnabled;
+  if (record.agentNotifyToolEnabled !== undefined) result.notify = record.agentNotifyToolEnabled;
+  if (record.agentRenderToolEnabled !== undefined) result.openchamber_render = record.agentRenderToolEnabled;
+  if (record.agentWorkflowToolEnabled !== undefined) result.openchamber_workflow = record.agentWorkflowToolEnabled;
   return result;
 }
 

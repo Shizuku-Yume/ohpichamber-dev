@@ -905,7 +905,7 @@ export class NativeModels {
   // that may rotate it between attempts.
   const apiKey = this.context.modelRegistry.resolver(nativeModel, this.context.currentNativeSessionId());
   const deadline = AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS);
-  const imageOptions: any = { prompt: request.prompt };
+  const imageOptions: Parameters<typeof generateImage>[1] = { prompt: request.prompt };
   if (request.inputImages) imageOptions.inputImages = request.inputImages;
   if (request.aspectRatio) imageOptions.aspectRatio = request.aspectRatio;
   if (request.imageSize) imageOptions.imageSize = request.imageSize;

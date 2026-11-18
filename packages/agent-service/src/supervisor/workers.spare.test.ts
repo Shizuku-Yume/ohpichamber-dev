@@ -149,14 +149,12 @@ test('a refused refill does not retry from its own settle', async () => {
   const registry = registryFor(f.entrypoint);
   try {
     await registry.acquireWorktreeLease('lease-under-test', f.cwd);
-    // SAFETY: Accessing private `warmSessionWorker` for test-only mocking.
-    const warm = (registry as unknown as { warmSessionWorker: (...args: unknown[]) => void }).warmSessionWorker.bind(registry);
-    (registry as unknown as { warmSessionWorker: (...args: unknown[]) => void }).warmSessionWorker = ((...args: unknown[]) => {
-      warm(...args);
-      (registry as unknown as { spareRefillBlocked: boolean }).spareRefillBlocked = true;
-    });
-
+    const warm = registry.warmSessionWorker.bind(registry);
     let attempts = 0;
+    registry.warmSessionWorker = (input, environment) => {
+      attempts += 1;
+      warm(input, environment);
+    };
 
     registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
 

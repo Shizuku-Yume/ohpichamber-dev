@@ -3,7 +3,7 @@ import { lstat, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import {
-  CatalogWorkerIdentitySchema, CounterSchema, EntityIdSchema, JsonObjectSchema,
+  CatalogWorkerIdentitySchema, CounterSchema, EntityIdSchema, JsonObjectSchema, JsonValueSchema,
   MCPApplyRequestSchema, MCPAppliedRevisionsSchema, MCPCatalogReadSchema,
   MCPCatalogStateSchema, MCPConfigurationStateSchema, MCPConfigureRequestSchema,
   MCP_OAUTH_LOOPBACK_CALLBACK_PATH, MCP_OAUTH_LOOPBACK_CALLBACK_PORT,
@@ -168,22 +168,30 @@ function sanitizeCommand(value: string): string {
   return command;
 }
 
+const LenientStringListSchema = z.array(JsonValueSchema).catch([]).transform((items) =>
+  items.flatMap((item) => {
+    const parsed = z.string().safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  }),
+);
+
 const MCPServerEntrySchema = z.object({
-  enabled: z.boolean().optional(),
-  name: z.string().optional(),
-  type: z.string().optional(),
-  url: z.string().optional(),
-  command: z.string().optional(),
-  args: z.array(z.string()).optional(),
+  enabled: z.boolean().optional().catch(undefined),
+  name: z.string().optional().catch(undefined),
+  type: z.string().optional().catch(undefined),
+  url: z.string().optional().catch(undefined),
+  command: z.string().optional().catch(undefined),
+  args: LenientStringListSchema.optional(),
 }).passthrough();
 
 const MCPConfigFileSchema = z.object({
-  mcpServers: z.record(z.string(), MCPServerEntrySchema).optional(),
-  disabledServers: z.array(z.string()).optional(),
+  mcpServers: z.record(z.string(), JsonValueSchema).optional(),
+  disabledServers: LenientStringListSchema.optional(),
 }).passthrough();
 
+/** The workspace owner supplies the durable revision; a worker never mints it. */
 function projectUnmanagedMcpConfiguration(
-  raw: unknown,
+  raw: MCPConfigFile,
   workspaceId: string,
   scope: 'project' | 'user' = 'project',
   managed = false,
@@ -198,23 +206,30 @@ function projectUnmanagedMcpConfiguration(
   const servers: MCPServerConfig[] = [];
   const seenIds = new Set<string>();
 
-  for (const [key, cfg] of Object.entries(mcpServers ?? {})) {
+  for (const [key, entry] of Object.entries(mcpServers ?? {})) {
+    const entryParsed = MCPServerEntrySchema.safeParse(entry);
+    if (!entryParsed.success) continue;
+    const cfg = entryParsed.data;
     const serverId = serverIdForKey(key);
     if (seenIds.has(serverId)) continue;
     seenIds.add(serverId);
 
     const enabled = cfg.enabled !== false && !disabledList.includes(key) && !disabledList.includes(serverId);
-    const label = (typeof cfg.name === 'string' && cfg.name.trim()) || key.trim() || serverId || 'server';
+    const label = cfg.name?.trim() || key.trim() || serverId || 'server';
 
     let transport: MCPServerConfig['transport'];
-    if (cfg.type === 'http' || cfg.type === 'sse' || typeof cfg.url === 'string') {
+    if (cfg.type === 'http' || cfg.type === 'sse' || cfg.url !== undefined) {
       transport = {
         type: cfg.type === 'http' ? 'http' : 'sse',
-        url: typeof cfg.url === 'string' ? sanitizeRemoteUrl(cfg.url) : 'http://localhost',
+        url: cfg.url !== undefined ? sanitizeRemoteUrl(cfg.url) : 'http://localhost',
       };
     } else {
-      const args = Array.isArray(cfg.args) ? cfg.args : [];
-      transport = { type: 'stdio', command: typeof cfg.command === 'string' ? sanitizeCommand(cfg.command) : 'stdio-server', args };
+      const args = cfg.args ?? [];
+      transport = {
+        type: 'stdio',
+        command: cfg.command !== undefined ? sanitizeCommand(cfg.command) : 'stdio-server',
+        args,
+      };
     }
     servers.push({ serverId, label, enabled, managed, scope, transport });
   }

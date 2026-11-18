@@ -13,7 +13,7 @@ import { MemorySessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
-import type { UsageHistoryEntry, UsageLimit, UsageReport } from '@oh-my-pi/pi-ai';
+import type { AssistantMessage, UsageHistoryEntry, UsageLimit, UsageReport } from '@oh-my-pi/pi-ai';
 import { getAgentDir, getProjectDir } from '@oh-my-pi/pi-utils';
 import type { UsageScopeFile, UsageSessionReference } from '../protocol.ts';
 import { initDb } from '@oh-my-pi/omp-stats/db';
@@ -91,17 +91,17 @@ async function readSource(reference: UsageSessionReference, includeTools: boolea
       if (!MessageIdentity.safeParse(entry.message).success) throw new CorruptSession();
       const message = entry.message;
       if (message.role === 'assistant') {
-        if (!Assistant.safeParse(message).success) throw new CorruptSession();
+        const parsedAssistant = Assistant.safeParse(message);
+        if (!parsedAssistant.success) throw new CorruptSession();
         normalizeAssistantUsage(message);
         const content: Extract<typeof message.content[number], { type: 'toolCall' }>[] = [];
         if (includeTools) for (const block of message.content) if (block.type === 'toolCall') {
           if (!ToolCall.safeParse(block).success) throw new CorruptSession();
           content.push({ type: 'toolCall', id: block.id, name: block.name, arguments: {} });
         }
-        const messageData: z.infer<typeof Assistant> = {
+        const messageData: AssistantMessage = {
           role: 'assistant',
-          // SAFETY: API is optional on the Assistant contract.
-          api: message.api as string | undefined,
+          api: message.api,
           provider: message.provider,
           model: message.model,
           usage: message.usage,
@@ -109,10 +109,12 @@ async function readSource(reference: UsageSessionReference, includeTools: boolea
           timestamp: message.timestamp,
           content,
         };
-        const duration = message.duration;
-        const ttft = message.ttft;
-        if (typeof duration === 'number') messageData.duration = duration;
-        if (typeof ttft === 'number') messageData.ttft = ttft;
+        if (parsedAssistant.data.duration !== null && parsedAssistant.data.duration !== undefined) {
+          messageData.duration = parsedAssistant.data.duration;
+        }
+        if (parsedAssistant.data.ttft !== null && parsedAssistant.data.ttft !== undefined) {
+          messageData.ttft = parsedAssistant.data.ttft;
+        }
         entries.push({ ...base, type: 'message', message: messageData });
       } else if (message.role === 'user') {
         entries.push({ ...base, type: 'message', message: { role: 'user', content: '', synthetic: message.synthetic, timestamp: message.timestamp } });

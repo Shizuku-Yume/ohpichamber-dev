@@ -14,8 +14,7 @@ import { problemMessage } from '../../../ui/src/lib/problemMessage.ts';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '../../../ui/src/lib/runtime-url.ts';
 import { setRuntimeExtraHeaders } from '../../../ui/src/lib/runtime-auth.ts';
 import { WorkerReplySchema } from '../protocol.ts';
-import type { ServiceResponse } from './service.ts';
-import type { ProblemDetails } from '@openchamber/agent-contract';
+import { AgentService } from './service.ts';
 
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
 
@@ -86,7 +85,7 @@ test('a worker cause reaches the problem response and the toast unchanged', asyn
       const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
       if (init.body) headers.set('content-type', 'application/json');
       const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-      return { status: response.status, body: await response.json().catch(() => null) as ServiceResponse | ProblemDetails | null };
+      return { status: response.status, body: z.json().parse(await response.json().catch(() => null)) };
     };
     expect((await request(`/internal/workspaces/${encodeURIComponent(workspaceId)}`, {
       method: 'POST',

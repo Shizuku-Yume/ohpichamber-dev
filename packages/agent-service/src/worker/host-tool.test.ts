@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { HostToolInvocation } from './host-tool.ts';
-import { createHostToolController, createHostToolExtension } from './host-tool.ts';
+import type { HostToolEnablementInput, HostToolInvocation } from './host-tool.ts';
+import { createHostToolController, createHostToolExtension, normalizeHostToolEnablement } from './host-tool.ts';
 import { HostActionRequestSchema } from '../native-policy-protocol.ts';
 import { ProposedWorkflowResultSchema } from '@openchamber/agent-contract';
 
@@ -263,5 +263,18 @@ test('openchamber_render is registered and carries its call id and answer envelo
   expect(result.details).toMatchObject({
     ok: true, action: 'render.page',
     openchamber: { schemaVersion: 1, ok: true, action: 'render.page', answer: { answered: true, summary: 'Chose the first' } },
+  });
+});
+
+test('normalizeHostToolEnablement preserves valid flags when an entry has a non-boolean value', () => {
+  const input: HostToolEnablementInput = { openchamber: false };
+  Object.assign(input, { extra: 'yes', web: 123 });
+  expect(normalizeHostToolEnablement(input)).toEqual({
+    openchamber: false,
+    web: true,
+    openchamber_knowledge: true,
+    notify: false,
+    openchamber_render: true,
+    openchamber_workflow: true,
   });
 });
