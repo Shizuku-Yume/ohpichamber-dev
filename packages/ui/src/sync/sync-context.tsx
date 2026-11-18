@@ -478,7 +478,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       if (pipelineRef.current === pipeline) pipelineRef.current = null
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
     }
-  }, [childStores, client, isCurrent, loadSessions, messageLoader, onSnapshot, props.runtimeKey])
+  }, [childStores, client, isCurrent, isKnownChildSession, loadSessions, messageLoader, onSnapshot, props.runtimeKey])
 
   useEffect(() => {
     const directory = currentDirectoryRef.current
