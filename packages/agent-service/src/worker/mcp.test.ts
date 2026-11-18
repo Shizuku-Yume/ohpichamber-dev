@@ -224,6 +224,85 @@ describe('MCP configuration management and unmanaged projection', () => {
     }
   });
 
+  test('skips non-object server entries without dropping valid servers and handles odd field types leniently', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      await writeFile(configPath, JSON.stringify({
+        mcpServers: {
+          'local-tool': {
+            type: 'stdio',
+            command: 'uvx',
+            args: ['mcp-server-sqlite'],
+          },
+          'broken-null': null,
+          'broken-string': 'not-an-object',
+          'broken-array': ['not', 'an', 'object'],
+          'lenient-numeric-cmd': {
+            command: 123,
+          },
+          'lenient-odd-fields': {
+            name: null,
+            command: 'node',
+            args: ['--port', 8080, 'server.js'],
+            enabled: 'true',
+          },
+          'remote-tool': {
+            type: 'http',
+            url: 'https://mcp.example.com/api',
+          },
+        },
+      }), 'utf8');
+
+      const projected = await readNativeMcpConfigurationIfPresent(configPath, 'workspace-1');
+      expect(projected).not.toBeNull();
+      const servers = projected!.config.servers;
+      expect(servers.map(server => server.serverId)).toEqual([
+        'local-tool',
+        'lenient-numeric-cmd',
+        'lenient-odd-fields',
+        'remote-tool',
+      ]);
+
+      const numericCmd = servers.find(server => server.serverId === 'lenient-numeric-cmd');
+      expect(numericCmd?.transport).toEqual({
+        type: 'stdio',
+        command: 'stdio-server',
+        args: [],
+      });
+
+      const oddFields = servers.find(server => server.serverId === 'lenient-odd-fields');
+      expect(oddFields?.label).toBe('lenient-odd-fields');
+      expect(oddFields?.enabled).toBe(true);
+      expect(oddFields?.transport).toEqual({
+        type: 'stdio',
+        command: 'node',
+        args: ['--port', 'server.js'],
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('fails closed with MCP_CONFIG_READ_FAILED when unmanaged file is wholly non-object', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      await writeFile(configPath, '[]', 'utf8');
+
+      await expect(readNativeMcpConfigurationIfPresent(configPath, 'workspace-1'))
+        .rejects
+        .toMatchObject({ code: 'MCP_CONFIG_READ_FAILED' });
+
+      await writeFile(configPath, JSON.stringify({ mcpServers: [] }), 'utf8');
+      await expect(readNativeMcpConfigurationIfPresent(configPath, 'workspace-1'))
+        .rejects
+        .toMatchObject({ code: 'MCP_CONFIG_READ_FAILED' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('scope round-trip: writes user scope to userConfigPath in OMP format and project scope to projectConfigPath', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'mcp-scope-test-'));
     try {

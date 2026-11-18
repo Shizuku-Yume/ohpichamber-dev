@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type Server } from 'node:net';
+import { z } from 'zod';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { ProblemDetailsSchema } from '@openchamber/agent-contract';
 
 import { WorkerRegistry, WORKER_CAPACITY_POLICY } from './workers.ts';
 import { CatalogCoordinator } from './catalog.ts';
@@ -128,7 +130,7 @@ test('a deferred registration failure surfaces with its cause as a session error
       const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
       if (init.body) headers.set('content-type', 'application/json');
       const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-      return { status: response.status, body: await response.json().catch(() => null) as ServiceResponse | ProblemDetails | null };
+      return { status: response.status, body: z.json().parse(await response.json().catch(() => null)) };
     };
 
     // Register workspace
@@ -189,8 +191,9 @@ test('a deferred registration failure surfaces with its cause as a session error
       }),
     });
     expect(runRes.status).toBe(503);
-    expect(runRes.body).toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
-    expect(runRes.body.detail).toContain(sentinelCause);
+    const problem = ProblemDetailsSchema.parse(runRes.body);
+    expect(problem.code).toBe('SERVICE_UNAVAILABLE');
+    expect(problem.detail).toContain(sentinelCause);
   } finally {
     process.env.HOME = previousHome;
     await service.stop();
