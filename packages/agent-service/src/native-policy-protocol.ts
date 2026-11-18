@@ -52,7 +52,8 @@ export const NativeOperationDescriptorSchema = z.strictObject({
   toolName: z.string().min(1), effectiveMode: NativeEditModeSchema.optional(),
   sourcePaths: z.array(PrivatePathSchema), destinationPaths: z.array(PrivatePathSchema),
   /** Read targets OMP resolves itself; never filesystem paths. */
-  internalReadUrls: z.array(OmpInternalUrlSchema).optional(),
+  /** Write targets OMP resolves itself; never filesystem paths. */
+  internalWriteUrls: z.array(OmpInternalUrlSchema).optional(),
   fileOps: z.array(z.strictObject({ kind: z.string().min(1), path: PrivatePathSchema, to: PrivatePathSchema.optional() })),
   command: z.string().optional(), declaredTier: NativeToolTierSchema.optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
   approvalGrant: NativeApprovalGrantSchema.optional(),

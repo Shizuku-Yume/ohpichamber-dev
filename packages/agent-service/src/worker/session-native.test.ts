@@ -2404,3 +2404,15 @@ test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and lo
   await harness.close();
  }
 }, 30000);
+test('compacting a too-small session returns 422 SESSION_TOO_SMALL', async () => {
+ const { worker } = await fixture({});
+ worker.appendMessage({ role: 'user', content: 'Short prompt' });
+ await worker.ensureOnDisk();
+
+ const response = await worker.operation({ type: 'compact', instructions: 'compact it' });
+ expect(response.type).toBe('operation.error');
+ if (response.type === 'operation.error') {
+  expect(response.code).toBe('SESSION_TOO_SMALL');
+  expect(response.status).toBe(422);
+ }
+});

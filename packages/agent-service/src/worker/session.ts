@@ -230,7 +230,7 @@ export class WorkerSession {
     });
     // SAFETY: Input received from the subagent lifecycle event bus.
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
-       // SAFETY: Input received from the subagent lifecycle event bus.
+      // SAFETY: Input received from the subagent lifecycle event bus.
       const payload = data as SubagentLifecyclePayload;
       this.onSubagent(payload);
       this.handleSubagentLifecycle(payload);
@@ -2244,7 +2244,15 @@ export class WorkerSession {
         try {
           await this.binding;
           const previousCompaction = this.lastEmittedCompaction;
-          const result = await this.session.compact(operation.instructions);
+          let result;
+          try {
+            result = await this.session.compact(operation.instructions);
+          } catch (e: unknown) {
+            if (e instanceof Error && e.name === 'ManualCompactionNoOpError') {
+              throw new ProjectionError(422, 'SESSION_TOO_SMALL', 'Session is too small to compact');
+            }
+            throw e;
+          }
           if (this.lastEmittedCompaction && this.lastEmittedCompaction !== previousCompaction) {
             return {
               type: 'compact',

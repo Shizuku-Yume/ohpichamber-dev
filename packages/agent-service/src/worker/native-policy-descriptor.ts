@@ -85,7 +85,7 @@ async function fileTargets(raw: string, cwd: string, read: boolean): Promise<{ t
  for (const part of parts) {
   // OMP owns the URL grammar, including selectors; the Host neither peels nor
   // resolves these targets and only admits the allowlisted scheme.
-  const internal = read ? ompInternalUrl(part) : null;
+  const internal = ompInternalUrl(part);
   if (internal !== null) {
    internalUrls.push(internal);
    continue;
@@ -132,7 +132,10 @@ export async function describeNativeOperation(cwd: string, request: WorkerPolicy
   const path = z.string().safeParse(input.path);
   if (!path.success) throw new Error('Native file path is missing');
   const { targets, internalUrls } = await fileTargets(path.data, cwd, toolName === 'read');
-  if (toolName !== 'read') return NativeOperationDescriptorSchema.parse({ ...effective, destinationPaths: targets });
+  if (toolName === 'write') {
+   const descriptor = { ...effective, destinationPaths: targets };
+   return NativeOperationDescriptorSchema.parse(internalUrls.length > 0 ? { ...descriptor, internalWriteUrls: internalUrls } : descriptor);
+  }
   const descriptor = { ...effective, sourcePaths: targets };
   return NativeOperationDescriptorSchema.parse(internalUrls.length > 0 ? { ...descriptor, internalReadUrls: internalUrls } : descriptor);
  }

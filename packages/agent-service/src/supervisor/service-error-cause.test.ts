@@ -14,6 +14,7 @@ import { problemMessage } from '../../../ui/src/lib/problemMessage.ts';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '../../../ui/src/lib/runtime-url.ts';
 import { setRuntimeExtraHeaders } from '../../../ui/src/lib/runtime-auth.ts';
 import { WorkerReplySchema } from '../protocol.ts';
+import { AgentService } from './service.ts';
 import type { ServiceResponse } from './service.ts';
 import type { ProblemDetails } from '@openchamber/agent-contract';
 
