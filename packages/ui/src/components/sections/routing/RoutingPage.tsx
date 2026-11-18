@@ -20,7 +20,7 @@ import {
   SettingsTwoColumn,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
@@ -37,6 +37,7 @@ import { VariantSelect } from './VariantSelect';
 import {
   MAX_CATEGORIES,
   buildUniqueCategoryId,
+  getBuiltinCategoryDisplayName,
   knownVariant,
   useModelReasoningEfforts,
 } from './routingCategoryUtils';
@@ -54,41 +55,6 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
     categories: config.categories.map((category) => ({ ...category, name: category.name.trim(), description: category.description.trim() })),
   });
   return trimmed(server) === trimmed(draft);
-};
-
-/**
- * The seeded English names of the builtin categories, as `defaults.js` writes
- * them. UI-only: the stored config keeps whatever the server holds.
- */
-const BUILTIN_CATEGORY_NAMES: Record<string, string> = {
-  trivial: 'Trivial',
-  research: 'Research',
-  implement: 'Implement',
-  hard: 'Hard',
-};
-
-const BUILTIN_CATEGORY_NAME_KEYS: Record<string, I18nKey> = {
-  trivial: 'settings.routing.builtin.trivial.name',
-  research: 'settings.routing.builtin.research.name',
-  implement: 'settings.routing.builtin.implement.name',
-  hard: 'settings.routing.builtin.hard.name',
-};
-
-/**
- * Display name for a builtin category that still carries its seeded English
- * name: the reader's language. A renamed builtin shows the typed name, and
- * anything a user created shows as typed.
- */
-export const getBuiltinCategoryDisplayName = (
-  category: Pick<RoutingCategory, 'id' | 'builtin' | 'name'>,
-  t: (key: I18nKey) => string,
-): string => {
-  const trimmed = category.name.trim() || category.id;
-  const builtinName = category.builtin ? BUILTIN_CATEGORY_NAMES[category.id] : undefined;
-  const nameKey = category.builtin ? BUILTIN_CATEGORY_NAME_KEYS[category.id] : undefined;
-  return builtinName !== undefined && nameKey !== undefined && category.name === builtinName
-    ? t(nameKey)
-    : trimmed;
 };
 
 /**

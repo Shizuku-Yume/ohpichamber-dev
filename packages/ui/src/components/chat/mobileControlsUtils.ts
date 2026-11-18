@@ -66,7 +66,7 @@ const getEffortTone = (variant?: string): EffortTone => {
 export const getEffortToneClass = (variant?: string) => EFFORT_TONE_CLASS[getEffortTone(variant)];
 
 /** Label keys for the effort levels OMP names; unknown labels are shown as typed. */
-const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
+const EFFORT_LABEL_KEYS = {
     minimal: 'effort.minimal',
     low: 'effort.low',
     medium: 'effort.medium',
@@ -75,7 +75,12 @@ const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
     max: 'effort.max',
     auto: 'effort.auto',
     none: 'effort.none',
-};
+} satisfies Record<'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto' | 'none', I18nKey>;
+
+type KnownEffortLabel = keyof typeof EFFORT_LABEL_KEYS;
+
+const isKnownEffortLabel = (label: string): label is KnownEffortLabel =>
+    Object.hasOwn(EFFORT_LABEL_KEYS, label);
 
 /**
  * The composer's label for one effort level: a known level is translated, a
@@ -89,7 +94,7 @@ export const formatEffortLabel = (
     const trimmed = variant?.trim() ?? '';
     if (trimmed.length === 0) return t('effort.default');
     if (/^\d+(\.\d+)?$/.test(trimmed)) return trimmed;
-    const labelKey = EFFORT_LABEL_KEYS[trimmed.toLowerCase()];
-    return labelKey ? t(labelKey) : capitalizeLabel(trimmed);
+    const name = trimmed.toLowerCase();
+    return isKnownEffortLabel(name) ? t(EFFORT_LABEL_KEYS[name]) : capitalizeLabel(trimmed);
 };
 

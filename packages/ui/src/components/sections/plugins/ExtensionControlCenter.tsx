@@ -58,17 +58,14 @@ const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
 };
 
 /** Providers whose OMP-side name needs the UI's own wording; unknown ids keep the reported name. */
-const PROVIDER_NAME_KEYS: Record<string, I18nKey> = {
- [BUNDLED_PROVIDER_ID]: 'settings.plugins.provider.builtinDefaults',
-};
+const BUNDLED_PROVIDER_NAME_KEY = 'settings.plugins.provider.builtinDefaults' satisfies I18nKey;
 
 const getProviderDisplayName = (
  provider: { id: string; displayName: string },
  t: (key: I18nKey) => string,
-): string => {
- const key = PROVIDER_NAME_KEYS[provider.id];
- return key ? t(key) : provider.displayName;
-};
+): string => (
+ provider.id === BUNDLED_PROVIDER_ID ? t(BUNDLED_PROVIDER_NAME_KEY) : provider.displayName
+);
 
 /** Shadowing wins over the switch, so one status drives the pill and the inspector. */
 const StatusPill: React.FC<{ item: ExtensionItem }> = ({ item }) => {

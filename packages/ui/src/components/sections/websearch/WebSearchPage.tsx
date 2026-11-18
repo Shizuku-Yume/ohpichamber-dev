@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { toast } from '@/components/ui';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -33,6 +33,7 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsSortableList, type SettingsSortableListItem } from '@/components/sections/shared/SettingsSortableList';
 import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from '@/stores/useWebSearchStore';
+import { getWebSearchProviderName } from './websearchProviderName';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 
 /**
@@ -44,20 +45,6 @@ import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
  * The page opens on the mode (default, off) and a card per provider; a card
  * opens the provider, where its key is added and it is chosen for search.
  */
-
-/** Native search providers whose service-side name needs the UI's own wording. */
-const WEB_SEARCH_PROVIDER_NAME_KEYS: Record<string, I18nKey> = {
-  'web/hosted': 'settings.webSearch.provider.hosted',
-};
-
-/** The reader's name for a search provider: a known id is translated, an unknown one keeps the service's name. */
-export const getWebSearchProviderName = (
-  provider: Pick<WebSearchProviderEntry, 'providerId' | 'name'>,
-  t: (key: I18nKey) => string,
-): string => {
-  const key = WEB_SEARCH_PROVIDER_NAME_KEYS[provider.providerId];
-  return key ? t(key) : provider.name;
-};
 
 /** OMP's native `providers.webSearchTimeoutSeconds` default, used by the reset action. */
 const DEFAULT_TIMEOUT_SECONDS = 60;
