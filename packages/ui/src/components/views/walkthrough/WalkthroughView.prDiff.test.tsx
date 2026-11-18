@@ -35,6 +35,72 @@ const PR: ChangeRequest = {
 
 const STATUS: GitStatus = { current: 'feature-17', tracking: null, ahead: 0, behind: 0, files: [], isClean: true };
 
+// B-1/B-2: on a directory that is not a repository, the panel must not ask the
+// binding route (422) or the walkthrough route (500 → 422 after the server fix).
+// It shows the shared not-a-repository state instead.
+test('a non-repository directory asks neither the binding nor the walkthrough', async () => {
+  const dom = new Window({ url: 'http://localhost' });
+  const originals = new Map<string, PropertyDescriptor | undefined>();
+  const globals = {
+    window: dom, document: dom.document, navigator: dom.navigator, location: dom.location, localStorage: dom.localStorage,
+    Element: dom.Element, HTMLElement: dom.HTMLElement, HTMLInputElement: dom.HTMLInputElement, Node: dom.Node,
+    customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
+    Event: dom.Event, CustomEvent: dom.CustomEvent, KeyboardEvent: dom.KeyboardEvent, MouseEvent: dom.MouseEvent,
+    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,
+    getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+    cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true,
+  };
+  for (const [name, value] of Object.entries(globals)) {
+    originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  }
+  const originalFetch = globalThis.fetch;
+  const paths: string[] = [];
+  globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+    paths.push(url.pathname);
+    // Git's own answer for the managed chats folder: not a repository, and
+    // nothing under it to discover.
+    if (url.pathname === '/api/git/projects') {
+      return Response.json({ projects: [{ directory: '/chats', isGitRepository: false, status: null }] });
+    }
+    if (url.pathname === '/api/fs/git-dirs') return Response.json({ repositories: [] });
+    // Everything the gated hooks would ask stays unanswered, and the assertions
+    // below say it was never asked.
+    return new Promise<Response>(() => {});
+  }, originalFetch);
+  const { createRoot } = await import('react-dom/client');
+  const { I18nProvider } = await import('@/lib/i18n');
+  const { CanonicalClient } = await import('@/api/canonicalClient');
+  const { SyncProvider } = await import('@/sync/sync-context');
+  const client = new CanonicalClient();
+  const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+  const { createWebAPIs } = await import('../../../../../web/src/api/index');
+  const { WalkthroughView } = await import('./WalkthroughView');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(<SyncProvider client={client} directory="/chats"><I18nProvider><RuntimeAPIContext.Provider value={createWebAPIs()}>
+        <WalkthroughView directory="/chats" />
+      </RuntimeAPIContext.Provider></I18nProvider></SyncProvider>);
+    });
+    // The repository check is batched on a timer; let it and the discovery land.
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    expect(paths).not.toContain('/api/source-control/binding');
+    expect(paths.filter((path) => path.startsWith('/api/walkthrough'))).toEqual([]);
+  } finally {
+    await act(async () => root.unmount());
+    globalThis.fetch = originalFetch;
+    await dom.happyDOM.abort();
+    for (const [name, value] of originals) {
+      if (value) Object.defineProperty(globalThis, name, value);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  }
+}, 30_000);
+
 test('a pull request walkthrough on a host without change-request diffs says so and offers no generation', async () => {
   const dom = new Window({ url: 'http://localhost' });
   const originals = new Map<string, PropertyDescriptor | undefined>();

@@ -9,6 +9,7 @@ import { openSession } from '@/lib/router/openSessionFromRoute';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useRouter } from './useRouter';
@@ -127,6 +128,19 @@ test('an initial message link keeps its message target', async () => {
   expect(useSessionUIStore.getState().currentSessionId).toBe('next');
   expect(window.location.search).toBe('?session=next&message=msg');
   expect(peekMessageFocus('next')?.messageId).toBe('msg');
+});
+
+test('a tab deep link opens the surface in the session directory, not the workspace directory', async () => {
+  // The two owners disagree: the workspace directory store still holds a
+  // different folder while the selected session's directory is its own. The
+  // tab used to follow the workspace store, so a cold `?tab=terminal` link
+  // opened nothing (the empty value) or the wrong project's panel.
+  window.history.replaceState({}, '', '/?tab=terminal');
+  useDirectoryStore.setState({ currentDirectory: '/other' });
+  await act(async () => root.render(<Harness />));
+  expect(useUIStore.getState().contextPanelByDirectory['/other']).toBeUndefined();
+  const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
+  expect(panel?.tabs.map((tab) => tab.mode)).toEqual(['terminal']);
 });
 
 test('a PWA notification opens one entry and preserves one-step Back', async () => {
