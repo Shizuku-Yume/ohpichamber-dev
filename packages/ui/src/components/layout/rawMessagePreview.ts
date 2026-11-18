@@ -1,4 +1,5 @@
 import type { Part } from '@openchamber/agent-contract';
+import { getCurrentIntlLocale } from '@/lib/i18n';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 
 /**
@@ -100,7 +101,10 @@ export const formatMessagePreviewTime = (
 ): string => {
   if (!timestamp || !Number.isFinite(timestamp)) return '-';
   const hour12 = resolveHour12(preference);
-  return new Date(timestamp).toLocaleString(undefined, {
+  // `undefined` would follow the *browser's* locale, not the app's: a zh-CN
+  // reader with an en-US browser saw "11/18, 11:06 PM" here while every other
+  // timestamp in the app was already localized.
+  return new Date(timestamp).toLocaleString(getCurrentIntlLocale(), {
     month: 'numeric',
     day: 'numeric',
     hour: hour12 === false ? '2-digit' : 'numeric',

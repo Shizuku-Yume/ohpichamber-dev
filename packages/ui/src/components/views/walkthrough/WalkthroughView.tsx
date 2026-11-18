@@ -115,6 +115,10 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   // or the root when nothing is picked. Everything below keys off `directory`.
   const { rootIsGitRepo, gitDirectory, nestedRepos, repositoryOptions, unreadable } = useNestedGitDirectory(rootDirectory || null, { enabled: visible, recheckOnOpen: true });
   const directory = gitDirectory ?? rootDirectory;
+  // Both server reads below refuse a directory that is not a repository (422),
+  // so they are asked only once the directory Git operates on proved to be one.
+  // `null` (still probing) is not a yes.
+  const isGitRepo = useIsGitRepo(directory || null);
 
   // Panel width, not viewport width: this surface is resizable independently of
   // the window.
@@ -214,7 +218,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const clearBaseOverride = useGitBaseBranchStore((state) => state.clearOverride);
   const ensureAll = useGitStore((state) => state.ensureAll);
   const { sourceControl, git } = useRuntimeAPIs();
-  const binding = useRepositoryBinding(directory, sourceControl);
+  const binding = useRepositoryBinding(directory, sourceControl, isGitRepo === true);
 
   useEffect(() => {
     if (visible && directory) void ensureAll(directory, git);
@@ -317,6 +321,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     visible,
     needsSourceSelection,
     revision: JSON.stringify([sourceRevision, prPushRevision]),
+    enabled: isGitRepo === true,
   });
   const { view } = review;
 
@@ -349,7 +354,6 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const headerOffersGeneration = Boolean(view || review.blocked);
   const sourceIcon = isPrScope ? 'git-pull-request' : isCommitScope ? 'git-commit' : isBranchScope ? 'git-branch' : 'file-edit';
 
-  const isGitRepo = useIsGitRepo(gitDirectory || null);
   const ensureNestedRepos = useGitStore((state) => state.ensureNestedRepos);
   const selectNestedRepo = useGitStore((state) => state.selectNestedRepo);
   if (unreadable) {

@@ -1557,14 +1557,16 @@ export const DiffView: React.FC<DiffViewProps> = ({
     // itself a repository, operate on the resolved nested repository instead.
     const { gitDirectory: nestedGitDirectory, repositoryOptions } = useNestedGitDirectory(rootDirectory ?? null, { enabled: visible, recheckOnOpen: true });
     const effectiveDirectory = nestedGitDirectory ?? rootDirectory;
-    // The binding follows the repository actually being diffed.
-    const binding = useRepositoryBinding(effectiveDirectory, sourceControl);
+    const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
+    // The binding follows the repository actually being diffed, and is asked
+    // only once that directory proved to be a repository: the route answers 422
+    // for anything else.
+    const binding = useRepositoryBinding(effectiveDirectory, sourceControl, isGitRepo === true);
     const openContextSurface = useUIStore((state) => state.openContextSurface);
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const requestWalkthroughTarget = useWalkthroughStore((state) => state.requestTarget);
     const { screenWidth, isMobile } = useDeviceInfo();
 
-    const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
     const status = useGitStatus(effectiveDirectory ?? null);
     const isLoadingStatus = useGitLoadingStatus(effectiveDirectory ?? null);
     const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);
