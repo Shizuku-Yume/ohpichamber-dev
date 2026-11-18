@@ -29,10 +29,14 @@ mock.module('@/lib/persistence', () => ({
 
 const iconCalls: string[] = [];
 const refreshCalls: string[][] = [];
+let iconResponse: () => Response = () => new Response('{}', { status: 200 });
 
 mock.module('@/lib/runtime-fetch', () => ({
   runtimeFetch: async (path: string) => {
-    if (path.includes('/icon/discover')) iconCalls.push(path);
+    if (path.includes('/icon/discover')) {
+      iconCalls.push(path);
+      return iconResponse();
+    }
     return new Response('{}', { status: 200 });
   },
 }));
@@ -83,6 +87,7 @@ const reset = () => {
   heldWrites.length = 0;
   iconCalls.length = 0;
   refreshCalls.length = 0;
+  iconResponse = () => new Response('{}', { status: 200 });
   useProjectsStore.setState({ projects: [], activeProjectId: null, manualProjectOrder: [] });
 };
 
@@ -138,5 +143,24 @@ describe('useProjectsStore persistence ordering', () => {
     expect(useProjectsStore.getState().projects).toEqual([]);
     expect(iconCalls).toEqual([]);
     expect(refreshCalls).toEqual([]);
+  });
+
+  test('a project without a favicon reports an empty discovery, not a failure', async () => {
+    iconResponse = () => Response.json({ project: { id: 'x' }, skipped: true, reason: 'no-favicon-found' });
+
+    const project = await useProjectsStore.getState().addProject('/repo/no-icon');
+
+    expect(project?.path).toBe('/repo/no-icon');
+    expect(useProjectsStore.getState().projects.map((entry) => entry.path)).toEqual(['/repo/no-icon']);
+    const result = await useProjectsStore.getState().discoverProjectIcon('x');
+    expect(result).toEqual({ status: 'no-favicon-found' });
+  });
+
+  test('a real icon discovery failure stays a failure', async () => {
+    iconResponse = () => Response.json({ error: 'Project not found' }, { status: 404 });
+
+    const result = await useProjectsStore.getState().discoverProjectIcon('x');
+
+    expect(result).toEqual({ status: 'failed', error: 'Project not found' });
   });
 });

@@ -69,13 +69,24 @@ interface ProjectsStore {
   }) => void;
   uploadProjectIcon: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
   removeProjectIcon: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  discoverProjectIcon: (id: string, options?: { force?: boolean }) => Promise<{ ok: boolean; skipped?: boolean; reason?: string; error?: string }>;
+  discoverProjectIcon: (id: string, options?: { force?: boolean }) => Promise<ProjectIconDiscoveryResult>;
   reorderProjects: (fromIndex: number, toIndex: number) => void;
   resetForRuntimeSwitch: () => void;
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings, options?: { adoptActiveProject?: boolean }) => void;
   getActiveProject: () => ProjectEntry | null;
 }
+
+/**
+ * What icon discovery did. "No favicon in this project" is a normal outcome,
+ * not a failure: the project keeps its symbol icon and nothing is reported as
+ * broken. Fetch failures and a project the Host does not know stay failures.
+ */
+export type ProjectIconDiscoveryResult =
+  | { status: 'discovered' }
+  | { status: 'no-favicon-found' }
+  | { status: 'custom-icon-present' }
+  | { status: 'failed'; error?: string };
 
 const safeStorage = getDeferredSafeStorage();
 const PROJECTS_STORAGE_KEY = 'projects';
@@ -780,21 +791,23 @@ export const useProjectsStore = create<ProjectsStore>()(
         } | null;
 
         if (!response.ok) {
-          return { ok: false, error: payload?.error || 'Failed to discover project icon' };
+          return { status: 'failed', error: payload?.error || 'Failed to discover project icon' };
         }
 
         if (payload?.settings) {
           get().synchronizeFromSettings(payload.settings, { adoptActiveProject: false });
         }
 
-        return {
-          ok: true,
-          skipped: payload?.skipped === true,
-          reason: typeof payload?.reason === 'string' ? payload.reason : undefined,
-        };
+        if (payload?.skipped === true && payload.reason === 'no-favicon-found') {
+          return { status: 'no-favicon-found' };
+        }
+        if (payload?.skipped === true && payload.reason === 'custom-icon-present') {
+          return { status: 'custom-icon-present' };
+        }
+        return { status: 'discovered' };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: message || 'Failed to discover project icon' };
+        return { status: 'failed', error: message || 'Failed to discover project icon' };
       }
     },
 

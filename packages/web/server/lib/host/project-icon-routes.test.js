@@ -302,6 +302,68 @@ describe('project icon routes', () => {
     expect(res.body.discoveredPath).toBe('/repo/web/public/icons/favicon.ico');
   });
 
+  it('answers a project with no favicon as a successful empty discovery, not an error', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const project = { id: 'proj-1', path: '/repo' };
+
+    registerProjectIconRoutes(app, {
+      fsPromises: {
+        readFile: vi.fn(async () => {
+          throw new Error('Unexpected read');
+        }),
+        mkdir: vi.fn(async () => {}),
+        writeFile: vi.fn(async () => {}),
+        unlink: vi.fn(async () => {}),
+      },
+      path,
+      crypto,
+      openchamberDataDir: '/tmp/openchamber-test',
+      sanitizeProjects: (projects) => projects,
+      readSettingsFromDiskMigrated: async () => ({ projects: [project] }),
+      persistResolvedSettings: async () => ({ projects: [project] }),
+      createFsSearchRuntime: () => ({ searchFilesystemFiles: async () => [] }),
+      spawn: vi.fn(),
+      resolveGitBinaryForSpawn: vi.fn(),
+    });
+
+    const res = createMockResponse();
+    await getRoute('POST', '/api/projects/:projectId/icon/discover')({
+      params: { projectId: 'proj-1' },
+      body: {},
+    }, res);
+
+    // Finding nothing is what a repository without a favicon always answers;
+    // the client keeps the symbol icon and says so without a console error.
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ project, skipped: true, reason: 'no-favicon-found' });
+  });
+
+  it('still answers an unknown project as an error, not as an empty discovery', async () => {
+    const { app, getRoute } = createRouteRegistry();
+
+    registerProjectIconRoutes(app, {
+      fsPromises: { readFile: vi.fn(async () => Buffer.from('x')) },
+      path,
+      crypto,
+      openchamberDataDir: '/tmp/openchamber-test',
+      sanitizeProjects: (projects) => projects,
+      readSettingsFromDiskMigrated: async () => ({ projects: [] }),
+      persistResolvedSettings: async () => ({ projects: [] }),
+      createFsSearchRuntime: () => ({ searchFilesystemFiles: async () => [] }),
+      spawn: vi.fn(),
+      resolveGitBinaryForSpawn: vi.fn(),
+    });
+
+    const res = createMockResponse();
+    await getRoute('POST', '/api/projects/:projectId/icon/discover')({
+      params: { projectId: 'proj-missing' },
+      body: {},
+    }, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: 'Project not found' });
+  });
+
   it('prefers svg over ico format in the same directory', async () => {
     const { app, getRoute } = createRouteRegistry();
     const svgBytes = Buffer.from('svg-bytes');
