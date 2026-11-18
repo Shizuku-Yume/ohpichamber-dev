@@ -8,7 +8,8 @@ import { verifyAgentPayload } from '../../electron/scripts/verify-agent-runtime.
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(webRoot, '../..');
-const backupPath = path.join(os.tmpdir(), 'ohpichamber-package-json-backup.json');
+const backupKey = createHash('sha256').update(webRoot).digest('hex').slice(0, 12);
+const backupPath = path.join(os.tmpdir(), `ohpichamber-package-json-backup-${backupKey}.json`);
 
 export function runPostpack() {
   // 1. Always restore original package.json first to leave the worktree clean

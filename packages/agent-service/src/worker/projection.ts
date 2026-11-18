@@ -170,6 +170,7 @@ function stepTiming(message: NativeAssistantMessage): StepTiming {
   if (ttft.success) {
     timing.firstTokenAt = Math.max(startedAt, Math.round(startedAt + ttft.data));
   }
+  const duration = z.number().finite().safeParse(message.duration);
   const completedAt = z.number().finite().safeParse(message.completedAt);
   const completed = completedAt.success
     ? completedAt.data

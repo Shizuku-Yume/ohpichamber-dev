@@ -1587,6 +1587,10 @@ const spawnLocalServer = async () => {
     OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: agentRuntime.entrypoint,
     ...(agentRuntime.env || {}),
   });
+  if (app.isPackaged && agentRuntime.root) {
+    const { registerStandaloneLoader } = await import('ohpichamber/scripts/standalone-loader.mjs');
+    registerStandaloneLoader({ runtimeRoot: agentRuntime.root });
+  }
 
   const { startWebUiServer } = await import('ohpichamber/server/index.js');
 

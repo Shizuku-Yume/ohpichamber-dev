@@ -81,7 +81,8 @@
       "!**/node_modules/7zip-bin/!(${os})/**/*",
       "!**/node_modules/7zip-bin/win/!(${arch}){,/**}",
       "!node_modules/node-pty/prebuilds/!(${platform}-${arch}){,/**}",
-      "!**/node_modules/@vscode/ripgrep-*{,/**}"
+      "!**/node_modules/@vscode/ripgrep-*{,/**}",
+      "!node_modules/ohpichamber/resources/agent-runtime{,/**}"
     ],
     "extraResources": [
       {

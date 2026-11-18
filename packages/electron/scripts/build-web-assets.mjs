@@ -21,10 +21,10 @@ const run = (cmd, args, cwd) => {
   const isWindowsCommandScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
   const result = isWindowsCommandScript
     ? spawnSync(
-        process.env.ComSpec || 'cmd.exe',
-        ['/d', '/s', '/c', ['call', quoteWindowsCommandArg(cmd), ...args.map(quoteWindowsCommandArg)].join(' ')],
-        { cwd, stdio: 'inherit', windowsVerbatimArguments: true },
-      )
+      process.env.ComSpec || 'cmd.exe',
+      ['/d', '/s', '/c', ['call', quoteWindowsCommandArg(cmd), ...args.map(quoteWindowsCommandArg)].join(' ')],
+      { cwd, stdio: 'inherit', windowsVerbatimArguments: true },
+    )
     : spawnSync(cmd, args, { cwd, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -83,6 +83,11 @@ const bunExe = resolveBun();
 // once the server needs an export added since the last SDK build.
 console.log('[electron] building ohpichamber-sdk dist...');
 run(bunExe, ['run', 'build'], sdkDir);
+const sdkTarget = path.join(webDir, 'resources', 'standalone-sdk');
+await fs.mkdir(sdkTarget, { recursive: true });
+await fs.copyFile(path.join(sdkDir, 'package.json'), path.join(sdkTarget, 'package.json'));
+await fs.cp(path.join(sdkDir, 'dist'), path.join(sdkTarget, 'dist'), { recursive: true });
+
 
 console.log('[electron] building web UI dist...');
 run(bunExe, ['run', 'build'], webDir);

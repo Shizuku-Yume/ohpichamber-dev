@@ -17,6 +17,8 @@ const completeApp = () => [
   `${web}/package.json`,
   `${web}/server/index.js`,
   `${web}/scripts/standalone-loader.mjs`,
+  `${web}/resources/standalone-sdk/dist/index.js`,
+  `${web}/resources/changelog/index.json`,
 ].map((filePath) => ({ path: filePath, unpacked: false }))
   .concat(helpers.map((filePath) => ({ path: filePath, unpacked: true })))
   .concat(process.platform === 'win32' ? [{ path: `node_modules/7zip-bin/win/${process.arch}/7za.exe`, unpacked: true }] : []);
@@ -76,6 +78,10 @@ test('packaging keeps only the target Windows decoder and no decoders on macOS o
 test('the web build output inside the archive is rejected', () => {
   const files = [...completeApp(), { path: `${web}/dist/assets/index.js`, unpacked: false }];
   assert.deepEqual(findPackagedAppContentProblems(files), [`${web}/dist must not be packaged (1 files found)`]);
+});
+test('agent-runtime inside the archive is rejected', () => {
+  const forbidden = [`${web}/resources/agent-runtime/manifest.json`];
+  assert.ok(findPackagedAppContentProblems(completeApp().concat(forbidden.map(path => ({ path, unpacked: false })))).length > 0);
 });
 
 test('ripgrep platform packages inside the archive are rejected', () => {

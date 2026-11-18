@@ -2252,3 +2252,13 @@ scripts/perf/animation-fixture.html	fork-differs	decision	2026-11-16 - Rename wh
 packages/web/package.json	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Fork-specific package dependencies and config.
 packages/web/server/lib/environment/runtime.js	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Fork-specific runtime configuration.
 packages/web/server/lib/environment/runtime.test.js	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Fork-specific runtime configuration tests.
+packages/electron/scripts/build-web-assets.mjs	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Stage standalone SDK for bundled agent runtime.
+packages/electron/scripts/packaged-app-contents.cjs	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Exclude bundled agent runtime from ASAR and verify standalone SDK.
+packages/electron/scripts/packaged-app-contents.test.cjs	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Verify packaged app contents for agent runtime and standalone SDK.
+packages/web/scripts/prepack.mjs	fork-only	decision	2026-11-18 - Remove OpenCode service and environment variables	Worktree-scoped manifest backup for packaging.
+packages/web/scripts/postpack.mjs	fork-only	decision	2026-11-18 - Remove OpenCode service and environment variables	Worktree-scoped manifest restoration.
+packages/web/scripts/standalone-loader.mjs	fork-only	decision	2026-11-18 - Remove OpenCode service and environment variables	Standalone SDK and runtime loader fixes.
+packages/ui/src/apps/MobileProjectEditSurface.tsx	fork-differs	decision	2026-11-12 - The R3/R5/R6 cutovers own the UI files they rewrote in the v2.7.0 merge	UI design and layout compliance for OhPiChamber branding.
+packages/ui/src/apps/MobileProjectIcon.tsx	fork-differs	decision	2026-11-12 - The R3/R5/R6 cutovers own the UI files they rewrote in the v2.7.0 merge	UI design and layout compliance for OhPiChamber branding.
+packages/ui/src/components/sections/projects/ProjectSettingsHeader.tsx	fork-differs	decision	2026-11-12 - The R3/R5/R6 cutovers own the UI files they rewrote in the v2.7.0 merge	UI design and layout compliance for OhPiChamber branding.
+packages/ui/src/types/desktop.d.ts	fork-differs	decision	2026-11-12 - The R3/R5/R6 cutovers own the UI files they rewrote in the v2.7.0 merge	UI design and layout compliance for OhPiChamber branding.
