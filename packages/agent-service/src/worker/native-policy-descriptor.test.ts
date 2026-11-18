@@ -86,13 +86,32 @@ describe('trusted execution-free first-party target inspection', () => {
     }
   });
 
+  test('passes local:// write targets as internal write URLs and keeps other schemes filesystem-only', async () => {
+    const cwd = await workspace();
+    for (const [path, normalized] of [['local://add-helper-plan.md', 'local://add-helper-plan.md'], ['local:/notes.md', 'local://notes.md']]) {
+      const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path, content: 'plan' } });
+      expect(descriptor?.destinationPaths).toEqual([]);
+      expect(descriptor?.internalWriteUrls).toEqual([normalized]);
+      expect(descriptor?.internalReadUrls).toBeUndefined();
+    }
+    // A real filesystem destination is still exactly that, never an internal URL.
+    const filesystem = await describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path: 'src/a.ts', content: 'new' } });
+    expect(filesystem?.destinationPaths).toEqual([join(cwd, 'src/a.ts')]);
+    expect(filesystem?.internalWriteUrls).toBeUndefined();
+  });
+
   test('refuses non-OMP schemes, NUL bytes and every non-read tool', async () => {
     const cwd = await workspace();
     for (const path of ['file:///etc/passwd', 'https://example.com/a', 'attachment://upload']) {
       await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path } })).rejects.toThrow('separate Host capability');
     }
     await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: 'agent://native\0ignored' } })).rejects.toThrow('invalid byte');
-    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path: 'local://notes.md', content: 'x' } })).rejects.toThrow('separate Host capability');
+    // Only the `local://` session sandbox is writable; every other internal
+    // scheme stays a read source or a device transport.
+    for (const path of ['agent://native', 'history://native', 'xd://memory', 'skill://flow-start']) {
+      await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path, content: 'x' } })).rejects.toThrow('separate Host capability');
+    }
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path: 'file:///etc/passwd', content: 'x' } })).rejects.toThrow('separate Host capability');
     await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'grep', input: { path: 'agent://native', pattern: 'x' } })).rejects.toThrow('separate Host capability');
     await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'glob', input: { path: 'local://*' } })).rejects.toThrow('separate Host capability');
   });

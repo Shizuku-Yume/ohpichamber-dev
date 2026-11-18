@@ -139,6 +139,35 @@ describe('Host-owned native descriptor authority', () => {
     } finally { await harness.close(); }
   });
 
+  it('admits only the local:// internal write target and only for the write tool', async () => {
+    const harness = await nativeHarness();
+    try {
+      const planWrite = { type: 'tool', toolName: 'write', input: { path: 'local://add-helper-plan.md', content: '# Plan' } };
+      const planDescriptor = { toolName: 'write', sourcePaths: [], destinationPaths: [], fileOps: [], internalWriteUrls: ['local://add-helper-plan.md'], declaredTier: 'write' };
+      expect(await harness.authorize(harness.scope, planWrite, planDescriptor)).toEqual({ allowed: true });
+      // The old refusal survives when the descriptor names no destination at all.
+      expect(await harness.authorize(harness.scope, planWrite, { ...planDescriptor, internalWriteUrls: undefined }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The write tool names no writable destination' });
+      // A real filesystem destination is still contained, and an internal write URL
+      // does not widen a tool that may only read.
+      expect(await harness.authorize(harness.scope, planWrite, { ...planDescriptor, destinationPaths: [path.join(harness.outside, 'plan.md')], internalWriteUrls: [] }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      for (const toolName of ['read', 'edit', 'grep', 'glob']) {
+        const request = { type: 'tool', toolName, input: { path: 'local://plan.md' } };
+        expect(await harness.authorize(harness.scope, request, { ...planDescriptor, toolName }))
+          .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: `The ${toolName} tool may write OMP internal URLs but may not read them` });
+      }
+      // Only `local://` is a writable scheme; any other internal URL is refused
+      // by the descriptor schema before the decision is reached.
+      expect(await harness.authorize(harness.scope, planWrite, { ...planDescriptor, internalWriteUrls: ['agent://native'] }))
+        .toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, planWrite, { ...planDescriptor, internalWriteUrls: ['file:///etc/passwd'] }))
+        .toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      harness.policy.fileTools = ['read'];
+      expect(await harness.authorize(harness.scope, planWrite, planDescriptor)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
   it('admits native wait without granting another native tool', async () => {
     const harness = await nativeHarness();
     try {

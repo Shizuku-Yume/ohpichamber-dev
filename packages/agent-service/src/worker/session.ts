@@ -125,6 +125,16 @@ type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'fo
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile?: Agent | null };
 
+/**
+ * OMP throws `ManualCompactionNoOpError` before a manual pass touches history
+ * when the branch already ends in a compaction or holds too little to summarize.
+ * The class is not exported from a public SDK path, so its name is the only
+ * stable identity. That is a refusal the user can act on, not a runtime failure.
+ */
+function isManualCompactionNoOp(error: unknown): error is Error {
+  return error instanceof Error && error.name === 'ManualCompactionNoOpError';
+}
+
 
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
@@ -2244,15 +2254,10 @@ export class WorkerSession {
         try {
           await this.binding;
           const previousCompaction = this.lastEmittedCompaction;
-          let result;
-          try {
-            result = await this.session.compact(operation.instructions);
-          } catch (e: unknown) {
-            if (e instanceof Error && e.name === 'ManualCompactionNoOpError') {
-              throw new ProjectionError(422, 'SESSION_TOO_SMALL', 'Session is too small to compact');
-            }
-            throw e;
-          }
+          const result = await this.session.compact(operation.instructions).catch(error => {
+            if (isManualCompactionNoOp(error)) throw new ProjectionError(422, 'SESSION_TOO_SMALL', 'Session is too small to compact');
+            throw error;
+          });
           if (this.lastEmittedCompaction && this.lastEmittedCompaction !== previousCompaction) {
             return {
               type: 'compact',

@@ -11,6 +11,17 @@ const OmpInternalUrlSchema = z.string().min(1).refine((value) => {
   const match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(value);
   return match !== null && OMP_INTERNAL_URL_SCHEME_SET[match[1]!.toLowerCase()] === true;
 });
+/**
+ * The only internal scheme a native tool may write. `local://` is OMP's
+ * session artifact sandbox, where an approved Plan-mode plan file lives; every
+ * other scheme is a read source, a device transport or a remote owner.
+ */
+const OMP_WRITABLE_INTERNAL_SCHEME = 'local';
+const OmpWritableInternalUrlSchema = z.string().min(1).refine((value) => {
+  if (value.includes('\0')) return false;
+  const match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(value);
+  return match !== null && match[1]!.toLowerCase() === OMP_WRITABLE_INTERNAL_SCHEME;
+});
 export const HostNativePolicySnapshotSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
@@ -52,8 +63,9 @@ export const NativeOperationDescriptorSchema = z.strictObject({
   toolName: z.string().min(1), effectiveMode: NativeEditModeSchema.optional(),
   sourcePaths: z.array(PrivatePathSchema), destinationPaths: z.array(PrivatePathSchema),
   /** Read targets OMP resolves itself; never filesystem paths. */
-  /** Write targets OMP resolves itself; never filesystem paths. */
-  internalWriteUrls: z.array(OmpInternalUrlSchema).optional(),
+  internalReadUrls: z.array(OmpInternalUrlSchema).optional(),
+  /** `local://` write targets OMP resolves itself, e.g. a Plan-mode plan file. */
+  internalWriteUrls: z.array(OmpWritableInternalUrlSchema).optional(),
   fileOps: z.array(z.strictObject({ kind: z.string().min(1), path: PrivatePathSchema, to: PrivatePathSchema.optional() })),
   command: z.string().optional(), declaredTier: NativeToolTierSchema.optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
   approvalGrant: NativeApprovalGrantSchema.optional(),

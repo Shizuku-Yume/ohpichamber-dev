@@ -2404,15 +2404,15 @@ test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and lo
   await harness.close();
  }
 }, 30000);
-test('compacting a too-small session returns 422 SESSION_TOO_SMALL', async () => {
- const { worker } = await fixture({});
- worker.appendMessage({ role: 'user', content: 'Short prompt' });
- await worker.ensureOnDisk();
-
- const response = await worker.operation({ type: 'compact', instructions: 'compact it' });
- expect(response.type).toBe('operation.error');
- if (response.type === 'operation.error') {
-  expect(response.code).toBe('SESSION_TOO_SMALL');
-  expect(response.status).toBe(422);
- }
-});
+test('compacting a too-small session is refused as 422 SESSION_TOO_SMALL', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const manager = harness.worker.session.sessionManager;
+  manager.appendMessage({ role: 'user', content: 'Short prompt', timestamp: Date.now() });
+  await manager.flush();
+  await expect(harness.worker.operation({ type: 'compact', instructions: 'compact it' }))
+   .rejects.toMatchObject({ status: 422, code: 'SESSION_TOO_SMALL', message: 'Session is too small to compact' });
+  expect(harness.fatal()).toBe(false);
+  expect(harness.requests).toHaveLength(0);
+ } finally { await harness.close(); }
+}, 30000);
