@@ -10,7 +10,7 @@ import { registerSkillRepositoryRoutes } from './skill-catalog-routes.js';
 
 const roots = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => fs.rm(root, { recursive: true, force: true }))); });
-async function fixture({ hideBuiltins = false, denyIdentity = false, failApply = false } = {}) {
+async function fixture({ hideBuiltins = false, denyIdentity = false, failApply = false, scanError = null } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-repository-boundary-')); roots.push(root);
   const cwd = path.join(root, 'workspace'); const agentDirectory = path.join(root, 'agent'); const stagingDirectory = path.join(root, 'staged');
   await Promise.all([cwd, agentDirectory, stagingDirectory].map(directory => fs.mkdir(directory)));
@@ -23,40 +23,47 @@ async function fixture({ hideBuiltins = false, denyIdentity = false, failApply =
     const status = { CATALOG_CONFLICT: 409, UNAUTHORIZED: 403, INVALID_REQUEST: 400, NOT_FOUND: 404 }[code] ?? 503;
     return Response.json({ type: `urn:ohpichamber:problem:${code}`, title: 'Skill source operation failed', status, code, detail: 'The skill source operation could not finish.', retryable: status === 503 }, { status });
   };
-  const owner = createSkillFileOwner({ service: { async request(endpoint, options) {
-    const input = JSON.parse(options.body);
-    expect(options.method).toBe('POST');
-    const recovered = await owner.handle({ action: 'reconcile', ...ids }, scope);
-    if (recovered.status !== 'reconciled') return problem(recovered.code);
-    Object.assign(published, recovered.sources);
-    if (endpoint.endsWith('/skill-files/reconcile')) return Response.json({ sources: recovered.sources });
-    const sourceScope = input.scope === 'workspace' ? { kind: 'workspace', workspaceId: scope.workspaceId } : { kind: 'agent', agentDirectoryId: scope.agentDirectoryId };
-    if (endpoint.endsWith('/skill-files/commit')) {
-      if (published[input.scope] !== input.expectedSourceRevision) return problem('CATALOG_CONFLICT');
-      const committed = await owner.handle({ action: 'commit', ...ids, ...input }, scope);
-      if (committed.status !== 'committed') return problem(committed.code);
-      published[input.scope] = committed.sourceRevision;
-      publications.push({ scope: input.scope, sourceRevision: committed.sourceRevision });
-      if (failApply) return problem('SKILL_APPLY_FAILED');
-      return Response.json({ scope: sourceScope, sourceRevision: committed.sourceRevision, persistence: 'committed',
-        apply: { kind: 'skills', status: 'no-active-workers', scope: sourceScope, sourceRevision: committed.sourceRevision, workers: [] } });
+  const owner = createSkillFileOwner({
+    service: {
+      async request(endpoint, options) {
+        const input = JSON.parse(options.body);
+        expect(options.method).toBe('POST');
+        const recovered = await owner.handle({ action: 'reconcile', ...ids }, scope);
+        if (recovered.status !== 'reconciled') return problem(recovered.code);
+        Object.assign(published, recovered.sources);
+        if (endpoint.endsWith('/skill-files/reconcile')) return Response.json({ sources: recovered.sources });
+        const sourceScope = input.scope === 'workspace' ? { kind: 'workspace', workspaceId: scope.workspaceId } : { kind: 'agent', agentDirectoryId: scope.agentDirectoryId };
+        if (endpoint.endsWith('/skill-files/commit')) {
+          if (published[input.scope] !== input.expectedSourceRevision) return problem('CATALOG_CONFLICT');
+          const committed = await owner.handle({ action: 'commit', ...ids, ...input }, scope);
+          if (committed.status !== 'committed') return problem(committed.code);
+          published[input.scope] = committed.sourceRevision;
+          publications.push({ scope: input.scope, sourceRevision: committed.sourceRevision });
+          if (failApply) return problem('SKILL_APPLY_FAILED');
+          return Response.json({
+            scope: sourceScope, sourceRevision: committed.sourceRevision, persistence: 'committed',
+            apply: { kind: 'skills', status: 'no-active-workers', scope: sourceScope, sourceRevision: committed.sourceRevision, workers: [] }
+          });
+        }
+        if (endpoint.endsWith('/skill-files/apply')) {
+          if (failApply) return problem('SKILL_APPLY_FAILED');
+          return Response.json({ kind: 'skills', status: 'no-active-workers', scope: sourceScope, sourceRevision: input.sourceRevision, workers: [] });
+        }
+        throw new Error(`Unexpected service request: ${endpoint}`);
+      }
     }
-    if (endpoint.endsWith('/skill-files/apply')) {
-      if (failApply) return problem('SKILL_APPLY_FAILED');
-      return Response.json({ kind: 'skills', status: 'no-active-workers', scope: sourceScope, sourceRevision: input.sourceRevision, workers: [] });
-    }
-    throw new Error(`Unexpected service request: ${endpoint}`);
-  } } });
+  });
   const dependencies = {
     readSettingsFromDisk: async () => ({ skillCatalogs: [{ id: 'custom:team', label: 'Team', source: 'owner/team' }] }),
     sanitizeSkillCatalogs: entries => entries,
     resolveCatalogGitIdentity: async () => denyIdentity ? { ok: false, error: { kind: 'authRequired', message: 'Identity unavailable' } } : { ok: true, identity: { transport: 'ssh', credentialId: 'managed', endpoint: 'git@github.com:owner/team.git' } },
     credentialResolver: () => { throw new Error('Fixture never resolves a real credential'); },
   };
-  const catalog = createSkillCatalogOwner({ owner, getDependencies: () => dependencies,
+  const catalog = createSkillCatalogOwner({
+    owner, getDependencies: () => dependencies,
     policyOptions: { env: {}, readFile: () => JSON.stringify({ hideBuiltinSkillCatalogs: hideBuiltins }) },
     metadata: async () => ({}),
-    scan: async input => { scans.push(input); return { ok: true, items: ['review', 'docx'].map(skillName => ({ repoSource: input.source, skillDir: `skills/${skillName}`, skillName, installable: true })) }; },
+    scan: async input => { scans.push(input); return scanError ? { ok: false, error: scanError } : { ok: true, items: ['review', 'docx'].map(skillName => ({ repoSource: input.source, skillDir: `skills/${skillName}`, skillName, installable: true })) }; },
     prepare: async (input, consume) => consume(input.selections.map(selection => ({ name: selection.skillDir.split('/').at(-1), stagingDirectory }))),
   });
   return { root, cwd, scope, owner, catalog, publications, scans };
@@ -145,10 +152,29 @@ describe('Host canonical skill repository boundary', () => {
   });
   it('reports a persisted source independently of failed active application', async () => {
     const f = await fixture({ failApply: true });
-    await expect(f.catalog.install(f.scope, install)).rejects.toMatchObject({ status: 503, code: 'SKILL_APPLY_FAILED', details: {
-      result: { persistence: 'committed', sourceRevision: '1', apply: null },
-      repository: { installed: [{ skillName: 'review', scope: 'workspace' }], skipped: [], commit: { persistence: 'committed', sourceRevision: '1', apply: null } },
-    } });
+    await expect(f.catalog.install(f.scope, install)).rejects.toMatchObject({
+      status: 503, code: 'SKILL_APPLY_FAILED', details: {
+        result: { persistence: 'committed', sourceRevision: '1', apply: null },
+        repository: { installed: [{ skillName: 'review', scope: 'workspace' }], skipped: [], commit: { persistence: 'committed', sourceRevision: '1', apply: null } },
+      }
+    });
     expect(await fs.readFile(path.join(f.cwd, '.omp/skills/review/SKILL.md'), 'utf8')).toContain('Keep this body.');
+  });
+  it('maps transient clone and git failures to a retryable 503, not a client error', async () => {
+    // A curated repository's clone fails on the network or on a missing git
+    // binary; neither is the caller's fault, so the browser must not see a 4xx.
+    for (const scanError of [
+      { kind: 'networkError', message: 'Failed to clone repository' },
+      { kind: 'gitUnavailable', message: 'Git is not available in PATH' },
+    ]) {
+      const failing = await fixture({ scanError });
+      await expect(failing.catalog.source(failing.scope, { sourceId: 'anthropic', refresh: true }))
+        .rejects.toMatchObject({ status: 503, code: 'SKILL_INSTALL_FAILED' });
+    }
+  });
+  it('keeps an authentication failure a 401', async () => {
+    const failing = await fixture({ scanError: { kind: 'authRequired', message: 'Authentication required to access this repository' } });
+    await expect(failing.catalog.source(failing.scope, { sourceId: 'anthropic', refresh: true }))
+      .rejects.toMatchObject({ status: 401 });
   });
 });
