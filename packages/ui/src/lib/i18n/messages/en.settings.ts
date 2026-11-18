@@ -2023,6 +2023,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': 'Project',
   'settings.shared.projectSelector.searchPlaceholder': 'Search projects...',
   'settings.openchamber.defaults.title': 'Session defaults',
+  "settings.openchamber.defaults.planModel.title": "Plan model",
+  "settings.openchamber.defaults.planModel.description": "Model used by Plan mode to draft plans.",
   'settings.openchamber.defaults.field.defaultModel': 'Default model',
   'settings.openchamber.defaults.field.defaultThinking': 'Default thinking',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Thinking',

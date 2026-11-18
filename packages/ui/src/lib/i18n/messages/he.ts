@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'מודלי Zen',
   'quota.value.requests': 'בקשות: {count}',
@@ -2743,6 +2744,7 @@ export const dict = {
   "snippets.source.global": "כללי",
   "snippets.source.project": "פרויקט",
   "chat.chatInput.toast.compactFailed": "לא ניתן היה לדחוס את ההפעלה",
+  "chat.chatInput.toast.compactNotNeeded": "ההפעלה קצרה מדי כדי לדחוס אותה עדיין.",
   "chat.chatInput.toast.forkFailed": "לא ניתן היה לפצל את ההפעלה",
   "chat.chatInput.toast.forkNothingToFork": "אין עדיין מה לפצל: אף תגובה לא הסתיימה בהפעלה זו",
   "chat.chatInput.toast.forkSendFailed": "ההפעלה פוצלה, אבל ההודעה לא נשלחה. היא הוחזרה לתיבת הכתיבה.",
@@ -9249,6 +9251,7 @@ export const dict = {
   "openchamber.source.control.account.list.description": "רשימת חשבונות מחוברים",
   "openchamber.theme.catalog.dialog.title": "קטלוג ערכות נושא",
   "openchamber.theme.catalog.dialog.description": "בחר ערכת נושא",
+  ...effortI18n.he,
 };
 
 export type I18nKey = keyof typeof dict;

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen モデル',
   'quota.value.requests': 'リクエスト数: {count}',
@@ -7633,6 +7634,7 @@ export const dict = {
   "snippets.source.global": "グローバル",
   "snippets.source.project": "プロジェクト",
   "chat.chatInput.toast.compactFailed": "セッションの圧縮に失敗しました",
+  "chat.chatInput.toast.compactNotNeeded": "このセッションは短すぎてまだ圧縮できません。",
   "chat.chatInput.toast.forkFailed": "セッションをフォークできませんでした",
   "chat.chatInput.toast.forkNothingToFork": "まだフォークできません：このセッションで完了した応答がありません",
   "chat.chatInput.toast.forkSendFailed": "フォークしましたが、メッセージは送信されませんでした。入力欄に戻しました。",
@@ -9318,4 +9320,5 @@ export const dict = {
   "settings.usage.state.error": "使用状況を読み込めませんでした。",
 
   "chat.workStatus.mcp.unknown": "MCP サーバーはまだ読み込まれていません。",
+  ...effortI18n.ja,
 };

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Modelos Zen',
   'quota.value.requests': 'Solicitudes: {count}',
@@ -7592,6 +7593,7 @@ export const dict = {
   "snippets.source.global": "global",
   "snippets.source.project": "proyecto",
   "chat.chatInput.toast.compactFailed": "No se pudo comprimir la sesión",
+  "chat.chatInput.toast.compactNotNeeded": "Esta sesión es demasiado corta para compactarla todavía.",
   "chat.chatInput.toast.forkFailed": "No se pudo bifurcar la sesión",
   "chat.chatInput.toast.forkNothingToFork": "Aún no hay nada que bifurcar: ninguna respuesta ha terminado en esta sesión",
   "chat.chatInput.toast.forkSendFailed": "Bifurcada, pero el mensaje no se envió. Está de nuevo en el editor.",
@@ -9318,4 +9320,5 @@ export const dict = {
   "settings.usage.state.error": "No se pudo cargar el uso.",
 
   "chat.workStatus.mcp.unknown": "Los servidores MCP aún no se han cargado.",
+  ...effortI18n.es,
 };

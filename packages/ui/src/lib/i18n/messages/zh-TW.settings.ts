@@ -1878,6 +1878,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': '專案',
   'settings.shared.projectSelector.searchPlaceholder': '搜尋專案...',
   'settings.openchamber.defaults.title': '工作階段預設值',
+  "settings.openchamber.defaults.planModel.title": "計畫模型",
+  "settings.openchamber.defaults.planModel.description": "計畫模式用於起草計畫的模型。",
   'settings.openchamber.defaults.field.defaultModel': '預設模型',
   'settings.openchamber.defaults.field.defaultThinking': '預設思考模式',
   'settings.openchamber.defaults.field.thinkingPlaceholder': '思考模式',

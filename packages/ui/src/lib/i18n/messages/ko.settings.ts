@@ -2000,6 +2000,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': '프로젝트',
   'settings.shared.projectSelector.searchPlaceholder': '프로젝트 검색...',
   'settings.openchamber.defaults.title': '세션 기본값',
+  "settings.openchamber.defaults.planModel.title": "계획 모델",
+  "settings.openchamber.defaults.planModel.description": "계획 모드가 계획 초안을 작성하는 데 사용하는 모델.",
   'settings.openchamber.defaults.field.defaultModel': '기본 모델',
   'settings.openchamber.defaults.field.defaultThinking': '기본 Thinking',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Thinking',

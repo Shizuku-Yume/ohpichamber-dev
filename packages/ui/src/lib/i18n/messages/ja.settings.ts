@@ -2033,6 +2033,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': 'プロジェクト',
   'settings.shared.projectSelector.searchPlaceholder': 'プロジェクトを検索...',
   'settings.openchamber.defaults.title': 'Session デフォルト',
+  "settings.openchamber.defaults.planModel.title": "計画モデル",
+  "settings.openchamber.defaults.planModel.description": "計画モードが計画の草案作成に使用するモデル。",
   'settings.openchamber.defaults.field.defaultModel': 'デフォルトモデル',
   'settings.openchamber.defaults.field.defaultThinking': 'デフォルト思考',
   'settings.openchamber.defaults.field.thinkingPlaceholder': '思考',

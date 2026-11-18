@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen Modelleri',
   'quota.value.requests': 'İstekler: {count}',
@@ -7474,6 +7475,7 @@ export const dict = {
   "snippets.source.global": "genel",
   "snippets.source.project": "proje",
   "chat.chatInput.toast.compactFailed": "Session sıkıştırılamadı",
+  "chat.chatInput.toast.compactNotNeeded": "Bu oturum henüz sıkıştırılamayacak kadar kısa.",
   "chat.chatInput.toast.forkFailed": "Session çatallanamadı",
   "chat.chatInput.toast.forkNothingToFork": "Henüz çatallanacak bir şey yok: bu session'da tamamlanmış bir yanıt yok",
   "chat.chatInput.toast.forkSendFailed": "Çatallandı ama mesaj gönderilmedi. Mesaj yeniden yazma alanında.",
@@ -9318,4 +9320,5 @@ export const dict = {
   "settings.usage.state.error": "Kullanım yüklenemedi.",
 
   "chat.workStatus.mcp.unknown": "MCP sunucuları henüz yüklenmedi.",
+  ...effortI18n.tr,
 };

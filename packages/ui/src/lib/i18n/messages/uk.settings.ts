@@ -2000,6 +2000,8 @@ export const settingsDict = {
   "settings.shared.projectSelector.sheetTitle": "Проєкт",
   "settings.shared.projectSelector.searchPlaceholder": "Пошук проєктів...",
   "settings.openchamber.defaults.title": "Стандартні параметри сесії",
+  "settings.openchamber.defaults.planModel.title": "Модель планування",
+  "settings.openchamber.defaults.planModel.description": "Модель, яку режим планування використовує для створення планів.",
   "settings.openchamber.defaults.field.defaultModel": "Модель за замовчуванням",
   "settings.openchamber.defaults.field.defaultThinking": "Мислення за замовчуванням",
   "settings.openchamber.defaults.field.thinkingPlaceholder": "Мислення",

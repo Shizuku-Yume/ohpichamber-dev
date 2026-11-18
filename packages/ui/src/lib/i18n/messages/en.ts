@@ -70,6 +70,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen Models',
   'quota.value.requests': 'Requests: {count}',
@@ -7675,6 +7676,7 @@ export const dict = {
   "snippets.source.global": "global",
   "snippets.source.project": "project",
   "chat.chatInput.toast.compactFailed": "Failed to compact session",
+  "chat.chatInput.toast.compactNotNeeded": "This session is too short to compact yet.",
   "chat.chatInput.toast.forkFailed": "Couldn't fork the session",
   "chat.chatInput.toast.forkNothingToFork": "Nothing to fork yet: no reply has finished in this session",
   "chat.chatInput.toast.forkSendFailed": "Forked, but the message wasn't sent. It's back in the composer.",
@@ -9355,6 +9357,7 @@ export const dict = {
   "settings.usage.state.error": "Failed to load usage.",
 
   "chat.workStatus.mcp.unknown": "MCP servers have not loaded yet.",
+  ...effortI18n.en,
 };
 
 export type I18nKey = keyof typeof dict;

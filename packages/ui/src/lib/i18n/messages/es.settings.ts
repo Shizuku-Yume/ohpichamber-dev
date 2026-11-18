@@ -2000,6 +2000,8 @@ export const settingsDict = {
   "settings.shared.projectSelector.sheetTitle": "Proyecto",
   "settings.shared.projectSelector.searchPlaceholder": "Buscar proyectos...",
   "settings.openchamber.defaults.title": "Configuración por defecto",
+  "settings.openchamber.defaults.planModel.title": "Modelo de planificación",
+  "settings.openchamber.defaults.planModel.description": "Modelo que usa el modo Planificación para redactar planes.",
   "settings.openchamber.defaults.field.defaultModel": "Modelo por defecto",
   "settings.openchamber.defaults.field.defaultThinking": "Pensamiento por defecto",
   "settings.openchamber.defaults.field.thinkingPlaceholder": "Pensando",

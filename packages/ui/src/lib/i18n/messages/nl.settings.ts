@@ -2024,6 +2024,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': 'Project',
   'settings.shared.projectSelector.searchPlaceholder': 'Projects zoeken...',
   'settings.openchamber.defaults.title': 'Standaard sessie-instellingen',
+  "settings.openchamber.defaults.planModel.title": "Planningsmodel",
+  "settings.openchamber.defaults.planModel.description": "Model dat de planningsmodus gebruikt om plannen op te stellen.",
   'settings.openchamber.defaults.field.defaultModel': 'Standaardmodel',
   'settings.openchamber.defaults.field.defaultThinking': 'Standaard denken',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Denken',

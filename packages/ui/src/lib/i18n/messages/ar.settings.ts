@@ -2021,6 +2021,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': 'المشروع',
   'settings.shared.projectSelector.searchPlaceholder': 'البحث في المشاريع…',
   'settings.openchamber.defaults.title': 'الإعدادات الافتراضية للجلسات',
+  "settings.openchamber.defaults.planModel.title": "نموذج التخطيط",
+  "settings.openchamber.defaults.planModel.description": "النموذج الذي يستخدمه وضع التخطيط لصياغة الخطط.",
   'settings.openchamber.defaults.field.defaultModel': 'النموذج الافتراضي',
   'settings.openchamber.defaults.field.defaultThinking': 'مستوى التفكير الافتراضي',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'التفكير',

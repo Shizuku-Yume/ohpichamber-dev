@@ -2000,6 +2000,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': '项目',
   'settings.shared.projectSelector.searchPlaceholder': '搜索项目...',
   'settings.openchamber.defaults.title': '会话默认值',
+  "settings.openchamber.defaults.planModel.title": "计划模型",
+  "settings.openchamber.defaults.planModel.description": "计划模式用于起草计划的模型。",
   'settings.openchamber.defaults.field.defaultModel': '默认模型',
   'settings.openchamber.defaults.field.defaultThinking': '默认思考模式',
   'settings.openchamber.defaults.field.thinkingPlaceholder': '思考模式',

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'نماذج Zen',
   'quota.value.requests': 'الطلبات: {count}',
@@ -2743,6 +2744,7 @@ export const dict = {
   "snippets.source.global": "عام",
   "snippets.source.project": "المشروع",
   "chat.chatInput.toast.compactFailed": "تعذّر ضغط الجلسة",
+  "chat.chatInput.toast.compactNotNeeded": "هذه الجلسة قصيرة جدًا بحيث لا يمكن ضغطها بعد.",
   "chat.chatInput.toast.forkFailed": "تعذّر اشتقاق الجلسة",
   "chat.chatInput.toast.forkNothingToFork": "لا شيء للاشتقاق بعد: لم يكتمل أي رد في هذه الجلسة",
   "chat.chatInput.toast.forkSendFailed": "تم الاشتقاق، لكن الرسالة لم تُرسل. أُعيدت إلى حقل الكتابة.",
@@ -9294,4 +9296,5 @@ export const dict = {
   "startup.initRecovery.agentServiceUnavailable": "OhPiChamber is reachable, but the Agent Service is not ready. Check the Agent Service on the server, then retry.",
   "chat.workStatus.linkedIssues.open": "Open #{number} on GitHub",
   "chat.workStatus.linkedIssues.openGitLab": "Open {reference} on GitLab",
+  ...effortI18n.ar,
 };

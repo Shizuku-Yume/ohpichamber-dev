@@ -2021,6 +2021,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': 'פרויקט',
   'settings.shared.projectSelector.searchPlaceholder': 'חיפוש פרויקטים…',
   'settings.openchamber.defaults.title': 'ברירות מחדל להפעלה',
+  "settings.openchamber.defaults.planModel.title": "מודל תכנון",
+  "settings.openchamber.defaults.planModel.description": "המודל שמוד התכנון משתמש בו לניסוח תוכניות.",
   'settings.openchamber.defaults.field.defaultModel': 'מודל ברירת מחדל',
   'settings.openchamber.defaults.field.defaultThinking': 'רמת חשיבה כברירת מחדל',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'חשיבה',

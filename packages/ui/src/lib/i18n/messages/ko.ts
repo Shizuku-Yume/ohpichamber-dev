@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen 모델',
   'quota.value.requests': '요청: {count}',
@@ -7636,6 +7637,7 @@ export const dict = {
   "snippets.source.global": "전역",
   "snippets.source.project": "프로젝트",
   "chat.chatInput.toast.compactFailed": "세션 압축 실패",
+  "chat.chatInput.toast.compactNotNeeded": "이 세션은 아직 압축하기에 너무 짧습니다.",
   "chat.chatInput.toast.forkFailed": "세션을 포크하지 못했습니다",
   "chat.chatInput.toast.forkNothingToFork": "아직 포크할 내용이 없습니다: 이 세션에 완료된 응답이 없습니다",
   "chat.chatInput.toast.forkSendFailed": "포크했지만 메시지를 보내지 못했습니다. 입력창에 다시 넣었습니다.",
@@ -9318,4 +9320,5 @@ export const dict = {
   "settings.usage.state.error": "사용량을 불러오지 못했습니다.",
 
   "chat.workStatus.mcp.unknown": "MCP 서버가 아직 로드되지 않았습니다.",
+  ...effortI18n.ko,
 };

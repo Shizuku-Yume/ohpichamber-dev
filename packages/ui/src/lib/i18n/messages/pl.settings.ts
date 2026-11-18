@@ -808,6 +808,8 @@ export const settingsDict = {
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Myślenie',
   'settings.openchamber.defaults.option.default': 'Domyślne',
   'settings.openchamber.defaults.title': 'Domyślne ustawienia sesji',
+  "settings.openchamber.defaults.planModel.title": "Model planowania",
+  "settings.openchamber.defaults.planModel.description": "Model używany przez tryb planowania do tworzenia planów.",
   'settings.openchamber.desktopNetwork.actions.saveAndRestart': 'Zapisz + Zrestartuj',
   'settings.openchamber.desktopNetwork.error.launchAtLoginUnsupported': 'Uruchamianie przy logowaniu nie jest obsługiwane w tym systemie',
   'settings.openchamber.desktopNetwork.error.launchAtLoginSaveFailed': 'Nie udało się zaktualizować ustawienia uruchamiania przy logowaniu',

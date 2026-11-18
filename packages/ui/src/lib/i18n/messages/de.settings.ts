@@ -1965,6 +1965,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.sheetTitle': 'Projekt',
   'settings.shared.projectSelector.searchPlaceholder': 'Projekte suchen...',
   'settings.openchamber.defaults.title': 'Sitzungsstandardwerte',
+  "settings.openchamber.defaults.planModel.title": "Planungsmodell",
+  "settings.openchamber.defaults.planModel.description": "Modell, das der Planungsmodus zum Entwerfen von Plänen verwendet.",
   'settings.openchamber.defaults.field.defaultModel': 'Standardmodell',
   'settings.openchamber.defaults.field.defaultThinking': 'Standard-Denken',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Denken',

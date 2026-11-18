@@ -1888,6 +1888,8 @@ export const settingsDict = {
   'settings.shared.projectSelector.switchProjectAria': 'Proje değiştir',
   'settings.shared.projectSelector.switchProjectTitle': 'Proje değiştir',
   'settings.openchamber.defaults.title': 'Session Varsayılanları',
+  "settings.openchamber.defaults.planModel.title": "Plan modeli",
+  "settings.openchamber.defaults.planModel.description": "Plan modunun plan taslakları hazırlamak için kullandığı model.",
   'settings.openchamber.defaults.field.defaultModel': 'Varsayılan Model',
   'settings.openchamber.defaults.field.defaultThinking': 'Varsayılan Düşünme',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Düşünme',
