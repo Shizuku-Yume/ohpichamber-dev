@@ -48,6 +48,13 @@ describe('parseRoute settings', () => {
     }
   });
 
+  test('keeps an explicit settings=home request as the root for desktop to resolve', () => {
+    // Desktop redirects the settings root to General when it opens; the route
+    // must still say "root" so that redirect keeps working.
+    expect(parseRoute(new URLSearchParams('settings=home')).settingsPath).toBe('home');
+    expect(parseRoute(new URLSearchParams('settings=home&surface=mobile')).settingsPath).toBe('home');
+  });
+
   test('still folds the settings root aliases', () => {
     expect(parseRoute(new URLSearchParams('settings=openchamber')).settingsPath).toBe('home');
     expect(parseRoute(new URLSearchParams('settings=preferences')).settingsPath).toBe('home');
