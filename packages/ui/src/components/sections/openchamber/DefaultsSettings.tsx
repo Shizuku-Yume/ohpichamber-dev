@@ -28,6 +28,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { refreshDirectoryCatalog } from '@/sync/sync-refs';
 
 
 type SessionModeValue = 'main' | 'plan' | 'vibe' | 'goal';
@@ -160,13 +161,17 @@ export const DefaultsSettings: React.FC = () => {
           }
         }
         setOmpState(next);
+        // The composer decides whether Plan is selectable from the workspace
+        // catalog's `planRoleAvailable`, which OMP derives from `modelRoles`.
+        // The bootstrap lane owns that read, so a role write asks it to re-run.
+        if (directory) refreshDirectoryCatalog(directory);
       } catch (err) {
         console.warn('Failed to update default model role:', err);
       } finally {
         setIsSavingOmp(false);
       }
     },
-    [],
+    [directory],
   );
 
   const handleDefaultModelChange = React.useCallback(
@@ -411,24 +416,6 @@ export const DefaultsSettings: React.FC = () => {
               />
             )}
           </SettingsFieldRow>
-          <SettingsFieldRow
-            settingsItem="sessions.default-plan"
-            label={t('settings.openchamber.defaults.planModel.title')}
-            info={t('settings.openchamber.defaults.planModel.description')}
-          >
-            <ModelRoleEditor
-              role="plan"
-              roles={roleSelectors}
-              models={models}
-              directory={directory ?? undefined}
-              globalLevel={configuredThinkingLevel || undefined}
-              settingsItem="sessions.default-plan"
-              disabled={isSavingOmp || !ompState}
-              loading={!ompState}
-              label={t('settings.openchamber.defaults.planModel.title')}
-              onChange={(selector) => setRole('plan', selector)}
-            />
-          </SettingsFieldRow>
 
           <SettingsFieldRow
             settingsItem="sessions.default-mode"
@@ -527,6 +514,22 @@ export const DefaultsSettings: React.FC = () => {
         settingsItem="sessions.plan-goal"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
+          {/* The composer disables Plan when the workspace catalog says the
+              `plan` role is unresolvable; this is the one control that writes
+              that role, so it sits with the modes it unlocks. */}
+          <ModelRoleEditor
+            role="plan"
+            roles={roleSelectors}
+            models={models}
+            directory={directory ?? undefined}
+            globalLevel={configuredThinkingLevel || undefined}
+            settingsItem="sessions.default-plan"
+            disabled={isSavingOmp || !ompState}
+            loading={!ompState}
+            label={t('settings.openchamber.defaults.planModel.title')}
+            info={t('settings.openchamber.defaults.planModel.description')}
+            onChange={(selector) => setRole('plan', selector)}
+          />
           {getSectionRows('plan').map((s) => (
             <OmpRowControl
               key={s.id}

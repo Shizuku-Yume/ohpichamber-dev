@@ -539,7 +539,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       // Mirror addProject: the first newly added project becomes active.
-      get().setActiveProjectIdOnly(entries[0].id);
+      get().setActiveProject(entries[0].id);
       for (const entry of entries) {
         void get().discoverProjectIcon(entry.id);
       }
@@ -559,7 +559,7 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       const nextManualOrder = get().manualProjectOrder.filter((oid) => oid !== id);
       set({ projects: nextProjects, activeProjectId: nextActiveId, manualProjectOrder: nextManualOrder });
-      persistProjects(nextProjects, nextActiveId, nextManualOrder);
+      void persistProjects(nextProjects, nextActiveId, nextManualOrder);
 
       // Clean up worktree entries for the removed project
       if (project) {
@@ -610,7 +610,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       );
 
       set({ projects: nextProjects, activeProjectId: id });
-      persistProjects(nextProjects, id, get().manualProjectOrder);
+      void persistProjects(nextProjects, id, get().manualProjectOrder);
 
       hostFilesystem.setDirectory(target.path);
       useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
@@ -641,7 +641,7 @@ export const useProjectsStore = create<ProjectsStore>()(
         project.id === id ? { ...project, label: trimmed } : project
       );
       set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
+      void persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
     },
 
     updateProjectMeta: (id: string, meta: {
@@ -689,7 +689,7 @@ export const useProjectsStore = create<ProjectsStore>()(
         return updated;
       });
       set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
+      void persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
     },
 
     uploadProjectIcon: async (id: string, file: File) => {
@@ -816,7 +816,7 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       const newOrder = nextProjects.map((p) => p.id);
       set({ projects: nextProjects, manualProjectOrder: newOrder });
-      persistProjects(nextProjects, activeProjectId, newOrder);
+      void persistProjects(nextProjects, activeProjectId, newOrder);
     },
 
     resetForRuntimeSwitch: () => {

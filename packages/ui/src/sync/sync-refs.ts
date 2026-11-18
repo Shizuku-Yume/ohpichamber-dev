@@ -55,6 +55,19 @@ export function getDirectoryState(directory?: string): State | undefined {
   return stores.getState(dir)
 }
 
+/**
+ * Re-read a directory's canonical environment after a settings write moved a
+ * fact it derives: the model catalog carries `planRoleAvailable`, which reads
+ * `modelRoles.plan`, and the composer disables Plan from that value. The
+ * bootstrap lane owns the read, so this asks it for a forced run instead of
+ * fetching a catalog beside it.
+ */
+export function refreshDirectoryCatalog(directory: string): void {
+  const stores = _childStores
+  if (!stores || !directory || boundRuntimeKey !== getRuntimeKey()) return
+  stores.requestBootstrap({ directory, priority: "selected", reason: "action-demand", force: true })
+}
+
 
 /** Read sessions from current directory's child store */
 export function getSyncSessions(directory?: string): State["session"] {
