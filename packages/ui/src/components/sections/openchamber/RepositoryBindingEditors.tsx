@@ -39,7 +39,7 @@ import { repositoryBindingOwner, useRepositoryBinding } from '@/lib/source-contr
 import { effectiveRepositoryBinding } from '@/lib/source-control/types';
 import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { useGitIdentity } from '@/stores/useGitStore';
+import { useGitIdentity, useIsGitRepo } from '@/stores/useGitStore';
 import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
@@ -99,7 +99,9 @@ const hydrationRequirements = (operation: GitNetworkOperation | undefined): GitC
 export const AdditionalRemoteGrants: React.FC<SourceControlBindingSettingsProps> = ({ directory, className }) => {
   const { t } = useI18n();
   const { git, sourceControl } = useRuntimeAPIs();
-  const binding = useRepositoryBinding(directory, sourceControl);
+  // A folder that is no repository answers 422 from the binding route.
+  const isGitRepo = useIsGitRepo(directory);
+  const binding = useRepositoryBinding(directory, sourceControl, isGitRepo === true);
   const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
   const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
   const connectedAccountIds = useConnectedAccountIds();
@@ -190,7 +192,8 @@ export const AdditionalRemoteGrants: React.FC<SourceControlBindingSettingsProps>
 export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProps> = ({ directory, className }) => {
   const { t } = useI18n();
   const { git, sourceControl } = useRuntimeAPIs();
-  const binding = useRepositoryBinding(directory, sourceControl);
+  const isGitRepo = useIsGitRepo(directory);
+  const binding = useRepositoryBinding(directory, sourceControl, isGitRepo === true);
   const recovery = useGitOperationRecovery(directory, git, sourceControl);
   const [parentRemote, setParentRemote] = React.useState('');
   const [selectedRequirement, setSelectedRequirement] = React.useState('');

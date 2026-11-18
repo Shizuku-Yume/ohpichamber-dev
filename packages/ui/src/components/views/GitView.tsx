@@ -352,7 +352,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
  const openContextDiff = useUIStore((state) => state.openContextDiff);
  const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
  const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
- const binding = useRepositoryBinding(gitDirectory, sourceControl, isActive);
+ // The binding route answers 422 for anything that is not a repository, so it is
+ // asked only once the directory Git operates on proved to be one. `null` is
+ // still probing, not a yes.
+ const binding = useRepositoryBinding(gitDirectory, sourceControl, isActive && isGitRepo === true);
  const [isRepositoryConfigurationOpen, setRepositoryConfigurationOpen] = React.useState(false);
  /**
   * The remote an identity answers for: the one the binding already names, or
