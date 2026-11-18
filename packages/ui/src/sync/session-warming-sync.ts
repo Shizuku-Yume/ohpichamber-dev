@@ -6,10 +6,15 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
+/**
+ * A synthetic `draft_*` id is not a session at all, and an id the Host has not
+ * listed yet has nothing for the warming route to read: it answers 404
+ * SESSION_NOT_FOUND. Only a listed, unarchived root is hydrated.
+ */
 export const isHydratableRootSession = (sessionId: string | null): sessionId is string => {
   if (!sessionId || sessionId.startsWith('draft_')) return false;
   const session = useGlobalSessionsStore.getState().entityById.get(sessionId);
-  if (!session) return true;
+  if (!session) return false;
   return session.archivedAt === undefined && session.parentSessionId === undefined;
 };
 

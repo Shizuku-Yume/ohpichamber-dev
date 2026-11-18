@@ -128,6 +128,26 @@ describe('useSessionWarmingSync', () => {
     globals.clear();
   });
 
+  test('a session the Host has not listed yet is not hydrated', async () => {
+    // The active id arrives from a deep link or a just-created session before
+    // the discovery snapshot carries it; the warming route answers 404 then.
+    useGlobalSessionsStore.setState({ entityById: new Map() });
+    expect(isHydratableRootSession('ses-unlisted')).toBe(false);
+
+    useConfigStore.setState({ isConnected: true });
+    useSessionUIStore.setState({ currentSessionId: 'ses-unlisted' });
+    await renderHarness();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(loadCalls).toEqual([]);
+
+    // Once discovery lists it, the read is safe and happens.
+    const listed = makeSession({ sessionId: 'ses-unlisted' });
+    await act(async () => {
+      useGlobalSessionsStore.setState({ entityById: new Map([[listed.sessionId, listed]]) });
+    });
+    expect(isHydratableRootSession('ses-unlisted')).toBe(true);
+  });
+
   test('draft_* session IDs do not hydrate or call loadSessionWarming', async () => {
     expect(isHydratableRootSession(null)).toBe(false);
     expect(isHydratableRootSession('draft_1')).toBe(false);
