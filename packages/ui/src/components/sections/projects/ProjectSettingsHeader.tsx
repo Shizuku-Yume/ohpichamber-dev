@@ -250,6 +250,8 @@ export const ProjectSettingsHeader: React.FC<{ form: ProjectIdentityFormState }>
       <div className="min-w-0 flex-1 space-y-0.5">
         <Input
           data-settings-item="projects.name"
+          data-settings-page-heading
+          tabIndex={-1}
           inputSize="compact"
           value={form.name}
           onChange={(event) => form.setName(event.target.value)}

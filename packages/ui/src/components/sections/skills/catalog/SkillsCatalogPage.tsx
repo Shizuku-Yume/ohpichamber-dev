@@ -201,15 +201,14 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
       return;
     }
     let cancelled = false;
-    const loadRest = async () => {
+    void (async () => {
       for (const src of unloaded) {
         if (cancelled) {
           return;
         }
         await loadSource(src.id);
       }
-    };
-    void loadRest();
+    })();
     return () => {
       cancelled = true;
     };

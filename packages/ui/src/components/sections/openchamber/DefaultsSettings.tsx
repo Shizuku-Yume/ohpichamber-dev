@@ -411,6 +411,24 @@ export const DefaultsSettings: React.FC = () => {
               />
             )}
           </SettingsFieldRow>
+          <SettingsFieldRow
+            settingsItem="sessions.default-plan"
+            label={t('settings.openchamber.defaults.planModel.title')}
+            info={t('settings.openchamber.defaults.planModel.description')}
+          >
+            <ModelRoleEditor
+              role="plan"
+              roles={roleSelectors}
+              models={models}
+              directory={directory ?? undefined}
+              globalLevel={configuredThinkingLevel || undefined}
+              settingsItem="sessions.default-plan"
+              disabled={isSavingOmp || !ompState}
+              loading={!ompState}
+              label={t('settings.openchamber.defaults.planModel.title')}
+              onChange={(selector) => setRole('plan', selector)}
+            />
+          </SettingsFieldRow>
 
           <SettingsFieldRow
             settingsItem="sessions.default-mode"

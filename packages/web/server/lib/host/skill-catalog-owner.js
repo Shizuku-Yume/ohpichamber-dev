@@ -31,25 +31,31 @@ export function createSkillCatalogOwner({ owner, getDependencies, policyOptions,
     const { credentialResolver } = getDependencies();
     const result = await scanWithCache(getCacheKey({ normalizedRepo: `${parsed.host}/${parsed.normalizedRepo}`, ref: parsed.ref, subpath: parsed.effectiveSubpath ?? '', identityId: input.gitIdentityId ?? '' }),
       () => scan({ ...input, identity: selectedIdentity, credentialResolver }), { refresh });
-    if (!result.ok) throw new SkillFileError(result.error.kind === 'authRequired' ? 401 : 400, 'SKILL_INSTALL_FAILED', result.error.message);
+    if (!result.ok) throw new SkillFileError(result.error.kind === 'authRequired' ? 401 : 503, 'SKILL_INSTALL_FAILED', result.error.message);
     const authored = await owner.catalog(scope);
-    return C.SkillRepositoryItemsSchema.parse({ workspaceId: scope.workspaceId, items: result.items.filter(item => !excludedSkills.includes(item.skillName)).map(item => {
-      const installed = authored.skills.find(skill => skill.scope === 'workspace' && skill.skillId === item.skillName)
-        ?? authored.skills.find(skill => skill.scope === 'agent' && skill.skillId === item.skillName);
-      return { ...item, sourceId, ...(input.gitIdentityId ? { gitIdentityId: input.gitIdentityId } : {}), installed: installed
-        ? { isInstalled: true, scope: installed.scope, authoredSkillId: installed.skillId } : { isInstalled: false } };
-    }) });
+    return C.SkillRepositoryItemsSchema.parse({
+      workspaceId: scope.workspaceId, items: result.items.filter(item => !excludedSkills.includes(item.skillName)).map(item => {
+        const installed = authored.skills.find(skill => skill.scope === 'workspace' && skill.skillId === item.skillName)
+          ?? authored.skills.find(skill => skill.scope === 'agent' && skill.skillId === item.skillName);
+        return {
+          ...item, sourceId, ...(input.gitIdentityId ? { gitIdentityId: input.gitIdentityId } : {}), installed: installed
+            ? { isInstalled: true, scope: installed.scope, authoredSkillId: installed.skillId } : { isInstalled: false }
+        };
+      })
+    });
   }
   return {
     async catalog(scope) {
       const available = await sources();
       const repos = available.map(source => parseSkillRepoSource(source.source)).filter(parsed => parsed.ok && parsed.host === 'github.com').map(parsed => parsed.normalizedRepo);
       const metas = await metadata(repos);
-      return C.SkillRepositoryCatalogSchema.parse({ workspaceId: scope.workspaceId, sources: available.map(({ gitIdentityId, excludedSkills, ...source }) => {
-        const parsed = parseSkillRepoSource(source.source);
-        const meta = parsed.ok && parsed.host === 'github.com' ? metas[parsed.normalizedRepo] : null;
-        return { ...source, stars: meta?.stars ?? null, repoUpdatedAt: meta?.repoUpdatedAt ?? null };
-      }) });
+      return C.SkillRepositoryCatalogSchema.parse({
+        workspaceId: scope.workspaceId, sources: available.map(({ gitIdentityId, excludedSkills, ...source }) => {
+          const parsed = parseSkillRepoSource(source.source);
+          const meta = parsed.ok && parsed.host === 'github.com' ? metas[parsed.normalizedRepo] : null;
+          return { ...source, stars: meta?.stars ?? null, repoUpdatedAt: meta?.repoUpdatedAt ?? null };
+        })
+      });
     },
     async source(scope, request) {
       const input = C.SkillRepositorySourceRequestSchema.parse(request);

@@ -112,6 +112,7 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
           set(state => ({ itemsBySource: { ...state.itemsBySource, [sourceId]: result.items }, loadedSourceIds: { ...state.loadedSourceIds, [sourceId]: true } }));
           resolvePending(true);
         } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') { resolvePending(false); return; }
           if (scope.owner === generation && epoch === catalogEpoch && sourceLoads.get(sourceId) === pending) set({ lastCatalogError: failure(error instanceof Error ? error : String(error)) });
           resolvePending(false);
         }

@@ -473,6 +473,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       };
 
       const nextProjects = [...get().projects, entry];
+      persistProjects(nextProjects, entry.id);
       set({ projects: nextProjects });
 
       if (streamDebugEnabled()) {
@@ -480,8 +481,10 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       get().setActiveProject(entry.id);
-      void get().discoverProjectIcon(entry.id);
-      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
+      await get().discoverProjectIcon(entry.id);
+      // Dynamic import to avoid circular dependency between ProjectsStore and GlobalSessionsStore.
+      const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
+      await useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]);
       return entry;
     },
 
