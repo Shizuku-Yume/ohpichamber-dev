@@ -41,7 +41,7 @@ export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleT
     // What the next send carries, as the desktop picker shows it: an explicit
     // pick, "Default" when that was picked, else the inherited effort.
     const variant = variantSelection.override === null ? undefined : variantSelection.override ?? effectiveVariant;
-    const label = variant ? formatEffortLabel(variant) : t('chat.modelControls.default');
+    const label = variant ? formatEffortLabel(variant, t) : t('chat.modelControls.default');
 
     return (
         <button

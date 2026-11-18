@@ -1294,14 +1294,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 <DropdownMenuTrigger asChild nativeButton>
                     <button type="button" aria-label={t('chat.modelControls.effort')} className={cn('model-controls__effort-trigger flex items-center gap-1.5 min-w-0 hover:opacity-70', buttonHeight)}>
                         <Icon name="brain-ai-3" className={cn(controlIconSize, 'flex-shrink-0')} />
-                        <span className={cn('model-controls__effort-label', controlTextSize, 'font-medium truncate')}>{selected === 'off' ? t('chat.modelControls.off') : formatEffortLabel(selected)}</span>
+                        <span className={cn('model-controls__effort-label', controlTextSize, 'font-medium truncate')}>{selected === 'off' ? t('chat.modelControls.off') : formatEffortLabel(selected, t)}</span>
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="end" className="w-[min(180px,calc(100vw-2rem))]">
                     <DropdownMenuLabel>{t('chat.modelControls.effort')}</DropdownMenuLabel>
                     {effortOptions.map((effort) => (
                         <DropdownMenuItem key={effort} onSelect={() => handleEffortSelect(effort)}>
-                            <span>{effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort)}</span>
+                            <span>{effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort, t)}</span>
                             {selected === effort && <Icon name="check" className="ms-auto size-4" />}
                         </DropdownMenuItem>
                     ))}

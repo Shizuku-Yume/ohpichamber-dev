@@ -33,7 +33,8 @@ Object.assign(globalThis, {
 // These loading boundaries must run after the browser globals and the Bun asset-loader plugin are installed.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
+const { dict: dictZhCn } = await import('@/lib/i18n/messages/zh-CN');
 const { getWebSearchScopeKey, useWebSearchStore } = await import('@/stores/useWebSearchStore');
 const { WebSearchPage } = await import('./WebSearchPage');
 
@@ -396,5 +397,26 @@ describe('WebSearchPage', () => {
     expect(page.saved).toEqual([['searxng', 'brave']]);
     expect(page.rowNames()).toEqual(['SearXNG', 'Brave Search']);
     expect(page.rowOrdinals()).toEqual(['1', '2']);
+  });
+  // The Agent Service calls this provider "Session model"; the UI names it in
+  // the reader's language, and any other id keeps the name the service reports.
+  test('a known provider id is named by the dictionary and an unknown one keeps the service name', async () => {
+    await act(async () => { useI18nStore.getState().setLocale('zh-CN'); });
+    for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    const page = await renderWithSnapshot({
+      ...fallbackSnapshot(['web/hosted']),
+      selectedProviderId: 'web/hosted',
+      providers: [entry('web/hosted', 'Session model'), entry('team/search', 'Team search')],
+    });
+
+    expect(container.textContent).toContain(dictZhCn['settings.webSearch.provider.hosted']);
+    expect(container.textContent).toContain(
+      dictZhCn['settings.webSearch.mode.providerDescription'].replace('{provider}', dictZhCn['settings.webSearch.provider.hosted']),
+    );
+    expect(container.textContent).toContain('Team search');
+    expect(container.textContent).not.toContain('Session model');
+    expect(page.rowNames()).toEqual([]);
   });
 });

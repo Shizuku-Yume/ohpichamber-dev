@@ -1,5 +1,6 @@
 import type { Agent } from '@openchamber/agent-contract';
 import { getProviderModelDisplayName, type DisplayProvider } from '@/lib/modelDisplay';
+import type { I18nKey, I18nParams } from '@/lib/i18n';
 
 export type MobileControlsPanel = 'model' | 'agent' | 'variant' | null;
 
@@ -64,14 +65,31 @@ const getEffortTone = (variant?: string): EffortTone => {
 
 export const getEffortToneClass = (variant?: string) => EFFORT_TONE_CLASS[getEffortTone(variant)];
 
-export const formatEffortLabel = (variant?: string) => {
-    if (!variant || variant.trim().length === 0) {
-        return 'Default';
-    }
-    const trimmed = variant.trim();
-    if (/^\d+(\.\d+)?$/.test(trimmed)) {
-        return trimmed;
-    }
-    return capitalizeLabel(trimmed);
+/** Label keys for the effort levels OMP names; unknown labels are shown as typed. */
+const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
+    minimal: 'effort.minimal',
+    low: 'effort.low',
+    medium: 'effort.medium',
+    high: 'effort.high',
+    xhigh: 'effort.xhigh',
+    max: 'effort.max',
+    auto: 'effort.auto',
+    none: 'effort.none',
+};
+
+/**
+ * The composer's label for one effort level: a known level is translated, a
+ * numeric budget (`16000`) is shown as written, and an unrecognised custom
+ * name keeps the worker's spelling with only its first letter raised.
+ */
+export const formatEffortLabel = (
+    variant: string | undefined,
+    t: (key: I18nKey, params?: I18nParams) => string,
+) => {
+    const trimmed = variant?.trim() ?? '';
+    if (trimmed.length === 0) return t('effort.default');
+    if (/^\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+    const labelKey = EFFORT_LABEL_KEYS[trimmed.toLowerCase()];
+    return labelKey ? t(labelKey) : capitalizeLabel(trimmed);
 };
 

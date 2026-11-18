@@ -20,7 +20,7 @@ import {
   SettingsTwoColumn,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
@@ -57,6 +57,41 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
 };
 
 /**
+ * The seeded English names of the builtin categories, as `defaults.js` writes
+ * them. UI-only: the stored config keeps whatever the server holds.
+ */
+const BUILTIN_CATEGORY_NAMES: Record<string, string> = {
+  trivial: 'Trivial',
+  research: 'Research',
+  implement: 'Implement',
+  hard: 'Hard',
+};
+
+const BUILTIN_CATEGORY_NAME_KEYS: Record<string, I18nKey> = {
+  trivial: 'settings.routing.builtin.trivial.name',
+  research: 'settings.routing.builtin.research.name',
+  implement: 'settings.routing.builtin.implement.name',
+  hard: 'settings.routing.builtin.hard.name',
+};
+
+/**
+ * Display name for a builtin category that still carries its seeded English
+ * name: the reader's language. A renamed builtin shows the typed name, and
+ * anything a user created shows as typed.
+ */
+export const getBuiltinCategoryDisplayName = (
+  category: Pick<RoutingCategory, 'id' | 'builtin' | 'name'>,
+  t: (key: I18nKey) => string,
+): string => {
+  const trimmed = category.name.trim() || category.id;
+  const builtinName = category.builtin ? BUILTIN_CATEGORY_NAMES[category.id] : undefined;
+  const nameKey = category.builtin ? BUILTIN_CATEGORY_NAME_KEYS[category.id] : undefined;
+  return builtinName !== undefined && nameKey !== undefined && category.name === builtinName
+    ? t(nameKey)
+    : trimmed;
+};
+
+/**
  * Ids of the categories the server would reject: it trims both fields and
  * requires each to be non-empty. The save gate and the page's own signal use
  * the same list, so what the page says and what it sends cannot drift apart.
@@ -86,7 +121,7 @@ const CategoryRow: React.FC<{
     : undefined;
   const missingName = category.name.trim().length === 0;
   const missingDescription = category.description.trim().length === 0;
-  const displayName = category.name.trim() || category.id;
+  const displayName = getBuiltinCategoryDisplayName(category, t);
 
   return (
     <SettingsDisclosure
@@ -445,7 +480,9 @@ export const RoutingPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     {removedBuiltins.map((builtin) => (
                       <Button key={builtin.id} size="xs" variant="ghost" onClick={() => restoreCategory(builtin.id)}>
-                        {t('settings.routing.category.restore', { name: builtin.name })}
+                        {t('settings.routing.category.restore', {
+                          name: getBuiltinCategoryDisplayName({ id: builtin.id, builtin: true, name: builtin.name }, t),
+                        })}
                       </Button>
                     ))}
                   </div>

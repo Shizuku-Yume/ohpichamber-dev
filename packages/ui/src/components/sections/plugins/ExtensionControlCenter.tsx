@@ -11,7 +11,7 @@ import {
   SettingsSection,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsCardChip, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +55,19 @@ const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
    ? t('settings.skills.catalog.conflicts.scope.user')
    : t('settings.skills.catalog.conflicts.scope.project');
  return <SettingsCardChip>{label}</SettingsCardChip>;
+};
+
+/** Providers whose OMP-side name needs the UI's own wording; unknown ids keep the reported name. */
+const PROVIDER_NAME_KEYS: Record<string, I18nKey> = {
+ [BUNDLED_PROVIDER_ID]: 'settings.plugins.provider.builtinDefaults',
+};
+
+const getProviderDisplayName = (
+ provider: { id: string; displayName: string },
+ t: (key: I18nKey) => string,
+): string => {
+ const key = PROVIDER_NAME_KEYS[provider.id];
+ return key ? t(key) : provider.displayName;
 };
 
 /** Shadowing wins over the switch, so one status drives the pill and the inspector. */
@@ -222,15 +235,17 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
    contentClassName={SETTINGS_SPACE_ROW_CLASS}
   >
    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-    {providers.map(provider => (
+    {providers.map(provider => {
+     const displayName = getProviderDisplayName(provider, t);
+     return (
      <div key={provider.id} className="flex min-w-0 items-center gap-2">
       <Switch
        checked={provider.enabled}
        disabled={disabled}
-       aria-label={t(provider.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: provider.displayName })}
+       aria-label={t(provider.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: displayName })}
        onCheckedChange={enabled => onToggleProvider(provider.id, enabled)}
       />
-      <span className="min-w-0 truncate typography-meta text-foreground">{provider.displayName} ({provider.itemCount})</span>
+      <span className="min-w-0 truncate typography-meta text-foreground">{displayName} ({provider.itemCount})</span>
       {provider.foreignUserSource ? (
        <>
         <Switch
@@ -243,7 +258,8 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
        </>
       ) : null}
      </div>
-    ))}
+     );
+    })}
    </div>
 
    {filtered.length === 0 ? (
