@@ -138,7 +138,7 @@ import { mintOutsideFileGrant } from 'ohpichamber/server/lib/fs/routes.js';
 import { fetchUpdateNotes } from 'ohpichamber/server/lib/changelog/update-notes.js';
 import { compareVersions } from 'ohpichamber/server/lib/version-order.js';
 import { applyConnectAttemptTimeout } from 'ohpichamber/server/lib/network-defaults.js';
-import { isNetworkAccessBlocked, NETWORK_ACCESS_BLOCKED_ERROR } from 'ohpichamber/server/lib/enterprise-mode.js';
+import { isNetworkAccessBlocked } from 'ohpichamber/server/lib/enterprise-mode.js';
 import { assignInjectedEnv } from 'ohpichamber/server/lib/injected-env.js';
 
 const execFileAsync = promisify(execFile);
@@ -923,10 +923,7 @@ const probeHostWithTimeout = async (url, timeoutMs, clientToken = '', requestHea
     clientToken,
     requestHeaders,
     expectedServerId,
-    chromiumFetch: (requestUrl, options) => {
-      if (isNetworkAccessBlocked()) throw new Error(NETWORK_ACCESS_BLOCKED_ERROR);
-      return electronNet.fetch(requestUrl, options);
-    },
+    chromiumFetch: (requestUrl, options) => electronNet.fetch(requestUrl, options),
     isReady: () => app.isReady(),
   });
 };
@@ -1316,7 +1313,6 @@ const registerPackagedUiProtocol = () => {
             },
           });
         }
-        if (isNetworkAccessBlocked()) throw new Error(NETWORK_ACCESS_BLOCKED_ERROR);
         return electronNet.fetch(pathToFileURL(filePath).toString());
       }
     } catch {
@@ -4010,7 +4006,6 @@ const launchWindowsCommandScript = (spec, program) => {
     windowsHide: false,
     windowsVerbatimArguments: true,
   });
-  if (isNetworkAccessBlocked()) log.warn('[desktop] Network egress attempted in child process');
   child.unref();
 };
 
@@ -4028,7 +4023,6 @@ const launchWindowsSpec = async (spec) => {
       windowsHide: false,
       windowsVerbatimArguments: true,
     });
-    if (isNetworkAccessBlocked()) log.warn('[desktop] Network egress attempted in child process');
     child.unref();
     return;
   }
@@ -4043,37 +4037,40 @@ const launchWindowsSpec = async (spec) => {
     stdio: 'ignore',
     windowsHide: false,
   });
-  if (isNetworkAccessBlocked()) log.warn('[desktop] Network egress attempted in child process');
   child.unref();
-  throw new Error(`Failed to open in ${appName}: no launch candidates`);
 };
 
-if (process.platform === 'win32') {
+const runSpecChain = async (specs, appName) => {
+  if (!Array.isArray(specs) || specs.length === 0) {
+    throw new Error(`Failed to open in ${appName}: no launch candidates`);
+  }
+
+  if (process.platform === 'win32') {
+    const failures = [];
+    for (const spec of specs) {
+      try {
+        await launchWindowsSpec(spec);
+        return;
+      } catch (error) {
+        failures.push(`${spec.program}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    throw new Error(`Failed to open in ${appName}: ${failures.join('; ')}`);
+  }
+
   const failures = [];
   for (const spec of specs) {
-    try {
-      await launchWindowsSpec(spec);
-      return;
-    } catch (error) {
-      failures.push(`${spec.program}: ${error instanceof Error ? error.message : String(error)}`);
+    const result = spawnSync(spec.program, spec.args, { stdio: 'ignore', windowsHide: true });
+    if (result.error) {
+      failures.push(`${spec.program}: ${result.error.message}`);
+      continue;
     }
+    if (result.status === 0) {
+      return;
+    }
+    failures.push(`${spec.program} exited ${result.status}`);
   }
   throw new Error(`Failed to open in ${appName}: ${failures.join('; ')}`);
-}
-
-const failures = [];
-for (const spec of specs) {
-  const result = spawnSync(spec.program, spec.args, { stdio: 'ignore', windowsHide: true });
-  if (result.error) {
-    failures.push(`${spec.program}: ${result.error.message}`);
-    continue;
-  }
-  if (result.status === 0) {
-    return;
-  }
-  failures.push(`${spec.program} exited ${result.status}`);
-}
-throw new Error(`Failed to open in ${appName}: ${failures.join('; ')}`);
 };
 
 // The tunnel client lives in the web package (it already has a WebSocket
@@ -4460,7 +4457,6 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         throw new Error('Unsupported favicon URL');
       }
 
-      if (isNetworkAccessBlocked()) throw new Error(NETWORK_ACCESS_BLOCKED_ERROR);
       const response = await electronNet.fetch(parsed.toString(), {
         session: session.fromPartition(BROWSER_PANEL_PARTITION),
       });

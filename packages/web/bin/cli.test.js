@@ -7,6 +7,7 @@ import net from 'net';
 import { spawn } from 'child_process';
 import { pathToFileURL } from 'url';
 
+import { formatModelRef } from '@openchamber/agent-contract';
 import { isModuleCliExecution, normalizeCliEntryPath } from './cli-entry.js';
 import { INJECTED_ENV_KEY, assignInjectedEnv } from '../server/lib/injected-env.js';
 import { requestJson } from './lib/cli-http.js';
@@ -614,7 +615,7 @@ describe('cli args', () => {
       recentModels: [
         { providerID: 'zai-coding-plan', modelID: 'glm-5.2' },
       ],
-    })).toBe('Default: `opencode-go/deepseek-v4-flash` / `build`\n\nFavorites:\n- `openai/gpt-5.5`\n- `opencode-go/deepseek-v4-pro`\n\nRecent:\n- `zai-coding-plan/glm-5.2`\n');
+    }, formatModelRef)).toBe('Default: `opencode-go/deepseek-v4-flash` / `build`\n\nFavorites:\n- `openai/gpt-5.5`\n- `opencode-go/deepseek-v4-pro`\n\nRecent:\n- `zai-coding-plan/glm-5.2`\n');
   });
 
   it('formats compact session list lines', () => {
@@ -623,14 +624,14 @@ describe('cli args', () => {
       agent: 'build',
       directory: '/repo',
       model: { providerID: 'opencode-go', id: 'deepseek-v4-flash', variant: 'default' },
-    })).toBe('- `Default model smoke test` — `opencode-go/deepseek-v4-flash`, `build` — `/repo`');
+    }, formatModelRef)).toBe('- `Default model smoke test` — `opencode-go/deepseek-v4-flash`, `build` — `/repo`');
     expect(formatSessionLine({
       title: 'Working session',
       agent: 'build',
       directory: '/repo',
       model: { providerID: 'openai', id: 'gpt-5.4-mini' },
       status: { type: 'busy' },
-    })).toContain('status:busy');
+    }, formatModelRef)).toContain('status:busy');
   });
 
   it('parses tunnel auto-start server options', () => {

@@ -84,6 +84,7 @@ const bunExe = resolveBun();
 console.log('[electron] building ohpichamber-sdk dist...');
 run(bunExe, ['run', 'build'], sdkDir);
 const sdkTarget = path.join(webDir, 'resources', 'standalone-sdk');
+await fs.rm(sdkTarget, { recursive: true, force: true });
 await fs.mkdir(sdkTarget, { recursive: true });
 await fs.copyFile(path.join(sdkDir, 'package.json'), path.join(sdkTarget, 'package.json'));
 await fs.cp(path.join(sdkDir, 'dist'), path.join(sdkTarget, 'dist'), { recursive: true });

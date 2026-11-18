@@ -15,7 +15,7 @@ export async function initialize(data) {
 
 export function findRuntimeRoot(packageRoot = webRoot) {
   const candidates = [
-    configuredRuntimeRoot,
+    packageRoot === webRoot ? configuredRuntimeRoot : null,
     packageRoot.includes('.asar') ? path.resolve(packageRoot, '../../..', 'agent-runtime') : null,
     path.join(packageRoot, 'resources', 'agent-runtime'),
     path.join(packageRoot, 'agent-runtime')
@@ -39,7 +39,7 @@ export function ensureAgentRuntimeSymlinks(root) {
   }
   if (!Array.isArray(manifest.files)) return;
   for (const item of manifest.files) {
-    if (item.link !== undefined && typeof item.path === 'string') {
+    if (item?.link !== undefined && item.path) {
       const file = path.join(root, item.path);
       try {
         if (fs.lstatSync(file).isSymbolicLink() && fs.readlinkSync(file) === item.link) {
@@ -58,6 +58,10 @@ export function ensureAgentRuntimeSymlinks(root) {
     }
   }
 
+  // Ensure node_modules links for the packages the packed server imports by bare
+  // specifier. The daemon runs under the bundled Bun, which never consults the
+  // resolve hook registered below, so these links are the only resolution the
+  // standalone install has.
   const targetWebRoot = path.resolve(root, '../..');
   const packageNm = path.join(targetWebRoot, 'node_modules');
   const webNm = path.join(packageNm, '@openchamber');
@@ -106,11 +110,9 @@ export function resolveWebAgentRuntime(
   return { bunPath, entrypoint, worker, root, manifest };
 }
 
-export function registerStandaloneLoader(optionsOrPackageRoot = webRoot) {
-  const packageRoot = (typeof optionsOrPackageRoot === 'object' && optionsOrPackageRoot !== null) ? (optionsOrPackageRoot.packageRoot ?? webRoot) : (typeof optionsOrPackageRoot === 'string' ? optionsOrPackageRoot : webRoot);
-  configuredRuntimeRoot = (typeof optionsOrPackageRoot === 'object' && optionsOrPackageRoot !== null) ? (optionsOrPackageRoot.runtimeRoot ?? findRuntimeRoot(packageRoot)) : findRuntimeRoot(packageRoot);
-  configuredSdkRoot = (typeof optionsOrPackageRoot === 'object' && optionsOrPackageRoot !== null) ? (optionsOrPackageRoot.sdkRoot ?? configuredSdkRoot) : configuredSdkRoot;
-
+export function registerStandaloneLoader({ packageRoot = webRoot, runtimeRoot, sdkRoot } = {}) {
+  configuredRuntimeRoot = runtimeRoot ?? findRuntimeRoot(packageRoot);
+  configuredSdkRoot = sdkRoot ?? configuredSdkRoot;
   const runtime = configuredRuntimeRoot;
   if (!runtime) return;
 
