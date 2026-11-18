@@ -248,10 +248,15 @@ export const ProjectSettingsHeader: React.FC<{ form: ProjectIdentityFormState }>
 
       {/* Name and path together are as tall as the tile, so the three read as one block. */}
       <div className="min-w-0 flex-1 space-y-0.5">
+        {/* The panel is passed to SettingsPageLayout as a JSX title, which the
+            shared layout only stamps on string titles. Settings focuses
+            `[data-settings-page-heading]` when a page opens, so the name is
+            also a heading — the input alone left the page with no target. */}
+        <h1 data-settings-page-heading tabIndex={-1} className="sr-only">
+          {form.name.trim() || form.project.path}
+        </h1>
         <Input
           data-settings-item="projects.name"
-          data-settings-page-heading
-          tabIndex={-1}
           inputSize="compact"
           value={form.name}
           onChange={(event) => form.setName(event.target.value)}
