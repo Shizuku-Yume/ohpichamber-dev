@@ -210,8 +210,25 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   if (!childStoresRef.current) childStoresRef.current = new ChildStoreManager()
   const childStores = childStoresRef.current
   const isCurrent = useCallback(() => currentRef.current && getRuntimeKey() === props.runtimeKey, [props.runtimeKey])
+  /**
+   * A child session's transcript is served by the history route only. Its
+   * snapshot, metadata, queue and event routes are root-only, so nothing in
+   * this provider may attach a stream or read those authorities for it.
+   */
+  const isKnownChildSession = useCallback((directory: string, sessionId: string): boolean => {
+    const store = childStores.getChild(directory)
+    const projected = store?.getState().session.find((item) => item.sessionId === sessionId)
+      ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
+    if (projected) return Boolean(projected.parentSessionId) || projected.rootSessionId !== projected.sessionId
+    const subagents = useSubagentsStore.getState().byParent
+    for (const parentId in subagents) {
+      const child = subagents[parentId].find((item) => item.subagentId === sessionId || item.childSessionId === sessionId)
+      if (child) return true
+    }
+    return false
+  }, [childStores])
   const onSnapshot = useCallback((target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => {
-    if (!isCurrent()) return
+    if (!isCurrent() || isKnownChildSession(target.directory, target.sessionId)) return
     const store = childStores.getChild(target.directory)
     if (!store || store.getState().snapshot[target.sessionId]?.cursor !== snapshot.cursor) return
     const invalidated = { ...(store.getState().sessionStatusInvalidated ?? {}) }
@@ -232,7 +249,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       // surfaces to re-list the addressed directory once; they coalesce it.
       fileTreeChanges.unknownChange(target.directory)
     }
-  }, [childStores, isCurrent])
+  }, [childStores, isCurrent, isKnownChildSession])
   const messageLoaderRef = useRef<SessionMessageLoader | null>(null)
   if (!messageLoaderRef.current) messageLoaderRef.current = new SessionMessageLoader(childStores, { client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
   const messageLoader = messageLoaderRef.current
@@ -277,7 +294,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       const unchanged = session.length === prior.session.length && session.every((item, index) => item === prior.session[index])
       store.setState({ ...listedState, session: unchanged ? prior.session : session, sessionTotal: session.length, limit: Math.max(prior.limit, session.length), sessionListSource: Object.keys(listed.errors).length ? "live" : "authoritative", discoveryErrors: listed.errors })
       useGlobalSessionsStore.getState().upsertSessions([...byId.values()])
-      const live = session.filter((item) => item.runtimeStatus === "running" || item.runtimeStatus === "awaiting_approval" || item.runtimeStatus === "awaiting_input")
+      // Only a root session has a snapshot to materialize; a child is read
+      // through its history when it is opened.
+      const live = session.filter((item) => item.rootSessionId === item.sessionId
+        && (item.runtimeStatus === "running" || item.runtimeStatus === "awaiting_approval" || item.runtimeStatus === "awaiting_input"))
       const newChildParents = new Set(session.filter((item) => item.parentSessionId && !previousById.has(item.sessionId)).map((item) => item.parentSessionId!))
       // Discovering a child must also recover its parent's task tool record.
       await Promise.allSettled([
@@ -334,6 +354,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
           useBtwStore.getState().setPanelState(target.sessionId, { pendingSend: undefined, pending: true })
         }
         await messageLoader.refresh(target, undefined, { recovered: true })
+        // A failed read must reach the pipeline as a failure so it keeps its
+        // permanent-4xx backoff; a resolved refresh is the only success.
+        const failure = messageLoader.getSnapshot(target).error
+        if (failure) throw failure
       },
       onDisconnect(target) {
         const store = childStores.getChild(target.directory)
@@ -400,7 +424,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       void bootstrapGlobal(useGlobalSyncStore.setState, useGlobalSyncStore.getState, client, isCurrent)
     })
     for (const [directory, store] of childStores.children) {
-      for (const snapshot of Object.values(store.getState().snapshot)) pipeline.attach({ directory, sessionId: snapshot.session.sessionId }, snapshot)
+      for (const snapshot of Object.values(store.getState().snapshot)) {
+        if (isKnownChildSession(directory, snapshot.session.sessionId)) continue
+        pipeline.attach({ directory, sessionId: snapshot.session.sessionId }, snapshot)
+      }
     }
     const discoveryTimer = setInterval(() => {
       if (!isCurrent()) return
@@ -466,6 +493,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       (sessionId, targetDirectory) => {
         if (!isCurrent()) return
         const dir = targetDirectory || currentDirectoryRef.current
+        if (isKnownChildSession(dir, sessionId)) {
+          pipelineRef.current?.detach({ directory: dir, sessionId })
+          return
+        }
         const store = childStores.getChild(dir)
         const snapshot = store?.getState().snapshot[sessionId]
         if (snapshot) {
@@ -487,7 +518,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     )
     setImperativeSessionMessageLoader(messageLoader)
     return () => { if (getImperativeSessionMessageLoader() === messageLoader) setImperativeSessionMessageLoader(null) }
-  }, [childStores, isCurrent, messageLoader, props.directory])
+  }, [childStores, isCurrent, isKnownChildSession, messageLoader, props.directory])
 
   useEffect(() => messageLoader.startCacheRetention({
     isCurrent,

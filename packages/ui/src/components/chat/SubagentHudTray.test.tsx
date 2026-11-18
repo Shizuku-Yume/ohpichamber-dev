@@ -46,6 +46,23 @@ describe('SubagentHudTray', () => {
     expect(host.querySelector('[data-testid="subagent-hud-tray"]')).toBeNull();
   });
 
+  test('a draft session id never requests the root-only subagent route', async () => {
+    const list = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+    try {
+      await act(async () => {
+        root.render(
+          <I18nProvider>
+            <SubagentHudTray sessionId="draft_2" />
+          </I18nProvider>,
+        );
+      });
+      expect(list).not.toHaveBeenCalled();
+      expect(host.querySelector('[data-testid="subagent-hud-tray"]')).toBeNull();
+    } finally {
+      list.mockRestore();
+    }
+  });
+
   test('renders live subagent details, tokens, cost, active tool and handles steer/cancel', async () => {
     const subagent: Subagent = {
       subagentId: 'sub_worker_1',

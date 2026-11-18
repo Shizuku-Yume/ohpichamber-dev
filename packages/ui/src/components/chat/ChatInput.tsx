@@ -53,7 +53,7 @@ import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
 import { BtwPanel } from './btw/BtwPanel';
 import { useBtwPanelState } from './btw/useBtwPanelState';
-import { canonicalClient } from '@/api/canonicalClient';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { AttachedFilesList } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
@@ -525,9 +525,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         () => createChatDraftIdentity(
             activeRuntimeKey,
             isNewChatDraft ? NEW_CHAT_DRAFT_DIRECTORY : currentSessionDirectoryForSync ?? currentDirectory,
-            currentSessionId,
+            isBtwActive && currentSessionId ? `btw-pending:${currentSessionId}` : currentSessionId,
         ),
-        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, isNewChatDraft],
+        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, isBtwActive, isNewChatDraft],
     );
     const claimAttachmentSlot = React.useCallback(() => {
         useInputStore.getState().selectAttachmentDraft(chatDraftIdentity);
@@ -2021,6 +2021,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     return;
                 }
                 if (actionName !== 'compact') throw error;
+                if (error instanceof CanonicalApiError && error.problem.code === 'SESSION_TOO_SMALL') {
+                    toast.info(t('chat.chatInput.toast.compactNotNeeded'));
+                    return;
+                }
                 toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.compactFailed')));
             }
             return;

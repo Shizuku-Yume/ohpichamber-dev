@@ -11,6 +11,7 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
+import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { dropSessionCaches } from "./session-cache"
 import { SessionCacheRetention } from "./session-cache-retention"
 import { SESSION_CACHE_LIMIT, type State } from "./types"
@@ -236,7 +237,9 @@ export class SessionMessageLoader {
       if (options?.reason !== "prefetch" && entry.snapshot.loadingKind === "prefetch") this.patchEntry(entry, { loadingKind: "initial" })
       return entry.inflight
     }
-    if (!options?.force && entry.snapshot.resolved && !entry.evicted && store.getState().snapshot[normalized.sessionId]) return Promise.resolve()
+    if (!options?.force && entry.snapshot.resolved && !entry.evicted
+      && (store.getState().snapshot[normalized.sessionId] !== undefined
+        || store.getState().message[normalized.sessionId] !== undefined)) return Promise.resolve()
     return this.startSnapshotLoad(normalized, entry, store, options?.reason === "prefetch" ? "prefetch" : "initial")
   }
 
@@ -545,14 +548,34 @@ export class SessionMessageLoader {
     return promise
   }
 
-  private knownChild(target: SessionMessageTarget, store: ChildStore) {
-    const session = useGlobalSessionsStore.getState().entityById.get(target.sessionId)
-      ?? store.getState().session.find(session => session.sessionId === target.sessionId)
-    if (session?.parentSessionId) return session
+  private knownSession(sessionId: string, store: ChildStore): Session | undefined {
+    return useGlobalSessionsStore.getState().entityById.get(sessionId)
+      ?? store.getState().session.find(session => session.sessionId === sessionId)
+  }
+  /**
+   * A child's transcript is readable through the history route; the root-only
+   * snapshot, metadata, queue and event routes answer 403/404 for it. A
+   * `vibe_spawn` child is often absent from the projected session rows, so the
+   * live subagent index is the remaining authoritative source. Its parent row
+   * supplies the workspace identity the projection needs.
+   */
+  private knownChild(target: SessionMessageTarget, store: ChildStore): Session | undefined {
+    const session = this.knownSession(target.sessionId, store)
+    if (session && (session.parentSessionId || session.rootSessionId !== session.sessionId)) return session
     const subagents = useSubagentsStore.getState().byParent
     for (const parentId in subagents) {
-      const found = subagents[parentId].find(s => s.subagentId === target.sessionId)
-      if (found) return { sessionId: target.sessionId, parentSessionId: parentId } as Session
+      const found = subagents[parentId].find(child => child.subagentId === target.sessionId || child.childSessionId === target.sessionId)
+      if (!found) continue
+      const parent = this.knownSession(parentId, store)
+      if (!parent) continue
+      return {
+        sessionId: target.sessionId, parentSessionId: parentId, rootSessionId: parent.rootSessionId,
+        projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
+        createdAt: parent.createdAt, updatedAt: parent.updatedAt,
+        epoch: parent.epoch, headSequence: parent.headSequence,
+        runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" },
+        metadata: null, metadataRevision: "0", archiveRevision: "0",
+      }
     }
     return undefined
   }
@@ -654,6 +677,8 @@ export class SessionMessageLoader {
   }
 
   private async loadHostState(target: SessionMessageTarget, store: ChildStore, snapshot: SessionSnapshot, client: CanonicalClient, isCurrent: () => boolean): Promise<void> {
+    // Metadata and queue are root-only routes; a child answers 404 for both.
+    if (this.knownChild(target, store)) return
     const requestedRevision = store.getState().sessionRevision ?? 0
     const missingSession = !store.getState().session.some(session => session.sessionId === target.sessionId)
     const sessions = missingSession ? client.listSessions(snapshot.session.workspaceId).catch(() => null) : Promise.resolve(null)

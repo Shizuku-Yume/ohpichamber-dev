@@ -11,6 +11,7 @@ import { ChildStoreManager } from "./child-store"
 import { installHookTestDom } from "../components/session/sidebar/test-utils/testDom"
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
 import { fileTreeChanges, subscribeFileTreeChanges } from "@/lib/fileTreeChanges"
@@ -287,6 +288,47 @@ describe("SyncProvider native scope and selection boundaries", () => {
       expect(manager.getState(directory)?.session.map((item) => item.sessionId)).toEqual([active.sessionId])
       expect(useGlobalSessionsStore.getState().archivedSessions.find((item) => item.sessionId === archived.sessionId)).toEqual(archived)
     } finally {
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+  test("a child session never attaches events or reads the root-only snapshot route", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/child-boundary"
+    const resolved = workspace(directory)
+    const parent = session("child-parent", resolved.workspaceId)
+    const child = { ...session("child-worker", resolved.workspaceId), parentSessionId: parent.sessionId, rootSessionId: parent.sessionId }
+    const client = createNativeClient()
+    const streams: string[] = []
+    client.subscribeSessionEvents = (sessionId) => { streams.push(sessionId); return () => {} }
+    let snapshots = 0
+    client.getSnapshot = async () => { snapshots += 1; throw new Error("Root-only route") }
+    client.getSessionMetadata = async () => { snapshots += 1; throw new Error("Root-only route") }
+    client.getQueue = async () => { snapshots += 1; throw new Error("Root-only route") }
+    let runtime: ReturnType<typeof useSyncRuntime> | undefined
+    const Probe = () => { runtime = useSyncRuntime(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!runtime) throw new Error("Sync runtime was not mounted")
+      const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
+      store.setState({ workspace: resolved, project: resolved.projectId, session: [parent, child] })
+      // The child is known only through the live subagent index, as a freshly
+      // spawned `vibe_spawn` task is before discovery catches up.
+      useSubagentsStore.getState().applySubagentUpdate(parent.sessionId, {
+        subagentId: "sub-1", parentSessionId: parent.sessionId, childSessionId: child.sessionId, role: "coder", status: "running",
+      })
+      const target = { directory, sessionId: child.sessionId }
+      await act(async () => { await runtime!.messageLoader.ensure(target) })
+      expect(snapshots).toBe(0)
+      expect(streams).toEqual([])
+      expect(runtime.messageLoader.getSnapshot(target)).toMatchObject({ status: "ready", resolved: true })
+      // Even a snapshot-shaped record cannot make this provider subscribe.
+      store.setState({ snapshot: { [child.sessionId]: { ...nativeSnapshot(child.sessionId), session: child, cursor: `${child.epoch}:0` } } })
+      await act(async () => { await runtime!.messageLoader.refresh(target) })
+      expect(streams).toEqual([])
+    } finally {
+      useSubagentsStore.setState({ byParent: {} })
       await act(async () => root.unmount())
       dom.restore()
     }

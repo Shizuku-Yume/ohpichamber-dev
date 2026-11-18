@@ -5,6 +5,7 @@ import { SessionMessageLoader, type LoaderConfiguration } from "./session-messag
 import { deferred, nativeApproval, nativeClient, nativeHistory, nativeHostSession, nativeMessage, nativeQuestion, nativeSnapshot } from "./session-message-loader-test-fixtures"
 import { clearRuntimeSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
@@ -671,5 +672,64 @@ describe("history-only canonical child sessions", () => {
     await loader.loadOlder(childTarget)
     expect(loader.getSnapshot(childTarget).status).toBe("error")
     expect(store.getState().message[childTarget.sessionId]).toBe(previous)
+  })
+})
+
+describe("subagent children known only through the live subagent index", () => {
+  const subagentChild = { directory: "/loader-repo", sessionId: "vibe-child" }
+  let subagentManager: ChildStoreManager | null = null
+  function setupSubagent(configuration: Partial<LoaderConfiguration>) {
+    subagentManager = new ChildStoreManager()
+    const client = configuration.client ?? nativeClient()
+    const loader = new SessionMessageLoader(subagentManager, { runtimeKey: "runtime-a", ...configuration, client })
+    cleanups.push(() => { loader.dispose(); subagentManager?.disposeAll(); subagentManager = null })
+    const store = subagentManager.ensureChild(subagentChild.directory, { bootstrap: false })
+    const originalGlobal = useGlobalSessionsStore.getState()
+    const originalSubagents = useSubagentsStore.getState()
+    cleanups.push(() => { useSubagentsStore.setState(originalSubagents); useGlobalSessionsStore.setState(originalGlobal) })
+    // The child is never projected; only its parent and the live subagent row exist.
+    store.setState({ session: [{ ...nativeHostSession(nativeSnapshot("session-root")), sessionId: "session-root", parentSessionId: undefined, rootSessionId: "session-root" }] })
+    useSubagentsStore.getState().applySubagentUpdate("session-root", {
+      subagentId: "subagent-a", parentSessionId: "session-root", childSessionId: subagentChild.sessionId,
+      role: "coder", status: "running",
+    })
+    return { loader, store }
+  }
+
+  test("loads history without snapshot, metadata, queue or snapshot reporting", async () => {
+    const recent = nativeMessage(subagentChild.sessionId, "recent", 2)
+    let forbiddenCalls = 0
+    let snapshotCallbacks = 0
+    const forbidden = async () => { forbiddenCalls += 1; throw new Error("Child snapshot/metadata/queue is unavailable") }
+    const { loader, store } = setupSubagent({
+      onSnapshot: () => { snapshotCallbacks += 1 },
+      client: nativeClient({
+        getSnapshot: forbidden, getSessionMetadata: forbidden, getQueue: forbidden,
+        getHistory: async (sessionId, options) => {
+          expect(sessionId).toBe(subagentChild.sessionId)
+          return nativeHistory(options?.cursor ? [] : [recent], options?.cursor ? null : "older-page", nativeSnapshot(subagentChild.sessionId))
+        },
+      }),
+    })
+    await loader.ensure(subagentChild)
+    expect(forbiddenCalls).toBe(0)
+    expect(snapshotCallbacks).toBe(0)
+    expect(store.getState().message[subagentChild.sessionId]).toEqual([recent])
+    expect(store.getState().snapshot[subagentChild.sessionId]).toBeUndefined()
+    expect(store.getState().sessionCursor[subagentChild.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(subagentChild)).toMatchObject({ status: "ready", resolved: true, complete: false })
+    // The projection carries the parent's workspace identity so the row is a
+    // usable child record rather than a guessed one.
+    expect(store.getState().session.find(row => row.sessionId === subagentChild.sessionId)).toMatchObject({
+      parentSessionId: "session-root", workspaceId: "workspace-a",
+    })
+  })
+
+  test("a child history failure reports the real error instead of empty success", async () => {
+    const error = new Error("child history unavailable")
+    const { loader, store } = setupSubagent({ client: nativeClient({ getHistory: async () => { throw error } }) })
+    await loader.ensure(subagentChild)
+    expect(store.getState().message[subagentChild.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(subagentChild)).toMatchObject({ status: "error", error })
   })
 })
