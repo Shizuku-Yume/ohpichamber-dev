@@ -23,36 +23,36 @@ export function resetI18nDictionaryCacheForTests(): void {
   dictionaries.set(DEFAULT_LOCALE, enDict);
 }
 
+/** One dictionary module; every locale file exports its strings as `dict`. */
+type I18nModule = { readonly dict: I18nDictionary };
+
+// A total map rather than a switch, so the module contract is checked at each
+// import instead of asserted after a union of import results.
+const DICTIONARY_LOADERS = {
+  en: () => import('./messages/en'),
+  de: () => import('./messages/de'),
+  fr: () => import('./messages/fr'),
+  nl: () => import('./messages/nl'),
+  'zh-CN': () => import('./messages/zh-CN'),
+  'zh-TW': () => import('./messages/zh-TW'),
+  uk: () => import('./messages/uk'),
+  es: () => import('./messages/es'),
+  'pt-BR': () => import('./messages/pt-BR'),
+  ko: () => import('./messages/ko'),
+  pl: () => import('./messages/pl'),
+  ja: () => import('./messages/ja'),
+  tr: () => import('./messages/tr'),
+  ar: () => import('./messages/ar'),
+  he: () => import('./messages/he'),
+} satisfies Record<Locale, () => Promise<I18nModule>>;
+
 async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
   const cached = dictionaries.get(locale);
   if (cached) {
     return cached;
   }
 
-  /*
-    The dictionaries are runtime-selected. We cast the import result to I18nDictionary,
-    as the module structure is guaranteed to contain a 'dict' of type I18nDictionary.
-  */
-  const moduleResult = await (async () => {
-    switch (locale) {
-      case 'zh-CN': return import('./messages/zh-CN');
-      case 'fr': return import('./messages/fr');
-      case 'nl': return import('./messages/nl');
-      case 'zh-TW': return import('./messages/zh-TW');
-      case 'es': return import('./messages/es');
-      case 'pt-BR': return import('./messages/pt-BR');
-      case 'uk': return import('./messages/uk');
-      case 'ko': return import('./messages/ko');
-      case 'pl': return import('./messages/pl');
-      case 'de': return import('./messages/de');
-      case 'ja': return import('./messages/ja');
-      case 'tr': return import('./messages/tr');
-      case 'ar': return import('./messages/ar');
-      case 'he': return import('./messages/he');
-      default: return import('./messages/en');
-    }
-  })();
-  const mod = moduleResult as { dict: I18nDictionary };
+  const mod = await DICTIONARY_LOADERS[locale]();
   const subagentDict = subagentHudI18n[locale] ?? subagentHudI18n.en;
   /* SAFETY: timelineNoticesI18n structure is Record<string, Record<string, string>>. */
   const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
