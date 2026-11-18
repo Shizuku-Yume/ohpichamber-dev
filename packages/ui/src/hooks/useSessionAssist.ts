@@ -29,7 +29,7 @@ function useNativeRecap(sessionId: string, enabled: boolean): string | null {
   const [recap, setRecap] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!enabled || !sessionId) {
+    if (!enabled || !sessionId || sessionId.startsWith('draft_')) {
       setRecap(null);
       return undefined;
     }

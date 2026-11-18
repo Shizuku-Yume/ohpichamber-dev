@@ -1792,14 +1792,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Enter BTW before sending so the question stays separate from the main draft.
         // A bare command waits for input; an argument requests one immediate send.
         if (commandPlan?.kind === 'prompt' && commandPlan.command.name === 'btw' && currentSessionId) {
+            useBtwStore.getState().setPanelState(currentSessionId, {
+                pending: true,
+                collapsed: false,
+                ephemeralRecordId: undefined,
+                ephemeralText: undefined,
+                ephemeralStatus: undefined,
+                pendingSend: undefined
+            });
             const targetIdentity = createChatDraftIdentity(activeRuntimeKey, currentSessionDirectoryForSync ?? currentDirectory, `btw-pending:${currentSessionId}`);
             const argument = commandPlan.command.argument.trim();
             handoffDraft(targetIdentity, isBtwActive ? argument : argument || null);
             if (argument && targetIdentity) immediateBtwSubmitRef.current = { identity: targetIdentity, text: argument };
             return;
         }
-
-        // Opening BTW is local and still works while authentication is expired.
         if (useAuthSessionStore.getState().state !== 'ok') {
             toast.error(t('sessionAuth.expired.sendBlocked'));
             return;
@@ -2287,17 +2293,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // never claims the new message.
         scrollToBottom?.();
 
-        if (isBtwActive && btwPanel.pending && currentSessionId) {
-            try {
-                const result = await canonicalClient.askBtw(currentSessionId, primaryText);
-                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
-                scrollToBottom?.();
-            } catch (error) {
-                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, collapsed: false, pendingSend: undefined });
-                restoreConsumedInput();
-                toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
+        if (isBtwActive && currentSessionId) {
+            if (btwPanel.pending) {
+                try {
+                    const result = await canonicalClient.askBtw(currentSessionId, primaryText);
+                    if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                    useBtwStore.getState().setPanelState(currentSessionId, { pending: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
+                    scrollToBottom?.();
+                } catch (error) {
+                    if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                    useBtwStore.getState().setPanelState(currentSessionId, { pending: true, collapsed: false, pendingSend: undefined });
+                    restoreConsumedInput();
+                    toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
+                }
             }
             return;
         }
