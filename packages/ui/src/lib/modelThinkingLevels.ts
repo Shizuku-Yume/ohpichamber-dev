@@ -5,7 +5,7 @@
  * the composer's effort panel both read this module so they cannot list
  * different levels for the same model.
  */
-export type ThinkingLevelModel = {
+type ThinkingLevelModel = {
   reasoningEffortSupported?: boolean;
   reasoningOptions?: readonly { reasoningEffort: string }[];
   variants?: readonly { variant: string }[];

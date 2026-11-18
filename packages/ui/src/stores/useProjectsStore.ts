@@ -82,7 +82,7 @@ interface ProjectsStore {
  * not a failure: the project keeps its symbol icon and nothing is reported as
  * broken. Fetch failures and a project the Host does not know stay failures.
  */
-export type ProjectIconDiscoveryResult =
+type ProjectIconDiscoveryResult =
   | { status: 'discovered' }
   | { status: 'no-favicon-found' }
   | { status: 'custom-icon-present' }
