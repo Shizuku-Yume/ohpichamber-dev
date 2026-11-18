@@ -384,7 +384,7 @@ const persistProjects = (projects: ProjectEntry[], activeProjectId: string | nul
   if (manualOrder) {
     persistManualProjectOrder(manualOrder);
   }
-  void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
+  return updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
 };
 
 const persistManualProjectOrder = (manualOrder: string[]) => {
@@ -440,8 +440,12 @@ export const useProjectsStore = create<ProjectsStore>()(
       };
       if (!isCurrent()) return false;
       const projects = [...get().projects, entry];
+      // The server has to know this project before anything reads its
+      // workspace: a directory resolved too early answers 404, and the
+      // sessions refresh would fail against a project it cannot see.
+      const persisted = await persistProjects(projects, get().activeProjectId);
+      if (!persisted.ok) return false;
       set({ projects });
-      persistProjects(projects, get().activeProjectId);
       void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
       return true;
     },
@@ -473,7 +477,11 @@ export const useProjectsStore = create<ProjectsStore>()(
       };
 
       const nextProjects = [...get().projects, entry];
-      persistProjects(nextProjects, entry.id);
+      // Persist before publishing the project: the workspace resolve and the
+      // icon discovery below are answered by the server, which cannot see a
+      // project that has not landed in the settings document yet.
+      const persisted = await persistProjects(nextProjects, entry.id);
+      if (!persisted.ok) return null;
       set({ projects: nextProjects });
 
       if (streamDebugEnabled()) {
@@ -520,6 +528,10 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       const nextProjects = [...current.projects, ...entries];
+      // Same order as addProject: the server answers workspace and icon reads
+      // only for projects already in the settings document.
+      const persisted = await persistProjects(nextProjects, entries[0].id);
+      if (!persisted.ok) return [];
       set({ projects: nextProjects });
 
       if (streamDebugEnabled()) {
@@ -527,7 +539,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       // Mirror addProject: the first newly added project becomes active.
-      get().setActiveProject(entries[0].id);
+      get().setActiveProjectIdOnly(entries[0].id);
       for (const entry of entries) {
         void get().discoverProjectIcon(entry.id);
       }
