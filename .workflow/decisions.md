@@ -1539,3 +1539,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OhPiChamber adopts a similar service-env runtime or OpenCode-compat surface.
 
+## 2026-11-18 - Stage standalone SDK, exclude agent-runtime from ASAR, and configure standalone loader roots
+
+- **Decided:** Stage `ohpichamber-sdk` into `packages/web/resources/standalone-sdk` during both Electron asset builds (`packages/electron/scripts/build-web-assets.mjs`) and npm prepack (`packages/web/scripts/prepack.mjs`), keep `packages/web/package.json` publishing `resources/agent-runtime`, `resources/changelog`, `resources/standalone-sdk`, and `scripts/standalone-loader.mjs` under `ohpichamber` 1.0.0 with a worktree-scoped `package.json` backup/restore in `prepack.mjs`/`postpack.mjs`, exclude `node_modules/ohpichamber/resources/agent-runtime` from Electron `app.asar` while verifying `standalone-loader.mjs`, `standalone-sdk/dist/index.js`, and `changelog/index.json` in `packaged-app-contents.{cjs,test.cjs}`, and pass `{ runtimeRoot, sdkRoot }` via `registerStandaloneLoader` and `Module.register` `initialize()` data in `standalone-loader.mjs` while skipping `.asar` paths.
+- **Instead of:** Bundling `agent-runtime` inside `app.asar`, resolving `ohpichamber-sdk` only from workspace `node_modules`, using a single shared `/tmp` `package.json` backup path across worktrees, or relying on `findRuntimeRoot()` without explicit packaged roots.
+- **Because:** Bun cannot execute `agent-runtime` binaries or resolve symlinks from inside Electron's virtual ASAR archive; standalone npm installs and packaged Electron apps lack workspace symlinks for `ohpichamber-sdk` and `@openchamber/agent-*` until `standalone-loader.mjs` resolves them using `initialize()`-propagated roots; and concurrent worktree packs clobbered the shared backup file.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** Electron and npm distributions consume published packages directly without staged `resources/agent-runtime` or `resources/standalone-sdk`.
+- **Effort:** final-main-audit
+
