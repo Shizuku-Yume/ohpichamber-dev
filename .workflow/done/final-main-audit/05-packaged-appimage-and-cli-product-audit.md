@@ -15,3 +15,4 @@
 - [x] Install `ohpichamber-1.0.0.tgz` into a clean prefix under `/tmp`, verify `ohpichamber --version` (`1.0.0`), `ohpichamber --help` (`OhPiChamber` branding, no `update` command), and `ohpichamber serve` with isolated `HOME` (writes `<HOME>/.config/ohpichamber`, `/api/agent/v1/ready` returns 200, real-provider chat completes).
 - [x] Launch `OhPiChamber-1.0.0-linux-x86_64.AppImage` with isolated `HOME`: verify window title & π icon, `<HOME>/.config/OhPiChamber` + `<HOME>/.config/ohpichamber` isolation, `ohpichamber://` protocol handler, Settings → About (`1.0.0`, `"Based on OpenChamber"` MIT credit, no canary/update-check controls), `app-update.yml` (`Shizuku-Yume/ohpichamber`), real-provider chat + terminal + git, clean child-process exit on quit, and zero requests to `*.openchamber.dev`.
 - [x] Fix any defect discovered in packaged desktop or CLI execution and re-verify.
+Integration verified on Wed Nov 18 14:32:32 CST 2026
