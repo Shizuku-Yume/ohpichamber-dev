@@ -226,7 +226,7 @@ export const createWorkerOperationAuthorizer = ({
     }
     const internalWriteUrls = descriptor.internalWriteUrls ?? [];
     if (internalWriteUrls.length > 0 && request.toolName !== 'write') {
-     return denied(`The ${request.toolName} tool may write OMP internal URLs but may not read them`);
+     return denied(`The ${request.toolName} tool may not target an OMP internal write URL; only the write tool may`);
     }
     for (const target of [...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
      if (!await pathAllowed(target)) return denied(`The ${request.toolName} tool targets a path outside the authorized workspace`);

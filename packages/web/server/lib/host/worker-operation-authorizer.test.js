@@ -155,7 +155,7 @@ describe('Host-owned native descriptor authority', () => {
       for (const toolName of ['read', 'edit', 'grep', 'glob']) {
         const request = { type: 'tool', toolName, input: { path: 'local://plan.md' } };
         expect(await harness.authorize(harness.scope, request, { ...planDescriptor, toolName }))
-          .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: `The ${toolName} tool may write OMP internal URLs but may not read them` });
+          .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: `The ${toolName} tool may not target an OMP internal write URL; only the write tool may` });
       }
       // Only `local://` is a writable scheme; any other internal URL is refused
       // by the descriptor schema before the decision is reached.
