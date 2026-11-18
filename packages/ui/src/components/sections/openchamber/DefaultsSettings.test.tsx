@@ -88,11 +88,18 @@ const mockOmpSettings = {
   ],
 };
 
+// A settings read the Agent Service refuses (provider/service trouble) must
+// surface as a failed row, not as a control that says "loading" forever.
+let failOmpSettings = false;
+
 mock.module('@/api/canonicalClient', () => ({
   CanonicalApiError: class extends Error { },
   canonicalClient: {
     resolveWorkspace: async () => ({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'repo' }),
-    getOmpSettings: async () => mockOmpSettings,
+    getOmpSettings: async () => {
+      if (failOmpSettings) throw new Error('Agent Service settings read failed');
+      return mockOmpSettings;
+    },
     getModels: async () => mockModelCatalog,
     updateOmpSettings: async () => mockOmpSettings,
     readCacheWarming: async () => ({ mode: 'off' }),
@@ -126,6 +133,7 @@ describe('DefaultsSettings', () => {
   let root: Root;
 
   beforeEach(() => {
+    failOmpSettings = false;
     updatedDesktopSettingsPayload = null;
     catalogRefreshCalls.length = 0;
     host = document.createElement('div');
@@ -209,6 +217,26 @@ describe('DefaultsSettings', () => {
     expect(host.querySelector('[data-settings-item="omp.retry.maxRetries"]')).not.toBeNull();
     expect(host.querySelector('[data-settings-item="omp.retry.fallbackChains"]')).toBeNull();
     expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')).not.toBeNull();
+  });
+
+  test('a failed settings read says so instead of spinning the plan model row forever', async () => {
+    failOmpSettings = true;
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <DefaultsSettings />
+        </I18nProvider>,
+      );
+    });
+    await settle();
+
+    const notice = host.querySelector('[data-settings-item="sessions.default-model-error"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.textContent).toBeTruthy();
+
+    // The plan row is still drawn; the read failure is what it reports.
+    const planRow = host.querySelector('[data-settings-item="sessions.default-plan"]');
+    expect(planRow).not.toBeNull();
   });
 
   test('the plan model role is drawn with the Plan & Goal Modes it unlocks', async () => {
