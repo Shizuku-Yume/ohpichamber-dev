@@ -174,7 +174,7 @@ function stepTiming(message: NativeAssistantMessage): StepTiming {
   const completedAt = z.number().finite().safeParse(message.completedAt);
   const completed = completedAt.success
     ? completedAt.data
-    : duration.success ? startedAt + duration.data : undefined;
+    : (duration.success ? startedAt + duration.data : undefined);
   if (completed !== undefined && Number.isFinite(completed)) timing.completedAt = Math.max(startedAt, Math.round(completed));
   return timing;
 }
