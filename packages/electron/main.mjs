@@ -4045,9 +4045,8 @@ const launchWindowsSpec = async (spec) => {
   });
   if (isNetworkAccessBlocked()) log.warn('[desktop] Network egress attempted in child process');
   child.unref();
+  throw new Error(`Failed to open in ${appName}: no launch candidates`);
 };
-throw new Error(`Failed to open in ${appName}: no launch candidates`);
-  }
 
 if (process.platform === 'win32') {
   const failures = [];
