@@ -195,30 +195,36 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   }, [loadCatalog]);
 
   // Load every source in the background so global search covers all of them.
+  // Navigating away aborts the request in flight; the store treats an abort as
+  // no result, never as a load failure on the page the user moved to.
   React.useEffect(() => {
     const unloaded = sources.filter((src) => !loadedSourceIds[src.id]);
     if (unloaded.length === 0) {
       return;
     }
-    let cancelled = false;
+    const abortController = new AbortController();
     void (async () => {
       for (const src of unloaded) {
-        if (cancelled) {
-          return;
-        }
-        await loadSource(src.id);
+        if (abortController.signal.aborted) return;
+        await loadSource(src.id, { signal: abortController.signal });
       }
     })();
     return () => {
-      cancelled = true;
+      abortController.abort();
     };
   }, [sources, loadedSourceIds, loadSource]);
 
+  // The selected source can be picked before its background turn. This load
+  // belongs to the same page visit, so unmounting aborts it too.
   React.useEffect(() => {
     if (!selectedSourceId || loadedSourceIds[selectedSourceId]) {
       return;
     }
-    void loadSource(selectedSourceId);
+    const abortController = new AbortController();
+    void loadSource(selectedSourceId, { signal: abortController.signal });
+    return () => {
+      abortController.abort();
+    };
   }, [selectedSourceId, loadedSourceIds, loadSource]);
 
   React.useEffect(() => {

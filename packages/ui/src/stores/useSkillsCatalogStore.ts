@@ -24,7 +24,7 @@ interface CatalogState {
   scanResults: SkillRepositoryItem[] | null;
   setSelectedSource: (id: string | null) => void;
   loadCatalog: (options?: { refresh?: boolean }) => Promise<boolean>;
-  loadSource: (sourceId: string, options?: { refresh?: boolean }) => Promise<boolean>;
+  loadSource: (sourceId: string, options?: { refresh?: boolean; signal?: AbortSignal }) => Promise<boolean>;
   scanRepo: (request: SkillRepositoryScanRequest) => Promise<ScanResult>;
   installSkills: (request: InstallInput, options?: { directory?: string | null }) => Promise<SkillRepositoryInstallResult>;
   resetForRuntimeSwitch: () => void;
@@ -100,14 +100,13 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
       const existing = sourceLoads.get(sourceId);
       if (existing && !options?.refresh) return existing;
       const epoch = catalogEpoch;
-      let resolvePending!: (value: boolean | PromiseLike<boolean>) => void;
-      const pending = new Promise<boolean>(resolve => { resolvePending = resolve; });
+      const { promise: pending, resolve: resolvePending } = Promise.withResolvers<boolean>();
       void (async () => {
         set({ isLoadingSource: true, lastCatalogError: null });
         try {
-          const workspace = await canonicalClient.resolveWorkspace(scope.directory);
+          const workspace = await canonicalClient.resolveWorkspace(scope.directory, { signal: options?.signal });
           if (scope.owner !== generation || epoch !== catalogEpoch || sourceLoads.get(sourceId) !== pending) { resolvePending(false); return; }
-          const result = await canonicalClient.skillRepositories.source(workspace.workspaceId, { sourceId, refresh: options?.refresh });
+          const result = await canonicalClient.skillRepositories.source(workspace.workspaceId, { sourceId, refresh: options?.refresh }, { signal: options?.signal });
           if (scope.owner !== generation || epoch !== catalogEpoch || sourceLoads.get(sourceId) !== pending) { resolvePending(false); return; }
           set(state => ({ itemsBySource: { ...state.itemsBySource, [sourceId]: result.items }, loadedSourceIds: { ...state.loadedSourceIds, [sourceId]: true } }));
           resolvePending(true);
