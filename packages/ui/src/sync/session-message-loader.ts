@@ -10,7 +10,7 @@ import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
-import { startSessionLoadPerformanceEvent } from "./session-load-performance"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { dropSessionCaches } from "./session-cache"
 import { SessionCacheRetention } from "./session-cache-retention"
 import { SESSION_CACHE_LIMIT, type State } from "./types"
@@ -548,9 +548,14 @@ export class SessionMessageLoader {
   private knownChild(target: SessionMessageTarget, store: ChildStore) {
     const session = useGlobalSessionsStore.getState().entityById.get(target.sessionId)
       ?? store.getState().session.find(session => session.sessionId === target.sessionId)
-    return session?.parentSessionId ? session : undefined
+    if (session?.parentSessionId) return session
+    const subagents = useSubagentsStore.getState().byParent
+    for (const parentId in subagents) {
+      const found = subagents[parentId].find(s => s.subagentId === target.sessionId)
+      if (found) return { sessionId: target.sessionId, parentSessionId: parentId } as Session
+    }
+    return undefined
   }
-
   private startChildHistoryLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: SessionMessageLoadKind): Promise<void> {
     const client = this.configuration.client
     const child = this.knownChild(target, store)
@@ -574,12 +579,16 @@ export class SessionMessageLoader {
       const incoming = sortMessagesChronologically(page.messages)
       const messages = kind === "older" ? mergeMessages(current.message[target.sessionId] ?? [], incoming) : incoming
       const next = installHostSession(current, this.knownChild(target, store) ?? child)
-      store.setState({ ...next, message: { ...next.message, [target.sessionId]: messages },
-        partOwner: { ...next.partOwner, [target.sessionId]: partOwners(messages) } })
+      store.setState({
+        ...next, message: { ...next.message, [target.sessionId]: messages },
+        partOwner: { ...next.partOwner, [target.sessionId]: partOwners(messages) }
+      })
       entry.historyBranch = page.branch
       entry.evicted = false
-      this.patchEntry(entry, { status: "ready", loadingKind: null, error: null, resolved: true,
-        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: messages.length, updatedAt: Date.now() })
+      this.patchEntry(entry, {
+        status: "ready", loadingKind: null, error: null, resolved: true,
+        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: messages.length, updatedAt: Date.now()
+      })
       this.persistCoverage(target, entry.snapshot)
       // No synthetic snapshot or journal cursor: Task32 exposes child history only.
     })
@@ -722,10 +731,12 @@ export class SessionMessageLoader {
     if (messages === current.message[target.sessionId] && authoritativeMessages === snapshot.messages && turns === snapshot.turns) return
     store.setState({
       message: messages === current.message[target.sessionId] ? current.message : { ...current.message, [target.sessionId]: messages },
-      snapshot: { ...current.snapshot, [target.sessionId]: {
-        ...snapshot, messages: authoritativeMessages, turns,
-        window: { ...snapshot.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: authoritativeMessages[0]?.messageId ?? null, lastMessageId: authoritativeMessages.at(-1)?.messageId ?? null, hasEarlier: page.nextCursor !== null },
-      } },
+      snapshot: {
+        ...current.snapshot, [target.sessionId]: {
+          ...snapshot, messages: authoritativeMessages, turns,
+          window: { ...snapshot.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: authoritativeMessages[0]?.messageId ?? null, lastMessageId: authoritativeMessages.at(-1)?.messageId ?? null, hasEarlier: page.nextCursor !== null },
+        }
+      },
       partOwner: messages === current.message[target.sessionId] ? current.partOwner : { ...current.partOwner, [target.sessionId]: partOwners(messages) },
     })
   }
