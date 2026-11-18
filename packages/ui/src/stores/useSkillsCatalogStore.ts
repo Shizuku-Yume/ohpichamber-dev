@@ -100,7 +100,8 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
       const existing = sourceLoads.get(sourceId);
       if (existing && !options?.refresh) return existing;
       const epoch = catalogEpoch;
-      const { promise: pending, resolve: resolvePending } = Promise.withResolvers<boolean>();
+      let resolvePending!: (value: boolean) => void;
+      const pending = new Promise<boolean>((resolve) => { resolvePending = resolve; });
       void (async () => {
         set({ isLoadingSource: true, lastCatalogError: null });
         try {
