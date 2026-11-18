@@ -1548,3 +1548,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream localizes effort labels itself, or its settings pages stamp the heading target so the fork's test assertion has nothing to pin.
 - **Effort:** final-main-audit
+
+## 2026-11-19 - Second-round walkthrough fixes own their fork-differs paths
+
+- **Decided:** the seven `fork-differs` paths the second walkthrough fix round left without a class keep the fork blob and are recorded as `decision` rows: the mobile settings navigation module and its test, the Git operation recovery hook and its test, `cycleThinkingVariant`, and the router's `parseRoute` and its test.
+- **Instead of:** reverting them to upstream's nav-only settings entry, ungated binding read, variant-only effort cycle and `settings=general` root alias.
+- **Because:** each file carries a fix the effort requires: the phone opened every deep-linked settings slug as the nav list (`5a6a053d28`), the desktop root request had to stay explicit while `general` stopped being a root alias (`ff07861164`), the recovery hook read the binding route for a folder Git had not proved a repository (`d36656aa8f`), and the phone's effort button derived levels from legacy route variants instead of the shared model levels (`9ce2395e79`).
+- **Mine:** yes
+- **Revisit when:** upstream gates its binding reads on a repository probe itself, or its router already keeps `general` distinct from the settings root.
+- **Effort:** final-main-audit
