@@ -1,4 +1,5 @@
 import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
+import { getReasoningEffortLevels } from '@/lib/modelThinkingLevels';
 import React from 'react';
 import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
@@ -349,9 +350,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const currentCatalogModel = providers
         .find((provider) => provider.providerId === currentProviderId)?.models
         .find((model) => model.modelId === currentModelId);
-    const effortOptions = React.useMemo(() => currentCatalogModel?.reasoningEffortSupported
-        ? ['off', ...currentCatalogModel.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')]
-        : [], [currentCatalogModel]);
+    // One derivation for the desktop panel, the phone's button and the picker's
+    // arrow keys: real effort options first, the same `off` entry they all show.
+    const effortOptions = React.useMemo(() => getReasoningEffortLevels(currentCatalogModel), [currentCatalogModel]);
     // OMP's configured default is what an untouched draft runs at. `auto` stays
     // off the wire: the worker resolves it, so the send carries no effort. A
     // model's own default wins, because that is the level OMP resolves for it.
@@ -668,7 +669,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const getModelReasoningOptions = React.useCallback((providerId: string, modelId: string) => {
         const model = providers.find((entry) => entry.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
-        return model?.reasoningEffortSupported ? model.reasoningOptions : [];
+        return getReasoningEffortLevels(model);
     }, [providers]);
     const getModelVariantOptions = React.useCallback((providerId: string, modelId: string) => {
         const provider = providers.find((entry) => entry.providerId === providerId);
@@ -1270,7 +1271,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const handleEffortSelect = React.useCallback((effort: string, providerId = currentProviderId, modelId = currentModelId) => {
         const targetModel = providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId);
-        if (!targetModel?.reasoningEffortSupported || (effort !== 'off' && !targetModel.reasoningOptions.some((option) => option.reasoningEffort === effort))) return;
+        if (!getReasoningEffortLevels(targetModel).includes(effort)) return;
         if (providerId !== currentProviderId || modelId !== currentModelId) {
             if (tryApplyModelSelection(providerId, modelId) !== 'applied') return;
         }
@@ -2065,8 +2066,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const handleEffortKey = (e: React.KeyboardEvent, selectedItem: ModelPickerEntry) => {
             keyboardOwnsModelSelectionRef.current = true;
             if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return false;
-            const options = getModelReasoningOptions(selectedItem.providerId, selectedItem.modelId);
-            const efforts = options.length > 0 ? ['off', ...options.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')] : [];
+            const efforts = getModelReasoningOptions(selectedItem.providerId, selectedItem.modelId);
             if (efforts.length <= 1) return false;
             e.preventDefault();
             e.stopPropagation();

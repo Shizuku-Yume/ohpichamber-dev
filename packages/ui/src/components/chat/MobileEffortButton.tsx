@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { swallowGestureClick } from '@/lib/swallowGestureClick';
 import { formatEffortLabel, getEffortToneClass } from './mobileControlsUtils';
+import { getModelThinkingLevels, getReasoningEffortLevels, resolveThinkingLevel } from '@/lib/modelThinkingLevels';
 
 interface MobileEffortButtonProps {
     onCycleThinking: () => void;
@@ -18,30 +19,42 @@ const LONG_PRESS_MS = 500;
  * The phone composer's effort, after the model as on the desktop: a quiet
  * "/ medium". Like the agent button beside it, a tap moves to the next level
  * and a long press opens the effort sheet. Absent for Auto and for models
- * without effort levels.
+ * without effort levels — real `reasoningOptions` first, as the desktop panel
+ * reads them, with legacy route variants as the fallback.
  */
 export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleThinking, onOpenThinking, className }) => {
     const { t } = useI18n();
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
     const currentModelId = useConfigStore((state) => state.currentModelId);
-    // A boolean, so the button re-renders only when the model gains or loses levels.
-    const hasVariants = useConfigStore((state) => state.getCurrentModelVariants().length > 0);
+    // The catalog is the level source for both the desktop panel and this
+    // button; the selector holds the level set so it stays reference-equal.
+    const currentModel = useConfigStore((state) => state.getCurrentModel());
+    const levels = React.useMemo(() => getModelThinkingLevels(currentModel), [currentModel]);
+    const usesEfforts = React.useMemo(() => getReasoningEffortLevels(currentModel).length > 0, [currentModel]);
+    const configuredReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
     const effectiveVariant = useConfigStore((state) => state.currentVariant);
     const variantSelection = useConfigStore((state) => state.currentVariantSelection);
-    const longPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressTimerRef = React.useRef<number | undefined>(undefined);
     const longPressedRef = React.useRef(false);
     const clearLongPress = () => {
-        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = undefined;
     };
     React.useEffect(() => clearLongPress, []);
 
-    if (isAutoModel(currentProviderId, currentModelId) || !hasVariants) return null;
+    if (isAutoModel(currentProviderId, currentModelId) || levels.length === 0) return null;
 
-    // What the next send carries, as the desktop picker shows it: an explicit
-    // pick, "Default" when that was picked, else the inherited effort.
+    // The selected level, the same cascade the desktop picker resolves: the
+    // configured effort (or the model's own default) for real levels, and the
+    // route selection for a legacy catalog.
+    const effort = usesEfforts
+        ? resolveThinkingLevel(levels, [configuredReasoningEffort, currentModel?.defaultReasoningEffort])
+        : undefined;
     const variant = variantSelection.override === null ? undefined : variantSelection.override ?? effectiveVariant;
-    const label = variant ? formatEffortLabel(variant, t) : t('chat.modelControls.default');
+    const label = usesEfforts
+        ? (effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort, t))
+        : (variant ? formatEffortLabel(variant, t) : t('chat.modelControls.default'));
+    const tone = usesEfforts ? (effort === 'off' ? undefined : effort) : variant;
 
     return (
         <button
@@ -52,7 +65,7 @@ export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleT
                 if (event.pointerType === 'touch') event.preventDefault();
                 longPressedRef.current = false;
                 clearLongPress();
-                longPressTimerRef.current = setTimeout(() => {
+                longPressTimerRef.current = window.setTimeout(() => {
                     longPressedRef.current = true;
                     // The sheet slides up under the finger; its lift must not pick a level.
                     swallowGestureClick();
@@ -60,7 +73,7 @@ export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleT
                 }, LONG_PRESS_MS);
             }}
             onPointerUp={() => {
-                const pressing = longPressTimerRef.current !== null;
+                const pressing = longPressTimerRef.current !== undefined;
                 clearLongPress();
                 if (pressing && !longPressedRef.current) onCycleThinking();
             }}
@@ -78,7 +91,7 @@ export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleT
             )}
         >
             <span aria-hidden="true" className="opacity-60">/</span>
-            <span className={cn('whitespace-nowrap', getEffortToneClass(variant))}>{label}</span>
+            <span className={cn('whitespace-nowrap', getEffortToneClass(tone))}>{label}</span>
         </button>
     );
 };
