@@ -418,6 +418,86 @@ describe('canonical sidebar child discovery', () => {
       : useGlobalSessionsStore.getState().loadSessions();
   };
 
+  test.each(['head', 'directory', 'workspace'] as const)('a healthy %s root listing cannot clear a failed child lookup', async (scope) => {
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    if (scope === 'head') await useGlobalSessionsStore.getState().refreshSessionHead();
+    else if (scope === 'directory') await discover(true);
+    else useGlobalSessionsStore.getState().clearWorkspaceDiscoveryErrors('wsp_repo');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    expect([...useGlobalSessionsStore.getState().failedChildDiscoveryParents]).toEqual(['ses_root']);
+    expect(subagents).toHaveBeenCalledTimes(scope === 'workspace' ? 1 : 2);
+
+    subagents.mockResolvedValue([child()]);
+    if (scope === 'directory') await discover(true);
+    else await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(true);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().failedChildDiscoveryParents.size).toBe(0);
+  });
+
+  test('successful empty child retry clears the failure and removes only omitted children', async () => {
+    subagents.mockResolvedValue([child()]);
+    await discover(false);
+    const previous = useGlobalSessionsStore.getState().entityById.get('ses_child');
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toBe(previous);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('ses_root')).toBe(true);
+    subagents.mockResolvedValue([]);
+    await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_root']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().failedChildDiscoveryParents.size).toBe(0);
+  });
+
+  test('a root-only head response cannot erase a child failure discovered while it was in flight', async () => {
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_root')], []);
+    const rootRead = deferred<SessionDiscoveryResult>();
+    list.mockImplementation((workspaceId) => workspaceId ? Promise.resolve({ items: [session('ses_root')], errors: {} }) : rootRead.promise);
+    const head = useGlobalSessionsStore.getState().refreshSessionHead();
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    rootRead.resolve({ items: [session('ses_root')], errors: {} });
+    await head;
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    expect([...useGlobalSessionsStore.getState().failedChildDiscoveryParents]).toEqual(['ses_root']);
+    subagents.mockResolvedValue([child()]);
+    list.mockResolvedValue({ items: [session('ses_root')], errors: {} });
+    await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(true);
+  });
+
+  test('a healthy sibling directory does not clear another parent failure', async () => {
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    list.mockResolvedValue({ items: [session('ses_other', { workspaceId: 'wsp_other' })], errors: {} });
+    subagents.mockResolvedValue([]);
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/other']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_other')).toBe(true);
+    expect([...useGlobalSessionsStore.getState().failedChildDiscoveryParents]).toEqual(['ses_root']);
+  });
+
+  test('runtime reset retires a pending child retry and its errors', async () => {
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    const started = deferred<void>();
+    const pending = deferred<Subagent[]>();
+    subagents.mockImplementation(() => { started.resolve(); return pending.promise; });
+    const retry = useGlobalSessionsStore.getState().refreshSessionHead();
+    await started.promise;
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    pending.resolve([child()]);
+    await retry;
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().failedChildDiscoveryParents.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+  });
+
   test.each([false, true])('projects canonical children and indexes hierarchy (directory=%s)', async (directory) => {
     subagents.mockResolvedValue([child()]);
     await discover(directory);

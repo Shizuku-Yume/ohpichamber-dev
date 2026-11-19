@@ -1802,3 +1802,10 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Instead of:** waiting for staging to change the index or introducing another status poller.
 - **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
 - **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
+
+## 2026-11-19 - Keep child discovery failures distinct from healthy root listings
+
+- **Decided:** Track failed child-discovery parents separately from root-listing failures. Root-only head and workspace listings cannot retire them. A head poll with pending child failures reuses full discovery to retry child reads; full and directory refreshes clear a pending parent only after successful child discovery, including empty results.
+- **Instead of:** Clearing every session-keyed error after a healthy root listing, or adding another child polling owner.
+- **Because:** Canonical session lists contain roots, not the result of `listSubagents(parentId)`. Root success cannot establish that a missing child tree recovered. Known children and unrelated scope failures must survive unsuccessful retries and runtime changes must retire old completions.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the global store. Guest SDK and native admission are unchanged. Existing bounded root-listing startup retries and scoped root-error clearing remain in place.
