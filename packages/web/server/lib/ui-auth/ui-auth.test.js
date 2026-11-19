@@ -95,8 +95,10 @@ describe('ui auth client credential seam', () => {
     try {
       const req = { headers: { host: 'localhost:3000', upgrade: 'websocket' } };
       await expect(auth.ensureSessionToken(req, null)).rejects.toThrow("Cannot read properties of null (reading 'setHeader')");
-      req.headers.cookie = 'oc_ui_session_3000=existing';
-      expect(await auth.ensureSessionToken(req, null)).toBe('existing');
+      const response = createResponse();
+      const token = await auth.ensureSessionToken(req, response);
+      req.headers.cookie = String(response.getHeader('Set-Cookie')).split(';', 1)[0];
+      expect(await auth.ensureSessionToken(req, null)).toBe(token);
     } finally {
       auth.dispose();
     }

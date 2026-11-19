@@ -708,11 +708,20 @@ export const createUiAuth = ({
           }
           return res.status(401).json({ authenticated: false, locked: true, ...(requireClientAuth ? { clientAuthRequired: true } : { disabled: true }) });
         }
+        const token = passwordlessSessionToken(req);
+        if (token && !await isSessionValid(token)) {
+          return res.status(401).json({ authenticated: false, locked: true, disabled: true });
+        }
         await ensureSessionToken(req, res);
         res.json({ authenticated: true, disabled: true });
       },
-      handleSessionCreate: (_req: Request, res: Response) => {
-        res.status(400).json({ error: 'UI password not configured' });
+      handleSessionCreate: async (req: Request, res: Response) => {
+        if (requireClientAuth || req.body?.issueSessionToken !== true) {
+          return res.status(400).json({ error: 'UI password not configured' });
+        }
+        const sessionToken = await issueSession(req, res, { trustDevice: isTrustedDeviceRequest(req.body?.trustDevice) });
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ authenticated: true, disabled: true, sessionToken });
       },
       handleUrlAuthToken: async (req: Request, res: Response) => {
         const scope = readRequestedUrlAuthScope(req);
@@ -767,7 +776,8 @@ export const createUiAuth = ({
   }
 
   const salt = crypto.randomBytes(16);
-  const expectedHash = crypto.scryptSync(normalizedPassword, salt, 64);
+  let expectedHash: Buffer | null = null;
+  const readExpectedHash = () => expectedHash ??= crypto.scryptSync(normalizedPassword, salt, 64);
   let passwordBinding = crypto.createHmac('sha256', jwtSecret).update(normalizedPassword).digest('hex');
   let passkeyController = createUiPasskeys({
     passwordBinding,
