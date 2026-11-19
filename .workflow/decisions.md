@@ -1639,6 +1639,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Compact draft welcomes scroll before clipping large text
+
+- **Decided:** give the compact draft welcome a bounded vertical scroll area and center its non-shrinking title/starter group with automatic margins.
+- **Instead of:** unconditional flex centering, shrinking the text, or scrolling the composer out of view with the welcome.
+- **Because:** at large system font sizes or short viewport heights, centered overflow begins above the scroll origin. Automatic margins preserve the normal centered appearance but collapse when content needs to scroll from its top.
+- **Mine:** yes
+- **Revisit when:** upstream provides the same scroll-safe compact welcome layout.
+
+## 2026-11-19 - Give terminal rows priority above the Android keyboard
+
+- **Decided:** on native Android, when the software keyboard is open and the viewport is at most 240 CSS pixels tall, collapse the active Terminal workspace's two tab bars and reclaim vertical padding without hiding quick keys or unmounting the terminal.
+- **Instead of:** adding another keyboard inset or forcing a minimum height that would clip the terminal or its quick keys.
+- **Because:** Android already resizes the WebView. In Android 15 landscape the keyboard can leave 122 CSS pixels, while the tab bars and quick keys alone take 163.
+- **Revisit when:** upstream preserves terminal rows in the short Android keyboard viewport.
+
 ## 2026-11-19 - Bound plugin marketplace metadata and actions on narrow panes
 
 - **Decided:** bound and truncate marketplace names, versions and source labels; wrap long description text and keep install/status actions in their own compact, width-bounded container in the Plugins page and Add plugin dialog.
