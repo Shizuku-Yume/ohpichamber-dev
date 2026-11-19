@@ -187,7 +187,10 @@ process.on('message', raw => {
     // The codes are coarse (a projection rejection and a failed bootstrap share
     // SERVICE_UNAVAILABLE); the reason is what an operator can act on.
     const detail = error instanceof Error && error.message ? error.message.slice(0, 200) : undefined;
-    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code, ...(detail ? { detail } : {}) });
+    // A projection refusal keeps its status so the Host can tell a refused
+    // admission (no native session) from an uncertain one.
+    const status = error instanceof ProjectionError ? error.status : undefined;
+    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code, ...(status ? { status } : {}), ...(detail ? { detail } : {}) });
     void stop(1);
   });
 });

@@ -60,6 +60,7 @@ const fixture = async () => {
       if (body.action === 'commit' && native.loseCommitResponse) { native.loseCommitResponse = false; throw new Error('Commit response was lost'); }
       return Response.json({ session: runtime() });
     }
+    if (pathname.startsWith('/api/agent/v1/sessions?')) return Response.json({ items: native.listed ?? [], errors: native.listErrors ?? [] });
     if (pathname === '/internal/sessions') return Response.json({ ...runtime(body.rootSessionId), rootSessionId: body.rootSessionId });
     if (pathname === '/api/agent/v1/sessions/public-root/snapshot') return Response.json(snapshot([], [], runtime()));
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
@@ -91,13 +92,13 @@ const fixture = async () => {
     throw new Error(`Unexpected private request ${pathname}`);
   };
   const registrations = [];
-  const makeService = () => createOpenChamberSessionService({
-    service: { request }, agentScopeStore: store, resolveHostRelocationScope: (id) => store.getSession(id),
-    resolveSessionScope: (id) => store.getSession(id), resolveHostSessionScope: (id) => store.getSession(id),
-    resolveWorkspaceScope: async (id) => { const scope = await store.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
+  const makeService = (state = owner) => createOpenChamberSessionService({
+    service: { request }, agentScopeStore: state.agentScopeStore, resolveHostRelocationScope: (id) => state.agentScopeStore.getSession(id),
+    resolveSessionScope: (id) => state.agentScopeStore.getSession(id), resolveHostSessionScope: (id) => state.agentScopeStore.getSession(id),
+    resolveWorkspaceScope: async (id) => { const scope = await state.agentScopeStore.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
     resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
-    directCommandAdmissionStore: owner.directCommandAdmissionStore,
-    archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
+    directCommandAdmissionStore: state.directCommandAdmissionStore,
+    archiveStore: state.archiveStore, sessionMetadataStore: state.sessionMetadataStore,
   });
   return { owner, root, store, source, destination, native, makeService, registrations };
 };
@@ -178,6 +179,35 @@ describe('Host native session control saga', () => {
     const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
     fixtures[fixtures.length - 1].owner = reopened;
     await expect(reopened.agentScopeStore.createWorktreeArchive({ hostProjectId: 'project', archiveId: 'uncertain-fork', archiveRef: 'refs/openchamber/archive/uncertain-fork', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+  });
+  it.each([false, true])('settles a create admission an earlier Host process left once the native listing proves its outcome (root listed: %s)', async (rootListed) => {
+    const { owner, root, source, native, makeService, registrations } = await fixture();
+    const create = (service) => service.create({ projectId: source.projectId, workspaceId: source.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } });
+    native.failPath = '/internal/sessions';
+    await expect(create(makeService())).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', retryable: false });
+    const strandedRoot = native.calls.find(({ pathname }) => pathname === '/internal/sessions').body.rootSessionId;
+    await expect(create(makeService())).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
+    fixtures[fixtures.length - 1].owner = reopened;
+    native.failPath = null;
+    native.listErrors = [{ sessionId: 'unreadable', code: 'SESSION_RESTORE_FAILED' }];
+    await expect(create(makeService(reopened))).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    native.listErrors = [];
+    native.listed = !rootListed ? [] : [{ sessionId: strandedRoot, rootSessionId: strandedRoot, projectId: source.projectId, workspaceId: source.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001, mode: { kind: 'main' }, epoch: 'epoch-native', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }];
+    await expect(create(makeService(reopened))).resolves.toBeDefined();
+    expect(registrations.includes(strandedRoot)).toBe(rootListed);
+    await expect(reopened.agentScopeStore.listPriorCreateAdmissions(source.workspaceId)).resolves.toEqual([]);
+  });
+  it('keeps an uncertain fork admission fenced after Host restart', async () => {
+    const { owner, root, native, makeService } = await fixture();
+    native.failPath = '/internal/sessions/public-root/fork';
+    await expect(makeService().fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', retryable: false });
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
+    fixtures[fixtures.length - 1].owner = reopened;
+    native.failPath = null;
+    await expect(makeService(reopened).fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
   });
   it.each(['create', 'reopen'])('reserves %s until native admission settles', async (operation) => {
     const { store, source, native, makeService } = await fixture();
