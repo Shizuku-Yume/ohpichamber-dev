@@ -1717,6 +1717,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** shared card button alignment guarantees a bounded text column without an explicit self-alignment.
 
+## 2026-11-19 - Preserve file descriptor identity in code previews
+
+- **Decided:** memoize the complete Pierre file descriptor by its contents and metadata at the preview component boundary.
+- **Instead of:** recreating equivalent file objects on each FilesView render, disabling large-file previews or replacing the virtualizer.
+- **Because:** the iOS simulator reproduced a blank large-text preview while edit mode displayed the same contents and narrow Chrome rendered it. Native console instrumentation exposed `VirtualizedFile.render: rendered a different file than its prepared layout`; Pierre compares prepared and rendered descriptors by reference. Keeping the descriptor stable restored the native preview without truncating the file or changing its worker-backed virtualization.
+- **Mine:** yes
+- **Revisit when:** Pierre no longer requires stable descriptor identity across virtualized renders.
+
 ## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
 
 - **Decided:** the desktop strip consults a file-editor selection guard before selecting a different file path. Reuse Save/Discard/Cancel and pause autosave through the existing confirmation hook; failed saves and Cancel leave the active tab and dirty draft unchanged. Clean drafts, the same path, and non-file surfaces select immediately.
