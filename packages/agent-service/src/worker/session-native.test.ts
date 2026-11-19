@@ -35,6 +35,7 @@ import { credentialReference } from './catalog-models.ts';
 import { daemonClient, isolateDaemonForSmokeTest } from '@oh-my-pi/pi-coding-agent/daemon/client';
 import type { DaemonCompletionEvent } from '@oh-my-pi/pi-coding-agent/daemon/protocol';
 import { logger } from '@oh-my-pi/pi-utils';
+import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
 beforeEach(() => {
@@ -1084,6 +1085,59 @@ test('native async work pauses and wakes one canonical run without reporting idl
   await harness.close();
  }
 }, 30000);
+
+for (const control of ['abort', 'close'] as const) {
+ test(`${control} settles a native run paused on a live child without waiting for that child`, async () => {
+  const childStarted = Promise.withResolvers<void>();
+  const releaseChild = Promise.withResolvers<void>();
+  let requests = 0;
+  const harness = await fixture({ respond: async () => {
+   if (++requests === 1) { childStarted.resolve(); await releaseChild.promise; }
+   return completion();
+  } });
+  const runtime = await openNativeRuntime({ cwd: harness.root, agentDirectory: harness.agentDirectory });
+  const { session: child } = await createAgentSession({
+   cwd: harness.root, agentDir: harness.agentDirectory,
+   sessionManager: SessionManager.inMemory(harness.root), authStorage: runtime.authStorage,
+   modelRegistry: runtime.modelRegistry, settings: runtime.settings, initialModelRefreshStrategy: 'offline',
+   enableMCP: false, disableExtensionDiscovery: true,
+  });
+  await child.setModelTemporary(harness.worker.session.model!);
+  const childTask = child.prompt('Keep the child running.');
+  await childStarted.promise;
+  const registry = AgentRegistry.global();
+  const ref = registry.register({ id: 'stop-child', displayName: 'Stop child', kind: 'sub',
+   parentId: harness.worker.session.getAgentId(), status: 'running', session: child });
+  const paused = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+   if (event.type === 'agent_pause' && event.awaiting) paused.resolve();
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+   await harness.worker.operation({ type: 'prompt', runId: 'child-wait-run', request: prompt('Wait for the child.') });
+   await paused.promise;
+   expect(harness.worker.session.wakeSources?.agents).toContain(ref.id);
+   const stopped = control === 'abort'
+    ? harness.worker.operation({ type: 'abort', runId: 'child-wait-run' }) : harness.worker.close();
+   await Promise.race([stopped, new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Stop is still waiting for the live child')), 1000);
+   })]);
+   expect(harness.worker.session.isRunActive).toBe(false);
+   expect(harness.worker.session.wakeSources).toBeUndefined();
+   expect(requests).toBe(2);
+   if (control === 'abort') expect(harness.journal.snapshot().session.runtimeStatus).toBe('idle');
+  } finally {
+   clearTimeout(timer);
+   unsubscribe();
+   registry.unregister(ref.id, ref);
+   releaseChild.resolve();
+   await childTask;
+   await child.dispose();
+   runtime.authStorage.close();
+   await harness.close();
+  }
+ }, 30000);
+}
 
 test('native daemon service callbacks retain the AgentSession receiver', async () => {
  const harness = await fixture({ respond: () => completion() });

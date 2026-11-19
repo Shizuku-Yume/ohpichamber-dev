@@ -2274,7 +2274,7 @@ export class WorkerSession {
         this.suggestionDriver.cancel();
         this.interaction.cancelAll();
         this.session.abortCompaction();
-        await this.session.abort();
+        await this.session.abort({ reason: USER_INTERRUPT_LABEL });
         await this.promptTask;
         await this.bind();
         this.emit(this.projection.cancelRun(Date.now(), operation.runId));
@@ -2381,7 +2381,7 @@ export class WorkerSession {
       await this.catalogs.close();
       try { await this.preparation; } catch { /* The operation reports preparation failure to its caller. */ }
       this.modeController.stopForHostAbort();
-      await this.session.abort();
+      await this.session.abort({ reason: USER_INTERRUPT_LABEL });
       await this.promptTask;
       await this.planReviewTask;
       await this.bind();
