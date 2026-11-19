@@ -147,6 +147,7 @@ const renderViewport = (
         sessionKey={sessionKey}
         chunks={chunks}
         onInput={() => undefined}
+        onReply={() => undefined}
         onResize={() => undefined}
         theme={theme}
         monoFont="system-mono"

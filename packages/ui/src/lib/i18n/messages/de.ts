@@ -147,6 +147,8 @@ export const dict = {
   'chat.goal.mark.budgetLimited': 'Budget des Ziels erreicht',
   'chat.goal.mark.complete': 'Ziel abgeschlossen',
   'terminalView.error.cannotConnect': 'Terminal konnte keine Verbindung herstellen',
+  'terminalView.status.inputPaused': "Verbindung wiederhergestellt. Prüfe die Befehlszeile, bevor du weitertippst.",
+  'terminalView.actions.resumeInput': "Eingabe fortsetzen",
   'terminalView.actions.tryAgain': 'Erneut versuchen',
   'directoryExplorerDialog.actions.addNamed': "\"{name}\" hinzufügen",
   'directoryExplorerDialog.actions.createNamed': "\"{name}\" erstellen und hinzufügen",
