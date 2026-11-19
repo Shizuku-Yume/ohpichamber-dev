@@ -15,6 +15,7 @@ import { addSelectionToChat } from '@/lib/addSelectionToChat';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
 import { getZoneView, resolveZoneActiveTabId, shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
 import { useUpdateStore } from '@/stores/useUpdateStore';
+import { handleNativeHistoryMenu } from '@/lib/codemirror/focusedHistory';
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === 'undefined') {
@@ -362,9 +363,11 @@ export const useMenuActions = (
     };
 
     window.addEventListener(MENU_ACTION_EVENT, handleMenuAction);
+    window.addEventListener('openchamber:history-action', handleNativeHistoryMenu);
     window.addEventListener(CHECK_FOR_UPDATES_EVENT, handleCheckForUpdatesEvent);
     return () => {
       window.removeEventListener(MENU_ACTION_EVENT, handleMenuAction);
+      window.removeEventListener('openchamber:history-action', handleNativeHistoryMenu);
       window.removeEventListener(CHECK_FOR_UPDATES_EVENT, handleCheckForUpdatesEvent);
     };
   }, [handleAction, handleCheckForUpdates]);
