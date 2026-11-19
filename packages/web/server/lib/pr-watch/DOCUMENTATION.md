@@ -88,22 +88,10 @@ with its sessions, and a woken turn would run in a session on its way out.
 
 ## Wake
 
-<<<<<<< HEAD
 A wake ends the watch: the item leaves the interest, and the agent calls
 `pr.watch` again when it needs to wait once more. The message waits until the
 session is not running and none of its subagents runs (a user may be talking
 to the agent), checked via `../canonical-session-state.js` (`createCanonicalSessionState`);
-||||||| bc50ba56aa
-A wake ends the watch: the item leaves the interest, and the agent calls
-`pr.watch` again when it needs to wait once more. The message waits until the
-session is not running and none of its subagents runs (a user may be talking
-to the agent), checked against OpenCode (`../opencode/session-activity.js`);
-=======
-A wake ends its watch: the item leaves the interest, and the agent calls
-`wait.start` with source `pr` again when it needs to wait once more. The message waits until the
-session's own turn is over (a user may be talking to the agent), checked
-against OpenCode (`/api/session/active`, `../opencode/session-activity.js`);
->>>>>>> upstream/main
 the session's next idle event re-arms it. An archived session is not woken,
 its watches end.
 

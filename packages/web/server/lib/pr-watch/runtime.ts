@@ -1,61 +1,10 @@
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
-// An agent waiting on its pull request.
-//
-// The agent opens a pull request (or a merge request), asks to watch it with
-// the `openchamber` tool's `pr.watch`, and goes on with whatever it does,
-// ending its turn when it has nothing else. From then on this runtime follows
-// the pull request through the tracked-items service, whether or not any
-// window is open, and wakes the session with one synthetic message
-// when something the agent has to act on happens: a check failed, every check
-// passed, someone commented or reviewed, it conflicts with or fell behind its
-// base, it was merged or closed. A wake ends the watch; the agent watches
-// again when it needs to wait once more.
-//
-// Delivery follows `../dispatch-results`: the message waits until the session is
-// not running, and its command key is minted and saved before the first attempt,
-// so a retry repeats the same command and the Host never admits it twice.
-
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-// An agent waiting on its pull request.
-//
-// The agent opens a pull request (or a merge request), asks to watch it with
-// the `openchamber` tool's `pr.watch`, and goes on with whatever it does,
-// ending its turn when it has nothing else. From then on this runtime follows
-// the pull request through the tracked-items service, whether or not any
-// window is open, and wakes the session with one synthetic message
-// when something the agent has to act on happens: a check failed, every check
-// passed, someone commented or reviewed, it conflicts with or fell behind its
-// base, it was merged or closed. A wake ends the watch; the agent watches
-// again when it needs to wait once more.
-//
-// Delivery follows `../dispatch-results`: the message waits until the session
-// is not running, its id is minted and saved before the first attempt, and
-// OpenCode refusing a second admission of that id counts as delivered.
-
-=======
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
 import { escapeAttribute } from '../dispatch-results/runtime.js';
 import { createCanonicalSessionState, retainSessions } from '../canonical-session-state.js';
 import { parseTrackedItem, threadInstance, trackedItemKey } from '../tracked-items/items.js';
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-import { assertOpenCodeApiResponse } from '../opencode/prompt-response.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
-import { createSessionActivityProbe } from '../opencode/session-activity.js';
-import { createMessageId, escapeAttribute } from '../dispatch-results/runtime.js';
-import { parseTrackedItem, threadInstance, trackedItemKey } from '../tracked-items/items.js';
-=======
-import { assertOpenCodeApiResponse } from '../opencode/prompt-response.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
-import { createSessionActivityProbe } from '../opencode/session-activity.js';
-import { createMessageId, escapeAttribute } from '../dispatch-results/runtime.js';
-import { isTrackedItemInput, parseTrackedItem, threadInstance, trackedItemKey } from '../tracked-items/items.js';
-import type { createTrackedItemReaders } from '../tracked-items/readers.js';
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
 
 const FILE_NAME = 'pr-watch.json';
 const FILE_VERSION = 1;
@@ -97,15 +46,8 @@ const watchSchema = z.object({
   last: snapshotSchema.nullable(),
   wake: z.object({
     events: z.array(z.enum(EVENTS)).min(1),
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     commandKey: z.string().nullish(),
     // Read when the wake was decided; a file from before them has none.
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    messageID: z.string().nullable(),
-    // Read when the wake was decided; a file from before them has none.
-=======
-    messageID: z.string().nullable(),
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     failedChecks: z.array(z.string()).catch([]),
     authors: z.array(z.string()).catch([]),
   }).nullable(),
@@ -133,17 +75,9 @@ const pullStateSchema = z.object({
 
 const httpError = (message: string, status: number) => Object.assign(new Error(message), { status });
 
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
 const httpStatusOf = (error) => error?.statusCode ?? error?.status;
 // A wake sends no model: the session keeps its own selection, or its Auto routing.
 const KEEP_SESSION_MODEL = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
-
-const httpError = (message, status) => Object.assign(new Error(message), { status });
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-const httpError = (message, status) => Object.assign(new Error(message), { status });
-=======
-const retryDelay = (failures: number) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
 
 export type PrWatchSnapshot = z.infer<typeof snapshotSchema>;
 type Wake = NonNullable<z.infer<typeof watchSchema>['wake']>;
@@ -311,36 +245,8 @@ const buildWakeMessage = (watch: WakingWatch) => {
   const finished = watch.wake.events.some((event) => event === 'merged' || event === 'closed');
   const next = finished
     ? 'There is nothing more to wait for.'
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     : 'You are no longer watching it. Read what changed and act on it; call pr.watch again when you need to wait for it once more.';
   return `<openchamber-pull-request url="${escapeAttribute(watch.url)}" number="${number}">\nPull request #${number}: ${changes.join('; ')}.\n${next}\n</openchamber-pull-request>`;
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    : 'You are no longer watching it. Read what changed and act on it; call pr.watch again when you need to wait for it once more.';
-  return {
-    text: `<openchamber-pull-request url="${escapeAttribute(watch.url)}" number="${number}">\nPull request #${number}: ${changes.join('; ')}.\n${next}\n</openchamber-pull-request>`,
-    description: `Pull request #${number}: ${changes.join(', ')}`,
-    metadata: {
-      source: PR_WATCH_SOURCE,
-      url: watch.url,
-      events: watch.wake.events,
-      failedChecks: cleanNames(watch.wake.failedChecks),
-      authors: cleanNames(watch.wake.authors),
-    },
-  };
-=======
-    : 'You are no longer watching it. Read what changed and act on it; call wait.start with source "pr" again when you need to wait for it once more.';
-  return {
-    text: `<openchamber-pull-request url="${escapeAttribute(watch.url)}" number="${number}">\nPull request #${number}: ${changes.join('; ')}.\n${next}\n</openchamber-pull-request>`,
-    description: `Pull request #${number}: ${changes.join(', ')}`,
-    metadata: {
-      source: PR_WATCH_SOURCE,
-      url: watch.url,
-      events: watch.wake.events,
-      failedChecks: cleanNames(watch.wake.failedChecks),
-      authors: cleanNames(watch.wake.authors),
-    },
-  };
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
 };
 
 const statusOf = (watch: Watch): PublicPrWatch['status'] => {
@@ -494,7 +400,6 @@ export function createPrWatchRuntime({
     trackedItems.setServerInterest(INTEREST_OWNER, items);
   };
 
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
   // --- canonical session access -------------------------------------------
 
   const sessionState = createCanonicalSessionState({ sessionService });
@@ -523,52 +428,13 @@ export function createPrWatchRuntime({
       })
       .catch((error) => console.warn('[pr-watch] could not observe a watched session:', error?.message ?? error))
       .finally(() => observing.delete(sessionID));
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-  // --- OpenCode ------------------------------------------------------------
-
-  const openCodeRequest = async (fetchPath, { method = 'GET', body } = {}) => {
-    const headers = { Accept: 'application/json', ...getOpenCodeAuthHeaders() };
-    const init = { method, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
-    if (body) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetchImpl(buildOpenCodeUrl(fetchPath, ''), init);
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
-    }
-    assertOpenCodeApiResponse(response, `OpenCode ${method} ${fetchPath}`);
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
-=======
-  const openCodeRequest = async (fetchPath: string, { method = 'GET', body }: { method?: 'GET' | 'POST'; body?: ReturnType<typeof buildWakeMessage> & { id: string; delivery: 'steer'; resume: true } } = {}) => {
-    const headers: OpenCodeRequestHeaders = { Accept: 'application/json', ...getOpenCodeAuthHeaders() };
-    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
-    if (body) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetchImpl(buildOpenCodeUrl(fetchPath, ''), init);
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
-    }
-    assertOpenCodeApiResponse(response, `OpenCode ${method} ${fetchPath}`);
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
   };
 
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
   const unobserve = (sessionID) => {
     const release = observed.get(sessionID);
     observed.delete(sessionID);
     return release?.();
   };
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-  const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: FETCH_TIMEOUT_MS, fetchImpl });
-=======
-  const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: FETCH_TIMEOUT_MS, fetchImpl, signal: undefined });
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
 
   const clearTimer = (sessionID: string) => {
     const timer = timers.get(sessionID);
@@ -589,7 +455,6 @@ export function createPrWatchRuntime({
 
   const isCurrent = (watch: Watch) => !stopped && watches.get(keyOf(watch)) === watch;
 
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
   /** Ends `watch`, and only it: a newer watch of the same session stays. */
   const drop = async (watch) => {
     if (!isCurrent(watch)) return;
@@ -597,26 +462,6 @@ export function createPrWatchRuntime({
     clearTimer(watch.sessionID);
     void unobserve(watch.sessionID);
     failures.delete(watch.sessionID);
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-  /** Ends `watch`, and only it: a newer watch of the same session stays. */
-  const drop = async (watch) => {
-    if (!isCurrent(watch)) return;
-    watches.delete(watch.sessionID);
-    clearTimer(watch.sessionID);
-    failures.delete(watch.sessionID);
-=======
-  const drop = async (...ending: Watch[]) => {
-    const current = ending.filter(isCurrent);
-    const first = current[0];
-    if (!first) return;
-    const { sessionID } = first;
-    for (const watch of current) {
-      watches.delete(keyOf(watch));
-      failures.delete(keyOf(watch));
-    }
-    if (!hasWake(sessionID)) clearTimer(sessionID);
-    else if (!timers.has(sessionID)) arm(sessionID);
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     syncInterest();
     await commit(sessionID);
   };
@@ -651,48 +496,19 @@ export function createPrWatchRuntime({
 
   async function attemptWake(watch: WakingWatch) {
     const { sessionID } = watch;
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     observe(sessionID);
     // Never into a running turn: the user may be talking to the agent.
     const state = await sessionState.read(sessionID);
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    // Never into a running turn: the user may be talking to the agent.
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
-=======
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     if (!isCurrent(watch)) return undefined;
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     if (state === null) return retry(watch, 'the session could not be read');
     if (state.kind === 'deleted') return drop(watch);
     if (state.kind === 'running') return undefined; // its idle event arms the next attempt
     if (state.kind === 'subagents') return arm(sessionID, subagentRecheckMs);
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    if (!statuses) return retry(watch, 'OpenCode could not be asked');
-    if (statuses[sessionID]) return undefined; // its idle event arms the next attempt
-    const subagents = await activityProbe.hasWorkingChildren(sessionID, statuses);
-    if (!isCurrent(watch)) return undefined;
-    if (subagents === null) return retry(watch, 'OpenCode could not be asked');
-    if (subagents) return arm(sessionID, subagentRecheckMs);
-=======
-    if (!statuses) return retry(watch, 'OpenCode could not be asked');
-    if (statuses[sessionID]) return undefined;
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     const archived = await Promise.resolve(isSessionArchived(sessionID)).catch(() => false) === true;
     if (!isCurrent(watch)) return undefined;
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     if (archived) return drop(watch);
     if (!watch.wake.commandKey) {
       watch.wake.commandKey = randomUUID();
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    if (archived) return drop(watch);
-    if (!watch.wake.messageID) {
-      watch.wake.messageID = createMessageId(now());
-=======
-    if (archived) return drop(...watchesOf(sessionID));
-    if (!watch.wake.messageID) {
-      watch.wake.messageID = createMessageId(now());
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
       await persist();
       if (!isCurrent(watch)) return undefined;
     }
@@ -702,16 +518,8 @@ export function createPrWatchRuntime({
         options: KEEP_SESSION_MODEL,
       }, watch.wake.commandKey);
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
       // 404: nobody is left to wake. Anything else retries under the same key.
       if (httpStatusOf(error) !== 404) return retry(watch, error?.message ?? String(error));
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-      // 409: an earlier attempt landed. 404: nobody is left to wake.
-      if (error?.status !== 409 && error?.status !== 404) return retry(watch, error?.message ?? String(error));
-=======
-      const status = hasHttpStatus(error) ? error.status : undefined;
-      if (status !== 409 && status !== 404) return retry(watch, failureMessage(error) ?? String(error));
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     }
     return drop(watch);
   }
@@ -726,19 +534,9 @@ export function createPrWatchRuntime({
       issues: [],
       details: true,
     }).catch(() => null);
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     const summary = result?.status === 'ok' ? (result.pulls ?? []).find((pull) => pull?.number === item.number) : null;
     const details = parse(detailsSchema, summary);
     if (!details || !isCurrent(watch) || !watch.wake || watch.wake.commandKey) return;
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    const summary = result?.status === 'ok' ? (result.pulls ?? []).find((pull) => pull?.number === item.number) : null;
-    const details = parse(detailsSchema, summary);
-    if (!details || !isCurrent(watch) || !watch.wake || watch.wake.messageID) return;
-=======
-    const summary = result?.status === 'ok' ? (result.pulls ?? []).find((pull: PullSummaryReference | null) => pull?.number === item.number) : null;
-    const details = detailsSchema.safeParse(summary).data ?? null;
-    if (!details || !isCurrent(watch) || !watch.wake || watch.wake.messageID) return;
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     if (watch.wake.events.includes('checks-failed')) watch.wake.failedChecks = details.failedChecks;
     if (watch.wake.events.includes('activity')) {
       watch.wake.authors = details.recentActivity.slice(0, Math.max(1, newActivity)).map((entry) => entry.author);
@@ -769,17 +567,9 @@ export function createPrWatchRuntime({
               continue;
             }
           }
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
           watch.wake = { events, commandKey: null, failedChecks: [], authors: [] };
           // Held from here on: an idle event during the write below must not
           // deliver the wake before its details are in.
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-          watch.wake = { events, messageID: null, failedChecks: [], authors: [] };
-          // Held from here on: an idle event during the write below must not
-          // deliver the wake before its details are in.
-=======
-          watch.wake = { events, messageID: null, failedChecks: [], authors: [] };
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
           const withDetails = events.includes('checks-failed') || events.includes('activity');
           if (withDetails) enriching.add(watch);
           try {
@@ -862,56 +652,23 @@ export function createPrWatchRuntime({
     return { watching: watchesOf(sessionID).map(toPublicWatch), stopped: ending.length > 0 };
   };
 
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
   /**
    * A canonical hub event. A deleted session ends its watch, and an idle one
    * delivers the wake that waited for its turn to end.
    */
   const processCanonicalEvent = (event) => {
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-  const processPayload = (payload) => {
-=======
-  const waitSource = () => (insideSpace ? null : { ...PR_WAIT, params: { ...PR_WAIT.params } });
-  const listWaits = async (sessionID: string) => {
-    await load();
-    return watchesOf(sessionID).map(toPublicWait);
-  };
-
-  const processPayload = (payload: TrackedWatchState['state']) => {
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     if (stopped) return;
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     if (event.type === 'session.deleted') {
       for (const deletedID of event.deletedSessionIds) {
         const current = watches.get(deletedID);
         if (current) void drop(current).catch(() => undefined);
       }
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    const deleted = parse(deletedEventSchema, payload);
-    if (deleted) {
-      const current = watches.get(deleted.properties.sessionID);
-      if (current) void drop(current).catch(() => undefined);
-=======
-    const deleted = deletedEventSchema.safeParse(payload).data ?? null;
-    if (deleted) {
-      void drop(...watchesOf(deleted.properties.sessionID)).catch(() => undefined);
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
       return;
     }
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
     const isIdle = (event.type === 'session.status' && event.runtimeStatus === 'idle')
       || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled';
     if (!isIdle) return;
     if (watches.get(event.sessionId)?.wake) arm(event.sessionId);
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-    const status = parse(statusEventSchema, payload);
-    if (!status || status.properties.status.type !== 'idle') return;
-    if (watches.get(status.properties.sessionID)?.wake) arm(status.properties.sessionID);
-=======
-    const status = statusEventSchema.safeParse(payload).data ?? null;
-    if (!status || status.properties.status.type !== 'idle') return;
-    if (hasWake(status.properties.sessionID)) arm(status.properties.sessionID);
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
   };
 
   const attach = ({ trackedItems: service, readers: itemReaders }: { trackedItems: PrWatchTrackedItems; readers: Readers }) => {
@@ -922,7 +679,6 @@ export function createPrWatchRuntime({
     void load().then(syncInterest).catch(() => undefined);
   };
 
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
   let unsubscribeEvent = null;
   let unsubscribeStatus = null;
 
@@ -932,44 +688,19 @@ export function createPrWatchRuntime({
     unsubscribeStatus?.();
     unsubscribeEvent = globalEventHub?.subscribeEvent(processCanonicalEvent);
     unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-  const start = (globalEventHub) => {
-    const unsubscribeEvent = globalEventHub?.subscribeEvent((event) => {
-      for (const payload of event?.translated?.() ?? []) processPayload(payload);
-    });
-    const unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
-=======
-  const start = (globalEventHub?: PrWatchEventHub | null) => {
-    const unsubscribeEvent = globalEventHub?.subscribeEvent((event) => {
-      for (const payload of event?.translated?.() ?? []) processPayload(payload);
-    });
-    const unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
       if (hubStatus?.type !== 'connect') return;
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
       for (const [sessionID, entry] of watches) {
         observe(sessionID);
         if (entry.wake) arm(sessionID);
       }
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-      for (const [sessionID, entry] of watches) if (entry.wake) arm(sessionID);
-=======
-      for (const entry of watches.values()) if (entry.wake) arm(entry.sessionID);
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
     });
     void load()
       .then(() => {
         syncInterest();
-<<<<<<< HEAD:packages/web/server/lib/pr-watch/runtime.js
         for (const [sessionID, entry] of watches) {
           observe(sessionID);
           if (entry.wake) arm(sessionID);
         }
-||||||| bc50ba56aa:packages/web/server/lib/pr-watch/runtime.js
-        for (const [sessionID, entry] of watches) if (entry.wake) arm(sessionID);
-=======
-        for (const entry of watches.values()) if (entry.wake) arm(entry.sessionID);
->>>>>>> upstream/main:packages/web/server/lib/pr-watch/runtime.ts
       })
       .catch((error) => console.warn('[pr-watch] failed to load watches:', failureMessage(error) ?? error));
     return () => {
