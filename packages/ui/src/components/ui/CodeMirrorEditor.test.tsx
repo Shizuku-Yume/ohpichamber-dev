@@ -12,6 +12,7 @@ Object.assign(globalThis, {
   ResizeObserver: dom.ResizeObserver,
   Node: dom.Node,
   HTMLElement: dom.HTMLElement,
+  InputEvent: dom.InputEvent,
   getComputedStyle: dom.getComputedStyle.bind(dom),
   requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0),
   cancelAnimationFrame: (id: number) => clearTimeout(id),
@@ -20,6 +21,10 @@ Object.assign(globalThis, {
 
 const { EditorView } = await import('@codemirror/view');
 const { CodeMirrorEditor } = await import('./CodeMirrorEditor');
+const { ComposerEditorView } = await import('../chat/composer/editor/ComposerEditorView');
+const { ComposerEditor } = await import('../chat/composer/editor/ComposerEditor');
+const { history, undo } = await import('@codemirror/commands');
+const { focusedHistory } = await import('@/lib/codemirror/focusedHistory');
 
 type EditorProps = React.ComponentProps<typeof CodeMirrorEditor>;
 
@@ -108,4 +113,97 @@ describe('CodeMirrorEditor reconfiguration', () => {
     expect(reconfigures).toBe(2);
     expect(view?.state.facet(EditorView.editable)).toBe(false);
   });
+});
+
+const nativeHistory = async (target: InstanceType<typeof EditorView>, inputType: string) => {
+  const event = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
+  await act(async () => { target.contentDOM.dispatchEvent(event); });
+  return event;
+};
+
+test('routes undo and redo to the focused composer without file changes', async () => {
+  const changes: string[] = [];
+  await render({ onChange: (value) => changes.push(value) });
+  const file = view!;
+  const composerHost = document.createElement('div');
+  document.body.append(composerHost);
+  const composerRoot = createRoot(composerHost);
+  await act(async () => composerRoot.render(<ComposerEditor value="composer" languageContext={{
+    inputMode: 'normal', knownAgentNames: new Set(), confirmedMentions: new Set(),
+    knownSlashNames: new Set(), knownSnippetTriggers: new Set(), attachmentFilenames: [],
+  }} onChange={() => {}} />));
+  const other = EditorView.findFromDOM(composerHost.querySelector('.cm-content')!)!;
+  try {
+    await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+    other.dispatch({ changes: { from: 0, insert: 'pasted ' } });
+    changes.length = 0;
+    other.focus();
+    expect(other.hasFocus).toBe(true);
+    expect(file.hasFocus).toBe(false);
+    expect((await nativeHistory(file, 'historyUndo')).defaultPrevented).toBe(true);
+    expect(other.state.doc.toString()).toBe('composer');
+    await nativeHistory(file, 'historyRedo');
+    expect(other.state.doc.toString()).toBe('pasted composer');
+    expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+    expect(changes).toEqual([]);
+    expect(other.hasFocus).toBe(true);
+    file.focus();
+    await nativeHistory(other, 'historyUndo');
+    expect(file.state.doc.toString()).toBe('one\ntwo\nthree');
+    expect(other.state.doc.toString()).toBe('pasted composer');
+    await nativeHistory(other, 'historyRedo');
+    expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+  } finally {
+    await act(async () => composerRoot.unmount());
+  }
+});
+
+test('focused file undo and redo keep working', async () => {
+  const changes: string[] = [];
+  await render({ onChange: (value) => changes.push(value) });
+  const file = view!;
+  await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+  file.focus();
+  changes.length = 0;
+  await nativeHistory(file, 'historyUndo');
+  await nativeHistory(file, 'historyRedo');
+  expect(changes).toEqual(['one\ntwo\nthree', 'saved one\ntwo\nthree']);
+});
+
+test('empty focused history never falls back to the file history', async () => {
+  const changes: string[] = [];
+  await render({ onChange: (value) => changes.push(value) });
+  const file = view!;
+  const other = new ComposerEditorView({ doc: 'composer', extensions: [history(), focusedHistory], parent: document.body });
+  try {
+    await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+    other.focus();
+    changes.length = 0;
+    await nativeHistory(file, 'historyUndo');
+    expect(changes).toEqual([]);
+    await act(async () => { undo(file); });
+    changes.length = 0;
+    await nativeHistory(file, 'historyRedo');
+    expect(changes).toEqual([]);
+    expect(file.state.doc.toString()).toBe('one\ntwo\nthree');
+    expect(other.state.doc.toString()).toBe('composer');
+  } finally {
+    other.destroy();
+  }
+});
+
+test('a focused native input or no focused editor makes stale history a no-op', async () => {
+  const changes: string[] = [];
+  await render({ onChange: (value) => changes.push(value) });
+  const file = view!;
+  await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+  changes.length = 0;
+  const input = document.createElement('input');
+  document.body.append(input);
+  input.focus();
+  await nativeHistory(file, 'historyUndo');
+  input.blur();
+  await nativeHistory(file, 'historyUndo');
+  expect(changes).toEqual([]);
+  expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
 });

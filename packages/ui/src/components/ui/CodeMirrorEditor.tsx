@@ -13,6 +13,7 @@ import { searchPanelSpace } from '@/lib/codemirror/searchPanelSpace';
 import { createVimModeExtensions } from '@/lib/codemirror/vimModeExtension';
 import { cn } from '@/lib/utils';
 import { searchKeymapWithFindShortcut } from '@/lib/codemirror/findShortcut';
+import { focusedHistory } from '@/lib/codemirror/focusedHistory';
 
 /** Patches `title` attributes onto CodeMirror search-panel controls for icon-only tooltips. */
 const buttonTooltips: Record<string, string> = {
@@ -419,6 +420,7 @@ export function CodeMirrorEditor({
         gutters({ fixed: true }),
         lineNumbersCompartment.of(lineNumbers(lineNumbersConfig)),
         history(),
+        focusedHistory,
         indentUnit.of('  '),
         vimCompartment.of(createVimModeExtensions(vimMode)),
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),

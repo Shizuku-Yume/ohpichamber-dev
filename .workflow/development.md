@@ -4,6 +4,18 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Native Undo focus:** File and composer CodeMirror views share a
+high-precedence native history-event guard. A stale `beforeinput` Undo/Redo
+target cannot mutate an unfocused file editor; routing uses the currently
+focused editable CodeMirror content, with no fallback for empty history.
+Happy DOM reproduced the unguarded file mutation from a synthetic stale event.
+Focused file/composer history regressions passed (9 tests); composer paste,
+view setup, and value-writeback tests passed (15 tests). UI type-check, lint,
+and dead-code checks exited 0. The existing paste harness logs missing `Window`
+diagnostics, and the file-editor harness logs a React `act` warning.
+Native macOS menu delivery remains unverified; no Electron or dev server was
+launched during this fix.
+
 **2026-11-19 Final main audit (task 06):** The candidate includes sidebar admission PR #2 and the PR #3 review fixes. The archived base reference, Agent Service lint and dead-code issues, Oxlint diagnostic parsing, and the Git clone timeout fixture are fixed. After the Web router test harness fix, the Ubuntu 24.04 gate passed on `d4feabd8c`, including all seven workspace suites and workflow validation. Devin signed off on local verification; Devin Review and maintainer merge are pending. See [task 06](tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md) for evidence and runtime walkthrough limitations. M7 release verification remains proposed.
 
 **2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**
