@@ -1678,6 +1678,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** shared card button alignment guarantees a bounded text column without an explicit self-alignment.
 
+## 2026-11-19 - Ship Windows Agent dependencies without archive links
+
+- **Decided:** Windows afterPack removes dependency directory links from the archive, records their relative payload targets, and copies native file aliases. Runtime resolution creates directory junctions at the installed location, validating existing junctions against those targets. Linux and macOS retain their relative symlink payloads.
+- **Instead of:** accepting electron-builder's absolute links into win-unpacked, or relying on NSIS to recreate symlinks.
+- **Because:** electron-builder rewrites relative links during copying, and NSIS extracts through Nsis7z and CopyFiles. An archive containing only ordinary files avoids symlink privilege and preservation requirements; per-user installation permits junction creation without administrator privileges.
+- **Mine:** yes
+- **Revisit when:** Windows packaging offers a verified relocatable dependency graph without runtime junction creation.
+
 ## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
 
 - **Decided:** the desktop strip consults a file-editor selection guard before selecting a different file path. Reuse Save/Discard/Cancel and pause autosave through the existing confirmation hook; failed saves and Cancel leave the active tab and dirty draft unchanged. Clean drafts, the same path, and non-file surfaces select immediately.

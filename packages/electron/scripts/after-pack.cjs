@@ -13,6 +13,10 @@ module.exports = async (context) => {
     : path.join(context.appOutDir, 'resources');
 
   const { verifyAgentPayload } = await import('./verify-agent-runtime.mjs');
+  if (context.electronPlatformName === 'win32') {
+    const { prepareWindowsAgentLinks } = await import('../windows-agent-links.mjs');
+    prepareWindowsAgentLinks(path.join(resourcesPath, 'agent-runtime'));
+  }
   const architecture = ['ia32', 'x64', 'armv7l', 'arm64', 'universal'][context.arch];
   verifyAgentPayload(path.join(resourcesPath, 'agent-runtime'), {
     platform: context.electronPlatformName,

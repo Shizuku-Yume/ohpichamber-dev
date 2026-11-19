@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { verifyWindowsAgentLinks } from './windows-agent-links.mjs';
 import { detectSystemOmpRuntime } from 'ohpichamber/server/lib/host/system-omp-runtime.js';
 // Bun must read physical files, never Electron's virtual ASAR filesystem.
 export function resolveAgentRuntime(resourcesDirectory, platform = process.platform) {
@@ -8,6 +9,7 @@ export function resolveAgentRuntime(resourcesDirectory, platform = process.platf
   if (manifest.platform !== platform || manifest.architecture !== process.arch) {
     throw new Error('Packaged Agent runtime does not match this platform and architecture');
   }
+  if (platform === 'win32') verifyWindowsAgentLinks(root, manifest, { create: true });
   const bunPath = path.join(root, platform === 'win32' ? 'bun.exe' : 'bun');
   const entrypoint = path.join(root, 'service', 'dist', 'index.js');
   for (const file of [bunPath, entrypoint, path.join(root, 'service', 'dist', 'worker', 'index.js')]) {
