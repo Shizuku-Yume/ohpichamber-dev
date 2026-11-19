@@ -1639,6 +1639,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Keep composer image removal from sending drafts
+
+- **Decided:** mark the shared composer's image removal control as a non-submit button.
+- **Instead of:** preventing the click's default action in the removal handler.
+- **Because:** the button has no submission role; native button semantics keep removal separate from sending without changing the form.
+- **Mine:** no
+- **Revisit when:** upstream marks the same control as non-submit.
+
 ## 2026-11-19 - Compact draft welcomes scroll before clipping large text
 
 - **Decided:** give the compact draft welcome a bounded vertical scroll area and center its non-shrinking title/starter group with automatic margins.
