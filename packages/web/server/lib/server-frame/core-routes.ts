@@ -1,7 +1,15 @@
+import { getBearerTokenFromRequest } from "../ui-auth/ui-auth.js";
+import { candidateUrlType, isLocalOnlyCandidateSet, isLoopbackCandidateUrl, normalizeCandidateUrl } from "../client-auth/pairing-candidates.js";
+import { isBoolean, isString } from "../shared/object-guards.js";
 import { hasLegacyOpenCodeData } from '../host/legacy-data.js';
 import { ThemeImportStorageError } from '../appearance/theme-runtime.js';
 import { registerThemeCatalogRoutes } from '../appearance/theme-catalog.js';
 import { collectLocalFileDiagnostics } from '../diagnostics/local-files.js';
+
+const hasRouteInput = (value) => value != null;
+const readBody = (req) => hasRouteInput(req.body) ? req.body : undefined;
+const hasErrorDetails = (value) => value != null;
+const isNumber = (value) => typeof value === 'number';
 
 const parseLoopbackUrl = (rawUrl) => {
   if (typeof rawUrl !== 'string') {
@@ -403,37 +411,21 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     clientPairingRuntime,
     readSettingsFromDiskMigrated,
     normalizeTunnelSessionTtlMs,
-    // Returns the relay pairing candidate ({ type:'relay', relayUrl, serverId,
-    // hostEncPubJwk, priority }) when the host relay is enabled, else null.
-    // Injected lazily because the relay service is constructed after these routes.
     getRelayPairingCandidate = async () => null,
-    // Re-evaluate the relay lifecycle after pairing/device changes.
-    reconcileRelay = async () => { },
-    removeClientPushDevices = async () => { },
-    // Returns { local, lan, relayAvailable } — the direct transport URLs the
-    // server can actually be reached on (LAN derived from the server bind, not
-    // the UI origin), for the create-device dialog.
-    getPairingTransports = () => ({ local: null, lan: null, relayAvailable: false }),
-    // Returns ALL direct LAN URLs the server is currently reachable on (client-
-    // reached address first, then interface scan) for the candidates-refresh
-    // endpoint. Empty when the server is loopback-only.
-    getDirectCandidateUrls = () => [],
-    // Stable server identity for client-side verification of learned addresses.
-    getServerId = async () => null,
-    // Display name a paired device shows for THIS server (issuing machine's
-    // hostname), distinct from the per-device pairing label typed by the operator.
-    getServerLabel = () => 'OhPiChamber',
+    reconcileRelay = async () => {},
+    removeClientPushDevices = async () => {},
     getLegacyDataPresence = hasLegacyOpenCodeData,
+    getPairingTransports = () => ({ local: null, lan: null, relayAvailable: true }),
+    getDirectCandidateUrls = () => [],
+    getServerId = async () => null,
+    getServerLabel = () => 'OhPiChamber'
   } = dependencies;
-  const PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+  const PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS = 300000;
   const PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS = 10;
-  const pairingRedeemAttempts = new Map();
-
+  const pairingRedeemAttempts = new Map;
   const runWithUiAuth = async (req, res, next, handler, options = {}) => {
     try {
-      const requireAuth = options.sessionOnly === true && typeof uiAuthController.requireSessionAuth === 'function'
-        ? uiAuthController.requireSessionAuth
-        : uiAuthController.requireAuth;
+      const requireAuth = options.sessionOnly === true && uiAuthController.requireSessionAuth ? uiAuthController.requireSessionAuth : uiAuthController.requireAuth;
       await requireAuth(req, res, async () => {
         await handler();
       });
@@ -441,93 +433,82 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       next(error);
     }
   };
-
   const runWithClientManagementAuth = async (req, res, next, handler) => {
     try {
-      if (typeof uiAuthController.resolveAuthContext === 'function') {
+      if (uiAuthController.resolveAuthContext) {
         const context = await uiAuthController.resolveAuthContext(req, res, {
           allowClientAuth: true,
-          allowUrlToken: false,
+          allowUrlToken: false
         });
-        if (context?.type === 'session' || context?.type === 'client') {
+        if (context?.type === "session" || context?.type === "client") {
           await handler(context);
           return;
         }
       }
-
       await runWithUiAuth(req, res, next, async () => {
-        await handler({ type: 'session' });
+        await handler({ type: "session" });
       }, { sessionOnly: true });
     } catch (error) {
       next(error);
     }
   };
-
   const runWithClientCreateAuth = async (req, res, next, handler) => {
     try {
-      if (typeof uiAuthController.resolveAuthContext === 'function') {
+      if (uiAuthController.resolveAuthContext) {
         const context = await uiAuthController.resolveAuthContext(req, res, {
           allowClientAuth: true,
-          allowUrlToken: false,
+          allowUrlToken: false
         });
-        if (context?.type === 'session') {
+        if (context?.type === "session") {
           await handler(context);
           return;
         }
-        if (context?.type === 'client') {
+        if (context?.type === "client") {
           const client = await clientRecordFromAuthContext(context);
-          if (client?.clientKind === 'desktop-local') {
+          if (client?.clientKind === "desktop-local") {
             await handler({ ...context, client });
             return;
           }
-          return res.status(403).json({ error: 'Client tokens cannot create remote clients' });
+          return res.status(403).json({ error: "Client tokens cannot create remote clients" });
         }
       }
-
       await runWithUiAuth(req, res, next, async () => {
-        await handler({ type: 'session' });
+        await handler({ type: "session" });
       }, { sessionOnly: true });
     } catch (error) {
       next(error);
     }
   };
-
   const clientIdFromAuthContext = (context) => {
     const raw = context?.client?.id || context?.clientId;
-    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+    return raw && raw.length > 0 ? raw : null;
   };
-
   const clientRecordFromAuthContext = async (context) => {
-    if (context?.client && typeof context.client === 'object') {
+    if (context?.client) {
       return context.client;
     }
     const clientId = clientIdFromAuthContext(context);
-    if (!clientId) return null;
+    if (!clientId)
+      return null;
     const clients = await remoteClientAuthRuntime.listClients();
     return clients.find((client) => client.id === clientId) || null;
   };
-
   const requestOrigin = (req) => {
-    const forwardedProto = typeof req.headers?.['x-forwarded-proto'] === 'string'
-      ? req.headers['x-forwarded-proto'].split(',')[0].trim()
-      : '';
-    const protocol = forwardedProto || (req.socket?.encrypted ? 'https' : 'http');
-    const host = typeof req.headers?.host === 'string' ? req.headers.host.trim() : '';
-    if (!host) return null;
+    const forwardedProto = isString(req.headers?.["x-forwarded-proto"]) ? req.headers["x-forwarded-proto"].split(",")[0]?.trim() : "";
+    const protocol = forwardedProto || (req.socket && "encrypted" in req.socket && req.socket.encrypted ? "https" : "http");
+    const host = isString(req.headers?.host) ? req.headers.host.trim() : "";
+    if (!host)
+      return null;
     return `${protocol}://${host}`;
   };
-
   const requestIp = (req) => {
-    // Do not use req.ip here: Express rewrites it from X-Forwarded-For when
-    // trust proxy is enabled, and redeem is unauthenticated before this limit.
-    return req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
+    return req.socket?.remoteAddress || req.connection?.remoteAddress || "unknown";
   };
-
   const pairingIdFromRequest = (req) => {
-    const raw = typeof req.body?.pairingId === 'string' ? req.body.pairingId.trim() : '';
-    return raw || 'missing';
+    const pairingId = readBody(req)?.pairingId;
+    const raw = isString(pairingId) ? pairingId.trim() : "";
+    return raw || "missing";
   };
-
   const checkPairingRedeemRateLimit = (req) => {
     const now = Date.now();
     const key = `${requestIp(req)}:${pairingIdFromRequest(req)}`;
@@ -547,57 +528,15 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
         allowed: false,
         remaining: 0,
         reset,
-        retryAfter: Math.max(1, Math.ceil((entry.firstAttemptAt + PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS - now) / 1000)),
+        retryAfter: Math.max(1, Math.ceil((entry.firstAttemptAt + PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS - now) / 1000))
       };
     }
     entry.count += 1;
     return { allowed: true, remaining: PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS - entry.count, reset };
   };
-
   const clearPairingRedeemRateLimit = (req) => {
     pairingRedeemAttempts.delete(`${requestIp(req)}:${pairingIdFromRequest(req)}`);
   };
-
-  const normalizeCandidateUrl = (value) => {
-    if (typeof value !== 'string' || !value.trim()) return null;
-    try {
-      const parsed = new URL(value.trim());
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-      parsed.hash = '';
-      parsed.search = '';
-      return parsed.toString().replace(/\/+$/, '');
-    } catch {
-      return null;
-    }
-  };
-
-  const candidateUrlType = (url) => {
-    try {
-      return new URL(url).protocol === 'https:' ? 'tunnel' : 'lan';
-    } catch {
-      return 'lan';
-    }
-  };
-
-  const isLoopbackCandidateUrl = (url) => {
-    try {
-      const hostname = new URL(url).hostname.toLowerCase();
-      return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
-    } catch {
-      return true;
-    }
-  };
-
-  // `preferredServerUrl` is the caller-supplied externally reachable URL (the
-  // desktop UI reaches its own server over loopback, so the request origin is not
-  // scannable — it passes the LAN URL instead). Falls back to the request origin
-  // for remote callers where the Host header IS the reachable address.
-  //
-  // `includeRelay` is the per-link transport choice from the create-link dialog:
-  //   true  → add the relay candidate, enabling the relay host on demand;
-  //   false → direct only, never relay;
-  //   undefined → legacy: advertise relay only if it is already enabled.
-  // `includeDirect === false` produces a relay-only link (no direct candidate).
   const pairingServerCandidates = async (req, { preferredServerUrl, includeRelay, includeDirect = true } = {}) => {
     const candidates = [];
     if (includeDirect) {
@@ -607,145 +546,96 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       if (direct) {
         candidates.push({ type: candidateUrlType(direct), url: direct, priority: 10 });
       }
-      // The origin the creator is browsing over (e.g. a public https domain in
-      // front of a reverse proxy) is a reachable address the server cannot
-      // discover from its own interfaces. Carry it as an additional direct
-      // candidate so the paired device can keep using that same domain instead
-      // of depending on LAN hairpin behavior or relay availability. Loopback
-      // origins (desktop shell, localhost dev) are unreachable from another
-      // device and are skipped.
       if (origin && direct && origin !== direct && !isLoopbackCandidateUrl(origin)) {
         candidates.push({ type: candidateUrlType(origin), url: origin, priority: 20 });
       }
     }
-    // The client races candidates and falls back to relay only if the direct URL
-    // is unreachable (relay carries a higher priority number).
     if (includeRelay !== false) {
       try {
         const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: includeRelay === true });
-        if (relayCandidate) candidates.push(relayCandidate);
-      } catch {
-        // A relay enable/status failure must not break direct pairing.
-      }
+        if (relayCandidate)
+          candidates.push(relayCandidate);
+      } catch {}
     }
     return candidates;
   };
-
   const sendPairingRedeemError = (res, error) => {
-    const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : 400;
-    res.status(statusCode).json({ error: 'Invalid or expired pairing session' });
+    const statusCode = isNumber(error?.statusCode) ? error.statusCode : 400;
+    res.status(statusCode).json({ error: "Invalid or expired pairing session" });
   };
-
-  /**
-   * Endpoints that carry their own authority instead of a UI session.
-   *
-   * The repository credential helper runs from Git itself, in a terminal or
-   * the agent's shell, wherever a repository names it in `.git/config`. It
-   * authenticates with the secret the server writes beside its endpoint file,
-   * rotated every start, and the route refuses any peer that is not this
-   * machine. It has no UI session and cannot obtain one, so leaving it behind
-   * the session guard would make a repository's account silently unusable on
-   * every instance that sets a UI password, which Docker requires.
-   */
-  const selfAuthenticatedApiPaths = new Set(['/api/git/repository-credential']);
-
-  // An extension tracker's OAuth callback (`/tracker/ext-<id>/oauth/callback`)
-  // is the same kind of page: the tracker redirects the browser here with no
-  // UI bearer, and the route accepts only a `state` this process issued.
-  const isGuestOauthCallback = (req) => (
-    req.method === 'GET'
-    && /^\/(?:guests\/[a-z][a-z0-9-]*|tracker\/ext-[a-z][a-z0-9-]*)\/oauth\/callback$/.test(req.path || '')
-  );
-
-  // An HTML preview runs in an opaque-origin sandbox and carries no session.
-  // The grant in its path is the capability; the fs route checks it.
-  const isFilePreviewRead = (req) => (
-    req.method === 'GET'
-    && /^\/fs\/preview\/[^/]+\/./.test(req.path || '')
-  );
-
-  // An extension frame is sandboxed the same way and loads its package
-  // through a grant in the path; the guests route checks it.
-  const isGuestFrameFileRead = (req) => (
-    req.method === 'GET'
-    && /^\/guest-files\/[^/]+\/./.test(req.path || '')
-  );
-
+  const selfAuthenticatedApiPaths = new Set(["/api/git/repository-credential"]);
+  const isGuestOauthCallback = (req) => req.method === "GET" && /^\/(?:guests\/[a-z][a-z0-9-]*|tracker\/ext-[a-z][a-z0-9-]*)\/oauth\/callback$/.test(req.path || "");
+  const isMcpOauthCallback = (req) => req.method === "GET" && /^\/mcp\/oauth\/[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?\/callback$/.test(req.path || "");
+  const isFilePreviewRead = (req) => req.method === "GET" && /^\/fs\/preview\/[^/]+\/./.test(req.path || "");
+  const isGuestFrameFileRead = (req) => req.method === "GET" && /^\/guest-files\/[^/]+\/./.test(req.path || "");
   const requireApiAuth = async (req, res, next) => {
-    const pathname = (req.originalUrl || '').split('?')[0];
-    if (selfAuthenticatedApiPaths.has(pathname)) return next();
-    if (isGuestOauthCallback(req) || isFilePreviewRead(req) || isGuestFrameFileRead(req)) {
+    const pathname = (req.originalUrl || "").split("?", 1).join("");
+    if (selfAuthenticatedApiPaths.has(pathname))
+      return next();
+    if (isGuestOauthCallback(req) || isMcpOauthCallback(req) || isFilePreviewRead(req) || isGuestFrameFileRead(req)) {
       return next();
     }
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
       return tunnelAuthController.requireTunnelSession(req, res, next);
     }
     return uiAuthController.requireAuth(req, res, next);
   };
-
-  app.get('/auth/session', async (req, res) => {
+  app.get("/auth/session", async (req, res) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
       const tunnelSession = tunnelAuthController.getTunnelSessionFromRequest(req);
       if (tunnelSession) {
-        return res.json({ authenticated: true, scope: 'tunnel' });
+        return res.json({ authenticated: true, scope: "tunnel" });
       }
       tunnelAuthController.clearTunnelSessionCookie(req, res);
       return res.status(401).json({ authenticated: false, locked: true, tunnelLocked: true });
     }
-
     try {
       await uiAuthController.handleSessionStatus(req, res);
     } catch {
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: "Internal server error" });
     }
   });
-
-  app.post('/auth/session', (req, res) => {
+  app.post("/auth/session", (req, res) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Password login is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Password login is disabled for tunnel scope", tunnelLocked: true });
     }
     return uiAuthController.handleSessionCreate(req, res);
   });
-
-  app.post('/auth/url-token', async (req, res, next) => {
+  app.post("/auth/url-token", async (req, res, next) => {
     try {
       await uiAuthController.handleUrlAuthToken(req, res);
     } catch (error) {
       next(error);
     }
   });
-
-  app.get('/auth/passkey/status', (req, res) => {
+  app.get("/auth/passkey/status", (req, res) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
       return res.json({ enabled: false, hasPasskeys: false, passkeyCount: 0, rpID: null, tunnelLocked: true });
     }
     return uiAuthController.handlePasskeyStatus(req, res);
   });
-
-  app.post('/auth/passkey/authenticate/options', (req, res) => {
+  app.post("/auth/passkey/authenticate/options", (req, res) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Passkey login is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey login is disabled for tunnel scope", tunnelLocked: true });
     }
     return uiAuthController.handlePasskeyAuthenticationOptions(req, res);
   });
-
-  app.post('/auth/passkey/authenticate/verify', (req, res) => {
+  app.post("/auth/passkey/authenticate/verify", (req, res) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Passkey login is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey login is disabled for tunnel scope", tunnelLocked: true });
     }
     return uiAuthController.handlePasskeyAuthenticationVerify(req, res);
   });
-
-  app.post('/auth/passkey/register/options', async (req, res, next) => {
+  app.post("/auth/passkey/register/options", async (req, res, next) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Passkey setup is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey setup is disabled for tunnel scope", tunnelLocked: true });
     }
     try {
       await uiAuthController.requireSessionAuth(req, res, async () => {
@@ -755,11 +645,10 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       next(error);
     }
   });
-
-  app.post('/auth/passkey/register/verify', async (req, res, next) => {
+  app.post("/auth/passkey/register/verify", async (req, res, next) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Passkey setup is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey setup is disabled for tunnel scope", tunnelLocked: true });
     }
     try {
       await uiAuthController.requireSessionAuth(req, res, async () => {
@@ -769,11 +658,10 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       next(error);
     }
   });
-
-  app.get('/api/passkeys', async (req, res, next) => {
+  app.get("/api/passkeys", async (req, res, next) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Passkey management is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey management is disabled for tunnel scope", tunnelLocked: true });
     }
     try {
       await uiAuthController.requireSessionAuth(req, res, async () => {
@@ -783,11 +671,10 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       next(error);
     }
   });
-
-  app.delete('/api/passkeys/:id', async (req, res, next) => {
+  app.delete("/api/passkeys/:id", async (req, res, next) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Passkey management is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey management is disabled for tunnel scope", tunnelLocked: true });
     }
     try {
       await uiAuthController.requireSessionAuth(req, res, async () => {
@@ -797,11 +684,26 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       next(error);
     }
   });
-
-  app.post('/api/auth/reset', async (req, res, next) => {
+  app.patch("/api/passkeys/:id", express.json({ limit: "8kb" }), async (req, res, next) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
-    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
-      return res.status(403).json({ error: 'Global sign-out is disabled for tunnel scope', tunnelLocked: true });
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Passkey management is disabled for tunnel scope", tunnelLocked: true });
+    }
+    try {
+      await uiAuthController.requireSessionAuth(req, res, async () => {
+        if (!uiAuthController.handlePasskeyRename) {
+          throw new TypeError("uiAuthController.handlePasskeyRename is not a function");
+        }
+        await uiAuthController.handlePasskeyRename(req, res);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.post("/api/auth/reset", async (req, res, next) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === "tunnel" || requestScope === "unknown-public") {
+      return res.status(403).json({ error: "Global sign-out is disabled for tunnel scope", tunnelLocked: true });
     }
     try {
       await uiAuthController.requireSessionAuth(req, res, async () => {
@@ -811,15 +713,11 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       next(error);
     }
   });
-
-  app.get('/api/client-auth/clients', async (req, res, next) => {
+  app.get("/api/client-auth/clients", async (req, res, next) => {
     await runWithClientManagementAuth(req, res, next, async (authContext) => {
-      if (authContext.type === 'client') {
+      if (authContext.type === "client") {
         const client = await clientRecordFromAuthContext(authContext);
-        // The desktop shell's local client is the trusted operator of this
-        // server; it manages devices just like a browser UI session. Every
-        // other client token is scoped to its own record.
-        if (client?.clientKind !== 'desktop-local') {
+        if (client?.clientKind !== "desktop-local") {
           return res.json({ clients: client ? [client] : [] });
         }
       }
@@ -827,95 +725,80 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       res.json({ clients });
     });
   });
-
-  app.post('/api/client-auth/clients', express.json({ limit: '64kb' }), async (req, res, next) => {
+  app.post("/api/client-auth/clients", express.json({ limit: "64kb" }), async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       const result = await remoteClientAuthRuntime.createClient({
-        label: req.body?.label,
-        clientKind: req.body?.clientKind,
-        dedupeKey: req.body?.dedupeKey,
+        label: readBody(req)?.label,
+        clientKind: readBody(req)?.clientKind,
+        dedupeKey: readBody(req)?.dedupeKey
       });
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader("Cache-Control", "no-store");
       res.status(201).json(result);
     });
   });
-
-  app.delete('/api/client-auth/clients/:id', async (req, res, next) => {
+  app.delete("/api/client-auth/clients/:id", async (req, res, next) => {
     await runWithClientManagementAuth(req, res, next, async (authContext) => {
-      if (authContext.type === 'client') {
+      if (authContext.type === "client") {
         const actingClient = await clientRecordFromAuthContext(authContext);
-        // The desktop shell's local client manages every device; other client
-        // tokens may only revoke themselves.
-        if (actingClient?.clientKind !== 'desktop-local') {
+        if (actingClient?.clientKind !== "desktop-local") {
           const clientId = clientIdFromAuthContext(authContext);
           if (!clientId || clientId !== req.params?.id) {
-            return res.status(403).json({ revoked: false, error: 'Client tokens can only revoke themselves' });
+            return res.status(403).json({ revoked: false, error: "Client tokens can only revoke themselves" });
           }
         }
       }
       const result = await remoteClientAuthRuntime.revokeClient(req.params?.id);
       if (!result.revoked) {
-        return res.status(404).json({ revoked: false, error: 'Client not found' });
+        return res.status(404).json({ revoked: false, error: "Client not found" });
       }
       await removeClientPushDevices([req.params.id]).catch((error) => {
-        console.warn('Failed to remove push registrations of a revoked client:', error?.message ?? error);
+        console.warn("Failed to remove push registrations of a revoked client:", error?.message ?? error);
       });
-      void reconcileRelay();
+      reconcileRelay();
       res.json(result);
     });
   });
-
-  app.delete('/api/client-auth/clients', async (req, res, next) => {
+  app.delete("/api/client-auth/clients", async (req, res, next) => {
     await runWithClientManagementAuth(req, res, next, async (authContext) => {
-      if (authContext.type === 'client') {
+      if (authContext.type === "client") {
         const actingClient = await clientRecordFromAuthContext(authContext);
-        // Purging revoked devices is a whole-server management action; only the
-        // trusted desktop shell client (or a UI session) may do it.
-        if (actingClient?.clientKind !== 'desktop-local') {
-          return res.status(403).json({ purged: 0, error: 'Client tokens cannot purge revoked devices' });
+        if (actingClient?.clientKind !== "desktop-local") {
+          return res.status(403).json({ purged: 0, error: "Client tokens cannot purge revoked devices" });
         }
       }
       const clients = await remoteClientAuthRuntime.listClients();
       await removeClientPushDevices(clients.filter((client) => client.revokedAt).map((client) => client.id));
       const result = await remoteClientAuthRuntime.purgeRevokedClients();
+      reconcileRelay();
       res.json(result);
     });
   });
-
-  app.post('/api/client-auth/pairing/sessions', express.json({ limit: '64kb' }), async (req, res, next) => {
+  app.post("/api/client-auth/pairing/sessions", express.json({ limit: "64kb" }), async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async (authContext) => {
+      const includeRelay = readBody(req)?.includeRelay;
       const candidates = await pairingServerCandidates(req, {
-        preferredServerUrl: req.body?.serverUrl,
-        includeRelay: typeof req.body?.includeRelay === 'boolean' ? req.body.includeRelay : undefined,
-        includeDirect: req.body?.includeDirect !== false,
+        preferredServerUrl: readBody(req)?.serverUrl,
+        includeRelay: isBoolean(includeRelay) ? includeRelay : undefined,
+        includeDirect: readBody(req)?.includeDirect !== false
       });
-      const usesRelay = candidates.some((candidate) => candidate.type === 'relay');
+      const usesRelay = candidates.some((candidate) => candidate.type === "relay");
       const result = await clientPairingRuntime.createPairingSession({
-        label: req.body?.label,
-        allowedClientKinds: req.body?.allowedClientKinds,
+        label: readBody(req)?.label,
+        allowedClientKinds: readBody(req)?.allowedClientKinds,
         createdByClientId: clientIdFromAuthContext(authContext),
         usesRelay,
+        localOnly: isLocalOnlyCandidateSet(candidates)
       });
-      void reconcileRelay();
-      res.setHeader('Cache-Control', 'no-store');
+      reconcileRelay();
+      res.setHeader("Cache-Control", "no-store");
       res.status(201).json({
         ...result,
-        server: { label: getServerLabel(), candidates },
+        server: { label: getServerLabel(), candidates }
       });
     });
   });
-
-  // Current reachable transports for an ALREADY-PAIRED device. Pairing-payload
-  // candidates are a snapshot: when DHCP hands this machine a new address, the
-  // device's saved LAN candidate goes stale and it is stuck on the relay forever.
-  // A client that connected over any live transport calls this to learn the
-  // server's present LAN URLs (plus the relay candidate when enabled) and update
-  // its saved candidate set. `serverId` lets the client bind the response — and
-  // later /health probes of the learned addresses — to this server's identity
-  // before trusting them with its bearer token.
-  // Auth: UI session or client bearer; never the short-lived URL token.
-  app.get('/api/client-auth/connection/candidates', async (req, res, next) => {
-    await runWithClientManagementAuth(req, res, next, async () => {
+  app.get("/api/client-auth/connection/candidates", async (req, res, next) => {
+    await runWithClientManagementAuth(req, res, next, async (authContext) => {
       const candidates = [];
       const directUrls = (() => {
         try {
@@ -927,146 +810,143 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       })();
       for (const url of directUrls) {
         const normalized = normalizeCandidateUrl(url);
-        if (normalized) candidates.push({ type: 'lan', url: normalized, priority: 10 });
+        if (normalized)
+          candidates.push({ type: "lan", url: normalized, priority: 10 });
       }
-      try {
-        const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: false });
-        if (relayCandidate) candidates.push(relayCandidate);
-      } catch {
-        // Relay status failure must not break the direct-candidate refresh.
+      const bearerToken = getBearerTokenFromRequest(req);
+      const bearerClient = bearerToken ? await remoteClientAuthRuntime.authenticateBearerToken(bearerToken, req) : null;
+      const actingClient = bearerClient?.client ?? (authContext.type === "client" ? await clientRecordFromAuthContext(authContext) : null);
+      if (actingClient?.localOnly !== true) {
+        try {
+          const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: false });
+          if (relayCandidate)
+            candidates.push(relayCandidate);
+        } catch {}
       }
       let serverId = null;
       try {
         const value = await getServerId();
-        serverId = typeof value === 'string' && value.trim() ? value.trim() : null;
+        serverId = value && value.trim() ? value.trim() : null;
       } catch {
         serverId = null;
       }
-      res.setHeader('Cache-Control', 'no-store');
-      res.json({ label: getServerLabel(), ...(serverId ? { serverId } : {}), candidates });
+      res.setHeader("Cache-Control", "no-store");
+      const identity = {};
+      if (serverId)
+        identity.serverId = serverId;
+      res.json({ label: getServerLabel(), ...identity, candidates });
     });
   });
-
-  // Direct transports the server can be reached on (for the create-device dialog).
-  app.get('/api/client-auth/pairing/transports', async (req, res, next) => {
+  app.get("/api/client-auth/pairing/transports", async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
-      res.setHeader('Cache-Control', 'no-store');
-      res.json(await getPairingTransports(req));
+      res.setHeader("Cache-Control", "no-store");
+      res.json(getPairingTransports(req));
     });
   });
-
-  // Pending pairing sessions (link created, device not yet connected) for the
-  // "pending devices" list. Secrets are never included.
-  app.get('/api/client-auth/pairing/sessions', async (req, res, next) => {
+  app.get("/api/client-auth/pairing/sessions", async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       const pending = await clientPairingRuntime.listPendingSessions();
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader("Cache-Control", "no-store");
       res.json({ pending });
     });
   });
-
-  app.delete('/api/client-auth/pairing/sessions/:id', async (req, res, next) => {
+  app.delete("/api/client-auth/pairing/sessions/:id", async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       const result = await clientPairingRuntime.cancelPairingSession(req.params?.id);
       if (!result.cancelled) {
-        return res.status(404).json({ cancelled: false, error: 'Pairing session not found' });
+        return res.status(404).json({ cancelled: false, error: "Pairing session not found" });
       }
-      void reconcileRelay();
+      reconcileRelay();
       res.json(result);
     });
   });
-
-  app.post('/api/client-auth/pairing/redeem', express.json({ limit: '64kb' }), async (req, res, next) => {
+  app.post("/api/client-auth/pairing/redeem", express.json({ limit: "64kb" }), async (req, res, next) => {
     try {
       const rateLimit = checkPairingRedeemRateLimit(req);
-      res.setHeader('X-RateLimit-Limit', PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS);
-      res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-      res.setHeader('X-RateLimit-Reset', rateLimit.reset);
+      res.setHeader("X-RateLimit-Limit", PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS);
+      res.setHeader("X-RateLimit-Remaining", rateLimit.remaining);
+      res.setHeader("X-RateLimit-Reset", rateLimit.reset);
       if (!rateLimit.allowed) {
-        res.setHeader('Retry-After', rateLimit.retryAfter);
-        return res.status(429).json({ error: 'Invalid or expired pairing session' });
+        res.setHeader("Retry-After", rateLimit.retryAfter);
+        return res.status(429).json({ error: "Invalid or expired pairing session" });
       }
       const result = await clientPairingRuntime.redeemPairingSession({
-        pairingId: req.body?.pairingId,
-        secret: req.body?.secret,
-        clientLabel: req.body?.clientLabel,
-        clientKind: req.body?.clientKind,
-        deviceName: req.body?.deviceName,
-        devicePlatform: req.body?.devicePlatform,
-        deviceModel: req.body?.deviceModel,
-        appVersion: req.body?.appVersion,
-        dedupeKey: req.body?.dedupeKey,
+        pairingId: readBody(req)?.pairingId,
+        secret: readBody(req)?.secret,
+        clientLabel: readBody(req)?.clientLabel,
+        clientKind: readBody(req)?.clientKind,
+        deviceName: readBody(req)?.deviceName,
+        devicePlatform: readBody(req)?.devicePlatform,
+        deviceModel: readBody(req)?.deviceModel,
+        appVersion: readBody(req)?.appVersion,
+        dedupeKey: readBody(req)?.dedupeKey
       });
       clearPairingRedeemRateLimit(req);
-      // The session became a device: relay demand may have moved from the pending
-      // session to the paired device (or a non-relay redeem may drop it).
-      void reconcileRelay();
-      res.setHeader('Cache-Control', 'no-store');
+      if (result.replacedClientIds?.length) {
+        await removeClientPushDevices(result.replacedClientIds).catch((error) => {
+          console.warn("Failed to remove push registrations of a replaced client:", error?.message ?? error);
+        });
+      }
+      reconcileRelay();
+      res.setHeader("Cache-Control", "no-store");
       res.json({
         ok: true,
         server: {
           label: getServerLabel(),
           url: requestOrigin(req),
-          fingerprint: result.pairing?.fingerprint || null,
+          fingerprint: result.pairing?.fingerprint || null
         },
         client: result.client,
-        clientToken: result.token,
+        clientToken: result.token
       });
     } catch (error) {
-      if (error?.message === 'Invalid or expired pairing session') {
+      if (hasErrorDetails(error) && error.message === "Invalid or expired pairing session") {
         sendPairingRedeemError(res, error);
         return;
       }
       next(error);
     }
   });
-
-  app.get('/connect', async (req, res) => {
+  app.get("/connect", async (req, res) => {
     try {
-      const token = typeof req.query?.t === 'string' ? req.query.t : '';
+      const token = isString(req.query?.t) ? req.query.t : "";
       const settings = await readSettingsFromDiskMigrated();
       const tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
-
       const exchange = tunnelAuthController.exchangeBootstrapToken({
         req,
         res,
         token,
-        sessionTtlMs: tunnelSessionTtlMs,
+        sessionTtlMs: tunnelSessionTtlMs
       });
-
-      res.setHeader('Cache-Control', 'no-store');
-
+      res.setHeader("Cache-Control", "no-store");
       if (!exchange.ok) {
-        if (exchange.reason === 'rate-limited') {
-          res.setHeader('Retry-After', String(exchange.retryAfter || 60));
-          return res.status(429).type('text/plain').send('Too many attempts. Please try again later.');
+        if (exchange.reason === "rate-limited") {
+          res.setHeader("Retry-After", String(exchange.retryAfter || 60));
+          return res.status(429).type("text/plain").send("Too many attempts. Please try again later.");
         }
-        return res.status(401).type('text/plain').send('Connection link is invalid or expired.');
+        return res.status(401).type("text/plain").send("Connection link is invalid or expired.");
       }
-
-      return res.redirect(302, '/');
+      return res.redirect(302, "/");
     } catch {
-      return res.status(500).type('text/plain').send('Failed to process connect request.');
+      return res.status(500).type("text/plain").send("Failed to process connect request.");
     }
   });
-
-  app.post('/api/system/probe-url', express.json({ limit: '16kb' }), async (req, res, next) => {
+  app.post("/api/system/probe-url", express.json({ limit: "16kb" }), async (req, res, next) => {
     try {
       await requireApiAuth(req, res, async () => {
-        const url = parseLoopbackUrl(req.body?.url);
+        const url = parseLoopbackUrl(readBody(req)?.url);
         if (!url) {
-          return res.status(400).json({ ok: false, error: 'Invalid loopback URL' });
+          return res.status(400).json({ ok: false, error: "Invalid loopback URL" });
         }
-
         try {
           const response = await fetch(url.toString(), {
-            method: 'GET',
-            redirect: 'manual',
-            signal: AbortSignal.timeout(1500),
+            method: "GET",
+            redirect: "manual",
+            signal: AbortSignal.timeout(1500)
           });
           return res.json({ ok: response.status >= 200 && response.status < 600, status: response.status });
         } catch (error) {
-          return res.json({ ok: false, error: error?.message || 'Probe failed' });
+          return res.json({ ok: false, error: hasErrorDetails(error) && error.message || "Probe failed" });
         }
       });
     } catch (error) {
@@ -1084,7 +964,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   });
 
-  app.use('/api', async (req, res, next) => {
+  app.use("/api", async (req, res, next) => {
     try {
       await requireApiAuth(req, res, next);
     } catch (err) {

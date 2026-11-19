@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { createTunnelAuth } from '../host/tunnel-auth.js';
+import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
 import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerServerStatusRoutes } from './core-routes.js';
 
 describe('core-routes', () => {
