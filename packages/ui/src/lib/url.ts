@@ -35,15 +35,7 @@ const BLOCKED_APP_LINK_SCHEMES = new Set([
   'ws', 'wss', 'ftp', 'ftps',
   'intent',
   'ms-msdt', 'search-ms', 'shell',
-<<<<<<< HEAD
-  // OpenChamber's own schemes must not be re-launched from chat content
-  'ohpichamber', 'openchamber-ui', 'capacitor',
-||||||| bc50ba56aa
-  // OpenChamber's own schemes must not be re-launched from chat content
   'openchamber', 'openchamber-ui', 'capacitor',
-=======
-  'openchamber', 'openchamber-ui', 'capacitor',
->>>>>>> upstream/main
 ]);
 
 const APP_LINK_SCHEME_RE = /^[a-z][a-z0-9+.-]{1,31}$/;

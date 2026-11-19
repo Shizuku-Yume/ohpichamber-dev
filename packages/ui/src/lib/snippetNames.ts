@@ -12,42 +12,12 @@ const CYRILLIC_TO_LATIN = new Map(Object.entries({
 
 const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
 
-<<<<<<< HEAD
 /** The snippet that `#name` already triggers. */
 const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
-||||||| bc50ba56aa
-/** What a name field keeps of typed text: spaces become dashes, other characters drop. */
-export const normalizeSnippetNameInput = (value: string): string => value
-  .replace(/\s+/g, '-')
-  .replace(/[^a-z0-9_-]/gi, '')
-  .slice(0, 80);
-
-/** The snippet that `#name` already triggers, by its name or an alias. */
-export const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
-=======
-export const normalizeSnippetNameInput = (value: string): string => value
-  .replace(/\s+/g, '-')
-  .replace(/[^a-z0-9_-]/gi, '')
-  .slice(0, 80);
-
-export const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
->>>>>>> upstream/main
   const key = name.toLowerCase();
   return snippets.find((snippet) => snippet.name.toLowerCase() === key);
 };
 
-<<<<<<< HEAD
-/**
- * Why `name` cannot be saved, or null when it can; `own` is the snippet being
- * renamed, whose own name stays free for it.
- */
-||||||| bc50ba56aa
-/**
- * Why `name` cannot be saved, or null when it can; `own` is the snippet being
- * renamed, whose own name and aliases stay free for it.
- */
-=======
->>>>>>> upstream/main
 export const snippetNameProblem = (name: string, snippets: readonly Snippet[], own?: Snippet): 'invalid' | 'taken' | null => {
   if (!isValidSnippetName(name)) return 'invalid';
   const owner = findSnippetByTrigger(snippets, name);

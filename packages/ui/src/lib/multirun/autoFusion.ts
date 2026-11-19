@@ -10,20 +10,9 @@ import type { MultiRunSummary } from './runs';
 import { useMultiRunSessions } from './useMultiRuns';
 import { RUN_LAUNCHER_ID } from './launcher';
 
-<<<<<<< HEAD
 /** Resolves the judge's display name and context window from the provider catalog. */
 export const resolveFusionJudge = (selection: FusionJudge): FusionJudge => {
   const model = useConfigStore.getState().providers.find((provider) => provider.providerId === selection.providerId)?.models.find((entry) => entry.modelId === selection.modelId);
-||||||| bc50ba56aa
-/** Resolves the judge's display name and context window from the provider catalog. */
-export const resolveFusionJudge = (selection: { providerID: string; modelID: string; variant?: string; agent?: string }): FusionJudge => {
-  const provider = useConfigStore.getState().providers.find((entry) => entry.id === selection.providerID);
-  const model = provider?.models.find((entry) => entry.id === selection.modelID);
-=======
-export const resolveFusionJudge = (selection: { providerID: string; modelID: string; variant?: string; agent?: string }): FusionJudge => {
-  const provider = useConfigStore.getState().providers.find((entry) => entry.id === selection.providerID);
-  const model = provider?.models.find((entry) => entry.id === selection.modelID);
->>>>>>> upstream/main
   return {
     ...selection,
     modelName: model?.name || selection.modelId,
@@ -32,16 +21,6 @@ export const resolveFusionJudge = (selection: { providerID: string; modelID: str
 };
 
 const startedRunKeys = new Set<string>();
-<<<<<<< HEAD
-// Lanes seen running on this page. A lane is finished only after it was seen
-// running and then left the live busy set with an outcome: persisted history
-// or a missing status entry never counts as finished.
-||||||| bc50ba56aa
-// Lanes seen running on this page. A lane is finished only after it was seen
-// running and then left the live busy set with an outcome. A parent idling for
-// a subagent must record a newer completion before its answer can be fused.
-=======
->>>>>>> upstream/main
 const seenRunningLaneIds = new Set<string>();
 // A parent idling for a subagent must record a newer idle time before its
 // answer can be fused; a resumed parent may finish again in the same batch.
@@ -81,7 +60,6 @@ function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): 
   React.useEffect(() => subscribeSessionStatusTransitions((sessionId, activeIds) => {
     for (const run of index.runs.values()) {
       if (run.autoFusion?.launcherId !== RUN_LAUNCHER_ID || startedRunKeys.has(run.key) || run.fusions.length > 0) continue;
-<<<<<<< HEAD
       if (!run.lanes.some((lane) => lane.sessionId === sessionId)) continue;
       if (activeIds.has(sessionId)) {
         seenRunningLaneIds.add(sessionId);
@@ -90,28 +68,6 @@ function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): 
         waitingForResumptionLaneIds.delete(sessionId);
       } else if (hasActiveChild(sessionId, activeIds, sessionById)) {
         waitingForResumptionLaneIds.add(sessionId);
-||||||| bc50ba56aa
-      for (const lane of run.lanes) {
-        if (lane.sessionId !== sessionId) continue;
-        if (activeIds.has(sessionId)) {
-          seenRunningLaneIds.add(sessionId);
-          // A resumed parent may finish again before this batch reaches React.
-          waitingForResumptionLaneIds.delete(sessionId);
-          waitingLaneIdleTimes.delete(sessionId);
-        } else if (hasActiveSubagent(sessionId, activeIds, (id) => sessionById.get(id)?.parentID)) {
-          waitingForResumptionLaneIds.add(sessionId);
-        }
-=======
-      for (const lane of run.lanes) {
-        if (lane.sessionId !== sessionId) continue;
-        if (activeIds.has(sessionId)) {
-          seenRunningLaneIds.add(sessionId);
-          waitingForResumptionLaneIds.delete(sessionId);
-          waitingLaneIdleTimes.delete(sessionId);
-        } else if (hasActiveSubagent(sessionId, activeIds, (id) => sessionById.get(id)?.parentID)) {
-          waitingForResumptionLaneIds.add(sessionId);
-        }
->>>>>>> upstream/main
       }
     }
   }), [index, sessionById]);

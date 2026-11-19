@@ -104,7 +104,6 @@ let isCreatingWorktreeSession = false;
 
 
 
-<<<<<<< HEAD
 const applyDefaultAgentAndModelSelection = (sessionId: string, configState = useConfigStore.getState()) => {
   try {
     const visibleAgents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
@@ -141,14 +140,6 @@ const applyDefaultAgentAndModelSelection = (sessionId: string, configState = use
 };
 
 /** `startDirectory` is where the session runs inside `metadata.path`; the worktree root stays the checkout. */
-||||||| bc50ba56aa
-/**
- * `startDirectory` is where the session runs inside `metadata.path`; the worktree root stays the checkout.
- * The session's agent and model are the caller's: it resolves them for `startDirectory`
- * (`resolveExecutionForDirectory`) and sends the first message with them.
- */
-=======
->>>>>>> upstream/main
 const initializeSessionForWorktree = (sessionId: string, startDirectory: string, metadata: {
   path: string;
   projectDirectory: string;
@@ -301,20 +292,6 @@ export async function createWorktreeDraft(options?: { initialPrompt?: string; ti
   return createInstantWorktreeDraft(options);
 }
 
-<<<<<<< HEAD
-/**
- * Create a worktree session for a new branch name.
- * Callers can still use startPoint for metadata or follow-up git operations.
- * @param selection Optional model/variant selection to apply at creation time.
- * @returns Created session descriptor or null.
- */
-||||||| bc50ba56aa
-/**
- * Create a worktree session for a new branch name.
- * Callers can still use startPoint for metadata or follow-up git operations.
- */
-=======
->>>>>>> upstream/main
 export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,

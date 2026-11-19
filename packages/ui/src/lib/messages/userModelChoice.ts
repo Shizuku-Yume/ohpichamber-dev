@@ -19,7 +19,6 @@ export const extractAssistantModelChoice = (message: Message): UserModelChoice |
   }
 }
 
-<<<<<<< HEAD
 /**
  * Find the latest turn's model/agent choice.
  *
@@ -27,23 +26,6 @@ export const extractAssistantModelChoice = (message: Message): UserModelChoice |
  * snapshot cannot be treated as authoritative.
  */
 export const findLatestUserModelChoice = (messages: readonly Message[]): UserModelChoice | null => {
-||||||| bc50ba56aa
-/**
- * Find the latest turn's model/agent choice.
- *
- * Messages whose parts have not been loaded yet are skipped so an incomplete
- * snapshot cannot be treated as authoritative.
- */
-export const findLatestUserModelChoice = (
-  messages: readonly Message[],
-  getParts: (messageId: string) => Part[] | undefined,
-): UserModelChoice | null => {
-=======
-export const findLatestUserModelChoice = (
-  messages: readonly Message[],
-  getParts: (messageId: string) => Part[] | undefined,
-): UserModelChoice | null => {
->>>>>>> upstream/main
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i]
     if (message.role !== 'assistant' || message.parts.length === 0) {

@@ -154,34 +154,12 @@ const shouldAttachRuntimeAuth = (input: string | URL | Request): boolean => {
   }
 };
 
-<<<<<<< HEAD
 // Headers API only accepts ISO-8859-1 (Latin-1) characters. Any value containing
 // characters outside \u0000-\u00FF causes "Failed to construct/set 'Headers':
 // String contains non ISO-8859-1 code point." Encode those values so they round-trip
 // safely through the browser's Headers API. Directory hints get an explicit marker
 // only when encoded, so plain ASCII paths remain compatible with routes that read
 // the header directly.
-||||||| bc50ba56aa
-// Redirects can forward custom credentials outside the configured address.
-const mobileRedirectPolicy = (input: string | URL | Request, init?: RequestInit): RequestInit | undefined =>
-  Object.keys(getRuntimeExtraHeadersSync()).length > 0 && isCapacitorApp() && shouldAttachRuntimeAuth(input)
-    ? { ...init, redirect: 'error' }
-    : init;
-
-// Headers API only accepts ISO-8859-1 (Latin-1) characters. Any value containing
-// characters outside \u0000-\u00FF causes "Failed to construct/set 'Headers':
-// String contains non ISO-8859-1 code point." Encode those values so they round-trip
-// safely through the browser's Headers API. Directory hints get an explicit marker
-// only when encoded, so plain ASCII paths remain compatible with routes that read
-// the header directly.
-=======
-const mobileRedirectPolicy = (input: string | URL | Request, init?: RequestInit): RequestInit | undefined =>
-  Object.keys(getRuntimeExtraHeadersSync()).length > 0 && isCapacitorApp() && shouldAttachRuntimeAuth(input)
-    ? { ...init, redirect: 'error' }
-    : init;
-
-// external: https://fetch.spec.whatwg.org/#headers-class Headers values are ByteStrings; non-Latin-1 directory hints need marked encoding.
->>>>>>> upstream/main
 export const isLatin1Safe = (value: string): boolean => {
   for (let i = 0; i < value.length; i += 1) {
     if (value.charCodeAt(i) > 0xFF) return false;
@@ -373,17 +351,6 @@ export const runtimeFetch = async (rawInput: string | URL | Request, init: Runti
 };
 
 let runtimeFetchBridgeInstalled = false;
-<<<<<<< HEAD
-
-// The browser's own fetch, kept before the bridge replaces window.fetch. A
-// request to a runtime that is no longer active must not resolve through the
-// active one.
-||||||| bc50ba56aa
-// The browser's own fetch, kept before the bridge replaces window.fetch. A
-// request to a runtime that is no longer active must not resolve through the
-// active one.
-=======
->>>>>>> upstream/main
 let fetchBypassingRuntimeBridgeImpl: typeof fetch | null = null;
 
 /** The browser's own fetch, for a cleanup that must reach the runtime it captured. */

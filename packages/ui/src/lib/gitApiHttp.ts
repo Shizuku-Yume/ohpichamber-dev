@@ -371,51 +371,6 @@ const completedStepSchema = z.enum([
   'cleaned-up',
 ]);
 const operationErrorCodeSchema = z.enum([
-<<<<<<< HEAD
-  'INVALID_REQUEST',
-  'NOT_FOUND',
-  'STALE_REPOSITORY',
-  'STALE_BINDING',
-  'STALE_CONFIG',
-  'REMOTE_CHANGED',
-  'REMOTE_URL_USERINFO',
-  'AUTHENTICATION_REQUIRED',
-  'DESTINATION_SELECTION_REQUIRED',
-  'CONTRIBUTOR_MANAGED_TRANSPORT_REQUIRED',
-  'AUTHENTICATION_FAILED',
-  'TRANSPORT_FAILED',
-  'CONFLICT',
-  'CANCELLED',
-  'TIMEOUT',
-  'OUTCOME_UNKNOWN',
-  'RUNTIME_UNSUPPORTED',
-  'GIT_LFS_CLIENT_MISSING',
-  'CHECKOUT_TOO_LARGE',
-  'UNKNOWN',
-]);
-||||||| bc50ba56aa
-    'INVALID_REQUEST',
-    'NOT_FOUND',
-    'STALE_REPOSITORY',
-    'STALE_BINDING',
-    'STALE_CONFIG',
-    'REMOTE_CHANGED',
-    'REMOTE_URL_USERINFO',
-    'AUTHENTICATION_REQUIRED',
-    'DESTINATION_SELECTION_REQUIRED',
-    'CONTRIBUTOR_MANAGED_TRANSPORT_REQUIRED',
-    'AUTHENTICATION_FAILED',
-    'TRANSPORT_FAILED',
-    'CONFLICT',
-    'CANCELLED',
-    'TIMEOUT',
-    'OUTCOME_UNKNOWN',
-    'RUNTIME_UNSUPPORTED',
-    'GIT_LFS_CLIENT_MISSING',
-    'CHECKOUT_TOO_LARGE',
-    'UNKNOWN',
-  ]);
-=======
     'INVALID_REQUEST',
     'NOT_FOUND',
     'STALE_REPOSITORY',
@@ -439,7 +394,6 @@ const operationErrorCodeSchema = z.enum([
     'BRANCH_NAME_CONFLICT',
     'UNKNOWN',
   ]);
->>>>>>> upstream/main
 const operationErrorSchema = <const Code extends readonly [string, ...string[]]>(codes: Code) => z.object({
   code: z.enum(codes),
   message: boundedString(NETWORK_OPERATION_ERROR_MESSAGE_MAX_CHARS),

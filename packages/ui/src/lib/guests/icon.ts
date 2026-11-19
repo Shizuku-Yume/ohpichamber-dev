@@ -14,15 +14,8 @@ const HOST_PRODUCT_ICONS = new Set([
   'openchamber',
 ]);
 
-<<<<<<< HEAD
 /** A Remixicon in the app's sprite that a guest may name; product marks are the host's own. */
 const isGuestIconName = (name: string): name is IconName => (
-||||||| bc50ba56aa
-/** A Remixicon in the app's sprite that a guest may name; product marks are the host's own. */
-export const isGuestIconName = (name: string): name is IconName => (
-=======
-export const isGuestIconName = (name: string): name is IconName => (
->>>>>>> upstream/main
   Object.hasOwn(iconSpriteData, name) && !HOST_PRODUCT_ICONS.has(name)
 );
 

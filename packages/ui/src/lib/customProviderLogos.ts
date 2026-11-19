@@ -72,35 +72,3 @@ export const removeProviderLogo = async (providerId: string): Promise<void> => {
   const response = await runtimeFetch(logoPath(providerId), { method: 'DELETE', headers: { Accept: 'application/json' } });
   if (!response.ok) throw await errorOf(response);
 };
-
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The uploaded logo as an object URL. An SVG is asked for in the theme's
- * variant, so one drawn in `currentColor` reads on either background; other
- * images keep their own colours.
- */
-export const useUploadedProviderLogoUrl = (
-  providerId: string,
-  logo: CustomProviderLogo | undefined,
-  themeVariant: 'light' | 'dark',
-): RuntimeObjectUrl => {
-  const path = logo ? logoPath(providerId) : null;
-  const query = logo
-    ? new URLSearchParams(logo.mime === 'image/svg+xml' ? { v: String(logo.updatedAt), theme: themeVariant } : { v: String(logo.updatedAt) }).toString()
-    : '';
-  return useRuntimeObjectUrl(path, query);
-};
-=======
-export const useUploadedProviderLogoUrl = (
-  providerId: string,
-  logo: CustomProviderLogo | undefined,
-  themeVariant: 'light' | 'dark',
-): RuntimeObjectUrl => {
-  const path = logo ? logoPath(providerId) : null;
-  const query = logo
-    ? new URLSearchParams(logo.mime === 'image/svg+xml' ? { v: String(logo.updatedAt), theme: themeVariant } : { v: String(logo.updatedAt) }).toString()
-    : '';
-  return useRuntimeObjectUrl(path, query);
-};
->>>>>>> upstream/main

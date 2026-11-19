@@ -1,17 +1,3 @@
-<<<<<<< HEAD
-/**
- * Client-side text sanitization for TTS output.
- * Removes markdown, URLs, file paths, and other non-speakable content.
- * Applied when canonical utility summarization is skipped or unavailable.
- */
-||||||| bc50ba56aa
-/**
- * Client-side text sanitization for TTS output.
- * Removes markdown, URLs, file paths, and other non-speakable content.
- * Applied as a fallback when server-side summarization is skipped.
- */
-=======
->>>>>>> upstream/main
 export function sanitizeForTTS(text: string): string {
     if (!text) return '';
     return text

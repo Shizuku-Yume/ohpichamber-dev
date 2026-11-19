@@ -46,7 +46,6 @@ export function diffCommentOriginFromSource(
     }
 }
 
-<<<<<<< HEAD
 /** The origin of a walkthrough target, when it compares something other than uncommitted changes. */
 export const diffCommentOriginFromWalkthroughTarget = (
     target: WalkthroughTarget | null | undefined,
@@ -61,10 +60,6 @@ export const diffCommentOriginFromWalkthroughTarget = (
 );
 
 /** Identity for matching drafts to the surface they were written on. */
-||||||| bc50ba56aa
-/** Identity for matching drafts to the surface they were written on. */
-=======
->>>>>>> upstream/main
 export function diffCommentOriginKey(origin: DiffCommentOrigin | undefined): string {
     if (!origin) return '';
     switch (origin.kind) {
@@ -92,62 +87,7 @@ function diffCommentOriginLabel(origin: DiffCommentOrigin): string {
     }
 }
 
-<<<<<<< HEAD
 /** A file name as chips show it, with the diff it came from when not on disk: `app.ts (#5543)`. */
-||||||| bc50ba56aa
-/** English for the model: where the commented lines come from. */
-export function describeDiffCommentOrigin(origin: DiffCommentOrigin): string {
-    switch (origin.kind) {
-        case 'commit':
-            return `in commit ${shortHash(origin.hash)}`;
-        case 'branch':
-            return `in the changes of branch \`${origin.headRef}\` compared with \`${origin.baseRef}\``;
-        case 'change-request': {
-            const descriptor = origin.provider ? readSourceControlProvider(origin.provider) : null;
-            const noun = descriptor ? `${descriptor.label} ${descriptor.terminology.promptNoun}` : 'pull request';
-            const repository = origin.repository ? ` in ${origin.repository}` : '';
-            const revision = origin.revision ? ` at commit ${shortHash(origin.revision)}` : '';
-            return `in ${noun} ${changeRequestReference(origin)}${repository}${revision}`;
-        }
-    }
-}
-
-/** A file name as chips show it, with the diff it came from when not on disk: `app.ts (#5543)`. */
-=======
-export function describeDiffCommentOrigin(origin: DiffCommentOrigin): string {
-    switch (origin.kind) {
-        case 'commit':
-            return `in commit ${shortHash(origin.hash)}`;
-        case 'branch':
-            return `in the changes of branch \`${origin.headRef}\` compared with \`${origin.baseRef}\``;
-        case 'change-request': {
-            const descriptor = origin.provider ? readSourceControlProvider(origin.provider) : null;
-            const noun = descriptor ? `${descriptor.label} ${descriptor.terminology.promptNoun}` : 'pull request';
-            const repository = origin.repository ? ` in ${origin.repository}` : '';
-            const revision = origin.revision ? ` at commit ${shortHash(origin.revision)}` : '';
-            return `in ${noun} ${changeRequestReference(origin)}${repository}${revision}`;
-        }
-    }
-}
-
->>>>>>> upstream/main
 export function fileWithDiffCommentOrigin(file: string, origin: DiffCommentOrigin | undefined): string {
     return origin ? `${file} (${diffCommentOriginLabel(origin)})` : file;
 }
-<<<<<<< HEAD
-||||||| bc50ba56aa
-
-/** The origin of what a walkthrough reads. */
-export function diffCommentOriginFromTarget(target: WalkthroughTarget): DiffCommentOrigin | undefined {
-    return 'context' in target
-        ? diffCommentOriginFromSource(target.source, { provider: target.context.provider })
-        : diffCommentOriginFromSource(target.source);
-}
-=======
-
-export function diffCommentOriginFromTarget(target: WalkthroughTarget): DiffCommentOrigin | undefined {
-    return 'context' in target
-        ? diffCommentOriginFromSource(target.source, { provider: target.context.provider })
-        : diffCommentOriginFromSource(target.source);
-}
->>>>>>> upstream/main

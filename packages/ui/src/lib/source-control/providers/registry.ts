@@ -133,38 +133,12 @@ export const useChangeRequestTerm = (id: string | null | undefined): ChangeReque
 );
 
 type SourceControlProviderServing = 'served' | 'not-served' | 'unknown';
-<<<<<<< HEAD
 /**
  * Whether the server reads a provider's change-request diffs, which the
  * comparison view and walkthroughs show. A served provider can list and open
  * its change requests and still not serve their diff
  * (`features.changeRequestPatch` off); `unknown` while no list is held.
  */
-||||||| bc50ba56aa
-
-export const useSourceControlProviderServing = (id: string | null | undefined): SourceControlProviderServing => (
-  useSourceControlProviderRegistry((state) => {
-    if (id && state.byId.has(id)) return 'served';
-    return state.holdsList ? 'not-served' : 'unknown';
-  })
-);
-
-/**
- * Whether the server reads a provider's change-request diffs, which the
- * comparison view and walkthroughs show. A served provider can list and open
- * its change requests and still not serve their diff
- * (`features.changeRequestPatch` off); `unknown` while no list is held.
- */
-=======
-
-export const useSourceControlProviderServing = (id: string | null | undefined): SourceControlProviderServing => (
-  useSourceControlProviderRegistry((state) => {
-    if (id && state.byId.has(id)) return 'served';
-    return state.holdsList ? 'not-served' : 'unknown';
-  })
-);
-
->>>>>>> upstream/main
 export const useChangeRequestDiffServing = (id: string | null | undefined): SourceControlProviderServing => (
   useSourceControlProviderRegistry((state) => {
     const descriptor = id ? state.byId.get(id) : undefined;
@@ -173,23 +147,12 @@ export const useChangeRequestDiffServing = (id: string | null | undefined): Sour
   })
 );
 
-<<<<<<< HEAD
 /**
  * A lookup from provider id to descriptor, for surfaces that name several
  * providers in one render (rows of different hosts). An id the registry does
  * not hold reads as the generic fallback. One function while the list stays.
  */
 type SourceControlDescriptorOf = (id: string | null | undefined) => SourceControlProviderDescriptor;
-||||||| bc50ba56aa
-/**
- * A lookup from provider id to descriptor, for surfaces that name several
- * providers in one render (rows of different hosts). An id the registry does
- * not hold reads as the generic fallback. One function while the list stays.
- */
-export type SourceControlDescriptorOf = (id: string | null | undefined) => SourceControlProviderDescriptor;
-=======
-export type SourceControlDescriptorOf = (id: string | null | undefined) => SourceControlProviderDescriptor;
->>>>>>> upstream/main
 
 export const useSourceControlDescriptorOf = (): SourceControlDescriptorOf => {
   const byId = useSourceControlProviderRegistry((state) => state.byId);

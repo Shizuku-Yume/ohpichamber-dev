@@ -48,7 +48,6 @@ export async function renameRun(run: MultiRunSummary, title: string, sessionById
 }
 
 export async function detachFromRun(session: Session, runTitle: string): Promise<void> {
-<<<<<<< HEAD
   const runtimeKey = getRuntimeKey();
   const nextTitle = runTitle.trim() || session.title;
   if (!nextTitle) throw new Error('Run session title is unavailable');
@@ -60,20 +59,6 @@ export async function detachFromRun(session: Session, runTitle: string): Promise
   const directory = resolveWorkspaceDirectory(session.workspaceId);
   if (!directory) throw new Error('Member directory is unknown');
   registerMultiRunSession({ ...renamed, metadata: metadata.metadata, metadataRevision: metadata.revision }, directory, metadata);
-||||||| bc50ba56aa
-  const result = await requestSessionMetadataUpdate(session.id, { openchamber: { multirun: null } }, session.directory);
-  if (result.outcome !== 'updated') throw new Error(`Multi-run membership was not removed: ${result.reason}`);
-  registerMultiRunSession({ ...session, metadata: result.metadata }, session.directory);
-  // Renaming also keeps an old slash-style lane title from reading as a legacy run.
-  const title = runTitle.trim();
-  if (title && title !== session.title) await useSessionUIStore.getState().updateSessionTitle(session.id, title);
-=======
-  const result = await requestSessionMetadataUpdate(session.id, { openchamber: { multirun: null } }, session.directory);
-  if (result.outcome !== 'updated') throw new Error(`Multi-run membership was not removed: ${result.reason}`);
-  registerMultiRunSession({ ...session, metadata: result.metadata }, session.directory);
-  const title = runTitle.trim();
-  if (title && title !== session.title) await useSessionUIStore.getState().updateSessionTitle(session.id, title);
->>>>>>> upstream/main
 }
 
 export async function archiveRun(run: MultiRunSummary): Promise<{ archivedIds: string[]; failedIds: string[] }> {
@@ -139,13 +124,8 @@ export async function askOtherModels(input: {
   let failedCount = 0;
   for (const model of input.models) {
     try {
-<<<<<<< HEAD
       assertCurrent();
       // Each new lane counts the ones before it, so duplicates get an index.
-||||||| bc50ba56aa
-      // Each new lane counts the ones before it, so duplicates get an index.
-=======
->>>>>>> upstream/main
       const laneId = await addLaneToRun({ run, runGroup: undefined, model, sessionById, isolateFromProjectRoot: true });
       const created = { sessionId: laneId, identity: { ...identity, providerID: model.providerId, modelID: model.modelId } };
       run.lanes = [...run.lanes, created];
@@ -195,15 +175,8 @@ export async function addLaneToRun(input: {
     ?? (input.isolateFromProjectRoot && location && await checkIsGitRepository(location.project.path) ? location.project.path : null);
   assertCurrent();
   if (location && startDirectory) {
-<<<<<<< HEAD
     // The template's HEAD is where every lane of the run started.
     const { head } = await snapshotGitWorktree(startDirectory, { ref: runSnapshotRef(run, templateSession.sessionId) });
-||||||| bc50ba56aa
-    // The template's HEAD is where every lane of the run started.
-    const { head } = await snapshotGitWorktree(startDirectory, { ref: runSnapshotRef(run, templateSession.id) });
-=======
-    const { head } = await snapshotGitWorktree(startDirectory, { ref: runSnapshotRef(run, templateSession.id) });
->>>>>>> upstream/main
     assertCurrent();
     const modelPart = `${toModelSlug(model.providerId, model.modelId)}${index ? `/${index}` : ''}`;
     const preferredName = [template.identity.runGroup, toGitSafeSlug(run.groupSlug) || 'multi-run', modelPart].filter(Boolean).join('/');

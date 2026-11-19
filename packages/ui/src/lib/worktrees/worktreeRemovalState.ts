@@ -36,15 +36,7 @@ export const isWorktreeRemoving = (path: string): boolean =>
 export const useWorktreeRemoving = (path: string | null | undefined): boolean =>
   useWorktreeRemovalStore((state) => selectRemoving(state, path));
 
-<<<<<<< HEAD
-export const useRemovingWorktreePaths = (): ReadonlySet<string> =>
-  useWorktreeRemovalStore((state) => state.removingPaths);
-||||||| bc50ba56aa
-/** Every worktree this client is removing right now, by normalized path. */
 export const useRemovingWorktreePaths = (): ReadonlySet<string> => useWorktreeRemovalStore((state) => state.removingPaths);
-=======
-export const useRemovingWorktreePaths = (): ReadonlySet<string> => useWorktreeRemovalStore((state) => state.removingPaths);
->>>>>>> upstream/main
 
 subscribeRuntimeEndpointChanged(() => {
   if (useWorktreeRemovalStore.getState().removingPaths.size === 0) return;

@@ -1,23 +1,6 @@
 import { z } from 'zod';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-<<<<<<< HEAD
-/**
- * Environment variables for what the server starts: the managed OpenCode,
- * Git, the terminal and command execution (`/api/environment`). Values can
- * be API tokens, so they stay on the server; the UI learns only the names
- * and can set or remove a value, never read it back.
- */
-||||||| bc50ba56aa
-/**
- * Environment variables for what the server starts: the managed OpenCode,
- * Git, the terminal and command execution (`/api/environment`). Values can
- * be API tokens, so they stay on the server; the UI learns only the names
- * and can set or remove a value, never read it back. Not available in VS Code,
- * which runs no OpenChamber server.
- */
-=======
->>>>>>> upstream/main
 
 export const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 

@@ -12,20 +12,6 @@ type GuestFileEditorMatch = {
 
 const fileNameOf = (filePath: string): string => filePath.slice(filePath.replace(/\\/g, '/').lastIndexOf('/') + 1);
 
-<<<<<<< HEAD
-/**
- * The first active guest's first editor whose patterns match the file's name,
- * in catalog order. `null` when none does. Mobile keeps the catalog empty,
- * so files there always stay with the host's own views.
- */
-||||||| bc50ba56aa
-/**
- * The first active guest's first editor whose patterns match the file's name,
- * in catalog order. `null` when none does. VS Code and mobile keep the catalog
- * empty, so files there always stay with the host's own views.
- */
-=======
->>>>>>> upstream/main
 export const findGuestFileEditor = (
   guests: readonly InstalledGuest[],
   filePath: string,

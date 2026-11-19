@@ -17,12 +17,6 @@ type OpenGuestCommitOptions = {
   directory: string | null;
   git: Pick<GitAPI, 'getGitLog'> | null;
   currentBranch: (directory: string) => Promise<string | null>;
-<<<<<<< HEAD
-  /** Mobile has no Diff view commit scope for guests. */
-||||||| bc50ba56aa
-  /** VS Code and mobile have no Diff view commit scope for guests. */
-=======
->>>>>>> upstream/main
   supported: boolean;
 };
 
@@ -49,7 +43,7 @@ export const openGuestCommit = async ({ sha, directory, git, currentBranch, supp
   if (isMobileSurfaceRuntime()) {
     return openMobileWorkspace({ tab: 'changes', commit: { directory } })
       ? { ok: true }
-      : { ok: false, code: 'UNSUPPORTED', message: 'This OpenChamber surface has no Diff view.' };
+      : { ok: false, code: 'UNSUPPORTED', message: 'This OhPiChamber surface has no Diff view.' };
   }
   useUIStore.getState().openContextPanelTab(directory, { mode: 'diff', diffScope: 'commit' });
   return { ok: true };

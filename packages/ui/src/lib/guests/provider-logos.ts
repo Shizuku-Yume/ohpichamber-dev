@@ -49,30 +49,3 @@ const firstLogo = (guests: readonly InstalledGuest[], ids: readonly string[]): G
 export const guestProviderLogoOf = (ids: readonly string[]): GuestProviderLogo | null => (
   firstLogo(useGuestsStore.getState().guests, ids)
 );
-<<<<<<< HEAD
-||||||| bc50ba56aa
-
-export const useGuestProviderLogo = (ids: readonly string[]): GuestProviderLogo | null => (
-  useGuestsStore((state) => firstLogo(state.guests, ids))
-);
-
-/** The logo as an object URL. An SVG is asked for in the theme's variant, so `currentColor` reads on either background. */
-export const useGuestProviderLogoUrl = (logo: GuestProviderLogo | null, themeVariant: 'light' | 'dark'): RuntimeObjectUrl => {
-  const query = logo
-    ? new URLSearchParams(logo.isSvg ? { v: logo.version, theme: themeVariant } : { v: logo.version }).toString()
-    : '';
-  return useRuntimeObjectUrl(logo?.path ?? null, query);
-};
-=======
-
-export const useGuestProviderLogo = (ids: readonly string[]): GuestProviderLogo | null => (
-  useGuestsStore((state) => firstLogo(state.guests, ids))
-);
-
-export const useGuestProviderLogoUrl = (logo: GuestProviderLogo | null, themeVariant: 'light' | 'dark'): RuntimeObjectUrl => {
-  const query = logo
-    ? new URLSearchParams(logo.isSvg ? { v: logo.version, theme: themeVariant } : { v: logo.version }).toString()
-    : '';
-  return useRuntimeObjectUrl(logo?.path ?? null, query);
-};
->>>>>>> upstream/main

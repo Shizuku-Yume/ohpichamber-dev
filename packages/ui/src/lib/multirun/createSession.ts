@@ -3,25 +3,12 @@ import type { CapturedSendOptions, Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { getMultiRunMembership, multiRunMembershipPatch, withMultiRunMembership, type MultiRunIdentity } from './identity';
 
-<<<<<<< HEAD
-/** Bind the server-assigned ID before dispatch. Copied markers cannot join. */
-||||||| bc50ba56aa
-/** Bind the server-assigned ID before dispatch. A fork inherits this ID and cannot join. */
-=======
->>>>>>> upstream/main
 export async function createMultiRunSession(
   input: {
     title: string;
     directory: string;
     identity: Omit<MultiRunIdentity, 'key'>;
-<<<<<<< HEAD
     selection: CapturedSendOptions;
-||||||| bc50ba56aa
-    /** Model and agent the run is pinned to; v2 sets them on the session, not per prompt. */
-    selection?: { model?: ModelRef; agent?: string };
-=======
-    selection?: { model?: ModelRef; agent?: string };
->>>>>>> upstream/main
   },
   assertCurrent: () => void,
 ): Promise<Session> {
@@ -39,24 +26,8 @@ export async function createMultiRunSession(
   });
   try {
     assertCurrent();
-<<<<<<< HEAD
     const result = await canonicalClient.patchSessionMetadata(session.sessionId,
       multiRunMembershipPatch({ ...membership, sessionID: session.sessionId }));
-||||||| bc50ba56aa
-    // OpenCode 2.x takes metadata only at creation, so the ID is bound through
-    // OpenChamber's own metadata route. It applies an RFC 7386 merge patch, so
-    // only the marker travels and nothing another feature wrote under
-    // `openchamber` in the meantime is replaced — no read-modify-write needed.
-    const result = await requestSessionMetadataUpdate(
-      session.id,
-      multiRunMembershipPatch({ ...membership, sessionID: session.id }),
-    );
-=======
-    const result = await requestSessionMetadataUpdate(
-      session.id,
-      multiRunMembershipPatch({ ...membership, sessionID: session.id }),
-    );
->>>>>>> upstream/main
     assertCurrent();
     const bound: Session = { ...session, metadata: result.metadata, metadataRevision: result.revision };
     if (!getMultiRunMembership(bound)) throw new Error('Multi-run membership was not saved');

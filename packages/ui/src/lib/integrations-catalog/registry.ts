@@ -1,47 +1,3 @@
-<<<<<<< HEAD
-/**
- * The curated external-services catalog: one bundled, typed list of services
- * worth connecting to OpenChamber. Adding or removing entries and changing
- * their URLs is a reviewed change; a URL change reaches users with the next
- * release. What belongs here and how to vet a candidate before adding it:
- * DOCUMENTATION.md next to this file.
- *
- * An entry is one integration and may bundle several components: an MCP
- * server, a native OMP plugin, and skills can arrive together the way vendors
- * ship them. Field names follow the official MCP Registry `server.json`
- * where they overlap, so importing from it stays possible.
- *
- * A local MCP server declares `envInputs` for the environment values it needs.
- * The install form collects them and stores each as a workspace credential
- * referenced by `envCredentialRefs`; the value never lands in the MCP config.
- *
- * OpenCode-only npm plugins are not listed: this app runs OMP native plugins
- * from `@oh-my-pi/pi-coding-agent`, which does not load them. The `plugin`
- * component kind stays for native plugin packages that support OMP.
- *
- * Vendor URLs were checked against vendor docs on 2026-10-01 (OPE-282 launch
- * list); the entries added on 2026-10-15 come from integrations.sh and passed
- * the probe with --register. Recheck one when you touch it.
- */
-||||||| bc50ba56aa
-/**
- * The curated external-services catalog: one bundled, typed list of services
- * worth connecting to OpenChamber. Adding or removing entries and changing
- * their URLs is a reviewed change; a URL change reaches users with the next
- * release. What belongs here and how to vet a candidate before adding it:
- * DOCUMENTATION.md next to this file.
- *
- * An entry is one integration and may bundle several components: an MCP
- * server, an OpenCode plugin, and skills can arrive together the way vendors
- * ship them. Field names follow the official MCP Registry `server.json`
- * where they overlap, so importing from it stays possible.
- *
- * Vendor URLs were checked against vendor docs on 2026-10-01 (OPE-282 launch
- * list); the entries added on 2026-10-15 come from integrations.sh and passed
- * the probe with --register. Recheck one when you touch it.
- */
-=======
->>>>>>> upstream/main
 import type { IconName } from '@/components/icon/icons';
 import type { I18nKey } from '@/lib/i18n';
 
@@ -59,7 +15,6 @@ export type CatalogInput = {
   required?: boolean;
 };
 
-<<<<<<< HEAD
 /**
  * An environment variable a local server needs. The install form collects the
  * value and stores it as a workspace credential reference; the value itself
@@ -80,13 +35,6 @@ export type CatalogEnvInput = {
  * One installable part of an integration. At most one MCP component per
  * entry: the entry id doubles as the MCP server name.
  */
-||||||| bc50ba56aa
-/**
- * One installable part of an integration. At most one MCP component per
- * entry: the entry id doubles as the MCP server name.
- */
-=======
->>>>>>> upstream/main
 export type CatalogMcpComponent = {
   kind: 'mcp';
   auth: CatalogAuthKind;
@@ -95,20 +43,8 @@ export type CatalogMcpComponent = {
     tokenHeader?: { name: string; valuePrefix?: string };
     tokenOptional?: boolean;
   };
-<<<<<<< HEAD
-  /** Local servers run on the machine the agent host runs on. */
-||||||| bc50ba56aa
-  /** Local servers run on the machine OpenCode runs on. */
-=======
->>>>>>> upstream/main
   local?: {
     command: string[];
-<<<<<<< HEAD
-    /** First run downloads a package; the default startup timeout is too tight. */
-||||||| bc50ba56aa
-    /** First run downloads a package; OpenCode's default timeout is too tight. */
-=======
->>>>>>> upstream/main
     timeoutMs?: number;
     requires?: Array<'node' | 'python' | 'docker'>;
     /**
@@ -2501,93 +2437,10 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     components: [{ kind: 'skill', source: 'openai/skills', subpath: 'skills/.curated/pdf', skillDir: 'pdf' }],
   },
 
-<<<<<<< HEAD
   // --- Native OMP plugins (npm, pinned to a major, explicit confirmation) ---
   // No entry yet: the upstream OpenCode plugins in this catalog position
   // (Langfuse, LangSmith, Claude Code, Search Providers) load only in
   // OpenCode's plugin runtime, which OMP does not provide.
-||||||| bc50ba56aa
-  // --- OpenCode plugins (npm, pinned to a major, explicit confirmation) ---
-  {
-    id: 'langfuse-plugin',
-    name: 'Langfuse',
-    publisher: 'Langfuse',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.langfuse-plugin.description',
-    detailsKey: 'integrationsCatalog.entry.langfuse-plugin.details',
-    categories: ['ai'],
-    icon: 'pulse',
-    homepage: 'https://langfuse.com',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@langfuse/opencode-observability-plugin@^1', license: 'MIT' }],
-  },
-  {
-    id: 'langsmith-plugin',
-    name: 'LangSmith',
-    publisher: 'LangChain',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.langsmith-plugin.description',
-    detailsKey: 'integrationsCatalog.entry.langsmith-plugin.details',
-    categories: ['ai'],
-    icon: 'pulse',
-    homepage: 'https://smith.langchain.com',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@langchain/langsmith-opencode@^1', license: 'MIT' }],
-  },
-  {
-    id: 'opencode-search-providers',
-    name: 'Search Providers',
-    publisher: 'OpenChamber',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.opencode-search-providers.description',
-    detailsKey: 'integrationsCatalog.entry.opencode-search-providers.details',
-    categories: ['openchamber', 'ai'],
-    icon: 'search',
-    homepage: 'https://github.com/openchamber/opencode-search-providers',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@openchamber/opencode-search-providers@^1', license: 'MIT' }],
-  },
-=======
-  {
-    id: 'langfuse-plugin',
-    name: 'Langfuse',
-    publisher: 'Langfuse',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.langfuse-plugin.description',
-    detailsKey: 'integrationsCatalog.entry.langfuse-plugin.details',
-    categories: ['ai'],
-    icon: 'pulse',
-    homepage: 'https://langfuse.com',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@langfuse/opencode-observability-plugin@^1', license: 'MIT' }],
-  },
-  {
-    id: 'langsmith-plugin',
-    name: 'LangSmith',
-    publisher: 'LangChain',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.langsmith-plugin.description',
-    detailsKey: 'integrationsCatalog.entry.langsmith-plugin.details',
-    categories: ['ai'],
-    icon: 'pulse',
-    homepage: 'https://smith.langchain.com',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@langchain/langsmith-opencode@^1', license: 'MIT' }],
-  },
-  {
-    id: 'opencode-search-providers',
-    name: 'Search Providers',
-    publisher: 'OpenChamber',
-    verified: true,
-    descriptionKey: 'integrationsCatalog.entry.opencode-search-providers.description',
-    detailsKey: 'integrationsCatalog.entry.opencode-search-providers.details',
-    categories: ['openchamber', 'ai'],
-    icon: 'search',
-    homepage: 'https://github.com/openchamber/opencode-search-providers',
-    status: 'stable',
-    components: [{ kind: 'plugin', spec: '@openchamber/opencode-search-providers@^1', license: 'MIT' }],
-  },
->>>>>>> upstream/main
 
   {
     id: 'excalidraw',

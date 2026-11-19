@@ -18,25 +18,6 @@ const diffCache = createLaneCache<LaneDiffStat>();
 
 const LOADING: LaneSummary = { reply: { state: 'loading' }, diff: { state: 'loading' } };
 
-<<<<<<< HEAD
-/**
- * Final reply and worktree changes of each member, read once per finished
- * turn, keyed by the canonical head sequence. Busy members keep what was last
- * read. A read failure is its own state, never an empty reply or zero changes.
- * A response is applied only while it answers the member's latest request, so
- * a slow older read never overwrites a newer one.
- */
-||||||| bc50ba56aa
-/**
- * Final reply and worktree changes of each member, read once per finished
- * turn: a member's `time.idle` changes when a turn ends, which is the only
- * moment its reply or diff can have settled. Busy members keep what was last
- * read. A read failure is its own state, never an empty reply or zero changes.
- * A response is applied only while it answers the member's latest request, so
- * a slow older read never overwrites a newer one.
- */
-=======
->>>>>>> upstream/main
 export function useLaneSummaries(
   members: readonly LaneSummaryInput[],
   activeSessionIds: ReadonlySet<string>,

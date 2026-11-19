@@ -9,7 +9,6 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 import { normalizePath } from '@/lib/pathNormalization';
 import { guestProject, guestProjectDirectories } from './workspace';
 
-<<<<<<< HEAD
 /**
  * A shell scope resolved to the identity it filters: every shell, the
  * sessions in a tree, or the Host directories of a project and its
@@ -24,18 +23,6 @@ type ShellScope =
 const scopeShells = (scope: GuestShellsScope): ShellScope => {
   if (scope.kind === 'global') return { kind: 'all' };
   if (scope.kind === 'project') return { kind: 'directories', directories: guestProjectDirectories(scope.projectId) };
-||||||| bc50ba56aa
-/**
- * The sessions a scope covers, or null for every session. A project scope
- * covers the sessions that run in the project root or one of its worktrees,
- * the same membership the workspace projection reports.
- */
-const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null => {
-  if (scope.kind === 'global') return null;
-=======
-const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null => {
-  if (scope.kind === 'global') return null;
->>>>>>> upstream/main
   const sessions = useGlobalSessionsStore.getState().entityById;
   const known = new Set<string>();
   const store = useBackgroundShellsStore.getState();
@@ -80,23 +67,12 @@ export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnap
   return { kind: 'shells', scope, shells: shells.slice(0, GUEST_SHELLS_MAX), ended: ended.slice(-GUEST_SHELLS_MAX) };
 };
 
-<<<<<<< HEAD
 /**
  * One page of a command's output, running or ended. OpenCode keeps an ended
  * command's output until it evicts the command (it retains the latest 25 per
  * directory); a stopped command's output goes with it at once.
  */
 export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number, signal?: AbortSignal): Promise<GuestShellOutputResult> => {
-||||||| bc50ba56aa
-/**
- * One page of a command's output, running or ended. OpenCode keeps an ended
- * command's output until it evicts the command (it retains the latest 25 per
- * directory); a stopped command's output goes with it at once.
- */
-export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number): Promise<GuestShellOutputResult> => {
-=======
-export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number): Promise<GuestShellOutputResult> => {
->>>>>>> upstream/main
   const store = useBackgroundShellsStore.getState();
   const shell = [...store.byId.values(), ...store.ended.values()].find((entry) => entry.jobId === shellId);
   if (!shell || ('termination' in shell && shell.termination.reason === 'stopped')) throw new HostRequestError('NOT_FOUND', 'OhPiChamber has not seen that shell.');

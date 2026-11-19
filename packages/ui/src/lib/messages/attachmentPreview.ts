@@ -17,18 +17,7 @@ const LEGACY_LINEAR_ISSUE_LINK_MIME = 'application/vnd.openchamber.linear-issue-
 const GUEST_ISSUE_LINK_MIME = 'application/vnd.openchamber.guest-issue-link';
 const GUEST_PR_LINK_MIME = 'application/vnd.openchamber.guest-pr-link';
 
-<<<<<<< HEAD
 type IssueLinkKind = 'repository-issue' | 'change-request' | 'tracker-item' | 'guest-issue' | 'guest-pr';
-||||||| bc50ba56aa
-export type IssueLinkKind = 'repository-issue' | 'change-request' | 'tracker-item' | 'guest-issue' | 'guest-pr';
-
-/** The display type of a repository issue link part: the provider rides as a parameter. */
-export const repositoryIssueLinkMime = (provider: string): string => `${REPOSITORY_ISSUE_LINK_MIME}; provider=${provider}`;
-=======
-export type IssueLinkKind = 'repository-issue' | 'change-request' | 'tracker-item' | 'guest-issue' | 'guest-pr';
-
-export const repositoryIssueLinkMime = (provider: string): string => `${REPOSITORY_ISSUE_LINK_MIME}; provider=${provider}`;
->>>>>>> upstream/main
 
 export const trackerItemLinkMime = (provider: string): string => `${TRACKER_ITEM_LINK_MIME}; provider=${provider}`;
 
@@ -42,21 +31,11 @@ const providerParameterOf = (mime: string, base: string): string | null => {
     return '';
 };
 
-<<<<<<< HEAD
 /**
  * The provider of a repository issue link part, or null for any other part.
  * A neutral type without a `provider` parameter names no provider (`''`).
  */
 const getRepositoryIssueLinkProvider = (file: { mime?: string }): string | null => {
-||||||| bc50ba56aa
-/**
- * The provider of a repository issue link part, or null for any other part.
- * A neutral type without a `provider` parameter names no provider (`''`).
- */
-export const getRepositoryIssueLinkProvider = (file: { mime?: string }): string | null => {
-=======
-export const getRepositoryIssueLinkProvider = (file: { mime?: string }): string | null => {
->>>>>>> upstream/main
     if (!file.mime) return null;
     const legacy = LEGACY_REPOSITORY_ISSUE_LINK_MIMES.get(file.mime);
     if (legacy) return legacy;

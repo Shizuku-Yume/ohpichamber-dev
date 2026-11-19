@@ -1,20 +1,6 @@
 import { z } from 'zod';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-<<<<<<< HEAD
-/**
- * Custom transcription keys live on the server (`/api/voice/keys`, mode 0600
- * there); the UI only learns whether one is set. Speech credentials remain
- * SDK-owned and are not part of this store.
- */
-||||||| bc50ba56aa
-/**
- * Voice API keys live on the server (`/api/voice/keys`, mode 0600 there);
- * the UI only learns whether each is set. Speech and transcription requests
- * carry no key: the server fills it in.
- */
-=======
->>>>>>> upstream/main
 const voiceApiKeyStateSchema = z.object({
   stt: z.boolean(),
 });

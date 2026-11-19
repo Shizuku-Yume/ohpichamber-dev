@@ -1,45 +1,3 @@
-<<<<<<< HEAD
-/**
- * Client for the project setup routes: worktree setup commands, project
- * actions, and pinned draft starters.
- *
- * A project's setup is the merge of two files the server (or the VS Code
- * extension host) owns: the personal one in `~/.config/ohpichamber/projects/`
- * and, when a team shares it, `<repo>/.openchamber/project.json`. The merged
- * view says what runs; its `shared` and `personal` blocks say where each
- * entry came from, so a Settings page edits the personal block and never
- * copies a teammate's entry into it. This module only speaks HTTP: it
- * resolves no home directory and composes no path, so the same code serves
- * web, desktop, VS Code, and the phone, including a phone driving a remote
- * instance.
- *
- * Reads keep the contract callers were written against: a failed read logs
- * and resolves to the empty setup, because worktree creation and the new
- * session screen must keep working when the config cannot be fetched.
- * Writes resolve `false` on failure.
- */
-||||||| bc50ba56aa
-/**
- * Client for the project setup routes: worktree setup commands, project
- * actions, and pinned draft starters.
- *
- * A project's setup is the merge of two files the server (or the VS Code
- * extension host) owns: the personal one in `~/.config/openchamber/projects/`
- * and, when a team shares it, `<repo>/.openchamber/project.json`. The merged
- * view says what runs; its `shared` and `personal` blocks say where each
- * entry came from, so a Settings page edits the personal block and never
- * copies a teammate's entry into it. This module only speaks HTTP: it
- * resolves no home directory and composes no path, so the same code serves
- * web, desktop, VS Code, and the phone, including a phone driving a remote
- * instance.
- *
- * Reads keep the contract callers were written against: a failed read logs
- * and resolves to the empty setup, because worktree creation and the new
- * session screen must keep working when the config cannot be fetched.
- * Writes resolve `false` on failure.
- */
-=======
->>>>>>> upstream/main
 
 import { z } from 'zod';
 
@@ -294,7 +252,6 @@ export async function saveWorktreeSetupWaitEnabled(project: ProjectRef, enabled:
   return updateProjectSetup(project, { setupWorktreeWait: enabled });
 }
 
-<<<<<<< HEAD
 /** Change the personal base directory for new worktrees. Empty input clears it. */
 export async function saveProjectWorktreeDirectory(project: ProjectRef, directory: string): Promise<boolean> {
   const value = directory.trim() || null;
@@ -302,10 +259,6 @@ export async function saveProjectWorktreeDirectory(project: ProjectRef, director
 }
 
 /** The starters pinned for this project, shared ones first, each marked with its source. */
-||||||| bc50ba56aa
-/** The starters pinned for this project, shared ones first, each marked with its source. */
-=======
->>>>>>> upstream/main
 export async function getProjectDraftStarters(project: ProjectRef): Promise<ProjectDraftStarter[]> {
   return (await getProjectSetup(project)).draftStarters;
 }

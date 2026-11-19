@@ -8,25 +8,11 @@ declare global {
   }
 }
 
-<<<<<<< HEAD
 /**
  * Forget the saved layout a crashing window restores on every load: expanded
  * folders, open files and open panels. Runs before the first render, and the
  * stores persist the result, so the next launch starts from it too.
  */
-||||||| bc50ba56aa
-/** True when the desktop app reloaded this window because it kept crashing. */
-export const isDesktopSafeStart = (): boolean => globalThis.window?.__OPENCHAMBER_SAFE_START__ === true;
-
-/**
- * Forget the saved layout a crashing window restores on every load: expanded
- * folders, open files and open panels. Runs before the first render, and the
- * stores persist the result, so the next launch starts from it too.
- */
-=======
-export const isDesktopSafeStart = (): boolean => globalThis.window?.__OPENCHAMBER_SAFE_START__ === true;
-
->>>>>>> upstream/main
 export const forgetLayoutForSafeStart = (): void => {
   useFilesViewTabsStore.setState({ byRoot: {}, runtimeSnapshots: {} });
 

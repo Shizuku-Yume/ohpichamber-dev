@@ -12,15 +12,6 @@ export const EXECUTION_FORK_DEFAULT_INSTRUCTIONS =
     "if it is a conclusion or summary, your task is to verify it, explain whether you agree or disagree, and correct it if needed. " +
     "Always clearly state what you understand your task to be, and wait for the user's approval of your conclusions before taking any further actions.";
 
-<<<<<<< HEAD
-// Assertive variant prefilled when "Run as goal" is checked: the new session
-// treats the forked message as an assignment and executes it to completion.
-||||||| bc50ba56aa
-// Assertive variant prefilled when "Run as goal" is checked: the new session
-// must treat the forked message as an assignment and execute it to completion
-// (the goal loop audits progress and keeps it going), not report back and wait.
-=======
->>>>>>> upstream/main
 export const EXECUTION_FORK_GOAL_INSTRUCTIONS =
     "The message I share is an assignment handed over from another AI agent. Extract the concrete task from it and start executing immediately: " +
     "if it is an implementation plan, implement that plan; " +

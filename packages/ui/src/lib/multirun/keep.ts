@@ -125,23 +125,8 @@ export async function keepRunMember(
     if (!worktree || !location) continue;
 
     try {
-<<<<<<< HEAD
       // Another chat the user started in this worktree keeps it alive.
       const workspace = await canonicalClient.resolveWorkspace(worktree.path);
-||||||| bc50ba56aa
-      // Another chat the user started in this worktree keeps it alive. OpenCode
-      // lists sessions by exact directory, so the lane's own folder inside the
-      // checkout (`<worktree>/ai`) is asked too.
-      const directories = [...new Set([worktree.path, current.directory].map((entry) => normalizePath(entry) ?? entry))];
-      const remaining = (await Promise.all(directories.map((directory) => (
-        listGlobalSessionPages(listSessionPage, { directory, pageSize: 500 })
-      )))).flat();
-=======
-      const directories = [...new Set([worktree.path, current.directory].map((entry) => normalizePath(entry) ?? entry))];
-      const remaining = (await Promise.all(directories.map((directory) => (
-        listGlobalSessionPages(listSessionPage, { directory, pageSize: 500 })
-      )))).flat();
->>>>>>> upstream/main
       assertCurrent();
       if (workspace.workspaceId !== current.workspaceId || normalizePath(resolveWorkspaceDirectory(current.workspaceId)) !== normalizePath(worktree.path)) throw new Error('Worktree workspace changed');
       const remaining = await canonicalClient.listSessions(workspace.workspaceId);

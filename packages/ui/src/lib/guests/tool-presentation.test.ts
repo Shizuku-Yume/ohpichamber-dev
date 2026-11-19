@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
-import type { GuestToolContribution } from 'ohpichamber-sdk';
-||||||| bc50ba56aa
-import type { GuestToolContribution } from '@openchamber/sdk';
-=======
-import type { GuestToolCard, GuestToolContribution, JsonValue } from '@openchamber/sdk';
->>>>>>> upstream/main
+import type { GuestToolCard, GuestToolContribution, JsonValue } from 'ohpichamber-sdk';
 
 import { useGuestsStore } from './store.ts';
 import {
@@ -286,7 +280,7 @@ describe('safeHttpsAddress', () => {
       'javascript:alert(1)',
       'data:text/html,<script>alert(1)</script>',
       'file:///etc/passwd',
-      'openchamber://settings',
+      'ohpichamber://settings',
       '//tracker.example/a',
       '/browse/DEMO-482',
       'tracker.example/browse/DEMO-482',

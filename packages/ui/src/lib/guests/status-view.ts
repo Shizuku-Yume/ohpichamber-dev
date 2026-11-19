@@ -8,25 +8,7 @@ export type GuestStatusViewRead =
   | { ok: true; view: GuestStatusView }
   | { ok: false; failure: GuestStatusViewFailure };
 
-<<<<<<< HEAD
 /** What the service is told about where the section shows. */
-||||||| bc50ba56aa
-type GuestStatusActionResult =
-  | { ok: true }
-  /** `message` is the service's own explanation when it gave one. */
-  | { ok: false; message: string | null };
-
-const actionFailureSchema = z.object({ message: z.string().trim().min(1).max(300) });
-
-/** What the service is told about where the section shows. */
-=======
-type GuestStatusActionResult =
-  | { ok: true }
-  | { ok: false; message: string | null };
-
-const actionFailureSchema = z.object({ message: z.string().trim().min(1).max(300) });
-
->>>>>>> upstream/main
 type GuestStatusContext = {
   directory: string | null;
   locale: string;
@@ -49,7 +31,6 @@ const parseView = (body: string): GuestStatusView | null => {
   }
 };
 
-<<<<<<< HEAD
 /**
  * Reads a source section, keeping what did not change. An answer identical to
  * the last one returns the last view itself, unparsed; otherwise each row and
@@ -57,57 +38,6 @@ const parseView = (body: string): GuestStatusView | null => {
  * memoized by identity, so a sample that moves one number redraws one row and
  * leaves the header alone.
  */
-||||||| bc50ba56aa
-/** Tells the service a control was activated. */
-export const postGuestStatusAction = async (
-  guestId: string,
-  path: string,
-  context: GuestStatusContext,
-  event: GuestStatusActionEvent,
-): Promise<GuestStatusActionResult> => {
-  const answer = await proxyGuestServiceRequest(guestId, sourceRequest(path, context, {
-    method: 'POST',
-    body: JSON.stringify(event),
-  }));
-  if (!answer.ok) return { ok: false, message: null };
-  if (isSuccess(answer.result.status)) return { ok: true };
-  try {
-    const parsed = actionFailureSchema.safeParse(JSON.parse(answer.result.body));
-    return { ok: false, message: parsed.success ? parsed.data.message : null };
-  } catch {
-    return { ok: false, message: null };
-  }
-};
-
-/**
- * Reads a source section, keeping what did not change. An answer identical to
- * the last one returns the last view itself, unparsed; otherwise each row and
- * the header controls keep their previous objects while unchanged. Rows are
- * memoized by identity, so a sample that moves one number redraws one row and
- * leaves the header alone.
- */
-=======
-export const postGuestStatusAction = async (
-  guestId: string,
-  path: string,
-  context: GuestStatusContext,
-  event: GuestStatusActionEvent,
-): Promise<GuestStatusActionResult> => {
-  const answer = await proxyGuestServiceRequest(guestId, sourceRequest(path, context, {
-    method: 'POST',
-    body: JSON.stringify(event),
-  }));
-  if (!answer.ok) return { ok: false, message: null };
-  if (isSuccess(answer.result.status)) return { ok: true };
-  try {
-    const parsed = actionFailureSchema.safeParse(JSON.parse(answer.result.body));
-    return { ok: false, message: parsed.success ? parsed.data.message : null };
-  } catch {
-    return { ok: false, message: null };
-  }
-};
-
->>>>>>> upstream/main
 export const createGuestStatusViewReader = (
   guestId: string,
   path: string,
@@ -161,23 +91,12 @@ const documentVisibility = (): StatusViewVisibility => ({
   },
 });
 
-<<<<<<< HEAD
 type StatusViewPoller = {
   /**
    * Read now, as after an action; a read in flight is followed by one more.
    * Resolves once a read that started after the call has been delivered, so
    * the caller knows the view it shows reflects what happened before.
    */
-||||||| bc50ba56aa
-export type StatusViewPoller = {
-  /**
-   * Read now, as after an action; a read in flight is followed by one more.
-   * Resolves once a read that started after the call has been delivered, so
-   * the caller knows the view it shows reflects what happened before.
-   */
-=======
-export type StatusViewPoller = {
->>>>>>> upstream/main
   refresh: () => Promise<void>;
   stop: () => void;
 };

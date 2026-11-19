@@ -16,40 +16,9 @@ export const fetchStartupDiagnostics = async (
     headers: { Accept: 'application/json' },
     cache: 'no-store',
   });
-<<<<<<< HEAD
   if (!response.ok) throw new Error(`Agent Service readiness request failed (${response.status})`);
   const ready = AgentServiceReadySchema.safeParse(await response.json());
   return ready.success ? null : { error: null, binary: null };
-||||||| bc50ba56aa
-  if (!response.ok) throw new Error(`Startup diagnostics request failed (${response.status})`);
-  const health = healthSchema.parse(await response.json());
-
-  // A historical process error is not a current failure after OpenCode recovers.
-  if (health.isOpenCodeReady === true) return null;
-  if (health.isOpenCodeReady !== false && health.openCodeRunning !== false) return null;
-
-  return {
-    error: health.lastOpenCodeError || null,
-    binary: health.lastOpenCodeLaunchDiagnostics?.sourceBinary
-      || health.opencodeBinaryResolved
-      || health.lastOpenCodeLaunchDiagnostics?.binary
-      || null,
-  };
-=======
-  if (!response.ok) throw new Error(`Startup diagnostics request failed (${response.status})`);
-  const health = healthSchema.parse(await response.json());
-
-  if (health.isOpenCodeReady === true) return null;
-  if (health.isOpenCodeReady !== false && health.openCodeRunning !== false) return null;
-
-  return {
-    error: health.lastOpenCodeError || null,
-    binary: health.lastOpenCodeLaunchDiagnostics?.sourceBinary
-      || health.opencodeBinaryResolved
-      || health.lastOpenCodeLaunchDiagnostics?.binary
-      || null,
-  };
->>>>>>> upstream/main
 };
 
 type InitRecoveryDescriptionKey =

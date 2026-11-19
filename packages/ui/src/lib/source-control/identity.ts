@@ -35,24 +35,10 @@ type SourceControlTarget = {
 };
 
 export const getBoundSourceControlReadContexts = (
-<<<<<<< HEAD
- result: SourceControlBindingRead,
- directory: string,
- activeAccountFor: (identity: SourceControlIdentity) => string | null = () => null,
- /** The instances remotes are recognised on: connected ones and each provider's default instance. */
- knownIdentities: readonly SourceControlIdentity[] = [],
-||||||| bc50ba56aa
-  result: SourceControlBindingRead,
-  directory: string,
-  activeAccountFor: (identity: SourceControlIdentity) => string | null = () => null,
-  /** The instances remotes are recognised on: connected ones and each provider's default instance. */
-  knownIdentities: readonly SourceControlIdentity[] = [],
-=======
   result: SourceControlBindingRead,
   directory: string,
   activeAccountFor: (identity: SourceControlIdentity) => string | null = () => null,
   knownIdentities: readonly SourceControlIdentity[] = [],
->>>>>>> upstream/main
 ): SourceControlReadContext[] => {
  const contexts: SourceControlReadContext[] = (result.binding?.providers ?? []).filter((provider) => provider.readiness === 'ready'
   && provider.endpoint?.fingerprint === result.repository.remotes.find((remote) => remote.name === provider.primaryRemote)?.fetch.fingerprint
@@ -260,39 +246,11 @@ export const selectableIdentities = <T extends { id: string }>(
 };
 
 export const activeIdentityFor = <T extends { id: string; name: string; userName: string; userEmail: string; account?: { accountId: string } | null }>(
-<<<<<<< HEAD
- profiles: T[],
- systemIdentity: T | null | undefined,
- author: { userName?: string | null; userEmail?: string | null } | null | undefined,
- fromAuthor: (author: { userName: string; userEmail: string }) => T,
- /**
-  * The account the repository is bound to, when it is bound to one. Two
-  * identities can share an author — the machine's own and an account with
-  * the same email — and the author alone cannot tell them apart; the
-  * binding can. Null means the repository answers to no account, which is
-  * the System identity when the author is the machine's.
-  */
- boundAccountId?: string | null,
-||||||| bc50ba56aa
-  profiles: T[],
-  systemIdentity: T | null | undefined,
-  author: { userName?: string | null; userEmail?: string | null } | null | undefined,
-  fromAuthor: (author: { userName: string; userEmail: string }) => T,
-  /**
-   * The account the repository is bound to, when it is bound to one. Two
-   * identities can share an author — the machine's own and an account with
-   * the same email — and the author alone cannot tell them apart; the
-   * binding can. Null means the repository answers to no account, which is
-   * the System identity when the author is the machine's.
-   */
-  boundAccountId?: string | null,
-=======
   profiles: T[],
   systemIdentity: T | null | undefined,
   author: { userName?: string | null; userEmail?: string | null } | null | undefined,
   fromAuthor: (author: { userName: string; userEmail: string }) => T,
   boundAccountId?: string | null,
->>>>>>> upstream/main
 ): T | null => {
  const userName = author?.userName ?? '';
  const userEmail = author?.userEmail ?? '';
@@ -325,39 +283,6 @@ export const proposeIdentityForHost = <T extends { id: string; account?: { insta
  defaultIdentityId?: string | null,
  instanceSshHosts: Readonly<Record<string, string>> = {},
 ): T | null => {
-<<<<<<< HEAD
- const matching = host
-  ? identities.find((identity) => {
-   const instance = identity.account?.instance ?? '';
-   if (!instance) return false;
-   return instanceHost(instance) === host
-    || gitRemoteHost(instanceSshHosts[instance] ?? '') === host;
-  })
-  : undefined;
- if (matching) return matching;
- const preferred = defaultIdentityId?.trim();
- return (preferred && identities.find((identity) => identity.id === preferred))
-  // The System identity is what a repository has before anyone chooses; it
-  // is the default rather than a guess.
-  || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
-  || null;
-||||||| bc50ba56aa
-  const matching = host
-    ? identities.find((identity) => {
-      const instance = identity.account?.instance ?? '';
-      if (!instance) return false;
-      return instanceHost(instance) === host
-        || gitRemoteHost(instanceSshHosts[instance] ?? '') === host;
-    })
-    : undefined;
-  if (matching) return matching;
-  const preferred = defaultIdentityId?.trim();
-  return (preferred && identities.find((identity) => identity.id === preferred))
-    // The System identity is what a repository has before anyone chooses; it
-    // is the default rather than a guess.
-    || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
-    || null;
-=======
   const matching = host
     ? identities.find((identity) => {
       const instance = identity.account?.instance ?? '';
@@ -371,7 +296,6 @@ export const proposeIdentityForHost = <T extends { id: string; account?: { insta
   return (preferred && identities.find((identity) => identity.id === preferred))
     || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
     || null;
->>>>>>> upstream/main
 };
 
 type ManagedAccountOption = {
@@ -382,46 +306,18 @@ type ManagedAccountOption = {
 };
 
 export const accountUsableByIdentity = (
-<<<<<<< HEAD
- account: Pick<SourceControlAuthAccount, 'source' | 'current'>,
- cliTransport: boolean,
-): boolean => account.source !== 'cli' || (cliTransport && account.current);
-||||||| bc50ba56aa
-  account: Pick<SourceControlAuthAccount, 'source' | 'current'>,
-  cliTransport: boolean,
-): boolean => account.source !== 'cli' || (cliTransport && account.current);
-=======
   account: Pick<SourceControlAuthAccount, 'source' | 'current' | 'usable'>,
   cliTransport: boolean,
 ): boolean => account.source !== 'cli'
   || (cliTransport && (account.usable ?? account.current));
->>>>>>> upstream/main
 
 export const unavailableAccountReason = (
-<<<<<<< HEAD
- account: SourceControlIdentity & { accountId: string },
- listedAccounts: Pick<SourceControlAuthAccount, 'source' | 'current'>[] | null,
- cliTransport: boolean,
-||||||| bc50ba56aa
-  account: SourceControlIdentity & { accountId: string },
-  listedAccounts: Pick<SourceControlAuthAccount, 'source' | 'current'>[] | null,
-  cliTransport: boolean,
-=======
   account: SourceControlIdentity & { accountId: string },
   listedAccounts: Pick<SourceControlAuthAccount, 'source' | 'current' | 'usable'>[] | null,
   cliTransport: boolean,
->>>>>>> upstream/main
 ): 'cli-not-in-use' | 'gone' => cliTransport
-<<<<<<< HEAD
- && account.accountId.includes('#cli:')
- && !listedAccounts?.some((listed) => listed.source === 'cli' && listed.current)
-||||||| bc50ba56aa
-  && account.accountId.includes('#cli:')
-  && !listedAccounts?.some((listed) => listed.source === 'cli' && listed.current)
-=======
   && account.accountId.includes('#cli:')
   && !listedAccounts?.some((listed) => listed.source === 'cli' && (listed.usable ?? listed.current))
->>>>>>> upstream/main
   ? 'cli-not-in-use'
   : 'gone';
 

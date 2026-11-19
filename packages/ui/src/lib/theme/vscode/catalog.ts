@@ -44,7 +44,6 @@ export async function readThemePackage(extension: ThemeExtension, signal: AbortS
 const FONT_STYLE_WORDS = /\b(?:(?:no|non|without)[\s-]*)?(?:italics?|bold)\b/gi;
 const baseName = (name: string) => name.replace(FONT_STYLE_WORDS, '').replace(/\(\s*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
-<<<<<<< HEAD
 /**
  * Packages often ship italic and bold editions of one palette. The import keeps
  * colors and drops font styles, so such editions add nothing here. An edition
@@ -54,19 +53,6 @@ const baseName = (name: string) => name.replace(FONT_STYLE_WORDS, '').replace(/\
  * The first variant, in the package's own order, stays.
  */
 function withoutRepeatedPalettes<T extends { status: 'ready'; name: string; definition: ThemeDefinition } | { status: 'invalid' }>(variants: T[]): T[] {
-||||||| bc50ba56aa
-/**
- * Packages often ship italic and bold editions of one palette. The import keeps
- * colors and drops font styles, so such editions add nothing here. An edition
- * goes when it imports to the same colors as an earlier variant, or when its
- * name differs from an earlier variant of the same appearance only by
- * font-style words (Night Owl's "No Italics" also nudges one token color).
- * The first variant, in the package's own order, stays.
- */
-export function withoutRepeatedPalettes<T extends { status: 'ready'; name: string; definition: ThemeDefinition } | { status: 'invalid' }>(variants: T[]): T[] {
-=======
-export function withoutRepeatedPalettes<T extends { status: 'ready'; name: string; definition: ThemeDefinition } | { status: 'invalid' }>(variants: T[]): T[] {
->>>>>>> upstream/main
   const palettes = new Set<string>();
   const names = new Set<string>();
   return variants.filter((variant) => {

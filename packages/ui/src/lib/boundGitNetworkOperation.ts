@@ -240,15 +240,8 @@ export const runBoundReviewPush = async ({
 }): Promise<GitNetworkOperation> => {
   const target = review.target.trim().replace(/^refs\/heads\//, '');
   if (!target || target === 'HEAD') fail('publish-target-required');
-<<<<<<< HEAD
   // People type hashtags as `#tag`; the host takes the bare name.
   const hashtags = (review.hashtags ?? []).map((tag: string) => tag.replace(/^#/, '')).filter(Boolean);
-||||||| bc50ba56aa
-  // People type hashtags as `#tag`; the host takes the bare name.
-  const hashtags = (review.hashtags ?? []).map((tag) => tag.replace(/^#/, '')).filter(Boolean);
-=======
-  const hashtags = (review.hashtags ?? []).map((tag) => tag.replace(/^#/, '')).filter(Boolean);
->>>>>>> upstream/main
   if ((review.topic !== undefined && !isValidReviewOption(review.topic)) || !hashtags.every(isValidReviewOption)) {
     fail('review-option-invalid');
   }

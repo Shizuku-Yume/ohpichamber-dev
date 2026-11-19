@@ -15,15 +15,8 @@ export type GuestLinkRule = {
   } | null;
 };
 
-<<<<<<< HEAD
 /** A click target: which extension, what it does, the identifier and the link it names. */
 type GuestLinkClaim = {
-||||||| bc50ba56aa
-/** A click target: which extension, what it does, the identifier and the link it names. */
-export type GuestLinkClaim = {
-=======
-export type GuestLinkClaim = {
->>>>>>> upstream/main
   guestId: string;
   action: GuestLinkAction;
   identifier: string;
@@ -124,28 +117,6 @@ export const claimGuestUrl = (rules: readonly GuestLinkRule[], href: string): Gu
   return null;
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-// The last rules handed out, by content: every chat part reads the same
-// catalog, so one slot keeps one array while the rules stay the same.
-type HandedOutRules = { key: string; rules: readonly GuestLinkRule[] };
-let current: HandedOutRules = { key: '[]', rules: [] };
-const stableRules = (rules: readonly GuestLinkRule[]): readonly GuestLinkRule[] => {
-  const key = JSON.stringify(rules);
-  if (key !== current.key) current = { key, rules };
-  return current.rules;
-};
-
-=======
-type HandedOutRules = { key: string; rules: readonly GuestLinkRule[] };
-let current: HandedOutRules = { key: '[]', rules: [] };
-const stableRules = (rules: readonly GuestLinkRule[]): readonly GuestLinkRule[] => {
-  const key = JSON.stringify(rules);
-  if (key !== current.key) current = { key, rules };
-  return current.rules;
-};
-
->>>>>>> upstream/main
 const versions = new WeakMap<readonly GuestLinkRule[], number>();
 let nextVersion = 1;
 export const guestLinksVersion = (rules: readonly GuestLinkRule[]): number => {
@@ -157,21 +128,3 @@ export const guestLinksVersion = (rules: readonly GuestLinkRule[]): number => {
   }
   return version;
 };
-
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The rules of the extensions active now. The array keeps its identity while
- * the rules stay the same, so the chat's Markdown plugins keep theirs and no
- * catalog reload re-parses a transcript.
- */
-export const useGuestLinkRules = (): readonly GuestLinkRule[] => {
-  const guests = useGuestsStore((state) => state.guests);
-  return React.useMemo(() => stableRules(guestLinkRulesOf(guests)), [guests]);
-};
-=======
-export const useGuestLinkRules = (): readonly GuestLinkRule[] => {
-  const guests = useGuestsStore((state) => state.guests);
-  return React.useMemo(() => stableRules(guestLinkRulesOf(guests)), [guests]);
-};
->>>>>>> upstream/main

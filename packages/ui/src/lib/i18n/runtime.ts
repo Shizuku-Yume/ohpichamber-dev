@@ -16,7 +16,6 @@ export function getInlineStartSide(direction: LayoutDirection): 'left' | 'right'
   return direction === 'rtl' ? 'right' : 'left';
 }
 
-<<<<<<< HEAD
 /**
  * Whether an element lays out right to left: the nearest explicit `dir`
  * decides (the document root carries the UI direction). Read from the
@@ -24,19 +23,6 @@ export function getInlineStartSide(direction: LayoutDirection): 'left' | 'right'
  */
 export function isRightToLeft(element: Element | null | undefined): boolean {
   return element?.closest?.('[dir="rtl"], [dir="ltr"]')?.getAttribute('dir') === 'rtl';
-||||||| bc50ba56aa
-/**
- * Whether an element lays out right to left: the nearest explicit `dir`
- * decides (the document root carries the UI direction). Read from the
- * attribute because `matches(':dir(rtl)')` throws on WebKit before 16.4.
- */
-export function isRightToLeft(element: Element): boolean {
-  return element.closest('[dir="rtl"], [dir="ltr"]')?.getAttribute('dir') === 'rtl';
-=======
-// external: https://developer.mozilla.org/en-US/docs/Web/CSS/:dir WebKit before 16.4 rejects :dir(), so direction follows the nearest explicit dir attribute.
-export function isRightToLeft(element: Element): boolean {
-  return element.closest('[dir="rtl"], [dir="ltr"]')?.getAttribute('dir') === 'rtl';
->>>>>>> upstream/main
 }
 
 export const LOCALE_LABEL_KEYS: Record<Locale, 'common.language.english' | 'common.language.french' | 'common.language.dutch' | 'common.language.simplifiedChinese' | 'common.language.traditionalChinese' | 'common.language.ukrainian' | 'common.language.spanish' | 'common.language.brazilianPortuguese' | 'common.language.korean' | 'common.language.polish' | 'common.language.german' | 'common.language.japanese' | 'common.language.turkish' | 'common.language.arabic' | 'common.language.hebrew'> = {

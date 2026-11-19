@@ -180,85 +180,9 @@ const probeOpenCode = async (): Promise<OpenCodeProbe[]> => {
   }));
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const megabytes = z.number().int().nonnegative();
-const openCodeLoadSchema = z.object({
-  locations: z.number().int().nonnegative().nullable(),
-  processes: z.object({ openCodeMb: megabytes, childProcesses: z.number().int().nonnegative(), childMb: megabytes }).nullable(),
-});
-type OpenCodeLoad = z.infer<typeof openCodeLoadSchema>;
-
-/** Loaded OpenCode directories and the processes OpenCode started, from the local server; null when it cannot say. */
-const readOpenCodeLoad = async (): Promise<OpenCodeLoad | null> => {
-  const url = getRuntimeUrlResolver().api('/api/diagnostics/opencode-load');
-  if (!url) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
-  try {
-    const response = await runtimeFetch(url, { signal: controller.signal });
-    if (!response.ok) return null;
-    const load = openCodeLoadSchema.safeParse(await response.json());
-    return load.success ? load.data : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
-/** Each loaded directory runs its own copy of the local MCP servers, so these two numbers explain most memory reports. */
-const formatOpenCodeLoad = (load: OpenCodeLoad | null): string => {
-  if (!load) return 'unavailable (request failed or response invalid)';
-  const locations = load.locations === null ? 'loaded directories unknown' : `${load.locations} loaded ${load.locations === 1 ? 'directory' : 'directories'}`;
-  const processes = load.processes === null
-    ? 'processes not counted (Windows, or OpenCode not on this machine)'
-    : `${load.processes.childProcesses} child processes using ${load.processes.childMb} MB, OpenCode itself ${load.processes.openCodeMb} MB`;
-  return `${locations}, ${processes}`;
-};
-=======
-const megabytes = z.number().int().nonnegative();
-const openCodeLoadSchema = z.object({
-  locations: z.number().int().nonnegative().nullable(),
-  processes: z.object({ openCodeMb: megabytes, childProcesses: z.number().int().nonnegative(), childMb: megabytes }).nullable(),
-});
-type OpenCodeLoad = z.infer<typeof openCodeLoadSchema>;
-
-const readOpenCodeLoad = async (): Promise<OpenCodeLoad | null> => {
-  const url = getRuntimeUrlResolver().api('/api/diagnostics/opencode-load');
-  if (!url) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
-  try {
-    const response = await runtimeFetch(url, { signal: controller.signal });
-    if (!response.ok) return null;
-    const load = openCodeLoadSchema.safeParse(await response.json());
-    return load.success ? load.data : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
-const formatOpenCodeLoad = (load: OpenCodeLoad | null): string => {
-  if (!load) return 'unavailable (request failed or response invalid)';
-  const locations = load.locations === null ? 'loaded directories unknown' : `${load.locations} loaded ${load.locations === 1 ? 'directory' : 'directories'}`;
-  const processes = load.processes === null
-    ? 'processes not counted (Windows, or OpenCode not on this machine)'
-    : `${load.processes.childProcesses} child processes using ${load.processes.childMb} MB, OpenCode itself ${load.processes.openCodeMb} MB`;
-  return `${locations}, ${processes}`;
-};
->>>>>>> upstream/main
 
 declare const __APP_VERSION__: string | undefined;
 
-<<<<<<< HEAD
-/** Version, platform and how the agent runtime was launched: the questions a support thread opens with. */
-||||||| bc50ba56aa
-/** Version, platform and how OpenCode was launched: the questions a support thread opens with. */
-=======
->>>>>>> upstream/main
 const formatEnvironment = (health: DiagnosticHealthSample | null, openCodeVersion: string | undefined): string[] => [
   `OhPiChamber: ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'} (${canUseElectronDesktopIPC() ? 'desktop' : 'web'})`,
   `Platform: ${navigator.userAgent}`,

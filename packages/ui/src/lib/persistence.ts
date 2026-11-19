@@ -183,14 +183,6 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
 export interface SettingsSyncedDetail {
   settings: DesktopSettings;
   bootstrap: boolean;
-<<<<<<< HEAD
-  /** Whether this sync may replace this window's theme preferences. */
-||||||| bc50ba56aa
-  /** Whether this sync may replace this window's theme preferences. VS Code
-      settings broadcasts remain bootstrap-grade for shared workspace pointers,
-      but must not copy one webview's theme into another webview. */
-=======
->>>>>>> upstream/main
   adoptTheme: boolean;
 }
 

@@ -5,24 +5,11 @@ export interface LatestReply {
  text: string;
 }
 
-<<<<<<< HEAD
 const extractMessageText = (message: Message): string => message.parts
  .filter((part) => part.type === 'text')
  .map((part) => part.content)
  .join('')
  .trim();
-||||||| bc50ba56aa
-/** One entry of the session history the search reads, newest last. */
-export interface LatestReplyRecord {
-    info: Message;
-    parts: Part[];
-}
-=======
-export interface LatestReplyRecord {
-    info: Message;
-    parts: Part[];
-}
->>>>>>> upstream/main
 
 /**
  * The answer of the session's newest prompt, when that turn has authoritatively
@@ -47,7 +34,6 @@ export const findLatestCompletedReply = (
  return text ? { messageId, text } : null;
 };
 
-<<<<<<< HEAD
 /**
  * Every message id of the turn, so a caller can tell a reply it has already
  * handled from one that just arrived without walking the transcript.
@@ -56,52 +42,3 @@ export const turnMessageIds = (turn: Turn): readonly string[] => [
  turn.userMessageId,
  ...turn.assistantMessageIds,
 ];
-||||||| bc50ba56aa
-/**
- * The last answer of the latest prompt: the newest completed assistant
- * message that finished with `stop` and has text to read. Steps that ended in
- * tool calls, aborted turns, and messages still streaming are left out.
- */
-export const findLatestCompletedReply = (messages: readonly LatestReplyRecord[]): LatestReply | null => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const record = messages[index];
-        if (!record) continue;
-        if (record.info.role === 'user') return null;
-
-        const text = completedReplyText(record);
-        if (text) return { messageId: record.info.id, text };
-    }
-
-    return null;
-};
-
-/** Finished answers across all turns, for the auto-read history baseline. */
-export const findCompletedReplyIds = (messages: readonly LatestReplyRecord[]): string[] => {
-    const ids: string[] = [];
-    for (const record of messages) {
-        if (completedReplyText(record)) ids.push(record.info.id);
-    }
-    return ids;
-};
-=======
-export const findLatestCompletedReply = (messages: readonly LatestReplyRecord[]): LatestReply | null => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const record = messages[index];
-        if (!record) continue;
-        if (record.info.role === 'user') return null;
-
-        const text = completedReplyText(record);
-        if (text) return { messageId: record.info.id, text };
-    }
-
-    return null;
-};
-
-export const findCompletedReplyIds = (messages: readonly LatestReplyRecord[]): string[] => {
-    const ids: string[] = [];
-    for (const record of messages) {
-        if (completedReplyText(record)) ids.push(record.info.id);
-    }
-    return ids;
-};
->>>>>>> upstream/main

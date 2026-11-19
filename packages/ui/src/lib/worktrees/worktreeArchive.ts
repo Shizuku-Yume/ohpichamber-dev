@@ -200,7 +200,6 @@ async function restoreArchivedWorktreeOnce(input: {
   return { outcome: 'restored', worktree, conflicts, sessionsFailed };
 }
 
-<<<<<<< HEAD
 /**
  * Deletes an archive for good: its sessions still in the archive, its
  * snapshot and its local branch (unless a checkout uses that branch again). A
@@ -214,18 +213,6 @@ export async function deleteArchivedWorktree(input: {
   /** The local branch too, when the user asked; a branch a checkout uses again stays. */
   deleteBranch?: boolean;
 }): Promise<void> {
-||||||| bc50ba56aa
-/**
- * Deletes an archive for good: its sessions still in the archive, its
- * snapshot and its local branch (unless a checkout uses that branch again). A
- * session that came back to work (an archive kept after a restore with
- * conflicts) is not the archive's to delete. Sessions go first: one that will
- * not delete stops it, so the archive that explains it stays.
- */
-export async function deleteArchivedWorktree(input: { project: ProjectRef; archive: GitWorktreeArchive }): Promise<void> {
-=======
-export async function deleteArchivedWorktree(input: { project: ProjectRef; archive: GitWorktreeArchive }): Promise<void> {
->>>>>>> upstream/main
   const { entityById } = useGlobalSessionsStore.getState();
   const others = useWorktreeArchivesStore.getState().byProject.get(normalizePath(input.project.path) ?? '')?.archives ?? [];
   const elsewhere = new Set(others.filter((archive) => archive.id !== input.archive.id).flatMap((archive) => archive.sessionIds ?? []));
@@ -244,29 +231,9 @@ export async function deleteArchivedWorktree(input: { project: ProjectRef; archi
   }
 }
 
-<<<<<<< HEAD
 // Worktrees restored here, for the merged-PR cleanup: restoring one whose PR
 // is merged is the user taking it back, and the cleanup would otherwise
 // archive it again on its next pass.
-||||||| bc50ba56aa
-/** The project's archive that holds `sessionId`, read fresh; null when none does. */
-export async function findWorktreeArchiveForSession(projectPath: string, sessionId: string): Promise<GitWorktreeArchive | null> {
-  if (!canArchiveWorktrees()) return null;
-  const archives = await loadWorktreeArchives(projectPath);
-  return archives.find((archive) => archive.sessionIds.includes(sessionId)) ?? null;
-}
-
-// Worktrees restored here, for the merged-PR cleanup: restoring one whose PR
-// is merged is the user taking it back, and the cleanup would otherwise
-// archive it again on its next pass.
-=======
-export async function findWorktreeArchiveForSession(projectPath: string, sessionId: string): Promise<GitWorktreeArchive | null> {
-  if (!canArchiveWorktrees()) return null;
-  const archives = await loadWorktreeArchives(projectPath);
-  return archives.find((archive) => archive.sessionIds.includes(sessionId)) ?? null;
-}
-
->>>>>>> upstream/main
 const RESTORED_STORAGE_KEY = 'openchamber.mergedWorktreeCleanup.restored';
 const RESTORED_LIMIT = 100;
 const restoredSchema = z.array(z.string()).catch([]);

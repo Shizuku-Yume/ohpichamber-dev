@@ -73,17 +73,10 @@ function parseSettingsPath(params: URLSearchParams): string | null {
     return null;
   }
 
-<<<<<<< HEAD
   // Handle aliases for the settings root. `general` is NOT one: it is the
   // real General page, and folding it to `home` stranded mobile deep links on
   // the navigation list (desktop then redirected home back to general).
   if (normalized === 'openchamber' || normalized === 'preferences') {
-||||||| bc50ba56aa
-  // Handle common aliases
-  if (normalized === 'openchamber' || normalized === 'general' || normalized === 'preferences') {
-=======
-  if (normalized === 'openchamber' || normalized === 'general' || normalized === 'preferences') {
->>>>>>> upstream/main
     return 'home';
   }
 

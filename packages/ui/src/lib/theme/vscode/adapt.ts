@@ -4,12 +4,6 @@ import { colorHue, contrastRatio, mixColor, onColor, readableText, tintColor, wi
 
 const BUBBLE_TINT = { dark: 0.16, light: 0.06 } as const;
 
-<<<<<<< HEAD
-// File and catalog imports pass through this policy once.
-||||||| bc50ba56aa
-// Both file imports and live VS Code palettes pass through this policy once.
-=======
->>>>>>> upstream/main
 export function adaptVSCodeRoles(theme: Theme, authored: Readonly<VSCodeThemePalette['colors']>, highContrast = false): void {
   if (highContrast) return;
   const { surface, primary, status, interactive, markdown, chat, tools, syntax } = theme.colors;

@@ -18,16 +18,6 @@ type TypeLayouts = Readonly<Record<string, TypeLayout>>;
 
 const textDecoder = new TextDecoder();
 
-<<<<<<< HEAD
-// The vendored artifact is fetched at runtime; `new URL` keeps this a plain
-// static asset for Vite in every retained surface (web and Electron's
-// openchamber-ui:// protocol) and a readable file URL under bun's test runner.
-||||||| bc50ba56aa
-// The vendored artifact is fetched at runtime; `new URL` keeps this a plain
-// static asset for Vite in every surface (web, VS Code webview, Electron's
-// openchamber-ui:// protocol) and a readable file URL under bun's test runner.
-=======
->>>>>>> upstream/main
 const ghosttyWasmUrl = new URL('./vendor/ghostty-vt.wasm', import.meta.url);
 
 const WRITE_PTY_TRAMPOLINE = Uint8Array.from([

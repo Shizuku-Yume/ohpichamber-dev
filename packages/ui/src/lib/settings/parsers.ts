@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { modelRefKey } from '@openchamber/agent-contract';
 /**
  * Boundary parsers for settings values. Every value that arrives from the
@@ -11,20 +10,6 @@ import { modelRefKey } from '@openchamber/agent-contract';
  * registry can be evaluated for its shape (the generated JSON snapshot)
  * without a browser.
  */
-||||||| bc50ba56aa
-/**
- * Boundary parsers for settings values. Every value that arrives from the
- * server, the VS Code bridge, or browser storage passes through one of these
- * before it is trusted; `undefined` means "reject", never "default".
- *
- * These are the value-level rules the registry (`./registry.ts`) attaches to
- * each key. They are zod schemas wrapped into one function shape so the
- * registry can hold hand-written and schema-derived parsers alike, and so the
- * registry can be evaluated for its shape (the generated JSON snapshot)
- * without a browser.
- */
-=======
->>>>>>> upstream/main
 import { z, type ZodType } from 'zod';
 
 import type { ProjectEntry } from '@/lib/api/types';

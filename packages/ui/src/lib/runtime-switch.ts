@@ -20,16 +20,11 @@ const RUNTIME_ENDPOINT_WILL_CHANGE_EVENT = 'openchamber:runtime-endpoint-will-ch
 let activeApiBaseUrl = '';
 let activeRuntimeKey = '';
 let instanceGeneration = 0;
-<<<<<<< HEAD
 // Bumped by every endpoint switch, even one that keeps the same runtime key:
 // a queued send must notice that the endpoint it captured is no longer current.
 let runtimeSwitchRevision = 0;
 export const getRuntimeSwitchRevision = (): number => runtimeSwitchRevision;
 // Null reads the native boot injection; an explicit switch replaces it, even when local.
-||||||| bc50ba56aa
-// Null reads the native boot injection; an explicit switch replaces it, even when local.
-=======
->>>>>>> upstream/main
 let activeSshForwarded: boolean | null = null;
 
 const setWindowRuntimeValue = <K extends '__OPENCHAMBER_API_BASE_URL__' | '__OPENCHAMBER_CLIENT_TOKEN__' | '__OPENCHAMBER_RUNTIME_HEADERS__'>(

@@ -1,21 +1,11 @@
 import { modelRefKey } from '@openchamber/agent-contract';
 import { useUIStore } from '@/stores/useUIStore';
 
-<<<<<<< HEAD
 /**
  * A thinking level in the same three states the selection store uses: a
  * variant name, `null` for an explicit Default, and `undefined` for no choice.
  */
 type EffortChoice = string | null | undefined;
-||||||| bc50ba56aa
-/**
- * A thinking level in the same three states the selection store uses: a
- * variant name, `null` for an explicit Default, and `undefined` for no choice.
- */
-export type EffortChoice = string | null | undefined;
-=======
-export type EffortChoice = string | null | undefined;
->>>>>>> upstream/main
 
 type EffortAgentPin = {
   name?: string;
@@ -29,15 +19,8 @@ const effortRevisions = new Map<string, number>();
 export const readEffortRevision = (providerID: string, modelID: string): number =>
   effortRevisions.get(effortMemoryKey(providerID, modelID)) ?? 0;
 
-<<<<<<< HEAD
 /** The last chosen level for this model, across sessions and projects. */
 const readRememberedEffort = (providerID: string, modelID: string): EffortChoice => {
-||||||| bc50ba56aa
-/** The last chosen level for this model, across sessions and projects. */
-export const readRememberedEffort = (providerID: string, modelID: string): EffortChoice => {
-=======
-export const readRememberedEffort = (providerID: string, modelID: string): EffortChoice => {
->>>>>>> upstream/main
   if (!providerID || !modelID) return undefined;
   return (useUIStore.getState().lastUsedEfforts ?? {})[effortMemoryKey(providerID, modelID)];
 };

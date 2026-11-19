@@ -11,32 +11,10 @@ export interface ModelFamily {
 }
 
 export function getDisplayModelName(modelName: string): string {
-<<<<<<< HEAD
   // The split is the selector grammar's: a quota id is `provider/model`.
   const parsed = parseModelString(modelName);
   if (!parsed) return modelName;
   return parsed.providerId === 'gemini' || parsed.providerId === 'antigravity' ? parsed.modelId : modelName;
-||||||| bc50ba56aa
-  // Handle prefixes like "gemini/", "antigravity/"
-  const slashIndex = modelName.indexOf('/');
-  if (slashIndex !== -1) {
-    const prefix = modelName.substring(0, slashIndex);
-    // Check if it's an auth source prefix
-    if (prefix === 'gemini' || prefix === 'antigravity') {
-      return modelName.substring(slashIndex + 1);
-    }
-  }
-  return modelName;
-=======
-  const slashIndex = modelName.indexOf('/');
-  if (slashIndex !== -1) {
-    const prefix = modelName.substring(0, slashIndex);
-    if (prefix === 'gemini' || prefix === 'antigravity') {
-      return modelName.substring(slashIndex + 1);
-    }
-  }
-  return modelName;
->>>>>>> upstream/main
 }
 
 const GOOGLE_MODEL_FAMILIES: ModelFamily[] = [
@@ -133,21 +111,10 @@ export function getDefaultModels(
   return availableModels.filter((model) => {
     if (providerId === 'claude') return true;
     if (providerId === 'opencode') return true;
-<<<<<<< HEAD
     // A quota row may name its auth source as a `provider/model` prefix.
     const modelName = getDisplayModelName(model).toLowerCase();
     // Gemini 3.x, including the dotted (gemini-3.6-flash) and hyphenated
     // (gemini-3-6-flash) minor versions
-||||||| bc50ba56aa
-    const lower = model.toLowerCase();
-    // Handle gemini/ and antigravity/ prefixes
-    const modelName = lower.includes('/') ? lower.split('/')[1] : lower;
-    // Gemini 3.x, including the dotted (gemini-3.6-flash) and hyphenated
-    // (gemini-3-6-flash) minor versions
-=======
-    const lower = model.toLowerCase();
-    const modelName = lower.includes('/') ? lower.split('/')[1] : lower;
->>>>>>> upstream/main
     if (GEMINI_3_MODEL.test(modelName)) return true;
     if (modelName.startsWith('claude-')) return true;
     return false;

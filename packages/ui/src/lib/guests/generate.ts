@@ -46,23 +46,6 @@ const parseGuestGenerateResponse = async (response: Response): Promise<GuestGene
   return { ok: true, result: parsed.data.result };
 };
 
-<<<<<<< HEAD
-/**
- * One-off generation through the Guest grant owner. The Host authorizes the
- * canonical workspace and calls its canonical completion domain service.
- * Provider preferences come from the Host UI, never from guest content.
- */
-||||||| bc50ba56aa
-/**
- * One-off text generation for a guest through the server's Small Model,
- * which resolves and authenticates the model itself. The open project only
- * informs which OpenCode config decides the model; it never enters the prompt.
- * `composer` is the composer's provider, which the model stays on, and its
- * model, used when that provider has no small one; the host sets both, never
- * the guest.
- */
-=======
->>>>>>> upstream/main
 export const guestGenerate = async (
   guestId: string,
   request: GenerateRequest,
@@ -77,28 +60,10 @@ export const guestGenerate = async (
   let changed = false;
   const unsubscribe = subscribeRuntimeEndpointWillChange(() => { changed = true; });
   try {
-<<<<<<< HEAD
     if (!directory) return failed('HOST_REJECTED', FAILED_MESSAGE);
     const runtimeKey = getRuntimeKey();
     const workspace = await canonicalClient.resolveWorkspace(directory);
     if (changed || getRuntimeKey() !== runtimeKey) return failed('HOST_REJECTED', FAILED_MESSAGE);
-||||||| bc50ba56aa
-    // A plain object, built inside the try: runtimeFetch percent-encodes a
-    // directory outside Latin-1, which `Headers.set` would throw on.
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(directory ? { 'x-opencode-directory': directory } : undefined),
-      ...(composer.providerID ? { 'x-openchamber-provider': composer.providerID } : undefined),
-      ...(composer.providerID && composer.modelID ? { 'x-openchamber-model': composer.modelID } : undefined),
-    };
-=======
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(directory ? { 'x-opencode-directory': directory } : undefined),
-      ...(composer.providerID ? { 'x-openchamber-provider': composer.providerID } : undefined),
-      ...(composer.providerID && composer.modelID ? { 'x-openchamber-model': composer.modelID } : undefined),
-    };
->>>>>>> upstream/main
     const response = await runtimeFetch(`/api/guests/${guestId}/generate`, {
       method: 'POST',
       headers,

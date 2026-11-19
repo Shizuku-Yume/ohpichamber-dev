@@ -20,7 +20,6 @@ export type LaneDiffStat = {
 const messageText = (message: Message): string => message.parts
   .filter((part) => part.type === 'text').map((part) => part.content).join('\n');
 
-<<<<<<< HEAD
 /** Native pages are chronological; continue until the first user prompt is found. */
 export async function loadLaneFirstPrompt(sessionId: string): Promise<LanePrompt | null> {
   const runtimeKey = getRuntimeKey();
@@ -60,46 +59,16 @@ export async function loadLaneTurnModel(sessionId: string, turnId: string): Prom
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
   return null;
-||||||| bc50ba56aa
-/** The user message that started the lane, with its attachments. Null when there is none yet. */
-export async function loadLaneFirstPrompt(sessionId: string, directory: string): Promise<LanePrompt | null> {
-  // The first user message can sit past the oldest page: OpenCode interleaves
-  // plumbing roles (synthetic, system, skill, compaction) with conversation
-  // records, so a fixed window can hold none of them.
-  const first = await findMessagePageItem(sessionId, (item) => item.info.role === 'user', { limit: 10, order: 'asc' }, directory);
-  if (!first) return null;
-  return {
-    messageId: first.info.id,
-    text: flattenUserTextParts(first.parts),
-    files: first.parts.filter(isFilePart).map((part) => ({ mime: part.mime, filename: part.filename, url: part.url })),
-  };
-=======
-export async function loadLaneFirstPrompt(sessionId: string, directory: string): Promise<LanePrompt | null> {
-  const first = await findMessagePageItem(sessionId, (item) => item.info.role === 'user', { limit: 10, order: 'asc' }, directory);
-  if (!first) return null;
-  return {
-    messageId: first.info.id,
-    text: flattenUserTextParts(first.parts),
-    files: first.parts.filter(isFilePart).map((part) => ({ mime: part.mime, filename: part.filename, url: part.url })),
-  };
->>>>>>> upstream/main
 }
 
 export type LaneLastTurn = {
   text: string;
-<<<<<<< HEAD
-  /** Error on the newest assistant turn, not on an individual tool result. */
-||||||| bc50ba56aa
-  /** Error OpenCode recorded on the newest assistant message, if any. */
-=======
->>>>>>> upstream/main
   error: string | null;
   status: TurnStatus | null;
   cost: number | null;
   finishedAt: number | null;
 };
 
-<<<<<<< HEAD
 /** Read every native page so the last nonempty reply is never a first-page reply. */
 export async function loadLaneLastTurn(sessionId: string): Promise<LaneLastTurn> {
   const runtimeKey = getRuntimeKey();
@@ -129,45 +98,11 @@ export async function loadLaneLastTurn(sessionId: string): Promise<LaneLastTurn>
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
   return { text, error: latestTurn?.error?.trim() || null, status: latestTurn?.status ?? null, cost, finishedAt: latestTurn?.finishedAt ?? null };
-||||||| bc50ba56aa
-/** The lane's latest reply text and the error its newest step recorded. */
-export async function loadLaneLastTurn(sessionId: string, directory: string): Promise<LaneLastTurn> {
-  const page = await opencodeClient.getSessionMessages(sessionId, { limit: 50 }, directory);
-  // v2 pages messages newest first, so the first assistant record is the last reply.
-  let error: string | null = null;
-  for (const record of page.items) {
-    if (record.info.role !== 'assistant') continue;
-    if (error === null && record.info.error) error = structuredErrorText(record.info.error).trim() || null;
-    const text = flattenAssistantTextParts(record.parts).trim();
-    if (text) return { text, error };
-  }
-  return { text: '', error };
-=======
-export async function loadLaneLastTurn(sessionId: string, directory: string): Promise<LaneLastTurn> {
-  const page = await opencodeClient.getSessionMessages(sessionId, { limit: 50 }, directory);
-  let error: string | null = null;
-  for (const record of page.items) {
-    if (record.info.role !== 'assistant') continue;
-    if (error === null && record.info.error) error = structuredErrorText(record.info.error).trim() || null;
-    const text = flattenAssistantTextParts(record.parts).trim();
-    if (text) return { text, error };
-  }
-  return { text: '', error };
->>>>>>> upstream/main
 }
 
-<<<<<<< HEAD
 /** Text of the lane's latest assistant reply; an empty string when it has not answered yet. */
 export async function loadLaneLastReply(sessionId: string): Promise<string> {
   return (await loadLaneLastTurn(sessionId)).text;
-||||||| bc50ba56aa
-/** Text of the lane's latest assistant reply; an empty string when it has not answered yet. */
-export async function loadLaneLastReply(sessionId: string, directory: string): Promise<string> {
-  return (await loadLaneLastTurn(sessionId, directory)).text;
-=======
-export async function loadLaneLastReply(sessionId: string, directory: string): Promise<string> {
-  return (await loadLaneLastTurn(sessionId, directory)).text;
->>>>>>> upstream/main
 }
 
 export async function loadLaneDiffStat(directory: string): Promise<LaneDiffStat> {

@@ -14,15 +14,8 @@ const widthDragListeners = new Set<() => void>();
 
 export const isLayoutAnimating = (): boolean => holds > 0 || settleTimer !== null || settleFrame !== null;
 
-<<<<<<< HEAD
 /** Readers who asked for reduced motion get no width animation at all. */
 const prefersReducedMotion = (): boolean =>
-||||||| bc50ba56aa
-/** Readers who asked for reduced motion get no width animation at all. */
-export const prefersReducedMotion = (): boolean =>
-=======
-export const prefersReducedMotion = (): boolean =>
->>>>>>> upstream/main
   globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
 const settle = () => {

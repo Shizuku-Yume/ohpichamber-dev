@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-<<<<<<< HEAD
 /**
  * The report of a workflow run, as the session that proposed it sees it.
  *
@@ -9,23 +8,6 @@ import { z } from 'zod';
  * session, the way a dispatched session reports back: the text wraps the report
  * in an `<openchamber-workflow …>` envelope that names the run and its state.
  */
-||||||| bc50ba56aa
-import type { Message } from '@/lib/opencode/model';
-
-/**
- * The report of a workflow run, as the session that proposed it sees it.
- *
- * When a run ends (or the user declines or stops it) the OpenChamber server
- * (`web/server/lib/workflows/runtime.js`) appends one synthetic message to the
- * session, the way a dispatched session reports back
- * (`lib/opencode/dispatched-session`): metadata names the run
- * (`source: "openchamber-workflow"`) and the text wraps the report in an
- * `<openchamber-workflow …>` envelope.
- */
-=======
-import type { Message } from '@/lib/opencode/model';
-
->>>>>>> upstream/main
 
 type WorkflowReportState = 'completed' | 'failed' | 'stopped' | 'declined';
 
@@ -61,7 +43,6 @@ export type WorkflowReportMessage = {
   parts?: ReadonlyArray<{ type: string; content?: string }>;
 };
 
-<<<<<<< HEAD
 /** The workflow run a message reports on, or undefined for any other message. */
 export function readWorkflowReport(message: WorkflowReportMessage): WorkflowReport | undefined {
   const text = textOf(message);
@@ -74,16 +55,6 @@ export function readWorkflowReport(message: WorkflowReportMessage): WorkflowRepo
     name: z.string(),
     state: z.enum(['completed', 'failed', 'stopped', 'declined']),
   }).safeParse(attributes);
-||||||| bc50ba56aa
-/** The workflow run a message reports on, or undefined for any other message. */
-export function readWorkflowReport(message: Message): WorkflowReport | undefined {
-  if (message.role !== 'synthetic') return undefined;
-  const parsed = metadataSchema.safeParse(message.metadata ?? {});
-=======
-export function readWorkflowReport(message: Message): WorkflowReport | undefined {
-  if (message.role !== 'synthetic') return undefined;
-  const parsed = metadataSchema.safeParse(message.metadata ?? {});
->>>>>>> upstream/main
   if (!parsed.success) return undefined;
   return {
     runId: parsed.data.runId,

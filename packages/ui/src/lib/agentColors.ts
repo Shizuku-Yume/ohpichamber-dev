@@ -2,12 +2,6 @@ import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { chromaticDistance, contrastRatio } from './theme/color';
 
-<<<<<<< HEAD
-/** `color` is a semantic theme CSS variable. */
-||||||| bc50ba56aa
-/** `color` is a CSS color: a theme variable, or the hex the agent's config sets. */
-=======
->>>>>>> upstream/main
 export type AgentColor = { color: string };
 
 const BUILD_COLOR: AgentColor = { color: 'var(--status-success)' };
@@ -22,50 +16,16 @@ const SYNTAX_COLORS = [
 ] as const;
 const MIN_SEPARATION = 0.055;
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-// OpenCode's v1 migration writes #aaaaaa for theme names it cannot keep
-// ("primary", "accent"), so it stands for "no colour chosen", not grey.
-const MIGRATED_COLOR_PLACEHOLDER = '#aaaaaa';
-
-/** The colour set in the agent's config, when it is one OpenCode v2 accepts (six-digit hex only). */
-export const configuredAgentColor = (color: string | null | undefined): string | null => {
-  const value = color?.trim();
-  if (!value || !isHexColor(value) || value.toLowerCase() === MIGRATED_COLOR_PLACEHOLDER) return null;
-  return value;
-};
-
-=======
-// external: https://github.com/anomalyco/opencode/tree/v2.3.0/packages/core/src Migrated unsupported theme-name colors use #aaaaaa to mean no chosen agent color.
-const MIGRATED_COLOR_PLACEHOLDER = '#aaaaaa';
-
-export const configuredAgentColor = (color: string | null | undefined): string | null => {
-  const value = color?.trim();
-  if (!value || !isHexColor(value) || value.toLowerCase() === MIGRATED_COLOR_PLACEHOLDER) return null;
-  return value;
-};
-
->>>>>>> upstream/main
 function hashName(name: string): number {
   let hash = 0;
   for (let index = 0; index < name.length; index++) hash = Math.imul(hash, 31) + name.charCodeAt(index) | 0;
   return hash >>> 0;
 }
 
-<<<<<<< HEAD
 /** Allocate against the complete native directory roster, never a filtered picker list.
  * Build owns success; other agents exhaust distinct syntax colors before reuse.
  * Stable IDs keep assignments independent of profile labels and server ordering. */
 export function createAgentColorResolver(theme: Theme, agents: readonly Pick<Agent, 'agentId'>[]) {
-||||||| bc50ba56aa
-/** Allocate against the complete visible roster, never a filtered picker list.
- * Build owns success; other agents exhaust distinct syntax colors before reuse.
- * A colour set in an agent's config wins over the allocation, Build included;
- * the others keep the colours they would have had. */
-export function createAgentColorResolver(theme: Theme, agents: readonly (Pick<Agent, 'name'> & Partial<Pick<Agent, 'mode' | 'color'>>)[]) {
-=======
-export function createAgentColorResolver(theme: Theme, agents: readonly (Pick<Agent, 'name'> & Partial<Pick<Agent, 'mode' | 'color'>>)[]) {
->>>>>>> upstream/main
   const { surface, syntax, status } = theme.colors;
   const backgrounds = [surface.background, surface.muted, surface.elevated];
   const distance = (a: string, b: string) => Math.min(...backgrounds.map((background) =>

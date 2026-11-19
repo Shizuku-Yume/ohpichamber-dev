@@ -93,7 +93,6 @@ const useSizeMorph = (ref: React.RefObject<HTMLElement | null>, axis: MorphAxis)
   });
 };
 
-<<<<<<< HEAD
 /**
  * The same for height, on an open popup whose content changes: a filtered
  * list, an autocomplete narrowing as the user types, a menu whose items
@@ -102,32 +101,6 @@ const useSizeMorph = (ref: React.RefObject<HTMLElement | null>, axis: MorphAxis)
  * (its positioner or `bottom-full` keeps the bottom edge), one below it grows
  * down.
  */
-||||||| bc50ba56aa
-/**
- * Eases an element into its new width whenever its content changes, on the
- * layout spring: a picker that now names a longer model grows into it instead
- * of shoving its neighbours over in one frame. It watches the content rather
- * than a key, because a change can arrive in parts (the new name first, the
- * provider's logo a moment later); each part retargets the move from where
- * the element stands now, so it never ends short and jumps the rest. The
- * element keeps its natural width; the animation only covers the move. Width
- * is a layout property, so this runs once per change on a small inline
- * control, never on a loop.
- */
-export const useWidthMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'width');
-
-/**
- * The same for height, on an open popup whose content changes: a filtered
- * list, an autocomplete narrowing as the user types, a menu whose items
- * arrive late. The box eases into its new height instead of jumping, and the
- * edge it is anchored to stays put: a popup above its anchor grows upward
- * (its positioner or `bottom-full` keeps the bottom edge), one below it grows
- * down.
- */
-=======
-export const useWidthMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'width');
-
->>>>>>> upstream/main
 export const useHeightMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'height');
 
 export const useHeightMorphRef = (): ((element: HTMLElement | null) => void) => useSizeMorphAttach('height');

@@ -3,44 +3,11 @@ import type { I18nKey } from '@/lib/i18n';
 import { getSessionGoal } from '@/lib/sessionGoalMetadata';
 import type { LaneReplyState } from './useLaneSummaries';
 
-<<<<<<< HEAD
 /** The server is still driving this lane: idle now means between two goal turns. */
 export const hasRunningGoal = (session: Pick<Session, 'mode'> | undefined): boolean => (
   getSessionGoal(session as Session | undefined)?.status === 'active'
-||||||| bc50ba56aa
-/** The server is still driving this lane: idle now means between two goal turns. */
-export const hasRunningGoal = (session: Pick<Session, 'metadata'> | undefined): boolean => (
-  getSessionGoal(session)?.status === 'active'
-=======
-export const hasRunningGoal = (session: Pick<Session, 'metadata'> | undefined): boolean => (
-  getSessionGoal(session)?.status === 'active'
->>>>>>> upstream/main
 );
 
-<<<<<<< HEAD
-/**
- * What a run member is doing, from live and recorded facts only:
- * - `permission` / `question`: a blocking request waits for the user, so the
- *   turn cannot move on (a blocked session also counts as busy, so this wins);
- * - `working`: the turn is live;
- * - `failed` / `stopped`: the canonical turn failed or was cancelled;
- * - `notStarted`: no recorded turn and none is running;
- * - `noReply`: the turn ended normally without any answer text;
- * - `finished`: the turn ended normally. It says nothing about quality.
- */
-||||||| bc50ba56aa
-/**
- * What a run member is doing, from live and recorded facts only:
- * - `permission` / `question`: a blocking request waits for the user, so the
- *   turn cannot move on (a blocked session also counts as busy, so this wins);
- * - `working`: the turn is live, or an active goal is between turns;
- * - `failed` / `stopped`: OpenCode recorded the turn as failed or interrupted;
- * - `notStarted`: no turn has ended and none is running;
- * - `noReply`: the turn ended normally without any answer text;
- * - `finished`: the turn ended normally. It says nothing about quality.
- */
-=======
->>>>>>> upstream/main
 export type LaneStatus = 'permission' | 'question' | 'working' | 'failed' | 'stopped' | 'notStarted' | 'noReply' | 'finished';
 
 export type LaneBlockingState = 'permission' | 'question' | null;

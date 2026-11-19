@@ -803,22 +803,10 @@ export class GhosttyTerminalSurface {
     this.requestRender();
   }
 
-<<<<<<< HEAD
   /**
    * Replays shell output at each historical PTY size before fitting the view.
    */
   resetAndWrite(data: string, sizes: readonly TerminalReplaySize[] = []): void {
-||||||| bc50ba56aa
-  /**
-   * Replaces the screen with replayed history. History was laid out by the
-   * shell for the PTY size it had at the time; when that differs from the
-   * fitted grid the replay runs at the drawn size and Ghostty reflows to the
-   * fitted grid afterwards, so lines wrap where the shell wrapped them.
-   */
-  resetAndWrite(data: string, drawnSize?: { readonly cols: number; readonly rows: number }): void {
-=======
-  resetAndWrite(data: string, drawnSize?: { readonly cols: number; readonly rows: number }): void {
->>>>>>> upstream/main
     if (this.disposed) return;
     this.lastMouseMotionData = '';
     let cols = this.cols;

@@ -61,7 +61,6 @@ export const PROJECT_ICON_MAP: Record<string, IconName> = Object.fromEntries(
   PROJECT_ICONS.map((i) => [i.key, i.Icon])
 );
 
-<<<<<<< HEAD
 export const PROJECT_COLORS: Array<{ key: string; label: string; cssVar: string }> = [
   { key: 'keyword',  label: 'Purple',  cssVar: 'var(--syntax-keyword)' },
   { key: 'string',   label: 'Green',   cssVar: 'var(--syntax-string)' },
@@ -83,14 +82,6 @@ export const PROJECT_COLOR_MAP: Record<string, string> = Object.fromEntries(
  * agents do. Projects saved then still carry the key, so it keeps painting
  * with its theme variable until the user picks a new colour.
  */
-||||||| bc50ba56aa
-/**
- * Colours older builds stored as theme keys, before projects took hex like
- * agents do. Projects saved then still carry the key, so it keeps painting
- * with its theme variable until the user picks a new colour.
- */
-=======
->>>>>>> upstream/main
 const LEGACY_PROJECT_COLORS = new Map<string, string>([
   ['keyword', 'var(--syntax-keyword)'],
   ['string', 'var(--syntax-string)'],

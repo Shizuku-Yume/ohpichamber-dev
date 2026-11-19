@@ -25,38 +25,12 @@ function formatTimestamp(timestamp: number | undefined): string {
   return `${monthPart} ${dayPart}, ${yearPart}, ${hours}:${minutes}`;
 }
 
-<<<<<<< HEAD
 function formatAssistantModel(record: Message): string {
   if (record.role !== 'assistant') return '';
   const providerId = record.providerId?.trim() ?? '';
   const modelId = record.modelId?.trim() ?? '';
   const model = modelRefKey(providerId, modelId) || modelId || providerId;
   const variant = 'variant' in record && typeof record.variant === 'string' ? record.variant.trim() : undefined;
-||||||| bc50ba56aa
-function formatAssistantModel(record: SessionMessageRecord): string {
-  if (record.info.role !== 'assistant') {
-    return '';
-  }
-
-  const providerID = record.info.providerID.trim();
-  const modelID = record.info.modelID.trim();
-  const model = providerID && modelID ? `${providerID}/${modelID}` : (modelID || providerID);
-
-  // OpenCode records `default` when no level was picked; like the chat
-  // footer, the export names only a level the user chose.
-  const variant = record.info.variant?.trim();
-=======
-function formatAssistantModel(record: SessionMessageRecord): string {
-  if (record.info.role !== 'assistant') {
-    return '';
-  }
-
-  const providerID = record.info.providerID.trim();
-  const modelID = record.info.modelID.trim();
-  const model = providerID && modelID ? `${providerID}/${modelID}` : (modelID || providerID);
-
-  const variant = record.info.variant?.trim();
->>>>>>> upstream/main
   if (!model || !variant || ['default', 'none'].includes(variant.toLowerCase())) {
     return model;
   }
@@ -71,50 +45,12 @@ function formatMessageHeader(record: Message): string {
   return details ? `**${label}**\n\n*${details}*` : `**${label}**`;
 }
 
-<<<<<<< HEAD
 export function formatMessageRecordText(record: Message): string {
   return formatMessageText(record.parts, { user: record.role === 'user' });
-||||||| bc50ba56aa
-/**
- * A message's text the way the Markdown export renders it. Guest message and
- * session items carry the same text, so an extension sees what the export
- * file would.
- */
-export function formatMessageRecordText(record: SessionMessageRecord): string {
-  return formatMessageText(record.parts, { user: record.info.role === 'user' });
-=======
-export function formatMessageRecordText(record: SessionMessageRecord): string {
-  return formatMessageText(record.parts, { user: record.info.role === 'user' });
->>>>>>> upstream/main
 }
 
-<<<<<<< HEAD
 function formatMessageAsMarkdown(record: Message): string {
   if (record.role === 'system') return '';
-||||||| bc50ba56aa
-function formatMessageAsMarkdown(record: SessionMessageRecord): string {
-  // Only the conversation roles carry parts. A synthetic message is either
-  // context the user attached to the next prompt — exported as Context, the
-  // way v1 exported it from inside the user message — or prompt plumbing a
-  // server plugin injected. Plumbing is not something the user wrote or the
-  // agent said, so it stays out of the transcript entirely.
-  if (record.info.role === 'synthetic') {
-    if (!readContextPart(record.info)) return '';
-    const context = formatContextMessage(record.info).trim();
-    return context ? `${formatMessageHeader(record)}\n\n${context}` : '';
-  }
-  if (!hasParts(record.info)) return '';
-
-=======
-function formatMessageAsMarkdown(record: SessionMessageRecord): string {
-  if (record.info.role === 'synthetic') {
-    if (!readContextPart(record.info)) return '';
-    const context = formatContextMessage(record.info).trim();
-    return context ? `${formatMessageHeader(record)}\n\n${context}` : '';
-  }
-  if (!hasParts(record.info)) return '';
-
->>>>>>> upstream/main
   const role = formatMessageHeader(record);
   const text = formatMessageRecordText(record);
   if (!text) return '';

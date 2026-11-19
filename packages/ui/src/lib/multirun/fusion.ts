@@ -26,14 +26,7 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 export type FusionJudge = ModelSelection & {
   variant?: string;
-<<<<<<< HEAD
   /** Display name for the fusion session title. */
-||||||| bc50ba56aa
-  agent?: string;
-  /** Display name for the fusion session title. */
-=======
-  agent?: string;
->>>>>>> upstream/main
   modelName?: string;
   contextLimit?: number;
 };
@@ -148,20 +141,8 @@ export async function startRunFusion(input: {
   const prompts = await loadVariantPrompts(sources, assertCurrent);
   const project = sources.find((source) => source.location)?.location?.project ?? null;
   const first = sources[0];
-<<<<<<< HEAD
   const projectDirectory = project?.path ?? resolveWorkspaceDirectory(first.session.workspaceId);
   if (!projectDirectory) throw new Error('Fusion source directory is unknown');
-||||||| bc50ba56aa
-  const projectDirectory = project?.path ?? first.session.directory;
-  // Read before any worktree exists, so a failed read leaves nothing behind.
-  // The fusion worktree belongs to the same project, so its prompts are the project's.
-  const magicPrompts = await loadMagicPrompts(projectDirectory);
-  assertCurrent();
-=======
-  const projectDirectory = project?.path ?? first.session.directory;
-  const magicPrompts = await loadMagicPrompts(projectDirectory);
-  assertCurrent();
->>>>>>> upstream/main
 
   
   let directory = projectDirectory;

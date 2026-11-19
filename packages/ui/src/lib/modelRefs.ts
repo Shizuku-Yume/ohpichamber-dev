@@ -1,12 +1,6 @@
 import type { Model, Provider } from '@openchamber/agent-contract';
 import type { ModelRef } from '@/lib/settings/parsers';
 
-<<<<<<< HEAD
-// The config store regroups the canonical catalog's flat model list under its provider.
-||||||| bc50ba56aa
-// The config store regroups OpenCode v2's flat model list under its provider.
-=======
->>>>>>> upstream/main
 type ProviderWithModelList = Provider & { models: Model[] };
 
 export const resolveModelRefs = <P extends ProviderWithModelList>(

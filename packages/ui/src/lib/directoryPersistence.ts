@@ -19,17 +19,9 @@ export const applyPersistedDirectoryPreferences = async (): Promise<void> => {
   if (savedDirectory) {
     const runtimeKey = getRuntimeKey();
     const currentDirectory = useDirectoryStore.getState().currentDirectory;
-<<<<<<< HEAD
     const availability = await hostFilesystem.getDirectoryAvailability(savedDirectory);
     // A saved path is only a startup hint. A probe must not undo a newer
     // navigation, settings snapshot, or host switch while it was in flight.
-||||||| bc50ba56aa
-    const availability = await opencodeClient.getDirectoryAvailability(savedDirectory);
-    // A saved path is only a startup hint. A probe must not undo a newer
-    // navigation, settings snapshot, or host switch while it was in flight.
-=======
-    const availability = await opencodeClient.getDirectoryAvailability(savedDirectory);
->>>>>>> upstream/main
     if (getRuntimeKey() !== runtimeKey
       || useDirectoryStore.getState().currentDirectory !== currentDirectory
       || window.localStorage.getItem('lastDirectory') !== savedDirectory) return;

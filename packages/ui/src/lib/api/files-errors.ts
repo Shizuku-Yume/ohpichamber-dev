@@ -49,13 +49,6 @@ export const parseFilesystemErrorReason = (value: unknown): FilesystemErrorReaso
   }
 };
 
-<<<<<<< HEAD
-// Inspect message-bearing failures without depending on their prototype.
-||||||| bc50ba56aa
-// Web rejects with an Error; the VS Code bridge rejects with a plain object
-// that carries the message.
-=======
->>>>>>> upstream/main
 const messageCarrierSchema = z.object({ message: z.string() });
 
 export const isFileMissingError = (error: unknown): boolean => {

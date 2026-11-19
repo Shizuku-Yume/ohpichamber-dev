@@ -1,18 +1,6 @@
 import { z } from 'zod';
 import type { Session } from '@openchamber/agent-contract';
 
-<<<<<<< HEAD
-// How long the last turn ran, recorded by the server under
-// `session.metadata.openchamber.turn` when the turn ends
-// (`packages/web/server/lib/openchamber-sessions/turn-duration.js`). It lives
-// on the session record, so it survives restarts and reaches every device.
-||||||| bc50ba56aa
-// How long the last turn ran, recorded by the server under
-// `session.metadata.openchamber.turn` when the turn ends
-// (`packages/web/server/lib/openchamber-sessions/turn-duration.js`). It lives
-// on the OpenCode record, so it survives restarts and reaches every device.
-=======
->>>>>>> upstream/main
 const turnMetadataSchema = z.object({
  openchamber: z.object({
   turn: z.object({

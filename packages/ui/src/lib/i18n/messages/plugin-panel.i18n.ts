@@ -40,14 +40,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} found nothing to attach.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} failed: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} did not answer.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'This extension is not available here. Open it on OhPiChamber web or desktop.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'This extension is not available here. Open it on OpenChamber web or desktop.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'This extension is not available here. Open it on OpenChamber web or desktop.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} does not open on the phone. Open it in OpenChamber on the web or desktop.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} does not open on the phone. Open it in OhPiChamber on the web or desktop.',
   },
   nl: {
     'chat.workStatus.sections.extensionBadge': 'Extensie',
@@ -89,14 +83,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} vond niets om toe te voegen.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} mislukt: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} gaf geen antwoord.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Deze extensie is hier niet beschikbaar. Open hem in OhPiChamber web of desktop.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Deze extensie is hier niet beschikbaar. Open hem in OpenChamber web of desktop.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Deze extensie is hier niet beschikbaar. Open hem in OpenChamber web of desktop.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} opent niet op de telefoon. Open het in OpenChamber web of desktop.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} opent niet op de telefoon. Open het in OhPiChamber web of desktop.',
   },
   de: {
     'chat.workStatus.sections.extensionBadge': 'Erweiterung',
@@ -138,14 +126,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} hat nichts zum Anhängen gefunden.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} fehlgeschlagen: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} hat nicht geantwortet.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Diese Erweiterung ist hier nicht verfügbar. Öffne sie in OhPiChamber Web oder Desktop.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Diese Erweiterung ist hier nicht verfügbar. Öffne sie in OpenChamber Web oder Desktop.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Diese Erweiterung ist hier nicht verfügbar. Öffne sie in OpenChamber Web oder Desktop.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} lässt sich auf dem Telefon nicht öffnen. Öffne es in OpenChamber Web oder Desktop.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} lässt sich auf dem Telefon nicht öffnen. Öffne es in OhPiChamber Web oder Desktop.',
   },
   fr: {
     'chat.workStatus.sections.extensionBadge': 'Extension',
@@ -187,14 +169,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} n’a rien trouvé à joindre.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} a échoué : {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} n’a pas répondu.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Cette extension n’est pas disponible ici. Ouvrez-la dans OhPiChamber web ou desktop.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Cette extension n’est pas disponible ici. Ouvrez-la dans OpenChamber web ou desktop.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Cette extension n’est pas disponible ici. Ouvrez-la dans OpenChamber web ou desktop.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} ne s’ouvre pas sur le téléphone. Ouvrez-le dans OpenChamber web ou desktop.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} ne s’ouvre pas sur le téléphone. Ouvrez-le dans OhPiChamber web ou desktop.',
   },
   es: {
     'chat.workStatus.sections.extensionBadge': 'Extensión',
@@ -236,14 +212,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} no encontró nada que adjuntar.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} falló: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} no respondió.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Esta extensión no está disponible aquí. Ábrela en OhPiChamber web o escritorio.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensión no está disponible aquí. Ábrela en OpenChamber web o escritorio.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensión no está disponible aquí. Ábrela en OpenChamber web o escritorio.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} no se abre en el teléfono. Ábrelo en OpenChamber web o escritorio.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} no se abre en el teléfono. Ábrelo en OhPiChamber web o escritorio.',
   },
   ja: {
     'chat.workStatus.sections.extensionBadge': '拡張機能',
@@ -285,14 +255,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} には添付するものが見つかりませんでした。',
     'chat.chatInput.toast.guestCommandFailed': '/{command} が失敗しました: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} が応答しませんでした。',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'この拡張機能はここでは利用できません。OhPiChamber のウェブ版かデスクトップ版で開いてください。',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'この拡張機能はここでは利用できません。OpenChamber のウェブ版かデスクトップ版で開いてください。',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'この拡張機能はここでは利用できません。OpenChamber のウェブ版かデスクトップ版で開いてください。',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} はスマートフォンでは開けません。OpenChamber のウェブ版かデスクトップ版で開いてください。',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} はスマートフォンでは開けません。OhPiChamber のウェブ版かデスクトップ版で開いてください。',
   },
   ko: {
     'chat.workStatus.sections.extensionBadge': '확장 프로그램',
@@ -334,14 +298,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name}에서 첨부할 항목을 찾지 못했습니다.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} 실패: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name}이(가) 응답하지 않았습니다.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': '이 확장은 여기에서 사용할 수 없습니다. OhPiChamber 웹 또는 데스크톱에서 여세요.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': '이 확장은 여기에서 사용할 수 없습니다. OpenChamber 웹 또는 데스크톱에서 여세요.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': '이 확장은 여기에서 사용할 수 없습니다. OpenChamber 웹 또는 데스크톱에서 여세요.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name}은(는) 휴대폰에서 열리지 않습니다. OpenChamber 웹 또는 데스크톱에서 여세요.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name}은(는) 휴대폰에서 열리지 않습니다. OhPiChamber 웹 또는 데스크톱에서 여세요.',
   },
   pl: {
     'chat.workStatus.sections.extensionBadge': 'Rozszerzenie',
@@ -383,14 +341,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} nie znalazło nic do załączenia.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} nie powiodło się: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} nie odpowiedziało.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'To rozszerzenie nie jest tu dostępne. Otwórz je w OhPiChamber web lub na desktopie.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'To rozszerzenie nie jest tu dostępne. Otwórz je w OpenChamber web lub na desktopie.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'To rozszerzenie nie jest tu dostępne. Otwórz je w OpenChamber web lub na desktopie.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} nie otwiera się na telefonie. Otwórz je w OpenChamber web lub na desktopie.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} nie otwiera się na telefonie. Otwórz je w OhPiChamber web lub na desktopie.',
   },
   'pt-BR': {
     'chat.workStatus.sections.extensionBadge': 'Extensão',
@@ -432,14 +384,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} não encontrou nada para anexar.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} falhou: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} não respondeu.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Esta extensão não está disponível aqui. Abra no OhPiChamber web ou desktop.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensão não está disponível aqui. Abra no OpenChamber web ou desktop.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensão não está disponível aqui. Abra no OpenChamber web ou desktop.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} não abre no celular. Abra no OpenChamber web ou desktop.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} não abre no celular. Abra no OhPiChamber web ou desktop.',
   },
   uk: {
     'chat.workStatus.sections.extensionBadge': 'Розширення',
@@ -481,14 +427,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} не знайшло, що прикріпити.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} не спрацювала: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} не відповіло.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Це розширення тут недоступне. Відкрийте його в OhPiChamber web або на десктопі.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Це розширення тут недоступне. Відкрийте його в OpenChamber web або на десктопі.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Це розширення тут недоступне. Відкрийте його в OpenChamber web або на десктопі.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} не відкривається на телефоні. Відкрийте його в OpenChamber web або на десктопі.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} не відкривається на телефоні. Відкрийте його в OhPiChamber web або на десктопі.',
   },
   'zh-CN': {
     'chat.workStatus.sections.extensionBadge': '扩展',
@@ -530,14 +470,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} 没有找到可附加的内容。',
     'chat.chatInput.toast.guestCommandFailed': '/{command} 失败：{reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} 没有响应。',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': '此扩展在此处不可用。请在 OhPiChamber 网页版或桌面版中打开。',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': '此扩展在此处不可用。请在 OpenChamber 网页版或桌面版中打开。',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': '此扩展在此处不可用。请在 OpenChamber 网页版或桌面版中打开。',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} 无法在手机上打开。请在 OpenChamber 网页版或桌面版中打开。',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} 无法在手机上打开。请在 OhPiChamber 网页版或桌面版中打开。',
   },
   'zh-TW': {
     'chat.workStatus.sections.extensionBadge': '擴充功能',
@@ -579,14 +513,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} 沒有找到可附加的內容。',
     'chat.chatInput.toast.guestCommandFailed': '/{command} 失敗：{reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} 沒有回應。',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': '此擴充功能在此處無法使用。請在 OhPiChamber 網頁版或桌面版中開啟。',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': '此擴充功能在此處無法使用。請在 OpenChamber 網頁版或桌面版中開啟。',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': '此擴充功能在此處無法使用。請在 OpenChamber 網頁版或桌面版中開啟。',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} 無法在手機上開啟。請在 OpenChamber 網頁版或桌面版中開啟。',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} 無法在手機上開啟。請在 OhPiChamber 網頁版或桌面版中開啟。',
   },
   tr: {
     'chat.workStatus.sections.extensionBadge': 'Uzantı',
@@ -628,14 +556,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} eklenecek bir şey bulamadı.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} başarısız oldu: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} yanıt vermedi.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Bu eklenti burada kullanılamıyor. OhPiChamber web veya masaüstünde açın.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'Bu eklenti burada kullanılamıyor. OpenChamber web veya masaüstünde açın.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'Bu eklenti burada kullanılamıyor. OpenChamber web veya masaüstünde açın.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} telefonda açılmıyor. OpenChamber web veya masaüstünde açın.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} telefonda açılmıyor. OhPiChamber web veya masaüstünde açın.',
   },
   ar: {
     'chat.workStatus.sections.extensionBadge': 'إضافة',
@@ -676,14 +598,8 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': 'لم يجد {name} شيئًا لإرفاقه.',
     'chat.chatInput.toast.guestCommandFailed': 'تعذّر تنفيذ /{command}: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': 'لم يستجب {name}.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'هذه الإضافة غير متاحة هنا. افتحها في OhPiChamber على الويب أو سطح المكتب.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'هذه الإضافة غير متاحة هنا. افتحها في OpenChamber على الويب أو سطح المكتب.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'هذه الإضافة غير متاحة هنا. افتحها في OpenChamber على الويب أو سطح المكتب.',
-    'chat.chatInput.toast.guestNotOnPhone': 'لا يُفتح {name} على الهاتف. افتحه في OpenChamber على الويب أو سطح المكتب.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': 'لا يُفتح {name} على الهاتف. افتحه في OhPiChamber على الويب أو سطح المكتب.',
   },
   he: {
     'chat.workStatus.sections.extensionBadge': 'הרחבה',
@@ -724,13 +640,7 @@ export const pluginPanelI18n = {
     'chat.chatInput.toast.guestCommandNothing': '{name} לא מצא שום דבר לצרף.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} נכשל: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} לא ענה.',
-<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'ההרחבה הזו אינה זמינה כאן. אפשר לפתוח אותה ב-OhPiChamber בגרסת הרשת או בגרסת שולחן העבודה.',
-||||||| bc50ba56aa
-    'chat.chatInput.toast.guestUnavailableHere': 'ההרחבה הזו אינה זמינה כאן. אפשר לפתוח אותה ב-OpenChamber בגרסת הרשת או בגרסת שולחן העבודה.',
-=======
-    'chat.chatInput.toast.guestUnavailableHere': 'ההרחבה הזו אינה זמינה כאן. אפשר לפתוח אותה ב-OpenChamber בגרסת הרשת או בגרסת שולחן העבודה.',
-    'chat.chatInput.toast.guestNotOnPhone': '{name} לא נפתח בטלפון. אפשר לפתוח אותו ב-OpenChamber בגרסת הרשת או בגרסת שולחן העבודה.',
->>>>>>> upstream/main
+    'chat.chatInput.toast.guestNotOnPhone': '{name} לא נפתח בטלפון. אפשר לפתוח אותו ב-OhPiChamber בגרסת הרשת או בגרסת שולחן העבודה.',
   },
 } as const;

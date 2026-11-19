@@ -266,19 +266,11 @@ export const buildLinkedTrackerItem = (input: {
   linkedAt: input.linkedAt,
 });
 
-<<<<<<< HEAD
 /** An entry as it is stored in session metadata and sent to the server. */
 type StoredLinkedIssue = Exclude<LinkedIssue, LinkedTrackerItem>
   | (Omit<LinkedTrackerItem, 'kind' | 'provider'> & { kind: 'linear'; provider: 'linear' })
   | LinkedTrackerItem;
-||||||| bc50ba56aa
-/** An entry as it is stored in session metadata and sent to the server. */
-type StoredLinkedIssue = Exclude<LinkedIssue, LinkedTrackerItem> | (Omit<LinkedTrackerItem, 'kind'> & { kind: 'tracker' | 'linear' });
-=======
-type StoredLinkedIssue = Exclude<LinkedIssue, LinkedTrackerItem> | (Omit<LinkedTrackerItem, 'kind'> & { kind: 'tracker' | 'linear' });
->>>>>>> upstream/main
 
-<<<<<<< HEAD
 /**
  * The stored form of an entry: a Linear item keeps `kind: 'linear'` (with
  * `provider` beside it), which older clients read and keep when they rewrite
@@ -290,20 +282,6 @@ export const toStoredLinkedIssue = (entry: LinkedIssue): StoredLinkedIssue => {
     ? { ...entry, kind: 'linear', provider: 'linear' }
     : entry;
 };
-||||||| bc50ba56aa
-/**
- * The stored form of an entry: a Linear item keeps `kind: 'linear'` (with
- * `provider` beside it), which older clients read and keep when they rewrite
- * the list (`storedTrackerLinkKind`). Readers accept both kinds.
- */
-export const toStoredLinkedIssue = (entry: LinkedIssue): StoredLinkedIssue => (
-  entry.kind === 'tracker' ? { ...entry, kind: storedTrackerLinkKind(entry.provider) } : entry
-);
-=======
-export const toStoredLinkedIssue = (entry: LinkedIssue): StoredLinkedIssue => (
-  entry.kind === 'tracker' ? { ...entry, kind: storedTrackerLinkKind(entry.provider) } : entry
-);
->>>>>>> upstream/main
 
 export const getLinkedIssues = (session: Session | null | undefined): LinkedIssue[] => {
   const openchamber = getSessionMetadata(session).openchamber;
