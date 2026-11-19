@@ -2306,5 +2306,7 @@ packages/ui/src/lib/ghostty/DOCUMENTATION.md	fork-differs	decision	2026-11-19 - 
 packages/ui/src/lib/ghostty/core.test.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Verifies interleaved replay matches a live resize.
 packages/ui/src/lib/ghostty/core.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Disables PTY writes throughout replay, including recorded resizes.
 packages/ui/src/lib/ghostty/surface.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Replays output at each recorded PTY size before fitting the viewport.
+packages/ui/src/lib/ghostty/surface.clipboard.test.ts	fork-differs	decision	2026-11-19 - Keep interactive terminal input bound to its attachment	Provides the separate terminal-reply callback while preserving clipboard input coverage.
+packages/ui/src/lib/ghostty/surface.softKeyboard.test.ts	fork-differs	decision	2026-11-19 - Keep interactive terminal input bound to its attachment	Checks that live terminal query replies are routed separately from interactive user input.
 packages/ui/src/stores/useTerminalStore.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Retains PTY size transitions with terminal output.
 packages/web/server/lib/terminal/runtime.js	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Orders resize events with output and keeps their offsets in bounded history.
