@@ -1724,3 +1724,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
 - **Mine:** yes
 - **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
+
+## 2026-11-19 - Preserve sanitized native provider failure details
+
+- **Decided:** project the last unrecovered assistant error message into canonical run failure and turn history after removing resolved provider credentials and credential-shaped text. Preserve generic detail only when OMP supplies none.
+- **Instead of:** replacing every provider failure with a generic service failure or teaching the UI to read native transcripts.
+- **Because:** OMP owns the provider outcome and the existing canonical failure string already reaches the chat error notice. Credential values must not cross that boundary even when a provider echoes them.
+- **Mine:** yes
+- **Revisit when:** the canonical API introduces a structured provider-error contract.
