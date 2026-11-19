@@ -13,7 +13,7 @@ import {
 } from './mappers.js';
 import { readPendingReview } from './review-draft.js';
 import { isSourceControlInteger } from '../source-control/input-guards.js';
-import type { SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { AccountIdentity, ProviderDescriptor, ProviderMutationContext, ProviderSession } from '../source-control/provider-contract.js';
 import type { MutationCompletion, MutationRecord, MutationResult } from '../source-control/mutation-storage.js';
 import type { GitHubResourceOptions } from './resources.js';

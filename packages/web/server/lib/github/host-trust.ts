@@ -11,7 +11,7 @@ import { ghConfigDir } from './gh-config.js';
 
 const dataDir = () => process.env.OPENCHAMBER_DATA_DIR
   ? resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : join(homedir(), '.config', 'openchamber');
+  : join(homedir(), '.config', 'ohpichamber');
 
 const normalizeHost = (value: string | null | undefined) => String(value ?? '').trim().toLowerCase();
 

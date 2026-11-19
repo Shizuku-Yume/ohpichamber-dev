@@ -19,7 +19,7 @@ import type { AccountEvents, ConnectedAccount, ProviderDescriptor, ProviderSessi
 import type { createSourceControlAuthStore } from '../source-control/auth-storage.js';
 import type { GitHubEnvelope, Octokit } from './contracts.js';
 import type { SummaryRef } from './pr-summaries.js';
-import type { SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { readGitHubChangeRequestPatch, readGitHubChangeRequestFile } from './change-request-patch.js';
 
 type SessionAccount = ReturnType<GitHubResourceOptions['accountOf']>;
