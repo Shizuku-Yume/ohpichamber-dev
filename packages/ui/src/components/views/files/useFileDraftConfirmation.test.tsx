@@ -5,6 +5,7 @@ import { Window } from 'happy-dom';
 
 import { useFileDraftConfirmation } from './useFileDraftConfirmation';
 import { useFileAutosave } from './useFileAutosave';
+import { guardFileTabSelection } from './fileTabSelectionGuard';
 
 type Props = Parameters<typeof useFileDraftConfirmation>[0];
 
@@ -41,6 +42,65 @@ afterEach(async () => {
 const render = (props: Partial<Props> = {}) => act(async () => {
   root.render(<Probe scope="host" path="/repo/a.txt" isDirty isSaving={false}
     saveDraft={async () => false} discardDraft={() => {}} {...props} />);
+});
+
+const selectOtherFile = (select: () => void) => guardFileTabSelection({
+  sameDirectory: true, currentPath: '/repo/a.txt', targetPath: '/repo/b.txt', isDirty: true,
+  confirm: confirmation.confirm, select,
+});
+
+test('Cancel keeps a dirty file selected, including after a refused missing-file save', async () => {
+  let selected = '/repo/a.txt';
+  const discardDraft = mock(() => {});
+  const saveDraft = mock(async () => false);
+  await render({ discardDraft, saveDraft });
+  await act(async () => selectOtherFile(() => { selected = '/repo/b.txt'; }));
+  expect(confirmation.open).toBe(true);
+  expect(selected).toBe('/repo/a.txt');
+  await act(async () => confirmation.save());
+  expect(saveDraft).toHaveBeenCalledTimes(1);
+  expect(selected).toBe('/repo/a.txt');
+  expect(confirmation.open).toBe(true);
+  await act(async () => { confirmation.cancel(); });
+  expect(selected).toBe('/repo/a.txt');
+  expect(discardDraft).not.toHaveBeenCalled();
+});
+
+test('Discard clears the dirty draft before selecting the other file', async () => {
+  const actions: string[] = [];
+  await render({ discardDraft: () => { actions.push('discard'); } });
+  await act(async () => selectOtherFile(() => { actions.push('select'); }));
+  expect(actions).toEqual([]);
+  await act(async () => confirmation.discard());
+  expect(actions).toEqual(['discard', 'select']);
+});
+
+test('Save selects the other file only once the draft is clean', async () => {
+  const select = mock(() => {});
+  await render({ saveDraft: async () => true });
+  await act(async () => selectOtherFile(select));
+  await act(async () => confirmation.save());
+  expect(select).not.toHaveBeenCalled();
+  await render({ isDirty: false });
+  expect(select).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  { label: 'clean draft', isDirty: false },
+  { label: 'same file', targetPath: '/repo/a.txt' },
+  { label: 'non-file surface', targetPath: null },
+  { label: 'empty file tab', targetPath: '' },
+  { label: 'no selected file', currentPath: null },
+  { label: 'another workspace', sameDirectory: false },
+])('selection is immediate for $label', (overrides) => {
+  const confirm = mock(() => {});
+  const select = mock(() => {});
+  guardFileTabSelection({
+    sameDirectory: true, currentPath: '/repo/a.txt', targetPath: '/repo/b.txt', isDirty: true,
+    ...overrides, confirm, select,
+  });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(select).toHaveBeenCalledTimes(1);
 });
 
 test('Cancel drops a bulk close and releases the autosave pause without touching the draft', async () => {
