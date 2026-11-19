@@ -109,4 +109,39 @@ describe('VoiceSettings endpoint paths', () => {
     expect(host.querySelector('[data-settings-item="voice.tts-endpoint-path"]')).toBeNull();
     expect(host.querySelector('[data-settings-item="voice.stt-endpoint-path"]')).toBeNull();
   });
+
+  test('only transcription exposes a key field and accepts the Host save/remove response', async () => {
+    let stored = false;
+    const patches: unknown[] = [];
+    globalThis.fetch = (async (input, init) => {
+      if (String(input).includes('/api/voice/keys')) {
+        if (init?.method === 'PUT') {
+          const patch = JSON.parse(String(init.body));
+          patches.push(patch);
+          stored = Boolean(patch.stt);
+        }
+        return Response.json({ stt: stored });
+      }
+      return Response.json({ available: false });
+    }) as typeof fetch;
+    useConfigStore.setState({
+      voiceProvider: 'openai', showMessageTTSButtons: true,
+      dictationEnabled: false, autoReadAloudEnabled: false, voiceApiKeys: { stt: false },
+    });
+    await act(async () => root.render(<I18nProvider><VoiceSettings /></I18nProvider>));
+    expect(host.querySelector('input[type="password"]')).toBeNull();
+    await act(async () => { useConfigStore.setState({ voiceProvider: 'openai-compatible' }); });
+    expect(host.querySelector('input[type="password"]')).toBeNull();
+    await act(async () => { useConfigStore.setState({ dictationEnabled: true, sttProvider: 'openai-compatible' }); });
+    expect(host.querySelectorAll('input[type="password"]').length).toBe(1);
+
+    await act(async () => { expect(await useConfigStore.getState().setVoiceApiKey('stt', 'synthetic-test-key')).toBe(true); });
+    expect(inputWithPlaceholder(enDict['settings.voice.page.field.apiKeySavedPlaceholder'])).toBeDefined();
+    const remove = host.querySelector<HTMLButtonElement>(`button[aria-label="${enDict['settings.voice.page.field.apiKeyRemove']}"]`);
+    expect(remove).not.toBeNull();
+    await act(async () => { remove?.click(); });
+    expect(inputWithPlaceholder('sk-...')).toBeDefined();
+    expect(useConfigStore.getState().voiceApiKeys).toEqual({ stt: false });
+    expect(patches).toEqual([{ stt: 'synthetic-test-key' }, { stt: null }]);
+  });
 });
