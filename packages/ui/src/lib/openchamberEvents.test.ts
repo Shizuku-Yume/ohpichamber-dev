@@ -110,6 +110,51 @@ describe('openchamber events', () => {
     }
   });
 
+  test.each([
+    [403, 30_000],
+    [404, 30_000],
+    [408, 1_000],
+    [429, 1_000],
+  ])('paces a native stream HTTP %i retry at %i ms', async (status, delay) => {
+    Object.assign(window, {
+      Capacitor: { isNativePlatform: () => true },
+      __OPENCHAMBER_API_BASE_URL__: 'http://runtime.test:3902',
+    });
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status }));
+    const timers = spyOn(globalThis, 'setTimeout');
+    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(timers.mock.calls.some(([, ms]) => ms === delay)).toBe(true);
+    } finally {
+      unsubscribe();
+      timers.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test('backs off while hidden and retries immediately on foreground', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const page = Object.assign(new EventTarget(), { visibilityState: 'hidden' });
+    Object.defineProperty(globalThis, 'document', { value: page, configurable: true });
+    const timers = spyOn(globalThis, 'setTimeout');
+    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
+    try {
+      MockEventSource.instances[0].onerror?.();
+      expect(timers.mock.calls.at(-1)?.[1]).toBe(30_000);
+      page.dispatchEvent(new Event('visibilitychange'));
+      expect(MockEventSource.instances).toHaveLength(1);
+      page.visibilityState = 'visible';
+      page.dispatchEvent(new Event('visibilitychange'));
+      expect(MockEventSource.instances).toHaveLength(2);
+    } finally {
+      unsubscribe();
+      timers.mockRestore();
+      Reflect.deleteProperty(globalThis, 'document');
+    }
+  });
+
   test('desktop browser-capable events cross the active relay as streamed HTTP, not native EventSource', async () => {
     Object.defineProperty(window, '__OPENCHAMBER_ELECTRON__', { value: true, configurable: true });
     const requests: Array<{ path: string; authorization: string | null; signal: AbortSignal | undefined }> = [];

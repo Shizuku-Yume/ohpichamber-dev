@@ -311,7 +311,10 @@ const cancelAuthSessionWait = () => {
  authSessionWait = null;
 };
 
-const scheduleReconnect = () => {
+const shouldSlowReconnect = () => (typeof navigator !== 'undefined' && navigator.onLine === false)
+ || (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+
+const scheduleReconnect = (permanentFailure = false) => {
  if (listeners.size === 0) return;
  setReconnecting(true);
  if (reconnectTimer || authSessionWait) {
@@ -330,9 +333,16 @@ const scheduleReconnect = () => {
   });
   return;
  }
- const delay = Math.min(1_000 * Math.pow(2, Math.min(reconnectAttempt, 5)), MAX_RECONNECT_DELAY_MS);
+ const slow = permanentFailure || shouldSlowReconnect();
+ const delay = slow
+  ? MAX_RECONNECT_DELAY_MS
+  : Math.min(1_000 * Math.pow(2, Math.min(reconnectAttempt, 5)), MAX_RECONNECT_DELAY_MS);
  reconnectTimer = setTimeout(() => {
   reconnectTimer = null;
+  if (!slow && shouldSlowReconnect()) {
+   scheduleReconnect();
+   return;
+  }
   reconnectAttempt += 1;
   connect();
  }, delay);
@@ -361,11 +371,16 @@ export const retryOpenchamberEventsNow = () => {
  connect();
 };
 
+const wakeReconnect = () => {
+ if (!shouldSlowReconnect()) retryOpenchamberEventsNow();
+};
+
 const connectFetchStream = (canControlBrowser: boolean, directNative: boolean) => {
  const controller = new AbortController();
  streamAbortController = controller;
  resetHeartbeatTimer();
  void (async () => {
+  let permanentFailure = false;
   try {
    const response = await runtimeFetch('/api/openchamber/events', {
     query: canControlBrowser ? { browser: '1' } : undefined,
@@ -378,6 +393,8 @@ const connectFetchStream = (canControlBrowser: boolean, directNative: boolean) =
     return;
    }
    if (!response.ok || !response.body || !response.headers.get('content-type')?.startsWith('text/event-stream')) {
+    const { status } = response;
+    permanentFailure = status >= 400 && status < 500 && status !== 408 && status !== 429;
     await response.body?.cancel();
     throw new Error(`OhPiChamber events returned ${response.status}`);
    }
@@ -417,7 +434,7 @@ const connectFetchStream = (canControlBrowser: boolean, directNative: boolean) =
   }
   if (streamAbortController !== controller) return;
   cleanupSource();
-  scheduleReconnect();
+  scheduleReconnect(permanentFailure);
  })();
 };
 
@@ -790,6 +807,8 @@ const connect = () => {
 
 const ensureRuntimeChangeSubscription = () => {
  if (runtimeChangeUnsubscribe || typeof window === 'undefined') return;
+ window.addEventListener('online', wakeReconnect);
+ if (typeof document !== 'undefined') document.addEventListener('visibilitychange', wakeReconnect);
  runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged((detail) => {
   cleanupSource();
   clearReconnectTimer();
@@ -801,6 +820,8 @@ const ensureRuntimeChangeSubscription = () => {
 };
 
 const cleanupRuntimeChangeSubscription = () => {
+ if (typeof window !== 'undefined') window.removeEventListener('online', wakeReconnect);
+ if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', wakeReconnect);
  runtimeChangeUnsubscribe?.();
  runtimeChangeUnsubscribe = null;
 };
