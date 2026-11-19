@@ -1,61 +1,20 @@
-<<<<<<<< HEAD:packages/web/server/lib/host/pwa-manifest-routes.js
-const DEFAULT_PWA_APP_NAME = 'OhPiChamber';
-const mapPwaOrientationToManifest = (value) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/pwa-manifest-routes.js
-const DEFAULT_PWA_APP_NAME = 'OpenChamber';
-const mapPwaOrientationToManifest = (value) => {
-========
 import type { Application, Request, Response } from '../shared/http-contracts.js';
-import type { JsonObject, JsonValue } from '../shared/json-values.js';
+import type { JsonValue } from '../shared/json-values.js';
 import type { ProjectDirectoryRequest, ProjectDirectoryResolution } from '../projects/project-directory-runtime.js';
-import { isString } from '../shared/object-guards.js';
 
-export interface PwaSettings {
-  pwaAppName?: JsonValue;
-  pwaOrientation?: JsonValue;
-}
-
+export interface PwaSettings { pwaAppName?: JsonValue; pwaOrientation?: JsonValue; }
 export interface PwaManifestDependencies {
-  process: Pick<NodeJS.Process, 'platform'>;
   resolveProjectDirectory: (request: ProjectDirectoryRequest) => Promise<ProjectDirectoryResolution>;
-  buildOpenCodeUrl: (route: string, query: string) => string | URL;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
+  listSessions: (directory: string | null) => Promise<{ items?: { sessionId?: string; title?: string; updatedAt?: number }[] }>;
   readSettingsFromDiskMigrated: () => Promise<PwaSettings>;
   normalizePwaAppName: (value: JsonValue | undefined, fallback: string) => string;
   normalizePwaOrientation: (value: JsonValue | undefined, fallback: string) => string;
   isRequestAuthorized: (req: Request, res: Response) => Promise<boolean>;
 }
+interface PwaShortcut { name: string; short_name: string; description: string; url: string; icons: { src: string; sizes: string; type: string }[]; }
 
-interface PwaShortcut {
-  name: string;
-  short_name: string;
-  description: string;
-  url: string;
-  icons: { src: string; sizes: string; type: string }[];
-}
-
-interface SessionFields extends JsonObject {
-  id?: JsonValue;
-  directory?: JsonValue;
-  title?: JsonValue;
-  time?: JsonValue;
-}
-
-const hasSessionFields = (value: JsonValue | undefined): value is SessionFields =>
-  Boolean(value) && typeof value === 'object';
-
-const hasSessionTime = (value: JsonValue | undefined): value is { updated?: JsonValue; created?: JsonValue } =>
-  value !== null && typeof value === 'object';
-
-const hasSessionData = (value: JsonValue | undefined): value is { data?: JsonValue } =>
-  value !== null && typeof value === 'object';
-
-const isFiniteNumber = (value: JsonValue | undefined): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
-
-const DEFAULT_PWA_APP_NAME = 'OpenChamber';
+const DEFAULT_PWA_APP_NAME = 'OhPiChamber';
 const mapPwaOrientationToManifest = (value: string) => {
->>>>>>>> upstream/main:packages/web/server/lib/appearance/pwa-manifest-routes.ts
   if (value === 'portrait') {
     return 'portrait-primary';
   }
@@ -75,23 +34,21 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
     isRequestAuthorized,
   } = dependencies;
 
-<<<<<<<< HEAD:packages/web/server/lib/host/pwa-manifest-routes.js
   if (!listSessions) {
     throw new Error('PWA manifest route requires a canonical session list reader');
   }
 
-  const recentPwaSessionsCache = new Map();
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/pwa-manifest-routes.js
-  const recentPwaSessionsCache = new Map();
-========
   const recentPwaSessionsCache = new Map<string, { at: number; data: PwaShortcut[] }>();
->>>>>>>> upstream/main:packages/web/server/lib/appearance/pwa-manifest-routes.ts
 
   const getRecentPwaSessionShortcuts = async () => {
     const now = Date.now();
 
+    // The manifest is served without API auth, so the caller cannot pick the
+    // directory: an empty request resolves to the directory the UI last used.
     const resolvedDirectoryResult = await resolveProjectDirectory({}).catch(() => ({ directory: null }));
-    const preferredDirectory = resolvedDirectoryResult?.directory ?? null;
+    const preferredDirectory = typeof resolvedDirectoryResult?.directory === 'string'
+      ? resolvedDirectoryResult.directory
+      : null;
 
     const cacheKey = preferredDirectory ? `dir:${preferredDirectory}` : 'global';
     const cached = recentPwaSessionsCache.get(cacheKey);
@@ -99,239 +56,18 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
       return cached.data;
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/pwa-manifest-routes.js
-    const normalizeShortcutTitle = (value, fallback) => normalizePwaAppName(value, fallback).slice(0, 48);
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/pwa-manifest-routes.js
-    const normalizeShortcutTitle = (value, fallback) => {
-      const normalized = normalizePwaAppName(value, fallback);
-      return normalized.length > 48 ? normalized.slice(0, 48) : normalized;
-    };
-
-    const toFiniteNumber = (value) => {
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        return value;
-      }
-      if (typeof value === 'string' && value.trim().length > 0) {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) {
-          return parsed;
-        }
-      }
-      return null;
-    };
-
-    const normalizeDirectory = (value) => {
-      if (typeof value !== 'string') {
-        return '';
-      }
-      const trimmed = value.trim();
-      if (!trimmed) {
-        return '';
-      }
-      const normalized = trimmed.replace(/\\/g, '/');
-      if (normalized === '/') {
-        return '/';
-      }
-      return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
-    };
-
-    const sessionUpdatedAt = (session) => {
-      const time = session && typeof session.time === 'object' ? session.time : null;
-      return toFiniteNumber(time?.updated) ?? toFiniteNumber(time?.created) ?? 0;
-    };
-
-    const filterSessionsByDirectory = (sessions, directory) => {
-      const normalizedDirectory = normalizeDirectory(directory);
-      if (!normalizedDirectory) {
-        return sessions;
-      }
-
-      const prefix = normalizedDirectory === '/' ? '/' : `${normalizedDirectory}/`;
-      return sessions.filter((session) => {
-        const sessionDirectory = normalizeDirectory(session?.directory);
-        if (!sessionDirectory) {
-          return false;
-        }
-        return sessionDirectory === normalizedDirectory || sessionDirectory.startsWith(prefix);
-      });
-    };
-
-    const listSessions = async (directory) => {
-      const query = (() => {
-        if (typeof directory !== 'string' || directory.length === 0) {
-          return '';
-        }
-        const preparedDirectory = process.platform === 'win32'
-          ? directory.replace(/\//g, '\\\\')
-          : directory;
-        return `?directory=${encodeURIComponent(preparedDirectory)}`;
-      })();
-
-      const response = await fetch(buildOpenCodeUrl(`/api/session${query}`, ''), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          ...getOpenCodeAuthHeaders(),
-        },
-        signal: AbortSignal.timeout(2500),
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      // v2 pages the session list as `{ data, cursor }`.
-      const body = await response.json().catch(() => null);
-      const payload = Array.isArray(body) ? body : body?.data;
-      return Array.isArray(payload) ? payload : [];
-    };
-========
-    const normalizeShortcutTitle = (value: JsonValue | undefined, fallback: string) => {
-      const normalized = normalizePwaAppName(value, fallback);
-      return normalized.length > 48 ? normalized.slice(0, 48) : normalized;
-    };
-
-    const toFiniteNumber = (value: JsonValue | undefined) => {
-      if (isFiniteNumber(value)) {
-        return value;
-      }
-      if (isString(value) && value.trim().length > 0) {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) {
-          return parsed;
-        }
-      }
-      return null;
-    };
-
-    const normalizeDirectory = (value: JsonValue | undefined) => {
-      if (!isString(value)) {
-        return '';
-      }
-      const trimmed = value.trim();
-      if (!trimmed) {
-        return '';
-      }
-      const normalized = trimmed.replace(/\\/g, '/');
-      if (normalized === '/') {
-        return '/';
-      }
-      return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
-    };
-
-    const sessionUpdatedAt = (session: SessionFields) => {
-      const time = session && hasSessionTime(session.time) ? session.time : null;
-      return toFiniteNumber(time?.updated) ?? toFiniteNumber(time?.created) ?? 0;
-    };
-
-    const filterSessionsByDirectory = (sessions: JsonValue[], directory: string) => {
-      const normalizedDirectory = normalizeDirectory(directory);
-      if (!normalizedDirectory) {
-        return sessions;
-      }
-
-      const prefix = normalizedDirectory === '/' ? '/' : `${normalizedDirectory}/`;
-      return sessions.filter((session) => {
-        const sessionDirectory = normalizeDirectory(hasSessionFields(session) ? session.directory : undefined);
-        if (!sessionDirectory) {
-          return false;
-        }
-        return sessionDirectory === normalizedDirectory || sessionDirectory.startsWith(prefix);
-      });
-    };
-
-    const listSessions = async (directory: string | null): Promise<JsonValue[]> => {
-      const query = (() => {
-        if (directory === null || directory.length === 0) {
-          return '';
-        }
-        const preparedDirectory = process.platform === 'win32'
-          ? directory.replace(/\//g, '\\\\')
-          : directory;
-        return `?directory=${encodeURIComponent(preparedDirectory)}`;
-      })();
-
-      const response = await fetch(buildOpenCodeUrl(`/api/session${query}`, ''), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          ...getOpenCodeAuthHeaders(),
-        },
-        signal: AbortSignal.timeout(2500),
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const body: JsonValue = await response.json().catch(() => null);
-      const payload = Array.isArray(body) ? body : hasSessionData(body) ? body.data : undefined;
-      return Array.isArray(payload) ? payload : [];
-    };
->>>>>>>> upstream/main:packages/web/server/lib/appearance/pwa-manifest-routes.ts
+    const normalizeShortcutTitle = (value: JsonValue | undefined, fallback: string) => normalizePwaAppName(value, fallback).slice(0, 48);
 
     try {
-<<<<<<<< HEAD:packages/web/server/lib/host/pwa-manifest-routes.js
       // Recent sessions come from the canonical Host service, scoped to the
       // directory the UI last used. No legacy session API or client path admission.
       const listed = await listSessions(preferredDirectory);
       const payload = Array.isArray(listed?.items) ? listed.items : [];
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/pwa-manifest-routes.js
-      let payload = [];
-
-      if (preferredDirectory) {
-        const scopedPayload = await listSessions(preferredDirectory);
-        const filteredScopedPayload = filterSessionsByDirectory(scopedPayload, preferredDirectory);
-
-        if (filteredScopedPayload.length > 0) {
-          payload = filteredScopedPayload;
-        } else {
-          const globalPayload = await listSessions(null);
-          const filteredGlobalPayload = filterSessionsByDirectory(globalPayload, preferredDirectory);
-          payload = filteredGlobalPayload;
-        }
-      } else {
-        payload = await listSessions(null);
-      }
-
-========
-      let payload: JsonValue[] = [];
-
-      if (preferredDirectory) {
-        const scopedPayload = await listSessions(preferredDirectory);
-        const filteredScopedPayload = filterSessionsByDirectory(scopedPayload, preferredDirectory);
-
-        if (filteredScopedPayload.length > 0) {
-          payload = filteredScopedPayload;
-        } else {
-          const globalPayload = await listSessions(null);
-          const filteredGlobalPayload = filterSessionsByDirectory(globalPayload, preferredDirectory);
-          payload = filteredGlobalPayload;
-        }
-      } else {
-        payload = await listSessions(null);
-      }
-
->>>>>>>> upstream/main:packages/web/server/lib/appearance/pwa-manifest-routes.ts
       const seen = new Set();
       const rows: { id: string; title: string; updatedAt: number }[] = [];
 
       for (const item of payload) {
-<<<<<<<< HEAD:packages/web/server/lib/host/pwa-manifest-routes.js
         const id = item?.sessionId?.trim().slice(0, 160) ?? '';
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/pwa-manifest-routes.js
-        if (!item || typeof item !== 'object') {
-          continue;
-        }
-
-        const id = typeof item.id === 'string' ? item.id.trim().slice(0, 160) : '';
-========
-        if (!hasSessionFields(item)) {
-          continue;
-        }
-
-        const id = isString(item.id) ? item.id.trim().slice(0, 160) : '';
->>>>>>>> upstream/main:packages/web/server/lib/appearance/pwa-manifest-routes.ts
         if (!id || seen.has(id)) {
           continue;
         }
@@ -340,7 +76,7 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
         rows.push({
           id,
           title: normalizeShortcutTitle(item.title, `Session ${rows.length + 1}`),
-          updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
+          updatedAt: typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
         });
       }
 
@@ -364,21 +100,21 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
 
   app.get('/manifest.webmanifest', async (req, res) => {
     const hasQueryOverride =
-      isString(req.query?.pwa_name)
-      || isString(req.query?.app_name)
-      || isString(req.query?.appName);
+      typeof req.query?.pwa_name === 'string'
+      || typeof req.query?.app_name === 'string'
+      || typeof req.query?.appName === 'string';
 
     let queryValueRaw = '';
-    if (isString(req.query?.pwa_name)) {
+    if (typeof req.query?.pwa_name === 'string') {
       queryValueRaw = req.query.pwa_name;
-    } else if (isString(req.query?.app_name)) {
+    } else if (typeof req.query?.app_name === 'string') {
       queryValueRaw = req.query.app_name;
-    } else if (isString(req.query?.appName)) {
+    } else if (typeof req.query?.appName === 'string') {
       queryValueRaw = req.query.appName;
     }
 
     const queryOverrideName = normalizePwaAppName(queryValueRaw, '');
-    const hasOrientationOverride = isString(req.query?.orientation);
+    const hasOrientationOverride = typeof req.query?.orientation === 'string';
     const queryOverrideOrientation = normalizePwaOrientation(req.query?.orientation, 'system');
 
     let storedName = '';
@@ -400,6 +136,7 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
     );
 
     const shortName = appName.length > 30 ? appName.slice(0, 30) : appName;
+    // Session titles are private: only a caller /api would accept gets them.
     const recentSessionShortcuts = await isRequestAuthorized(req, res).catch(() => false)
       ? await getRecentPwaSessionShortcuts()
       : [];
@@ -415,7 +152,7 @@ export const registerPwaManifestRoute = (app: Application, dependencies: PwaMani
       display_override: ['window-controls-overlay'],
       background_color: '#151313',
       theme_color: '#edb449',
-      ...(manifestOrientation && { orientation: manifestOrientation }),
+      ...(manifestOrientation ? { orientation: manifestOrientation } : {}),
       icons: [
         { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

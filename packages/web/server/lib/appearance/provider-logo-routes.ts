@@ -49,34 +49,12 @@ const PROVIDER_LOGO_EXTENSIONS = new Map([
   ['image/svg+xml', 'svg'],
 ]);
 
-<<<<<<<< HEAD:packages/web/server/lib/host/provider-logo-routes.js
 // A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/provider-logo-routes.js
-/** What a provider logo may be; mirrors CUSTOM_PROVIDER_LOGO_MIMES in packages/ui/src/lib/customProviderLogos.ts. */
-export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
-// A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
-========
-export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
->>>>>>>> upstream/main:packages/web/server/lib/appearance/provider-logo-routes.ts
 export const PROVIDER_LOGO_MAX_BYTES = 1024 * 1024;
 const SVG_THEME_COLORS = new Map<QueryValue | undefined, string>([['light', '#111111'], ['dark', '#f5f5f5']]);
 const isProviderLogoMime = (value: unknown): value is string => isString(value) && PROVIDER_LOGO_EXTENSIONS.has(value);
 
-<<<<<<<< HEAD:packages/web/server/lib/host/provider-logo-routes.js
-/**
- * An SVG logo's markup with its CSS colour set for `theme`, so `currentColor`
- * reads on either background. Null for anything but `light` or `dark`.
- */
-const themedLogoSvg = (data, theme) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/provider-logo-routes.js
-/**
- * An SVG logo's markup with its CSS colour set for `theme`, so `currentColor`
- * reads on either background. Null for anything but `light` or `dark`.
- */
-export const themedLogoSvg = (data, theme) => {
-========
 export const themedLogoSvg = (data: Buffer, theme: QueryValue | undefined) => {
->>>>>>>> upstream/main:packages/web/server/lib/appearance/provider-logo-routes.ts
   const color = SVG_THEME_COLORS.get(theme);
   return color ? injectSvgRootColor(data.toString('utf8'), color) : null;
 };
@@ -217,15 +195,7 @@ export const registerProviderLogoRoutes = (app: Application, dependencies: Provi
         try {
           await writeLogoSetting(providerId, next);
         } catch (error) {
-<<<<<<<< HEAD:packages/web/server/lib/host/provider-logo-routes.js
-          // The setting still names the previous file, which stays served.
-          await fsPromises.unlink(filePath).catch(() => { });
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/provider-logo-routes.js
-          // The setting still names the previous file, which stays served.
           await fsPromises.unlink(filePath).catch(() => {});
-========
-          await fsPromises.unlink(filePath).catch(() => {});
->>>>>>>> upstream/main:packages/web/server/lib/appearance/provider-logo-routes.ts
           throw error;
         }
         await removeLogoFiles(providerId, filePath);
