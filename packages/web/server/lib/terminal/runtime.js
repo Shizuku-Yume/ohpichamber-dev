@@ -688,9 +688,9 @@ export function createTerminalRuntime({
     const { cols, rows } = req.body ?? {};
     if (!validateSize(cols, 1000) || !validateSize(rows, 500)) return res.status(400).json({ error: 'Invalid terminal dimensions' });
     try {
-      if (session.status === 'running' && (cols !== session.cols || rows !== session.rows)) {
+      if (cols !== session.cols || rows !== session.rows) {
         flushOutput(session);
-        session.process?.resize(cols, rows);
+        if (session.status === 'running') session.process?.resize(cols, rows);
         session.cols = cols; session.rows = rows;
         recordHistoryResize(session.history, cols, rows);
         publish(session, { t: 'resize', cols, rows });

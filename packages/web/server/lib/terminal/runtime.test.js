@@ -732,6 +732,23 @@ describe('terminal runtime', () => {
     } finally { await harness.runtime.shutdown(); }
   });
 
+  it('keeps accepted dimensions for a restart after exit without resizing the dead PTY', async () => {
+    const harness = createHarness();
+    try {
+      await harness.routes.post.get('/api/terminal/create')({ body: { sessionId: 'term-1', cwd: '/repo', cols: 80, rows: 24 } }, createResponse());
+      harness.processes[0].emitExit(0);
+      const resized = createResponse();
+      const params = { sessionId: 'term-1' };
+      harness.routes.post.get('/api/terminal/:sessionId/resize')({ params, body: { cols: 120, rows: 40 } }, resized);
+      expect(resized.body).toMatchObject({ cols: 120, rows: 40 });
+      expect(harness.processes[0].resizes).toEqual([]);
+      const restarted = createResponse();
+      await harness.routes.post.get('/api/terminal/:sessionId/restart')({ params }, restarted);
+      expect(restarted.body).toMatchObject({ cols: 120, rows: 40, status: 'running' });
+      expect(harness.processes[1].options).toMatchObject({ cols: 120, rows: 40 });
+    } finally { await harness.runtime.shutdown(); }
+  });
+
   it('serializes concurrent restarts without orphaning replacement processes', async () => {
     const harness = createHarness();
     try {
