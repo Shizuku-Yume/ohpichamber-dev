@@ -220,11 +220,11 @@ describe('environment runtime', () => {
     });
     if (message === null) {
       await expect(runtime.forDirectory(projectPath)).rejects.toThrow(TypeError);
-      expect(() => runtime.forOpenCode()).toThrow(TypeError);
+      expect(runtime.forOpenCode).toBeUndefined();
       return;
     }
     expect(await runtime.forDirectory(projectPath)).toBeNull();
-    expect(runtime.forOpenCode()).toEqual({});
+    expect(runtime.forOpenCode).toBeUndefined();
     expect(logger.warn.mock.calls).toEqual([
       [`[environment] user variables not applied: ${message}`],
       [`[environment] project variables not applied: ${message}`],
