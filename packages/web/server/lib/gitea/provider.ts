@@ -11,7 +11,7 @@ import type { createSourceControlAuthStore } from '../source-control/auth-storag
 import type { ProviderDescriptor, ProviderMutationContext, ProviderReadContext, ProviderSession } from '../source-control/provider-contract.js';
 import type { MutationRecord } from '../source-control/mutation-storage.js';
 import type { StandardMutationInput } from '../source-control/standard-mutations.js';
-import type { SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { BindingMutationTarget } from '../source-control/binding-service-contracts.js';
 import type { GiteaFetch } from './client.js';
 import type { GiteaResourceOptions } from './resources.js';
@@ -230,7 +230,7 @@ export function createGiteaFamilyProvider(build: GiteaFamilyProviderOptions) {
     const { version, supported, edition: probed } = await probeGiteaVersion({ origin, token, fetch: fetchImpl, timeoutMs, label });
     return supported
       ? { version, supported, edition: probed }
-      : { version, supported, edition: probed, message: `${label} ${version} is older than OpenChamber supports (${edition.minimum})` };
+      : { version, supported, edition: probed, message: `${label} ${version} is older than OhPiChamber supports (${edition.minimum})` };
   };
   type ProbeResult = Parameters<NonNullable<PatAccountAuthOptions['ownerElsewhere']>>[0];
   const servesEdition = (target: GiteaFamilyProviderOptions['edition'], { version, edition: probed }: ProbeResult) => (probed ? probed === target.id : target.serves(version));
