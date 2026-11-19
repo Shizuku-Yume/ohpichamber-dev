@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ErrorResponseDetails } from '@/components/chat/ErrorResponseDetails';
 import { useI18n } from '@/lib/i18n';
 import { showRuntimeStatus } from '@/lib/runtimeStatus';
-import { useLatestSessionError } from '@/sync/notification-store';
+import { useLatestSessionError, type ErrorNotification } from '@/sync/notification-store';
 import { useDirectoryStore, useDirectorySync, useSessionStatus, useSessionStatusSnapshotReady } from '@/sync/sync-context';
 import { summarizeSessionError } from '@/sync/session-error-log';
 import { refetchSessionMessages } from '@/sync/session-actions';
@@ -71,7 +71,7 @@ export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionI
   const { t } = useI18n();
   const liveError = useLatestSessionError(sessionId);
   const latestTurn = useDirectorySync(React.useCallback((state) => state.snapshot[sessionId]?.turns.at(-1) ?? null, [sessionId]), directory);
-  const storedError = React.useMemo(() => latestTurn?.status === 'failed'
+  const storedError = React.useMemo<ErrorNotification | null>(() => latestTurn?.status === 'failed'
     ? { time: latestTurn.finishedAt ?? latestTurn.startedAt, error: summarizeSessionError(latestTurn.error) }
     : null, [latestTurn]);
   const latestError = liveError && (!storedError || liveError.time >= storedError.time) ? liveError : storedError;
