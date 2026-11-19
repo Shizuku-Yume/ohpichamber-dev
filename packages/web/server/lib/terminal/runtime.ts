@@ -199,13 +199,9 @@ interface Connection { socket: WebSocket; attachments: Map<string, Attachment> }
 
 const MAX_SESSIONS = 20;
 const MAX_HISTORY_BYTES = 512 * 1024;
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
 const MAX_HISTORY_RESIZES = 256;
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-=======
 const DEFAULT_TERMINAL_READ_BYTES = 32 * 1024;
 const MAX_TERMINAL_READ_BYTES = 256 * 1024;
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
 const HISTORY_SEGMENT_BYTES = 8 * 1024;
 const MAX_SOCKET_BUFFER_BYTES = 4 * 1024 * 1024;
 const OUTPUT_BATCH_MS = 12;
@@ -285,22 +281,13 @@ const findPendingActionCreate = (pendingSessionCreates: Map<string, PendingCreat
   }
   return null;
 };
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
 const newHistory = (cols, rows) => ({
   chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '',
   units: 0, sizes: [{ offset: 0, cols, rows }],
 });
 const historyText = (history) => history.original
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-const newHistory = () => ({ chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '' });
-const historyText = (history) => history.original
-=======
-const newHistory = (): TerminalHistory => ({ chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '' });
-const historyText = (history: TerminalHistory) => history.original
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
   ? history.original.join('') + history.originalTail
   : Buffer.concat(history.chunks.slice(history.head).map((chunk, index) => chunk.buffer.subarray(index === 0 ? history.offset : 0, chunk.length))).toString('utf8');
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
 const recordHistoryResize = (history, cols, rows) => {
   const offset = history.units;
   const sizes = history.sizes;
@@ -319,11 +306,6 @@ const snapshotHistory = (history) => {
   return sizes.length > 1 ? { history: text, sizes } : { history: text };
 };
 const appendHistoryBytes = (history, bytes) => {
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-const appendHistoryBytes = (history, bytes) => {
-=======
-const appendHistoryBytes = (history: TerminalHistory, bytes: Buffer) => {
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
   let offset = 0;
   while (offset < bytes.length) {
     let tail = history.chunks.at(-1);
@@ -364,15 +346,9 @@ const appendOriginal = (history: TerminalHistory, original: string[], text: stri
 };
 const appendHistory = (history: TerminalHistory, text: string) => {
   if (!text) return;
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
   history.units += text.length;
   // Buffer.from encodes an unmatched high surrogate as U+FFFD. Until the first
   // trim, the next chunk can still complete that UTF-16 pair.
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-  // Buffer.from encodes an unmatched high surrogate as U+FFFD. Until the first
-  // trim, the next chunk can still complete that UTF-16 pair.
-=======
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
   let encoded = text;
   if (history.original && /[\uD800-\uDBFF]/.test(String(history.originalLast)) && /^[\uDC00-\uDFFF]/.test(text)) {
     removeHistoryTail(history, 3);
@@ -561,19 +537,8 @@ export function createTerminalRuntime({
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
   const snapshot = (session) => ({
     t: 'snapshot', v: 3, s: session.id, q: session.sequence, ...snapshotHistory(session.history),
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-  const snapshot = (session) => ({
-    t: 'snapshot', v: 3, s: session.id, q: session.sequence, history: historyText(session.history),
-    // The PTY size the history was drawn for: a client replays history at this
-    // size before fitting its own viewport, so shell output wrapped for one
-    // width never gets re-laid-out at another.
-=======
-  const snapshot = (session: TerminalSession) => ({
-    t: 'snapshot', v: 3, s: session.id, q: session.sequence, history: historyText(session.history),
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
     cols: session.cols, rows: session.rows,
     status: session.status, exitCode: session.exitCode, signal: session.signal,
     mode: session.mode ?? INTERACTIVE_TERMINAL_MODE, purpose: getSessionPurpose(session),
@@ -666,28 +631,7 @@ export function createTerminalRuntime({
   const startSession = async (seed: TerminalSessionSeed, { cwd: requestedCwd, cols, rows, themeMode = 'dark', terminalBackground, terminalForeground, shell, loginShell, mode = INTERACTIVE_TERMINAL_MODE, command = null, purpose = TERMINAL_PURPOSE }: TerminalStartOptions, clear = true) => {
     const cwd = await validateCwd({ cwd: requestedCwd });
     const spawned = await spawnPty({ cwd, cols, rows, themeMode, shell, loginShell, mode, command });
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
-    if (clear) { discardOutput(session); session.history = newHistory(cols, rows); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; }
-    session.retired = false;
-    session.cwd = cwd; session.cols = cols; session.rows = rows; session.process = spawned.process;
-    session.backend = spawned.backend; session.shell = spawned.shell; session.loginShell = spawned.loginShell; session.status = 'running'; session.exitCode = null; session.signal = null;
-    session.shellExecutable = spawned.shellExecutable;
-    session.mode = mode; session.command = mode === COMMAND_TERMINAL_MODE ? command : null;
-    session.purpose = purpose;
-    session.themeMode = themeMode === 'light' ? 'light' : 'dark'; session.terminalBackground = terminalBackground; session.terminalForeground = terminalForeground;
-    session.lastActivity = Date.now(); session.eventQueue.length = 0;
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-    if (clear) { discardOutput(session); session.history = newHistory(); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; }
-    session.retired = false;
-    session.cwd = cwd; session.cols = cols; session.rows = rows; session.process = spawned.process;
-    session.backend = spawned.backend; session.shell = spawned.shell; session.loginShell = spawned.loginShell; session.status = 'running'; session.exitCode = null; session.signal = null;
-    session.shellExecutable = spawned.shellExecutable;
-    session.mode = mode; session.command = mode === COMMAND_TERMINAL_MODE ? command : null;
-    session.purpose = purpose;
-    session.themeMode = themeMode === 'light' ? 'light' : 'dark'; session.terminalBackground = terminalBackground; session.terminalForeground = terminalForeground;
-    session.lastActivity = Date.now(); session.eventQueue.length = 0;
-=======
-    if (clear) { discardOutput(seed); seed.history = newHistory(); seed.pendingHistoryControlSequence = ''; seed.pendingThemeControlSequence = ''; seed.themeModeEnabled = false; }
+    if (clear) { discardOutput(seed); seed.history = newHistory(cols, rows); seed.pendingHistoryControlSequence = ''; seed.pendingThemeControlSequence = ''; seed.themeModeEnabled = false; }
     const initialized: Omit<TerminalSession, keyof TerminalSessionSeed | 'lastActivity'> = {
       retired: false, cwd, cols, rows, process: spawned.process,
       backend: spawned.backend, shell: spawned.shell, loginShell: spawned.loginShell, status: 'running', exitCode: null, signal: null,
@@ -697,7 +641,6 @@ export function createTerminalRuntime({
     };
     const session: TerminalSession = Object.assign(seed, initialized, { lastActivity: Date.now() });
     session.eventQueue.length = 0;
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
     wire(session, spawned.process);
     return { session, ptyProcess: spawned.process };
   };
@@ -754,16 +697,8 @@ export function createTerminalRuntime({
     if (!existing && sessions.size - superseded.length + pendingSessionCreates.size >= MAX_SESSIONS) throw new Error('Maximum terminal sessions reached');
     const pendingEntry: PendingCreate = { cwd: resolvedCwd, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose, cancelled: false, promise: null };
     const creation = (async () => {
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
-      const session = existing ?? { id, sequence: 0, history: newHistory(cols, rows), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
-      const ptyProcess = await startSession(session, { cwd, cols, rows, themeMode, terminalBackground, terminalForeground, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose });
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-      const session = existing ?? { id, sequence: 0, history: newHistory(), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
-      const ptyProcess = await startSession(session, { cwd, cols, rows, themeMode, terminalBackground, terminalForeground, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose });
-=======
-      const seed: TerminalSessionSeed = existing ?? { id, sequence: 0, history: newHistory(), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
+      const seed: TerminalSessionSeed = existing ?? { id, sequence: 0, history: newHistory(cols, rows), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
       const { session, ptyProcess } = await startSession(seed, { cwd, cols, rows, themeMode, terminalBackground, terminalForeground, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose });
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
       if (pendingEntry.cancelled) {
         session.retired = true;
         discardOutput(session);
@@ -976,7 +911,6 @@ export function createTerminalRuntime({
     if (!session) return res.status(404).json({ error: 'Terminal session not found' });
     const { cols, rows } = hasRequestFields(req.body) ? req.body : {};
     if (!validateSize(cols, 1000) || !validateSize(rows, 500)) return res.status(400).json({ error: 'Invalid terminal dimensions' });
-<<<<<<< HEAD:packages/web/server/lib/terminal/runtime.js
     try {
       if (cols !== session.cols || rows !== session.rows) {
         flushOutput(session);
@@ -988,13 +922,6 @@ export function createTerminalRuntime({
       res.json({ success: true, cols: session.cols, rows: session.rows, orderedResize: true });
     }
     catch (error) { res.status(500).json({ error: error?.message || 'Failed to resize terminal' }); }
-||||||| bc50ba56aa:packages/web/server/lib/terminal/runtime.js
-    try { if (session.status === 'running') session.process?.resize(cols, rows); session.cols = cols; session.rows = rows; res.json({ success: true, cols, rows }); }
-    catch (error) { res.status(500).json({ error: error?.message || 'Failed to resize terminal' }); }
-=======
-    try { if (session.status === 'running') session.process?.resize(cols, rows); session.cols = cols; session.rows = rows; res.json({ success: true, cols, rows }); }
-    catch (error) { res.status(500).json({ error: (hasErrorFields(error) && error.message) || 'Failed to resize terminal' }); }
->>>>>>> upstream/main:packages/web/server/lib/terminal/runtime.ts
   });
   app.post('/api/terminal/:sessionId/appearance', (req, res) => {
     const session = req.params.sessionId === undefined ? undefined : sessions.get(req.params.sessionId);
