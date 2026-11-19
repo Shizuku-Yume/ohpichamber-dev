@@ -58,13 +58,7 @@ copy:
 
 - `terminal/runtime.js` and `terminal/shells.js` use `String(value) === value`,
   which rejects boxed strings and throws on null-prototype objects.
-<<<<<<< HEAD
-- `guests/oauth.js`, `host/settings-files.js`, and `host/shared.js`
-||||||| bc50ba56aa
-- `guests/oauth.js`, `opencode/settings-files.js`, and `opencode/shared.js`
-=======
 - `guests/oauth.js`, `settings/settings-files.js`, and `opencode/config-files.js`
->>>>>>> upstream/main
   expose a loose `isPlainObject` that uses `typeof value === 'object'` and so
   accepts values the strict predicate rejects. They keep their own name and
   shape; only modules asking for `isRecord` were migrated.
@@ -82,6 +76,7 @@ copy:
 The modules below keep their exported names and signatures and now re-export
 the shared functions, so existing importers are unaffected:
 
+- `opencode/config-v2.js`: `isRecord`
 - `linear/parse.js`: `isString`, `isPlainObject`
 - `gitlab/validation.js`: `isString`, `isPlainObject`
 - `quota/utils/transformers.js`: `asNonEmptyString`
