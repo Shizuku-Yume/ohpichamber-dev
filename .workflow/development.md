@@ -4,32 +4,17 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
-**2026-11-19 Frameless app-menu focus:** The Windows and frameless Linux
-titlebar app-menu button cancels mouse-down's focus transfer, so opening the
-native menu keeps the active editor or input as the Undo/Redo target. The
-button remains tabbable and keyboard click activation is unchanged. The
-titlebar regression tests cover both platform configurations, cancellation of
-mouse-down, input focus at the menu handoff, and keyboard-style activation.
-Native Windows/Linux menu interaction remains unverified.
-
-**2026-11-19 Native history focus:** Native testing of `85df60fa5` verified that
-Undo targets the focused composer without changing the file, but native menu
-Redo did not restore the composer while its keyboard binding did. Desktop now
-uses explicit Undo/Redo menu callbacks and an acknowledged, cancelable
-`openchamber:history-action` query in main and Mini Chat app documents. Focused
-CodeMirror content owns both commands, even with empty or read-only history;
-ordinary inputs, DevTools, and browser guests retain native history. Failed
-renderer queries do not fall back. Labels and accelerators match Electron's
-platform defaults. The shared stale-`beforeinput` guard remains for history
-commands arriving outside the app menu. Happy DOM reproduced the original
-unguarded unfocused-file mutation. Native validation of the explicit menu route
-remains pending; no Electron or dev server was launched during this follow-up.
-Electron menu tests passed (33 tests), UI file/composer history tests passed
-(11 tests), and existing composer paste/view/writeback tests passed (15 tests).
-Electron syntax type-check, UI type-check, both package lint commands, and
-dead-code checks exited 0. Electron's lint script is currently a no-op. Existing
-Happy DOM paste tests log missing `Window` diagnostics despite passing, and the
-file-editor harness retains its React `act` warning.
+**2026-11-19 Native history focus:** Native Edit → Undo could revert and autosave
+an unfocused file after a paste into chat, and native Redo could skip CodeMirror's
+history. Desktop routes Undo/Redo to the focused editor and keeps native history
+for ordinary inputs, DevTools and guests. The frameless app-menu button keeps
+editor focus on mouse-down without changing its keyboard activation. Native
+[macOS](https://app.devin.ai/sessions/69dd47e13bb34e098f0f91ef6cb0e71a?testRecording=ea986b56-de15-42ea-b566-4715130553cf),
+[Linux](https://app.devin.ai/sessions/7dac27f9da6f4c32ba0dece075fb2086?testRecording=9799d134-a70c-4df7-9c08-3fedf910476b)
+and [Windows](https://app.devin.ai/sessions/3a0fa9b3973f4432bf9dbbe5fe43c06a?testRecording=3b04cdda-9426-49dd-91d1-285ed2581667)
+tests confirmed chat Undo/Redo did not change saved file bytes. Linux also
+verified Mini Chat keyboard history in isolation; its mouse-menu path and
+packaged builds were not tested.
 
 **2026-11-19 Mobile authentication drift ledger:** A fresh worktree at `origin/main` (`d50c8784c`, including PRs #11 and #13) reproduced `bun run type-check` failing only the upstream-drift step: `mobileNativeHttp.test.ts` and `mobileReconnectForm.test.tsx` were unexplained `fork-differs` paths. Explicit ledger rows now reference the decision to preserve their native Host authentication regression coverage; no runtime code, test assertions or guard exclusions changed. Full type-check and drift-guard test evidence is recorded under `/home/ubuntu/mobile-testing/drift-ledger-{main-types,fixed-types,tests}.log`. No runtime or platform certification is implied by this ledger repair.
 
