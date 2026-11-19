@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
-import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
+import { GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
+import { GUEST_UI_LOOK_CSS } from 'ohpichamber-sdk/ui';
 import { injectGuestDocumentStyles } from './html-styles.js';
 import { registerGuestRoutes } from './routes.js';
 import { setCapabilityGrants, writeExtensionStore } from './persist.js';
@@ -20,7 +21,7 @@ describe('approved origins in the frame policy', () => {
     await fs.writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'guest', version: '1.0.0', openchamber: { apiVersion: 1, contributes: { panel: { id: 'fonts-guest', name: 'Fonts', icon: 'apps', entry: 'index.html' }, origins: ['https://fonts.example.com'] } } }));
     const persistPath = path.join(root, 'extensions.json');
     await writeExtensionStore(persistPath, { paths: [packageRoot], sources: { [packageRoot]: 'path' } });
-    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root, resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
+    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root });
     const policy = async () => (await request(app).get('/api/guests/fonts-guest/index.html').set('Host', 'oc.test').expect(200)).headers['content-security-policy'];
 
     expect(await policy()).not.toContain('https://fonts.example.com');
@@ -33,36 +34,22 @@ describe('approved origins in the frame policy', () => {
 });
 
 describe('guest document styles', () => {
-  test('places the host bootstrap before authored CSP metadata and scripts', () => {
+  test('preserves doctypes, CSP, and tag-like text inside authored scripts', () => {
     const html = '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="style-src \'self\'"><script>const text = "</head><head>";</script></head><body>Guest</body></html>';
     const decorated = injectGuestDocumentStyles(html);
     const meta = '<meta name="color-scheme" content="light dark">';
-    const policy = '<meta http-equiv="Content-Security-Policy" content="style-src \'self\'">';
-    const bootstrap = `<script data-openchamber-guest-bootstrap>${GUEST_BOOTSTRAP_SCRIPT}</script>`;
-    expect(decorated.startsWith(`<!doctype html>${meta}${bootstrap}<html>`)).toBe(true);
-    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf(policy));
-    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf('<script>const text'));
-    expect(decorated.replace(bootstrap, '')).toContain(html.replace('<!doctype html>', `<!doctype html>${meta}`));
+    expect(decorated.startsWith(`<!doctype html>${meta}${html.slice('<!doctype html>'.length)}`)).toBe(true);
     expect(decorated).toContain(GUEST_SCROLLBAR_CSS);
     expect(decorated).toContain('data-openchamber-guest-styles');
     expect(decorated).toContain(`<script data-openchamber-guest-scrollbar>${GUEST_SCROLLBAR_SCRIPT}</script>`);
   });
 
-  test('places bootstrap before encoded CSP metadata and inert data scripts', () => {
-    const html = '<html><head><script type="text/plain">inert</script><meta http-equiv="Content-Security-Policy" content="script-src &#x27;none&#x27;"></head><body></body></html>';
-    const decorated = injectGuestDocumentStyles(html);
-    const bootstrap = '<script data-openchamber-guest-bootstrap>';
-    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf('<script type="text/plain">'));
-    expect(decorated.indexOf(bootstrap)).toBeLessThan(decorated.indexOf('<meta http-equiv="Content-Security-Policy"'));
-  });
-
-  test('declares the color scheme and bootstrap before any authored content', () => {
+  test('declares the color scheme before any authored content', () => {
     const meta = '<meta name="color-scheme" content="light dark">';
-    const bootstrap = `<script data-openchamber-guest-bootstrap>${GUEST_BOOTSTRAP_SCRIPT}</script>`;
-    expect(injectGuestDocumentStyles('<html><body>x</body></html>').startsWith(`${meta}${bootstrap}<html>`)).toBe(true);
-    expect(injectGuestDocumentStyles('\n<!DOCTYPE html>\n<html></html>').startsWith(`\n<!DOCTYPE html>${meta}${bootstrap}\n<html>`)).toBe(true);
+    expect(injectGuestDocumentStyles('<html><body>x</body></html>').startsWith(`${meta}<html>`)).toBe(true);
+    expect(injectGuestDocumentStyles('\n<!DOCTYPE html>\n<html></html>').startsWith(`\n<!DOCTYPE html>${meta}\n<html>`)).toBe(true);
     // A doctype-looking string later in the document is authored text, not the doctype.
-    expect(injectGuestDocumentStyles('<p>"<!doctype html>"</p>').startsWith(`${meta}${bootstrap}<p>`)).toBe(true);
+    expect(injectGuestDocumentStyles('<p>"<!doctype html>"</p>').startsWith(`${meta}<p>`)).toBe(true);
   });
 
   test('serves scrollbar defaults to existing guests with or without an asset token', async () => {
@@ -74,7 +61,7 @@ describe('guest document styles', () => {
     await fs.writeFile(path.join(packageRoot, 'main.js'), script);
     await fs.writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'guest', version: '1.0.0', openchamber: { apiVersion: 1, contributes: { panel: { id: 'old-guest', name: 'Old guest', icon: 'apps', entry: 'index.html' } } } }));
     await writeExtensionStore(path.join(root, 'extensions.json'), { paths: [packageRoot], sources: { [packageRoot]: 'path' } });
-    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root, resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
+    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root });
     for (const suffix of ['', '?oc_url_token=fixture-scope']) {
       const response = await request(app).get(`/api/guests/old-guest/index.html${suffix}`).set('Host', 'oc.example:3000').expect(200);
       // Sandboxed and off the network: its own package path is the one place it may connect.
@@ -86,6 +73,8 @@ describe('guest document styles', () => {
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.text).toContain(GUEST_SCROLLBAR_CSS);
       expect(response.text).toContain(GUEST_SCROLLBAR_SCRIPT);
+      // The kit's look follows this app, after the authored document so it outranks the bundle's own copy.
+      expect(response.text.indexOf(GUEST_UI_LOOK_CSS)).toBeGreaterThan(response.text.indexOf('</html>'));
       expect(response.text.startsWith('<!doctype html>')).toBe(true);
       expect(response.text).toContain(suffix ? 'main.js?oc_url_token=fixture-scope' : 'src="main.js"');
     }
@@ -98,7 +87,7 @@ describe('guest document styles', () => {
       if (req.headers.origin === 'openchamber-ui://app') res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
       next();
     });
-    registerGuestRoutes(uiApp, { openchamberDataDir: root, resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
+    registerGuestRoutes(uiApp, { openchamberDataDir: root });
     const fromUi = await request(uiApp).get('/api/guests/old-guest/main.js').set('Origin', 'openchamber-ui://app').expect(200);
     expect(fromUi.headers['access-control-allow-origin']).toBe('openchamber-ui://app');
     const fromFrame = await request(uiApp).get('/api/guests/old-guest/main.js').set('Origin', 'null').expect(200);

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { SocketBinding as ManifestSocketBinding, PublicSocketBinding } from '@openchamber/sdk';
+import type { SocketBinding as ManifestSocketBinding, PublicSocketBinding } from 'ohpichamber-sdk';
 import { isString } from './input-guards.js';
 
 type SocketBinding = Pick<ManifestSocketBinding, 'id'> & Partial<Pick<ManifestSocketBinding, 'candidatesByPlatform'>>;

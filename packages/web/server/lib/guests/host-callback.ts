@@ -70,7 +70,7 @@ const startListener = () => new Promise<CallbackListener>((resolve, reject) => {
   const server = http.createServer((request, response) => {
     answer(request).then(
       (result) => send(response, result, result.close ? () => request.destroy() : undefined),
-      () => send(response, refuse(500, 'HOST_FAILED', 'OpenChamber could not handle the request')),
+      () => send(response, refuse(500, 'HOST_FAILED', 'OhPiChamber could not handle the request')),
     );
   });
   server.requestTimeout = REQUEST_TIMEOUT_MS;

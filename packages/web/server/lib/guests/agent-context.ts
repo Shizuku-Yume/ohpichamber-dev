@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { GUEST_BLOCK_RESERVED_NAMES, isGuestApproved, requestedGuestCapabilities } from 'ohpichamber-sdk';
 
-import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
+
 import type { GuestBlockContribution } from 'ohpichamber-sdk';
 import type { GuestRecord } from './contracts.js';
 
@@ -61,16 +61,7 @@ export const createGuestAgentContext = ({ listGuests, instructions, fsPromises =
       .map((guest) => path.resolve(guest.packageRoot, guest.skills));
   };
 
-  const pluginDirectories = async () => {
-    const guests = await listGuests().catch((): GuestRecord[] => []);
-    const directories = [];
-    for (const guest of guests) {
-      if (!isActive(guest) || !guest.opencodePlugin || !guest.capabilityGrants?.includes('opencodePlugin')) continue;
-      const directory = await resolveOpenCodePluginFolder(fsPromises, guest.packageRoot, guest.opencodePlugin);
-      if (directory) directories.push(directory);
-    }
-    return directories;
-  };
 
-  return { instructionText, skillDirectories, pluginDirectories };
+
+  return { instructionText, skillDirectories, };
 };

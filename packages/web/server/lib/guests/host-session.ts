@@ -1,7 +1,7 @@
 import { resolveIntegrationAuth } from 'ohpichamber-sdk';
 
 import { GuestOAuthError, toPublicGuestAuth } from './oauth.js';
-import type { IntegrationContribution } from '@openchamber/sdk';
+import type { IntegrationContribution } from 'ohpichamber-sdk';
 import type { TrackerRegistry } from '../trackers/tracker-contract.js';
 import type { GuestAuthEntry } from './auth-store.js';
 

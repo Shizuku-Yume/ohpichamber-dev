@@ -447,6 +447,7 @@ const startGuestService = async ({
         lastFailures.set(guestId, { at: Date.now(), output: detail });
       }
       runtime.status = runtime.status === 'starting' ? 'failed' : 'stopped';
+      announceServiceEnded(guestId);
     }
   });
 

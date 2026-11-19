@@ -37,7 +37,7 @@ import {
 import { GuestServiceError, holdGuestService, openGuestServiceRequest } from './service.js';
 import type { GuestServiceRequest } from './service.js';
 import type { GuestRecord } from './contracts.js';
-import type { SurfaceHostMessage, SurfaceViewerMessage } from '@openchamber/sdk/schemas';
+import type { SurfaceHostMessage, SurfaceViewerMessage } from 'ohpichamber-sdk/schemas';
 import type { RawData, WebSocket } from '../shared/websocket-contracts.js';
 import type { SurfaceController, SurfaceEndReason, SurfaceFrame, SurfaceGuest, SurfaceRuntimeOptions, SurfaceSession, SurfaceViewer } from './surface-contracts.js';
 

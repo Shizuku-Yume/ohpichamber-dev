@@ -1,7 +1,7 @@
-import { SERVICE_MARKS_MAX, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
+import { SERVICE_MARKS_MAX, isGuestApproved, requestedGuestCapabilities } from 'ohpichamber-sdk';
 
 import { guestIdOfServiceToken } from './service.js';
-import type { serviceHostCallSchema } from '@openchamber/sdk/schemas';
+import type { serviceHostCallSchema } from 'ohpichamber-sdk/schemas';
 import type { z } from 'zod';
 import type { GuestRecord } from './contracts.js';
 import { isString } from './input-guards.js';

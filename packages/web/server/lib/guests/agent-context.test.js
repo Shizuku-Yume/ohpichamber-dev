@@ -61,22 +61,13 @@ describe('what extensions add to agents', () => {
     const guests = [row({ enabled: false })];
     expect(await context(guests, [{ guestId: 'desk', text: 'x' }]).instructionText('/repo')).toBe('');
     expect(await context(guests).skillDirectories()).toEqual([]);
-    expect(await context(guests).pluginDirectories()).toEqual([]);
+    expect(context(guests).pluginDirectories).toBeUndefined();
   });
 
-  test('the plugin folder is listed only for an active extension holding its grant, and only while it resolves', async () => {
-    expect(await context([row()]).pluginDirectories()).toEqual(['/pkg/plugin']);
-    // Needs approval: a requested grant is missing.
-    expect(await context([row({ capabilityGrants: ['service', 'instructions', 'skills'] })]).pluginDirectories()).toEqual([]);
-    // Enterprise mode stripped the grant from the row and marked it.
-    expect(await context([row({ capabilityGrants: ['service', 'instructions', 'skills'], enterpriseBlocked: ['opencodePlugin'] })]).pluginDirectories()).toEqual([]);
-    // No plugin declared.
-    expect(await context([row({ opencodePlugin: undefined, capabilityGrants: ['service', 'instructions', 'skills'] })]).pluginDirectories()).toEqual([]);
-    // The folder left the package root, or is gone: OpenCode is not told to load it.
-    expect(await context([row({ opencodePlugin: '../elsewhere' })]).pluginDirectories()).toEqual([]);
-    expect(await context([row({ packageRoot: '/gone' })]).pluginDirectories()).toEqual([]);
-    // Removed: not in the catalog at all.
-    expect(await context([]).pluginDirectories()).toEqual([]);
+  test('does not expose a legacy OpenCode plugin loader', () => {
+    for (const guests of [[row()], [row({ opencodePlugin: '../elsewhere' })], []]) {
+      expect(context(guests).pluginDirectories).toBeUndefined();
+    }
   });
 
   test('an approved extension is named with its text and its skills load from the package', async () => {
@@ -90,6 +81,6 @@ describe('what extensions add to agents', () => {
     const failing = createGuestAgentContext({ listGuests: async () => { throw new Error('read'); }, instructions: { forDirectory: async () => [] } });
     expect(await failing.instructionText('/repo')).toBeNull();
     expect(await failing.skillDirectories()).toEqual([]);
-    expect(await failing.pluginDirectories()).toEqual([]);
+    expect(failing.pluginDirectories).toBeUndefined();
   });
 });

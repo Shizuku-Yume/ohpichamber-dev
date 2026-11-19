@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { serviceHostCallSchema } from '@openchamber/sdk/schemas';
+import { serviceHostCallSchema } from 'ohpichamber-sdk/schemas';
 import { createGuestMarks } from './marks.js';
 
 test('stores the parsed mark shape, including explicit undefined fields', () => {

@@ -3,7 +3,7 @@ import type {
   GuestSessionEventContent,
   GuestSessionEventRequest,
   GuestQuestionAskedContent,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 import type { GuestRecord } from './contracts.js';
 import type { GuestServiceRequest } from './service.js';
 import type { JsonValue, JsonObject } from '../shared/json-values.js';

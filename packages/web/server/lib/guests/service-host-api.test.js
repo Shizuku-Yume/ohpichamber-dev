@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { OpenChamberControlError } from '../openchamber-control/error.js';
-import { SERVICE_MARKS_MAX, SERVICE_MARK_RATE_MAX } from '@openchamber/sdk';
+import { SERVICE_MARKS_MAX, SERVICE_MARK_RATE_MAX } from 'ohpichamber-sdk';
 
 import { enterpriseBlockedCapabilities } from './enterprise.js';
 import { createGuestMarks } from './marks.js';

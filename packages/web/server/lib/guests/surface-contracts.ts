@@ -2,7 +2,7 @@ import type { Server } from 'node:http';
 import type { WebSocket } from '../shared/websocket-contracts.js';
 import type { RequestOriginChecker, createRequestSecurityRuntime } from '../security/request-security.js';
 import type { createUiAuth } from '../ui-auth/ui-auth.js';
-import type { SurfaceHostMessage } from '@openchamber/sdk/schemas';
+import type { SurfaceHostMessage } from 'ohpichamber-sdk/schemas';
 import type { GuestRecord } from './contracts.js';
 import type { holdGuestService, openGuestServiceRequest } from './service.js';
 

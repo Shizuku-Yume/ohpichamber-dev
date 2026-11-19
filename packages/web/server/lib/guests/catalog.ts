@@ -424,7 +424,7 @@ export const hasGuestFrame = (guest: GuestPackage) => Boolean(
 const configurationNotes = new Map<string, string>();
 
 /** Catalog JSON. Drops packageRoot. Keeps attach only when true. `entry` is absent for a page-less guest. */
-export const toPublicGuest = (guest) => {
+export const toPublicGuest = (guest, toolLinkSettings = {}) => {
   const row = {
     id: guest.id,
     name: guest.name,

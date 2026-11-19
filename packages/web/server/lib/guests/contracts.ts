@@ -1,4 +1,4 @@
-import type { AttachMode, GuestCapability, OpenChamberManifest, PublicSocketBinding } from '@openchamber/sdk';
+import type { AttachMode, GuestCapability, OpenChamberManifest, PublicSocketBinding } from 'ohpichamber-sdk';
 import type { GitOrigin } from './persist.js';
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

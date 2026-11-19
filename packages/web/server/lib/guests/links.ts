@@ -1,5 +1,5 @@
 import { compileTrackerUrlTemplate, identifierPatternOf } from '../trackers/extension-descriptor.js';
-import type { LinksContribution } from '@openchamber/sdk';
+import type { LinksContribution } from 'ohpichamber-sdk';
 
 export const toPublicLinks = (links: LinksContribution) => {
   const declaredUrls = links.urls;

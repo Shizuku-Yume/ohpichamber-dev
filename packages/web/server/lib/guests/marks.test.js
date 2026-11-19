@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { SERVICE_MARKS_MAX } from '@openchamber/sdk';
+import { SERVICE_MARKS_MAX } from 'ohpichamber-sdk';
 
 import { createGuestMarks, mayGuestShowMarks } from './marks.js';
 

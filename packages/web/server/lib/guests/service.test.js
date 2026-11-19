@@ -19,6 +19,7 @@ import {
 } from './service.js';
 import { setCapabilityGrants, writeExtensionStore } from './persist.js';
 import { listInstalledGuests, noteGuestPackageChanged } from './catalog.js';
+import { createGuestMarks } from './marks.js';
 
 const writeFixture = async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-service-'));

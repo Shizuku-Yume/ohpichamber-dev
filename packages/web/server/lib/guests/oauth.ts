@@ -11,7 +11,7 @@ import {
 
 import { dropGuestTokens, getGuestAuth, patchGuestAuth } from './auth-store.js';
 import type { GuestAuthEntry } from './auth-store.js';
-import type { IntegrationContribution } from '@openchamber/sdk';
+import type { IntegrationContribution } from 'ohpichamber-sdk';
 import type { GuestRecord, JsonValue } from './contracts.js';
 import { isString, isJsonObject as isPlainObject } from './input-guards.js';
 

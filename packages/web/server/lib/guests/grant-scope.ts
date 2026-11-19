@@ -1,5 +1,5 @@
-import { resolveIntegrationApi, serviceProvides } from '@openchamber/sdk';
-import type { GuestCapability, OpenChamberManifest } from '@openchamber/sdk';
+import { resolveIntegrationApi, serviceProvides } from 'ohpichamber-sdk';
+import type { GuestCapability, OpenChamberManifest } from 'ohpichamber-sdk';
 import type { CapabilityScope } from './persist.js';
 
 

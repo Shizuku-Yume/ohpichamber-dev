@@ -84,6 +84,8 @@ import {
   stopGuestService,
 } from './service.js';
 
+
+
 const json16 = express.json({ limit: '16kb' });
 const json80 = express.json({ limit: '80kb' });
 const jsonFiles = express.json({ limit: '12mb' });
@@ -260,11 +262,7 @@ export type GuestRoutesOptions = {
   watchFolderInstalls?: boolean;
   surfaceViewerHeaders?: (guestId: string, viewerId: string) => Record<string, string> | null;
   trackers?: TrackerRegistry | null;
-  opencodePlugins?: {
-    delivery: () => string;
-    readGlobalEntries: () => { path: string; targets: string[] };
-    addGlobalEntry: (directory: string) => { path: string; added: boolean };
-  };
+
   marks?: typeof guestMarks;
 };
 
@@ -281,11 +279,8 @@ export const registerGuestRoutes = (app: Application, {
   watchFolderInstalls = false,
   surfaceViewerHeaders = () => null,
   trackers = null,
-  opencodePlugins = {
-    delivery: () => 'file',
-    readGlobalEntries: () => ({ path: '', targets: [] }),
-    addGlobalEntry: () => { throw new Error('No global OpenCode config here.'); },
-  },
+  marks = guestMarks,
+
 }) => {
   if (typeof resolveWorkspaceScope !== 'function') throw new TypeError('Guest workspace scope resolver is required');
   const persistPath = extensionsPersistPath(openchamberDataDir);
@@ -401,25 +396,7 @@ export const registerGuestRoutes = (app: Application, {
     }
   });
 
-  const describeOpenCodePlugins = async (guests: InstalledGuest[]) => {
-    const delivery = opencodePlugins.delivery();
-    const withPlugin = guests.filter((guest): guest is InstalledGuest & { opencodePlugin: string } => !!guest.opencodePlugin);
-    if (withPlugin.length === 0) return { delivery, globalConfigPath: null, inGlobalConfig: [] };
-    let globalEntries;
-    try {
-      globalEntries = opencodePlugins.readGlobalEntries();
-    } catch (error) {
-      console.warn('Could not read the global OpenCode config for the extension list:', (hasErrorMessage(error) ? error.message : undefined) ?? error);
-      return { delivery, globalConfigPath: null, inGlobalConfig: [] };
-    }
-    const { path: globalConfigPath, targets } = globalEntries;
-    const inGlobalConfig = [];
-    for (const guest of withPlugin) {
-      const directory = await resolveOpenCodePluginFolder(fs, guest.packageRoot, guest.opencodePlugin);
-      if (directory && targets.includes(directory)) inGlobalConfig.push(guest.id);
-    }
-    return { delivery, globalConfigPath, inGlobalConfig };
-  };
+
 
   const storedLinkSettings = async (guests: InstalledGuest[]) => {
     if (!guests.some((guest) => guestToolLinkSettingIds(guest.tools).length > 0)) return {};
@@ -437,7 +414,7 @@ export const registerGuestRoutes = (app: Application, {
       const stored = await storedLinkSettings(guests);
       res.json({
         guests: guests.map((guest) => toPublicGuest(withGuestUpdate(guest, persistPath), toolLinkSettingsOf(stored[guest.id], guest))),
-        opencodePlugins: await describeOpenCodePlugins(guests),
+
       });
     } catch (error) {
       console.error('Failed to list guests:', error);
@@ -445,18 +422,9 @@ export const registerGuestRoutes = (app: Application, {
     }
   });
 
-  const pluginRefusal = (guest: InstalledGuest) => {
-    if (guest.enterpriseBlocked?.includes('opencodePlugin')) return { status: 403, body: { error: 'enterprise-mode' } };
-    const approved = requestedGuestCapabilities(guest).every((capability) => guest.capabilityGrants.includes(capability));
-    if (guest.enabled === false || !approved || !guest.capabilityGrants.includes('opencodePlugin')) {
-      return { status: 409, body: { error: 'inactive' } };
-    }
-    return null;
-  };
 
-  app.post('/api/guests/:id/opencode-plugin/global-config', async (_req, res) => {
-    return res.status(501).json({ error: 'unsupported' });
-  });
+
+
 
   app.post<JsonValue | undefined>('/api/guests', json16, async (req, res) => {
     try {

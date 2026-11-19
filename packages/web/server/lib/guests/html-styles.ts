@@ -1,5 +1,5 @@
-import { GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from '@openchamber/sdk';
-import { GUEST_UI_LOOK_CSS } from '@openchamber/sdk/ui';
+import { GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
+import { GUEST_UI_LOOK_CSS } from 'ohpichamber-sdk/ui';
 
 const GUEST_COLOR_SCHEME_META = '<meta name="color-scheme" content="light dark">';
 const LEADING_DOCTYPE = /^\s*<!doctype[^>]*>/i;
