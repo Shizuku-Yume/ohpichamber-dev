@@ -1,4 +1,4 @@
-import type { BrowserProviderContext } from '@openchamber/sdk';
+import type { BrowserProviderContext } from 'ohpichamber-sdk';
 import type { UploadTicket } from './uploads.js';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -104,8 +104,8 @@ export const createBrowserControlBroker = ({
       });
       if (!listenerCount) {
         return Promise.reject(new BrowserControlError(
-          'No OpenChamber client connected here can control a page. Reading and '
-          + 'interacting with a page works when OpenChamber runs as its desktop '
+          'No OhPiChamber client connected here can control a page. Reading and '
+          + 'interacting with a page works when OhPiChamber runs as its desktop '
           + 'application; a web browser tab can display a page but cannot be '
           + 'driven. Nothing was changed. Mention this to the user only if it '
           + 'affects what they asked for.',
