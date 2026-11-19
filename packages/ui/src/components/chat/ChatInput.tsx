@@ -1342,7 +1342,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const handleCycleThinking = React.useCallback(() => {
         cycleThinkingVariant(currentSessionId);
     }, [currentSessionId]);
-    const handleOpenThinkingPanel = React.useCallback(() => handleOpenMobilePanel('variant'), [handleOpenMobilePanel]);
+    const handleOpenThinkingPanel = React.useCallback(() => handleOpenMobilePanel('effort'), [handleOpenMobilePanel]);
 
     // Consume pending input text (e.g., from revert action). Must stay after
     // useComposerDraft: on a draft switch the incoming draft loads first and

@@ -2,7 +2,7 @@ import type { Agent } from '@openchamber/agent-contract';
 import { getProviderModelDisplayName, type DisplayProvider } from '@/lib/modelDisplay';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 
-export type MobileControlsPanel = 'model' | 'agent' | 'variant' | null;
+export type MobileControlsPanel = 'model' | 'agent' | 'variant' | 'effort' | null;
 
 /** Cycle through available favorites, or the complete enabled native roster. */
 export const getCycledAgentId = (

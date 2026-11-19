@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { Agent, Message, Model, Provider, Session, Workspace } from '@openchamber/agent-contract';
+import type { MobileControlsPanel } from './mobileControlsUtils';
 import { CanonicalClient } from '@/api/canonicalClient';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getThemeById } from '@/lib/theme/themes';
@@ -44,6 +45,7 @@ Object.assign(globalThis, {
 const { createRoot } = await import('react-dom/client');
 const { TooltipProvider } = await import('@/components/ui/tooltip');
 const { ModelControls } = await import('./ModelControls');
+const { MobileEffortButton } = await import('./MobileEffortButton');
 const DIRECTORY = '/workspace/project';
 const PROVIDER_ID = 'openai';
 const MODEL_ID = 'gpt-5.5';
@@ -66,6 +68,9 @@ const provider: Provider & { models: Model[] } = {
   providerId: PROVIDER_ID, name: PROVIDER_ID, endpoint: null, protocol: null,
   authMethods: [], auth: { status: 'missing' }, models: [model],
 };
+// The configured OMP catalog shape: real effort levels, no route variants.
+const effortOnlyModel: Model = { ...model, variants: [] };
+const effortOnlyProvider: Provider & { models: Model[] } = { ...provider, models: [effortOnlyModel] };
 const agent: Agent = {
   agentId: AGENT_ID, name: 'Build', description: 'Build native projects',
   model: null, allowedTools: ['read', 'custom-native-tool'],
@@ -333,4 +338,67 @@ describe('ModelControls native selection and effort restore', () => {
       } finally { saveModel.mockRestore(); saveEffort.mockRestore(); }
     });
   }
+
+  test('long-pressing the phone effort button opens the level sheet and a pick applies', async () => {
+    useUIStore.setState({ isMobile: true });
+    useSessionUIStore.setState({ currentSessionId: SESSION_ID });
+    useConfigStore.setState({
+      providers: [effortOnlyProvider], providersLoaded: true,
+      currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID,
+      currentReasoningEffort: 'medium', currentVariant: undefined,
+      currentVariantSelection: { override: undefined, inherited: undefined },
+    });
+    const LongPressComposer = () => {
+      const [panel, setPanel] = React.useState<MobileControlsPanel>(null);
+      return (
+        <>
+          <MobileEffortButton
+            onCycleThinking={() => undefined}
+            onOpenThinking={() => setPanel('effort')}
+          />
+          <ModelControls mobilePanel={panel} onMobilePanelChange={setPanel} />
+        </>
+      );
+    };
+    await act(async () => root.render(
+      <SyncProvider client={client} directory={DIRECTORY}>
+        <ThemeSystemContext.Provider value={themeContext}>
+          <I18nProvider><TooltipProvider><LongPressComposer /></TooltipProvider></I18nProvider>
+        </ThemeSystemContext.Provider>
+      </SyncProvider>,
+    ));
+
+    const effortButton = dom.container.querySelector('button[aria-label^="Thinking"]');
+    if (!effortButton) throw new Error('Missing the phone effort button');
+    const view = effortButton.ownerDocument.defaultView;
+    if (!view) throw new Error('Expected a browser window for the phone effort button');
+    await act(async () => {
+      effortButton.dispatchEvent(new view.PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
+      await new Promise<void>((resolve) => view.setTimeout(resolve, 550));
+      effortButton.dispatchEvent(new view.PointerEvent('pointerup', { pointerType: 'touch', bubbles: true }));
+    });
+
+    // The sheet lists the model's real levels, not the empty legacy route list.
+    const sheet = document.body.querySelector('[role="dialog"][aria-label="Effort"]');
+    if (!sheet) throw new Error('The long press opened no effort sheet');
+    const rows = [...sheet.querySelectorAll('button')]
+      .map((entry) => entry.textContent?.trim())
+      .filter((label): label is string => Boolean(label));
+    expect(rows).toEqual(['Off', 'Low', 'High']);
+
+    // The lift's swipe guard swallows a click within 400 ms of the pointerup;
+    // a person reads the sheet and taps well after that.
+    await act(async () => {
+      await new Promise<void>((resolve) => view.setTimeout(resolve, 450));
+      const high = [...sheet.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === 'High');
+      if (!high) throw new Error('Missing the High level row');
+      high.click();
+      await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
+    });
+    // The pick lands where the tap path lands it: the draft's configured level.
+    expect(useConfigStore.getState().currentReasoningEffort).toBe('high');
+    // The sheet closed and the composer now reads that level.
+    expect(document.body.querySelector('[role="dialog"][aria-label="Effort"]')).toBeNull();
+    expect(dom.container.querySelector('button[aria-label^="Thinking"]')?.getAttribute('aria-label')).toBe('Thinking: High');
+  });
 });

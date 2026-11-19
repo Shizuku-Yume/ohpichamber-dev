@@ -1,5 +1,5 @@
 import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
-import { getReasoningEffortLevels } from '@/lib/modelThinkingLevels';
+import { getReasoningEffortLevels, resolveThinkingLevel } from '@/lib/modelThinkingLevels';
 import React from 'react';
 import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
@@ -1972,6 +1972,57 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     };
 
 
+    const renderMobileEffortPanel = () => {
+        if (!isCompact) return null;
+        if (!currentProviderId || !currentModelId) return null;
+
+        const levels = getReasoningEffortLevels(currentCatalogModel);
+        if (levels.length === 0) return null;
+
+        const agentId = resolveLiveAgentName() ?? ROOT_SELECTION_AGENT;
+        const savedEffort = currentSessionId
+            ? getAgentModelReasoningEffortForSession(currentSessionId, agentId, currentProviderId, currentModelId)
+            : undefined;
+        const selected = resolveThinkingLevel(levels, [savedEffort, configuredCurrentReasoningEffort, currentCatalogModel?.defaultReasoningEffort]);
+
+        const handleSelect = (effort: string) => {
+            handleEffortSelect(effort);
+            closeMobilePanel();
+            requestAnimationFrame(focusColumnInput);
+        };
+
+        return (
+            <MobileOverlayPanel
+                open={activeMobilePanel === 'effort'}
+                onClose={closeMobilePanel}
+                title={t('chat.modelControls.effort')}
+            >
+                <div className="flex flex-col gap-1.5">
+                    {levels.map((effort) => {
+                        const isSelected = selected === effort;
+                        return (
+                            <button
+                                key={effort}
+                                type="button"
+                                className={cn(
+                                    'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-start',
+                                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                                    isSelected ? 'border-border bg-interactive-selection text-interactive-selection-foreground' : 'border-border/40'
+                                )}
+                                onClick={() => handleSelect(effort)}
+                            >
+                                <span className="typography-meta font-medium text-inherit">
+                                    {effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort, t)}
+                                </span>
+                                {isSelected && <Icon name="check" className="size-4 text-inherit flex-shrink-0" />}
+                            </button>
+                        );
+                    })}
+                </div>
+            </MobileOverlayPanel>
+        );
+    };
+
     const renderModelTooltipContent = () => (
         <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
             {currentMetadata ? (
@@ -2440,6 +2491,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
             {renderMobileModelPanel()}
             {renderMobileVariantPanel()}
+            {renderMobileEffortPanel()}
             {renderMobileModelTooltip()}
         </>
     );
