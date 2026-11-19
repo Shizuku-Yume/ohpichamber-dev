@@ -872,6 +872,52 @@ test('btwBranch leaves no root-addressed read pointing at the retired session id
   } finally { await harness.close(); }
 }, 60000);
 
+test('btwBranch leaves the interaction owner on the epoch a later pending request must carry', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-epoch-session-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          // A real branch replies with the seed of its rekeyed projection, which
+          // also mints the journal epoch every request published after it needs.
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      // The plan review is minted by this test rather than by the worker, so the
+      // answer has nowhere to go; reply as the worker would for its own dialog.
+      if (op.type === 'question.resolve') return { type: 'question.resolve', questionId: op.questionId };
+      return origRequest(sessionId, op);
+    };
+    await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    const generation = harness.workers.authorizationScope(newSessionId)?.workerGeneration;
+    if (!generation) throw new Error('The rekeyed worker generation is required');
+    // A plan review reaches the user after the branch, so its request is minted
+    // after the seed re-epoch. A stale epoch makes every snapshot poll answer
+    // 503: the pending request would not belong to the captured session.
+    harness.sessions.onInteraction(newSessionId, generation, {
+      kind: 'question', questionId: 'plan-review', turnId: 'turn-1', prompt: 'Review plan',
+      schema: { type: 'plan-review', title: 'Review plan', planReference: 'local://review-plan.md', planText: '# Plan\nImplement review.' },
+    });
+    const snapshot = await harness.sessions.snapshot(newSessionId);
+    expect(snapshot.questions).toHaveLength(1);
+    expect(snapshot.questions[0]?.epoch).toBe(snapshot.session.epoch);
+    expect(snapshot.questions[0]?.sessionId).toBe(newSessionId);
+    // The card must still be answerable under the epoch the snapshot advertises.
+    const answered = await harness.sessions.resolveQuestion(newSessionId, 'plan-review', {
+      action: 'answer', version: '1', epoch: snapshot.session.epoch,
+      workerGeneration: snapshot.questions[0]!.workerGeneration, response: { action: 'approve' },
+    });
+    expect(answered).toMatchObject({ status: 'answered', sessionId: newSessionId });
+  } finally { await harness.close(); }
+}, 60000);
+
 test('btwBranch returns an ack the strict public SessionControlAckSchema accepts', async () => {
   const harness = await fixture();
   try {

@@ -1322,6 +1322,12 @@ export class SessionRegistry {
       const entry = this.entries.get(sessionId);
       if (entry?.state === 'live' && result.sessionFile) {
         entry.opened.sessionFile = result.sessionFile;
+        // The branch seed re-mints the journal epoch, so it has to land before
+        // the owners below re-register: a request minted against the retired
+        // epoch cannot be published by a snapshot taken under the new one, and
+        // `GET /snapshot` answered 503 on the pending-request contract for every
+        // poll between a Promote to Branch and the next request's resolution.
+        if (result.seed) entry.opened.journal.replace(result.seed);
         if (targetSessionId !== sessionId) {
           // The native branch rekeys the session in place. Every owner keyed by
           // the root id has to move with it: the worker registration, the live
@@ -1343,8 +1349,14 @@ export class SessionRegistry {
           }
           await this.onSessionRekeyed?.(sessionId, targetSessionId);
         }
-        if (result.seed) {
-          entry.opened.journal.replace(result.seed);
+        if (result.seed && targetSessionId === sessionId) {
+          // A branch seed re-mints the journal epoch, so the interaction owner
+          // must follow it exactly as a branch selection does. Without this the
+          // manager kept the retired epoch and every request minted after the
+          // branch (a plan review, a question) was published under an epoch the
+          // snapshot does not carry; `GET /snapshot` then answered 503 on the
+          // pending-request contract until that request was resolved.
+          this.openInteractions(targetSessionId, entry.opened, entry.input.workspaceId);
         }
       }
       // The projection seed is already applied to the journal above; the public
