@@ -1029,3 +1029,55 @@ test('btwBranch returns an ack the strict public SessionControlAckSchema accepts
     expect(ack.type === 'btw.branch' && ack.sessionId).toBe(newSessionId);
   } finally { await harness.close(); }
 }, 60000);
+
+test('a vibe_spawn child stays authorized through its root after a restart', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'vibe-spawn-child', status: 'completed', role: 'vibe_spawn', sessionFile: harness.childFile,
+    });
+    const childId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
+    if (!childId) throw new Error('Native child identity is required');
+    // The registry side of the reported 403: after a restart the child still
+    // resolves its root through the durable child index, so the Agent Service is
+    // not what refuses the Host's read. This is a guard, not the defect.
+    await harness.restart();
+    expect(harness.sessions.runtime(childId).rootSessionId).toBe(rootSessionId);
+    expect(harness.sessions.listSubagents(childId)).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('a vibe_spawn child stays authorized through its rekeyed root', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'vibe-spawn-child', status: 'completed', role: 'vibe_spawn', sessionFile: harness.childFile,
+    });
+    const childId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
+    if (!childId) throw new Error('Native child identity is required');
+    const newSessionId = 'minted-child-branch-root';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch', sessionId: newSessionId, rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    // The rekey fan-out already moves the child index; the guard keeps that
+    // true so the Host's refusal can never be blamed on a stale registry.
+    await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    expect(harness.sessions.runtime(childId).rootSessionId).toBe(newSessionId);
+    await harness.restart();
+    expect(harness.sessions.runtime(childId).rootSessionId).toBe(newSessionId);
+    expect(harness.sessions.listSubagents(childId)).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
