@@ -45,7 +45,6 @@ const createResponse = () => {
 };
 
 describe('ui auth client credential seam', () => {
-<<<<<<< HEAD
   it('bootstraps signed passwordless bearer sessions with the same policy and lifetime as cookies', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth({ sessionTtlMs: 60_000, trustedSessionTtlMs: 3_600_000 });
@@ -90,8 +89,6 @@ describe('ui auth client credential seam', () => {
     expiredAuth.dispose();
   });
 
-||||||| bc50ba56aa
-=======
   it('preserves upgrade cookie handling with a null response', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth();
@@ -119,7 +116,6 @@ describe('ui auth client credential seam', () => {
     }
   });
 
->>>>>>> upstream/main
   it('accepts bearer client credentials when UI password auth is enabled', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth({
@@ -355,15 +351,11 @@ describe('ui auth client credential seam', () => {
       { method: 'GET', path: '/api/event', url: `/api/event?oc_url_token=${encodeURIComponent(guestToken)}` },
       { method: 'GET', path: '/api/guests/other/panel/main.js', url: `/api/guests/other/panel/main.js?oc_url_token=${encodeURIComponent(guestToken)}` },
       { method: 'GET', path: '/api/guests', url: `/api/guests?oc_url_token=${encodeURIComponent(guestToken)}` },
-<<<<<<< HEAD
       { method: 'GET', path: '/api/guests/hello/oauth/status', url: `/api/guests/hello/oauth/status?oc_url_token=${encodeURIComponent(guestToken)}` },
       { method: 'GET', path: '/api/guests/hello/oauth/callback', url: `/api/guests/hello/oauth/callback?oc_url_token=${encodeURIComponent(guestToken)}` },
       { method: 'GET', path: '/api/guests/hello/service/status', url: `/api/guests/hello/service/status?oc_url_token=${encodeURIComponent(guestToken)}` },
-||||||| bc50ba56aa
-=======
       // A route named like the guest (`/api/guests/marks` for a guest `marks`) is not one of its files.
       { method: 'GET', path: '/api/guests/hello', url: `/api/guests/hello?oc_url_token=${encodeURIComponent(guestToken)}` },
->>>>>>> upstream/main
     ]) {
       const forbiddenRes = createResponse();
       let forbiddenCalled = false;
@@ -512,7 +504,7 @@ describe('ui auth client credential seam', () => {
       body: {
         password: 'secret',
         issueClientToken: true,
-        clientLabel: 'OpenChamber Desktop',
+        clientLabel: 'OhPiChamber Desktop',
       },
     };
     const res = createResponse();
@@ -520,7 +512,7 @@ describe('ui auth client credential seam', () => {
     await auth.handleSessionCreate(req, res);
 
     expect(res.body.clientToken).toBe('client-token');
-    expect(createClientInput.fallbackLabel).toBe('OpenChamber Desktop');
+    expect(createClientInput.fallbackLabel).toBe('OhPiChamber Desktop');
     const expiresAt = Date.parse(createClientInput.expiresAt);
     expect(expiresAt).toBeGreaterThanOrEqual(before + 122_000);
     expect(expiresAt).toBeLessThanOrEqual(Date.now() + 124_000);

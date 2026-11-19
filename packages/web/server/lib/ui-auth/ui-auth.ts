@@ -381,7 +381,6 @@ const parseUrlAuthScope = (value: AuthInput['scope']): UrlAuthScope | null | und
   return match?.[1] !== undefined ? { kind: 'guest', id: match[1] } : undefined;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
 // Keep this in sync with the MIME types served by the guest package-file route.
 // API endpoints under the same guest prefix must never inherit the asset token.
 const GUEST_ASSET_EXTENSION = /\.(?:html|js|css|svg|json|png)$/i;
@@ -390,30 +389,11 @@ const isGuestScopedAssetPath = (pathname, guestId) => {
   const prefix = `/api/guests/${guestId}/`;
   return pathname.startsWith(prefix) && GUEST_ASSET_EXTENSION.test(pathname.slice(prefix.length));
 };
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-const isGuestScopedPath = (pathname, guestId) => pathname.startsWith(`/api/guests/${guestId}/`);
-=======
-const isGuestScopedPath = (pathname: string, guestId: string) => pathname.startsWith(`/api/guests/${guestId}/`);
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
 
 const SPACE_RAW_FILE_PATH = /^\/api\/spaces\/[0-9a-f]{12}\/fs\/raw$/;
 const SPACE_WS_PATH = /^\/api\/spaces\/[0-9a-f]{12}\/(?:terminal\/ws|dev-tunnel|event\/ws|global\/event\/ws)$/;
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
 const MARKDOWN_IMAGE_GRANT_PATH = /^\/api\/openchamber\/sessions\/[^/]+\/markdown-image-grants\/[^/]+\/raw$/;
 const SPACE_MARKDOWN_IMAGE_GRANT_PATH = /^\/api\/spaces\/[0-9a-f]{12}\/openchamber\/sessions\/[^/]+\/markdown-image-grants\/[^/]+\/raw$/;
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-
-// Pictures and clips in an issue or change request, loaded by `img` and
-// `video`, for each provider that serves uploads.
-const SOURCE_CONTROL_UPLOAD_PREFIXES = Object.freeze(sourceControlProviderDescriptors.list()
-  .filter((descriptor) => descriptor.capabilities.uploads)
-  .map((descriptor) => `/api/source-control/${descriptor.id}/uploads/`));
-=======
-
-const SOURCE_CONTROL_UPLOAD_PREFIXES = Object.freeze(sourceControlProviderDescriptors.list()
-  .filter((descriptor) => descriptor.capabilities.uploads)
-  .map((descriptor) => `/api/source-control/${descriptor.id}/uploads/`));
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
 
 const isUrlAuthReadableHttpPath = (pathname: string) => {
   return pathname === '/api/event'
@@ -507,35 +487,17 @@ function getOrCreateJwtSecret() {
     if (fs.existsSync(JWT_SECRET_FILE)) {
       return new TextEncoder().encode(fs.readFileSync(JWT_SECRET_FILE, 'utf8').trim());
     }
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
   } catch {
     console.warn('[JWT] Failed to read the Host session signing secret');
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  } catch (e) {
-    console.warn('[JWT] Failed to read secret file:', e.message);
-=======
-  } catch (e) {
-    console.warn('[JWT] Failed to read secret file:', hasErrorDetails(e) ? e.message : undefined);
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
   }
 
   const secret = crypto.randomBytes(32).toString('hex');
   try {
     fs.mkdirSync(OPENCHAMBER_DATA_DIR, { recursive: true });
     fs.writeFileSync(JWT_SECRET_FILE, secret, { mode: 0o600 });
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
     console.log('[JWT] Generated and persisted the Host session signing secret');
   } catch {
     console.warn('[JWT] Failed to persist the Host session signing secret');
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-    console.log('[JWT] Generated and persisted new secret to', JWT_SECRET_FILE);
-  } catch (e) {
-    console.warn('[JWT] Failed to persist secret:', e.message);
-=======
-    console.log('[JWT] Generated and persisted new secret to', JWT_SECRET_FILE);
-  } catch (e) {
-    console.warn('[JWT] Failed to persist secret:', hasErrorDetails(e) ? e.message : undefined);
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
   }
 
   return new TextEncoder().encode(secret);
@@ -635,7 +597,6 @@ export const createUiAuth = ({
     client: clientAuth?.client || null,
   });
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
   let jwtSecret = getOrCreateJwtSecret();
   const resolveSessionTtlMs = (trustDevice) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
   const getTokenFromRequest = (req) => {
@@ -646,36 +607,7 @@ export const createUiAuth = ({
     }
     return null;
   };
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  if (!normalizedPassword) {
-    const setSessionCookie = (req, res, token, ttlMs = sessionTtlMs) => {
-      const secure = isSecureRequest(req);
-      const maxAgeSeconds = Math.floor(ttlMs / 1000);
-      const header = buildCookie({
-        name: sessionCookieNameForRequest(req, cookieName),
-        value: encodeURIComponent(token),
-        maxAge: maxAgeSeconds,
-        secure,
-      });
-      res.setHeader('Set-Cookie', header);
-    };
-=======
-  if (!normalizedPassword) {
-    const setSessionCookie = (req: AuthRequest, res: CookieResponse, token: string, ttlMs = sessionTtlMs) => {
-      const secure = isSecureRequest(req);
-      const maxAgeSeconds = Math.floor(ttlMs / 1000);
-      const header = buildCookie({
-        name: sessionCookieNameForRequest(req, cookieName),
-        value: encodeURIComponent(token),
-        maxAge: maxAgeSeconds,
-        secure,
-      });
-      if (res === null) throw new TypeError("Cannot read properties of null (reading 'setHeader')");
-      res.setHeader('Set-Cookie', header);
-    };
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
   const setSessionCookie = (req, res, token, ttlMs) => {
     const secure = isSecureRequest(req);
     const maxAgeSeconds = Math.floor(ttlMs / 1000);
@@ -719,19 +651,6 @@ export const createUiAuth = ({
       const token = passwordlessSessionToken(req);
       if (!requireClientAuth && await isSessionValid(token)) {
         return token;
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-    const ensureSessionToken = async (req, res) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const name = sessionCookieNameForRequest(req, cookieName);
-      if (cookies[name]) {
-        return cookies[name];
-=======
-    const ensureSessionToken = async (req: AuthRequest, res: CookieResponse) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const name = sessionCookieNameForRequest(req, cookieName);
-      if (cookies[name]) {
-        return cookies[name];
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
       }
       return issueSession(req, res);
     };
@@ -760,24 +679,10 @@ export const createUiAuth = ({
       return res.status(401).json({ error: 'UI session authentication required', locked: true });
     };
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
     const resolveAuthContext = async (req, res, { allowClientAuth = true, allowUrlToken = true, allowAnonymousSession = true } = {}) => {
       const token = passwordlessSessionToken(req);
       if (!requireClientAuth && await isSessionValid(token)) {
         return { type: 'session', token };
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-    const resolveAuthContext = async (req, res, { allowClientAuth = true, allowUrlToken = true } = {}) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const name = sessionCookieNameForRequest(req, cookieName);
-      if (cookies[name]) {
-        return { type: 'session', token: cookies[name] };
-=======
-    const resolveAuthContext = async (req: AuthRequest, res: CookieResponse, { allowClientAuth = true, allowUrlToken = true } = {}): Promise<AuthContext | null> => {
-      const cookies = parseCookies(req.headers.cookie);
-      const name = sessionCookieNameForRequest(req, cookieName);
-      if (cookies[name]) {
-        return { type: 'session', token: cookies[name] };
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
       }
       if (allowClientAuth) {
         const clientAuth = await authenticateClientRequest(req, { allowUrlToken });
@@ -795,22 +700,9 @@ export const createUiAuth = ({
       requireAuth,
       requireSessionAuth,
       resolveAuthContext,
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
-      handleSessionStatus: async (req, res) => {
-        if (requireClientAuth || getBearerTokenFromRequest(req)) {
-          if (!requireClientAuth && await isSessionValid(passwordlessSessionToken(req))) {
-            return res.json({ authenticated: true, disabled: true });
-          }
-          const clientAuth = await authenticateClientRequest(req, { allowUrlToken: false });
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-      handleSessionStatus: async (req, res) => {
-        if (requireClientAuth) {
-          const clientAuth = await authenticateClientRequest(req);
-=======
       handleSessionStatus: async (req: Request, res: Response) => {
         if (requireClientAuth) {
           const clientAuth = await authenticateClientRequest(req);
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
           if (clientAuth) {
             return res.json({ authenticated: true, disabled: true, scope: 'client' });
           }
@@ -819,21 +711,8 @@ export const createUiAuth = ({
         await ensureSessionToken(req, res);
         res.json({ authenticated: true, disabled: true });
       },
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
-      handleSessionCreate: async (req, res) => {
-        if (requireClientAuth || req.body?.issueSessionToken !== true) {
-          return res.status(400).json({ error: 'UI password not configured' });
-        }
-        const sessionToken = await issueSession(req, res, { trustDevice: isTrustedDeviceRequest(req.body?.trustDevice) });
-        res.setHeader('Cache-Control', 'no-store');
-        return res.json({ authenticated: true, disabled: true, sessionToken });
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-      handleSessionCreate: (_req, res) => {
-        res.status(400).json({ error: 'UI password not configured' });
-=======
       handleSessionCreate: (_req: Request, res: Response) => {
         res.status(400).json({ error: 'UI password not configured' });
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
       },
       handleUrlAuthToken: async (req: Request, res: Response) => {
         const scope = readRequestedUrlAuthScope(req);
@@ -888,26 +767,8 @@ export const createUiAuth = ({
   }
 
   const salt = crypto.randomBytes(16);
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
   const expectedHash = crypto.scryptSync(normalizedPassword, salt, 64);
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  const expectedHash = crypto.scryptSync(normalizedPassword, salt, 64);
-  let jwtSecret = getOrCreateJwtSecret();
-=======
-  let expectedHash: Buffer | null = null;
-  const readExpectedHash = () => {
-    expectedHash ??= crypto.scryptSync(normalizedPassword, salt, 64);
-    return expectedHash;
-  };
-  let jwtSecret = getOrCreateJwtSecret();
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
   let passwordBinding = crypto.createHmac('sha256', jwtSecret).update(normalizedPassword).digest('hex');
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  const resolveSessionTtlMs = (trustDevice) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
-=======
-  const resolveSessionTtlMs = (trustDevice: boolean) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
   let passkeyController = createUiPasskeys({
     passwordBinding,
     readSettingsFromDiskMigrated,
@@ -929,55 +790,7 @@ export const createUiAuth = ({
     rebuildPasskeyController();
   };
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
   const clearSessionCookie = (req, res) => {
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  const getTokenFromRequest = (req) => {
-    const cookies = parseCookies(req.headers.cookie);
-    const name = sessionCookieNameForRequest(req, cookieName);
-    if (cookies[name]) {
-      return cookies[name];
-    }
-    return null;
-  };
-
-  const setSessionCookie = (req, res, token, ttlMs) => {
-    const secure = isSecureRequest(req);
-    const maxAgeSeconds = Math.floor(ttlMs / 1000);
-    const header = buildCookie({
-      name: sessionCookieNameForRequest(req, cookieName),
-      value: encodeURIComponent(token),
-      maxAge: maxAgeSeconds,
-      secure,
-    });
-    res.setHeader('Set-Cookie', header);
-  };
-
-  const clearSessionCookie = (req, res) => {
-=======
-  const getTokenFromRequest = (req: AuthRequest) => {
-    const cookies = parseCookies(req.headers.cookie);
-    const name = sessionCookieNameForRequest(req, cookieName);
-    if (cookies[name]) {
-      return cookies[name];
-    }
-    return null;
-  };
-
-  const setSessionCookie = (req: Request, res: Response, token: string, ttlMs: number) => {
-    const secure = isSecureRequest(req);
-    const maxAgeSeconds = Math.floor(ttlMs / 1000);
-    const header = buildCookie({
-      name: sessionCookieNameForRequest(req, cookieName),
-      value: encodeURIComponent(token),
-      maxAge: maxAgeSeconds,
-      secure,
-    });
-    res.setHeader('Set-Cookie', header);
-  };
-
-  const clearSessionCookie = (req: Request, res: Response) => {
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
     const secure = isSecureRequest(req);
     const header = buildCookie({
       name: sessionCookieNameForRequest(req, cookieName),
@@ -1004,60 +817,6 @@ export const createUiAuth = ({
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  const isSessionValid = async (token) => {
-    if (!token) {
-      return false;
-    }
-    try {
-      const { jwtVerify } = await loadJose();
-      await jwtVerify(token, jwtSecret);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const issueSession = async (req, res, { trustDevice = false } = {}) => {
-    const ttlMs = resolveSessionTtlMs(trustDevice);
-    const { SignJWT } = await loadJose();
-    const token = await new SignJWT({ type: 'ui-session' })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime(ttlMs / 1000 + 's')
-      .sign(jwtSecret);
-    setSessionCookie(req, res, token, ttlMs);
-    return token;
-  };
-
-=======
-  const isSessionValid = async (token: string | null | undefined) => {
-    if (!token) {
-      return false;
-    }
-    try {
-      const { jwtVerify } = await loadJose();
-      await jwtVerify(token, jwtSecret);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const issueSession = async (req: Request, res: Response, { trustDevice = false } = {}) => {
-    const ttlMs = resolveSessionTtlMs(trustDevice);
-    const { SignJWT } = await loadJose();
-    const token = await new SignJWT({ type: 'ui-session' })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime(ttlMs / 1000 + 's')
-      .sign(jwtSecret);
-    setSessionCookie(req, res, token, ttlMs);
-    return token;
-  };
-
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
   startRateLimitCleanup();
 
   const respondUnauthorized = (req: Request, res: Response) => {
@@ -1322,20 +1081,6 @@ export const createUiAuth = ({
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-auth.js
-  const handleResetAuth = (req, res) => {
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-auth.js
-  const handlePasskeyRename = (req, res) => {
-    try {
-      const result = passkeyController.renamePasskey(req, req.params?.id, req.body?.label);
-      res.json(result);
-    } catch (error) {
-      respondPasskeyError(res, error);
-    }
-  };
-
-  const handleResetAuth = (req, res) => {
-=======
   const handlePasskeyRename = (req: Request, res: Response) => {
     try {
       const result = passkeyController.renamePasskey(req, req.params?.id, readBody(req)?.label);
@@ -1346,7 +1091,6 @@ export const createUiAuth = ({
   };
 
   const handleResetAuth = (req: Request, res: Response) => {
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-auth.ts
     try {
       const passkeyResult = passkeyController.clearAllPasskeys();
       rotateJwtSecret();
