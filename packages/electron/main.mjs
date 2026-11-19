@@ -111,6 +111,7 @@ import { createContextMenuLabels, menuLabel, normalizeMenuLocale, roleMenuItem }
 import { menuAccelerator, normalizeMenuShortcuts } from './menu-shortcuts.mjs';
 import { createCopyLinkMenuHook } from './context-menu-clipboard.mjs';
 import { createCopyMenuAction } from './menu-copy-action.mjs';
+import { createHistoryMenuAction, createHistoryMenuItems } from './menu-history-action.mjs';
 import {
   PRODUCTION_UPDATER_FEED,
   resolveUpdaterFeed,
@@ -2228,6 +2229,13 @@ const handleCopyAction = createCopyMenuAction({
     (window) => !window.isDestroyed() && !isBrowserPanelPopup(window),
   ),
   dispatchAppCopy: (window) => dispatchDomEventToWindow(window, 'openchamber:menu-action', 'copy'),
+});
+
+const handleHistoryAction = createHistoryMenuAction({
+  getFocusedWebContents: () => webContents.getFocusedWebContents(),
+  getAppWindows: () => BrowserWindow.getAllWindows().filter(
+    (window) => !window.isDestroyed() && !isBrowserPanelPopup(window),
+  ),
 });
 
 // Mini-chat draft windows are not deduplicated, so this must reach the renderer
@@ -5427,8 +5435,7 @@ const buildMacMenu = (locale = 'en') => {
     {
       label: t('edit'),
       submenu: [
-        roleItem('undo', 'undo'),
-        roleItem('redo', 'redo'),
+        ...createHistoryMenuItems(locale, 'darwin', handleHistoryAction),
         { type: 'separator' },
         roleItem('cut', 'cut'),
         { label: t('copy'), accelerator: 'Cmd+C', click: () => handleCopyAction() },
@@ -5525,8 +5532,7 @@ const buildAutoHiddenMenu = (locale = 'en') => {
     {
       label: t('edit'),
       submenu: [
-        roleItem('undo', 'undo'),
-        roleItem('redo', 'redo'),
+        ...createHistoryMenuItems(locale, process.platform, handleHistoryAction),
         { type: 'separator' },
         roleItem('cut', 'cut'),
         { label: t('copy'), accelerator: 'Ctrl+C', click: () => handleCopyAction() },

@@ -6,6 +6,17 @@ This folder owns runtime-independent controls and their Base UI integration, inc
 
 ## Invariants
 
+`CodeMirrorEditor` and the chat composer share `lib/codemirror/focusedHistory.ts`.
+Native history events targeting an unfocused editor are cancelled and routed
+only to the focused editable CodeMirror content. Empty history or focus outside
+CodeMirror never falls back to another editor's history.
+
+The desktop menu separately sends `openchamber:history-action` through
+`useMenuActions`. Its cancelable DOM event is acknowledged whenever CodeMirror
+content owns focus, including empty or read-only history. Undo/Redo runs directly
+against that view's history, independent of Chromium's native undo stack. Other
+focused elements leave the event uncancelled so Electron can use native history.
+
 - A root dropdown opened by keyboard or controlled state stays open when the pointer leaves its popup. Hover dismissal applies only to a dropdown opened by trigger hover.
 - Escape, outside presses, item selection, and window blur retain their normal dismissal behavior. Submenu hover behavior stays with Base UI.
 - An open dropdown whose content changes (a filtered picker list, items that arrive late) eases into its new height (`useHeightMorph` in `DropdownMenuContent`); the edge facing the trigger stays where it was in every painted frame.
