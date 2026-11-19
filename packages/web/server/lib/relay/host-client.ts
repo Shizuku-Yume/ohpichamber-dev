@@ -54,7 +54,6 @@ const isNonemptyConnectionId = (value: unknown): value is string => typeof value
 
 const shareStateMessageSchema = z.object({ type: z.literal('share-state'), shareId: z.string().min(1) });
 
-<<<<<<< HEAD:packages/web/server/lib/relay/host-client.js
 // The relay asks a peer to close its own socket with this plaintext frame
 // rather than closing it from the relay side, where a close to a peer that is
 // gone holds the relay's handler, billed, until it times out. Mirrors
@@ -64,13 +63,6 @@ const shareStateMessageSchema = z.object({ type: z.literal('share-state'), share
 // the socket open after its map entry is gone), so peer text is only ever
 // logged, bounded and single-line: it never reaches socket.close().
 const LOG_REASON_MAX_CHARS = 200;
-||||||| bc50ba56aa:packages/web/server/lib/relay/host-client.js
-// The relay asks a peer to close its own socket with this plaintext frame
-// rather than closing it from the relay side, where a close to a peer that is
-// gone holds the relay's handler, billed, until it times out. Mirrors
-// parseRelayRetire in packages/ui/src/lib/relay/protocol.ts.
-=======
->>>>>>> upstream/main:packages/web/server/lib/relay/host-client.ts
 const relayRetireSchema = z.object({ type: z.literal('relay-retire'), code: z.number().int(), reason: z.string().catch('') });
 const parseRelayRetire = (raw: string) => {
   try {
@@ -377,20 +369,11 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
         });
     });
     socket.on('close', (code, reason) => {
-<<<<<<< HEAD:packages/web/server/lib/relay/host-client.js
       // One line per device drop, so a host that keeps losing devices shows why
       // in its log: the code says which side closed and the lifetime how often.
       const closeReason = sanitizeCloseReason(reason?.toString?.('utf8') ?? '');
       logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${closeReason ? ` reason=${closeReason}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
       // A retry may already own this connectionId.
-||||||| bc50ba56aa:packages/web/server/lib/relay/host-client.js
-      // One line per device drop, so a host that keeps losing devices shows why
-      // in its log: the code says which side closed and the lifetime how often.
-      logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${reason?.length ? ` reason=${reason.toString('utf8')}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
-      // A retry may already own this connectionId.
-=======
-      logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${reason?.length ? ` reason=${reason.toString('utf8')}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
->>>>>>> upstream/main:packages/web/server/lib/relay/host-client.ts
       if (dataSockets.get(connectionId) === entry) teardownDataSocket(connectionId);
     });
     socket.on('error', (error) => {

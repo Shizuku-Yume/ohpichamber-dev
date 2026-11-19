@@ -509,14 +509,7 @@ describe('relay host-client data socket retry', () => {
         if (status.state === 'connected') markConnected();
         statuses.emit('status', status);
       },
-<<<<<<< HEAD
       logger,
-||||||| bc50ba56aa
-      logger: { warn: () => {}, info: () => {} },
-=======
-      onShareState: shareId => markers.emit(shareId),
-      logger: { warn: () => {}, info: () => {} },
->>>>>>> upstream/main
     });
     await connected;
   };

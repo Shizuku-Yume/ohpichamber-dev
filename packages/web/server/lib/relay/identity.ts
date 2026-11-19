@@ -30,7 +30,6 @@ export const createRelayIdentityRuntime = (deps: RelaySigningDependencies) => {
     return { privateJwk, publicJwk };
   });
 
-<<<<<<< HEAD:packages/web/server/lib/relay/identity.js
   /**
    * @returns {Promise<{
    *   serverId: string,
@@ -40,23 +39,6 @@ export const createRelayIdentityRuntime = (deps: RelaySigningDependencies) => {
    * }>}
    */
   const buildIdentity = async () => {
-||||||| bc50ba56aa:packages/web/server/lib/relay/identity.js
-  /**
-   * @returns {Promise<{
-   *   serverId: string,
-   *   hostEncPubJwk: JsonWebKey,
-   *   hostEncPrivateKey: CryptoKey,
-   *   signRelayAuth: (role: string, connectionId?: string | null) => { ts: number, sig: string, pk: string },
-   * }>}
-   */
-  const getRelayIdentity = async () => {
-    const generation = relayKeyStore.generation();
-    if (cachedIdentity && cachedGeneration === generation) return cachedIdentity;
-=======
-  const getRelayIdentity = async (): Promise<RelayIdentity> => {
-    const generation = relayKeyStore.generation();
-    if (cachedIdentity && cachedGeneration === generation) return cachedIdentity;
->>>>>>> upstream/main:packages/web/server/lib/relay/identity.ts
     const signing = await getOrCreateRelaySigningKeypair({ crypto, relayKeyStore });
     const serverId = deriveServerId({ crypto }, signing.publicJwk);
     const encryption = await getOrCreateEncryptionKeypair();

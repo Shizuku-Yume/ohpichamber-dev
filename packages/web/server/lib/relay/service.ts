@@ -71,16 +71,8 @@ const isValidRelayUrl = (value: unknown): value is string => {
   }
 };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
 const normalizeRelayUrl = (value) => {
   if (typeof value !== 'string') return null;
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-const normalizeRelayUrl = (value) => {
-  if (typeof value !== 'string') return DEFAULT_RELAY_URL;
-=======
-export const normalizeRelayUrl = (value: string | null | undefined) => {
-  if (!isString(value)) return DEFAULT_RELAY_URL;
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
   const trimmed = value.trim();
   if (!trimmed || !isValidRelayUrl(trimmed)) return null;
   return trimmed;
@@ -150,7 +142,6 @@ export const createRelayService = ({
     connectedClients: 0,
   });
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   // Claim watcher, active while the relay is enabled:
   //   - standby → claimant died → take over (start our host);
   //   - running → another live process claimed → stand down (stop, standby);
@@ -159,18 +150,6 @@ export const createRelayService = ({
   // This back-off is what actually ends the mutual-eviction fight: the loser
   // must STOP reconnecting, otherwise both keep replacing each other forever.
   const ensureClaimWatch = () => {
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  // Claim watcher, active while the relay is enabled:
-  //   - standby → claimant died → take over (start our host);
-  //   - running → another live process claimed → stand down (stop, standby);
-  //     otherwise refresh the claim, which keeps it live for instances on
-  //     other hosts or containers that cannot probe our pid.
-  // This back-off is what actually ends the mutual-eviction fight: the loser
-  // must STOP reconnecting, otherwise both keep replacing each other forever.
-  const ensureClaimWatch = (relayUrl) => {
-=======
-  const ensureClaimWatch = (relayUrl: string) => {
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     if (!hostLock || claimWatchTimer) return;
     claimWatchTimer = setInterval(() => {
       // Same queue as start/stop/disable: the tick must not act on a config
@@ -226,13 +205,7 @@ export const createRelayService = ({
     claimFreeSinceMs = null;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   const startHost = async (relayUrl, { claim = 'try' } = {}) => {
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  const start = async (relayUrl, { claim = 'try' } = {}) => {
-=======
-  const start = async (relayUrl: string, { claim = 'try' }: { claim?: 'try' | 'force' } = {}) => {
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     if (hostClient) return;
     if (relayBlockedByEnterprise()) {
       status = { state: 'disabled', lastError: RELAY_BLOCKED_ERROR, connectedClients: 0 };
@@ -260,16 +233,8 @@ export const createRelayService = ({
       }
     }
     const identity = await identityRuntime.getRelayIdentity();
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
-    hostClient = startRelayHost({
-      relayUrl: normalizedUrl,
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-    hostClient = startRelayHost({
-      relayUrl,
-=======
     const hostOptions = {
-      relayUrl,
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
+      relayUrl: normalizedUrl,
       identity,
       getLocalPort,
       logger,
@@ -301,19 +266,10 @@ export const createRelayService = ({
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   // Drive the relay lifecycle from demand: run it when a device or pending
   // session uses the relay, stop it when none remain. Called on startup and after
   // pairing/device changes, so the operator never toggles it manually.
   const reconcileHost = async () => {
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  // Drive the relay lifecycle from demand: run it when a device or pending
-  // session uses the relay, stop it when none remain. Called on startup and after
-  // pairing/device changes, so the operator never toggles it manually.
-  const reconcile = async () => {
-=======
-  const reconcile = async () => {
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     try {
       const demand = await hasRelayDemand();
       const config = await readConfig();
@@ -365,7 +321,6 @@ export const createRelayService = ({
     return result;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   // Pairing candidate for the unified connection payload (pairing v2). Relay is
   // just another transport: it carries the relay route + E2EE trust anchor, no
   // embedded token — the client redeems the one-time pairing secret over the
@@ -375,19 +330,6 @@ export const createRelayService = ({
   const buildPairingCandidate = async (configOverride) => {
     const config = configOverride ?? await readConfig();
     if (!config.relayUrl) return null;
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  // Pairing candidate for the unified connection payload (pairing v2). Relay is
-  // just another transport: it carries the relay route + E2EE trust anchor, no
-  // embedded token — the client redeems the one-time pairing secret over the
-  // tunnel like any other candidate. Returns null when the host relay is off, so
-  // callers only advertise relay when it is actually reachable. Priority is high
-  // (tried after LAN/tunnel) since the relay path is the last-resort transport.
-  const buildPairingCandidate = async () => {
-    const config = await readConfig();
-=======
-  const buildPairingCandidate = async (): Promise<RelayPairingCandidate> => {
-    const config = await readConfig();
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     const identity = await identityRuntime.getRelayIdentity();
     return {
       type: 'relay',
@@ -404,23 +346,12 @@ export const createRelayService = ({
     return buildPairingCandidate(config);
   };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   // Enable the relay host on demand and return its pairing candidate. Creating a
   // relay pairing link IS the demand signal, so the relay turns itself on here
   // rather than requiring a separate manual toggle. Idempotent: a no-op when the
   // relay is already enabled and running.
   const ensureEnabledForPairingHost = async () => {
     // Direct pairing still works: the pairing route drops a failed relay candidate.
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  // Enable the relay host on demand and return its pairing candidate. Creating a
-  // relay pairing link IS the demand signal, so the relay turns itself on here
-  // rather than requiring a separate manual toggle. Idempotent: a no-op when the
-  // relay is already enabled and running.
-  const ensureEnabledForPairing = async () => {
-    // Direct pairing still works: the pairing route drops a failed relay candidate.
-=======
-  const ensureEnabledForPairing = async () => {
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     if (relayBlockedByEnterprise()) throw Object.assign(new Error(RELAY_BLOCKED_ERROR), { statusCode: 403 });
     const config = await readConfig();
     if (!config.relayUrl) throw Object.assign(new Error(RELAY_UNCONFIGURED_ERROR), { statusCode: 400 });
@@ -429,39 +360,20 @@ export const createRelayService = ({
     }
     if (!hostClient) {
       const next = await readConfig();
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
       if (!next.relayUrl) throw Object.assign(new Error(RELAY_UNCONFIGURED_ERROR), { statusCode: 400 });
       // Force-claim: creating a pairing link is explicit user intent — the
       // instance the user is pairing against MUST be the one devices reach,
       // even if another local process currently holds the machine's claim
       // (its claim watcher sees the takeover and stands down).
       await startHost(next.relayUrl, { claim: 'force' });
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-      // Force-claim: creating a pairing link is explicit user intent — the
-      // instance the user is pairing against MUST be the one devices reach,
-      // even if another local process currently holds the machine's claim
-      // (its claim watcher sees the takeover and stands down).
-      await start(next.relayUrl, { claim: 'force' });
-=======
-      await start(next.relayUrl, { claim: 'force' });
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     }
     return buildPairingCandidate();
   };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   // Gives this copy its own identity. Both copies of a copied data dir hold the
   // same keys and evict each other at the relay; after the reset, devices that
   // know the old identity keep reaching the other copy until they pair here again.
   const resetIdentityHost = async () => {
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  // Gives this copy its own identity. Both copies of a copied data dir hold the
-  // same keys and evict each other at the relay; after the reset, devices that
-  // know the old identity keep reaching the other copy until they pair here again.
-  const resetIdentity = async () => {
-=======
-  const resetIdentity = async () => {
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     const wasHosting = hostClient !== null;
     stopHostClient();
     await relayKeyStore.reset();
@@ -476,7 +388,6 @@ export const createRelayService = ({
     await startHost(config.relayUrl, { claim: 'force' });
   };
 
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
   // One lifecycle mutation at a time: boot, demand reconcile, explicit
   // enable/disable and identity reset read and replace the same host and key
   // state. Serializing them also keeps a reset from restarting a host built
@@ -499,11 +410,6 @@ export const createRelayService = ({
   });
 
   const registerRoutes = (app) => {
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-  const registerRoutes = (app) => {
-=======
-  const registerRoutes = (app: Application) => {
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
     app.get('/api/openchamber/relay/status', async (_req, res) => {
       try {
         res.json(await getStatus());
@@ -518,7 +424,6 @@ export const createRelayService = ({
       }
       try {
         const current = await readConfig();
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
         const hasExplicitUrl = req.body?.relayUrl !== undefined && req.body?.relayUrl !== null;
         if (hasExplicitUrl && !isValidRelayUrl(req.body.relayUrl)) {
           return res.status(400).json({ error: 'Invalid relay URL. Use a ws:// or wss:// URL.' });
@@ -531,24 +436,9 @@ export const createRelayService = ({
         if (!relayUrl) {
           return res.status(400).json({ error: RELAY_UNCONFIGURED_ERROR });
         }
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-        const relayUrl = typeof req.body?.relayUrl === 'string' ? normalizeRelayUrl(req.body.relayUrl) : current.relayUrl;
-=======
-        const rawRelayUrl = hasRelayUrlField(req.body) ? req.body.relayUrl : undefined;
-        const relayUrl = isString(rawRelayUrl) ? normalizeRelayUrl(rawRelayUrl) : current.relayUrl;
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
         await writeConfig({ enabled: true, relayUrl });
-<<<<<<< HEAD:packages/web/server/lib/relay/service.js
         // Explicit user action: take the machine's host claim like pairing does.
         await enableRelay(relayUrl);
-||||||| bc50ba56aa:packages/web/server/lib/relay/service.js
-        if (hostClient) stop();
-        // Explicit user action: take the machine's host claim like pairing does.
-        await start(relayUrl, { claim: 'force' });
-=======
-        if (hostClient) stop();
-        await start(relayUrl, { claim: 'force' });
->>>>>>> upstream/main:packages/web/server/lib/relay/service.ts
         res.json(await getStatus());
       } catch (error) {
         res.status(500).json({ error: (hasErrorMessage(error) ? error.message : undefined) ?? 'Failed to enable relay' });
