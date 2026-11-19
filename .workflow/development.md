@@ -4,6 +4,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Installed card text bounds:** Android retesting found the header fix effective but the long installed title still overflowed: the card button's computed start alignment let its text wrapper size intrinsically. The wrapper now explicitly stretches to the card's inner width so the existing truncation can apply. The added bounding assertion failed before this change. Updated native visual verification remains pending.
+
 **2026-11-19 Installed plugin portrait layout:** Android retesting identified the reported collisions in the Installed section rather than only marketplace rows (`/home/ubuntu/plugin-row-evidence/android-installed-section-overlap.png`). Shared section headers now stack below `@xl`, Installed/Marketplace actions wrap, and shared card grid items shrink with a reserved narrow-pane control footer. Capabilities inherits the same header fix. New regression assertions failed on the previous code. Updated Android/visual verification remains pending; regenerated native build files are intentionally left untouched.
 
 **2026-11-19 Narrow plugin marketplace rows:** The Plugins page and Add plugin dialog now bound long names, versions and source labels to the available width, wrap unbroken description text and keep install/status buttons compact on narrow panes. The existing wide-pane container-query layout is retained. Regression coverage exercises available and installed entries with long metadata on both surfaces; the new page assertions failed against the original layout. Native Android and visual rendering remain unverified.

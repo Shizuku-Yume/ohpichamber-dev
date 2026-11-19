@@ -1647,3 +1647,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** Android portrait verification showed heading/action collisions in Installed and Marketplace and an overflowing installed plugin title under its controls. Capabilities uses the same header primitive and needs the same stacking. Wide-pane direction and control placement remain unchanged. Existing fork section/disclosure and card-chip contracts are retained.
 - **Mine:** yes
 - **Revisit when:** upstream adopts equivalent narrow-pane section and card layout constraints.
+
+## 2026-11-19 - Stretch the settings card text column within its button
+
+- **Decided:** explicitly stretch the shared settings card text wrapper across the card's available inner width.
+- **Instead of:** relying on `min-w-0` to bound a flex child when the card button aligns children to the start.
+- **Because:** Android WebView measured a long installed plugin title extending to 423.1px past the card edge at 357.1px. Start alignment let the text wrapper use its intrinsic width, preventing the existing title ellipsis from taking effect.
+- **Mine:** yes
+- **Revisit when:** shared card button alignment guarantees a bounded text column without an explicit self-alignment.

@@ -478,6 +478,7 @@ test('a long installed plugin name stays inside the card above its reserved cont
   const title = container.querySelector(`[title="${name}"]`);
   const card = title?.closest('button');
   expect(title?.classList.contains('truncate')).toBe(true);
+  expect(title?.parentElement?.classList.contains('self-stretch')).toBe(true);
   expect(card?.classList.contains('min-w-0')).toBe(true);
   expect(card?.parentElement?.classList.contains('min-w-0')).toBe(true);
   const footer = card?.querySelector('.mt-auto');

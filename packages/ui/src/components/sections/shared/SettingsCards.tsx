@@ -102,7 +102,7 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
         </span>
         {badges ? <span className="flex min-w-0 flex-wrap justify-end gap-1">{badges}</span> : null}
       </div>
-      <div className={cn('mt-3 min-w-0', muted && 'opacity-60')}>
+      <div className={cn('mt-3 min-w-0 self-stretch', muted && 'opacity-60')}>
         <div className="truncate text-sm font-semibold text-foreground" title={title}>{title}</div>
         {subtitle ? (
           <div className="mt-0.5 truncate font-mono typography-micro text-muted-foreground" title={subtitle}>{subtitle}</div>
