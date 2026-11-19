@@ -1624,6 +1624,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
 
+## 2026-11-19 - Replay terminal history at its recorded PTY sizes
+
+- **Decided:** retain PTY resize boundaries in bounded terminal history and replay them in output order before fitting the viewport.
+- **Instead of:** replaying the entire snapshot at the latest dimensions.
+- **Because:** shell cursor movements and wrapping depend on the grid where they were produced. Resizing and reloading otherwise leaves scrambled command echoes.
+- **Revisit when:** upstream records ordered resize boundaries or snapshots terminal emulator state directly.
+
 ## 2026-11-19 - Refuse editor saves to externally missing paths
 
 - **Decided:** text editor saves send an optional `mustExist` condition through the shared Files API and content cache to the Host. Missing paths return `409`; the editor displays the error and retains its dirty draft. New-file writes and binary canvas uploads keep their existing behavior.

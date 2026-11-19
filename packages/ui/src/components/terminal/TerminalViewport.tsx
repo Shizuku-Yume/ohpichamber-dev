@@ -13,7 +13,7 @@ import { openExternalUrl } from '@/lib/url';
 import { useI18n } from '@/lib/i18n';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
 
-import { selectTerminalChunkReplay } from './terminalChunkReplay';
+import { composeTerminalReplay, selectTerminalChunkReplay } from './terminalChunkReplay';
 import { problemMessage } from '@/lib/problemMessage';
 
 // The libghostty-vt adapter (WASM VT + canvas renderer) loads on demand so the
@@ -328,16 +328,13 @@ const TerminalViewport = React.forwardRef<TerminalController, Props>(({
     if (!surface) return;
     const { reset, replay, pending } = selectTerminalChunkReplay(chunks, lastChunkRef.current);
     if (replay) {
-      // Snapshot history is laid out for the PTY size recorded on its chunk;
-      // the surface replays it at that size and reflows to the fitted grid.
-      const [snapshot, ...live] = pending;
-      surface.resetAndWrite(snapshot ? (snapshot.replayData ?? snapshot.data) : '', snapshot?.size);
-      const liveData = live.map((chunk) => chunk.replayData ?? chunk.data).join('');
-      if (liveData) surface.write(liveData);
+      const history = composeTerminalReplay(pending);
+      surface.resetAndWrite(history.data, history.sizes);
     } else if (reset) {
       surface.resetAndWrite('');
     } else if (pending.length > 0) {
-      surface.write(pending.map((chunk) => chunk.data).join(''));
+      const data = pending.map((chunk) => chunk.data).join('');
+      if (data) surface.write(data);
     }
     lastChunkRef.current = chunks.at(-1)?.id ?? null;
   }, [chunks, ready]);

@@ -363,20 +363,23 @@ export class GhosttyTerminalCore {
   }
 
   resetAndWrite(data: string): void {
+    this.resetAndReplay(() => this.write(data));
+  }
+
+  resetAndReplay(replay: () => void): void {
     this.ensureActive();
     this.runtime.call('ghostty_terminal_reset', this.terminal);
     // RIS returns the cursor to Ghostty's built-in steady default, so the
     // embedder default has to be applied again before the replay runs.
     this.applyDefaultCursorBlink();
     this.rows = [];
-    if (data.length === 0) return;
     const writer = this.ptyWriter;
     if (this.ptyWriterId !== 0) {
       this.runtime.detachPtyWriter(this.terminal, this.ptyWriterId);
       this.ptyWriterId = 0;
     }
     try {
-      this.write(data);
+      replay();
     } finally {
       if (writer !== null && !this.disposed) {
         this.ptyWriterId = this.runtime.attachPtyWriter(this.terminal, writer);
