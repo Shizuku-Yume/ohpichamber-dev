@@ -1830,7 +1830,7 @@ Later successful listings also retire stale failures: global head polls replace 
 
 ## 2026-11-19 - Remove Agent junctions before NSIS atomic uninstall
 
-- **Decided:** The new Windows installer's customInit and the generated uninstaller's customUnInstall remove directory reparse points beneath the physical Agent runtime root, using non-recursive RMDir without following targets. Physical directories and files remain for normal NSIS removal.
+- **Decided:** The new Windows installer's customCheckAppRunning wraps the stock PowerShell availability and running-app checks, then removes directory reparse points beneath the physical Agent runtime root. A cancelled check exits before cleanup. The generated uninstaller's customUnInstall runs after its own stock app-running check and before removal. Cleanup uses non-recursive RMDir without following targets; physical directories and files remain for normal NSIS removal.
 - **Because:** electron-builder's atomic upgrade removal traverses dependency junctions into paths beyond MAX_PATH and aborts. New-installer cleanup also covers older uninstallers without this hook.
 - **Instead of:** Materializing dependency directory copies or relying on the newly installed uninstaller to repair an upgrade executed by the old one.
 - **Surfaces:** Windows NSIS only; runtime junction semantics and Linux/macOS packaging remain unchanged.

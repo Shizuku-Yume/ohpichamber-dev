@@ -65,11 +65,15 @@ FunctionEnd
   !insertmacro AgentLinkCleanupFunctions "un."
 !else
   !insertmacro AgentLinkCleanupFunctions ""
-!endif
+  !include "getProcessInfo.nsh"
+  Var pid
 
-!macro customInit
-  Call CleanupAgentLinks
-!macroend
+  !macro customCheckAppRunning
+    !insertmacro IS_POWERSHELL_AVAILABLE
+    !insertmacro _CHECK_APP_RUNNING
+    Call CleanupAgentLinks
+  !macroend
+!endif
 
 !macro customUnInstall
   Call un.CleanupAgentLinks
