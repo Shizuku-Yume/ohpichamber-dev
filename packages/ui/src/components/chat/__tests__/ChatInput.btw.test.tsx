@@ -243,3 +243,32 @@ test('compacting a too-small session is an informational notice, not a failure',
     error.mockRestore();
   }
 });
+
+test('promoting a /btw answer re-points the selection before any later read', async () => {
+  await mount();
+  const promote = spyOn(canonicalClient, 'branchFromBtw').mockResolvedValue({
+    type: 'btw.branch', sessionId: 'ses_promoted', rootSessionId: 'ses_promoted',
+    sessionFile: '/tmp/ses_promoted.jsonl', branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: null },
+  });
+  try {
+    useBtwStore.getState().setPanelState(SESSION_ID, {
+      pending: false, collapsed: false, ephemeralRecordId: 'btw-record', ephemeralText: 'answer', ephemeralStatus: 'completed',
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    const button = Array.from(container.querySelectorAll('[aria-label="btw"] button'))
+      .find((candidate) => /Promote to Branch/.test(candidate.textContent || ''));
+    if (!button) throw new Error('The promote action did not render');
+    await act(async () => {
+      button.dispatchEvent(new Event('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(promote).toHaveBeenCalledTimes(1);
+    expect(promote.mock.calls[0]?.[0]).toBe(SESSION_ID);
+    // The service and the Host retire the pre-branch id on this ack, so the
+    // selection must already name the minted session.
+    expect(useSessionUIStore.getState().currentSessionId).toBe('ses_promoted');
+  } finally {
+    promote.mockRestore();
+    useBtwStore.getState().clearPanelState(SESSION_ID);
+  }
+});
