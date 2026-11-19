@@ -13,6 +13,9 @@
 import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
+
+export const createMessageId = () => `msg_${randomUUID()}`;
 
 const FILE_NAME = 'dispatch-results.json';
 const FILE_VERSION = 1;
@@ -268,7 +271,7 @@ export function createDispatchResultsRuntime({
       if (!session) return { kind: 'deleted' };
       if (session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input') return { kind: 'running' };
       const listed = await sessionService.list(scope.workspaceId);
-      if (!listed || !Array.isArray(listed.items) || (Array.isArray(listed.errors) && listed.errors.length > 0)) return null;
+      if (!listed || !Array.isArray(listed.items) || Object.keys(listed.errors ?? {}).length > 0) return null;
       if (listed.items.some((item) => item.rootSessionId === sessionId && item.sessionId !== sessionId && ['running', 'awaiting_approval', 'awaiting_input'].includes(item.runtimeStatus))) return { kind: 'subagents' };
       const page = await sessionService.history(sessionId, new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) }).toString());
       if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
@@ -280,7 +283,7 @@ export function createDispatchResultsRuntime({
   };
 
   const deliver = async (entry, message) => {
-    const archived = await Promise.resolve(isSessionArchived(entry.parentSessionId)).catch(() => false);
+    const archived = await isSessionArchived(entry.parentSessionId);
     if (archived === true) return true;
     try {
       const parentPage = await sessionService.history(entry.parentSessionId, new URLSearchParams({ limit: '20' }).toString());
@@ -289,10 +292,9 @@ export function createDispatchResultsRuntime({
       await sessionService.send(entry.parentSessionId, {
         input: { text: '', attachments: [], context: [{ kind: 'synthetic', text: message.text }] },
         options: { providerId: latestAssistant.providerId, modelId: latestAssistant.modelId, agentId: null, variant: null, reasoningEffort: null },
-      });
+      }, entry.messageId);
       return true;
     } catch (error) {
-      if (error?.status === 409 || error?.statusCode === 409) return true;
       if (error?.status === 404 || error?.statusCode === 404) {
         console.log(`[dispatch-results] dropping the result of ${entry.sessionId}: session ${entry.parentSessionId} no longer exists`);
         return true;
@@ -355,11 +357,23 @@ export function createDispatchResultsRuntime({
           waiting = true;
           continue;
         }
-        // Persisted before the first attempt, so a retry reuses it.
+        ready.push({ entry, outcome });
+      }
+
+      const unsent = ready.filter(({ entry }) => !entry.messageId);
+      if (unsent.length > 0) {
+        const minted = new Map();
+        for (const { entry } of unsent) {
+          let messageId = minted.get(entry.parentSessionId);
+          if (messageId === undefined) {
+            messageId = createMessageId();
+            minted.set(entry.parentSessionId, messageId);
+          }
+          entry.messageId = messageId;
+        }
         try {
           await persist();
         } catch (error) {
-          // Unsaved, it could be minted again after a crash and deliver twice.
           for (const { entry } of unsent) delete entry.messageId;
           throw error;
         }
