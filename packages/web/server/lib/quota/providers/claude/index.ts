@@ -4,6 +4,8 @@ import { createHash } from 'crypto';
 import { buildResult } from '../../utils/index.js';
 import { credentialAccessToken, credentialRefreshToken } from '../selected-credential.js';
 import { toClaudeUsage } from './transforms.js';
+const USAGE_DENIED_ERROR = 'Anthropic does not let this Claude token read usage. A token from `claude setup-token` cannot; a Claude Code sign-in (`/login`) can.';
+
 
 export const providerId = 'claude';
 export const providerName = 'Claude';
@@ -88,7 +90,7 @@ const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) =>
       ?? failure('Rate limited. Retrying soon.');
   }
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     return failure('Claude session expired. Open Claude Code to sign in again.');
   }
 

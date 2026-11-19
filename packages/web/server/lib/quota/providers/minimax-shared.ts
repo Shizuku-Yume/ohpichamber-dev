@@ -4,6 +4,18 @@ import { buildResult,
 toUsageWindow,
 toNumber,
 toTimestamp, } from '../utils/index.js'
+const fieldsOf = <Value>(value: Value) => (hasFields(value) ? value : undefined);
+
+const positive = (value: number | null) => value !== null && value > 0;
+
+import { lowerCaseLabel } from "../utils/labels.js";
+
+const isNumberValue = (value: unknown): value is number => typeof value === 'number';
+
+const isBaseResp = (value: unknown): value is MiniMaxBaseResp => value !== null && value !== undefined;
+
+const hasFields = (value: unknown): value is MiniMaxFields => value !== null && value !== undefined;
+
 
 const WINDOW_STATUS_INACTIVE = 3;
 

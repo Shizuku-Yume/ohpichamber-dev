@@ -22,15 +22,15 @@ describe('Google boundary values', () => {
     });
   }
 
-  it('keeps credential defaults, normalization and nested OAuth selection', () => {
-    expect(resolveGoogleAuthSources({ google: ' access ' })).toEqual([{
+  it('reads the selected OAuth credential rather than an OpenCode auth map', () => {
+    expect(resolveGoogleAuthSources({ type: 'oauth', access: 'access' })).toEqual([{
       sourceId: 'gemini', sourceLabel: 'Gemini', accessToken: 'access',
-      refreshToken: null, projectId: null, expires: null,
+      refreshToken: null, projectId: 'rising-fact-p41fc', expires: null,
     }]);
-    expect(resolveGoogleAuthSources({ google: { oauth: {
-      refresh: ' refresh | | managed ', expires: '2026-01-01T00:00:00Z',
-    } } })).toEqual([{
-      sourceId: 'gemini', sourceLabel: 'Gemini', accessToken: null,
+    expect(resolveGoogleAuthSources({ type: 'oauth',
+      refresh: ' refresh | | managed ', expires: Date.parse('2026-01-01T00:00:00Z'),
+    })).toEqual([{
+      sourceId: 'gemini', sourceLabel: 'Gemini', accessToken: '',
       refreshToken: 'refresh', projectId: 'managed', expires: Date.parse('2026-01-01T00:00:00Z'),
     }]);
     expect(resolveGoogleAuthSources({ google: [] })).toEqual([]);

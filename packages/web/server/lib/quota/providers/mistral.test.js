@@ -99,8 +99,8 @@ describe('Mistral usage reader', () => {
   });
 
   it('counts a stored key under key or token as configured', () => {
-    expect(isConfigured({ mistral: { key: 'k' } })).toBe(true);
-    expect(isConfigured({ mistral: { token: 't' } })).toBe(true);
+    expect(isConfigured({ type: 'api_key', key: 'k' })).toBe(true);
+    expect(isConfigured({ type: 'oauth', access: 't' })).toBe(true);
     expect(isConfigured({})).toBe(false);
   });
 });

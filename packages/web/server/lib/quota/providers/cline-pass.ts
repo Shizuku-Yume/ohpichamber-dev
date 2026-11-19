@@ -7,6 +7,8 @@ import {
   toNumber,
   toTimestamp
 } from '../utils/index.js';
+import { z } from "zod";
+
 
 interface ClineFields {
   key?: unknown;

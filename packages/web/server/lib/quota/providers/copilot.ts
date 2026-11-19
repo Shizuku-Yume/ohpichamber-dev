@@ -6,6 +6,12 @@ import {
   toTimestamp,
   formatCredits
 } from '../utils/index.js';
+const hasFields = (value: unknown): value is Record<string, unknown> => value !== null && value !== undefined;
+
+const asSnapshot = z.custom<CopilotSnapshot>(hasFields).nullish().parse;
+
+import { z } from "zod";
+
 
 const buildCopilotWindows = (payload) => {
   const quota = payload?.quota_snapshots ?? {};

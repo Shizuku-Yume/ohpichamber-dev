@@ -21,7 +21,7 @@ const parseWindows = (payload) => {
   const secondary = payload?.rate_limit?.secondary_window ?? null;
   const credits = payload?.credits ?? null;
 
-  const windows: Record<string, UsageWindow> = {};
+  const windows = {};
   if (primary) {
     const windowSeconds = toNumber(primary.limit_window_seconds);
     windows[resolveWindowLabel(windowSeconds)] = toUsageWindow({
@@ -41,11 +41,7 @@ const parseWindows = (payload) => {
   if (credits) {
     const balance = toNumber(credits.balance);
     const unlimited = Boolean(credits.unlimited);
-    const label = unlimited
-      ? 'Unlimited'
-      : balance !== null
-        ? formatCredits(balance)
-        : null;
+    const label = unlimited ? "Unlimited" : balance !== null ? String(balance) : null;
     windows.credits_balance = toUsageWindow({
       usedPercent: null,
       windowSeconds: null,
@@ -53,18 +49,12 @@ const parseWindows = (payload) => {
       valueLabel: label
     });
   }
-
-  const spendLimit = asFields(asFields(payload?.spend_control)?.individual_limit);
-  if (spendLimit) {
+  if (payload?.spend_control?.individual_limit) {
+    const spendLimit = payload.spend_control.individual_limit;
     const used = toNumber(spendLimit.used);
     const limit = toNumber(spendLimit.limit);
-    const isUsd = spendLimit.unit === 'usd';
-    const valueLabel = used !== null && limit !== null
-      ? isUsd
-        ? `$${formatMoney(used)} / $${formatMoney(limit)}`
-        : `${used.toFixed(0)} / ${limit.toFixed(0)} used`
-      : null;
-    windows[isUsd ? 'usage' : 'credits'] = toUsageWindow({
+    const valueLabel = used !== null && limit !== null ? `${used.toFixed(0)} / ${limit.toFixed(0)} used` : null;
+    windows.credits = toUsageWindow({
       usedPercent: toNumber(spendLimit.used_percent),
       windowSeconds: null,
       resetAt: null,

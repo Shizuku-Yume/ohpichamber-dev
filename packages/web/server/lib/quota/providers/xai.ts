@@ -1,6 +1,10 @@
 import { credentialAccessToken, credentialRefreshToken } from './selected-credential.js';
 import { buildResult, toUsageWindow } from '../utils/index.js';
 import { asNonEmptyString as nonEmptyString } from '../../shared/guards.js';
+import { z } from "zod";
+
+const jwtClaims = z.looseObject({ exp: z.unknown() });
+
 
 export const providerId = 'xai';
 export const providerName = 'xAI';

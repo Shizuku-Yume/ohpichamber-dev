@@ -6,6 +6,22 @@ toNumber,
 resolveWindowSeconds,
 resolveWindowLabel,
 normalizeTimestamp } from '../utils/index.js'
+import { isString } from "../../shared/object-guards.js";
+
+import { isLimitArray } from "./zhipuai-coding-plan.js";
+
+import { hasPayloadFields } from "./zhipuai-coding-plan.js";
+
+import { hasDataFields } from "./zhipuai-coding-plan.js";
+
+import { isCreditLimit } from "./zhipuai-coding-plan.js";
+
+import { isNumber } from "./zhipuai-coding-plan.js";
+
+import { formatCreditValueLabel } from "./zhipuai-coding-plan.js";
+
+import { isTimeLimit } from "./zhipuai-coding-plan.js";
+
 
 export const providerId = 'zai-coding-plan';
 export const providerName = 'z.ai';

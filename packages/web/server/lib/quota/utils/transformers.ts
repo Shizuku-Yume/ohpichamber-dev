@@ -1,3 +1,15 @@
+import fs from 'node:fs';
+
+export const readJsonFile = (filePath: string): unknown => {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8').trim();
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 import { z } from 'zod';
 import type { TokenWindowLimit } from './contracts.js';
 

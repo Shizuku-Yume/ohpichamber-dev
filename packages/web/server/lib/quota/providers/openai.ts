@@ -1,35 +1,17 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
-  toUsageWindow
+  toUsageWindow,
+  toNumber,
+  toTimestamp
 } from '../utils/index.js';
-import { asAuthFields, propertySource, readField } from './fields.js';
-import type { QuotaResult, UsageWindow } from '../utils/contracts.js';
 
 const providerId = 'openai';
 const providerName = 'OpenAI';
-const aliases = ['openai', 'codex', 'chatgpt'];
 
-type OpenAiWindows = Partial<Record<'5h' | 'weekly', UsageWindow<unknown, unknown>>>;
-export type OpenAiQuotaResult = QuotaResult<typeof providerId, typeof providerName, { windows: OpenAiWindows }>;
 
-const formatWindow = (window: NonNullable<ReturnType<typeof propertySource>>) => {
-  const usedPercent = readField(window, 'used_percent') ?? null;
-  const windowSeconds = readField(window, 'limit_window_seconds') ?? null;
-  const resetAt = readField(window, 'reset_at');
-  return toUsageWindow({
-    usedPercent,
-    windowSeconds,
-    resetAt: resetAt ? +resetAt * 1000 : null
-  });
-};
-
-export const fetchQuota = async (): Promise<OpenAiQuotaResult> => {
-  const auth = await readOpenCodeCredentials();
-  const entry = asAuthFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const accessToken = entry?.access ?? entry?.token;
+export const fetchQuota = async ({ credential } = {}) => {
+  const accessToken = credentialAccessToken(credential);
 
   if (!accessToken) {
     return buildResult({
@@ -60,16 +42,25 @@ export const fetchQuota = async (): Promise<OpenAiQuotaResult> => {
       });
     }
 
-    const payload: unknown = await response.json();
-    const rateLimit = propertySource(readField(propertySource(payload), 'rate_limit'));
-    const primary = readField(rateLimit, 'primary_window');
-    const secondary = readField(rateLimit, 'secondary_window');
+    const payload = await response.json();
+    const primary = payload?.rate_limit?.primary_window ?? null;
+    const secondary = payload?.rate_limit?.secondary_window ?? null;
 
-    const windows: OpenAiWindows = {};
-    const primaryFields = primary ? propertySource(primary) : null;
-    if (primaryFields) windows['5h'] = formatWindow(primaryFields);
-    const secondaryFields = secondary ? propertySource(secondary) : null;
-    if (secondaryFields) windows.weekly = formatWindow(secondaryFields);
+    const windows = {};
+    if (primary) {
+      windows['5h'] = toUsageWindow({
+        usedPercent: primary.used_percent ?? null,
+        windowSeconds: primary.limit_window_seconds ?? null,
+        resetAt: primary.reset_at ? primary.reset_at * 1000 : null
+      });
+    }
+    if (secondary) {
+      windows['weekly'] = toUsageWindow({
+        usedPercent: secondary.used_percent ?? null,
+        windowSeconds: secondary.limit_window_seconds ?? null,
+        resetAt: secondary.reset_at ? secondary.reset_at * 1000 : null
+      });
+    }
 
     return buildResult({
       providerId,
@@ -84,7 +75,7 @@ export const fetchQuota = async (): Promise<OpenAiQuotaResult> => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

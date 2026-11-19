@@ -7,6 +7,8 @@ import {
   asNonEmptyString,
   formatMoney
 } from '../utils/index.js';
+import { z } from "zod";
+
 
 interface OpenRouterFields {
   key?: unknown;

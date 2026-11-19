@@ -5,6 +5,8 @@ import {
   toNumber,
   formatMoney
 } from '../utils/index.js';
+import { z } from "zod";
+
 
 interface DeepInfraFields {
   key?: unknown;

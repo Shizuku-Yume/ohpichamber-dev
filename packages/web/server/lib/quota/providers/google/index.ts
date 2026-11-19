@@ -11,6 +11,8 @@ import {
 } from './api.js';
 import { refreshGoogleAccessToken } from './oauth.js';
 import type { JsonObject, JsonValue, ProviderUsage } from '../../utils/contracts.js';
+const isJsonContainer = (value: JsonValue): value is JsonObject | JsonValue[] => value !== null && typeof value === 'object';
+
 
 export const providerId = 'google';
 export const providerName = 'Google';

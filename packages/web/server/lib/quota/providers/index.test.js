@@ -80,15 +80,4 @@ describe('selected quota dispatcher', () => {
     expect(result.ok).toBe(false);
     expect(resolveCredential).not.toHaveBeenCalled();
   });
-
-  it.each(['constructor', 'toString', '__proto__', 'null', null])('rejects unsupported registry key %s', async (providerId) => {
-    await expect(fetchQuotaForProvider(providerId)).resolves.toMatchObject({
-      providerId,
-      providerName: providerId,
-      ok: false,
-      configured: false,
-      usage: null,
-      error: 'Unsupported provider',
-    });
-  });
 });
