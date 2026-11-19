@@ -244,15 +244,13 @@ export async function stopWorkerProcess(
   exited: Promise<void>,
   { cooperativeGraceMs = 0, stopTimeoutMs = 5_000, terminateTree = terminateWorkerProcessTree, waitForTree = waitForWorkerProcessTree, waitForExit = waitWithin } = {},
 ): Promise<boolean> {
-  let cooperativelyExited = false;
-  if (cooperativeGraceMs > 0) {
-    try {
-      await waitForExit(exited, cooperativeGraceMs);
-      cooperativelyExited = await waitForTree(child.pid);
-    } catch { /* Continue with process-tree termination after the grace. */ }
+  const groupSignalled = await terminateTree(child.pid, 'SIGTERM');
+  if (!groupSignalled && child.exitCode === null && child.signalCode === null) {
+    if (cooperativeGraceMs > 0) {
+      try { await waitForExit(exited, cooperativeGraceMs); } catch { /* Continue with the direct fallback. */ }
+    }
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
   }
-  const groupSignalled = !cooperativelyExited && await terminateTree(child.pid, 'SIGTERM');
-  if (!groupSignalled && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
   let escalated = false;
   try {
     await waitForExit(exited, stopTimeoutMs);

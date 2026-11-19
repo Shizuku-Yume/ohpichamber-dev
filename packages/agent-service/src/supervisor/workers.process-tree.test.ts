@@ -23,18 +23,23 @@ const stoppingWorker = () => {
   return { child, exited, exit, calls, terminateTree, waitForTree };
 };
 
-test('cooperative stop waits for a delayed clean exit without terminating the worker', async () => {
+test('tree termination precedes the grace and a delayed clean exit skips the direct fallback', async () => {
   const f = stoppingWorker();
   const waits: number[] = [];
   const stopped = stopWorkerProcess(f.child, f.exited, {
     cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
-    waitForExit: (operation, ms) => { waits.push(ms); return operation; },
+    waitForExit: (operation, ms) => {
+      expect(f.calls).toEqual(['tree:SIGTERM']);
+      waits.push(ms);
+      return operation;
+    },
   });
+  expect(f.calls).toEqual(['tree:SIGTERM']);
+  await Promise.resolve();
   expect(waits).toEqual([1_000]);
-  expect(f.calls).toEqual([]);
   f.exit();
   expect(await stopped).toBe(true);
-  expect(f.calls).toEqual(['tree:wait']);
+  expect(f.calls).toEqual(['tree:SIGTERM']);
   expect(waits).toEqual([1_000, 5_000]);
 });
 
@@ -45,6 +50,8 @@ test('expired grace preserves taskkill, fallback, stop timeout and forced escala
     cooperativeGraceMs: 1_000, stopTimeoutMs: 200, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
     waitForExit: async (_operation, ms) => {
       waits.push(ms);
+      if (waits.length === 1) expect(f.calls).toEqual(['tree:SIGTERM']);
+      if (waits.length === 2) expect(f.calls).toEqual(['tree:SIGTERM', 'kill:SIGTERM']);
       if (waits.length < 3) throw new Error('Worker operation timed out');
       f.exit(null, 'SIGKILL');
     },
@@ -59,29 +66,35 @@ for (const code of [0, 1]) {
     f.exit(code);
     expect(await stopWorkerProcess(f.child, f.exited, {
       cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+      waitForExit: async (operation, ms) => { expect(ms).toBe(5_000); await operation; },
     })).toBe(code === 0);
-    expect(f.calls).toEqual(['tree:wait']);
+    expect(f.calls).toEqual(['tree:SIGTERM']);
   });
 }
 
-test('a signalled cooperative exit is not reported as success', async () => {
-  const f = stoppingWorker();
-  f.exit(null, 'SIGTERM');
-  expect(await stopWorkerProcess(f.child, f.exited, {
-    cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
-  })).toBe(false);
-  expect(f.calls).toEqual(['tree:wait']);
-});
+for (const [code, signal] of [[1, null], [null, 'SIGTERM']] as const) {
+  test(`an exit during the grace with code ${code} and signal ${signal} is not success`, async () => {
+    const f = stoppingWorker();
+    expect(await stopWorkerProcess(f.child, f.exited, {
+      cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+      waitForExit: async (operation, ms) => {
+        if (ms === 1_000) f.exit(code, signal);
+        await operation;
+      },
+    })).toBe(false);
+    expect(f.calls).toEqual(['tree:SIGTERM']);
+  });
+}
 
-test('a cooperative leader exit still cleans up surviving process-group descendants', async () => {
+test('a successful tree signal skips the grace and preserves the existing group check', async () => {
   const f = stoppingWorker();
-  f.exit();
   expect(await stopWorkerProcess(f.child, f.exited, {
-    cooperativeGraceMs: 1_000,
+    cooperativeGraceMs: 1_000, stopTimeoutMs: 200,
     terminateTree: async (_pid, signal) => { f.calls.push(`tree:${signal}`); return true; },
     waitForTree: async (_pid, options) => { f.calls.push(`tree:wait:${options?.graceMs ?? 250}`); return options?.graceMs === 500; },
+    waitForExit: async (_operation, ms) => { expect(ms).toBe(200); f.exit(); },
   })).toBe(true);
-  expect(f.calls).toEqual(['tree:wait:250', 'tree:SIGTERM', 'tree:wait:250', 'tree:SIGKILL', 'tree:wait:500']);
+  expect(f.calls).toEqual(['tree:SIGTERM', 'tree:wait:250', 'tree:SIGKILL', 'tree:wait:500']);
 });
 
 test('ordinary stops still terminate immediately without a cooperative grace', async () => {
@@ -104,7 +117,8 @@ process.on('message', message => {
     appendFileSync(${JSON.stringify(stops)}, 'stop\\n');
     setTimeout(() => process.exit(0), 25);
   }
-});`);
+});
+process.on('SIGTERM', () => {});`);
   const registry = new WorkerRegistry({ workerEntrypoint: entrypoint, workerRuntime: process.execPath });
   try {
     await registry.start({ rootSessionId: 'root', projectId: 'project', workspaceId: 'workspace', cwd: root, agentDirectory: root });
