@@ -173,7 +173,7 @@ export const MobileWorkspaceDrawer: React.FC<{
 
   const body = (
     <>
-      <div className={MOBILE_HEADER_CLASS}>
+      <div className={cn(MOBILE_HEADER_CLASS, 'oc-terminal-chrome')}>
         <div className="flex h-9 min-w-0 flex-1 items-center">
           {/* Mounted only while shown; nonCompositedIndicator keeps the active
               pill off its own compositing layer — creating one inside the
@@ -287,12 +287,13 @@ export const MobileWorkspaceDrawer: React.FC<{
     </>
   );
 
+  const terminalWorkspaceClass = tab === 'terminal' && 'oc-mobile-workspace-terminal';
   if (variant === 'panel') {
     // The caller animates the width; the content itself is plain flow so it
     // never gets its own compositing layer (iOS clips those to the safe-area
     // viewport, which is exactly what the drawer's settled `transform: none`
     // avoids on the other host).
-    return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{body}</div>;
+    return <div className={cn('flex h-full min-h-0 flex-col bg-background text-foreground', terminalWorkspaceClass)}>{body}</div>;
   }
 
   return createPortal(
@@ -302,7 +303,7 @@ export const MobileWorkspaceDrawer: React.FC<{
       aria-modal="true"
       aria-label={t('mobile.header.openWorkspaceAria')}
       aria-hidden={!open}
-      className="oc-keyboard-inset-surface oc-bottom-safe-surface oc-side-safe-area fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+      className={cn('oc-keyboard-inset-surface oc-bottom-safe-surface oc-side-safe-area fixed inset-0 z-50 flex flex-col bg-background text-foreground', terminalWorkspaceClass)}
       style={{
         paddingTop: 'var(--oc-safe-area-top, 0px)',
         // Settled state drops the transform entirely so the drawer isn't kept

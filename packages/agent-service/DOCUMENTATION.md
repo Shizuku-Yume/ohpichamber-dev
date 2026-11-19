@@ -84,6 +84,10 @@ Scope mismatches keep the existing refusals: the service compares the request wi
 
 Native JSONL storage appends timestamped `custom` records when a runtime opens or disposes (`ohpichamber.private-roots.v1`, `session_exit`), so whole-file byte equality is not a stable transcript invariant. Session tests compare the parsed `message` records and the journal/history projection instead; a live reopen must preserve them exactly.
 
+## Permanent session deletion
+
+The Agent Service verifies the transcript against the live worker, stops the worker, and then removes the native transcript and artifacts before acknowledging deletion. Worker shutdown may write exit diagnostics, so removing storage before shutdown can recreate a deleted transcript.
+
 ## Named daemon ownership after promotion
 
 Named daemon services remain owned by their broker session id after `/btw` promotion. `WorkerRegistry` retains the retired ids across worker retirement for the lifetime of the supervisor and passes that lineage through private worker bootstrap. `WorkerShell` authorizes listing, logs, stdin and stop against the current id and those retired ids only, while projecting every service under the current session and worker generation. Catalog aliases are generation-scoped and are not the service ownership authority. Supervisor restart does not restore this in-memory lineage.
