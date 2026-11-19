@@ -5454,6 +5454,8 @@ export const dict = {
   "mobile.files.rootDirectory": "Project files",
   "mobile.files.search.placeholder": "Search files",
   "mobile.files.search.empty": "No files found.",
+  "mobile.files.search.failed": "Couldn't search files.",
+  "mobile.files.search.retry": "Retry",
   "mobile.files.parentDirectory": "Parent directory",
   "mobile.files.empty.noDirectory": "Select a project to browse files.",
   "mobile.files.empty.directory": "This directory is empty.",

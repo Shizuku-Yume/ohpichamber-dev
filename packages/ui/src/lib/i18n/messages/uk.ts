@@ -5465,6 +5465,8 @@ export const dict = {
   "mobile.files.rootDirectory": "Файли проєкту",
   "mobile.files.search.placeholder": "Шукати файли",
   "mobile.files.search.empty": "Файлів не знайдено.",
+  "mobile.files.search.failed": "Не вдалося виконати пошук файлів.",
+  "mobile.files.search.retry": "Спробувати ще раз",
   "mobile.files.parentDirectory": "Батьківська тека",
   "mobile.files.empty.noDirectory": "Виберіть проєкт, щоб переглядати файли.",
   "mobile.files.empty.directory": "Ця тека порожня.",

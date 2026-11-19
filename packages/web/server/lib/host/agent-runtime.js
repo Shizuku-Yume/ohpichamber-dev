@@ -92,11 +92,8 @@ export function createHostAgentRuntime({
   });
   skillFileOwner = createSkillFileOwner({ service });
   const admitWorkspace = async (scope) => {
-    const baseEnv = isEnterpriseMode(enterprisePolicyOptions)
+    const env = isEnterpriseMode(enterprisePolicyOptions)
       ? {} : await getEnvironmentForDirectory(scope.cwd);
-    const env = process.env.BUN_BE_BUN === '1'
-      ? { BUN_BE_BUN: '1', ...baseEnv }
-      : baseEnv;
     // The workspace catalog answers from this admission, so the Host's current
     // tool enablement travels with it rather than a worker-side default.
     const hostTools = await resolveHostTools();

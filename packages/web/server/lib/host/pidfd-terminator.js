@@ -102,16 +102,35 @@ const signalNumbers = { SIGTERM: 15, SIGKILL: 9 };
 const signalNumber = signalNumbers[request.signal];
 if (!signalNumber || !Array.isArray(request.identities)) process.exit(2);
 
+const processSymbols = {
+  close: { args: ['i32'], returns: 'i32' },
+  __errno_location: { args: [], returns: 'ptr' },
+};
 let symbols;
+let pidfdOpen;
+let pidfdSendSignal;
 try {
   symbols = dlopen('libc.so.6', {
     pidfd_open: { args: ['i32', 'u32'], returns: 'i32' },
     pidfd_send_signal: { args: ['i32', 'i32', 'ptr', 'u32'], returns: 'i32' },
-    close: { args: ['i32'], returns: 'i32' },
-    __errno_location: { args: [], returns: 'ptr' },
+    ...processSymbols,
   }).symbols;
+  pidfdOpen = symbols.pidfd_open;
+  pidfdSendSignal = (fd, signal) => symbols.pidfd_send_signal(fd, signal, null, 0);
 } catch {
-  process.exit(2);
+  // glibc before 2.36 may lack wrappers even when the kernel supports pidfds.
+  // Both Linux x64 (unistd_64.h) and arm64 (asm-generic/unistd.h) use these syscall numbers.
+  if (process.arch !== 'x64' && process.arch !== 'arm64') process.exit(2);
+  try {
+    symbols = dlopen('libc.so.6', {
+      syscall: { args: ['i64', 'i64', 'i64', 'ptr', 'i64'], returns: 'i64_fast' },
+      ...processSymbols,
+    }).symbols;
+  } catch {
+    process.exit(2);
+  }
+  pidfdOpen = (pid, flags) => symbols.syscall(434n, BigInt(pid), BigInt(flags), null, 0n);
+  pidfdSendSignal = (fd, signal) => symbols.syscall(424n, BigInt(fd), BigInt(signal), null, 0n);
 }
 
 const results = [];
@@ -120,7 +139,7 @@ for (const identity of request.identities) {
     results.push({ pid: identity.pid, delivered: false, identityMismatch: true });
     continue;
   }
-  const fd = symbols.pidfd_open(identity.pid, 0);
+  const fd = pidfdOpen(identity.pid, 0);
   if (fd < 0) {
     const errno = readNative.i32(symbols.__errno_location(), 0);
     results.push({ pid: identity.pid, delivered: false, gone: errno === 3, unavailable: errno === 38 || errno === 22 });
@@ -139,7 +158,7 @@ for (const identity of request.identities) {
       results.push({ pid: identity.pid, delivered: false, gone: false, identityMismatch: true });
       continue;
     }
-    if (symbols.pidfd_send_signal(fd, signalNumber, null, 0) === 0) {
+    if (pidfdSendSignal(fd, signalNumber) === 0) {
       results.push({ pid: identity.pid, delivered: true, gone: false, unavailable: false });
     } else {
       const errno = readNative.i32(symbols.__errno_location(), 0);
@@ -166,6 +185,7 @@ export const createPidfdTerminator = ({ bunPath = process.env.OHPICHAMBER_BUN ||
     windowsHide: true,
     env: {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
+      ...(process.env.BUN_BE_BUN === '1' ? { BUN_BE_BUN: '1' } : {}),
       [REQUEST_ENV]: JSON.stringify(request),
     },
   });

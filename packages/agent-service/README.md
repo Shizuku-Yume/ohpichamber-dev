@@ -29,6 +29,8 @@ Only `kind: 'session'` roots count toward `WORKER_CAPACITY_POLICY.maxActiveRootW
 
 Both service and worker launches pass Bun's `--no-env-file`. Project dotenv files cannot add values to the Host-resolved environment.
 
+When a standalone OMP binary runs as Bun, workers inherit `BUN_BE_BUN=1` from the service, including the readiness worker that has no workspace overlay. A workspace cannot override the selected interpreter mode.
+
 Only `src/worker/` imports the OMP SDK; the Node Host never imports or loads the SDK. Each session owns its supplied `SessionManager`; disposal closes that manager, then the worker closes its owned `AuthStorage`. `SessionRegistry.close()` first settles openings and then closes its owned `WorkerRegistry` before closing persistent references, so graceful service shutdown cannot leave native workers alive after the registry is unavailable. Workers pass `initialModelRefreshStrategy: 'offline'` to `createAgentSession` so initial cold-cache default-model fallback does not block readiness on an external catalog fetch while leaving later explicit `ModelRegistry` discovery unchanged, and enable native approval/question hooks and concrete Promise-based interactive UI before admitting prompts. LSP and extension discovery remain disabled (`enableLsp: false`, `disableExtensionDiscovery: true`); `WorkerMcp` is passed as `mcpManager` (`enableMCP: mcp !== undefined`) when mcp is supplied.
 
 ## Sessions and recovery
