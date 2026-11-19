@@ -1,4 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 // Results of sessions an agent dispatched and asked to hear back from.
 //
 // An agent that creates, sends to, or forks a session with `returnResult`
@@ -11,25 +10,6 @@
 // Event-driven: the Host event hub supplies canonical envelopes directly.
 // Pending deliveries are persisted so a restart still delivers them.
 
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-// Results of sessions an agent dispatched and asked to hear back from.
-//
-// An agent that creates, sends to, or forks a session with `returnResult`
-// gets its answer at once and goes on. When the dispatched session's turn is
-// over, this runtime hands its final answer to the session that dispatched it
-// as a synthetic message and wakes that session, so the agent continues on its
-// own: background primary sessions, the way OpenCode 2 reports a background
-// subagent to its parent (core `session/subagent-completion.ts`).
-//
-// Event-driven like the message queue: the shared upstream hub delivers
-// `session.status`, and an idle transition of a watched session arms a short
-// timer. The tick confirms the turn is over against OpenCode itself (not
-// running, no running subagent, and the `idle` record OpenCode appends when a
-// run ends) before anything is delivered. Pending deliveries are persisted,
-// so a restart in between still delivers.
-
-=======
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
 import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
@@ -37,28 +17,25 @@ import { z } from 'zod';
 const FILE_NAME = 'dispatch-results.json';
 const FILE_VERSION = 1;
 const MAX_ENTRIES = 200;
+// Idle events arrive in bursts around a turn boundary.
 const QUIET_MS = 500;
+// While a subagent of the dispatched session runs, the turn is not over yet.
+const SUBAGENT_RECHECK_MS = 5_000;
+// An idle session without the run's `idle` record yet: the record lands with
+// the event, so a few short rechecks cover a projection that trails it.
 const SETTLE_RECHECK_MS = 2_000;
 const SETTLE_RECHECKS = 3;
 const RETRY_BASE_DELAY_MS = 2_000;
 const RETRY_MAX_DELAY_MS = 60_000;
 const MESSAGE_PAGE_LIMIT = 50;
+// The answer travels into the parent's context; a session that wrote a book
+// is cut, and the agent can read the rest with session.messages.
 const ANSWER_CHAR_LIMIT = 50_000;
 
 const DISPATCH_RESULT_SOURCE = 'openchamber-session';
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 // Boundary schemas: the only place raw JSON (the file, OpenCode answers, hub
 // events) is inspected. Everything below branches on what they return.
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-const ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
-// Boundary schemas: the only place raw JSON (the file, OpenCode answers, hub
-// events) is inspected. Everything below branches on what they return.
-=======
-const ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
 const sessionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{4,128}$/);
 const messageIdSchema = z.string().min(1);
 const timeSchema = z.number().finite().nonnegative();
@@ -70,212 +47,36 @@ const entrySchema = z.object({
   parentSessionId: sessionIdSchema,
   sessionId: sessionIdSchema,
   dispatchedAt: timeSchema,
+  // The newest end-of-run record before the dispatch; null when there was
+  // none. Entries written before this field compare clock times instead.
   afterIdleId: afterIdleSchema.optional(),
   messageId: messageIdSchema.optional(),
 });
 
 const storedFileSchema = z.object({ entries: z.array(z.unknown()) });
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-const idleRecordSchema = z.object({
-  id: z.string().min(1),
-  type: z.literal('idle'),
-  outcome: z.enum(['succeeded', 'failed', 'interrupted']),
-  time: z.object({ created: timeSchema }),
-});
-
-const assistantRecordSchema = z.object({
-  type: z.literal('assistant'),
-  content: z.array(z.unknown()).default([]),
-  error: z.object({ message: z.string().optional() }).nullish(),
-  time: z.object({ created: timeSchema }),
-});
-
-const textContentSchema = z.object({ type: z.literal('text'), text: z.string() });
-
-const recordTypeSchema = z.object({ type: z.string() });
-const recordIdSchema = z.object({ id: z.string() });
-const sessionRecordSchema = z.object({ title: z.string().optional() });
-const messagePageSchema = z.object({ data: z.array(z.unknown()) });
-
-const statusEventSchema = z.object({
-  type: z.literal('session.status'),
-  properties: z.object({ sessionID: z.string().min(1), status: z.object({ type: z.string().min(1) }) }),
-});
-
-const deletedEventSchema = z.object({
-  type: z.literal('session.deleted'),
-  properties: z.object({ sessionID: z.string().min(1) }),
-});
-
-=======
-const idleRecordSchema = z.object({
-  id: z.string().min(1),
-  type: z.literal('idle'),
-  outcome: z.enum(['succeeded', 'failed', 'interrupted']),
-  time: z.object({ created: timeSchema }),
-});
-
-const assistantRecordSchema = z.object({
-  type: z.literal('assistant'),
-  content: z.array(z.unknown()).default([]),
-  error: z.object({ message: z.string().optional() }).nullish(),
-  time: z.object({ created: timeSchema }),
-});
-
-const textContentSchema = z.object({ type: z.literal('text'), text: z.string() });
-
-const recordTypeSchema = z.object({ type: z.string() });
-const recordIdSchema = z.object({ id: z.string() });
-const sessionRecordSchema = z.object({ title: z.string().optional() });
-const messagePageSchema = z.object({ data: z.array(z.unknown()) });
-
-const statusEventSchema = z.object({
-  type: z.literal('session.status'),
-  properties: z.object({ sessionID: z.string().min(1), status: z.object({ type: z.string().min(1) }) }),
-});
-
-const deletedEventSchema = z.object({
-  type: z.literal('session.deleted'),
-  properties: z.object({ sessionID: z.string().min(1) }),
-});
-
-const dispatchEventSchema = z.union([deletedEventSchema, statusEventSchema]);
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
 const errorCodeSchema = z.object({ code: z.string() });
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 const parse = (schema, value) => {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : null;
 };
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
 
-const parse = (schema, value) => {
-  const parsed = schema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-};
-=======
+const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
 
-export type DispatchEntry = z.infer<typeof entrySchema>;
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
-
-export interface DispatchOutcome {
-  state: 'completed' | 'error' | 'cancelled';
-  text: string;
-  errorMessage: string;
-}
-
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 const unavailableError = (message, status) => Object.assign(new Error(message), { status });
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-const httpError = (message, status) => Object.assign(new Error(message), { status });
 
-/**
- * A message id in OpenCode's own ascending format (`msg_` + time + random),
- * minted once per delivery and persisted before the first attempt. OpenCode
- * refuses a second admission of the same id, so a retry after a crash or a
- * lost response can never deliver the answer twice.
- */
-export const createMessageId = (now) => {
-  const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
-  let random = '';
-  for (let index = 0; index < 14; index += 1) random += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
-  return `msg_${time}${random}`;
-};
-=======
-export interface DispatchResultMessage {
-  text: string;
-  description: string;
-  metadata: {
-    source: typeof DISPATCH_RESULT_SOURCE;
-    sessionID: string;
-    state: DispatchOutcome['state'];
-    title?: string;
-  };
-}
-
-export interface DispatchRegistration {
-  parentSessionId: string;
-  sessionId: string;
-  dispatchedAt: number;
-  afterIdleId?: string | null;
-}
-
-export interface DispatchResultsOptions {
-  globalEventHub: {
-    subscribeEvent: (listener: (event: DispatchEventSource) => void) => () => void;
-    subscribeStatus: (listener: (status: { type: string }) => void) => () => void;
-  };
-  buildOpenCodeUrl: (fetchPath: string, query: string) => string | URL;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
-  dataDir: string;
-  isSessionArchived?: (sessionId: string) => boolean | Promise<boolean>;
-  fetchImpl?: typeof fetch;
-  now?: () => number;
-  quietMs?: number;
-  retryDelayMs?: (failures: number) => number;
-  settleRecheckMs?: number;
-}
-
-type WatchedSession =
-  | { kind: 'running' }
-  | { kind: 'deleted' }
-  | { kind: 'ended'; title: string; records: unknown[] };
-
-interface ReadyResult {
-  entry: DispatchEntry;
-  outcome: DispatchOutcome;
-}
-
-interface DispatchEventSource {
-  translated?: () => unknown[];
-}
-
-const hasMessage = (value: unknown): value is { message: unknown } =>
-  value !== null && (typeof value === 'object' || typeof value === 'function') && 'message' in value;
-
-const hasStatus = (value: unknown): value is { status: unknown } =>
-  value !== null && (typeof value === 'object' || typeof value === 'function') && 'status' in value;
-
-const parsedData = <Data>(parsed: z.ZodSafeParseResult<Data>) => parsed.success ? parsed.data : null;
-
-const isDispatchEvent = (value: unknown): value is z.infer<typeof dispatchEventSchema> =>
-  dispatchEventSchema.safeParse(value).success;
-
-const retryDelay = (failures: number) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
-
-const httpError = (message: string, status: number) => Object.assign(new Error(message), { status });
-
-export const createMessageId = (now: number) => {
-  const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
-  let random = '';
-  for (let index = 0; index < 14; index += 1) random += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
-  return `msg_${time}${random}`;
-};
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
-
-export const escapeAttribute = (value: string) => value
+export const escapeAttribute = (value) => value
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 const messageText = (message) => (Array.isArray(message?.parts) ? message.parts : [])
   .filter((part) => part?.type === 'text' && typeof part.content === 'string')
   .map((part) => part.content)
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-const assistantText = (assistant) => assistant.content
-  .map((item) => parse(textContentSchema, item)?.text ?? '')
-=======
-const assistantText = (assistant: z.infer<typeof assistantRecordSchema>) => assistant.content
-  .map((item) => parsedData(textContentSchema.safeParse(item))?.text ?? '')
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
   .join('')
   .trim();
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 const OUTCOME_STATES = {
   succeeded: 'completed',
   failed: 'error',
@@ -283,80 +84,8 @@ const OUTCOME_STATES = {
   stopped: 'cancelled',
   completed: 'completed',
   cancelled: 'cancelled',
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-const OUTCOME_STATES = { succeeded: 'completed', failed: 'error', interrupted: 'cancelled' };
-
-/**
- * How the dispatched turn ended, read from the newest page of the session's
- * records (newest first), or null while it has not ended since the dispatch.
- *
- * OpenCode appends an `idle` record with the run's outcome when a run ends,
- * so the outcome is authoritative and survives a restart of either server.
- * The answer is the newest assistant reply of that turn.
- *
- * "Since the dispatch" is decided by record order against `afterIdleId`, the
- * newest idle record before the prompt went out, so OpenChamber's clock never
- * meets OpenCode's: a remote OpenCode whose clock lags would otherwise make a
- * finished turn look older than its own dispatch. Only an entry stored
- * without that baseline (`afterIdleId` undefined) falls back to `dispatchedAt`.
- *
- * `withText` takes the text from the newest reply of the turn that has any,
- * for a caller that forwards the answer: a turn can end on a step that only
- * ran tools. The error still comes from the newest reply.
- */
-export const readDispatchOutcome = (records, dispatchedAt, afterIdleId, { withText = false } = {}) => {
-  const idleIndex = records.findIndex((record) => parse(recordTypeSchema, record)?.type === 'idle');
-  if (idleIndex === -1) return null;
-  // A malformed idle record proves nothing about the turn: keep waiting.
-  const idle = parse(idleRecordSchema, records[idleIndex]);
-  if (!idle) return null;
-  const byOrder = afterIdleId !== undefined;
-  if (byOrder ? idle.id === afterIdleId : idle.time.created < dispatchedAt) return null;
-  // The turn's records sit between its idle record and the baseline one.
-  const baselineIndex = byOrder && afterIdleId !== null
-    ? records.findIndex((record) => parse(recordIdSchema, record)?.id === afterIdleId)
-    : -1;
-  const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
-  const replies = turnRecords
-    .map((record) => parse(assistantRecordSchema, record))
-    .filter((assistant) => assistant !== null && (byOrder || assistant.time.created >= dispatchedAt));
-  const reply = replies[0];
-  const textReply = withText ? replies.find((assistant) => assistantText(assistant)) : reply;
-  return {
-    state: OUTCOME_STATES[idle.outcome],
-    text: textReply ? assistantText(textReply) : '',
-    errorMessage: reply?.error?.message?.trim() ?? '',
-  };
-=======
-const OUTCOME_STATES = {
-  succeeded: 'completed', failed: 'error', interrupted: 'cancelled',
-} satisfies Record<z.infer<typeof idleRecordSchema>['outcome'], DispatchOutcome['state']>;
-
-export const readDispatchOutcome = (records: unknown[], dispatchedAt: number, afterIdleId?: string | null, { withText = false }: { withText?: boolean } = {}): DispatchOutcome | null => {
-  const idleIndex = records.findIndex((record) => parsedData(recordTypeSchema.safeParse(record))?.type === 'idle');
-  if (idleIndex === -1) return null;
-  const idle = parsedData(idleRecordSchema.safeParse(records[idleIndex]));
-  if (!idle) return null;
-  const byOrder = afterIdleId !== undefined;
-  if (byOrder ? idle.id === afterIdleId : idle.time.created < dispatchedAt) return null;
-  const baselineIndex = byOrder && afterIdleId !== null
-    ? records.findIndex((record) => parsedData(recordIdSchema.safeParse(record))?.id === afterIdleId)
-    : -1;
-  const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
-  const replies = turnRecords
-    .map((record) => parsedData(assistantRecordSchema.safeParse(record)))
-    .filter((assistant): assistant is z.infer<typeof assistantRecordSchema> => assistant !== null && (byOrder || assistant.time.created >= dispatchedAt));
-  const reply = replies[0];
-  const textReply = withText ? replies.find((assistant) => assistantText(assistant)) : reply;
-  return {
-    state: OUTCOME_STATES[idle.outcome],
-    text: textReply ? assistantText(textReply) : '',
-    errorMessage: reply?.error?.message?.trim() ?? '',
-  };
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
 };
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdleId, { withText = false } = {}) => {
   if (Array.isArray(pageOrRecords)) {
     const records = pageOrRecords;
@@ -408,11 +137,6 @@ export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdle
   };
 };
 const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
-=======
-const outcomeBody = ({ state, text, errorMessage }: DispatchOutcome, sessionId: string) => {
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
   const answer = text.length > ANSWER_CHAR_LIMIT
     ? `${text.slice(0, ANSWER_CHAR_LIMIT)}\n\n[Cut at ${ANSWER_CHAR_LIMIT} characters; read the rest with session.messages for ${sessionId}.]`
     : text;
@@ -425,10 +149,11 @@ const outcomeBody = ({ state, text, errorMessage }: DispatchOutcome, sessionId: 
   return answer ? `${stopped}\n\nIts last reply:\n${answer}` : stopped;
 };
 
-export const buildDispatchResultMessage = ({ sessionId, title, outcome }: { sessionId: string; title: string; outcome: DispatchOutcome }): DispatchResultMessage => {
+/** The synthetic message that carries a dispatched session's result to its parent. */
+export const buildDispatchResultMessage = ({ sessionId, title, outcome }) => {
   const label = title || 'Dispatched session';
   const attributes = `sessionID="${escapeAttribute(sessionId)}" state="${outcome.state}" title="${escapeAttribute(label)}"`;
-  const metadata: DispatchResultMessage['metadata'] = { source: DISPATCH_RESULT_SOURCE, sessionID: sessionId, state: outcome.state };
+  const metadata = { source: DISPATCH_RESULT_SOURCE, sessionID: sessionId, state: outcome.state };
   if (title) metadata.title = title;
   return {
     text: `<openchamber-session ${attributes}>\n${outcomeBody(outcome, sessionId)}\n</openchamber-session>`,
@@ -437,7 +162,7 @@ export const buildDispatchResultMessage = ({ sessionId, title, outcome }: { sess
   };
 };
 
-const DELETED_OUTCOME: DispatchOutcome = { state: 'cancelled', text: '', errorMessage: '' };
+const DELETED_OUTCOME = { state: 'cancelled', text: '', errorMessage: '' };
 
 export function createDispatchResultsRuntime({
   sessionService,
@@ -447,53 +172,55 @@ export function createDispatchResultsRuntime({
   now = Date.now,
   quietMs = QUIET_MS,
   retryDelayMs = retryDelay,
+  subagentRecheckMs = SUBAGENT_RECHECK_MS,
   settleRecheckMs = SETTLE_RECHECK_MS,
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
 }) {
   if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function' || typeof sessionService.list !== 'function' || typeof sessionService.send !== 'function') {
     throw new Error('dispatch-results requires the canonical session service');
   }
   if (typeof resolveSessionScope !== 'function') throw new Error('dispatch-results requires a session scope resolver');
   if (typeof dataDir !== 'string' || !dataDir) throw new Error('dispatch-results requires a data directory');
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-}) {
-=======
-}: DispatchResultsOptions) {
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
   const filePath = path.join(dataDir, FILE_NAME);
 
-  const entries = new Map<string, DispatchEntry>();
-  let loadPromise: Promise<void> | null = null;
+  /** entry id → { id, parentSessionId, sessionId, dispatchedAt, messageId? } */
+  const entries = new Map();
+  let loadPromise = null;
   let writePromise = Promise.resolve();
   let stopped = false;
 
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  const failures = new Map<string, number>();
-  const settleChecks = new Map<string, number>();
-  const ticking = new Set<string>();
+  // In memory only: a restart starts every watched session from a fresh tick.
+  const timers = new Map(); // watched sessionId → timeout
+  const failures = new Map(); // watched sessionId → consecutive failed ticks
+  const settleChecks = new Map(); // watched sessionId → rechecks spent waiting for the idle record
+  const ticking = new Set(); // watched sessionIds with a tick in flight
+
+  // --- persistence ---------------------------------------------------------
 
   const readFile = async () => {
     let raw;
     try {
       raw = await fs.promises.readFile(filePath, 'utf8');
     } catch (error) {
-      if (parsedData(errorCodeSchema.safeParse(error))?.code === 'ENOENT') return [];
+      if (parse(errorCodeSchema, error)?.code === 'ENOENT') return [];
       throw error;
     }
-    let stored: z.infer<typeof storedFileSchema> | null = null;
-    let reason: unknown;
+    let stored = null;
+    let reason = 'not a dispatch results file';
     try {
-      stored = parsedData(storedFileSchema.safeParse(JSON.parse(raw)));
+      stored = parse(storedFileSchema, JSON.parse(raw));
     } catch (error) {
-      reason = (hasMessage(error) ? error.message : undefined) ?? String(error);
+      reason = error?.message ?? String(error);
     }
     if (!stored) {
+      // Malformed is a failure, not "nothing pending": keep the bytes and
+      // start over rather than overwrite them on the next write.
       const backup = `${filePath}.corrupt-${now()}`;
       await fs.promises.rename(filePath, backup).catch(() => undefined);
-      console.warn(`[dispatch-results] file was unreadable and moved to ${backup}: ${reason === undefined ? 'not a dispatch results file' : reason}`);
+      console.warn(`[dispatch-results] file was unreadable and moved to ${backup}: ${reason}`);
       return [];
     }
-    return stored.entries.map((entry) => parsedData(entrySchema.safeParse(entry))).filter((entry) => entry !== null);
+    // One unreadable entry is dropped alone; the rest still deliver.
+    return stored.entries.map((entry) => parse(entrySchema, entry)).filter(Boolean);
   };
 
   const load = () => {
@@ -503,6 +230,8 @@ export function createDispatchResultsRuntime({
           for (const entry of stored) if (!entries.has(entry.id)) entries.set(entry.id, entry);
         })
         .catch((error) => {
+          // A failed read must not pass for "nothing pending": the next write
+          // would clobber the file, so writes wait for a load that succeeds.
           loadPromise = null;
           throw error;
         });
@@ -518,87 +247,20 @@ export function createDispatchResultsRuntime({
       await fs.promises.writeFile(tmpPath, payload, { encoding: 'utf8', mode: 0o600 });
       await fs.promises.rename(tmpPath, filePath);
     });
-    writePromise = write.catch((cause: unknown) => {
-      console.warn('[dispatch-results] failed to persist pending results:', (hasMessage(cause) ? cause.message : undefined) ?? cause);
+    // The chain survives a failed write so later writes still run; the caller
+    // still sees this one fail, since "on disk" is what it waits for.
+    writePromise = write.catch((error) => {
+      console.warn('[dispatch-results] failed to persist pending results:', error?.message ?? error);
     });
     return write;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
   // --- OpenCode access -----------------------------------------------------
 
   // --- canonical session access -------------------------------------------
   const readWatchedSession = async (sessionId) => {
     if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function' || typeof resolveSessionScope !== 'function') return null;
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-  // --- OpenCode access -----------------------------------------------------
-
-  const openCodeRequest = async (fetchPath, { method = 'GET', body, query } = {}) => {
-    const base = buildOpenCodeUrl(fetchPath, '');
-    const search = new URLSearchParams(query || {}).toString();
-    const headers = { Accept: 'application/json', ...getOpenCodeAuthHeaders() };
-    const init = { method, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
-    if (body) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetchImpl(search ? `${base}?${search}` : base, init);
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
-    }
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
-  };
-
-  const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: FETCH_TIMEOUT_MS, fetchImpl });
-
-  /**
-   * Where the watched session stands: `running`, `ended` with its record page
-   * and title, `deleted`, or null when OpenCode could not be asked. Unknown is
-   * never "ended": a failed read retries instead of reporting a guess.
-   */
-  const readWatchedSession = async (sessionId) => {
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
-    if (!statuses) return null;
-    if (statuses[sessionId]) return { kind: 'running' };
-    // A turn is over only when its subagents are done too: the session idles
-    // while a background subagent works and runs again on its result.
-    const subagentsWorking = await activityProbe.hasWorkingChildren(sessionId, statuses);
-    if (subagentsWorking === null) return null;
-    if (subagentsWorking) return { kind: 'subagents' };
-    const encoded = encodeURIComponent(sessionId);
-=======
-  const openCodeRequest = async <Schema extends z.ZodType>(fetchPath: string, schema: Schema, { method = 'GET', body, query }: {
-    method?: string;
-    body?: { id: DispatchEntry['messageId']; delivery: 'steer'; resume: boolean } & DispatchResultMessage;
-    query?: Record<string, string>;
-  } = {}) => {
-    const base = buildOpenCodeUrl(fetchPath, '');
-    const search = new URLSearchParams(query || {}).toString();
-    const headers = { Accept: 'application/json', ...getOpenCodeAuthHeaders() };
-    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
-    if (body) {
-      Object.assign(headers, { 'Content-Type': 'application/json' });
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetchImpl(search ? `${base}?${search}` : base, init);
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
-    }
-    return parsedData(schema.safeParse(unwrapOpenCodeResponse(await response.json().catch(() => null))));
-  };
-
-  const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: FETCH_TIMEOUT_MS, fetchImpl, signal: undefined });
-
-  const readWatchedSession = async (sessionId: string): Promise<WatchedSession | null> => {
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
-    if (!statuses) return null;
-    if (statuses[sessionId]) return { kind: 'running' };
-    const encoded = encodeURIComponent(sessionId);
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
     try {
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
       const scope = await resolveSessionScope(sessionId);
       if (!scope) return { kind: 'deleted' };
       const snapshot = await sessionService.open(sessionId);
@@ -611,79 +273,27 @@ export function createDispatchResultsRuntime({
       const page = await sessionService.history(sessionId, new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) }).toString());
       if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
       return { kind: 'ended', title: typeof session.title === 'string' ? session.title.trim() : '', page };
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-      const session = parse(sessionRecordSchema, await openCodeRequest(`/api/session/${encoded}`));
-      const page = parse(messagePageSchema, await openCodeRequest(`/api/session/${encoded}/message`, {
-        query: { limit: String(MESSAGE_PAGE_LIMIT), order: 'desc' },
-      }));
-      // An answer that is not a page is unknown, never an empty history.
-      if (!page) return null;
-      return { kind: 'ended', title: session?.title?.trim() ?? '', records: page.data };
-=======
-      const session = await openCodeRequest(`/api/session/${encoded}`, sessionRecordSchema);
-      const page = await openCodeRequest(`/api/session/${encoded}/message`, messagePageSchema, {
-        query: { limit: String(MESSAGE_PAGE_LIMIT), order: 'desc' },
-      });
-      if (!page) return null;
-      return { kind: 'ended', title: session?.title?.trim() ?? '', records: page.data };
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
       if (error?.status === 404 || error?.statusCode === 404) return { kind: 'deleted' };
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-      if (error?.status === 404) return { kind: 'deleted' };
-=======
-      if (hasStatus(error) && error.status === 404) return { kind: 'deleted' };
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
       return null;
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
   const deliver = async (entry, message) => {
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-  /** Admits the result into the parent. Resolves true when it is there (now or before). */
-  const deliver = async (entry, message) => {
-    // The archive store answers asynchronously; reading its Promise as a
-    // value made every parent look archived, so none was ever woken. A failed
-    // lookup wakes: the agent asked for this result.
-=======
-  const deliver = async (entry: DispatchEntry, message: DispatchResultMessage) => {
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
     const archived = await Promise.resolve(isSessionArchived(entry.parentSessionId)).catch(() => false);
     if (archived === true) return true;
     try {
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
       const parentPage = await sessionService.history(entry.parentSessionId, new URLSearchParams({ limit: '20' }).toString());
       const latestAssistant = [...(parentPage?.messages ?? [])].reverse().find((candidate) => candidate.role === 'assistant');
       if (!latestAssistant?.providerId || !latestAssistant.modelId) throw unavailableError('Parent model is unavailable', 503);
       await sessionService.send(entry.parentSessionId, {
         input: { text: '', attachments: [], context: [{ kind: 'synthetic', text: message.text }] },
         options: { providerId: latestAssistant.providerId, modelId: latestAssistant.modelId, agentId: null, variant: null, reasoningEffort: null },
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-      await openCodeRequest(`/api/session/${encodeURIComponent(entry.parentSessionId)}/synthetic`, {
-        method: 'POST',
-        body: { id: entry.messageId, ...message, delivery: 'steer', resume },
-=======
-      await openCodeRequest(`/api/session/${encodeURIComponent(entry.parentSessionId)}/synthetic`, z.unknown().transform(() => undefined), {
-        method: 'POST',
-        body: { id: entry.messageId, ...message, delivery: 'steer', resume },
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
       });
       return true;
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
       if (error?.status === 409 || error?.statusCode === 409) return true;
       if (error?.status === 404 || error?.statusCode === 404) {
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-      // The id is ours and was admitted before: an earlier attempt landed.
-      if (error?.status === 409) return true;
-      // The parent is gone; nobody is left to tell.
-      if (error?.status === 404) {
-=======
-      if (hasStatus(error) && error.status === 409) return true;
-      if (hasStatus(error) && error.status === 404) {
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
         console.log(`[dispatch-results] dropping the result of ${entry.sessionId}: session ${entry.parentSessionId} no longer exists`);
         return true;
       }
@@ -691,9 +301,11 @@ export function createDispatchResultsRuntime({
     }
   };
 
-  const pendingFor = (sessionId: string) => Array.from(entries.values()).filter((entry) => entry.sessionId === sessionId);
+  // --- delivery loop -------------------------------------------------------
 
-  const clearTimer = (sessionId: string) => {
+  const pendingFor = (sessionId) => Array.from(entries.values()).filter((entry) => entry.sessionId === sessionId);
+
+  const clearTimer = (sessionId) => {
     const existing = timers.get(sessionId);
     if (existing) {
       clearTimeout(existing);
@@ -701,89 +313,63 @@ export function createDispatchResultsRuntime({
     }
   };
 
-  const arm = (sessionId: string, delayMs = quietMs) => {
+  const arm = (sessionId, delayMs = quietMs) => {
     if (stopped || pendingFor(sessionId).length === 0) return;
     clearTimer(sessionId);
     const timer = setTimeout(() => {
       timers.delete(sessionId);
-      tick(sessionId).catch((cause: unknown) => {
-        console.warn('[dispatch-results] tick failed:', (hasMessage(cause) ? cause.message : undefined) ?? cause);
+      tick(sessionId).catch((error) => {
+        console.warn('[dispatch-results] tick failed:', error?.message ?? error);
       });
     }, Math.max(0, delayMs));
     timer.unref?.();
     timers.set(sessionId, timer);
   };
 
-  const retryLater = (sessionId: string) => {
+  const retryLater = (sessionId) => {
     const count = (failures.get(sessionId) ?? 0) + 1;
     failures.set(sessionId, count);
     arm(sessionId, retryDelayMs(count));
   };
 
-  async function tick(sessionId: string): Promise<void> {
+  async function tick(sessionId) {
     if (stopped || pendingFor(sessionId).length === 0) return;
+    // An idle event that lands while a tick is still reading must not be
+    // lost: that tick may have seen the session running a moment earlier.
     if (ticking.has(sessionId)) return arm(sessionId);
     ticking.add(sessionId);
     try {
       const watched = await readWatchedSession(sessionId);
       if (watched === null) return retryLater(sessionId);
+      // Running: its next idle event re-arms the tick.
       if (watched.kind === 'running') return;
+      if (watched.kind === 'subagents') return arm(sessionId, subagentRecheckMs);
 
       let waiting = false;
-      const ready: ReadyResult[] = [];
+      const ready = [];
       for (const entry of pendingFor(sessionId)) {
         const outcome = watched.kind === 'deleted'
           ? DELETED_OUTCOME
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
           : readDispatchOutcome(watched.page, entry.dispatchedAt, entry.afterIdleId);
         if (!outcome) {
           waiting = true;
           continue;
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-          : readDispatchOutcome(watched.records, entry.dispatchedAt, entry.afterIdleId);
-        if (outcome) ready.push({ entry, outcome });
-        else waiting = true;
-      }
-
-      // Every ready entry reports the session's newest run, so prompts a
-      // parent steered into one run share one message id and one result. An
-      // entry that already holds an id keeps it: that id may have landed with
-      // an earlier run, and sharing it would swallow this one.
-      const unsent = ready.filter(({ entry }) => !entry.messageId);
-      if (unsent.length > 0) {
-        const minted = new Map(); // parentSessionId → message id
-        for (const { entry } of unsent) {
-          if (!minted.has(entry.parentSessionId)) minted.set(entry.parentSessionId, createMessageId(now()));
-          entry.messageId = minted.get(entry.parentSessionId);
-=======
-          : readDispatchOutcome(watched.records, entry.dispatchedAt, entry.afterIdleId);
-        if (outcome) ready.push({ entry, outcome });
-        else waiting = true;
-      }
-
-      const unsent = ready.filter(({ entry }) => !entry.messageId);
-      if (unsent.length > 0) {
-        const minted = new Map<string, string>();
-        for (const { entry } of unsent) {
-          let messageId = minted.get(entry.parentSessionId);
-          if (messageId === undefined) {
-            messageId = createMessageId(now());
-            minted.set(entry.parentSessionId, messageId);
-          }
-          entry.messageId = messageId;
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
         }
+        // Persisted before the first attempt, so a retry reuses it.
         try {
           await persist();
         } catch (error) {
+          // Unsaved, it could be minted again after a crash and deliver twice.
           for (const { entry } of unsent) delete entry.messageId;
           throw error;
         }
       }
 
-      const deliveries = new Map<string | undefined, [ReadyResult, ...ReadyResult[]]>();
+      const deliveries = new Map(); // message id → ready entries
       for (const item of ready) deliveries.set(item.entry.messageId, [...(deliveries.get(item.entry.messageId) ?? []), item]);
       for (const group of deliveries.values()) {
+        // An entry without a baseline compares clocks and can miss a reply
+        // that began before its send; another entry of the run may have it.
         const { entry, outcome } = group.find((item) => item.outcome.text) ?? group[0];
         const message = buildDispatchResultMessage({
           sessionId,
@@ -801,13 +387,16 @@ export function createDispatchResultsRuntime({
         settleChecks.delete(sessionId);
         return;
       }
+      // Idle, yet the run's idle record is not there: either the record trails
+      // the event briefly, or the dispatched prompt has not started. A few
+      // short rechecks cover the first; the next idle event covers the second.
       const spent = settleChecks.get(sessionId) ?? 0;
       if (spent < SETTLE_RECHECKS) {
         settleChecks.set(sessionId, spent + 1);
         arm(sessionId, settleRecheckMs);
       }
     } catch (error) {
-      console.warn(`[dispatch-results] delivering the result of ${sessionId} failed:`, (hasMessage(error) ? error.message : undefined) ?? error);
+      console.warn(`[dispatch-results] delivering the result of ${sessionId} failed:`, error?.message ?? error);
       retryLater(sessionId);
     } finally {
       ticking.delete(sessionId);
@@ -820,15 +409,23 @@ export function createDispatchResultsRuntime({
     }
   };
 
-  const register = async ({ parentSessionId, sessionId, dispatchedAt, afterIdleId }: DispatchRegistration) => {
-    const parent = parsedData(sessionIdSchema.safeParse(parentSessionId));
-    const watched = parsedData(sessionIdSchema.safeParse(sessionId));
+  // --- public --------------------------------------------------------------
+
+  /**
+   * Watches `sessionId` for the end of the turn dispatched at `dispatchedAt`
+   * and delivers its result to `parentSessionId`. Resolves once the entry is
+   * on disk, so a restart right after the tool answers still delivers.
+   */
+  const register = async ({ parentSessionId, sessionId, dispatchedAt, afterIdleId }) => {
+    const parent = parse(sessionIdSchema, parentSessionId);
+    const watched = parse(sessionIdSchema, sessionId);
     if (!parent || !watched) throw new TypeError('parentSessionId and sessionId must be session ids');
     if (parent === watched) throw new TypeError('a session cannot return its result to itself');
-    const at = parsedData(timeSchema.safeParse(dispatchedAt));
+    const at = parse(timeSchema, dispatchedAt);
     if (at === null) throw new TypeError('dispatchedAt must be a timestamp');
     await load();
-    const entry: DispatchEntry = { id: `dispatch-${now()}-${Math.random().toString(36).slice(2, 9)}`, parentSessionId: parent, sessionId: watched, dispatchedAt: at };
+    const entry = { id: `dispatch-${now()}-${Math.random().toString(36).slice(2, 9)}`, parentSessionId: parent, sessionId: watched, dispatchedAt: at };
+    // Kept only when it is a real baseline (an id, or null for "none yet").
     const baseline = afterIdleSchema.safeParse(afterIdleId);
     if (afterIdleId !== undefined && baseline.success) entry.afterIdleId = baseline.data;
     entries.set(entry.id, entry);
@@ -845,36 +442,22 @@ export function createDispatchResultsRuntime({
     try {
       await persist();
     } catch (error) {
+      // The caller tells the agent no result is coming; delivering one anyway
+      // would contradict it.
       entries.delete(entry.id);
       throw error;
     }
+    // The session may already be done: a short turn can end before this
+    // entry existed, and its idle event would then have found nothing to arm.
     arm(watched);
     return { id: entry.id };
   };
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
   const processCanonicalEvent = (event, scope) => {
     if (stopped || !event || typeof event.sessionId !== 'string') return;
     if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
     const sessionId = event.sessionId;
     if (event.type === 'session.deleted') {
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-  const processPayload = (payload) => {
-    if (stopped) return;
-
-    const deleted = parse(deletedEventSchema, payload);
-    if (deleted) {
-      const deletedSessionId = deleted.properties.sessionID;
-      // A deleted parent has nobody left to tell; a deleted dispatched session
-      // still reports, as stopped, so the agent is not left waiting.
-=======
-  const processPayload = (payload: z.infer<typeof dispatchEventSchema>) => {
-    if (stopped) return;
-
-    const deleted = parsedData(deletedEventSchema.safeParse(payload));
-    if (deleted) {
-      const deletedSessionId = deleted.properties.sessionID;
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
       let changed = false;
       for (const entry of entries.values()) {
         if (entry.parentSessionId === sessionId) {
@@ -882,31 +465,10 @@ export function createDispatchResultsRuntime({
           changed = true;
         }
       }
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
       if (changed) void persist();
       arm(sessionId);
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-      // Logged by persist; the next write saves the same state again.
-      if (changed) persist().catch(() => undefined);
-      arm(deletedSessionId);
-=======
-      if (changed) persist().catch(() => undefined);
-      arm(deletedSessionId);
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
       return;
     }
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-
-    const status = parse(statusEventSchema, payload);
-    if (!status) return;
-    const sessionId = status.properties.sessionID;
-=======
-
-    const status = parsedData(statusEventSchema.safeParse(payload));
-    if (!status) return;
-    const sessionId = status.properties.sessionID;
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
     if (pendingFor(sessionId).length === 0) return;
     if ((event.type === 'session.status' && (event.runtimeStatus === 'idle' || event.runtimeStatus === 'unavailable'))
       || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled') {
@@ -917,28 +479,14 @@ export function createDispatchResultsRuntime({
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/dispatch-results/runtime.js
-||||||| bc50ba56aa:packages/web/server/lib/dispatch-results/runtime.js
-  const processEvent = (event) => {
-    for (const payload of event?.translated?.() ?? []) processPayload(payload);
-  };
-
-=======
-  const processEvent = (event: DispatchEventSource) => {
-    for (const payload of event?.translated?.() ?? []) {
-      if (isDispatchEvent(payload)) processPayload(payload);
-    }
-  };
-
->>>>>>> upstream/main:packages/web/server/lib/dispatch-results/runtime.ts
   const start = () => {
     void load()
       .then(() => {
         if (entries.size > 0) console.log(`[dispatch-results] restored ${entries.size} pending result(s)`);
         reconcileAll();
       })
-      .catch((cause: unknown) => {
-        console.warn('[dispatch-results] failed to load pending results:', (hasMessage(cause) ? cause.message : undefined) ?? cause);
+      .catch((error) => {
+        console.warn('[dispatch-results] failed to load pending results:', error?.message ?? error);
       });
   };
 
@@ -954,7 +502,9 @@ export function createDispatchResultsRuntime({
     processCanonicalEvent,
     start,
     stop,
+    /** Pending entries, oldest first; tests and diagnostics read it. */
     pending: () => Array.from(entries.values()).sort((left, right) => left.dispatchedAt - right.dispatchedAt),
+    /** Drains the pending write; tests and shutdown use it. */
     flush: () => writePromise,
   };
 }
