@@ -88,6 +88,7 @@ const createSurface = async (options: {
       cursor: { r: 255, g: 255, b: 255 },
     },
     onData: (data) => mouseData.push(data),
+    onReply() {},
     onResize() {},
     onSelectionChange: () => {
       const selection = surface?.getSelection();

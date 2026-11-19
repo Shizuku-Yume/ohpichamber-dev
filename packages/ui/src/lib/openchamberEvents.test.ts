@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { adoptRelayTunnel, deactivateRelayTunnel } from './relay/runtime-tunnel';
 import type { RelayTunnelClient } from './relay/tunnel-client';
-import { setRuntimeBearerToken } from './runtime-auth';
+import { setRuntimeBearerToken, setRuntimeExtraHeaders } from './runtime-auth';
 
 class MockEventSource {
   static CLOSED = 2;
@@ -35,8 +35,127 @@ describe('openchamber events', () => {
   afterEach(() => {
     deactivateRelayTunnel();
     setRuntimeBearerToken(null);
+    setRuntimeExtraHeaders(null);
     Reflect.deleteProperty(globalThis, 'window');
     Reflect.deleteProperty(globalThis, 'EventSource');
+  });
+
+  test('keeps reconnect status until the replacement Host stream is ready', async () => {
+    const {
+      isOpenchamberEventsReconnecting,
+      markOpenchamberEventsUnreachable,
+      retryOpenchamberEventsNow,
+      subscribeOpenchamberEvents,
+      subscribeOpenchamberEventsConnection,
+    } = await import('./openchamberEvents');
+    const status: boolean[] = [];
+    const unsubscribeStatus = subscribeOpenchamberEventsConnection(() => status.push(isOpenchamberEventsReconnecting()));
+    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
+    const first = MockEventSource.instances[0];
+    const ready = { data: '{"type":"openchamber:event-stream-ready"}' };
+    try {
+      first.onmessage?.(ready);
+      first.onerror?.();
+      expect(status).toEqual([true]);
+      const unsubscribeSecond = subscribeOpenchamberEvents(() => undefined);
+      unsubscribeSecond();
+      expect(MockEventSource.instances).toHaveLength(1);
+      retryOpenchamberEventsNow();
+      const resumed = MockEventSource.instances[1];
+      resumed.onopen?.();
+      first.onmessage?.(ready);
+      expect(status).toEqual([true]);
+      resumed.onmessage?.(ready);
+      expect(status).toEqual([true, false]);
+
+      // A native resume probe can detect an outage before the stream errors.
+      markOpenchamberEventsUnreachable();
+      expect(resumed.readyState).toBe(MockEventSource.CLOSED);
+      expect(status).toEqual([true, false, true]);
+    } finally {
+      unsubscribe();
+      unsubscribeStatus();
+    }
+    expect(isOpenchamberEventsReconnecting()).toBe(false);
+  });
+
+  test.each([true, false])('native direct control events scope redirects to requests without saved proxy headers (has headers: %s)', async (hasProxyHeaders) => {
+    Object.assign(window, {
+      Capacitor: { isNativePlatform: () => true },
+      __OPENCHAMBER_API_BASE_URL__: 'http://runtime.test:3902',
+    });
+    setRuntimeBearerToken('fixture-token');
+    if (hasProxyHeaders) setRuntimeExtraHeaders({ 'X-Fixture-Proxy': 'fixture' });
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      'data: {"type":"openchamber:event-stream-ready"}\n\n',
+      { headers: { 'content-type': 'text/event-stream' } },
+    ));
+    let unsubscribe = () => {};
+    try {
+      const ready = new Promise<void>((resolve) => {
+        unsubscribe = subscribeOpenchamberEvents((event) => {
+          if (event.type === 'event-stream-ready') resolve();
+        });
+      });
+      await ready;
+      expect(MockEventSource.instances).toHaveLength(0);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0];
+      const headers = new Headers(init?.headers);
+      expect(String(url)).toBe('http://runtime.test:3902/api/openchamber/events');
+      expect(headers.get('authorization')).toBe('Bearer fixture-token');
+      expect(headers.get('x-fixture-proxy')).toBe(hasProxyHeaders ? 'fixture' : null);
+      expect(init?.redirect).toBe(hasProxyHeaders ? 'error' : undefined);
+    } finally {
+      unsubscribe();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test.each([
+    [403, 30_000],
+    [404, 30_000],
+    [408, 1_000],
+    [429, 1_000],
+  ])('paces a native stream HTTP %i retry at %i ms', async (status, delay) => {
+    Object.assign(window, {
+      Capacitor: { isNativePlatform: () => true },
+      __OPENCHAMBER_API_BASE_URL__: 'http://runtime.test:3902',
+    });
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status }));
+    const timers = spyOn(globalThis, 'setTimeout');
+    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(timers.mock.calls.some(([, ms]) => ms === delay)).toBe(true);
+    } finally {
+      unsubscribe();
+      timers.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test('backs off while hidden and retries immediately on foreground', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const page = Object.assign(new EventTarget(), { visibilityState: 'hidden' });
+    Object.defineProperty(globalThis, 'document', { value: page, configurable: true });
+    const timers = spyOn(globalThis, 'setTimeout');
+    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
+    try {
+      MockEventSource.instances[0].onerror?.();
+      expect(timers.mock.calls.at(-1)?.[1]).toBe(30_000);
+      page.dispatchEvent(new Event('visibilitychange'));
+      expect(MockEventSource.instances).toHaveLength(1);
+      page.visibilityState = 'visible';
+      page.dispatchEvent(new Event('visibilitychange'));
+      expect(MockEventSource.instances).toHaveLength(2);
+    } finally {
+      unsubscribe();
+      timers.mockRestore();
+      Reflect.deleteProperty(globalThis, 'document');
+    }
   });
 
   test('desktop browser-capable events cross the active relay as streamed HTTP, not native EventSource', async () => {

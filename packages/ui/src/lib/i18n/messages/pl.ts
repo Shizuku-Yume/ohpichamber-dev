@@ -190,6 +190,8 @@ export const dict = {
   'sidebarFilesTree.toast.uploadFailedAndMoreSingle': 'i {count} kolejny plik nie został przesłany',
   'sidebarFilesTree.toast.uploadFailedAndMorePlural': 'kolejne nieprzesłane pliki: {count}',
   'terminalView.error.cannotConnect': 'Terminal nie mógł się połączyć',
+  'terminalView.status.inputPaused': "Połączono ponownie. Sprawdź wiersz polecenia, zanim zaczniesz znowu pisać.",
+  'terminalView.actions.resumeInput': "Wznów pisanie",
   'terminalView.actions.tryAgain': 'Spróbuj ponownie',
   'contextFileOpen.failure.tooLargeDetail': 'Ponad {count} wierszy · {size}',
   'quota.value.creditsUsed': 'Wykorzystane kredyty: {credits}',

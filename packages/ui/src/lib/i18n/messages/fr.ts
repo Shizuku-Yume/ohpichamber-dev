@@ -142,6 +142,8 @@ export const dict = {
   'chat.goal.mark.complete': 'Objectif terminé',
   "chat.goal.toast.distillFallback": "L'objectif dépassait la limite et n'a pas pu être condensé — l'auditeur utilise une version tronquée",
   'terminalView.error.cannotConnect': 'Le terminal n\'a pas pu se connecter',
+  'terminalView.status.inputPaused': "Connexion rétablie. Vérifiez la ligne de commande avant de reprendre la saisie.",
+  'terminalView.actions.resumeInput': "Reprendre la saisie",
   'terminalView.actions.tryAgain': 'Réessayer',
   'directoryExplorerDialog.actions.addNamed': "Ajouter \"{name}\"",
   'directoryExplorerDialog.actions.createNamed': "Créer \"{name}\" et ajouter",

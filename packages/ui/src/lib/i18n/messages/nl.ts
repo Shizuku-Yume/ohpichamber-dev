@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.complete': 'Goal voltooid',
   "chat.goal.toast.distillFallback": "De doelstelling overschreed de limiet en kon niet worden ingekort — voor de auditor wordt een ingekorte versie gebruikt",
   'terminalView.error.cannotConnect': 'Terminal kon geen verbinding maken',
+  'terminalView.status.inputPaused': "Verbinding hersteld. Controleer de opdrachtregel voordat je verder typt.",
+  'terminalView.actions.resumeInput': "Verder typen",
   'terminalView.actions.tryAgain': 'Opnieuw proberen',
   'directoryExplorerDialog.actions.addNamed': "\"{name}\" toevoegen",
   'directoryExplorerDialog.actions.createNamed': "\"{name}\" maken en toevoegen",
