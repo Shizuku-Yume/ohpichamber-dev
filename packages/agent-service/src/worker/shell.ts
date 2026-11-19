@@ -294,7 +294,7 @@ export class WorkerShell {
     }
     const currentIds = new Set<string>();
     for (const daemon of daemons) {
-      if (daemon.owner !== this.sessionId) continue;
+      if (daemon.owner !== this.context.sessionId) continue;
       const jobId = `service:${daemon.id}`;
       currentIds.add(jobId);
       const isEnded = (daemon.state as string) === 'stopped' || daemon.state === 'exited' || daemon.state === 'failed';

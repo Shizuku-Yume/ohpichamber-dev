@@ -546,9 +546,14 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
 
 test('a session rekey moves every shell job identity and the snapshot scope to the minted id', async () => {
   const manager = new AsyncJobManager({ onJobComplete: () => { } });
+  const daemon: DaemonSnapshot = {
+    name: 'service', id: 'daemon-1', state: 'running', pid: 1111, createdAt: 1000, startedAt: 1000,
+    restartCount: 0, outputBytes: 0, persist: true, detached: false, owner: 'session-1',
+  };
   const shell = new WorkerShell({
     manager, workspaceId: 'ws-1', projectId: 'proj-1', sessionId: 'session-1',
     workerGeneration: 'gen-1', epoch: 'epoch-1', cwd: '/workspace',
+    listServices: async () => [daemon, { ...daemon, id: 'foreign', owner: 'other-session' }],
   });
   const startRes = await shell.operation({ type: 'start', request: { command: 'sleep 5', background: true } });
   expect(startRes.type).toBe('start');
@@ -564,6 +569,9 @@ test('a session rekey moves every shell job identity and the snapshot scope to t
   expect(snapshot.snapshot.scope).toEqual({ kind: 'session', sessionId: 'session-minted' });
   const running = snapshot.snapshot.running.find(job => job.jobId === startRes.job.jobId);
   expect(running?.sessionId).toBe('session-minted');
+  expect(snapshot.snapshot.running.filter(job => job.jobId.startsWith('service:'))).toMatchObject([
+    { jobId: 'service:daemon-1', sessionId: 'session-minted' },
+  ]);
   const stop = await shell.operation({
     type: 'stop',
     request: { job: { jobId: startRes.job.jobId, sessionId: 'session-minted', epoch: startRes.job.epoch, workerGeneration: startRes.job.workerGeneration } },
