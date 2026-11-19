@@ -73,21 +73,11 @@ const parsePushUnsubscribeBody = (body: JsonValue | undefined) => {
 
 export const NOTIFICATION_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
-<<<<<<< HEAD:packages/web/server/lib/notifications/routes.js
 /** The settings that turn native push on, named in the UI's unavailable copy. */
 const NATIVE_PUSH_RELAY_SETTING = 'OPENCHAMBER_PUSH_RELAY_URL';
 const NATIVE_PUSH_RELAY_DISABLED_SETTING = 'OPENCHAMBER_PUSH_RELAY_DISABLED';
 
 export const registerNotificationRoutes = (app, dependencies) => {
-||||||| bc50ba56aa:packages/web/server/lib/notifications/routes.js
-export const registerNotificationRoutes = (app, dependencies) => {
-=======
-export const registerNotificationRoutes = (app: {
-  get: (route: string, handler: NotificationRouteHandler) => void;
-  post: (route: string, handler: NotificationRouteHandler) => void;
-  delete: (route: string, handler: NotificationRouteHandler) => void;
-}, dependencies: NotificationRouteDependencies) => {
->>>>>>> upstream/main:packages/web/server/lib/notifications/routes.ts
   const {
     uiAuthController,
     ensurePushInitialized,
@@ -112,14 +102,7 @@ export const registerNotificationRoutes = (app: {
     getSessionContextSnapshot,
     getSessionState,
     setPushInitialized,
-<<<<<<< HEAD:packages/web/server/lib/notifications/routes.js
     resolveApnsStatus,
-||||||| bc50ba56aa:packages/web/server/lib/notifications/routes.js
-    setAutoAcceptSession,
-=======
-    setAutoAcceptSession,
-    isLocalOnlyPushRequest,
->>>>>>> upstream/main:packages/web/server/lib/notifications/routes.ts
   } = dependencies;
 
   const ensureSessionWatcher = async () => {
@@ -453,35 +436,4 @@ export const registerNotificationRoutes = (app: {
     });
   });
 
-<<<<<<< HEAD:packages/web/server/lib/notifications/routes.js
-||||||| bc50ba56aa:packages/web/server/lib/notifications/routes.js
-  // Mirror client-side Permission Auto-Accept state to the server so it can
-  // suppress permission notifications at the source (the 500ms debounce race
-  // otherwise leaks notifications for auto-accepted permissions).
-  app.post('/api/notifications/auto-accept', (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
-    const enabled = body.enabled === true;
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId required' });
-    }
-    if (typeof setAutoAcceptSession === 'function') {
-      setAutoAcceptSession(sessionId, enabled);
-    }
-    return res.json({ success: true, sessionId, enabled });
-  });
-=======
-  app.post('/api/notifications/auto-accept', (req, res) => {
-    const body = isJsonObject(req.body) ? req.body : {};
-    const sessionId = isString(body.sessionId) ? body.sessionId.trim() : '';
-    const enabled = body.enabled === true;
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId required' });
-    }
-    if (setAutoAcceptSession) {
-      setAutoAcceptSession(sessionId, enabled);
-    }
-    return res.json({ success: true, sessionId, enabled });
-  });
->>>>>>> upstream/main:packages/web/server/lib/notifications/routes.ts
 };

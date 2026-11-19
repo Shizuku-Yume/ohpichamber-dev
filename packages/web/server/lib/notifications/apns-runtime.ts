@@ -1,29 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
-// APNs (Apple Push Notification service) runtime for the native iOS mobile app.
-//
-// Device tokens are persisted per UI session (mirrors push-runtime.js). Delivery has two
-// modes, chosen at send time:
-//   - Relay: POST tokens + generic text to the push relay the operator configures in
-//     OPENCHAMBER_PUSH_RELAY_URL; the relay holds the project APNs key and signs+sends.
-//     There is no built-in relay: without that URL remote push reports unavailable and
-//     sends nothing (no request leaves this machine).
-//   - Direct (fallback): set OPENCHAMBER_PUSH_RELAY_DISABLED=true and OPENCHAMBER_APNS_*;
-//     sign an ES256 JWT with Node crypto and send over HTTP/2 ourselves.
-// Wired into the same trigger fanout as web push (see runtime.js); the relay carries only
-// generic, model-based text (no session content) — see APNS.md.
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-// APNs (Apple Push Notification service) runtime for the native iOS mobile app.
-//
-// Device tokens are persisted per UI session (mirrors push-runtime.js). Delivery has two
-// modes, chosen at send time:
-//   - Relay (default): POST tokens + generic text to the central Cloudflare relay, which
-//     holds the single project APNs key and signs+sends — so users configure nothing.
-//   - Direct (fallback): sign an ES256 JWT with Node crypto and send over HTTP/2 ourselves,
-//     for self-hosters who set OPENCHAMBER_APNS_* and OPENCHAMBER_PUSH_RELAY_DISABLED=true.
-// Wired into the same trigger fanout as web push (see runtime.js); the relay carries only
-// generic, model-based text (no session content) — see APNS.md.
-=======
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
 
 import { sessionKeyFor, withHashedSessionKeys } from './session-key.js';
 import { parsePushKey, sealPushContent } from './push-seal.js';
@@ -177,7 +151,6 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
 
   let persistLock: Promise<void | ApnsStore> = Promise.resolve();
   let legacyKeysScrubQueued = false;
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
   let cachedJwt = null; // { token, issuedAtMs, keyId }
   let cachedRelayKey = null; // { generation, keypair: { privateKey, publicJwk } }
   let warnedUnavailable = false;
@@ -197,15 +170,6 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
         : '[APNs] Remote push is unavailable: no push relay is configured. Set OPENCHAMBER_PUSH_RELAY_URL on this server to turn it on, or set OPENCHAMBER_PUSH_RELAY_DISABLED=true with OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
     );
   };
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-  let cachedJwt = null; // { token, issuedAtMs, keyId }
-  let cachedRelayKey = null; // { generation, keypair: { privateKey, publicJwk } }
-  let warnedUnconfigured = false;
-=======
-  let cachedJwt: { token: string; issuedAtMs: number; keyId: string } | null = null;
-  let cachedRelayKey: { generation: number; keypair: RelaySigningKeypair } | null = null;
-  let warnedUnconfigured = false;
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
 
 
   const getOrCreateRelayKeypair = async () => {
@@ -227,14 +191,7 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
 
   const registerTokenWithRelay = async (token: string, platform = 'ios') => {
     const relay = resolveRelayConfig();
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
-    // No relay configured (or direct mode): the token stays local, nothing is called.
     if (!relay) return;
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-    if (!relay) return; // direct mode — no relay binding needed
-=======
-    if (!relay) return;
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
     try {
       const { privateKey, publicJwk } = await getOrCreateRelayKeypair();
       const ts = Date.now();
@@ -538,20 +495,7 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
       req.end(body);
     });
 
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
-  // Relay mode: the APNs key lives in the relay the operator names. There is no built-in
-  // relay — an unset OPENCHAMBER_PUSH_RELAY_URL means remote push has no way out.
-  // Direct mode (below) is for self-hosters who set OPENCHAMBER_APNS_* and disable the relay.
-  const resolveRelayConfig = () => {
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-  // Relay mode (default): the single APNs key lives in the central Cloudflare relay, not on
-  // each user's server — so users configure nothing. The server just POSTs device tokens +
-  // generic text; the relay signs + sends and reports which tokens to drop. Direct mode (below)
-  // is the fallback for self-hosters who set OPENCHAMBER_APNS_* and disable the relay.
-  const resolveRelayConfig = () => {
-=======
   const resolveRelayConfig = (): RelayConfig | null => {
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
     if (trimmedEnv('OPENCHAMBER_PUSH_RELAY_DISABLED') === 'true') return null;
     const url = trimmedEnv('OPENCHAMBER_PUSH_RELAY_URL');
     if (!url) return null;
@@ -566,13 +510,7 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
 
   const sendViaRelay = async (deviceTokens: string[], payload: ApnsPayload, relay: RelayConfig, environment: ApnsEnvironment) => {
     const tokens = deviceTokens.slice(0, 100);
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
-    const title = typeof payload?.title === 'string' && payload.title.length > 0 ? payload.title : 'OhPiChamber';
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-    const title = typeof payload?.title === 'string' && payload.title.length > 0 ? payload.title : 'OpenChamber';
-=======
-    const title = payload?.title && payload.title.length > 0 ? payload.title : 'OpenChamber';
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
+    const title = payload?.title && payload.title.length > 0 ? payload.title : 'OhPiChamber';
     const { privateKey, publicJwk } = await getOrCreateRelayKeypair();
     const ts = Date.now();
     const sig = signRelayMessage(privateKey, `${ts}.${[...tokens].sort().join(',')}.${title}`);
@@ -606,37 +544,11 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
   const resolveApnsStatus = async () => {
     if (resolveRelayConfig()) return { available: true, reason: null };
     if (await resolveApnsConfig()) return { available: true, reason: null };
     return { available: false, reason: resolveUnavailableReason() };
   };
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-  const sendViaDirectApns = async (tokenGroups, payload) => {
-    const config = await resolveApnsConfig();
-    if (!config) {
-      if (!warnedUnconfigured) {
-        warnedUnconfigured = true;
-        console.warn(
-          '[APNs] Relay disabled and no direct config; set OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
-        );
-      }
-      return;
-    }
-=======
-  const sendViaDirectApns = async (tokenGroups: Map<ApnsEnvironment, string[]>, { body, tag, pushType }: DirectRequest) => {
-    const config = await resolveApnsConfig();
-    if (!config) {
-      if (!warnedUnconfigured) {
-        warnedUnconfigured = true;
-        console.warn(
-          '[APNs] Relay disabled and no direct config; set OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
-        );
-      }
-      return;
-    }
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
 
   const sendViaDirectApns = async (tokenGroups, payload, config) => {
     const jwt = getJwt(config);
@@ -726,7 +638,6 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
       ]);
       return;
     }
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
     const directConfig = await resolveApnsConfig();
     if (!directConfig) {
       // Nothing to deliver through: no relay URL and no direct APNs key. Say so
@@ -735,22 +646,8 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
       return;
     }
     await sendViaDirectApns(tokensByEnvironment, payload, directConfig);
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-    await sendViaDirectApns(tokensByEnvironment, payload);
-=======
-    await sendViaDirectApns(tokensByEnvironment, directAlertRequest(payload));
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
     for (const entry of sealedDevices) {
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
       await sendViaDirectApns(new Map([[entry.environment, [entry.deviceToken]]]), sealedPayloadFor(payload, sealedContent, entry.pushKey), directConfig);
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-      await sendViaDirectApns(new Map([[entry.environment, [entry.deviceToken]]]), sealedPayloadFor(payload, sealedContent, entry.pushKey));
-=======
-      await sendViaDirectApns(
-        new Map([[entry.environment, [entry.deviceToken]]]),
-        directAlertRequest(sealedPayloadFor(payload, sealedContent, entry.pushKey)),
-      );
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
     }
   };
 
@@ -830,13 +727,8 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
     sendApnsToAllUiSessions,
     clearApnsNotifications,
     resolveApnsConfig,
-<<<<<<< HEAD:packages/web/server/lib/notifications/apns-runtime.js
     resolveApnsStatus,
     // exposed for tests
-||||||| bc50ba56aa:packages/web/server/lib/notifications/apns-runtime.js
-    // exposed for tests
-=======
->>>>>>> upstream/main:packages/web/server/lib/notifications/apns-runtime.ts
     signApnsJwt,
   };
 };

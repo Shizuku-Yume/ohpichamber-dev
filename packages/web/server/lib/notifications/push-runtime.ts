@@ -313,15 +313,6 @@ export const createPushRuntime = (deps: PushDependencies) => {
     }));
   };
 
-<<<<<<< HEAD:packages/web/server/lib/notifications/push-runtime.js
-  // A client is "mobile" if it reports a native mobile platform. Web, desktop,
-  // and older clients without a platform are interactive notification surfaces.
-||||||| bc50ba56aa:packages/web/server/lib/notifications/push-runtime.js
-  // A client is "mobile" if it reports a native mobile platform. Anything else (web, desktop,
-  // vscode, or an older client that doesn't report a platform) is treated as interactive — i.e.
-  // a surface where the user would actually see the in-app notification.
-=======
->>>>>>> upstream/main:packages/web/server/lib/notifications/push-runtime.ts
   const MOBILE_PLATFORMS = new Set(['ios', 'android']);
   const isMobilePlatform = (platform: string | undefined) => platform !== undefined && MOBILE_PLATFORMS.has(platform);
 
@@ -345,18 +336,6 @@ export const createPushRuntime = (deps: PushDependencies) => {
     return false;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/notifications/push-runtime.js
-  // True when at least one NON-mobile client (desktop/web) is currently visible. Used to
-  // suppress native push to the phone: an active desktop already shows the notification, so the
-  // phone doesn't need it. Deliberately based on the desktop's visibility (reliable), never the
-  // phone's own (a backgrounded WKWebView can't report "hidden" before iOS suspends it).
-||||||| bc50ba56aa:packages/web/server/lib/notifications/push-runtime.js
-  // True when at least one NON-mobile client (desktop/web/vscode) is currently visible. Used to
-  // suppress native push to the phone: an active desktop already shows the notification, so the
-  // phone doesn't need it. Deliberately based on the desktop's visibility (reliable), never the
-  // phone's own (a backgrounded WKWebView can't report "hidden" before iOS suspends it).
-=======
->>>>>>> upstream/main:packages/web/server/lib/notifications/push-runtime.ts
   const isAnyInteractiveClientVisible = () => {
     const now = Date.now();
     pruneUiVisibility(now);
