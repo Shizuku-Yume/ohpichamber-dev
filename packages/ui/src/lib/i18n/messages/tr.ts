@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.budgetLimited': 'Hedef bütçesine ulaşıldı',
   'chat.goal.mark.complete': 'Hedef tamamlandı',
   'terminalView.error.cannotConnect': 'Terminal bağlanamadı',
+  'terminalView.status.inputPaused': "Bağlantı yeniden kuruldu. Yazmaya devam etmeden önce komut satırını kontrol edin.",
+  'terminalView.actions.resumeInput': "Yazmaya devam et",
   'terminalView.actions.tryAgain': 'Tekrar dene',
   'directoryExplorerDialog.actions.addNamed': "\"{name}\" ekle",
   'directoryExplorerDialog.actions.createNamed': "\"{name}\" oluştur ve ekle",

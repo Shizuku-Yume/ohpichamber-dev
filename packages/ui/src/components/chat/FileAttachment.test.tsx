@@ -1,5 +1,6 @@
-import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
+import type { FormEvent } from 'react';
 import type { AttachmentPart, Part } from '@openchamber/agent-contract';
 import type { ToolPopupContent } from './message/types';
 
@@ -23,7 +24,8 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { TooltipProvider } = await import('@/components/ui/tooltip');
 const { canonicalClient } = await import('@/api/canonicalClient');
 const { toast } = await import('@/components/ui');
-const { MessageFilesDisplay } = await import('./FileAttachment');
+const { AttachedFilesList, MessageFilesDisplay } = await import('./FileAttachment');
+const { useInputStore } = await import('@/sync/input-store');
 
 const blobs = new Map<string, Blob>();
 const readAttachment = spyOn(canonicalClient, 'readAttachment').mockImplementation(async (_workspaceId, attachmentId) => {
@@ -83,6 +85,32 @@ afterAll(async () => {
   createObjectURL.mockRestore();
   revokeObjectURL.mockRestore();
   browser.close();
+});
+
+test('removing a draft image does not submit the composer form', async () => {
+  const image = new File(['fixture'], 'draft.png', { type: 'image/png' });
+  const submit = mock((event: FormEvent<HTMLFormElement>) => event.preventDefault());
+  useInputStore.getState().setAttachedFiles([{
+    id: 'draft-image',
+    file: image,
+    dataUrl: 'data:image/png;base64,Zml4dHVyZQ==',
+    mimeType: image.type,
+    filename: image.name,
+    size: image.size,
+    source: 'local',
+  }]);
+  try {
+    await act(async () => {
+      root.render(<I18nProvider><form onSubmit={submit}><AttachedFilesList /></form></I18nProvider>);
+    });
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove draft.png"]');
+    expect(remove?.type).toBe('button');
+    await act(async () => remove?.click());
+    expect(useInputStore.getState().attachedFiles).toEqual([]);
+    expect(submit).not.toHaveBeenCalled();
+  } finally {
+    useInputStore.getState().clearAttachedFiles();
+  }
 });
 
 describe('canonical MessageFilesDisplay attachments', () => {

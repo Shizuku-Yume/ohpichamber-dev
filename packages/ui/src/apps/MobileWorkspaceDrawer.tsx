@@ -252,6 +252,7 @@ export const MobileWorkspaceDrawer: React.FC<{
             <ErrorBoundary>
               <MobileChangesSurface
                 visible={open && tab === 'changes'}
+                registerBackHandler={registerBackHandler}
                 initialDiff={pendingChangesDiff}
                 onNavigatedToChat={onClose}
               />

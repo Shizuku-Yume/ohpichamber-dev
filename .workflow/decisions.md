@@ -1624,6 +1624,30 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
 
+## 2026-11-19 - Mobile Git detail Back belongs to the workspace navigation owner
+
+- **Decided:** register visible Git detail routes through the workspace Back callback already used by Files, and reuse the header's return-to-list action. Keep the drawer's existing terminal lifecycle and the fork health/sync test harness.
+- **Instead of:** closing the workspace while retaining a hidden diff, registering Git in the higher-priority global overlay stack, or leaving hidden tabs in charge of Back.
+- **Because:** the Git pane owns its list/detail route and visited panes remain mounted. Only that pane can consume one Back to clear the detail, while the shell keeps popups, plans and fullscreen surfaces ahead of workspace navigation. Visibility and owner-key cleanup prevent stale handlers during tab, repository and runtime changes.
+- **Mine:** yes
+- **Revisit when:** upstream wires Git detail navigation into the same workspace Back contract.
+
+## 2026-11-19 - Walkthrough Back follows its reading depth
+
+- **Decided:** the Git workspace Back callback delegates to the visible walkthrough's own header action before returning to Changes.
+- **Instead of:** discarding an open step and its contents in one hardware Back.
+- **Because:** the walkthrough owns its reading depth; step, contents and Changes must follow the same ladder for header and hardware Back. Global overlays retain their shell priority.
+- **Mine:** yes
+- **Revisit when:** upstream shares walkthrough navigation through the workspace Back contract.
+
+## 2026-11-19 - Git Back ownership follows the rendered screen
+
+- **Decided:** register workspace Back only while Git renders a diff or walkthrough, including its repository and source availability gates. Reset a walkthrough route only when a successful file-list read is empty.
+- **Instead of:** treating every retained non-list route as a visible detail screen.
+- **Because:** refresh can remove the last walkthrough target or change a comparison source while retaining its route. The resulting Changes list must let Back close the workspace immediately. Two consecutive typed unreadable status errors clear the store's status to unknown, not an authoritative empty list; the walkthrough route must survive that failure and return on retry.
+- **Mine:** yes
+- **Revisit when:** Git navigation normalizes unavailable detail routes before rendering.
+
 ## 2026-11-19 - Replay terminal history at its recorded PTY sizes
 
 - **Decided:** retain PTY resize boundaries in bounded terminal history and replay them in output order before fitting the viewport.
@@ -1646,6 +1670,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and its ready event confirms recovery and lets stalled startup retry without a separate poll. Native direct connections use the header-aware stream reader because EventSource cannot send saved proxy headers; when configured, those headers stay on the selected endpoint by rejecting redirects.
 - **Mine:** yes
 - **Revisit when:** upstream provides a native, authenticated Host connectivity signal independent of its session streams.
+
+## 2026-11-19 - Keep interactive terminal input bound to its attachment
+
+- **Decided:** interactive input requires the current socket's terminal snapshot and an explicit resume after reconnect. Project-action interrupts can still use a socket without attaching a viewport.
+- **Instead of:** automatically accepting input as soon as the next socket opens or replaying keys typed during a disconnect.
+- **Because:** forwarding an arbitrary suffix of a command can change what the shell executes. After reattachment, the user can inspect the recovered command line before typing again.
+- **Revisit when:** interactive terminal transport can acknowledge command input across a connection change without ambiguity.
+
+## 2026-11-19 - Keep composer image removal from sending drafts
+
+- **Decided:** mark the shared composer's image removal control as a non-submit button.
+- **Instead of:** preventing the click's default action in the removal handler.
+- **Because:** the button has no submission role; native button semantics keep removal separate from sending without changing the form.
+- **Mine:** no
+- **Revisit when:** upstream marks the same control as non-submit.
 
 ## 2026-11-19 - Compact draft welcomes scroll before clipping large text
 
