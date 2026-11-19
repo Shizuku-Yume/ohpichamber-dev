@@ -4,6 +4,14 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Frameless app-menu focus:** The Windows and frameless Linux
+titlebar app-menu button cancels mouse-down's focus transfer, so opening the
+native menu keeps the active editor or input as the Undo/Redo target. The
+button remains tabbable and keyboard click activation is unchanged. The
+titlebar regression tests cover both platform configurations, cancellation of
+mouse-down, input focus at the menu handoff, and keyboard-style activation.
+Native Windows/Linux menu interaction remains unverified.
+
 **2026-11-19 Native history focus:** Native testing of `85df60fa5` verified that
 Undo targets the focused composer without changing the file, but native menu
 Redo did not restore the composer while its keyboard binding did. Desktop now
