@@ -418,7 +418,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         setIsReconnectPending(false);
         focusTerminalWhenWindowActive();
 
-        replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event));
+        replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event), event.sizes);
         scanTerminalPreviewOutput(directory, tabId, event.data ?? '');
         if (event.status === 'exited') {
          if (closesOnExit()) {
@@ -441,6 +441,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         setConnectionError(null);
         setIsFatalError(false);
         setIsReconnectPending(true);
+        break;
+       }
+       case 'resize': {
+        appendToBuffer(directory, tabId, '', event.sequence, undefined, terminalSnapshotSize(event));
         break;
        }
        case 'data': {

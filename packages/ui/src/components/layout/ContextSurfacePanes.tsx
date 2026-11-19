@@ -2,6 +2,7 @@ import React from 'react';
 
 import { TerminalView } from '@/components/views/TerminalView';
 import type { FileTabCloseGuard } from '@/components/views/FilesView';
+import type { FileTabSelectionGuard } from '@/components/views/files/fileTabSelectionGuard';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { BrowserPane } from '@/components/browser/BrowserPane';
 import { ChatView } from '@/components/views/ChatView';
@@ -261,7 +262,7 @@ const ZonePane: React.FC<{
  * refs and begin their layout animation in layout effects, both of which have
  * to run before the panes attach and the settle step queues behind them.
  */
-export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null> }> = ({ fileTabCloseGuard }) => {
+export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null>; fileTabSelectionGuard: React.RefObject<FileTabSelectionGuard | null> }> = ({ fileTabCloseGuard, fileTabSelectionGuard }) => {
   const { t } = useI18n();
   const effectiveDirectory = useEffectiveDirectory() ?? '';
   const directoryKey = React.useMemo(
@@ -612,6 +613,7 @@ export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<
                     visible={!contentHidden(fileZone.zone) && isFileTabActive && showsEditor}
                     onCloseFile={handleCloseEditorFile}
                     fileTabCloseGuard={fileTabCloseGuard}
+                    fileTabSelectionGuard={fileTabSelectionGuard}
                   />
                 </React.Suspense>
               ) : (

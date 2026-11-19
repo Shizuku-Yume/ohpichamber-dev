@@ -153,6 +153,30 @@ describe('GhosttyTerminalCore', () => {
     expect(core.snapshot().rowData.map((row) => row.text)).toEqual(['x'.repeat(12), 'x'.repeat(6), 'prompt>']);
   });
 
+  test('replaying narrow cursor movements before widening matches the live terminal', async () => {
+    const narrow = 'abcdefghijkl\r!';
+    const wide = '\r\nready';
+    const live = await createCore();
+    live.resize(8, 8, 8, 16);
+    live.write(narrow);
+    live.resize(20, 8, 8, 16);
+    live.write(wide);
+    const lines = (core: GhosttyTerminalCore) => core.snapshot().rowData.map((row) => row.text);
+
+    const replay = await createCore();
+    replay.resize(20, 8, 8, 16);
+    replay.resetAndWrite(narrow + wide);
+    expect(lines(replay)).not.toEqual(lines(live));
+
+    replay.resize(8, 8, 8, 16);
+    replay.resetAndReplay(() => {
+      replay.write(narrow);
+      replay.resize(20, 8, 8, 16);
+      replay.write(wide);
+    });
+    expect(lines(replay)).toEqual(lines(live));
+  });
+
   test('encodes bracketed paste only when the terminal asked for it', async () => {
     const core = await createCore();
     expect(core.encodePaste('hello')).toBe('hello');
