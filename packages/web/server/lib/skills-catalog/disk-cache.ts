@@ -16,7 +16,7 @@ export const isPersistedCacheEntry = (value: unknown): value is PersistedCacheEn
 
 const resolveDataDir = () => (process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.config', 'openchamber'));
+  : path.join(os.homedir(), '.config', 'ohpichamber'));
 
 const isDiskCache = (value: JsonValue): value is Record<string, JsonValue> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));

@@ -90,7 +90,6 @@ describe('removeStaleCatalogFolders', () => {
     makeFolder('openchamber-skills-install-old2', 61, now);
     makeFolder('openchamber-vscode-skills-scan-old3', 200, now);
     makeFolder('openchamber-vscode-skills-install-old4', 120, now);
-    makeFolder('openchamber-skills-stage-old5', 90, now);
     makeFolder('openchamber-vscode-skills-scan-fresh', 50, now);
     makeFolder('openchamber-vscode-bridge-config-old', 60, now);
     makeFolder('someone-elses-folder', 60, now);

@@ -29,7 +29,7 @@ const isInstalledSourcesPayload = (value: unknown): value is { version: number; 
 const installedSourcesPath = () => path.join(
   process.env.OPENCHAMBER_DATA_DIR
     ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-    : path.join(os.homedir(), '.config', 'openchamber'),
+    : path.join(os.homedir(), '.config', 'ohpichamber'),
   FILE_NAME,
 );
 
