@@ -1663,6 +1663,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Confirm external mobile pairing links before connecting
+
+- **Decided:** deliver validated native URL pairing offers to the shared confirmation UI before probing, redeeming or changing Hosts. Reuse the mobile pairing controller after confirmation.
+- **Instead of:** treating a URL handoff as consent or waiting for a connected workspace before showing the offer.
+- **Because:** Safari and other apps can launch the URL scheme. Opening an offer is not consent to store its credentials or switch the active Host, and first-time onboarding must also receive it. Existing mobile authentication regressions and fork deep-link behavior remain in force.
+- **Revisit when:** upstream provides a native consent flow for external Host pairing links.
+
 ## 2026-11-19 - Keep native mobile visible through Host outages
 
 - **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.
@@ -1754,3 +1761,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** persisting the notification cache or relying on replay of a terminal event after a reload.
 - **Because:** snapshots already own sanitized terminal outcomes; transient notification state is not a complete history source. Completed, cancelled and superseded turns must not become current failures.
 - **Revisit when:** the chat renders terminal explanations inline with each canonical turn.
+
+## 2026-11-19 - Recheck draft dirtiness on working-tree status updates
+
+- **Decided:** subscribe the draft dirty probe to its selected directory's shared Git status in addition to index revision changes.
+- **Instead of:** waiting for staging to change the index or introducing another status poller.
+- **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
+- **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.

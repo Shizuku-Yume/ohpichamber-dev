@@ -338,6 +338,9 @@ export function useDraftTarget(enabled: boolean) {
     const draftIndexRevision = useGitStore((state) => selectedDraftDirectory
         ? state.directories.get(selectedDraftDirectory)?.indexRevision ?? 0
         : 0);
+    const draftGitStatus = useGitStore((state) => selectedDraftDirectory
+        ? state.directories.get(selectedDraftDirectory)?.status ?? null
+        : null);
 
     React.useEffect(() => {
         if (
@@ -374,7 +377,7 @@ export function useDraftTarget(enabled: boolean) {
         return () => {
             cancelled = true;
         };
-    }, [enabled, newSessionDraft?.bootstrapPendingDirectory, newSessionDraft?.pendingWorktreeRequestId, selectedDraftDirectory, selectedDraftDirectoryBootstrapPending, selectedDraftProject?.kind, draftIndexRevision]);
+    }, [enabled, newSessionDraft?.bootstrapPendingDirectory, newSessionDraft?.pendingWorktreeRequestId, selectedDraftDirectory, selectedDraftDirectoryBootstrapPending, selectedDraftProject?.kind, draftIndexRevision, draftGitStatus]);
 
     const shouldKeepMissingSelectedDraftDirectory = React.useMemo(() => {
         const pendingDirectory = normalizePath(newSessionDraft?.bootstrapPendingDirectory ?? null);

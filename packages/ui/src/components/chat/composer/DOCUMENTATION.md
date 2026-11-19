@@ -322,6 +322,9 @@ and the send path reading the same grammar.
   binding for a matching directory even before worktree discovery completes.
   The hook owns advisory dirty state and clears it
   when the target changes so a warning never names a previous branch.
+  The selected directory's shared Git status updates and index revision both
+  trigger dirty rechecks, including unstaged editor saves and successful commits.
+  Other directories do not trigger rechecks; failed reads preserve the warning.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
   state and registers its application shortcuts locally. The desktop project
   picker is a searchable popup: it ranks the current projects with
