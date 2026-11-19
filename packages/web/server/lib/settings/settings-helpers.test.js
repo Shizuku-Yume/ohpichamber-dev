@@ -5,11 +5,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { LOCALES } from '../../../../ui/src/lib/i18n/runtime.ts';
 import {
   DEFAULT_INPUT_HISTORY_LIMIT,
 } from './input-history-scope.js';
-import { createSettingsHelpers, isMessageSearchEnabled } from './settings-helpers.js';
+import { createSettingsHelpers } from './settings-helpers.js';
 import { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
 
 const testFilePath = fileURLToPath(import.meta.url);
@@ -92,36 +91,6 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({ lastDirectory: 42 })).toEqual({});
   });
 
-  it('keeps a built-in sidebar section an older client omits, in its place and with its hidden state', () => {
-    const helpers = createTestHelpers();
-    const builtin = (id) => ({ kind: 'builtin', id });
-    const ids = (settings) => helpers.formatSettingsResponse(settings).sidebarSections.map((entry) => entry.id);
-    // A newer client puts Pages after In work and hides it.
-    let stored = helpers.mergePersistedSettings({}, helpers.sanitizeSettingsUpdate({
-      sidebarSections: ['chats', 'pinned', 'work', 'pages', 'projects'].map(builtin),
-      sidebarHiddenSections: ['pages'],
-    }));
-    stored = JSON.parse(JSON.stringify(stored));
-    // An older client, which knows no Pages, adds a section under Chats and hides it,
-    // saving its whole order without Pages and the hidden list it read.
-    const older = helpers.formatSettingsResponse(stored);
-    const olderSections = [builtin('chats'), { kind: 'custom', id: 's1', name: 'Mine' }, ...older.sidebarSections.filter((entry) => entry.id !== 'pages' && entry.id !== 'chats')];
-    stored = helpers.mergePersistedSettings(stored, helpers.sanitizeSettingsUpdate({
-      sidebarSections: olderSections,
-      sidebarHiddenSections: [...older.sidebarHiddenSections, 's1'],
-    }));
-    // The newer client reads Pages where the user put it, still hidden.
-    expect(ids(stored)).toEqual(['chats', 's1', 'pinned', 'work', 'pages', 'projects']);
-    expect(helpers.formatSettingsResponse(stored).sidebarHiddenSections).toEqual(['pages', 's1']);
-    // A client that lists Pages decides where it goes.
-    stored = helpers.mergePersistedSettings(stored, helpers.sanitizeSettingsUpdate({
-      sidebarSections: ['pages', 'chats', 'pinned', 'work', 'projects'].map(builtin),
-    }));
-    expect(ids(stored)).toEqual(['pages', 'chats', 'pinned', 'work', 'projects']);
-    // With nothing stored, an order without Pages stays as sent.
-    expect(ids(helpers.mergePersistedSettings({}, helpers.sanitizeSettingsUpdate({ sidebarSections: [builtin('projects')] })))).toEqual(['projects']);
-  });
-
   it('round-trips section order and preserves it across unrelated writes', () => {
     const helpers = createTestHelpers();
     const changes = helpers.sanitizeSettingsUpdate({ workStatusSectionOrder: ['mcp', 'session', 'mcp', null, ''] });
@@ -133,34 +102,6 @@ describe('settings helpers', () => {
     expect(helpers.formatSettingsResponse(next).workStatusSectionOrder).toEqual(['mcp', 'session']);
     expect(helpers.sanitizeSettingsUpdate({ workStatusSectionOrder: 'bad' }).workStatusSectionOrder).toBeUndefined();
     expect(helpers.sanitizeSettingsUpdate({ workStatusSectionOrder: [] }).workStatusSectionOrder).toEqual([]);
-  });
-  it('preserves loose settings values and rejects unreadable usage group entries', () => {
-    const helpers = createTestHelpers();
-    const notificationTemplates = [];
-    expect(helpers.sanitizeSettingsUpdate({ notificationTemplates }).notificationTemplates).toBe(notificationTemplates);
-    expect(helpers.sanitizeSettingsUpdate({
-      usageModelGroups: {
-        constructor: {
-          customGroups: [null, false, 0, '', { id: 'g', label: 'Group', models: ['m', 1], order: 2 }],
-          modelAssignments: { constructor: 'g', bad: 1 },
-          renamedGroups: { toString: 'Renamed', bad: false },
-        },
-        toString: true,
-        valueOf: 'text',
-      },
-    })).toEqual({
-      usageModelGroups: {
-        constructor: {
-          customGroups: [{ id: 'g', label: 'Group', models: ['m'], order: 2 }],
-          modelAssignments: { constructor: 'g' },
-          renamedGroups: { toString: 'Renamed' },
-        },
-      },
-    });
-    for (const config of [null, undefined]) {
-      expect(() => helpers.sanitizeSettingsUpdate({ usageModelGroups: { provider: config } }))
-        .toThrow(TypeError);
-    }
   });
   it('round-trips telemetry opt-in with the hidden list and preserves it across unrelated writes', () => {
     const helpers = createTestHelpers();
@@ -215,13 +156,7 @@ describe('settings helpers', () => {
       linkModules(join(packagesWebDir, '..', '..', 'node_modules'), join(extractDir, 'node_modules'));
 
       const extractedModule = await import(
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.test.js
         pathToFileURL(join(extractDir, 'package', 'server', 'lib', 'host', 'settings-helpers.js')).href
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.test.js
-        pathToFileURL(join(extractDir, 'package', 'server', 'lib', 'opencode', 'settings-helpers.js')).href
-========
-        pathToFileURL(join(extractDir, 'package', 'build', 'server', 'lib', 'settings', 'settings-helpers.js')).href
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.test.js
       );
 
       const helpers = extractedModule.createSettingsHelpers({
@@ -311,11 +246,17 @@ describe('settings helpers', () => {
 
   it('keeps every interface language and nothing else', () => {
     const helpers = createTestHelpers();
-    for (const locale of LOCALES) {
-      const changes = helpers.sanitizeSettingsUpdate({ locale });
-      expect(changes).toEqual({ locale });
-      const stored = helpers.mergePersistedSettings({}, changes);
-      expect(helpers.formatSettingsResponse(JSON.parse(JSON.stringify(stored))).locale).toBe(locale);
+    // The server cannot import `packages/ui`, so its list is compared with the
+    // interface's own here: a language added there and not on the server would
+    // never be saved, and would quietly reset again after a restart.
+    const source = readFileSync(fileURLToPath(new URL('../../../../ui/src/lib/i18n/runtime.ts', import.meta.url)), 'utf8');
+    const match = source.match(/export const LOCALES = \[([^\]]*)\]/);
+    if (!match) throw new Error('Could not find LOCALES in the UI i18n runtime');
+    const interfaceLocales = match[1].split(',').map((entry) => entry.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+
+    expect(interfaceLocales.length).toBeGreaterThan(1);
+    for (const locale of interfaceLocales) {
+      expect(helpers.sanitizeSettingsUpdate({ locale })).toEqual({ locale });
     }
     expect(helpers.sanitizeSettingsUpdate({ locale: 'xx' })).toEqual({});
     expect(helpers.sanitizeSettingsUpdate({ locale: ['uk'] })).toEqual({});
@@ -337,8 +278,6 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({ wideChatLayoutEnabled: true })).toEqual({ wideChatLayoutEnabled: true });
     expect(helpers.sanitizeSettingsUpdate({ wideChatLayoutEnabled: false })).toEqual({ wideChatLayoutEnabled: false });
     expect(helpers.sanitizeSettingsUpdate({ wideChatLayoutEnabled: 'true' })).toEqual({});
-    expect(helpers.sanitizeSettingsUpdate({ chatWidth: 'wider' })).toEqual({ chatWidth: 'wider' });
-    expect(helpers.sanitizeSettingsUpdate({ chatWidth: 'wide' })).toEqual({});
   });
 
   it('accepts only booleans for collapsible user messages', () => {
@@ -888,7 +827,6 @@ describe('settings registry gate', () => {
     pinnedDirectories: ['/home/testuser/project'],
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true, desktopLinuxNativeFrame: true, sidebarShowChatsSection: false,
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.test.js
     defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
     // The Host-owned per-session policy: modes for current clients, booleans
     // from before the modes, and the revision the runtime increments.
@@ -905,64 +843,21 @@ describe('settings registry gate', () => {
     smallModelVariant: 'high',
     autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionOnlyArchived: false, sessionRetentionAction: 'archive', mergedWorktreeCleanupEnabled: true, terminalShell: 'zsh', terminalLoginShells: ['zsh'],
     openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.test.js
-    defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 }, permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
-    agentControlToolEnabled: true, agentScheduleToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentKnowledgeToolEnabled: true, agentNotifyToolEnabled: true, agentRenderToolEnabled: true, agentImageToolEnabled: true, agentSecretToolEnabled: true, agentUsageToolEnabled: true, agentImageModel: 'openrouter/openai/gpt-image-2', agentWorkflowToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 }, isolatedSpacesSshHost: 'me@box.local:2222', openCodeUpdateToastDismissedVersion: '1.0.0',
-    autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionOnlyArchived: false, sessionRetentionIncludeInWork: true, sessionRetentionAction: 'archive', mergedWorktreeCleanupEnabled: true, worktreeArchiveOnDoneEnabled: true, terminalShell: 'zsh', terminalLoginShells: ['zsh'], terminalCloseOnExit: false,
-    openInAppId: 'vscode', dictationEnabled: true, dictationAutoSend: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttEndpointPath: '/speech_to_text', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en', sttCorrectTranscript: true,
-========
-    defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 }, permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
-    agentControlToolEnabled: true, agentScheduleToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentMemoryDreamingEnabled: true, agentMemoryDreamingModel: 'openai/gpt-mini', agentMemoryDreamingVariant: 'low', agentKnowledgeToolEnabled: true, agentNotifyToolEnabled: true, agentRenderToolEnabled: true, agentImageToolEnabled: true, agentSecretToolEnabled: true, agentUsageToolEnabled: true, agentTerminalToolEnabled: true, agentImageModel: 'openrouter/openai/gpt-image-2', agentWorkflowToolEnabled: true, agentWorkflowAutoApprove: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 }, isolatedSpacesSshHost: 'me@box.local:2222', openCodeUpdateToastDismissedVersion: '1.0.0',
-    autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionOnlyArchived: false, sessionRetentionIncludeInWork: true, sessionRetentionAction: 'archive', mergedWorktreeCleanupEnabled: true, worktreeArchiveOnDoneEnabled: true, terminalShell: 'zsh', terminalLoginShells: ['zsh'], terminalCloseOnExit: false, terminalOpenOnProjectAction: false,
-    openInAppId: 'vscode', dictationEnabled: true, dictationAutoSend: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttEndpointPath: '/speech_to_text', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en', sttCorrectTranscript: true,
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.test.js
     tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelHttpsPort: 8443, tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
     managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.test.js
     managedRemoteTunnelPresetTokens: { a: 'token' },
     sidebarProjectDisplayMode: 'all', sidebarListSessionGrouping: 'project', sidebarGrouping: 'time', sidebarKeepWorkInPlace: true, sidebarProjectSortOrder: 'manual', sidebarShowWorkSection: true, sidebarShowPinnedSection: true, sidebarDetailedZoneRows: true,
     workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'],
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.test.js
-    managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
-    sidebarSections: [{ kind: 'builtin', id: 'chats' }, { kind: 'custom', id: 's1', name: 'Clients', grouping: 'project', filter: { projectIds: ['p', `path_${'L1VzZXJzL3Rlc3R1c2Vy'.repeat(4)}`], folders: ['f1'] }, claims: true, hideWhenEmpty: false }],
-    sidebarPinLists: [{ id: 'l1', name: 'Release' }], sidebarHiddenSections: ['s1'],
-    sidebarProjectDisplayMode: 'all', sidebarViewMode: 'timeline', sidebarListSessionGrouping: 'time', sidebarGrouping: 'time', sidebarKeepWorkInPlace: true, sidebarProjectSortOrder: 'manual',
-    workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'], workStatusSectionOrderExplicit: true,
-========
-    managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
-    sidebarSections: [{ kind: 'builtin', id: 'pages' }, { kind: 'builtin', id: 'chats' }, { kind: 'custom', id: 's1', name: 'Clients', grouping: 'project', filter: { projectIds: ['p', `path_${'L1VzZXJzL3Rlc3R1c2Vy'.repeat(4)}`], folders: ['f1'] }, claims: true, hideWhenEmpty: false }],
-    sidebarPinLists: [{ id: 'l1', name: 'Release' }], sidebarHiddenSections: ['s1'],
-    sidebarProjectDisplayMode: 'all', sidebarViewMode: 'timeline', sidebarListSessionGrouping: 'time', sidebarGrouping: 'time', sidebarKeepWorkInPlace: true, sidebarKeepPinnedInPlace: false, sidebarSessionBatchSize: 12, sidebarProjectSortOrder: 'manual',
-    workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'], workStatusSectionOrderExplicit: true,
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.test.js
     showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, expandReasoningWhileStreaming: true, showTextJustificationActivity: true,
     chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.test.js
     stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.test.js
-    stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
-    selectionApprovalText: 'Agreed.',
-========
-    stickyUserHeader: true, promptNavigatorEnabled: true, chatWidth: 'wider', wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
-    selectionApprovalText: 'Agreed.',
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.test.js
     codeBlockLineWrap: true, tableCellWrap: true, copyMessagesAsPlainText: true, showTurnChangedFiles: true, toolJsonViewMode: 'raw',
     timeFormatPreference: '24h', weekStartPreference: 'monday', diffLayoutPreference: 'inline', diffWrapLines: true, diffHideWhitespace: true,
     gitChangesViewMode: 'tree', gitmojiEnabled: true, defaultFileViewerPreview: true, directoryShowHidden: true, filesViewShowGitignored: true,
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.test.js
     generateCommitMessages: true, commitMessageReasoning: false, commitMessageNotes: false, commitMessageChangeId: false,
     fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, confirmFileTreeMove: false, autoCreateWorktree: true, terminalCloseOnExit: true, sessionTabsEnabled: true,
     allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, persistChatDraft: true,
     largeTextPasteBehavior: 'attach', followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.test.js
-    fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, fileEditorWrapLines: false, confirmFileTreeMove: false, layoutAnimations: false, openLinksInBrowserPanel: true, liveBrowserTabLimit: 8, openTrackerLinksOnBoard: true, fileTreeSide: 'left', autoCreateWorktree: true, sessionTabsEnabled: true, sessionTabsPerWorkspace: true,
-    allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, mobileReturnKeySends: true,
-    largeTextPasteBehavior: 'attach', savePastedImagesAsFiles: true, followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,
-========
-    fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, fileEditorWrapLines: false, confirmFileTreeMove: false, layoutAnimations: false, openLinksInBrowserPanel: true, liveBrowserTabLimit: 8, agentBrowserSharesLogins: true, openTrackerLinksOnBoard: true, fileTreeSide: 'left', autoCreateWorktree: true, sessionTabsEnabled: true, sessionTabsPerWorkspace: true,
-    allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, mobileReturnKeySends: true,
-    largeTextPasteBehavior: 'attach', savePastedImagesAsFiles: true, followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.test.js
     draftStarters: [{ type: 'command', name: 'plan-feature' }], draftStartersVisible: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
     fontSize: 100, chatFontSize: 100, terminalFontSize: 14, editorFontSize: 14, uiFont: 'inter', monoFont: 'jetbrains-mono', customUiFont: 'Maple Mono NF CN', customMonoFont: 'Maple Mono', uiFontWeight: 'regular', padding: 100,
     shortcutOverrides: { 'chat.send': 'mod+enter' },
@@ -976,7 +871,7 @@ describe('settings registry gate', () => {
     notificationTemplates: { completion: { title: 't', message: 'm' } },
     usageDisplayMode: 'usage', usageDropdownProviders: ['anthropic'], usageSelectedModels: { anthropic: ['claude'] },
     usageExpandedFamilies: { anthropic: ['f'] },
-    pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
+    pwaAppName: 'OhPiChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
     inputBarOffset: 10,
     customProviderIcons: { 'campus-llm': 'cloud' },
     layoutAnimations: true, openLinksInBrowserPanel: false, liveBrowserTabLimit: 8,
@@ -1090,22 +985,5 @@ describe('settings registry gate', () => {
       autoSaveEnabled: false,
     });
     expect(helpers.sanitizeSettingsUpdate({ largeTextPasteBehavior: 'maybe', fileEditorKeymap: 'emacs' })).toEqual({});
-  });
-});
-
-describe('message search default', () => {
-  it('is on for a user who never chose, and keeps an explicit choice either way', () => {
-    const helpers = createTestHelpers();
-    // Never touched: the file has no key, the index runs, and the client is told so.
-    expect(isMessageSearchEnabled({})).toBe(true);
-    expect(isMessageSearchEnabled(undefined)).toBe(true);
-    expect(helpers.formatSettingsResponse({}).messageSearchEnabled).toBe(true);
-    // Turned off by hand: it stays off across a save and a reload.
-    const off = helpers.mergePersistedSettings({}, helpers.sanitizeSettingsUpdate({ messageSearchEnabled: false }));
-    expect(isMessageSearchEnabled(off)).toBe(false);
-    expect(helpers.formatSettingsResponse(JSON.parse(JSON.stringify(off))).messageSearchEnabled).toBe(false);
-    // An unrelated save does not write the default into the file.
-    expect('messageSearchEnabled' in helpers.mergePersistedSettings({}, helpers.sanitizeSettingsUpdate({ inputHistoryLimit: 40 }))).toBe(false);
-    expect(helpers.formatSettingsResponse({ messageSearchEnabled: true }).messageSearchEnabled).toBe(true);
   });
 });

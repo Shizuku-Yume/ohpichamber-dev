@@ -1,158 +1,80 @@
 import { z } from 'zod';
+
 import { createRequire } from 'node:module';
 
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
+
 const isWorkflowFeatureAvailable = () => true;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
+
 import { isPermissionMode } from '../permission-auto-accept/modes.js';
-import { asNonEmptyString } from '../shared/guards.js';
-========
-import { isPermissionMode } from '../permission-auto-accept/modes.js';
+
 import type { PermissionMode } from '../permission-auto-accept/modes.js';
+
 import { asNonEmptyString } from '../shared/guards.js';
+
 import { isBoolean, isString } from '../shared/object-guards.js';
+
 import type { JsonValue } from '../shared/json-values.js';
+
 import type { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
+
 import type { normalizeTunnelProvider, normalizeTunnelMode, normalizeOptionalPath } from '../tunnels/types.js';
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
 import { idleStopSchema } from '../spaces/idle-stop.js';
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-import { isPermissionMode } from '../permission-auto-accept/modes.js';
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-import { sshHostSchema } from '../spaces/places/ssh-host.js';
-import { PROVIDER_LOGO_MIMES } from './provider-logo-routes.js';
-========
-import { sshHostSchema } from '../spaces/places/ssh-host.js';
+
 import { PROVIDER_LOGO_MIMES } from '../appearance/provider-logo-routes.js';
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
 
 const settingsDocumentSchema = z.looseObject({});
+
 export type SettingsDocument = z.infer<typeof settingsDocumentSchema>;
+
 const hasSettingsFields = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object');
+
 const isNumber = (value: unknown): value is number => typeof value === 'number';
+
 const isFiniteNumber = (value: unknown): value is number => Number.isFinite(value);
+
 const isInteger = (value: unknown): value is number => Number.isInteger(value);
+
 const isSafeInteger = (value: unknown): value is number => Number.isSafeInteger(value);
+
 const isSetMember = (values: ReadonlySet<string>, value: unknown): value is string => isString(value) && values.has(value);
+
 const hasIdleStopSetting = (value: unknown): value is z.infer<typeof idleStopSchema> => idleStopSchema.safeParse(value).success;
+
 type UsageModelGroupInput = {
   customGroups?: unknown;
   modelAssignments?: unknown;
   renamedGroups?: unknown;
 };
+
 type UsageGroupInput = {
   id?: unknown;
   label?: unknown;
   models?: unknown;
   order?: unknown;
 };
+
 const hasUsageGroupFields = (value: unknown): value is UsageGroupInput => Boolean(value);
+
 const hasUsageModelGroupFields = (value: unknown): value is UsageModelGroupInput => value != null;
+
 const hasUsageGroupLabels = (value: unknown): value is { id: string; label: string; models?: unknown; order?: unknown } => {
   if (!hasUsageGroupFields(value)) return false;
   return isString(value.id) && isString(value.label);
 };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-/**
- * Whether a client may persist this key through PUT /api/config/settings:
- * it must be a registry key, not a server-computed flag, not a device field
- * that only lives in the browser, and not one the desktop shell writes itself.
- */
-const isPersistableSettingsKey = (key) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-// The sidebar's sections and pin lists, the same shapes the UI keeps
-// (packages/ui/src/lib/sidebarSections.ts, which also restores missing built-in
-// sections on read). The server keeps what is well formed and drops the rest.
-const SIDEBAR_BUILTIN_SECTION_IDS = ['chats', 'pinned', 'work', 'projects'];
-const sidebarSectionIdSchema = z.string().trim().min(1).max(64);
-const sidebarSectionNameSchema = z.string().trim().min(1).transform((value) => value.slice(0, 60));
-const sidebarChips = (values) => z.array(z.unknown()).transform((entries) => (
-  [...new Set(entries.flatMap((entry) => {
-    const parsed = z.enum(values).safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
-  }))]
-));
-const sidebarIdList = (schema) => z.array(z.unknown()).transform((entries) => (
-  [...new Set(entries.flatMap((entry) => {
-    const parsed = schema.safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
-  }))]
-));
-const sidebarIds = sidebarIdList(sidebarSectionIdSchema);
-// A project's id names its folder (`path_` and the path encoded), so it grows with the path.
-const sidebarProjectIds = sidebarIdList(z.string().trim().min(1).max(4096));
-const sidebarSectionSchema = z.union([
-  z.object({ kind: z.literal('builtin'), id: z.enum(SIDEBAR_BUILTIN_SECTION_IDS) }),
-  z.object({
-    kind: z.literal('custom'),
-    id: sidebarSectionIdSchema,
-    name: sidebarSectionNameSchema,
-    grouping: z.enum(['time', 'project']).catch('time'),
-    filter: z.object({
-      states: sidebarChips(['running', 'needs-answer', 'unread', 'failed', 'looks-done']).catch([]),
-      work: sidebarChips(['in-work', 'done']).catch([]),
-      pins: sidebarIds.catch([]),
-      kinds: sidebarChips(['session', 'worktree', 'space', 'run', 'scheduled']).catch([]),
-      links: sidebarChips(['pr', 'issue', 'tracker', 'plan', 'goal']).catch([]),
-      projectIds: sidebarProjectIds.catch([]),
-      folders: sidebarIds.catch([]),
-      activity: z.enum(['any', 'today', 'two-days', 'week', 'stalled']).catch('any'),
-      // A list of phrases; a build before lists kept one phrase as a string.
-      text: z.union([z.string().transform((value) => [value]), z.array(z.unknown())]).transform((entries) => (
-        [...new Set(entries.flatMap((entry) => {
-          const phrase = z.string().trim().transform((value) => value.slice(0, 100)).safeParse(entry);
-          return phrase.success && phrase.data ? [phrase.data] : [];
-        }))].slice(0, 12)
-      )).catch([]),
-    }).partial().catch({}),
-    claims: z.boolean().catch(false),
-    hideWhenEmpty: z.boolean().catch(true),
-  }),
-]);
-
-const sanitizeSidebarSections = (entries) => {
-  const result = [];
-  const seen = new Set();
-  for (const entry of entries) {
-    const parsed = sidebarSectionSchema.safeParse(entry);
-    if (!parsed.success || seen.has(parsed.data.id) || result.length >= 28) continue;
-    if (parsed.data.kind === 'custom' && SIDEBAR_BUILTIN_SECTION_IDS.includes(parsed.data.id)) continue;
-    seen.add(parsed.data.id);
-    result.push(parsed.data);
-  }
-  return result;
-};
-
-const sanitizeSidebarPinLists = (entries) => {
-  const result = [];
-  const seen = new Set(['pinned']);
-  for (const entry of entries) {
-    const parsed = z.object({ id: sidebarSectionIdSchema, name: sidebarSectionNameSchema }).safeParse(entry);
-    if (!parsed.success || seen.has(parsed.data.id) || result.length >= 24) continue;
-    seen.add(parsed.data.id);
-    result.push(parsed.data);
-  }
-  return result;
-};
-
-/**
- * Whether a client may persist this key through PUT /api/config/settings:
- * it must be a registry key, not a server-computed flag, not a device field
- * that only lives in the browser, and not one the desktop shell writes itself.
- */
-const isPersistableSettingsKey = (key) => {
-========
 interface RegistryField {
   computed?: boolean;
   local?: boolean;
   owner?: string;
   secret?: boolean;
 }
+
 const settingsRegistry: { fields: Record<string, RegistryField> } = createRequire(import.meta.url)('./settings-registry.json');
 
 type Normalization = ReturnType<typeof createSettingsNormalizationRuntime>;
+
 export type SettingsHelpersDependencies = Pick<Normalization,
   'normalizePathForPersistence' | 'normalizeDirectoryPath' | 'normalizeTunnelBootstrapTtlMs'
   | 'normalizeTunnelSessionTtlMs' | 'normalizeManagedRemoteTunnelHostname'
@@ -165,23 +87,31 @@ export type SettingsHelpersDependencies = Pick<Normalization,
 };
 
 const SIDEBAR_BUILTIN_SECTION_IDS = ['pages', 'chats', 'pinned', 'work', 'projects'];
+
 const SIDEBAR_SECTIONS_STORED_MAX = 24 + SIDEBAR_BUILTIN_SECTION_IDS.length;
+
 const sidebarSectionIdSchema = z.string().trim().min(1).max(64);
+
 const sidebarSectionNameSchema = z.string().trim().min(1).transform((value) => value.slice(0, 60));
+
 const sidebarChips = (values: string[]) => z.array(z.unknown()).transform((entries) => (
   [...new Set(entries.flatMap((entry) => {
     const parsed = z.enum(values).safeParse(entry);
     return parsed.success ? [parsed.data] : [];
   }))]
 ));
+
 const sidebarIdList = (schema: z.ZodString) => z.array(z.unknown()).transform((entries) => (
   [...new Set(entries.flatMap((entry) => {
     const parsed = schema.safeParse(entry);
     return parsed.success ? [parsed.data] : [];
   }))]
 ));
+
 const sidebarIds = sidebarIdList(sidebarSectionIdSchema);
+
 const sidebarProjectIds = sidebarIdList(z.string().trim().min(1).max(4096));
+
 const sidebarSectionSchema = z.union([
   z.object({ kind: z.literal('builtin'), id: z.enum(SIDEBAR_BUILTIN_SECTION_IDS) }),
   z.object({
@@ -250,7 +180,6 @@ const sanitizeSidebarPinLists = (entries: readonly unknown[]) => {
 };
 
 const isPersistableSettingsKey = (key: string) => {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
   const field = settingsRegistry.fields[key];
   if (!field) return false;
   if (field.computed || field.local) return false;
@@ -283,13 +212,13 @@ const customProviderIconsSchema = z.record(
   z.string().trim().min(1).max(128),
   z.enum(['server', 'cloud', 'database', 'terminal', 'code', 'ai']),
 );
+
 const CUSTOM_PROVIDER_ICONS_MAX = 256;
+
 const lastSelectedModelSchema = z.string().trim().min(1).max(512);
-// Shortcut id -> keys combo, as the settings payload may carry them; each
-// value is decoded individually below because a client can send any JSON.
+
 const shortcutOverridesRecordSchema = z.record(z.string(), z.unknown());
 
-// Boolean settings the registry lists; each is accepted as a plain boolean.
 const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
   'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard', 'worktreeArchiveOnDoneEnabled',
   'agentKnowledgeToolEnabled', 'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends',
@@ -297,13 +226,15 @@ const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
   // the server only records what the user chose, so an absent key stays absent.
   'generateCommitMessages', 'commitMessageReasoning', 'commitMessageNotes', 'commitMessageChangeId',
 ]);
+
 const LIVE_BROWSER_TABS_MIN = 1;
+
 const LIVE_BROWSER_TABS_MAX = 20;
-// Both mirror the registry parsers for the resolved instruction and the
-// freeform custom preset text.
+
 const MAX_RESPONSE_STYLE_INSTRUCTION_LENGTH = 100_000;
+
 const MAX_RESPONSE_STYLE_CUSTOM_LENGTH = 50_000;
-// Mirrors `RESPONSE_STYLE_PRESETS` in packages/ui/src/lib/responseStyle.ts.
+
 const RESPONSE_STYLE_PRESET_VALUES = new Set([
   'default', 'concise', 'detailed', 'mentor', 'pushback', 'noFiller', 'matchEnergy', 'warmPeer', 'custom',
 ]);
@@ -319,32 +250,6 @@ const sanitizeCustomProviderIcons = (value: SettingsDocument[string]) => {
   return result;
 };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-export const createSettingsHelpers = (dependencies) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-// What `provider-logo-routes.js` stores for an uploaded logo; the bytes stay in its folder.
-const customProviderLogosSchema = z.record(
-  z.string().trim().min(1).max(128),
-  z.object({
-    mime: z.enum(PROVIDER_LOGO_MIMES),
-    updatedAt: z.number().int().positive(),
-  }),
-);
-
-/** Provider id -> `{ mime, updatedAt }`; malformed entries are dropped one by one. */
-const sanitizeCustomProviderLogos = (value) => {
-  const record = z.record(z.string(), z.unknown()).safeParse(value);
-  if (!record.success) return undefined;
-  const result = {};
-  for (const [providerID, logo] of Object.entries(record.data).slice(0, CUSTOM_PROVIDER_ICONS_MAX)) {
-    const entry = customProviderLogosSchema.safeParse({ [providerID]: logo });
-    if (entry.success) Object.assign(result, entry.data);
-  }
-  return result;
-};
-
-export const createSettingsHelpers = (dependencies) => {
-========
 const customProviderLogosSchema = z.record(
   z.string().trim().min(1).max(128),
   z.object({
@@ -495,8 +400,7 @@ export type SanitizedSettings = Partial<Record<BooleanSettingsKey, boolean>>
 export const isMessageSearchEnabled = (settings: SettingsDocument | null | undefined) => settings?.messageSearchEnabled !== false;
 
 export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies) => {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-  const {
+const {
     normalizePathForPersistence,
     normalizeTunnelBootstrapTtlMs,
     normalizeTunnelSessionTtlMs,
@@ -512,102 +416,76 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
     sanitizeProjects,
   } = dependencies;
 
-  const PWA_APP_NAME_MAX_LENGTH = 64;
-  const STT_SERVER_URL_MAX_LENGTH = 2048;
-  const STT_MODEL_MAX_LENGTH = 256;
-  const STT_LANGUAGE_MAX_LENGTH = 64;
-  const SHORTCUT_OVERRIDE_KEY_MAX_LENGTH = 128;
-  const SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH = 128;
-  const PWA_ORIENTATION_VALUES = new Set(['system', 'portrait', 'landscape']);
-  const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
-  const UI_FONT_WEIGHT_VALUES = new Set(['regular', 'balanced', 'strong']);
-  const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
-  const SESSION_MODE_VALUES = new Set(['main', 'plan', 'vibe', 'goal']);
-  const SIDEBAR_PROJECT_DISPLAY_MODE_VALUES = new Set(['all', 'single']);
-  const SIDEBAR_LIST_SESSION_GROUPING_VALUES = new Set(['project', 'time']);
-  const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr', 'ar', 'he']);
-  const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
-  const HIDDEN_MODELS_MAX = 1024;
+const PWA_APP_NAME_MAX_LENGTH = 64;
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-  const sanitizeShortcutOverrides = (value) => {
-    // Decoded at the boundary: a record of string keys, entries the registry
-    // does not name are dropped one by one below.
-    const record = shortcutOverridesRecordSchema.safeParse(value);
-    if (!record.success) return null;
-    const sanitized = {};
-    for (const [rawKey, rawValue] of Object.entries(record.data)) {
-      const parsed = z.string().safeParse(rawValue);
-      if (!parsed.success) continue;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-  const sanitizeShortcutOverrides = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+const STT_SERVER_URL_MAX_LENGTH = 2048;
+
+const STT_ENDPOINT_PATH_MAX_LENGTH = 1024;
+
+const STT_MODEL_MAX_LENGTH = 256;
+
+const STT_LANGUAGE_MAX_LENGTH = 64;
+
+const VERSION_STRING_MAX_LENGTH = 128;
+
+const SHORTCUT_OVERRIDE_KEY_MAX_LENGTH = 128;
+
+const SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH = 128;
+
+const PWA_ORIENTATION_VALUES = new Set(['system', 'portrait', 'landscape']);
+
+const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
+
+const UI_FONT_WEIGHT_VALUES = new Set(['regular', 'balanced', 'strong']);
+
+const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
+
+const SESSION_MODE_VALUES = new Set(['main', 'plan', 'vibe', 'goal']);
+
+const SIDEBAR_PROJECT_DISPLAY_MODE_VALUES = new Set(['all', 'single']);
+
+const SIDEBAR_VIEW_MODE_VALUES = new Set(['projects', 'timeline']);
+
+const SIDEBAR_LIST_SESSION_GROUPING_VALUES = new Set(['project', 'time']);
+
+const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr', 'ar', 'he']);
+
+const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
+
+const HIDDEN_MODELS_MAX = 1024;
+
+const RECENT_EFFORTS_MAX_KEYS = 128;
+
+const RECENT_EFFORTS_MAX_VARIANTS_PER_KEY = 5;
+
+const LAST_USED_EFFORTS_MAX_KEYS = 512;
+
+const lastUsedEffortsSchema = z.record(z.string(), z.string().trim().min(1).nullable().catch(undefined));
+
+const sanitizeShortcutOverrides = (value: SettingsDocument[string]) => {
+const record = shortcutOverridesRecordSchema.safeParse(value);
+
+if (!record.success) return null;
+
+const sanitized = {};
+
+if (!hasSettingsFields(value) || Array.isArray(value)) {
       return null;
     }
-    const result = {};
-    for (const [rawKey, rawValue] of Object.entries(value)) {
-      const key = typeof rawKey === 'string' ? rawKey.trim() : '';
-      const combo = typeof rawValue === 'string' ? rawValue.trim() : '';
-      if (!key || !combo) continue;
-      result[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
-    }
-    return result;
-  };
 
-  const sanitizeRecentEfforts = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return null;
-    }
-    const result = {};
-    const seenKeys = new Set();
-    let count = 0;
-    for (const [rawKey, rawVariants] of Object.entries(value)) {
-      const key = typeof rawKey === 'string' ? rawKey.trim() : '';
-      if (!key || seenKeys.has(key)) continue;
-      if (!Array.isArray(rawVariants)) continue;
-      const variants = [];
-      const seenVariants = new Set();
-      for (const rawVariant of rawVariants) {
-        const variant = typeof rawVariant === 'string' ? rawVariant.trim() : '';
-        if (!variant || seenVariants.has(variant)) continue;
-        seenVariants.add(variant);
-        variants.push(variant);
-        if (variants.length >= RECENT_EFFORTS_MAX_VARIANTS_PER_KEY) break;
-      }
-      if (variants.length === 0) continue;
-      seenKeys.add(key);
-      result[key] = variants;
-      count += 1;
-      if (count >= RECENT_EFFORTS_MAX_KEYS) break;
-    }
-    return count > 0 ? result : null;
-  };
+const result: Record<string, string> = {};
 
-  // One explicit Default (`null`) or variant name per model. A missing entry is
-  // "never sent", which is not the same as Default.
-  const sanitizeLastUsedEfforts = (value) => {
-    const parsed = lastUsedEffortsSchema.safeParse(value);
-    if (!parsed.success) return null;
-    const result = {};
-    const seenKeys = new Set();
-    let count = 0;
-    for (const [rawKey, effort] of Object.entries(parsed.data)) {
-========
-  const sanitizeShortcutOverrides = (value: SettingsDocument[string]) => {
-    if (!hasSettingsFields(value) || Array.isArray(value)) {
-      return null;
-    }
-    const result: Record<string, string> = {};
-    for (const [rawKey, rawValue] of Object.entries(value)) {
+for (const [rawKey, rawValue] of Object.entries(value)) {
       const key = rawKey.trim();
       const combo = isString(rawValue) ? rawValue.trim() : '';
       if (!key || !combo) continue;
       result[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
     }
-    return result;
-  };
 
-  const sanitizeRecentEfforts = (value: SettingsDocument[string]) => {
+return sanitized;
+};
+
+const sanitizeRecentEfforts = (value: SettingsDocument[string]) => {
     if (!hasSettingsFields(value) || Array.isArray(value)) {
       return null;
     }
@@ -636,23 +514,25 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
     return count > 0 ? result : null;
   };
 
-  const sanitizeLastUsedEfforts = (value: SettingsDocument[string]) => {
+const sanitizeLastUsedEfforts = (value: SettingsDocument[string]) => {
     const parsed = lastUsedEffortsSchema.safeParse(value);
     if (!parsed.success) return null;
     const result: Record<string, string | null> = {};
     const seenKeys = new Set();
     let count = 0;
     for (const [rawKey, effort] of Object.entries(parsed.data)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       const key = rawKey.trim();
-      const combo = parsed.data.trim();
-      if (!key || !combo) continue;
-      sanitized[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
+      if (!key || seenKeys.has(key)) continue;
+      if (effort === undefined) continue;
+      seenKeys.add(key);
+      result[key] = effort;
+      count += 1;
+      if (count >= LAST_USED_EFFORTS_MAX_KEYS) break;
     }
-    return sanitized;
+    return count > 0 ? result : null;
   };
 
-  const normalizePwaAppName = (value: SettingsDocument[string], fallback = '') => {
+const normalizePwaAppName = (value: SettingsDocument[string], fallback = '') => {
     if (!isString(value)) {
       return fallback;
     }
@@ -663,7 +543,7 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
     return normalized.slice(0, PWA_APP_NAME_MAX_LENGTH);
   };
 
-  const normalizePwaOrientation = (value: SettingsDocument[string], fallback = 'system') => {
+const normalizePwaOrientation = (value: SettingsDocument[string], fallback = 'system') => {
     if (!isString(value)) {
       return fallback;
     }
@@ -674,7 +554,7 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
     return fallback;
   };
 
-  const normalizeMobileKeyboardMode = (value: SettingsDocument[string], fallback: string | null = 'native') => {
+const normalizeMobileKeyboardMode = (value: SettingsDocument[string], fallback: string | null = 'native') => {
     if (!isString(value)) {
       return fallback;
     }
@@ -685,7 +565,7 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
     return fallback;
   };
 
-  const normalizeFollowUpBehavior = (value: SettingsDocument[string], legacyQueueModeEnabled: boolean | null = null) => {
+const normalizeFollowUpBehavior = (value: SettingsDocument[string], legacyQueueModeEnabled: boolean | null = null) => {
     if (value === 'immediate') {
       return 'steer';
     }
@@ -698,51 +578,64 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
     return 'queue';
   };
 
-  const sanitizeSettingsUpdate = (payload: JsonValue | SettingsDocument | undefined): SanitizedSettings => {
-    if (!hasSettingsFields(payload)) {
+const sanitizeSettingsUpdate = (payload: JsonValue | SettingsDocument | undefined): SanitizedSettings => {
+if (!hasSettingsFields(payload)) {
       return {};
     }
 
-    const candidate = payload;
-    const result: SanitizedSettings = {};
+const candidate = payload;
 
-    if (isString(candidate.themeId) && candidate.themeId.length > 0) {
+const result: SanitizedSettings = {};
+
+if (isString(candidate.themeId) && candidate.themeId.length > 0) {
       result.themeId = candidate.themeId;
     }
-    if (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark') {
+
+if (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark') {
       result.themeVariant = candidate.themeVariant;
     }
-    if (isInputHistoryScope(candidate.inputHistoryScope)) {
+
+if (isInputHistoryScope(candidate.inputHistoryScope)) {
       result.inputHistoryScope = candidate.inputHistoryScope;
     }
-    if (isInputHistoryLimit(candidate.inputHistoryLimit)) {
+
+if (isInputHistoryLimit(candidate.inputHistoryLimit)) {
       result.inputHistoryLimit = candidate.inputHistoryLimit;
     }
-    if (isSetMember(UI_LOCALE_VALUES, candidate.locale)) {
+
+if (isSetMember(UI_LOCALE_VALUES, candidate.locale)) {
       result.locale = candidate.locale;
     }
-    if (isBoolean(candidate.useSystemTheme)) {
+
+if (isBoolean(candidate.useSystemTheme)) {
       result.useSystemTheme = candidate.useSystemTheme;
     }
-    if (isString(candidate.lightThemeId) && candidate.lightThemeId.length > 0) {
+
+if (isString(candidate.lightThemeId) && candidate.lightThemeId.length > 0) {
       result.lightThemeId = candidate.lightThemeId;
     }
-    if (isString(candidate.darkThemeId) && candidate.darkThemeId.length > 0) {
+
+if (isString(candidate.darkThemeId) && candidate.darkThemeId.length > 0) {
       result.darkThemeId = candidate.darkThemeId;
     }
-    if (isString(candidate.splashBgLight) && candidate.splashBgLight.trim().length > 0) {
+
+if (isString(candidate.splashBgLight) && candidate.splashBgLight.trim().length > 0) {
       result.splashBgLight = candidate.splashBgLight.trim();
     }
-    if (isString(candidate.splashFgLight) && candidate.splashFgLight.trim().length > 0) {
+
+if (isString(candidate.splashFgLight) && candidate.splashFgLight.trim().length > 0) {
       result.splashFgLight = candidate.splashFgLight.trim();
     }
-    if (isString(candidate.splashBgDark) && candidate.splashBgDark.trim().length > 0) {
+
+if (isString(candidate.splashBgDark) && candidate.splashBgDark.trim().length > 0) {
       result.splashBgDark = candidate.splashBgDark.trim();
     }
-    if (isString(candidate.splashFgDark) && candidate.splashFgDark.trim().length > 0) {
+
+if (isString(candidate.splashFgDark) && candidate.splashFgDark.trim().length > 0) {
       result.splashFgDark = candidate.splashFgDark.trim();
     }
-    if (candidate.lastDirectory === '') {
+
+if (candidate.lastDirectory === '') {
       result.lastDirectory = '';
     } else if (isString(candidate.lastDirectory)) {
       const normalized = normalizePathForPersistence(candidate.lastDirectory);
@@ -750,88 +643,82 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
         result.lastDirectory = normalized;
       }
     }
-    if (isString(candidate.homeDirectory) && candidate.homeDirectory.length > 0) {
+
+if (isString(candidate.homeDirectory) && candidate.homeDirectory.length > 0) {
       const normalized = normalizePathForPersistence(candidate.homeDirectory);
       if (normalized.length > 0) {
         result.homeDirectory = normalized;
       }
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.workStatusPanelEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    // Absolute path to the opencode CLI binary (optional override).
-    // Accept empty-string to clear (we persist an empty string sentinel so the running
-    // process can reliably drop a previously applied OPENCODE_BINARY override).
-    if (typeof candidate.opencodeBinary === 'string') {
+if (isString(candidate.opencodeBinary)) {
       const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
       result.opencodeBinary = normalized;
     }
-    if (typeof candidate.workStatusPanelEnabled === 'boolean') {
-========
-    if (isString(candidate.opencodeBinary)) {
-      const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
-      result.opencodeBinary = normalized;
-    }
-    if (isBoolean(candidate.workStatusPanelEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.workStatusPanelEnabled)) {
       result.workStatusPanelEnabled = candidate.workStatusPanelEnabled;
     }
-    if (Array.isArray(candidate.workStatusHiddenSections)) {
+
+if (Array.isArray(candidate.workStatusHiddenSections)) {
       result.workStatusHiddenSections = [
         ...new Set(candidate.workStatusHiddenSections.filter((entry) => isString(entry) && entry.length > 0)),
       ];
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.workStatusHiddenSectionsExplicit === 'boolean') {
+
+if (typeof candidate.workStatusHiddenSectionsExplicit === 'boolean') {
       result.workStatusHiddenSectionsExplicit = candidate.workStatusHiddenSectionsExplicit;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    for (const key of ['workStatusHiddenSectionsExplicit', 'workStatusSectionOrderExplicit']) {
-      if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
-========
-    for (const key of ['workStatusHiddenSectionsExplicit', 'workStatusSectionOrderExplicit'] as const) {
-      if (isBoolean(candidate[key])) result[key] = candidate[key];
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
     }
-    if (Array.isArray(candidate.workStatusSectionOrder)) {
+
+for (const key of ['workStatusHiddenSectionsExplicit', 'workStatusSectionOrderExplicit'] as const) {
+      if (isBoolean(candidate[key])) result[key] = candidate[key];
+    }
+
+if (Number.isInteger(candidate.liveBrowserTabLimit)
+      && candidate.liveBrowserTabLimit >= LIVE_BROWSER_TABS_MIN
+      && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
+      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
+    }
+
+if (typeof candidate.smallModelVariant === 'string' && candidate.smallModelVariant.trim().length > 0) {
+      result.smallModelVariant = candidate.smallModelVariant.trim();
+    }
+
+if (Array.isArray(candidate.workStatusSectionOrder)) {
       result.workStatusSectionOrder = [
         ...new Set(candidate.workStatusSectionOrder.filter((entry) => isString(entry) && entry.length > 0)),
       ];
     }
-    if (isBoolean(candidate.desktopLanAccessEnabled)) {
+
+if (isBoolean(candidate.desktopLanAccessEnabled)) {
       result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
     }
-    if (isBoolean(candidate.desktopKeepAwakeEnabled)) {
+
+if (isBoolean(candidate.desktopKeepAwakeEnabled)) {
       result.desktopKeepAwakeEnabled = candidate.desktopKeepAwakeEnabled;
     }
-    if (isBoolean(candidate.desktopMinimizeToTrayEnabled)) {
+
+if (isBoolean(candidate.desktopMinimizeToTrayEnabled)) {
       result.desktopMinimizeToTrayEnabled = candidate.desktopMinimizeToTrayEnabled;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.desktopMacMenuBarEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.desktopUpdateChannel === 'stable' || candidate.desktopUpdateChannel === 'canary') {
+
+if (candidate.desktopUpdateChannel === 'stable' || candidate.desktopUpdateChannel === 'canary') {
       result.desktopUpdateChannel = candidate.desktopUpdateChannel;
     }
-    if (candidate.serverUpdateChannel === 'stable' || candidate.serverUpdateChannel === 'canary') {
+
+if (candidate.serverUpdateChannel === 'stable' || candidate.serverUpdateChannel === 'canary') {
       result.serverUpdateChannel = candidate.serverUpdateChannel;
     }
-    if (typeof candidate.desktopMacMenuBarEnabled === 'boolean') {
-========
-    if (candidate.desktopUpdateChannel === 'stable' || candidate.desktopUpdateChannel === 'canary') {
-      result.desktopUpdateChannel = candidate.desktopUpdateChannel;
-    }
-    if (candidate.serverUpdateChannel === 'stable' || candidate.serverUpdateChannel === 'canary') {
-      result.serverUpdateChannel = candidate.serverUpdateChannel;
-    }
-    if (isBoolean(candidate.desktopMacMenuBarEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.desktopMacMenuBarEnabled)) {
       result.desktopMacMenuBarEnabled = candidate.desktopMacMenuBarEnabled;
     }
-    if (isBoolean(candidate.desktopLinuxNativeFrame)) {
+
+if (isBoolean(candidate.desktopLinuxNativeFrame)) {
       result.desktopLinuxNativeFrame = candidate.desktopLinuxNativeFrame;
     }
-    if (isString(candidate.desktopWindowControlsPosition)) {
+
+if (isString(candidate.desktopWindowControlsPosition)) {
       const mode = candidate.desktopWindowControlsPosition.trim();
       if (mode === 'auto' || mode === 'right') {
         result.desktopWindowControlsPosition = 'right';
@@ -839,30 +726,16 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
         result.desktopWindowControlsPosition = 'left';
       }
     }
-    if (isString(candidate.desktopWindowControlsStyle)) {
+
+if (isString(candidate.desktopWindowControlsStyle)) {
       const style = candidate.desktopWindowControlsStyle.trim();
       if (style === 'classic' || style === 'traffic-lights') {
         result.desktopWindowControlsStyle = style;
       }
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.messageSearchEnabled === 'boolean') {
-      result.messageSearchEnabled = candidate.messageSearchEnabled;
-    }
-    // The per-session permission policy is written by its runtime; the only
-    // client-editable permission setting is the new-session default.
-    if (isPermissionMode(candidate.permissionDefaultMode)) {
-      result.permissionDefaultMode = candidate.permissionDefaultMode;
-    }
-    if (candidate.permissionAutoAccept && typeof candidate.permissionAutoAccept === 'object' && !Array.isArray(candidate.permissionAutoAccept)) {
-      const sessions = {};
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.permissionAutoAccept && typeof candidate.permissionAutoAccept === 'object' && !Array.isArray(candidate.permissionAutoAccept)) {
-      const sessions = {};
-========
-    if (hasSettingsFields(candidate.permissionAutoAccept) && !Array.isArray(candidate.permissionAutoAccept)) {
+
+if (hasSettingsFields(candidate.permissionAutoAccept) && !Array.isArray(candidate.permissionAutoAccept)) {
       const sessions: Record<string, boolean | PermissionMode> = {};
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       const sourceSessions = candidate.permissionAutoAccept.sessions;
       if (hasSettingsFields(sourceSessions) && !Array.isArray(sourceSessions)) {
         for (const [sessionId, mode] of Object.entries(sourceSessions)) {
@@ -877,93 +750,122 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
           : 0,
       };
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.messageSearchReasoningEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (isPermissionMode(candidate.permissionDefaultMode)) {
+
+if (isPermissionMode(candidate.permissionDefaultMode)) {
       result.permissionDefaultMode = candidate.permissionDefaultMode;
     }
-    if (typeof candidate.messageSearchEnabled === 'boolean') {
+
+if (isBoolean(candidate.messageSearchEnabled)) {
       result.messageSearchEnabled = candidate.messageSearchEnabled;
     }
-    if (typeof candidate.messageSearchReasoningEnabled === 'boolean') {
-========
-    if (isPermissionMode(candidate.permissionDefaultMode)) {
-      result.permissionDefaultMode = candidate.permissionDefaultMode;
-    }
-    if (isBoolean(candidate.messageSearchEnabled)) {
-      result.messageSearchEnabled = candidate.messageSearchEnabled;
-    }
-    if (isBoolean(candidate.messageSearchReasoningEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.messageSearchReasoningEnabled)) {
       result.messageSearchReasoningEnabled = candidate.messageSearchReasoningEnabled;
     }
-    if (isString(candidate.desktopUiPassword)) {
+
+if (isString(candidate.desktopUiPassword)) {
       result.desktopUiPassword = candidate.desktopUiPassword.trim();
     }
-    if (Array.isArray(candidate.projects)) {
+
+if (Array.isArray(candidate.projects)) {
       const projects = sanitizeProjects(candidate.projects);
       if (projects) {
         result.projects = projects;
       }
     }
-    if (isString(candidate.activeProjectId) && candidate.activeProjectId.length > 0) {
-      result.activeProjectId = candidate.activeProjectId;
-    }
-    if (isSetMember(SIDEBAR_PROJECT_DISPLAY_MODE_VALUES, candidate.sidebarProjectDisplayMode)) {
-      result.sidebarProjectDisplayMode = candidate.sidebarProjectDisplayMode;
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (SIDEBAR_LIST_SESSION_GROUPING_VALUES.has(candidate.sidebarListSessionGrouping)) {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (SIDEBAR_VIEW_MODE_VALUES.has(candidate.sidebarViewMode)) {
-      result.sidebarViewMode = candidate.sidebarViewMode;
-    }
-    if (SIDEBAR_LIST_SESSION_GROUPING_VALUES.has(candidate.sidebarListSessionGrouping)) {
-========
-    if (isSetMember(SIDEBAR_VIEW_MODE_VALUES, candidate.sidebarViewMode)) {
-      result.sidebarViewMode = candidate.sidebarViewMode;
-    }
-    if (isSetMember(SIDEBAR_LIST_SESSION_GROUPING_VALUES, candidate.sidebarListSessionGrouping)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-      result.sidebarListSessionGrouping = candidate.sidebarListSessionGrouping;
-    }
-    if (isSetMember(SIDEBAR_LIST_SESSION_GROUPING_VALUES, candidate.sidebarGrouping)) {
-      result.sidebarGrouping = candidate.sidebarGrouping;
-    }
-    if (isBoolean(candidate.sidebarKeepWorkInPlace)) {
-      result.sidebarKeepWorkInPlace = candidate.sidebarKeepWorkInPlace;
-    }
-    if (isBoolean(candidate.sidebarKeepPinnedInPlace)) {
-      result.sidebarKeepPinnedInPlace = candidate.sidebarKeepPinnedInPlace;
-    }
-    if (isFiniteNumber(candidate.sidebarSessionBatchSize)) {
-      result.sidebarSessionBatchSize = Math.max(3, Math.min(50, Math.round(candidate.sidebarSessionBatchSize)));
-    }
-    if (isSetMember(SIDEBAR_PROJECT_SORT_ORDER_VALUES, candidate.sidebarProjectSortOrder)) {
-      result.sidebarProjectSortOrder = candidate.sidebarProjectSortOrder;
-    }
-    if (isBoolean(candidate.sidebarShowChatsSection)) {
-      result.sidebarShowChatsSection = candidate.sidebarShowChatsSection;
-    }
-    if (isBoolean(candidate.sidebarShowWorkSection)) {
-      result.sidebarShowWorkSection = candidate.sidebarShowWorkSection;
-    }
-    if (typeof candidate.sidebarShowPinnedSection === 'boolean') {
+
+if (typeof candidate.sidebarShowPinnedSection === 'boolean') {
       result.sidebarShowPinnedSection = candidate.sidebarShowPinnedSection;
     }
-    if (typeof candidate.sidebarDetailedZoneRows === 'boolean') {
+
+if (typeof candidate.sidebarDetailedZoneRows === 'boolean') {
       result.sidebarDetailedZoneRows = candidate.sidebarDetailedZoneRows;
     }
 
-    if (Array.isArray(candidate.pinnedDirectories)) {
+if (isString(candidate.activeProjectId) && candidate.activeProjectId.length > 0) {
+      result.activeProjectId = candidate.activeProjectId;
+    }
+
+if (isSetMember(SIDEBAR_PROJECT_DISPLAY_MODE_VALUES, candidate.sidebarProjectDisplayMode)) {
+      result.sidebarProjectDisplayMode = candidate.sidebarProjectDisplayMode;
+    }
+
+if (isSetMember(SIDEBAR_VIEW_MODE_VALUES, candidate.sidebarViewMode)) {
+      result.sidebarViewMode = candidate.sidebarViewMode;
+    }
+
+if (isSetMember(SIDEBAR_LIST_SESSION_GROUPING_VALUES, candidate.sidebarListSessionGrouping)) {
+      result.sidebarListSessionGrouping = candidate.sidebarListSessionGrouping;
+    }
+
+if (isSetMember(SIDEBAR_LIST_SESSION_GROUPING_VALUES, candidate.sidebarGrouping)) {
+      result.sidebarGrouping = candidate.sidebarGrouping;
+    }
+
+if (isBoolean(candidate.sidebarKeepWorkInPlace)) {
+      result.sidebarKeepWorkInPlace = candidate.sidebarKeepWorkInPlace;
+    }
+
+if (isBoolean(candidate.sidebarKeepPinnedInPlace)) {
+      result.sidebarKeepPinnedInPlace = candidate.sidebarKeepPinnedInPlace;
+    }
+
+if (isFiniteNumber(candidate.sidebarSessionBatchSize)) {
+      result.sidebarSessionBatchSize = Math.max(3, Math.min(50, Math.round(candidate.sidebarSessionBatchSize)));
+    }
+
+if (isSetMember(SIDEBAR_PROJECT_SORT_ORDER_VALUES, candidate.sidebarProjectSortOrder)) {
+      result.sidebarProjectSortOrder = candidate.sidebarProjectSortOrder;
+    }
+
+if (isBoolean(candidate.sidebarShowChatsSection)) {
+      result.sidebarShowChatsSection = candidate.sidebarShowChatsSection;
+    }
+
+if (isBoolean(candidate.sidebarShowWorkSection)) {
+      result.sidebarShowWorkSection = candidate.sidebarShowWorkSection;
+    }
+
+if (candidate.sidebarShowPinnedSection === true || candidate.sidebarShowPinnedSection === false) {
+      result.sidebarShowPinnedSection = candidate.sidebarShowPinnedSection;
+    }
+
+if (candidate.sidebarDetailedZoneRows === true || candidate.sidebarDetailedZoneRows === false) {
+      result.sidebarDetailedZoneRows = candidate.sidebarDetailedZoneRows;
+    }
+
+if (candidate.sidebarWorktreeNameByBranch === true || candidate.sidebarWorktreeNameByBranch === false) {
+      result.sidebarWorktreeNameByBranch = candidate.sidebarWorktreeNameByBranch;
+    }
+
+if (Array.isArray(candidate.sidebarSections)) {
+      result.sidebarSections = sanitizeSidebarSections(candidate.sidebarSections);
+    }
+
+if (Array.isArray(candidate.sidebarPinLists)) {
+      result.sidebarPinLists = sanitizeSidebarPinLists(candidate.sidebarPinLists);
+    }
+
+if (Array.isArray(candidate.sidebarHiddenSections)) {
+      result.sidebarHiddenSections = [...new Set(candidate.sidebarHiddenSections.flatMap((entry) => {
+        const parsed = sidebarSectionIdSchema.safeParse(entry);
+        return parsed.success ? [parsed.data] : [];
+      }))];
+    }
+
+if (Array.isArray(candidate.securityScopedBookmarks)) {
+      result.securityScopedBookmarks = normalizeStringArray(candidate.securityScopedBookmarks);
+    }
+
+if (Array.isArray(candidate.pinnedDirectories)) {
       result.pinnedDirectories = normalizeStringArray(
         candidate.pinnedDirectories
           .map((entry) => (isString(entry) ? normalizePathForPersistence(entry) : entry))
           .filter((entry) => isString(entry) && entry.length > 0)
       );
     }
-    if (Array.isArray(candidate.draftStarters)) {
+
+if (Array.isArray(candidate.draftStarters)) {
       const seenStarters = new Set();
       const starters: { type: 'command' | 'skill'; name: string }[] = [];
       for (const entry of candidate.draftStarters) {
@@ -978,901 +880,828 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       }
       result.draftStarters = starters;
     }
-    if (isBoolean(candidate.draftStartersVisible)) {
+
+if (isBoolean(candidate.draftStartersVisible)) {
       result.draftStartersVisible = candidate.draftStartersVisible;
     }
-    if (isBoolean(candidate.draftStartersCraftGoalAdded)) {
+
+if (isBoolean(candidate.draftStartersCraftGoalAdded)) {
       result.draftStartersCraftGoalAdded = candidate.draftStartersCraftGoalAdded;
     }
-    if (isBoolean(candidate.draftStartersScheduleTaskAdded)) {
+
+if (isBoolean(candidate.draftStartersScheduleTaskAdded)) {
       result.draftStartersScheduleTaskAdded = candidate.draftStartersScheduleTaskAdded;
     }
 
-
-    if (isString(candidate.uiFont) && candidate.uiFont.length > 0) {
+if (isString(candidate.uiFont) && candidate.uiFont.length > 0) {
       result.uiFont = candidate.uiFont;
     }
-    if (isString(candidate.monoFont) && candidate.monoFont.length > 0) {
+
+if (isString(candidate.monoFont) && candidate.monoFont.length > 0) {
       result.monoFont = candidate.monoFont;
     }
-    if (isString(candidate.customUiFont)) {
+
+if (isString(candidate.customUiFont)) {
       result.customUiFont = candidate.customUiFont.slice(0, 100);
     }
-    if (isString(candidate.customMonoFont)) {
+
+if (isString(candidate.customMonoFont)) {
       result.customMonoFont = candidate.customMonoFont.slice(0, 100);
     }
-    if (isSetMember(UI_FONT_WEIGHT_VALUES, candidate.uiFontWeight)) {
+
+if (isSetMember(UI_FONT_WEIGHT_VALUES, candidate.uiFontWeight)) {
       result.uiFontWeight = candidate.uiFontWeight;
     }
-    if (isString(candidate.githubClientId)) {
+
+if (isString(candidate.githubClientId)) {
       const trimmed = candidate.githubClientId.trim();
       if (trimmed.length > 0) {
         result.githubClientId = trimmed;
       }
     }
-    if (isString(candidate.githubScopes)) {
+
+if (isString(candidate.githubScopes)) {
       const trimmed = candidate.githubScopes.trim();
       if (trimmed.length > 0) {
         result.githubScopes = trimmed;
       }
     }
-    if (isString(candidate.gitlabClientId)) {
+
+if (isString(candidate.gitlabClientId)) {
       const trimmed = candidate.gitlabClientId.trim();
       if (trimmed.length > 0) {
         result.gitlabClientId = trimmed;
       }
     }
-    if (isBoolean(candidate.showReasoningTraces)) {
+
+if (isBoolean(candidate.showReasoningTraces)) {
       result.showReasoningTraces = candidate.showReasoningTraces;
     }
-    if (isBoolean(candidate.streamingAutoFollowEnabled)) {
+
+if (isBoolean(candidate.streamingAutoFollowEnabled)) {
       result.streamingAutoFollowEnabled = candidate.streamingAutoFollowEnabled;
     }
-    if (isBoolean(candidate.expandReasoningWhileStreaming)) {
+
+if (isBoolean(candidate.expandReasoningWhileStreaming)) {
       result.expandReasoningWhileStreaming = candidate.expandReasoningWhileStreaming;
     }
-    if (isBoolean(candidate.codeBlockLineWrap)) {
+
+if (isBoolean(candidate.codeBlockLineWrap)) {
       result.codeBlockLineWrap = candidate.codeBlockLineWrap;
     }
-    if (isBoolean(candidate.tableCellWrap)) {
+
+if (isBoolean(candidate.tableCellWrap)) {
       result.tableCellWrap = candidate.tableCellWrap;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.copyMessagesAsPlainText === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    const selectionApprovalText = z.string().transform((value) => value.slice(0, 1000)).safeParse(candidate.selectionApprovalText);
-    if (selectionApprovalText.success) {
+
+const selectionApprovalText = z.string().transform((value) => value.slice(0, 1000)).safeParse(candidate.selectionApprovalText);
+
+if (selectionApprovalText.success) {
       result.selectionApprovalText = selectionApprovalText.data;
     }
-    if (typeof candidate.copyMessagesAsPlainText === 'boolean') {
-========
-    const selectionApprovalText = z.string().transform((value) => value.slice(0, 1000)).safeParse(candidate.selectionApprovalText);
-    if (selectionApprovalText.success) {
-      result.selectionApprovalText = selectionApprovalText.data;
-    }
-    if (isBoolean(candidate.copyMessagesAsPlainText)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.copyMessagesAsPlainText)) {
       result.copyMessagesAsPlainText = candidate.copyMessagesAsPlainText;
     }
-    if (isBoolean(candidate.autoSaveEnabled)) {
+
+if (isBoolean(candidate.autoSaveEnabled)) {
       result.autoSaveEnabled = candidate.autoSaveEnabled;
     }
-    if (candidate.confirmFileTreeMove === true || candidate.confirmFileTreeMove === false) {
+
+if (candidate.fileEditorWrapLines === true || candidate.fileEditorWrapLines === false) {
+      result.fileEditorWrapLines = candidate.fileEditorWrapLines;
+    }
+
+if (candidate.confirmFileTreeMove === true || candidate.confirmFileTreeMove === false) {
       result.confirmFileTreeMove = candidate.confirmFileTreeMove;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.diffWrapLines === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.layoutAnimations === true || candidate.layoutAnimations === false) {
-      result.layoutAnimations = candidate.layoutAnimations;
-    }
-    if (candidate.openLinksInBrowserPanel === true || candidate.openLinksInBrowserPanel === false) {
-      result.openLinksInBrowserPanel = candidate.openLinksInBrowserPanel;
-    }
-    if (Number.isInteger(candidate.liveBrowserTabLimit) && candidate.liveBrowserTabLimit >= 1 && candidate.liveBrowserTabLimit <= 20) {
-      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
-    }
-    if (candidate.openTrackerLinksOnBoard === true || candidate.openTrackerLinksOnBoard === false) {
-      result.openTrackerLinksOnBoard = candidate.openTrackerLinksOnBoard;
-    }
-    if (candidate.fileTreeSide === 'left' || candidate.fileTreeSide === 'right') {
-      result.fileTreeSide = candidate.fileTreeSide;
-    }
-    if (typeof candidate.diffWrapLines === 'boolean') {
-========
-    if (candidate.layoutAnimations === true || candidate.layoutAnimations === false) {
-      result.layoutAnimations = candidate.layoutAnimations;
-    }
-    if (candidate.openLinksInBrowserPanel === true || candidate.openLinksInBrowserPanel === false) {
-      result.openLinksInBrowserPanel = candidate.openLinksInBrowserPanel;
-    }
-    if (candidate.agentBrowserSharesLogins === true || candidate.agentBrowserSharesLogins === false) {
-      result.agentBrowserSharesLogins = candidate.agentBrowserSharesLogins;
-    }
-    if (isInteger(candidate.liveBrowserTabLimit) && candidate.liveBrowserTabLimit >= 1 && candidate.liveBrowserTabLimit <= 20) {
-      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
-    }
-    if (candidate.openTrackerLinksOnBoard === true || candidate.openTrackerLinksOnBoard === false) {
-      result.openTrackerLinksOnBoard = candidate.openTrackerLinksOnBoard;
-    }
-    if (candidate.fileTreeSide === 'left' || candidate.fileTreeSide === 'right') {
-      result.fileTreeSide = candidate.fileTreeSide;
-    }
-    if (isBoolean(candidate.diffWrapLines)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-      result.diffWrapLines = candidate.diffWrapLines;
-    }
-    if (isBoolean(candidate.diffHideWhitespace)) {
-      result.diffHideWhitespace = candidate.diffHideWhitespace;
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.persistChatDraft === 'boolean') {
+
+if (typeof candidate.persistChatDraft === 'boolean') {
       result.persistChatDraft = candidate.persistChatDraft;
     }
-    if (typeof candidate.allowPromptingSubagentSessions === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.allowPromptingSubagentSessions === 'boolean') {
-========
-    if (isBoolean(candidate.allowPromptingSubagentSessions)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-      result.allowPromptingSubagentSessions = candidate.allowPromptingSubagentSessions;
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.showOpenCodeRestartConfirm === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.savePastedImagesAsFiles === true || candidate.savePastedImagesAsFiles === false) {
-      result.savePastedImagesAsFiles = candidate.savePastedImagesAsFiles;
-    }
-    if (typeof candidate.showOpenCodeRestartConfirm === 'boolean') {
-========
-    if (candidate.savePastedImagesAsFiles === true || candidate.savePastedImagesAsFiles === false) {
-      result.savePastedImagesAsFiles = candidate.savePastedImagesAsFiles;
-    }
-    if (isBoolean(candidate.showOpenCodeRestartConfirm)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-      result.showOpenCodeRestartConfirm = candidate.showOpenCodeRestartConfirm;
-    }
-    if (isBoolean(candidate.sessionTabsEnabled)) {
-      result.sessionTabsEnabled = candidate.sessionTabsEnabled;
-    }
-    if (typeof candidate.terminalCloseOnExit === 'boolean') {
+
+if (typeof candidate.terminalCloseOnExit === 'boolean') {
       result.terminalCloseOnExit = candidate.terminalCloseOnExit;
     }
-    if (candidate.terminalOpenOnProjectAction === true || candidate.terminalOpenOnProjectAction === false) {
+
+if (candidate.layoutAnimations === true || candidate.layoutAnimations === false) {
+      result.layoutAnimations = candidate.layoutAnimations;
+    }
+
+if (candidate.openLinksInBrowserPanel === true || candidate.openLinksInBrowserPanel === false) {
+      result.openLinksInBrowserPanel = candidate.openLinksInBrowserPanel;
+    }
+
+if (candidate.agentBrowserSharesLogins === true || candidate.agentBrowserSharesLogins === false) {
+      result.agentBrowserSharesLogins = candidate.agentBrowserSharesLogins;
+    }
+
+if (isInteger(candidate.liveBrowserTabLimit) && candidate.liveBrowserTabLimit >= 1 && candidate.liveBrowserTabLimit <= 20) {
+      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
+    }
+
+if (candidate.openTrackerLinksOnBoard === true || candidate.openTrackerLinksOnBoard === false) {
+      result.openTrackerLinksOnBoard = candidate.openTrackerLinksOnBoard;
+    }
+
+if (candidate.fileTreeSide === 'left' || candidate.fileTreeSide === 'right') {
+      result.fileTreeSide = candidate.fileTreeSide;
+    }
+
+if (isBoolean(candidate.diffWrapLines)) {
+      result.diffWrapLines = candidate.diffWrapLines;
+    }
+
+if (isBoolean(candidate.diffHideWhitespace)) {
+      result.diffHideWhitespace = candidate.diffHideWhitespace;
+    }
+
+if (isBoolean(candidate.allowPromptingSubagentSessions)) {
+      result.allowPromptingSubagentSessions = candidate.allowPromptingSubagentSessions;
+    }
+
+if (candidate.savePastedImagesAsFiles === true || candidate.savePastedImagesAsFiles === false) {
+      result.savePastedImagesAsFiles = candidate.savePastedImagesAsFiles;
+    }
+
+if (isBoolean(candidate.showOpenCodeRestartConfirm)) {
+      result.showOpenCodeRestartConfirm = candidate.showOpenCodeRestartConfirm;
+    }
+
+if (isBoolean(candidate.sessionTabsEnabled)) {
+      result.sessionTabsEnabled = candidate.sessionTabsEnabled;
+    }
+
+if (candidate.sessionTabsPerWorkspace === true || candidate.sessionTabsPerWorkspace === false) {
+      result.sessionTabsPerWorkspace = candidate.sessionTabsPerWorkspace;
+    }
+
+if (candidate.terminalCloseOnExit === true || candidate.terminalCloseOnExit === false) {
+      result.terminalCloseOnExit = candidate.terminalCloseOnExit;
+    }
+
+if (candidate.terminalOpenOnProjectAction === true || candidate.terminalOpenOnProjectAction === false) {
       result.terminalOpenOnProjectAction = candidate.terminalOpenOnProjectAction;
     }
-    if (isString(candidate.largeTextPasteBehavior)) {
+
+if (isString(candidate.largeTextPasteBehavior)) {
       const mode = candidate.largeTextPasteBehavior.trim();
       if (mode === 'ask' || mode === 'attach' || mode === 'inline' || mode === 'inline-double-paste') {
         result.largeTextPasteBehavior = mode;
       }
     }
-    if (isString(candidate.fileEditorKeymap)) {
+
+if (isString(candidate.fileEditorKeymap)) {
       const mode = candidate.fileEditorKeymap.trim();
       if (mode === 'default' || mode === 'vim') {
         result.fileEditorKeymap = mode;
       }
     }
-    if (isString(candidate.fileEditorVimMappings)) {
+
+if (isString(candidate.fileEditorVimMappings)) {
       result.fileEditorVimMappings = candidate.fileEditorVimMappings.slice(0, 10_000);
     }
-    if (Array.isArray(candidate.providerOrder)) {
+
+if (Array.isArray(candidate.providerOrder)) {
       result.providerOrder = normalizeStringArray(candidate.providerOrder);
     }
-    if (isBoolean(candidate.sessionRecapEnabled)) {
-      result.sessionRecapEnabled = candidate.sessionRecapEnabled;
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.suggestionGenerator === 'string' && ['session', 'small', 'off'].includes(candidate.suggestionGenerator)) {
+
+if (typeof candidate.suggestionGenerator === 'string' && ['session', 'small', 'off'].includes(candidate.suggestionGenerator)) {
       result.suggestionGenerator = candidate.suggestionGenerator;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
-      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
-========
-    if (isBoolean(candidate.sessionSuggestionEnabled)) {
-      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
     }
-    if (isBoolean(candidate.sessionWorkEnabled)) {
-      result.sessionWorkEnabled = candidate.sessionWorkEnabled;
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.sessionWorkAutoOpen === 'boolean') {
+
+if (typeof candidate.sessionWorkAutoOpen === 'boolean') {
       result.sessionWorkAutoOpen = candidate.sessionWorkAutoOpen;
     }
-    if (typeof candidate.sessionReviewOfferEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.sessionReviewOfferEnabled === 'boolean') {
-========
-    if (isBoolean(candidate.sessionReviewOfferEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.sessionRecapEnabled)) {
+      result.sessionRecapEnabled = candidate.sessionRecapEnabled;
+    }
+
+if (isBoolean(candidate.sessionSuggestionEnabled)) {
+      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+    }
+
+if (isBoolean(candidate.sessionWorkEnabled)) {
+      result.sessionWorkEnabled = candidate.sessionWorkEnabled;
+    }
+
+if (isBoolean(candidate.sessionReviewOfferEnabled)) {
       result.sessionReviewOfferEnabled = candidate.sessionReviewOfferEnabled;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.sessionGoalEnabled === 'boolean') {
+
+if (isBoolean(candidate.sessionGoalEnabled)) {
       result.sessionGoalEnabled = candidate.sessionGoalEnabled;
     }
-    if (candidate.sessionGoalChecker === 'classifier' || candidate.sessionGoalChecker === 'small-model') {
+
+if (candidate.sessionGoalChecker === 'classifier' || candidate.sessionGoalChecker === 'small-model') {
       result.sessionGoalChecker = candidate.sessionGoalChecker;
     }
-    if (Number.isInteger(candidate.sessionGoalMaxAutoTurns) && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
-      result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
-    }
-    if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
-========
-    if (isBoolean(candidate.sessionGoalEnabled)) {
-      result.sessionGoalEnabled = candidate.sessionGoalEnabled;
-    }
-    if (candidate.sessionGoalChecker === 'classifier' || candidate.sessionGoalChecker === 'small-model') {
-      result.sessionGoalChecker = candidate.sessionGoalChecker;
-    }
-    if (isInteger(candidate.sessionGoalMaxAutoTurns) && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
-      result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
-    }
-    if (isBoolean(candidate.sessionGoalDefaultBudgetEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-      result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
-    }
-    if (isNumber(candidate.sessionGoalDefaultBudget) && Number.isFinite(candidate.sessionGoalDefaultBudget) && candidate.sessionGoalDefaultBudget > 0) {
-      result.sessionGoalDefaultBudget = Math.floor(candidate.sessionGoalDefaultBudget);
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (candidate.sessionGoalChecker === 'classifier' || candidate.sessionGoalChecker === 'small-model') {
-      result.sessionGoalChecker = candidate.sessionGoalChecker;
-    }
-    if (typeof candidate.sessionGoalMaxAutoTurns === 'number' && Number.isSafeInteger(candidate.sessionGoalMaxAutoTurns)
+
+if (typeof candidate.sessionGoalMaxAutoTurns === 'number' && Number.isSafeInteger(candidate.sessionGoalMaxAutoTurns)
       && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
       result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
     }
-    if (typeof candidate.planModeAllowAgents === 'boolean') {
+
+if (typeof candidate.planModeAllowAgents === 'boolean') {
       result.planModeAllowAgents = candidate.planModeAllowAgents;
     }
-    if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
-========
-    if (isBoolean(candidate.collapsibleThinkingBlocks)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (typeof candidate.notifyOnPullRequests === 'boolean') {
+      result.notifyOnPullRequests = candidate.notifyOnPullRequests;
+    }
+
+if (isInteger(candidate.sessionGoalMaxAutoTurns) && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
+      result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
+    }
+
+if (isBoolean(candidate.sessionGoalDefaultBudgetEnabled)) {
+      result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
+    }
+
+if (isNumber(candidate.sessionGoalDefaultBudget) && Number.isFinite(candidate.sessionGoalDefaultBudget) && candidate.sessionGoalDefaultBudget > 0) {
+      result.sessionGoalDefaultBudget = Math.floor(candidate.sessionGoalDefaultBudget);
+    }
+
+if (isBoolean(candidate.collapsibleThinkingBlocks)) {
       result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;
     }
-    if (isBoolean(candidate.showTextJustificationActivity)) {
+
+if (isBoolean(candidate.showTextJustificationActivity)) {
       result.showTextJustificationActivity = candidate.showTextJustificationActivity;
     }
-    if (isBoolean(candidate.showDeletionDialog)) {
+
+if (isBoolean(candidate.showDeletionDialog)) {
       result.showDeletionDialog = candidate.showDeletionDialog;
     }
-    if (isBoolean(candidate.nativeNotificationsEnabled)) {
+
+if (isBoolean(candidate.nativeNotificationsEnabled)) {
       result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled;
     }
-    if (isString(candidate.notificationMode)) {
+
+if (isString(candidate.notificationMode)) {
       const mode = candidate.notificationMode.trim();
       if (mode === 'always' || mode === 'hidden-only') {
         result.notificationMode = mode;
       }
     }
-    if (isBoolean(candidate.notifyOnSubtasks)) {
+
+if (isBoolean(candidate.notifyOnSubtasks)) {
       result.notifyOnSubtasks = candidate.notifyOnSubtasks;
     }
-    if (isBoolean(candidate.notifyOnCompletion)) {
+
+if (isBoolean(candidate.notifyOnCompletion)) {
       result.notifyOnCompletion = candidate.notifyOnCompletion;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.notifyOnError === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.notifyOnPullRequests === true || candidate.notifyOnPullRequests === false) {
+
+if (candidate.notifyOnPullRequests === true || candidate.notifyOnPullRequests === false) {
       result.notifyOnPullRequests = candidate.notifyOnPullRequests;
     }
-    if (typeof candidate.notifyOnError === 'boolean') {
-========
-    if (candidate.notifyOnPullRequests === true || candidate.notifyOnPullRequests === false) {
-      result.notifyOnPullRequests = candidate.notifyOnPullRequests;
-    }
-    if (isBoolean(candidate.notifyOnError)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.notifyOnError)) {
       result.notifyOnError = candidate.notifyOnError;
     }
-    if (isBoolean(candidate.notifyOnQuestion)) {
+
+if (isBoolean(candidate.notifyOnQuestion)) {
       result.notifyOnQuestion = candidate.notifyOnQuestion;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.notifyOnPullRequests === 'boolean') {
-      result.notifyOnPullRequests = candidate.notifyOnPullRequests;
-    }
-    if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
-========
-    if (hasSettingsFields(candidate.notificationTemplates)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (hasSettingsFields(candidate.notificationTemplates)) {
       result.notificationTemplates = candidate.notificationTemplates;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.maxLastMessageLength === 'number' && Number.isFinite(candidate.maxLastMessageLength)) {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.summarizeLastMessage === 'boolean') {
+
+if (isBoolean(candidate.summarizeLastMessage)) {
       result.summarizeLastMessage = candidate.summarizeLastMessage;
     }
-    if (typeof candidate.summaryThreshold === 'number' && Number.isFinite(candidate.summaryThreshold)) {
+
+if (isNumber(candidate.summaryThreshold) && Number.isFinite(candidate.summaryThreshold)) {
       result.summaryThreshold = Math.max(0, Math.round(candidate.summaryThreshold));
     }
-    if (typeof candidate.summaryLength === 'number' && Number.isFinite(candidate.summaryLength)) {
+
+if (isNumber(candidate.summaryLength) && Number.isFinite(candidate.summaryLength)) {
       result.summaryLength = Math.max(10, Math.round(candidate.summaryLength));
     }
-    if (typeof candidate.maxLastMessageLength === 'number' && Number.isFinite(candidate.maxLastMessageLength)) {
-========
-    if (isBoolean(candidate.summarizeLastMessage)) {
-      result.summarizeLastMessage = candidate.summarizeLastMessage;
-    }
-    if (isNumber(candidate.summaryThreshold) && Number.isFinite(candidate.summaryThreshold)) {
-      result.summaryThreshold = Math.max(0, Math.round(candidate.summaryThreshold));
-    }
-    if (isNumber(candidate.summaryLength) && Number.isFinite(candidate.summaryLength)) {
-      result.summaryLength = Math.max(10, Math.round(candidate.summaryLength));
-    }
-    if (isNumber(candidate.maxLastMessageLength) && Number.isFinite(candidate.maxLastMessageLength)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isNumber(candidate.maxLastMessageLength) && Number.isFinite(candidate.maxLastMessageLength)) {
       result.maxLastMessageLength = Math.max(10, Math.round(candidate.maxLastMessageLength));
     }
-    if (candidate.usageDisplayMode === 'usage' || candidate.usageDisplayMode === 'remaining') {
+
+if (candidate.usageDisplayMode === 'usage' || candidate.usageDisplayMode === 'remaining') {
       result.usageDisplayMode = candidate.usageDisplayMode;
     }
-    if (Array.isArray(candidate.usageDropdownProviders)) {
+
+if (Array.isArray(candidate.usageDropdownProviders)) {
       result.usageDropdownProviders = normalizeStringArray(candidate.usageDropdownProviders);
     }
-    if (isBoolean(candidate.autoDeleteEnabled)) {
+
+if (isBoolean(candidate.autoDeleteEnabled)) {
       result.autoDeleteEnabled = candidate.autoDeleteEnabled;
     }
-    if (isNumber(candidate.autoDeleteAfterDays) && Number.isFinite(candidate.autoDeleteAfterDays)) {
+
+if (isNumber(candidate.autoDeleteAfterDays) && Number.isFinite(candidate.autoDeleteAfterDays)) {
       const normalizedDays = Math.max(1, Math.min(365, Math.round(candidate.autoDeleteAfterDays)));
       result.autoDeleteAfterDays = normalizedDays;
     }
-    if (candidate.sessionRetentionAction === 'archive' || candidate.sessionRetentionAction === 'delete') {
+
+if (candidate.sessionRetentionAction === 'archive' || candidate.sessionRetentionAction === 'delete') {
       result.sessionRetentionAction = candidate.sessionRetentionAction;
     }
-    if (isBoolean(candidate.sessionRetentionOnlyArchived)) {
+
+if (isBoolean(candidate.sessionRetentionOnlyArchived)) {
       result.sessionRetentionOnlyArchived = candidate.sessionRetentionOnlyArchived;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.mergedWorktreeCleanupEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.sessionRetentionIncludeInWork === true || candidate.sessionRetentionIncludeInWork === false) {
+
+if (candidate.sessionRetentionIncludeInWork === true || candidate.sessionRetentionIncludeInWork === false) {
       result.sessionRetentionIncludeInWork = candidate.sessionRetentionIncludeInWork;
     }
-    if (typeof candidate.mergedWorktreeCleanupEnabled === 'boolean') {
-========
-    if (candidate.sessionRetentionIncludeInWork === true || candidate.sessionRetentionIncludeInWork === false) {
-      result.sessionRetentionIncludeInWork = candidate.sessionRetentionIncludeInWork;
-    }
-    if (isBoolean(candidate.mergedWorktreeCleanupEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.mergedWorktreeCleanupEnabled)) {
       result.mergedWorktreeCleanupEnabled = candidate.mergedWorktreeCleanupEnabled;
     }
-    if (candidate.tunnelBootstrapTtlMs === null) {
+
+if (candidate.worktreeArchiveOnDoneEnabled === true || candidate.worktreeArchiveOnDoneEnabled === false) {
+      result.worktreeArchiveOnDoneEnabled = candidate.worktreeArchiveOnDoneEnabled;
+    }
+
+if (candidate.tunnelBootstrapTtlMs === null) {
       result.tunnelBootstrapTtlMs = null;
     } else if (isNumber(candidate.tunnelBootstrapTtlMs) && Number.isFinite(candidate.tunnelBootstrapTtlMs)) {
       result.tunnelBootstrapTtlMs = normalizeTunnelBootstrapTtlMs(candidate.tunnelBootstrapTtlMs);
     }
-    if (isNumber(candidate.tunnelSessionTtlMs) && Number.isFinite(candidate.tunnelSessionTtlMs)) {
+
+if (isNumber(candidate.tunnelSessionTtlMs) && Number.isFinite(candidate.tunnelSessionTtlMs)) {
       result.tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(candidate.tunnelSessionTtlMs);
     }
-    if (isString(candidate.tunnelProvider)) {
+
+if (isString(candidate.tunnelProvider)) {
       const provider = normalizeTunnelProvider(candidate.tunnelProvider);
       if (provider) {
         result.tunnelProvider = provider;
       }
     }
-    if (isString(candidate.tunnelMode)) {
+
+if (isString(candidate.tunnelMode)) {
       result.tunnelMode = normalizeTunnelMode(candidate.tunnelMode);
     }
-    if (isInteger(candidate.tunnelHttpsPort) && candidate.tunnelHttpsPort >= 1 && candidate.tunnelHttpsPort <= 65535) {
+
+if (isInteger(candidate.tunnelHttpsPort) && candidate.tunnelHttpsPort >= 1 && candidate.tunnelHttpsPort <= 65535) {
       result.tunnelHttpsPort = candidate.tunnelHttpsPort;
     }
-    if (candidate.managedLocalTunnelConfigPath === null) {
+
+if (candidate.managedLocalTunnelConfigPath === null) {
       result.managedLocalTunnelConfigPath = null;
     } else if (isString(candidate.managedLocalTunnelConfigPath)) {
       const trimmed = candidate.managedLocalTunnelConfigPath.trim();
       result.managedLocalTunnelConfigPath = trimmed.length > 0 ? normalizeOptionalPath(trimmed) : null;
     }
-    if (isString(candidate.managedRemoteTunnelHostname)) {
+
+if (isString(candidate.managedRemoteTunnelHostname)) {
       const hostname = normalizeManagedRemoteTunnelHostname(candidate.managedRemoteTunnelHostname);
       result.managedRemoteTunnelHostname = hostname;
     }
-    if (candidate.managedRemoteTunnelToken === null) {
+
+if (candidate.managedRemoteTunnelToken === null) {
       result.managedRemoteTunnelToken = null;
     } else if (isString(candidate.managedRemoteTunnelToken)) {
       result.managedRemoteTunnelToken = candidate.managedRemoteTunnelToken.trim();
     }
-    const managedRemoteTunnelPresets = normalizeManagedRemoteTunnelPresets(candidate.managedRemoteTunnelPresets);
-    if (managedRemoteTunnelPresets) {
+
+const managedRemoteTunnelPresets = normalizeManagedRemoteTunnelPresets(candidate.managedRemoteTunnelPresets);
+
+if (managedRemoteTunnelPresets) {
       result.managedRemoteTunnelPresets = managedRemoteTunnelPresets;
     }
-    const managedRemoteTunnelPresetTokens = normalizeManagedRemoteTunnelPresetTokens(candidate.managedRemoteTunnelPresetTokens);
-    if (managedRemoteTunnelPresetTokens) {
+
+const managedRemoteTunnelPresetTokens = normalizeManagedRemoteTunnelPresetTokens(candidate.managedRemoteTunnelPresetTokens);
+
+if (managedRemoteTunnelPresetTokens) {
       result.managedRemoteTunnelPresetTokens = managedRemoteTunnelPresetTokens;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.managedRemoteTunnelSelectedPresetId === 'string') {
-      const id = candidate.managedRemoteTunnelSelectedPresetId.trim();
-      result.managedRemoteTunnelSelectedPresetId = id || undefined;
-    }
-========
-    if (isString(candidate.managedRemoteTunnelSelectedPresetId)) {
-      const id = candidate.managedRemoteTunnelSelectedPresetId.trim();
-      result.managedRemoteTunnelSelectedPresetId = id || undefined;
-    }
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.defaultModel === 'string') {
+if (isString(candidate.managedRemoteTunnelSelectedPresetId)) {
+      const id = candidate.managedRemoteTunnelSelectedPresetId.trim();
+      result.managedRemoteTunnelSelectedPresetId = id || undefined;
+    }
+
+if (isString(candidate.defaultModel)) {
       const trimmed = candidate.defaultModel.trim();
       result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
     }
-========
-    if (isString(candidate.defaultModel)) {
-      const trimmed = candidate.defaultModel.trim();
-      result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
-    }
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-    const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);
-    if (lastSelectedModel.success) {
+
+const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);
+
+if (lastSelectedModel.success) {
       result.lastSelectedModel = lastSelectedModel.data;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.defaultSessionMode === 'string') {
+
+if (typeof candidate.defaultSessionMode === 'string') {
       const mode = candidate.defaultSessionMode.trim();
       if (SESSION_MODE_VALUES.has(mode)) {
         result.defaultSessionMode = mode;
       }
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.defaultVariant === 'string') {
+    }
+
+if (isString(candidate.defaultVariant)) {
       const trimmed = candidate.defaultVariant.trim();
       result.defaultVariant = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (typeof candidate.defaultAgent === 'string') {
+
+if (isString(candidate.defaultAgent)) {
       const trimmed = candidate.defaultAgent.trim();
       result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (typeof candidate.smallModelUseDefault === 'boolean') {
+
+if (isBoolean(candidate.smallModelUseDefault)) {
       result.smallModelUseDefault = candidate.smallModelUseDefault;
     }
-    if (typeof candidate.smallModelOverride === 'string') {
+
+if (isString(candidate.smallModelOverride)) {
       const trimmed = candidate.smallModelOverride.trim();
       result.smallModelOverride = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (candidate.smallModelVariant !== undefined) {
+
+if (candidate.smallModelVariant !== undefined) {
       result.smallModelVariant = asNonEmptyString(candidate.smallModelVariant) ?? undefined;
     }
-    if (typeof candidate.walkthroughModelOverride === 'string') {
+
+if (isString(candidate.walkthroughModelOverride)) {
       const trimmed = candidate.walkthroughModelOverride.trim();
       result.walkthroughModelOverride = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (candidate.walkthroughModelVariant !== undefined) {
+
+if (candidate.walkthroughModelVariant !== undefined) {
       result.walkthroughModelVariant = asNonEmptyString(candidate.walkthroughModelVariant) ?? undefined;
     }
-    for (const key of ['fallbackModel', 'fallbackVariant']) {
-      const value = z.string().trim().safeParse(candidate[key]);
-      if (value.success) result[key] = value.data.length > 0 ? value.data : undefined;
+
+for (const key of [
+      'sessionRetentionIncludeInWork',
+      'dictationAutoSend', 'sttEndpointPath', 'sttCorrectTranscript',
+      'sidebarSections', 'sidebarPinLists', 'sidebarHiddenSections',
+      'sessionTabsPerWorkspace', 'selectionApprovalText', 'customProviderLogos',
+      'lastUsedEfforts',
+    ]) {
+      if (candidate[key] !== undefined) result[key] = candidate[key];
     }
-    if (Array.isArray(candidate.accountSwitchProviders)) {
+
+if (Array.isArray(candidate.accountSwitchProviders)) {
       result.accountSwitchProviders = normalizeStringArray(candidate.accountSwitchProviders);
-========
-    if (isString(candidate.defaultVariant)) {
-      const trimmed = candidate.defaultVariant.trim();
-      result.defaultVariant = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (isString(candidate.defaultAgent)) {
-      const trimmed = candidate.defaultAgent.trim();
-      result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
-    }
-    if (isBoolean(candidate.smallModelUseDefault)) {
-      result.smallModelUseDefault = candidate.smallModelUseDefault;
-    }
-    if (isString(candidate.smallModelOverride)) {
-      const trimmed = candidate.smallModelOverride.trim();
-      result.smallModelOverride = trimmed.length > 0 ? trimmed : undefined;
-    }
-    if (candidate.smallModelVariant !== undefined) {
-      result.smallModelVariant = asNonEmptyString(candidate.smallModelVariant) ?? undefined;
-    }
-    if (isString(candidate.walkthroughModelOverride)) {
-      const trimmed = candidate.walkthroughModelOverride.trim();
-      result.walkthroughModelOverride = trimmed.length > 0 ? trimmed : undefined;
-    }
-    if (candidate.walkthroughModelVariant !== undefined) {
-      result.walkthroughModelVariant = asNonEmptyString(candidate.walkthroughModelVariant) ?? undefined;
-    }
-    for (const key of ['fallbackModel', 'fallbackVariant'] as const) {
-      const value = z.string().trim().safeParse(candidate[key]);
-      if (value.success) result[key] = value.data.length > 0 ? value.data : undefined;
-    }
-    if (Array.isArray(candidate.accountSwitchProviders)) {
-      result.accountSwitchProviders = normalizeStringArray(candidate.accountSwitchProviders);
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-    }
-    if (isString(candidate.defaultGitIdentityId)) {
+
+if (isString(candidate.defaultGitIdentityId)) {
       const trimmed = candidate.defaultGitIdentityId.trim();
       result.defaultGitIdentityId = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (isString(candidate.followUpBehavior)) {
+
+if (isString(candidate.followUpBehavior)) {
       result.followUpBehavior = normalizeFollowUpBehavior(candidate.followUpBehavior);
     } else if (isBoolean(candidate.queueModeEnabled)) {
       result.followUpBehavior = normalizeFollowUpBehavior(undefined, candidate.queueModeEnabled);
     }
-    if (isBoolean(candidate.autoCreateWorktree)) {
+
+if (isBoolean(candidate.autoCreateWorktree)) {
       result.autoCreateWorktree = candidate.autoCreateWorktree;
     }
-    if (isBoolean(candidate.gitmojiEnabled)) {
+
+if (isBoolean(candidate.gitmojiEnabled)) {
       result.gitmojiEnabled = candidate.gitmojiEnabled;
     }
-    if (isBoolean(candidate.defaultFileViewerPreview)) {
+
+if (isBoolean(candidate.defaultFileViewerPreview)) {
       result.defaultFileViewerPreview = candidate.defaultFileViewerPreview;
     }
-    if (isString(candidate.zenModel)) {
+
+if (isString(candidate.zenModel)) {
       const trimmed = candidate.zenModel.trim();
       result.zenModel = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (isString(candidate.pwaAppName)) {
+
+if (isString(candidate.pwaAppName)) {
       result.pwaAppName = normalizePwaAppName(candidate.pwaAppName, undefined);
     }
-    if (isString(candidate.pwaOrientation)) {
+
+if (isString(candidate.pwaOrientation)) {
       result.pwaOrientation = normalizePwaOrientation(candidate.pwaOrientation, undefined);
     }
-    if (isString(candidate.mobileKeyboardMode)) {
+
+if (isString(candidate.mobileKeyboardMode)) {
       const mode = normalizeMobileKeyboardMode(candidate.mobileKeyboardMode, null);
       if (mode) {
         result.mobileKeyboardMode = mode;
       }
     }
-    if (isBoolean(candidate.inputSpellcheckEnabled)) {
+
+if (isBoolean(candidate.inputSpellcheckEnabled)) {
       result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
     }
-    if (candidate.enterToSend === true || candidate.enterToSend === false) {
+
+if (candidate.enterToSend === true || candidate.enterToSend === false) {
       result.enterToSend = candidate.enterToSend;
     }
-    if (candidate.enterToSendConfigured === true || candidate.enterToSendConfigured === false) {
+
+if (candidate.enterToSendConfigured === true || candidate.enterToSendConfigured === false) {
       result.enterToSendConfigured = candidate.enterToSendConfigured;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.agentWebToolEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.mobileReturnKeySends === true || candidate.mobileReturnKeySends === false) {
-      result.mobileReturnKeySends = candidate.mobileReturnKeySends;
-    }
-    if (typeof candidate.showOpenCodeUpdateNotifications === 'boolean') {
-      result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
-    }
-    if (typeof candidate.agentWebToolEnabled === 'boolean') {
-========
-    if (candidate.mobileReturnKeySends === true || candidate.mobileReturnKeySends === false) {
-      result.mobileReturnKeySends = candidate.mobileReturnKeySends;
-    }
-    if (isBoolean(candidate.showOpenCodeUpdateNotifications)) {
-      result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
-    }
-    if (isBoolean(candidate.agentWebToolEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
-      result.agentWebToolEnabled = candidate.agentWebToolEnabled;
-    }
-    if (isString(candidate.browserProvider) && candidate.browserProvider.trim()) {
-      result.browserProvider = candidate.browserProvider.trim();
-    }
-    for (const key of AGENT_TOOL_BOOLEAN_KEYS) {
-      if (isBoolean(candidate[key])) result[key] = candidate[key];
-    }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
-      result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
-    }
-    if (typeof candidate.liveBrowserTabLimit === 'number' && Number.isFinite(candidate.liveBrowserTabLimit)) {
+
+if (typeof candidate.liveBrowserTabLimit === 'number' && Number.isFinite(candidate.liveBrowserTabLimit)) {
       result.liveBrowserTabLimit = Math.max(1, Math.min(20, Math.round(candidate.liveBrowserTabLimit)));
     }
-    if (typeof candidate.smallModelVariant === 'string') {
+
+if (typeof candidate.smallModelVariant === 'string') {
       const trimmed = candidate.smallModelVariant.trim();
       result.smallModelVariant = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (typeof candidate.isolatedSpacesEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (candidate.agentScheduleToolEnabled === true || candidate.agentScheduleToolEnabled === false) {
-      result.agentScheduleToolEnabled = candidate.agentScheduleToolEnabled;
+
+if (typeof candidate.stickyUserHeader === 'boolean') {
+      result.stickyUserHeader = candidate.stickyUserHeader;
     }
-    if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
-      result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;
+
+if (typeof candidate.chatFontSize === 'number' && Number.isFinite(candidate.chatFontSize)) {
+      result.chatFontSize = Math.max(50, Math.min(200, Math.round(candidate.chatFontSize)));
     }
-    if (candidate.agentKnowledgeToolEnabled === true || candidate.agentKnowledgeToolEnabled === false) {
-      result.agentKnowledgeToolEnabled = candidate.agentKnowledgeToolEnabled;
+
+if (candidate.mobileReturnKeySends === true || candidate.mobileReturnKeySends === false) {
+      result.mobileReturnKeySends = candidate.mobileReturnKeySends;
     }
-    if (candidate.agentWorkflowToolEnabled === true || candidate.agentWorkflowToolEnabled === false) {
-      result.agentWorkflowToolEnabled = candidate.agentWorkflowToolEnabled;
+
+if (isBoolean(candidate.showOpenCodeUpdateNotifications)) {
+      result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
     }
-    if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
-      result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
+
+if (isBoolean(candidate.agentWebToolEnabled)) {
+      result.agentWebToolEnabled = candidate.agentWebToolEnabled;
     }
-    if (candidate.agentRenderToolEnabled === true || candidate.agentRenderToolEnabled === false) {
-      result.agentRenderToolEnabled = candidate.agentRenderToolEnabled;
+
+if (isString(candidate.browserProvider) && candidate.browserProvider.trim()) {
+      result.browserProvider = candidate.browserProvider.trim();
     }
-    if (candidate.agentImageToolEnabled === true || candidate.agentImageToolEnabled === false) {
-      result.agentImageToolEnabled = candidate.agentImageToolEnabled;
+
+for (const key of AGENT_TOOL_BOOLEAN_KEYS) {
+      if (isBoolean(candidate[key])) result[key] = candidate[key];
     }
-    // `provider/model`; the model id may hold slashes of its own (OpenRouter's `openai/gpt-image-2`).
-    const agentImageModel = asNonEmptyString(candidate.agentImageModel);
-    if (agentImageModel && /^[^/\s]+\/\S+$/.test(agentImageModel)) {
+
+const dreamingModel = dreamingModelSchema.safeParse(candidate.agentMemoryDreamingModel);
+
+if (dreamingModel.success) result.agentMemoryDreamingModel = dreamingModel.data;
+
+const dreamingVariant = z.string().trim().safeParse(candidate.agentMemoryDreamingVariant);
+
+if (dreamingVariant.success) result.agentMemoryDreamingVariant = dreamingVariant.data;
+
+const agentImageModel = asNonEmptyString(candidate.agentImageModel);
+
+if (agentImageModel && /^[^/\s]+\/\S+$/.test(agentImageModel)) {
       result.agentImageModel = agentImageModel;
     }
-    if (candidate.agentSecretToolEnabled === true || candidate.agentSecretToolEnabled === false) {
-      result.agentSecretToolEnabled = candidate.agentSecretToolEnabled;
-    }
-    if (candidate.agentUsageToolEnabled === true || candidate.agentUsageToolEnabled === false) {
-      result.agentUsageToolEnabled = candidate.agentUsageToolEnabled;
-    }
-    if (typeof candidate.isolatedSpacesEnabled === 'boolean') {
-========
-    const dreamingModel = dreamingModelSchema.safeParse(candidate.agentMemoryDreamingModel);
-    if (dreamingModel.success) result.agentMemoryDreamingModel = dreamingModel.data;
-    const dreamingVariant = z.string().trim().safeParse(candidate.agentMemoryDreamingVariant);
-    if (dreamingVariant.success) result.agentMemoryDreamingVariant = dreamingVariant.data;
-    const agentImageModel = asNonEmptyString(candidate.agentImageModel);
-    if (agentImageModel && /^[^/\s]+\/\S+$/.test(agentImageModel)) {
-      result.agentImageModel = agentImageModel;
-    }
-    if (isBoolean(candidate.isolatedSpacesEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.isolatedSpacesEnabled)) {
       result.isolatedSpacesEnabled = candidate.isolatedSpacesEnabled;
     }
-    if (hasIdleStopSetting(candidate.isolatedSpacesIdleStop)) {
+
+if (hasIdleStopSetting(candidate.isolatedSpacesIdleStop)) {
       result.isolatedSpacesIdleStop = { ...candidate.isolatedSpacesIdleStop };
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.showToolFileIcons === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    // The machine of the Docker over SSH place; the empty string takes that place away.
-    const sshHost = sshHostSchema.safeParse(candidate.isolatedSpacesSshHost);
-    if (sshHost.success) result.isolatedSpacesSshHost = sshHost.data;
-    if (typeof candidate.openCodeUpdateToastDismissedVersion === 'string') {
+
+const sshHost = sshHostSchema.safeParse(candidate.isolatedSpacesSshHost);
+
+if (sshHost.success) result.isolatedSpacesSshHost = sshHost.data;
+
+if (isString(candidate.openCodeUpdateToastDismissedVersion)) {
       const version = candidate.openCodeUpdateToastDismissedVersion.trim();
       result.openCodeUpdateToastDismissedVersion = version.slice(0, VERSION_STRING_MAX_LENGTH);
     }
-    if (typeof candidate.showToolFileIcons === 'boolean') {
-========
-    const sshHost = sshHostSchema.safeParse(candidate.isolatedSpacesSshHost);
-    if (sshHost.success) result.isolatedSpacesSshHost = sshHost.data;
-    if (isString(candidate.openCodeUpdateToastDismissedVersion)) {
-      const version = candidate.openCodeUpdateToastDismissedVersion.trim();
-      result.openCodeUpdateToastDismissedVersion = version.slice(0, VERSION_STRING_MAX_LENGTH);
-    }
-    if (isBoolean(candidate.showToolFileIcons)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isBoolean(candidate.showToolFileIcons)) {
       result.showToolFileIcons = candidate.showToolFileIcons;
     }
-    if (isBoolean(candidate.showTurnChangedFiles)) {
+
+if (isBoolean(candidate.showTurnChangedFiles)) {
       result.showTurnChangedFiles = candidate.showTurnChangedFiles;
     }
-    if (isString(candidate.timeFormatPreference)) {
+
+if (isString(candidate.timeFormatPreference)) {
       const mode = candidate.timeFormatPreference.trim();
       if (mode === 'auto' || mode === '12h' || mode === '24h') {
         result.timeFormatPreference = mode;
       }
     }
-    if (isString(candidate.weekStartPreference)) {
+
+if (isString(candidate.weekStartPreference)) {
       const mode = candidate.weekStartPreference.trim();
       if (mode === 'auto' || mode === 'sunday' || mode === 'monday') {
         result.weekStartPreference = mode;
       }
     }
-    if (isString(candidate.chatRenderMode)) {
+
+if (isString(candidate.chatRenderMode)) {
       const mode = candidate.chatRenderMode.trim();
       if (mode === 'sorted' || mode === 'live') {
         result.chatRenderMode = mode;
       }
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.activityRenderMode === 'string') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.messageStreamTransport === 'string') {
+
+if (isString(candidate.messageStreamTransport)) {
       const mode = candidate.messageStreamTransport.trim();
       if (mode === 'auto' || mode === 'ws' || mode === 'sse') {
         result.messageStreamTransport = mode;
       }
     }
-    if (typeof candidate.activityRenderMode === 'string') {
-========
-    if (isString(candidate.messageStreamTransport)) {
-      const mode = candidate.messageStreamTransport.trim();
-      if (mode === 'auto' || mode === 'ws' || mode === 'sse') {
-        result.messageStreamTransport = mode;
-      }
-    }
-    if (isString(candidate.activityRenderMode)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isString(candidate.activityRenderMode)) {
       const mode = candidate.activityRenderMode.trim();
       if (mode === 'collapsed' || mode === 'summary') {
         result.activityRenderMode = mode;
       }
     }
-    if (isString(candidate.mermaidRenderingMode)) {
+
+if (isString(candidate.mermaidRenderingMode)) {
       const mode = candidate.mermaidRenderingMode.trim();
       if (mode === 'svg' || mode === 'ascii') {
         result.mermaidRenderingMode = mode;
       }
     }
-    if (isString(candidate.userMessageRenderingMode)) {
+
+if (isString(candidate.userMessageRenderingMode)) {
       const mode = candidate.userMessageRenderingMode.trim();
       if (mode === 'markdown' || mode === 'plain') {
         result.userMessageRenderingMode = mode;
       }
     }
-    if (isBoolean(candidate.collapsibleUserMessages)) {
+
+if (isBoolean(candidate.collapsibleUserMessages)) {
       result.collapsibleUserMessages = candidate.collapsibleUserMessages;
     }
-    if (typeof candidate.stickyUserHeader === 'boolean') {
+
+if (candidate.stickyUserHeader === true || candidate.stickyUserHeader === false) {
       result.stickyUserHeader = candidate.stickyUserHeader;
     }
-    if (isBoolean(candidate.promptNavigatorEnabled)) {
+
+if (isBoolean(candidate.promptNavigatorEnabled)) {
       result.promptNavigatorEnabled = candidate.promptNavigatorEnabled;
     }
-    if (candidate.chatWidth === 'default' || candidate.chatWidth === 'wider' || candidate.chatWidth === 'full') {
+
+if (candidate.chatWidth === 'default' || candidate.chatWidth === 'wider' || candidate.chatWidth === 'full') {
       result.chatWidth = candidate.chatWidth;
     }
-    if (isBoolean(candidate.wideChatLayoutEnabled)) {
+
+if (isBoolean(candidate.wideChatLayoutEnabled)) {
       result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled;
     }
-    if (isBoolean(candidate.showSplitAssistantMessageActions)) {
+
+if (isBoolean(candidate.showSplitAssistantMessageActions)) {
       result.showSplitAssistantMessageActions = candidate.showSplitAssistantMessageActions;
     }
-    if (isNumber(candidate.fontSize) && Number.isFinite(candidate.fontSize)) {
+
+if (isNumber(candidate.fontSize) && Number.isFinite(candidate.fontSize)) {
       result.fontSize = Math.max(50, Math.min(200, Math.round(candidate.fontSize)));
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.chatFontSize === 'number' && Number.isFinite(candidate.chatFontSize)) {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (Number.isFinite(candidate.chatFontSize)) {
-========
-    if (isFiniteNumber(candidate.chatFontSize)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isFiniteNumber(candidate.chatFontSize)) {
       result.chatFontSize = Math.max(50, Math.min(200, Math.round(candidate.chatFontSize)));
     }
-    if (isNumber(candidate.terminalFontSize) && Number.isFinite(candidate.terminalFontSize)) {
+
+if (isNumber(candidate.terminalFontSize) && Number.isFinite(candidate.terminalFontSize)) {
       result.terminalFontSize = Math.max(9, Math.min(52, Math.round(candidate.terminalFontSize)));
     }
-    if (isNumber(candidate.editorFontSize) && Number.isFinite(candidate.editorFontSize)) {
+
+if (isNumber(candidate.editorFontSize) && Number.isFinite(candidate.editorFontSize)) {
       result.editorFontSize = Math.max(9, Math.min(32, Math.round(candidate.editorFontSize)));
     }
-    if (isString(candidate.terminalShell)) {
+
+if (isString(candidate.terminalShell)) {
       const shell = candidate.terminalShell.trim().toLowerCase();
       if (TERMINAL_SHELL_VALUES.has(shell)) result.terminalShell = shell;
     }
-    if (Array.isArray(candidate.terminalLoginShells)) {
+
+if (Array.isArray(candidate.terminalLoginShells)) {
       result.terminalLoginShells = [...new Set(candidate.terminalLoginShells
         .filter(isString)
         .map((shell) => shell.trim().toLowerCase())
         .filter((shell) => TERMINAL_SHELL_VALUES.has(shell)))];
     }
-    if (isNumber(candidate.padding) && Number.isFinite(candidate.padding)) {
+
+if (isNumber(candidate.padding) && Number.isFinite(candidate.padding)) {
       result.padding = Math.max(50, Math.min(200, Math.round(candidate.padding)));
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.cornerRadius === 'number' && Number.isFinite(candidate.cornerRadius)) {
+
+if (isNumber(candidate.cornerRadius) && Number.isFinite(candidate.cornerRadius)) {
       result.cornerRadius = Math.max(0, Math.min(32, Math.round(candidate.cornerRadius)));
     }
-    if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
-========
-    if (isNumber(candidate.cornerRadius) && Number.isFinite(candidate.cornerRadius)) {
-      result.cornerRadius = Math.max(0, Math.min(32, Math.round(candidate.cornerRadius)));
-    }
-    if (isNumber(candidate.inputBarOffset) && Number.isFinite(candidate.inputBarOffset)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isNumber(candidate.inputBarOffset) && Number.isFinite(candidate.inputBarOffset)) {
       result.inputBarOffset = Math.max(0, Math.min(100, Math.round(candidate.inputBarOffset)));
     }
 
-    const shortcutOverrides = sanitizeShortcutOverrides(candidate.shortcutOverrides);
-    if (shortcutOverrides) {
+const shortcutOverrides = sanitizeShortcutOverrides(candidate.shortcutOverrides);
+
+if (shortcutOverrides) {
       result.shortcutOverrides = shortcutOverrides;
     }
 
-    const favoriteModels = sanitizeModelRefs(candidate.favoriteModels, 64);
-    if (favoriteModels) {
+const favoriteModels = sanitizeModelRefs(candidate.favoriteModels, 64);
+
+if (favoriteModels) {
       result.favoriteModels = favoriteModels;
     }
 
-    const recentModels = sanitizeModelRefs(candidate.recentModels, 16);
-    if (recentModels) {
+const recentModels = sanitizeModelRefs(candidate.recentModels, 16);
+
+if (recentModels) {
       result.recentModels = recentModels;
     }
 
-    const hiddenModels = sanitizeModelRefs(candidate.hiddenModels, HIDDEN_MODELS_MAX);
-    if (hiddenModels) {
+const hiddenModels = sanitizeModelRefs(candidate.hiddenModels, HIDDEN_MODELS_MAX);
+
+if (hiddenModels) {
       result.hiddenModels = hiddenModels;
     }
 
+if (Array.isArray(candidate.collapsedModelProviders)) {
+      result.collapsedModelProviders = normalizeStringArray(candidate.collapsedModelProviders);
+    }
 
-    const customProviderIcons = sanitizeCustomProviderIcons(candidate.customProviderIcons);
-    if (customProviderIcons) {
+const customProviderIcons = sanitizeCustomProviderIcons(candidate.customProviderIcons);
+
+if (customProviderIcons) {
       result.customProviderIcons = customProviderIcons;
     }
-    for (const key of REGISTRY_BOOLEAN_SETTINGS) {
-      if (typeof candidate[key] === 'boolean') {
-        result[key] = candidate[key];
-      }
-    }
-    if (Number.isInteger(candidate.liveBrowserTabLimit)
-      && candidate.liveBrowserTabLimit >= LIVE_BROWSER_TABS_MIN
-      && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
-      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
-    }
-    if (typeof candidate.smallModelVariant === 'string' && candidate.smallModelVariant.trim().length > 0) {
-      result.smallModelVariant = candidate.smallModelVariant.trim();
+
+const customProviderLogos = sanitizeCustomProviderLogos(candidate.customProviderLogos);
+
+if (customProviderLogos) {
+      result.customProviderLogos = customProviderLogos;
     }
 
-    if (Array.isArray(candidate.favoriteAgents)) {
+if (Array.isArray(candidate.recentAgents)) {
+      result.recentAgents = normalizeStringArray(candidate.recentAgents);
+    }
+
+if (Array.isArray(candidate.favoriteAgents)) {
       result.favoriteAgents = normalizeStringArray(candidate.favoriteAgents);
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.diffLayoutPreference === 'string') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    const recentEfforts = sanitizeRecentEfforts(candidate.recentEfforts);
-    if (recentEfforts) {
+const recentEfforts = sanitizeRecentEfforts(candidate.recentEfforts);
+
+if (recentEfforts) {
       result.recentEfforts = recentEfforts;
     }
 
-    const lastUsedEfforts = sanitizeLastUsedEfforts(candidate.lastUsedEfforts);
-    if (lastUsedEfforts) {
+const lastUsedEfforts = sanitizeLastUsedEfforts(candidate.lastUsedEfforts);
+
+if (lastUsedEfforts) {
       result.lastUsedEfforts = lastUsedEfforts;
-    }
-    if (typeof candidate.diffLayoutPreference === 'string') {
-========
-    const recentEfforts = sanitizeRecentEfforts(candidate.recentEfforts);
-    if (recentEfforts) {
-      result.recentEfforts = recentEfforts;
     }
 
-    const lastUsedEfforts = sanitizeLastUsedEfforts(candidate.lastUsedEfforts);
-    if (lastUsedEfforts) {
-      result.lastUsedEfforts = lastUsedEfforts;
-    }
-    if (isString(candidate.diffLayoutPreference)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+if (isString(candidate.diffLayoutPreference)) {
       const mode = candidate.diffLayoutPreference.trim();
       if (mode === 'dynamic' || mode === 'inline' || mode === 'side-by-side') {
         result.diffLayoutPreference = mode;
       }
     }
-    if (isString(candidate.gitChangesViewMode)) {
+
+if (isString(candidate.gitChangesViewMode)) {
       const mode = candidate.gitChangesViewMode.trim();
       if (mode === 'flat' || mode === 'tree') {
         result.gitChangesViewMode = mode;
       }
     }
-    if (isString(candidate.toolJsonViewMode)) {
+
+if (isString(candidate.toolJsonViewMode)) {
       const mode = candidate.toolJsonViewMode.trim();
       if (mode === 'summary' || mode === 'formatted' || mode === 'raw') {
         result.toolJsonViewMode = mode;
       }
     }
-    if (isBoolean(candidate.directoryShowHidden)) {
+
+if (isBoolean(candidate.directoryShowHidden)) {
       result.directoryShowHidden = candidate.directoryShowHidden;
     }
-    if (isBoolean(candidate.filesViewShowGitignored)) {
+
+if (isBoolean(candidate.filesViewShowGitignored)) {
       result.filesViewShowGitignored = candidate.filesViewShowGitignored;
     }
-    if (isString(candidate.openInAppId)) {
+
+if (isString(candidate.openInAppId)) {
       const trimmed = candidate.openInAppId.trim();
       if (trimmed.length > 0) {
         result.openInAppId = trimmed;
       }
     }
 
-    const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
-    if (skillCatalogs) {
+const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
+
+if (skillCatalogs) {
       result.skillCatalogs = skillCatalogs;
     }
 
-    if (hasSettingsFields(candidate.usageSelectedModels)) {
+if (typeof candidate.responseStyleInstruction === 'string') {
+      result.responseStyleInstruction = candidate.responseStyleInstruction.slice(0, MAX_RESPONSE_STYLE_INSTRUCTION_LENGTH);
+    }
+
+if (RESPONSE_STYLE_PRESET_VALUES.has(candidate.responseStylePreset)) {
+      result.responseStylePreset = candidate.responseStylePreset;
+    }
+
+if (hasSettingsFields(candidate.usageSelectedModels)) {
       const sanitized: Record<string, string[]> = {};
       for (const [providerId, models] of Object.entries(candidate.usageSelectedModels)) {
         if (Array.isArray(models)) {
@@ -1887,32 +1716,7 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       }
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    // Header dropdown expanded families (inverted - stores EXPANDED, default all collapsed)
-    if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === 'object') {
-      const sanitized = {};
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    // Usage page collapsed families - for "Other Models" section
-    if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === 'object') {
-      const sanitized = {};
-      for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
-        if (typeof providerId === 'string' && Array.isArray(families)) {
-          const validFamilies = families.filter((f) => typeof f === 'string' && f.length > 0);
-          if (validFamilies.length > 0) {
-            sanitized[providerId] = validFamilies;
-          }
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageCollapsedFamilies = sanitized;
-      }
-    }
-
-    // Header dropdown expanded families (inverted - stores EXPANDED, default all collapsed)
-    if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === 'object') {
-      const sanitized = {};
-========
-    if (hasSettingsFields(candidate.usageCollapsedFamilies)) {
+if (hasSettingsFields(candidate.usageCollapsedFamilies)) {
       const sanitized: Record<string, string[]> = {};
       for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
         if (Array.isArray(families)) {
@@ -1927,9 +1731,8 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       }
     }
 
-    if (hasSettingsFields(candidate.usageExpandedFamilies)) {
+if (hasSettingsFields(candidate.usageExpandedFamilies)) {
       const sanitized: Record<string, string[]> = {};
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       for (const [providerId, families] of Object.entries(candidate.usageExpandedFamilies)) {
         if (Array.isArray(families)) {
           const validFamilies = families.filter((f) => isString(f) && f.length > 0);
@@ -1943,82 +1746,14 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       }
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    // Custom model groups configuration
-    if (candidate.usageModelGroups && typeof candidate.usageModelGroups === 'object') {
-      const sanitized = {};
-      for (const [providerId, config] of Object.entries(candidate.usageModelGroups)) {
-        if (typeof providerId !== 'string') continue;
-========
-    if (hasSettingsFields(candidate.usageModelGroups)) {
+if (hasSettingsFields(candidate.usageModelGroups)) {
       const sanitized: Record<string, UsageModelGroups> = {};
       for (const [providerId, rawConfig] of Object.entries(candidate.usageModelGroups)) {
         if (!hasUsageModelGroupFields(rawConfig)) {
           throw new TypeError(`Cannot read properties of ${rawConfig} (reading 'customGroups')`);
         }
         const config = rawConfig;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    // Behavior page (profile). The resolved response-style instruction is what
-    // prompt delivery reads; the preset/flag keep the editor's own state.
-    if (typeof candidate.responseStyleInstruction === 'string') {
-      result.responseStyleInstruction = candidate.responseStyleInstruction.slice(0, MAX_RESPONSE_STYLE_INSTRUCTION_LENGTH);
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-        const providerConfig = {};
-
-        // customGroups: array of {id, label, models, order}
-        if (Array.isArray(config.customGroups)) {
-          const validGroups = config.customGroups
-            .filter((g) => g && typeof g.id === 'string' && typeof g.label === 'string')
-            .map((g) => ({
-              id: g.id.slice(0, 64),
-              label: g.label.slice(0, 128),
-              models: Array.isArray(g.models)
-                ? g.models.filter((m) => typeof m === 'string').slice(0, 500)
-                : [],
-              order: typeof g.order === 'number' ? g.order : 0,
-            }));
-          if (validGroups.length > 0) {
-            providerConfig.customGroups = validGroups;
-          }
-        }
-
-        // modelAssignments: Record<modelName, groupId>
-        if (config.modelAssignments && typeof config.modelAssignments === 'object') {
-          const assignments = {};
-          for (const [model, groupId] of Object.entries(config.modelAssignments)) {
-            if (typeof model === 'string' && typeof groupId === 'string') {
-              assignments[model] = groupId;
-            }
-          }
-          if (Object.keys(assignments).length > 0) {
-            providerConfig.modelAssignments = assignments;
-          }
-        }
-
-        // renamedGroups: Record<groupId, label>
-        if (config.renamedGroups && typeof config.renamedGroups === 'object') {
-          const renamed = {};
-          for (const [groupId, label] of Object.entries(config.renamedGroups)) {
-            if (typeof groupId === 'string' && typeof label === 'string') {
-              renamed[groupId] = label.slice(0, 128);
-            }
-          }
-          if (Object.keys(renamed).length > 0) {
-            providerConfig.renamedGroups = renamed;
-          }
-        }
-
-        if (Object.keys(providerConfig).length > 0) {
-          sanitized[providerId] = providerConfig;
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageModelGroups = sanitized;
-      }
-========
         const providerConfig: UsageModelGroups = {};
 
         if (Array.isArray(config.customGroups)) {
@@ -2068,101 +1803,46 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       if (Object.keys(sanitized).length > 0) {
         result.usageModelGroups = sanitized;
       }
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.responseStyleEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
 
-    // Usage reporting opt-out (default: true/enabled)
-    if (typeof candidate.reportUsage === 'boolean') {
+if (isBoolean(candidate.reportUsage)) {
       result.reportUsage = candidate.reportUsage;
     }
 
-    // Global behavior prompt — synced to ~/.config/opencode/AGENTS.md
-    if (typeof candidate.globalBehaviorPrompt === 'string') {
+if (isString(candidate.globalBehaviorPrompt)) {
       const value = candidate.globalBehaviorPrompt;
       if (value.length <= 1024 * 1024) {
         result.globalBehaviorPrompt = value;
       }
     }
 
-    if (typeof candidate.responseStyleEnabled === 'boolean') {
-========
-
-    if (isBoolean(candidate.reportUsage)) {
-      result.reportUsage = candidate.reportUsage;
-    }
-
-    if (isString(candidate.globalBehaviorPrompt)) {
-      const value = candidate.globalBehaviorPrompt;
-      if (value.length <= 1024 * 1024) {
-        result.globalBehaviorPrompt = value;
-      }
-    }
-
-    if (isBoolean(candidate.responseStyleEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+if (isBoolean(candidate.responseStyleEnabled)) {
       result.responseStyleEnabled = candidate.responseStyleEnabled;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (RESPONSE_STYLE_PRESET_VALUES.has(candidate.responseStylePreset)) {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
 
-    if (
-      typeof candidate.responseStylePreset === 'string' &&
-      ['concise', 'detailed', 'mentor', 'pushback', 'noFiller', 'matchEnergy', 'warmPeer', 'custom'].includes(candidate.responseStylePreset)
-    ) {
-========
-
-    if (
+if (
       isString(candidate.responseStylePreset) &&
       ['concise', 'detailed', 'mentor', 'pushback', 'noFiller', 'matchEnergy', 'warmPeer', 'custom'].includes(candidate.responseStylePreset)
     ) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       result.responseStylePreset = candidate.responseStylePreset;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.responseStyleCustomInstructions === 'string') {
-      result.responseStyleCustomInstructions = candidate.responseStyleCustomInstructions.slice(0, MAX_RESPONSE_STYLE_CUSTOM_LENGTH);
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
 
-    if (typeof candidate.responseStyleCustomInstructions === 'string') {
+if (isString(candidate.responseStyleCustomInstructions)) {
       const value = candidate.responseStyleCustomInstructions;
       if (value.length <= 50_000) {
         result.responseStyleCustomInstructions = value;
       }
-========
-
-    if (isString(candidate.responseStyleCustomInstructions)) {
-      const value = candidate.responseStyleCustomInstructions;
-      if (value.length <= 50_000) {
-        result.responseStyleCustomInstructions = value;
-      }
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-
-    if (typeof candidate.dictationEnabled === 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    if (typeof candidate.dictationEnabled === 'boolean') {
-========
-    if (isBoolean(candidate.dictationEnabled)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+if (isBoolean(candidate.dictationEnabled)) {
       result.dictationEnabled = candidate.dictationEnabled;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.sttProvider === 'string') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    const dictationAutoSend = z.boolean().safeParse(candidate.dictationAutoSend);
-    if (dictationAutoSend.success) result.dictationAutoSend = dictationAutoSend.data;
-    if (typeof candidate.sttProvider === 'string') {
-========
-    const dictationAutoSend = z.boolean().safeParse(candidate.dictationAutoSend);
-    if (dictationAutoSend.success) result.dictationAutoSend = dictationAutoSend.data;
-    if (isString(candidate.sttProvider)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+const dictationAutoSend = z.boolean().safeParse(candidate.dictationAutoSend);
+
+if (dictationAutoSend.success) result.dictationAutoSend = dictationAutoSend.data;
+
+if (isString(candidate.sttProvider)) {
       const provider = candidate.sttProvider.trim();
       if (provider === 'local' || provider === 'openai-compatible') {
         result.sttProvider = provider;
@@ -2172,70 +1852,55 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
         result.sttProvider = 'local';
       }
     }
-    if (isString(candidate.sttServerUrl)) {
+
+if (isString(candidate.sttServerUrl)) {
       const trimmed = candidate.sttServerUrl.trim();
       if (trimmed.length <= STT_SERVER_URL_MAX_LENGTH) {
         result.sttServerUrl = trimmed;
       }
     }
-    if (isString(candidate.sttModel)) {
+
+if (isString(candidate.sttModel)) {
       const trimmed = candidate.sttModel.trim();
       if (trimmed.length <= STT_MODEL_MAX_LENGTH) {
         result.sttModel = trimmed;
       }
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-    if (typeof candidate.sttLocalModel === 'string') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    const sttEndpointPath = z.string().trim().safeParse(candidate.sttEndpointPath);
-    if (sttEndpointPath.success && sttEndpointPath.data.length <= STT_ENDPOINT_PATH_MAX_LENGTH) {
+
+const sttEndpointPath = z.string().trim().safeParse(candidate.sttEndpointPath);
+
+if (sttEndpointPath.success && sttEndpointPath.data.length <= STT_ENDPOINT_PATH_MAX_LENGTH) {
       result.sttEndpointPath = sttEndpointPath.data;
     }
-    if (typeof candidate.sttLocalModel === 'string') {
-========
-    const sttEndpointPath = z.string().trim().safeParse(candidate.sttEndpointPath);
-    if (sttEndpointPath.success && sttEndpointPath.data.length <= STT_ENDPOINT_PATH_MAX_LENGTH) {
-      result.sttEndpointPath = sttEndpointPath.data;
-    }
-    if (isString(candidate.sttLocalModel)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
+
+if (isString(candidate.sttLocalModel)) {
       const trimmed = candidate.sttLocalModel.trim();
       if (trimmed.length <= STT_MODEL_MAX_LENGTH) {
         result.sttLocalModel = trimmed;
       }
     }
-    if (isString(candidate.sttLanguage)) {
+
+if (isString(candidate.sttLanguage)) {
       const trimmed = candidate.sttLanguage.trim();
       if (trimmed.length <= STT_LANGUAGE_MAX_LENGTH) {
         result.sttLanguage = trimmed;
       }
     }
 
-    // Keys the registry lists whose sanitizer branch is a shape check the
-    // registry parser already enforces. They are recorded as sent: the
-    // registry is the authority on what a client may persist, and the client
-    // parses the same document on the way back in.
-    for (const key of [
-      'sessionRetentionIncludeInWork',
-      'dictationAutoSend', 'sttEndpointPath', 'sttCorrectTranscript',
-      'sidebarSections', 'sidebarPinLists', 'sidebarHiddenSections',
-      'sessionTabsPerWorkspace', 'selectionApprovalText', 'customProviderLogos',
-      'lastUsedEfforts',
-    ]) {
-      if (candidate[key] !== undefined) result[key] = candidate[key];
+if (candidate.sttCorrectTranscript === true || candidate.sttCorrectTranscript === false) {
+      result.sttCorrectTranscript = candidate.sttCorrectTranscript;
     }
 
-    for (const key of Object.keys(result)) {
+for (const key of Object.keys(result)) {
       if (!isPersistableSettingsKey(key)) {
         Reflect.deleteProperty(result, key);
       }
     }
 
-    return result;
-  };
+return result;
+};
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-  const mergePersistedSettings = (current, changes) => {
+const mergePersistedSettings = (current, changes) => {
     const merged = { ...current, ...changes };
     delete merged.defaultAgent;
     delete merged.sessionWorkKeepInGroup;
@@ -2250,126 +1915,36 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       });
     }
     return merged;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-  const mergePersistedSettings = (current, changes) => {
-    const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
-      ? changes.securityScopedBookmarks
-      : Array.isArray(current.securityScopedBookmarks)
-        ? current.securityScopedBookmarks
-        : [];
-
-    const next = {
-      ...current,
-      ...changes,
-      securityScopedBookmarks: Array.from(
-        new Set(
-          baseBookmarks.filter((entry) => typeof entry === 'string' && entry.length > 0)
-        )
-      ),
-    };
-
-    return next;
-========
-  const mergePersistedSettings = (current: SettingsDocument, changes: SettingsDocument) => {
-    const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
-      ? changes.securityScopedBookmarks
-      : Array.isArray(current.securityScopedBookmarks)
-        ? current.securityScopedBookmarks
-        : [];
-
-    const next: SettingsDocument = {
-      ...current,
-      ...changes,
-      securityScopedBookmarks: Array.from(
-        new Set(
-          baseBookmarks.filter((entry) => isString(entry) && entry.length > 0)
-        )
-      ),
-    };
-
-    if (Array.isArray(changes.sidebarSections) && Array.isArray(current.sidebarSections)) {
-      next.sidebarSections = keepOmittedBuiltinSections(sanitizeSidebarSections(current.sidebarSections), changes.sidebarSections);
-    }
-
-    return next;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
   };
 
-  const formatSettingsResponse = (settings: SettingsDocument) => {
+const formatSettingsResponse = (settings) => {
     const sanitized = sanitizeSettingsUpdate(settings);
     for (const key of SECRET_SETTINGS_KEYS) {
-      Reflect.deleteProperty(sanitized, key);
+      delete sanitized[key];
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
     const hasManagedRemoteTunnelToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
     const hasDesktopUiPassword = typeof settings?.desktopUiPassword === 'string' && settings.desktopUiPassword.trim().length > 0;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-    const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
-    const hasManagedRemoteTunnelToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
-    const hasDesktopUiPassword = typeof settings?.desktopUiPassword === 'string' && settings.desktopUiPassword.trim().length > 0;
-========
-    const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
-    const hasManagedRemoteTunnelToken = isString(settings?.managedRemoteTunnelToken) && settings.managedRemoteTunnelToken.trim().length > 0;
-    const hasDesktopUiPassword = isString(settings?.desktopUiPassword) && settings.desktopUiPassword.trim().length > 0;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
     const pwaAppName = normalizePwaAppName(settings?.pwaAppName, '');
     const pwaOrientation = normalizePwaOrientation(settings?.pwaOrientation, 'system');
     const mobileKeyboardMode = normalizeMobileKeyboardMode(settings?.mobileKeyboardMode, 'native');
     const inputHistoryScope = sanitized.inputHistoryScope ?? DEFAULT_INPUT_HISTORY_SCOPE;
     const inputHistoryLimit = sanitized.inputHistoryLimit ?? DEFAULT_INPUT_HISTORY_LIMIT;
 
-    const appNameFields: AppNameFields = {};
-    if (pwaAppName) appNameFields.pwaAppName = pwaAppName;
-    const desktopFields: DesktopSettingsFields = {};
-    if (process.env.OPENCHAMBER_RUNTIME === 'desktop') {
-      desktopFields.desktopLanAccessActive = process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_ACTIVE === 'true';
-      desktopFields.desktopLanAccessBlockedReason =
-        process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'missing-password'
-          || process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'enterprise-mode'
-          ? process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON
-          : null;
-    }
-
     return {
       ...sanitized,
       hasManagedRemoteTunnelToken,
       hasDesktopUiPassword,
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-      // Agent memory needs the OpenChamber server, like routing below.
-      agentMemoryFeatureAvailable: true,
-      // The same for agent workflows.
-      agentWorkflowFeatureAvailable: true,
-      // The overview page ships dark until `OPENCHAMBER_OVERVIEW_ENABLED` is set.
-========
-      agentMemoryFeatureAvailable: true,
-      agentWorkflowFeatureAvailable: true,
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       overviewFeatureAvailable: isOverviewFeatureAvailable(),
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
       // Whether this build has agent workflows (OPENCHAMBER_WORKFLOWS_ENABLE).
       agentWorkflowFeatureAvailable: isWorkflowFeatureAvailable(),
       // Jev routing needs the OpenChamber server and is always available here.
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-      // Jev routing needs the OpenChamber server, so it is present here and
-      // absent wherever this payload does not come from one (VS Code).
-========
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       routingFeatureAvailable: true,
-      ...appNameFields,
+      ...(pwaAppName ? { pwaAppName } : {}),
       pwaOrientation,
       mobileKeyboardMode,
       inputHistoryScope,
       inputHistoryLimit,
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-      securityScopedBookmarks: bookmarks,
-========
-      messageSearchEnabled: isMessageSearchEnabled(sanitized),
-      securityScopedBookmarks: bookmarks,
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-helpers.js
       ...(process.env.OPENCHAMBER_RUNTIME === 'desktop'
         ? {
           desktopLanAccessActive: process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_ACTIVE === 'true',
@@ -2386,38 +1961,16 @@ export const createSettingsHelpers = (dependencies: SettingsHelpersDependencies)
       // Answering `false` for an absent key overrode that default on the first
       // settings sync, so a fresh data directory rendered no reasoning at all.
       // The key travels back only when it is stored.
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-helpers.js
-      ...(process.env.OPENCHAMBER_RUNTIME === 'desktop'
-        ? {
-            desktopLanAccessActive: process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_ACTIVE === 'true',
-            desktopLanAccessBlockedReason:
-              process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'missing-password'
-                || process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'enterprise-mode'
-                ? process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON
-                : null,
-          }
-        : {}),
-      showReasoningTraces:
-        typeof settings.showReasoningTraces === 'boolean'
-          ? settings.showReasoningTraces
-          : typeof sanitized.showReasoningTraces === 'boolean'
-            ? sanitized.showReasoningTraces
-            : false,
-========
-      ...desktopFields,
-      showReasoningTraces:
-        isBoolean(settings.showReasoningTraces)
-          ? settings.showReasoningTraces
-          : sanitized.showReasoningTraces ?? false,
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-helpers.ts
       collapsibleThinkingBlocks:
-        isBoolean(settings.collapsibleThinkingBlocks)
+        typeof settings.collapsibleThinkingBlocks === 'boolean'
           ? settings.collapsibleThinkingBlocks
-          : sanitized.collapsibleThinkingBlocks ?? true,
+          : typeof sanitized.collapsibleThinkingBlocks === 'boolean'
+            ? sanitized.collapsibleThinkingBlocks
+            : true,
     };
   };
 
-  return {
+return {
     normalizePwaAppName,
     normalizePwaOrientation,
     normalizeMobileKeyboardMode,

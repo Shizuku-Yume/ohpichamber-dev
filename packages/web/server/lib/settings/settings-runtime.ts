@@ -1,13 +1,4 @@
 import { createProjectIdFromPath, projectConfigFileStemOf } from '../projects/project-id.js';
-import { isMessageSearchEnabled } from './settings-helpers.js';
-import type { SettingsDocument, createSettingsHelpers } from './settings-helpers.js';
-import type { SettingsProject, createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
-import type { createManagedTunnelConfigRuntime } from '../tunnels/managed-config.js';
-import type { PreferenceFields, SettingsSurface } from './settings-files.js';
-import { isBoolean, isString } from '../shared/object-guards.js';
-import type fsModule from 'node:fs/promises';
-import type pathModule from 'node:path';
-import type cryptoModule from 'node:crypto';
 import {
   buildPreferencesFields,
   flattenPreferences,
@@ -23,143 +14,24 @@ import {
   serializePreferencesDocument,
 } from './settings-files.js';
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
 const DEFAULT_NOTIFICATION_TEMPLATES = {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-// An empty field means "no custom text": the notification uses the default for
-// the interface language (see notifications/template-locales.js), and the
-// settings page shows that default as the placeholder. Persisting English text
-// here is what made a Chinese interface send English notifications.
-const EMPTY_NOTIFICATION_TEMPLATES = {
-  completion: { title: '', message: '' },
-  error: { title: '', message: '' },
-  question: { title: '', message: '' },
-  subtask: { title: '', message: '' },
-};
-
-const emptyNotificationTemplates = () => Object.fromEntries(
-  Object.entries(EMPTY_NOTIFICATION_TEMPLATES).map(([event, template]) => [event, { ...template }]),
-);
-
-// Builds before the language-aware defaults wrote this English set into every
-// install. It is cleared once so those installs follow their interface
-// language; anything the user typed stays untouched.
-const LEGACY_SEEDED_NOTIFICATION_TEMPLATES = {
-========
-type Normalization = ReturnType<typeof createSettingsNormalizationRuntime>;
-type Helpers = ReturnType<typeof createSettingsHelpers>;
-type TunnelConfig = ReturnType<typeof createManagedTunnelConfigRuntime>;
-export type SettingsRuntimeDependencies = Pick<Normalization,
-  'sanitizeProjects' | 'normalizeSettingsPaths' | 'normalizeStringArray'
-  | 'normalizeManagedRemoteTunnelHostname' | 'normalizeManagedRemoteTunnelPresets'
-  | 'normalizeManagedRemoteTunnelPresetTokens'> & Pick<Helpers,
-  'sanitizeSettingsUpdate' | 'mergePersistedSettings' | 'formatSettingsResponse'> & {
-  fsPromises: Pick<typeof fsModule, 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'access' | 'rename' | 'rm' | 'stat' | 'realpath' | 'copyFile' | 'chmod'>;
-  path: Pick<typeof pathModule, 'join' | 'dirname' | 'relative' | 'isAbsolute' | 'resolve' | 'basename'>;
-  crypto: Pick<typeof cryptoModule, 'createHash'>;
-  SETTINGS_FILE_PATH: string;
-  resolveDirectoryCandidate: (value: string) => string | null;
-  syncManagedRemoteTunnelConfigWithPresets: TunnelConfig['syncManagedRemoteTunnelConfigWithPresets'];
-  upsertManagedRemoteTunnelToken: TunnelConfig['upsertManagedRemoteTunnelToken'];
-  chatRoots?: string[];
-  onManagedPluginSettingsChanged?: (settings: SettingsDocument) => void;
-  onMessageSearchEnabledChanged?: (enabled: boolean) => void;
-  onMessageSearchReasoningChanged?: (enabled: boolean) => void;
-  onPermissionDefaultModeChanged?: (mode: SettingsDocument[string]) => void;
-  onLastDirectoryChanged?: (directory: SettingsDocument[string]) => void;
-};
-
-export interface SettingsReadOptions {
-  surface?: SettingsSurface | null;
-}
-
-export interface SettingsWriteOptions extends SettingsReadOptions {
-  changedKeys?: Iterable<string> | null;
-}
-
-type NotificationTemplate = { title: string; message: string };
-type NotificationTemplates = Record<string, NotificationTemplate>;
-type OrphanProject = { orphanId: string; filePath: string; content: SettingsDocument };
-type PreferenceReadResult = { status: 'missing' } | { status: 'failed' } | { status: 'ok'; fields: PreferenceFields };
-const hasFields = (value: unknown): value is SettingsDocument => Boolean(value && typeof value === 'object');
-const hasErrorCode = (value: unknown): value is { code?: unknown } => Boolean(value && typeof value === 'object');
-const hasOptionalCode = (value: unknown): value is { code?: unknown } => value != null;
-const hasTemplateFields = (value: unknown): value is { title?: unknown; message?: unknown } => value != null;
-const hasActionFields = (value: unknown): value is { command?: unknown; name?: unknown } => value != null;
-const hasProjectFields = (value: unknown): value is { id?: unknown; path?: unknown } => value != null;
-const hasPresetFields = (value: unknown): value is { id?: unknown; name?: unknown; hostname?: unknown } => value != null;
-const isList = (value: unknown): value is unknown[] => Array.isArray(value);
-
-const EMPTY_NOTIFICATION_TEMPLATES = {
-  completion: { title: '', message: '' },
-  error: { title: '', message: '' },
-  question: { title: '', message: '' },
-  subtask: { title: '', message: '' },
-};
-
-const emptyNotificationTemplates = () => Object.fromEntries(
-  Object.entries(EMPTY_NOTIFICATION_TEMPLATES).map(([event, template]) => [event, { ...template }]),
-);
-
-const LEGACY_SEEDED_NOTIFICATION_TEMPLATES = {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   completion: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
   error: { title: 'Tool error', message: '{last_message}' },
   question: { title: 'Input needed', message: '{last_message}' },
   subtask: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
 };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
 const ensureNotificationTemplateShape = (templates) => {
   const input = templates && typeof templates === 'object' ? templates : {};
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-const isLegacySeededNotificationTemplates = (templates) => (
-  Object.keys(LEGACY_SEEDED_NOTIFICATION_TEMPLATES).every((event) => {
-    const legacy = LEGACY_SEEDED_NOTIFICATION_TEMPLATES[event];
-    const candidate = templates?.[event];
-    return candidate?.title === legacy.title && candidate?.message === legacy.message;
-  })
-);
-
-const ensureNotificationTemplateShape = (templates) => {
-  const input = templates && typeof templates === 'object' ? templates : {};
-========
-const isLegacySeededNotificationTemplates = (templates: NotificationTemplates) => (
-  Object.entries(LEGACY_SEEDED_NOTIFICATION_TEMPLATES).every(([event, legacy]) => {
-    const candidate = templates?.[event];
-    return candidate?.title === legacy.title && candidate?.message === legacy.message;
-  })
-);
-
-const normalizeNotificationTemplates = (templates: SettingsDocument[string]) => {
-  const input = hasFields(templates) ? templates : {};
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   let changed = false;
-  const next: NotificationTemplates = {};
+  const next = {};
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
   for (const event of Object.keys(DEFAULT_NOTIFICATION_TEMPLATES)) {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-  for (const event of Object.keys(EMPTY_NOTIFICATION_TEMPLATES)) {
-========
-  for (const [event, base] of Object.entries(EMPTY_NOTIFICATION_TEMPLATES)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
     const currentEntry = input[event];
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
     const base = DEFAULT_NOTIFICATION_TEMPLATES[event];
     const currentTitle = typeof currentEntry?.title === 'string' ? currentEntry.title : base.title;
     const currentMessage = typeof currentEntry?.message === 'string' ? currentEntry.message : base.message;
     if (!currentEntry || typeof currentEntry.title !== 'string' || typeof currentEntry.message !== 'string') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-    const base = EMPTY_NOTIFICATION_TEMPLATES[event];
-    const currentTitle = typeof currentEntry?.title === 'string' ? currentEntry.title : base.title;
-    const currentMessage = typeof currentEntry?.message === 'string' ? currentEntry.message : base.message;
-    if (!currentEntry || typeof currentEntry.title !== 'string' || typeof currentEntry.message !== 'string') {
-========
-    const currentTitle = hasTemplateFields(currentEntry) && isString(currentEntry.title) ? currentEntry.title : base.title;
-    const currentMessage = hasTemplateFields(currentEntry) && isString(currentEntry.message) ? currentEntry.message : base.message;
-    if (!currentEntry || !hasTemplateFields(currentEntry) || !isString(currentEntry.title) || !isString(currentEntry.message)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
       changed = true;
     }
     next[event] = { title: currentTitle, message: currentMessage };
@@ -168,48 +40,7 @@ const normalizeNotificationTemplates = (templates: SettingsDocument[string]) => 
   return { templates: next, changed };
 };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
 export const createSettingsRuntime = (deps) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-/** Settings that decide which OpenChamber plugins the managed OpenCode loads. */
-const MANAGED_PLUGIN_SETTINGS_KEYS = new Set([
-  'agentControlToolEnabled',
-  'agentScheduleToolEnabled',
-  'agentWebToolEnabled',
-  'agentMemoryToolEnabled',
-  'agentKnowledgeToolEnabled',
-  'agentNotifyToolEnabled',
-  'agentRenderToolEnabled',
-  'agentImageToolEnabled',
-  'agentSecretToolEnabled',
-  'agentUsageToolEnabled',
-  'agentWorkflowToolEnabled',
-  // The limit failover plugin loads only while one of these is set.
-  'fallbackModel',
-  'accountSwitchProviders',
-]);
-
-export const createSettingsRuntime = (deps) => {
-========
-const MANAGED_PLUGIN_SETTINGS_KEYS = new Set([
-  'agentControlToolEnabled',
-  'agentScheduleToolEnabled',
-  'agentWebToolEnabled',
-  'agentMemoryToolEnabled',
-  'agentKnowledgeToolEnabled',
-  'agentNotifyToolEnabled',
-  'agentRenderToolEnabled',
-  'agentImageToolEnabled',
-  'agentSecretToolEnabled',
-  'agentUsageToolEnabled',
-  'agentTerminalToolEnabled',
-  'agentWorkflowToolEnabled',
-  'fallbackModel',
-  'accountSwitchProviders',
-]);
-
-export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   const {
     fsPromises,
     path,
@@ -232,18 +63,26 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     onMessageSearchReasoningChanged = () => { },
   } = deps;
 
-  let persistSettingsLock: Promise<unknown> = Promise.resolve();
+  let persistSettingsLock = Promise.resolve();
 
   const PREFERENCES_FILE_PATH = preferencesFilePathFor(SETTINGS_FILE_PATH, path);
+  // True while preferences.json exists but cannot be read. Profile writes are
+  // refused meanwhile so a corrupt file is never overwritten with a seed or a
+  // partial document; clients keep the values they hold.
   let preferencesUnavailable = false;
   let preferencesFailureLogged = false;
 
+  // Orphan recovery is a one-shot best-effort scan: when orphans can't be
+  // matched on first pass they stay on disk and every subsequent settings
+  // read would re-scan them. In-process (Electron) this runs in the main
+  // event loop, so hitting it 3+ times/second from fs/list, path, etc.
+  // turns into perceptible UI jank for ~10-15 seconds after launch.
+  // Cache the outcome for this process lifetime.
   let orphanRecoveryDone = false;
 
   const PROJECTS_ROOT_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'projects');
   const PROJECT_ICONS_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'project-icons');
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
   const isManagedChatDirectory = async (candidate) => {
     if (!managedChatsRoot) return false;
     const root = await fsPromises.realpath(managedChatsRoot).catch((error) => {
@@ -258,40 +97,33 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
 
   const sha1Hex = (value) => crypto.createHash('sha1').update(value).digest('hex');
   const projectIconBaseName = (projectId) => `project-${sha1Hex(projectId)}`;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-  const sha1Hex = (value) => crypto.createHash('sha1').update(value).digest('hex');
-  const projectIconBaseName = (projectId) => `project-${sha1Hex(projectId)}`;
-========
-  const sha1Hex = (value: string) => crypto.createHash('sha1').update(value).digest('hex');
-  const projectIconBaseName = (projectId: string) => `project-${sha1Hex(projectId)}`;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   const PROJECT_ICON_EXTENSIONS = ['png', 'jpg', 'svg', 'webp', 'ico'];
 
-  const readJsonFile = async (filePath: string) => {
+  const readJsonFile = async (filePath) => {
     try {
       const raw = await fsPromises.readFile(filePath, 'utf8');
-      const parsed: unknown = JSON.parse(raw);
-      return hasFields(parsed) ? parsed : null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
     } catch (error) {
-      if (hasErrorCode(error) && error.code === 'ENOENT') {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') {
         return null;
       }
       throw error;
     }
   };
 
-  const writeJsonFile = async (filePath: string, value: SettingsDocument) => {
+  const writeJsonFile = async (filePath, value) => {
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
     await fsPromises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
   };
 
-  const uniqueStrings = (values: unknown[]) => Array.from(new Set(values.filter((value): value is string => isString(value) && value.trim().length > 0)));
+  const uniqueStrings = (values) => Array.from(new Set(values.filter((value) => typeof value === 'string' && value.trim().length > 0)));
 
-  const mergeByKey = (oldItems: SettingsDocument[string], newItems: SettingsDocument[string], getKey: (item: SettingsDocument) => SettingsDocument[string]) => {
-    const result: SettingsDocument[] = [];
+  const mergeByKey = (oldItems, newItems, getKey) => {
+    const result = [];
     const seen = new Set();
-    for (const item of [...(isList(newItems) ? newItems : []), ...(isList(oldItems) ? oldItems : [])]) {
-      if (!hasFields(item)) continue;
+    for (const item of [...(Array.isArray(newItems) ? newItems : []), ...(Array.isArray(oldItems) ? oldItems : [])]) {
+      if (!item || typeof item !== 'object') continue;
       const key = getKey(item);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -300,12 +132,12 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return result;
   };
 
-  const remapPlanPaths = (entries: SettingsDocument[string], fromDir: string, toDir: string) => {
-    if (!isList(entries) || !fromDir || !toDir || fromDir === toDir) {
-      return isList(entries) ? entries : [];
+  const remapPlanPaths = (entries, fromDir, toDir) => {
+    if (!Array.isArray(entries) || !fromDir || !toDir || fromDir === toDir) {
+      return Array.isArray(entries) ? entries : [];
     }
     return entries.map((entry) => {
-      if (!hasFields(entry) || !isString(entry.path)) {
+      if (!entry || typeof entry !== 'object' || typeof entry.path !== 'string') {
         return entry;
       }
       const trimmedPath = entry.path.trim();
@@ -320,47 +152,43 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     });
   };
 
-  const mergeProjectConfigData = ({ oldConfig, newConfig, oldStorageDir, newStorageDir, projectPath }: {
-    oldConfig: SettingsDocument | null; newConfig: SettingsDocument | null;
-    oldStorageDir: string; newStorageDir: string; projectPath: string;
-  }) => {
-    const oldValue = oldConfig || {};
-    const newValue = newConfig || {};
+  const mergeProjectConfigData = ({ oldConfig, newConfig, oldStorageDir, newStorageDir, projectPath }) => {
+    const oldValue = oldConfig && typeof oldConfig === 'object' ? oldConfig : {};
+    const newValue = newConfig && typeof newConfig === 'object' ? newConfig : {};
     const oldPlanFiles = remapPlanPaths(oldValue.projectPlanFiles, oldStorageDir, newStorageDir);
     const newPlanFiles = remapPlanPaths(newValue.projectPlanFiles, oldStorageDir, newStorageDir);
-    const oldNotes = isString(oldValue.projectNotes) ? oldValue.projectNotes : '';
-    const newNotes = isString(newValue.projectNotes) ? newValue.projectNotes : '';
+    const oldNotes = typeof oldValue.projectNotes === 'string' ? oldValue.projectNotes : '';
+    const newNotes = typeof newValue.projectNotes === 'string' ? newValue.projectNotes : '';
 
-    const merged: SettingsDocument = {
+    return {
       ...oldValue,
       ...newValue,
+      ...(typeof projectPath === 'string' && projectPath.trim().length > 0 ? { projectPath } : {}),
+      ...(uniqueStrings([...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []), ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : [])]).length > 0
+        ? { 'setup-worktree': uniqueStrings([...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []), ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : [])]) }
+        : {}),
+      ...(oldNotes || newNotes ? { projectNotes: newNotes || oldNotes } : {}),
+      ...(mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id).length > 0
+        ? { projectTodos: mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id) }
+        : {}),
+      ...(mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id).length > 0
+        ? { projectActions: mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id) }
+        : {}),
+      ...(mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id).length > 0
+        ? { scheduledTasks: mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id) }
+        : {}),
+      ...(mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path).length > 0
+        ? { projectPlanFiles: mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path) }
+        : {}),
+      ...(typeof newValue.projectActionsPrimaryId === 'string' && newValue.projectActionsPrimaryId.trim().length > 0
+        ? { projectActionsPrimaryId: newValue.projectActionsPrimaryId }
+        : typeof oldValue.projectActionsPrimaryId === 'string' && oldValue.projectActionsPrimaryId.trim().length > 0
+          ? { projectActionsPrimaryId: oldValue.projectActionsPrimaryId }
+          : {}),
     };
-    if (projectPath.trim().length > 0) merged.projectPath = projectPath;
-    if (uniqueStrings([...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []), ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : [])]).length > 0) {
-      merged['setup-worktree'] = uniqueStrings([...(Array.isArray(oldValue['setup-worktree']) ? oldValue['setup-worktree'] : []), ...(Array.isArray(newValue['setup-worktree']) ? newValue['setup-worktree'] : [])]);
-    }
-    if (oldNotes || newNotes) merged.projectNotes = newNotes || oldNotes;
-    if (mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id).length > 0) {
-      merged.projectTodos = mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id);
-    }
-    if (mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id).length > 0) {
-      merged.projectActions = mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id);
-    }
-    if (mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id).length > 0) {
-      merged.scheduledTasks = mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id);
-    }
-    if (mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path).length > 0) {
-      merged.projectPlanFiles = mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path);
-    }
-    if (isString(newValue.projectActionsPrimaryId) && newValue.projectActionsPrimaryId.trim().length > 0) {
-      merged.projectActionsPrimaryId = newValue.projectActionsPrimaryId;
-    } else if (isString(oldValue.projectActionsPrimaryId) && oldValue.projectActionsPrimaryId.trim().length > 0) {
-      merged.projectActionsPrimaryId = oldValue.projectActionsPrimaryId;
-    }
-    return merged;
   };
 
-  const moveDirectoryContents = async (fromDir: string, toDir: string) => {
+  const moveDirectoryContents = async (fromDir, toDir) => {
     try {
       const entries = await fsPromises.readdir(fromDir, { withFileTypes: true });
       await fsPromises.mkdir(toDir, { recursive: true });
@@ -381,13 +209,13 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
 
       await fsPromises.rm(fromDir, { recursive: true, force: true });
     } catch (error) {
-      if (!(hasErrorCode(error) && error.code === 'ENOENT')) {
+      if (!(error && typeof error === 'object' && error.code === 'ENOENT')) {
         throw error;
       }
     }
   };
 
-  const migrateProjectIconFiles = async ({ oldId, newId }: { oldId: string; newId: string }) => {
+  const migrateProjectIconFiles = async ({ oldId, newId }) => {
     if (!oldId || !newId || oldId === newId) {
       return;
     }
@@ -403,7 +231,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       try {
         await fsPromises.access(oldPath);
       } catch (error) {
-        if (hasErrorCode(error) && error.code === 'ENOENT') {
+        if (error && typeof error === 'object' && error.code === 'ENOENT') {
           continue;
         }
         throw error;
@@ -420,7 +248,20 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     }
   };
 
-  const mergeProjectContextFiles = async (oldStorageDir: string, newStorageDir: string) => {
+  /**
+   * Merge the server-owned `context.json` (notes/todos/plans) across a project
+   * id change.
+   *
+   * `moveDirectoryContents` only renames a file when the destination is free,
+   * so without this step an existing `<newId>/context.json` would silently
+   * discard everything stored under `<oldId>`. Every list is merged by identity
+   * so neither side loses entries.
+   *
+   * A version 1 context stored notes as a single string. It is left untouched
+   * here: `project-context` converts it on read, and converting in two places
+   * would mean two definitions of the same migration.
+   */
+  const mergeProjectContextFiles = async (oldStorageDir, newStorageDir) => {
     const oldContextPath = path.join(oldStorageDir, 'context.json');
     const newContextPath = path.join(newStorageDir, 'context.json');
 
@@ -430,10 +271,13 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     ]);
 
     if (!oldContext || !newContext) {
+      // Nothing to reconcile: the plain directory move handles a single side.
       return;
     }
 
     const mergeNotes = () => {
+      // One side may still be a version 1 string; keep whichever is a list, and
+      // prefer the destination when both are strings.
       const oldIsList = Array.isArray(oldContext.notes);
       const newIsList = Array.isArray(newContext.notes);
       if (oldIsList && newIsList) {
@@ -454,7 +298,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     await fsPromises.rm(oldContextPath, { force: true });
   };
 
-  const migrateProjectScopedStorage = async ({ oldId, newId, projectPath }: { oldId: string; newId: string; projectPath: string }) => {
+  const migrateProjectScopedStorage = async ({ oldId, newId, projectPath }) => {
     if (!oldId || !newId || oldId === newId) {
       return;
     }
@@ -479,14 +323,21 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     await fsPromises.rm(oldConfigPath, { force: true });
   };
 
-  const migrateRawIdStorageFolder = async (projectId: string) => {
+  /**
+   * A build before the bounded folder name created `<projectId>/` for an id
+   * the filesystem still accepted (201 to 255 characters; longer ids never
+   * got a folder). Only the bounded folder is read now, so that folder's
+   * notes, plans, and memory are moved over once. A raw name the filesystem
+   * cannot hold (ENAMETOOLONG) means no such folder ever existed.
+   */
+  const migrateRawIdStorageFolder = async (projectId) => {
     const stem = projectConfigFileStemOf(projectId);
     if (stem === projectId) return;
     const rawStorageDir = path.join(PROJECTS_ROOT_DIR, projectId);
     try {
       await fsPromises.stat(rawStorageDir);
     } catch (error) {
-      if (hasOptionalCode(error) && (error.code === 'ENOENT' || error.code === 'ENAMETOOLONG')) return;
+      if (error?.code === 'ENOENT' || error?.code === 'ENAMETOOLONG') return;
       throw error;
     }
     const boundedStorageDir = path.join(PROJECTS_ROOT_DIR, stem);
@@ -494,8 +345,8 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     await moveDirectoryContents(rawStorageDir, boundedStorageDir);
   };
 
-  const migrateSettingsToDeterministicProjectIds = async (current: SettingsDocument) => {
-    const settings = current;
+  const migrateSettingsToDeterministicProjectIds = async (current) => {
+    const settings = current && typeof current === 'object' ? current : {};
     const projects = sanitizeProjects(settings.projects) || [];
     if (projects.length === 0) {
       return { settings, changed: false };
@@ -519,7 +370,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     }
 
     if (!orphanRecoveryDone) {
-      orphanRecoveryDone = true;
+      orphanRecoveryDone = true; // set before await to close races under concurrent settings reads
       try {
         await recoverOrphanProjectFiles(nextProjects);
       } catch (error) {
@@ -531,23 +382,30 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       return { settings, changed: false };
     }
 
-    const currentActiveId = isString(settings.activeProjectId) ? settings.activeProjectId : '';
+    const currentActiveId = typeof settings.activeProjectId === 'string' ? settings.activeProjectId : '';
     const nextActiveProjectId = projectIdMap.get(currentActiveId) || currentActiveId || nextProjects[0]?.id;
 
-    const nextSettings: SettingsDocument = {
-      ...settings,
-      projects: nextProjects,
+    return {
+      settings: {
+        ...settings,
+        projects: nextProjects,
+        ...(nextActiveProjectId ? { activeProjectId: nextActiveProjectId } : {}),
+      },
+      changed: true,
     };
-    if (nextActiveProjectId) nextSettings.activeProjectId = nextActiveProjectId;
-    return { settings: nextSettings, changed: true };
   };
 
-  const recoverOrphanProjectFiles = async (canonicalProjects: SettingsProject[]) => {
+  // Orphan files are project jsons left behind from earlier random-UUID project
+  // ids (they have no projectPath field and are not referenced by settings).
+  // For each canonical project whose current config is empty (lost during the
+  // earlier id churn), try to find a single orphan whose setup-worktree command
+  // patterns uniquely match the project's basename and merge it in.
+  const recoverOrphanProjectFiles = async (canonicalProjects) => {
     let entries;
     try {
       entries = await fsPromises.readdir(PROJECTS_ROOT_DIR, { withFileTypes: true });
     } catch (error) {
-      if (hasErrorCode(error) && error.code === 'ENOENT') return;
+      if (error && typeof error === 'object' && error.code === 'ENOENT') return;
       throw error;
     }
 
@@ -561,13 +419,13 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
 
     console.warn(`[projects] Found ${orphanFiles.length} orphan project config(s) without projectPath.`);
 
-    const orphans: OrphanProject[] = [];
+    const orphans = [];
     for (const orphanId of orphanFiles) {
       const filePath = path.join(PROJECTS_ROOT_DIR, `${orphanId}.json`);
       const content = await readJsonFile(filePath);
       if (!content) continue;
       const hasContent = [
-        isString(content.projectNotes) && content.projectNotes.trim().length > 0,
+        typeof content.projectNotes === 'string' && content.projectNotes.trim().length > 0,
         Array.isArray(content.projectTodos) && content.projectTodos.length > 0,
         Array.isArray(content.projectActions) && content.projectActions.length > 0,
         Array.isArray(content['setup-worktree']) && content['setup-worktree'].length > 0,
@@ -579,30 +437,30 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
 
     if (orphans.length === 0) return;
 
-    const basenameOf = (projectPath: string) => {
+    const basenameOf = (projectPath) => {
+      if (typeof projectPath !== 'string') return '';
       const normalized = projectPath.replace(/\\/g, '/').replace(/\/+$/g, '');
       const idx = normalized.lastIndexOf('/');
       return (idx >= 0 ? normalized.slice(idx + 1) : normalized).toLowerCase();
     };
 
-    const extractRootRelPaths = (orphan: OrphanProject) => {
+    const extractRootRelPaths = (orphan) => {
       const commands = [
         ...(Array.isArray(orphan.content['setup-worktree']) ? orphan.content['setup-worktree'] : []),
-        ...(isList(orphan.content.projectActions) ? orphan.content.projectActions.map((a) => hasActionFields(a) && isString(a.command) ? a.command : '') : []),
-      ].filter(isString);
-      const results = new Set<string>();
+        ...(Array.isArray(orphan.content.projectActions) ? orphan.content.projectActions.map((a) => typeof a?.command === 'string' ? a.command : '') : []),
+      ].filter((s) => typeof s === 'string');
+      const results = new Set();
       const re = /\$(?:\{)?ROOT_(?:PROJECT|WORKTREE)_PATH\}?\/([A-Za-z0-9._/-]+)/g;
       for (const cmd of commands) {
         let match;
         while ((match = re.exec(cmd)) !== null) {
-          const relativePath = match[1];
-          if (relativePath !== undefined) results.add(relativePath);
+          results.add(match[1]);
         }
       }
       return Array.from(results);
     };
 
-    const fileExistsInProject = async (projectPath: string, relPath: string) => {
+    const fileExistsInProject = async (projectPath, relPath) => {
       try {
         await fsPromises.access(path.join(projectPath, relPath));
         return true;
@@ -611,8 +469,8 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       }
     };
 
-    const orphanMatchesProject = async (orphan: OrphanProject, project: SettingsProject) => {
-      if (!project.path.trim()) return false;
+    const orphanMatchesProject = async (orphan, project) => {
+      if (typeof project.path !== 'string' || !project.path.trim()) return false;
       const rels = extractRootRelPaths(orphan);
       for (const rel of rels) {
         if (await fileExistsInProject(project.path, rel)) {
@@ -623,12 +481,12 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       if (!name) return false;
       const haystacks = [
         ...(Array.isArray(orphan.content['setup-worktree']) ? orphan.content['setup-worktree'] : []),
-        ...(isList(orphan.content.projectActions) ? orphan.content.projectActions.map((a) => `${hasActionFields(a) && a.name || ''} ${hasActionFields(a) && a.command || ''}`) : []),
+        ...(Array.isArray(orphan.content.projectActions) ? orphan.content.projectActions.map((a) => `${a?.name || ''} ${a?.command || ''}`) : []),
       ].join(' ').toLowerCase();
       return haystacks.includes(name);
     };
 
-    const matches = new Map<string, OrphanProject[]>();
+    const matches = new Map();
     for (const orphan of orphans) {
       const matchedProjects = [];
       for (const project of canonicalProjects) {
@@ -636,8 +494,8 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
           matchedProjects.push(project);
         }
       }
-      const project = matchedProjects[0];
-      if (matchedProjects.length === 1 && project) {
+      if (matchedProjects.length === 1) {
+        const project = matchedProjects[0];
         const list = matches.get(project.id) || [];
         list.push(orphan);
         matches.set(project.id, list);
@@ -654,6 +512,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
 
       for (const orphan of orphansForProject) {
         const targetExisting = (await readJsonFile(targetPath)) || {};
+        // An orphan is named by the file found on disk, so its folder is the raw name.
         const orphanStorageDir = path.join(PROJECTS_ROOT_DIR, orphan.orphanId);
         const merged = mergeProjectConfigData({
           oldConfig: orphan.content,
@@ -679,13 +538,13 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
   const readInstanceSettingsFromDisk = async () => {
     try {
       const raw = await fsPromises.readFile(SETTINGS_FILE_PATH, 'utf8');
-      const parsed: unknown = JSON.parse(raw);
-      if (hasFields(parsed)) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
         return parsed;
       }
       return {};
     } catch (error) {
-      if (hasErrorCode(error) && error.code === 'ENOENT') {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') {
         return {};
       }
       console.warn('Failed to read settings file:', error);
@@ -693,12 +552,17 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     }
   };
 
-  const readPreferenceFields = async (): Promise<PreferenceReadResult> => {
+  /**
+   * `{ status: 'missing' }` when the file does not exist, `{ status: 'ok',
+   * fields }` when it parsed, `{ status: 'failed' }` for anything else. Only
+   * "missing" may be seeded; "failed" must leave the file alone.
+   */
+  const readPreferenceFields = async () => {
     let raw;
     try {
       raw = await fsPromises.readFile(PREFERENCES_FILE_PATH, 'utf8');
     } catch (error) {
-      if (hasErrorCode(error) && error.code === 'ENOENT') {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') {
         return { status: 'missing' };
       }
       if (!preferencesFailureLogged) {
@@ -719,11 +583,17 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return { status: 'ok', fields: parsed.fields };
   };
 
-  const writePreferencesToDisk = async (fields: PreferenceFields) => {
+  const writePreferencesToDisk = async (fields) => {
     await writeJsonFileAtomic(PREFERENCES_FILE_PATH, serializePreferencesDocument(fields));
   };
 
-  const readSettingsFromDisk = async ({ surface = null }: SettingsReadOptions = {}) => {
+  // The merged document every consumer sees: instance facts from settings.json
+  // plus the profile from preferences.json. On the first read of an install
+  // that predates the split, the profile keys still sitting in settings.json
+  // seed preferences.json. settings.json keeps a copy of the profile's base
+  // values on every write too, so an older build (which reads only that file)
+  // still finds everything where it used to be.
+  const readSettingsFromDisk = async ({ surface = null } = {}) => {
     const instance = await readInstanceSettingsFromDisk();
     const preferences = await readPreferenceFields();
     if (preferences.status === 'failed') {
@@ -743,35 +613,42 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return { ...instance, ...flattenPreferences(preferences.fields, normalizeSettingsSurface(surface)) };
   };
 
+  // Strict variant for callers that REGENERATE persisted identity when a key is
+  // absent (relay signing/encryption keys). The lenient reader above maps every
+  // failure — corrupt JSON, EACCES, transient I/O — to `{}`, which such callers
+  // cannot distinguish from "first run": they would mint a NEW identity, orphan
+  // every paired device and push binding, and overwrite the settings file with
+  // the empty spread. Here only a genuinely missing file means "no settings";
+  // any other failure (including a non-object payload) throws.
   const readSettingsFromDiskStrict = async () => {
     let raw;
     try {
       raw = await fsPromises.readFile(SETTINGS_FILE_PATH, 'utf8');
     } catch (error) {
-      if (hasErrorCode(error) && error.code === 'ENOENT') {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') {
         return {};
       }
       throw error;
     }
-    const parsed: unknown = JSON.parse(raw);
-    if (!hasFields(parsed)) {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
       throw new Error('Settings file is malformed (non-object payload)');
     }
     return parsed;
   };
 
-  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const isTransientWindowsReplaceError = (error: unknown): error is { code: 'EPERM' | 'EACCES' | 'EBUSY' } => {
-    if (process.platform !== 'win32' || !hasErrorCode(error)) {
+  const isTransientWindowsReplaceError = (error) => {
+    if (process.platform !== 'win32' || !error || typeof error !== 'object') {
       return false;
     }
     return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY';
   };
 
-  const replaceFile = async (tmp: string, target: string) => {
+  const replaceFile = async (tmp, target) => {
     const maxAttempts = process.platform === 'win32' ? 6 : 1;
-    let lastError: unknown;
+    let lastError = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
@@ -790,6 +667,10 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       throw lastError;
     }
 
+    // Windows can transiently reject atomic replacement when another process
+    // briefly opens the target file. Preserve atomic rename everywhere it works,
+    // but fall back to a direct replacement so settings persistence does not
+    // get permanently wedged on Windows desktop installs.
     try {
       await fsPromises.copyFile(tmp, target);
     } finally {
@@ -797,7 +678,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     }
   };
 
-  const cleanupOrphanedSettingsTempFiles = async (directory: string) => {
+  const cleanupOrphanedSettingsTempFiles = async (directory) => {
     try {
       const entries = await fsPromises.readdir(directory, { withFileTypes: true });
       const cleanupTasks = entries
@@ -805,14 +686,20 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
         .map((entry) => fsPromises.rm(path.join(directory, entry.name), { force: true }).catch(() => { }));
       await Promise.all(cleanupTasks);
     } catch {
-      return;
+      // Best-effort cleanup: errors reading directory must not fail settings operations
     }
   };
 
-  const writeJsonFileAtomic = async (filePath: string, text: string) => {
+  const writeJsonFileAtomic = async (filePath, text) => {
     const directory = path.dirname(filePath);
+    // Tighten only a directory this write created (mkdir's mode is umasked):
+    // an existing one keeps the permissions and ACLs an administrator gave it.
     const created = await fsPromises.mkdir(directory, { recursive: true, mode: 0o700 });
     if (created && process.platform !== 'win32') await fsPromises.chmod(directory, 0o700);
+    // Atomic write: Electron main and ssh-manager read these files via plain
+    // readFile + JSON.parse and silently coerce parse errors to {}. A
+    // partial read during a non-atomic writeFile would make their next
+    // read-modify-write wipe the file.
     const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       await fsPromises.writeFile(tmp, text, { encoding: 'utf8', mode: 0o600 });
@@ -826,9 +713,16 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     }
   };
 
-  const writeSettingsToDisk = async (settings: SettingsDocument, { surface = null, changedKeys = null }: SettingsWriteOptions = {}) => {
-    const current: PreferenceReadResult = preferencesUnavailable ? { status: 'failed' } : await readPreferenceFields();
+  /**
+   * Persist a merged document: profile keys go to preferences.json (stamped
+   * when their value changed), everything else to settings.json. While
+   * preferences.json is unreadable its part is skipped rather than replaced.
+   */
+  const writeSettingsToDisk = async (settings, { surface = null, changedKeys = null } = {}) => {
+    const current = preferencesUnavailable ? { status: 'failed' } : await readPreferenceFields();
     if (current.status === 'failed') {
+      // The profile part is not saved; settings.json keeps whatever legacy
+      // profile copy it already holds rather than losing it too.
       preferencesUnavailable = true;
       const onDisk = await readInstanceSettingsFromDisk();
       await writeJsonFileAtomic(SETTINGS_FILE_PATH, JSON.stringify({
@@ -846,13 +740,13 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     await writePreferencesToDisk(nextFields);
   };
 
-  const validateProjectEntries = async (projects: unknown[]) => {
-    if (!isList(projects)) {
+  const validateProjectEntries = async (projects) => {
+    if (!Array.isArray(projects)) {
       return [];
     }
 
     const validations = projects.map(async (project) => {
-      if (!project || !hasProjectFields(project) || !isString(project.path) || project.path.length === 0) {
+      if (!project || typeof project.path !== 'string' || project.path.length === 0) {
         console.warn('[validateProjectEntries] Dropping project entry with missing or empty path');
         return null;
       }
@@ -864,10 +758,12 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
         }
         return project;
       } catch (error) {
-        if (hasErrorCode(error) && error.code === 'ENOENT') {
+        if (error && typeof error === 'object' && error.code === 'ENOENT') {
           console.warn(`[validateProjectEntries] Dropping project — directory no longer exists: ${project.path}`);
           return null;
         }
+        // Permission or transient fs error — keep the project rather than
+        // silently losing it from the user's list.
         return project;
       }
     });
@@ -875,59 +771,19 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return (await Promise.all(validations)).filter((p) => p !== null);
   };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
   const migrateSettingsFromLegacyLastDirectory = async (current) => {
     const settings = current && typeof current === 'object' ? current : {};
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-  const isWithinRoot = (candidate, root) => {
-    const relative = path.relative(root, candidate);
-    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-  };
-
-  // A chat's folder belongs to no project. With no project open, the folder
-  // the UI last browsed is often a chat's, and it must not become one.
-  const isChatDirectory = async (candidate) => {
-    const roots = chatRoots.filter(Boolean).map((root) => path.resolve(root));
-    if (roots.some((root) => isWithinRoot(candidate, root))) {
-      return true;
-    }
-    const realCandidate = await fsPromises.realpath(candidate);
-    const realRoots = await Promise.all(roots.map((root) => fsPromises.realpath(root).catch(() => null)));
-    return realRoots.some((root) => root && isWithinRoot(realCandidate, root));
-  };
-
-  const migrateSettingsFromLegacyLastDirectory = async (current) => {
-    const settings = current && typeof current === 'object' ? current : {};
-========
-  const isWithinRoot = (candidate: string, root: string) => {
-    const relative = path.relative(root, candidate);
-    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-  };
-
-  const isChatDirectory = async (candidate: string) => {
-    const roots = chatRoots.filter(Boolean).map((root) => path.resolve(root));
-    if (roots.some((root) => isWithinRoot(candidate, root))) {
-      return true;
-    }
-    const realCandidate = await fsPromises.realpath(candidate);
-    const realRoots = await Promise.all(roots.map((root) => fsPromises.realpath(root).catch(() => null)));
-    return realRoots.some((root) => root && isWithinRoot(realCandidate, root));
-  };
-
-  const migrateSettingsFromLegacyLastDirectory = async (current: SettingsDocument) => {
-    const settings = current;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
     const now = Date.now();
 
     const sanitizedProjects = sanitizeProjects(settings.projects) || [];
     let nextProjects = sanitizedProjects;
     let nextActiveProjectId =
-      isString(settings.activeProjectId) ? settings.activeProjectId : undefined;
+      typeof settings.activeProjectId === 'string' ? settings.activeProjectId : undefined;
 
     let changed = false;
 
     if (nextProjects.length === 0) {
-      const legacy = isString(settings.lastDirectory) ? settings.lastDirectory.trim() : '';
+      const legacy = typeof settings.lastDirectory === 'string' ? settings.lastDirectory.trim() : '';
       const candidate = legacy ? resolveDirectoryCandidate(legacy) : null;
 
       if (candidate) {
@@ -948,7 +804,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
             changed = true;
           }
         } catch {
-          changed = false;
+          // ignore invalid lastDirectory
         }
       }
     }
@@ -956,7 +812,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     if (nextProjects.length > 0) {
       const active = nextProjects.find((project) => project.id === nextActiveProjectId) || null;
       if (!active) {
-        nextActiveProjectId = nextProjects[0]?.id;
+        nextActiveProjectId = nextProjects[0].id;
         changed = true;
       }
     } else if (nextActiveProjectId) {
@@ -977,14 +833,14 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return { settings: merged, changed: true };
   };
 
-  const migrateSettingsFromLegacyThemePreferences = async (current: SettingsDocument) => {
-    const settings = current;
+  const migrateSettingsFromLegacyThemePreferences = async (current) => {
+    const settings = current && typeof current === 'object' ? current : {};
 
-    const themeId = isString(settings.themeId) ? settings.themeId.trim() : '';
-    const themeVariant = isString(settings.themeVariant) ? settings.themeVariant.trim() : '';
+    const themeId = typeof settings.themeId === 'string' ? settings.themeId.trim() : '';
+    const themeVariant = typeof settings.themeVariant === 'string' ? settings.themeVariant.trim() : '';
 
-    const hasLight = isString(settings.lightThemeId) && settings.lightThemeId.trim().length > 0;
-    const hasDark = isString(settings.darkThemeId) && settings.darkThemeId.trim().length > 0;
+    const hasLight = typeof settings.lightThemeId === 'string' && settings.lightThemeId.trim().length > 0;
+    const hasDark = typeof settings.darkThemeId === 'string' && settings.darkThemeId.trim().length > 0;
 
     if (hasLight && hasDark) {
       return { settings, changed: false };
@@ -1012,16 +868,17 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       }
     }
 
-    const changes = { ...settings };
-    if (nextLightThemeId) changes.lightThemeId = nextLightThemeId;
-    if (nextDarkThemeId) changes.darkThemeId = nextDarkThemeId;
-    const merged = mergePersistedSettings(settings, changes);
+    const merged = mergePersistedSettings(settings, {
+      ...settings,
+      ...(nextLightThemeId ? { lightThemeId: nextLightThemeId } : {}),
+      ...(nextDarkThemeId ? { darkThemeId: nextDarkThemeId } : {}),
+    });
 
     return { settings: merged, changed: true };
   };
 
-  const migrateSettingsFromLegacyCollapsedProjects = async (current: SettingsDocument) => {
-    const settings = current;
+  const migrateSettingsFromLegacyCollapsedProjects = async (current) => {
+    const settings = current && typeof current === 'object' ? current : {};
     const collapsed = Array.isArray(settings.collapsedProjects)
       ? normalizeStringArray(settings.collapsedProjects)
       : [];
@@ -1057,84 +914,44 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       return { settings, changed: false };
     }
 
-    const next: SettingsDocument = { ...settings, projects: nextProjects };
+    const next = { ...settings, projects: nextProjects };
     delete next.collapsedProjects;
     return { settings: next, changed: true };
   };
 
-  const migrateSettingsNotificationDefaults = async (current: SettingsDocument) => {
-    const settings = current;
+  const migrateSettingsNotificationDefaults = async (current) => {
+    const settings = current && typeof current === 'object' ? current : {};
     let changed = false;
     const next = { ...settings };
 
-    if (!isBoolean(settings.notifyOnSubtasks)) {
+    if (typeof settings.notifyOnSubtasks !== 'boolean') {
       next.notifyOnSubtasks = true;
       changed = true;
     }
-    if (!isBoolean(settings.notifyOnCompletion)) {
+    if (typeof settings.notifyOnCompletion !== 'boolean') {
       next.notifyOnCompletion = true;
       changed = true;
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
     if (typeof settings.notifyOnError !== 'boolean') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-    if (settings.notifyOnPullRequests !== true && settings.notifyOnPullRequests !== false) {
-      next.notifyOnPullRequests = true;
-      changed = true;
-    }
-    if (typeof settings.notifyOnError !== 'boolean') {
-========
-    if (settings.notifyOnPullRequests !== true && settings.notifyOnPullRequests !== false) {
-      next.notifyOnPullRequests = true;
-      changed = true;
-    }
-    if (!isBoolean(settings.notifyOnError)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
       next.notifyOnError = true;
       changed = true;
     }
-    if (!isBoolean(settings.notifyOnQuestion)) {
+    if (typeof settings.notifyOnQuestion !== 'boolean') {
       next.notifyOnQuestion = true;
       changed = true;
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
     const { templates, changed: templatesChanged } = ensureNotificationTemplateShape(settings.notificationTemplates);
     if (templatesChanged || !settings.notificationTemplates || typeof settings.notificationTemplates !== 'object') {
       next.notificationTemplates = templates;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-    const { templates, changed: templatesChanged } = ensureNotificationTemplateShape(settings.notificationTemplates);
-    // Clearing the old English seed is what lets an install that never edited
-    // the templates send notification text in its own language.
-    const wasSeeded = isLegacySeededNotificationTemplates(templates);
-    const nextTemplates = wasSeeded ? emptyNotificationTemplates() : templates;
-    if (
-      templatesChanged
-      || wasSeeded
-      || !settings.notificationTemplates
-      || typeof settings.notificationTemplates !== 'object'
-    ) {
-      next.notificationTemplates = nextTemplates;
-========
-    const { templates, changed: templatesChanged } = normalizeNotificationTemplates(settings.notificationTemplates);
-    const wasSeeded = isLegacySeededNotificationTemplates(templates);
-    const nextTemplates = wasSeeded ? emptyNotificationTemplates() : templates;
-    if (
-      templatesChanged
-      || wasSeeded
-      || !settings.notificationTemplates
-      || !hasFields(settings.notificationTemplates)
-    ) {
-      next.notificationTemplates = nextTemplates;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
       changed = true;
     }
 
     return { settings: changed ? next : settings, changed };
   };
 
-  const migrateSettingsFromLegacyNamedTunnelKeys = async (current: SettingsDocument) => {
-    const settings = current;
+  const migrateSettingsFromLegacyNamedTunnelKeys = async (current) => {
+    const settings = current && typeof current === 'object' ? current : {};
     const next = { ...settings };
     let changed = false;
 
@@ -1148,7 +965,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       && Object.prototype.hasOwnProperty.call(next, 'namedTunnelToken')) {
       if (next.namedTunnelToken === null) {
         next.managedRemoteTunnelToken = null;
-      } else if (isString(next.namedTunnelToken)) {
+      } else if (typeof next.namedTunnelToken === 'string') {
         next.managedRemoteTunnelToken = next.namedTunnelToken.trim();
       }
       changed = true;
@@ -1166,32 +983,6 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       changed = true;
     }
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-    if (!Object.prototype.hasOwnProperty.call(next, 'managedRemoteTunnelSelectedPresetId')
-      && Object.prototype.hasOwnProperty.call(next, 'namedTunnelSelectedPresetId')) {
-      const selectedPresetId = typeof next.namedTunnelSelectedPresetId === 'string'
-        ? next.namedTunnelSelectedPresetId.trim()
-        : '';
-      if (selectedPresetId) {
-        next.managedRemoteTunnelSelectedPresetId = selectedPresetId;
-      }
-      changed = true;
-    }
-
-========
-    if (!Object.prototype.hasOwnProperty.call(next, 'managedRemoteTunnelSelectedPresetId')
-      && Object.prototype.hasOwnProperty.call(next, 'namedTunnelSelectedPresetId')) {
-      const selectedPresetId = isString(next.namedTunnelSelectedPresetId)
-        ? next.namedTunnelSelectedPresetId.trim()
-        : '';
-      if (selectedPresetId) {
-        next.managedRemoteTunnelSelectedPresetId = selectedPresetId;
-      }
-      changed = true;
-    }
-
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
     const legacyKeys = [
       'namedTunnelHostname',
       'namedTunnelToken',
@@ -1209,8 +1000,11 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return { settings: changed ? next : settings, changed };
   };
 
-  const migrateSettingsRemoveApprovedDirectories = (current: SettingsDocument) => {
-    const settings = current;
+  // `approvedDirectories` was a write-only registry: every project path and
+  // visited directory was appended forever, but nothing ever read it. Strip
+  // the stale key from persisted settings on upgrade.
+  const migrateSettingsRemoveApprovedDirectories = (current) => {
+    const settings = current && typeof current === 'object' ? current : {};
     if (!Object.prototype.hasOwnProperty.call(settings, 'approvedDirectories')) {
       return { settings, changed: false };
     }
@@ -1219,32 +1013,9 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     return { settings: next, changed: true };
   };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-  // Scheduled tasks used to be part of the agent control tool. Someone who had
-  // switched that tool off keeps them off after the split instead of getting a
-  // scheduling tool they never chose.
-  const migrateSettingsScheduleToolFromControl = (settings) => {
-    const chosen = settings.agentScheduleToolEnabled === true || settings.agentScheduleToolEnabled === false;
-    if (settings.agentControlToolEnabled !== false || chosen) {
-      return { settings, changed: false };
-    }
-    return { settings: { ...settings, agentScheduleToolEnabled: false }, changed: true };
-  };
-
-========
-  const migrateSettingsScheduleToolFromControl = (settings: SettingsDocument) => {
-    const chosen = settings.agentScheduleToolEnabled === true || settings.agentScheduleToolEnabled === false;
-    if (settings.agentControlToolEnabled !== false || chosen) {
-      return { settings, changed: false };
-    }
-    return { settings: { ...settings, agentScheduleToolEnabled: false }, changed: true };
-  };
-
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   let hasCleanedOrphanedTempFiles = false;
 
-  const readSettingsFromDiskMigrated = async ({ surface = null }: SettingsReadOptions = {}) => {
+  const readSettingsFromDiskMigrated = async ({ surface = null } = {}) => {
     if (!hasCleanedOrphanedTempFiles) {
       hasCleanedOrphanedTempFiles = true;
       await cleanupOrphanedSettingsTempFiles(path.dirname(SETTINGS_FILE_PATH));
@@ -1261,49 +1032,27 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
     if (migration1.changed || migration2.changed || migration3.changed || migration4.changed || migration5.changed || migration6.changed || migration7.changed || migration8.changed) {
       await writeSettingsToDisk(migration8.settings);
     }
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
     // Migrations run on the base view; a surface asks for its own resolution
     // of the per-surface keys on top of the migrated files.
     return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration8.settings;
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-    // Migrations run on the base view; a surface asks for its own resolution
-    // of the per-surface keys on top of the migrated files.
-    return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration9.settings;
-========
-    return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration9.settings;
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
   const persistResolvedSettings = async (resolveChanges, { surface = null } = {}) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-  // For a caller whose change depends on the settings on disk: `resolveChanges`
-  // runs inside the queue, so no other save lands between that read and this write.
-  const persistResolvedSettings = async (resolveChanges, { surface = null } = {}) => {
-========
-  const persistResolvedSettings = async (resolveChanges: (current: SettingsDocument) => SettingsDocument, { surface = null }: SettingsReadOptions = {}) => {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
     const result = persistSettingsLock.then(async () => {
       const current = await readSettingsFromDisk({ surface });
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
       const changes = typeof resolveChanges === 'function' ? resolveChanges(current) : resolveChanges;
       // Log field names only — changes can carry credentials (UI password,
       // client tokens, tunnel tokens) that must never reach the log file.
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-      const changes = resolveChanges(current);
-      // Log field names only — changes can carry credentials (UI password,
-      // client tokens, tunnel tokens) that must never reach the log file.
-========
-      const changes = resolveChanges(current);
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
       console.log('[persistSettings] Updating fields:', Object.keys(changes || {}).join(', ') || '(none)');
       const sanitized = sanitizeSettingsUpdate(changes);
       for (const key of Object.keys(sanitized)) {
+        // Device state belongs to the install in front of the user, never to
+        // the instance; a client that still sends it is simply ignored.
         if (isDeviceSettingsKey(key)) {
-          Reflect.deleteProperty(sanitized, key);
+          delete sanitized[key];
         } else if (preferencesUnavailable && isProfileSettingsKey(key)) {
           console.warn(`[persistSettings] Dropping ${key}: preferences file is unreadable`);
-          Reflect.deleteProperty(sanitized, key);
+          delete sanitized[key];
         }
       }
       let next = mergePersistedSettings(current, sanitized);
@@ -1323,22 +1072,20 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
         next = approvedDirectoriesMigration.settings;
       }
 
-      if (Object.prototype.hasOwnProperty.call(sanitized, 'projects') && isList(next.projects)) {
+      // Validating project paths hits the filesystem for every entry, so only
+      // do it when the incoming update actually touches the projects list —
+      // not on every theme/window-state/etc. save.
+      if (Object.prototype.hasOwnProperty.call(sanitized, 'projects') && Array.isArray(next.projects)) {
         const validated = await validateProjectEntries(next.projects);
         next = { ...next, projects: validated };
       }
 
-      if (isList(next.projects) && next.projects.length > 0) {
-        const activeId = isString(next.activeProjectId) ? next.activeProjectId : '';
-        const active = next.projects.find((project) => {
-          if (!hasProjectFields(project)) throw new TypeError(`Cannot read properties of ${project === null ? 'null' : 'undefined'} (reading 'id')`);
-          return project.id === activeId;
-        }) || null;
+      if (Array.isArray(next.projects) && next.projects.length > 0) {
+        const activeId = typeof next.activeProjectId === 'string' ? next.activeProjectId : '';
+        const active = next.projects.find((project) => project.id === activeId) || null;
         if (!active) {
-          const firstProject = next.projects[0];
-          if (!hasProjectFields(firstProject)) throw new TypeError(`Cannot read properties of ${firstProject === null ? 'null' : 'undefined'} (reading 'id')`);
-          console.log(`[persistSettings] Active project ID ${activeId} not found, switching to ${firstProject.id}`);
-          next = { ...next, activeProjectId: firstProject.id };
+          console.log(`[persistSettings] Active project ID ${activeId} not found, switching to ${next.projects[0].id}`);
+          next = { ...next, activeProjectId: next.projects[0].id };
         }
       } else if (next.activeProjectId) {
         console.log(`[persistSettings] No projects found, clearing activeProjectId ${next.activeProjectId}`);
@@ -1350,16 +1097,11 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
       }
 
       if (Object.prototype.hasOwnProperty.call(sanitized, 'managedRemoteTunnelPresetTokens') && sanitized.managedRemoteTunnelPresetTokens) {
-        const presets = next.managedRemoteTunnelPresets || [];
-        if (!isList(presets)) throw new TypeError('(next.managedRemoteTunnelPresets || []).map is not a function');
-        const presetsById = new Map(presets.map((entry) => {
-          if (!hasPresetFields(entry)) throw new TypeError(`Cannot read properties of ${entry === null ? 'null' : 'undefined'} (reading 'id')`);
-          return [entry.id, entry] as const;
-        }));
+        const presetsById = new Map((next.managedRemoteTunnelPresets || []).map((entry) => [entry.id, entry]));
         const updates = Object.entries(sanitized.managedRemoteTunnelPresetTokens)
           .map(([presetId, token]) => {
             const preset = presetsById.get(presetId);
-            if (!preset || !isString(token) || token.trim().length === 0) {
+            if (!preset || typeof token !== 'string' || token.trim().length === 0) {
               return null;
             }
             return {
@@ -1369,7 +1111,7 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
               token: token.trim(),
             };
           })
-          .filter((update) => update !== null);
+          .filter(Boolean);
 
         for (const update of updates) {
           await upsertManagedRemoteTunnelToken(update);
@@ -1378,89 +1120,23 @@ export const createSettingsRuntime = (deps: SettingsRuntimeDependencies) => {
 
       const changedKeys = Object.keys(sanitized);
       await writeSettingsToDisk(next, { surface, changedKeys });
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
       // The search index starts or stops in the background; the save does not wait for it.
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-      // OpenChamber's own OpenCode plugins live in a config file OpenCode
-      // watches, so flipping one of these switches takes effect in the running
-      // process instead of waiting for a restart.
-      if (changedKeys.some((key) => MANAGED_PLUGIN_SETTINGS_KEYS.has(key))) {
-        await Promise.resolve(onManagedPluginSettingsChanged(next)).catch((error) => {
-          console.warn('Failed to refresh the managed OpenCode config:', error?.message ?? error);
-        });
-      }
-      // The search index starts or stops in the background; the save does not wait for it.
-========
-      if (changedKeys.some((key) => MANAGED_PLUGIN_SETTINGS_KEYS.has(key))) {
-        await Promise.resolve(onManagedPluginSettingsChanged(next)).catch((error) => {
-          console.warn('Failed to refresh the managed OpenCode config:', error?.message ?? error);
-        });
-      }
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
       if (changedKeys.includes('messageSearchEnabled')) {
-        onMessageSearchEnabledChanged(isMessageSearchEnabled(next));
+        onMessageSearchEnabledChanged(next.messageSearchEnabled === true);
       }
       if (changedKeys.includes('messageSearchReasoningEnabled')) {
         onMessageSearchReasoningChanged(next.messageSearchReasoningEnabled === true);
       }
       return formatSettingsResponse(next);
     });
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
     // A failed write (a full disk) rejects only its own caller; the next
     // save still runs instead of replaying that error until a restart.
     persistSettingsLock = result.catch(() => { });
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-    // A failed write (a full disk) rejects only its own caller; the next
-    // save still runs instead of replaying that error until a restart.
-    persistSettingsLock = result.catch(() => {});
-========
-    persistSettingsLock = result.catch(() => {});
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
     return result;
   };
 
-  const persistSettings = (changes: SettingsDocument, options?: SettingsReadOptions) => persistResolvedSettings(() => changes, options);
+  const persistSettings = (changes, options) => persistResolvedSettings(() => changes, options);
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-runtime.js
-  // A background session may discover a project while another window saves
-  // settings. Resolve the append inside the settings queue, without activation.
-  const registerSessionProject = (resolveProject) => {
-    const result = persistSettingsLock.then(async () => {
-      const current = await readSettingsFromDiskStrict();
-      if (Array.isArray(current) || (current.projects !== undefined && !Array.isArray(current.projects))) {
-        throw new Error('Project registry is malformed');
-      }
-      const projects = sanitizeProjects(current.projects) || [];
-      const project = await resolveProject(projects);
-      if (!projects.some((entry) => entry.id === project.id)) {
-        await writeJsonFileAtomic(SETTINGS_FILE_PATH, JSON.stringify({ ...current, projects: [...(current.projects || []), project] }, null, 2));
-      }
-      return project;
-    });
-    persistSettingsLock = result.catch(() => {});
-    return result;
-  };
-
-========
-  const registerSessionProject = (resolveProject: (projects: SettingsProject[]) => SettingsProject | Promise<SettingsProject>) => {
-    const result = persistSettingsLock.then(async () => {
-      const current = await readSettingsFromDiskStrict();
-      if (Array.isArray(current) || (current.projects !== undefined && !Array.isArray(current.projects))) {
-        throw new Error('Project registry is malformed');
-      }
-      const projects = sanitizeProjects(current.projects) || [];
-      const project = await resolveProject(projects);
-      if (!projects.some((entry) => entry.id === project.id)) {
-        await writeJsonFileAtomic(SETTINGS_FILE_PATH, JSON.stringify({ ...current, projects: [...(current.projects || []), project] }, null, 2));
-      }
-      return project;
-    });
-    persistSettingsLock = result.catch(() => {});
-    return result;
-  };
-
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-runtime.ts
   return {
     readSettingsFromDisk,
     readSettingsFromDiskStrict,

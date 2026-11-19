@@ -1,69 +1,6 @@
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-normalization-runtime.js
 import { modelRefKey } from '@openchamber/agent-contract';
 
 export const createSettingsNormalizationRuntime = (dependencies) => {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-normalization-runtime.js
-export const createSettingsNormalizationRuntime = (dependencies) => {
-========
-import type osModule from 'node:os';
-import type pathModule from 'node:path';
-import type { SettingsDocument } from './settings-helpers.js';
-import type { ManagedRemoteTunnelPreset } from '../tunnels/managed-config.js';
-import { isBoolean, isString } from '../shared/object-guards.js';
-
-const hasFields = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object');
-const isFiniteNumber = (value: unknown): value is number => Number.isFinite(value);
-const isNumber = (value: unknown): value is number => typeof value === 'number';
-
-export interface SettingsNormalizationDependencies {
-  os: Pick<typeof osModule, 'homedir'>;
-  path: Pick<typeof pathModule, 'join' | 'resolve' | 'posix'>;
-  processLike: { platform: string };
-  realpathSync?: (value: string) => string;
-  readdirSync?: (value: string) => string[];
-  tunnelBootstrapTtlDefaultMs: number;
-  tunnelBootstrapTtlMinMs: number;
-  tunnelBootstrapTtlMaxMs: number;
-  tunnelSessionTtlDefaultMs: number;
-  tunnelSessionTtlMinMs: number;
-  tunnelSessionTtlMaxMs: number;
-}
-
-export interface SettingsProject {
-  id: string;
-  path: string;
-  label?: string;
-  labelSource?: 'manual' | 'auto';
-  icon?: string;
-  iconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' } | null;
-  iconBackground?: string | null;
-  color?: string;
-  defaultAgent?: string;
-  defaultModel?: string;
-  defaultVariant?: string;
-  addedAt?: number;
-  lastOpenedAt?: number;
-  sidebarCollapsed?: boolean;
-}
-
-export interface SettingsModelRef {
-  providerID: string;
-  modelID: string;
-}
-
-export interface SettingsSkillCatalog {
-  id: string;
-  label: string;
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-}
-
-type DirectoryListings = Map<string, string[] | null>;
-type TypographyKey = 'markdown' | 'code' | 'uiHeader' | 'uiLabel' | 'meta' | 'micro';
-
-export const createSettingsNormalizationRuntime = (dependencies: SettingsNormalizationDependencies) => {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-normalization-runtime.ts
   const {
     os,
     path,
@@ -78,13 +15,15 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     tunnelSessionTtlMaxMs,
   } = dependencies;
 
-  function normalizeDirectoryPath<Value>(value: Value): Value extends string ? string : Value;
-  function normalizeDirectoryPath(value: SettingsDocument[string]) {
-    if (!isString(value)) {
+  const normalizeDirectoryPath = (value) => {
+    if (typeof value !== 'string') {
       return value;
     }
 
     let trimmed = value.trim();
+    // Paths pasted from Windows "Copy as path" (or quoted shell snippets)
+    // arrive wrapped in quotes — a literal quote character can never be part
+    // of a real path, and it breaks every fs.stat/executable check.
     if (trimmed.length >= 2
       && ((trimmed.startsWith('"') && trimmed.endsWith('"'))
         || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
@@ -103,18 +42,32 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     }
 
     return trimmed;
-  }
+  };
 
+  // On case-insensitive but case-preserving filesystems (APFS default, NTFS)
+  // `realpathSync` resolves symlinks but returns the path with whatever casing
+  // was passed in — it does NOT report the on-disk casing. A project registered
+  // as `/Users/me/desktop/…` therefore stays lowercase even after realpath, and
+  // later case-sensitive `===` comparisons against the real (capitalized)
+  // session `directory` reported by opencode/git silently fail, mis-grouping
+  // sessions under a phantom worktree (issue #1913). We recover the true casing
+  // by walking each path component through readdir, preferring an exact match so
+  // that a case-SENSITIVE filesystem (where two entries may legitimately differ
+  // only by case) is never rewritten. Gated to case-insensitive platforms.
   const CASE_INSENSITIVE_PLATFORMS = new Set(['win32', 'darwin']);
 
-  const rootLengthOf = (value: string) => {
+  const rootLengthOf = (value) => {
     const drive = /^[a-zA-Z]:[\\/]/.exec(value);
     if (drive) return 3;
     return value.startsWith('/') ? 1 : 0;
   };
 
-  const canonicalizePathCase = (value: string, listings?: DirectoryListings) => {
-    if (!readdirSync || !value) return value;
+  // `listings` (directory -> entries, or null when unreadable) lets one pass over
+  // many paths read each shared ancestor once: projects mostly sit under the
+  // same few folders, and reading each of them again per project was 71 × 6
+  // synchronous readdirs per settings read on a 71-project workspace (#6084).
+  const canonicalizePathCase = (value, listings) => {
+    if (!readdirSync || typeof value !== 'string' || !value) return value;
     if (!CASE_INSENSITIVE_PLATFORMS.has(processLike?.platform)) return value;
 
     let result = value;
@@ -122,6 +75,8 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
       const rootLength = rootLengthOf(value);
       if (rootLength === 0) return value;
       const root = value.slice(0, rootLength);
+      // Only Windows treats a backslash as a separator; on macOS it is a legal
+      // name character, so `A\\B` must stay one segment.
       const separator = processLike.platform === 'win32' ? /[\\/]+/ : /\/+/;
       const segments = value.slice(rootLength).split(separator).filter(Boolean);
       let current = root;
@@ -135,11 +90,11 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
           }
           listings?.set(current, entries);
         }
-        if (!entries) return value;
-        let next: string | undefined = segment;
+        if (!entries) return value; // cannot read this level (missing/permission) — keep original
+        let next = segment;
         if (!entries.includes(segment)) {
           next = entries.find((entry) => entry.toLowerCase() === segment.toLowerCase());
-          if (!next) return value;
+          if (!next) return value; // component doesn't exist — don't rewrite
         }
         current = path.join(current, next);
       }
@@ -150,8 +105,12 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return result;
   };
 
-  const safeRealpathSync = (value: string, listings?: DirectoryListings) => {
-    if (!value) {
+  // Resolve symlinks and canonical case. A path realpath cannot resolve
+  // (missing, no permission) is kept exactly as stored: recovering its case
+  // could land on a different, existing sibling such as /volume/Foo for a
+  // missing /volume/foo.
+  const safeRealpathSync = (value, listings) => {
+    if (typeof value !== 'string' || !value) {
       return value;
     }
     if (!realpathSync) {
@@ -166,26 +125,35 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return canonicalizePathCase(resolved, listings);
   };
 
-  function normalizePathForPersistence<Value>(value: Value, options?: { resolveRealpath?: boolean }): Value extends string ? string : Value;
-  function normalizePathForPersistence(value: SettingsDocument[string], options: { resolveRealpath?: boolean } = {}) {
-    if (!isString(value)) {
+  const normalizePathForPersistence = (value, options = {}) => {
+    if (typeof value !== 'string') {
       return value;
     }
 
     const normalized = normalizeDirectoryPath(value);
+    if (typeof normalized !== 'string') {
+      return normalized;
+    }
+
     const trimmed = normalized.trim();
     if (!trimmed) {
       return trimmed;
     }
 
-    const uppercaseDriveLetter = (p: string) =>
-      p.replace(/^([a-z]):/, (_match: string, letter: string) => letter.toUpperCase() + ':');
+    // Normalize Windows drive letter to uppercase to ensure consistent
+    // case across all path representations on Windows. NTFS is case-insensitive
+    // but case-preserving, so a path like "c:\\Users\\..." and "C:\\Users\\..."
+    // would be stored differently in settings.json across sessions.
+    const uppercaseDriveLetter = (p) =>
+      p.replace(/^([a-z]):/, (_, letter) => letter.toUpperCase() + ':');
 
     const isWindows = processLike.platform === 'win32';
     const caseNormalized = isWindows ? uppercaseDriveLetter(trimmed) : trimmed;
     const resolved = options.resolveRealpath === false ? caseNormalized : safeRealpathSync(caseNormalized);
 
-    const finalResolved = isWindows
+    // Re-normalize after realpath — safeRealpathSync may return a
+    // lowercase drive letter on some Windows environments.
+    const finalResolved = isWindows && typeof resolved === 'string'
       ? uppercaseDriveLetter(resolved)
       : resolved;
 
@@ -194,9 +162,9 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     }
 
     return finalResolved.replace(/\//g, '\\');
-  }
+  };
 
-  const areStringArraysEqual = (a: SettingsDocument[string], b: SettingsDocument[string]) => {
+  const areStringArraysEqual = (a, b) => {
     if (!Array.isArray(a) || !Array.isArray(b)) {
       return false;
     }
@@ -211,25 +179,25 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return true;
   };
 
-  const normalizeStringArray = (input: SettingsDocument[string]) => {
+  const normalizeStringArray = (input) => {
     if (!Array.isArray(input)) {
       return [];
     }
     return Array.from(
       new Set(
-        input.filter((entry): entry is string => isString(entry) && entry.length > 0)
+        input.filter((entry) => typeof entry === 'string' && entry.length > 0)
       )
     );
   };
 
-  const sanitizeProjects = (input: SettingsDocument[string]) => {
+  const sanitizeProjects = (input) => {
     if (!Array.isArray(input)) {
       return undefined;
     }
 
     const hexColorPattern = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
-    const normalizeIconBackground = (value: SettingsDocument[string]) => {
-      if (!isString(value)) {
+    const normalizeIconBackground = (value) => {
+      if (typeof value !== 'string') {
         return null;
       }
       const trimmed = value.trim();
@@ -239,43 +207,31 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
       return hexColorPattern.test(trimmed) ? trimmed.toLowerCase() : null;
     };
 
-    const result: SettingsProject[] = [];
+    const result = [];
     const seenIds = new Set();
     const seenPaths = new Set();
-    const listings: DirectoryListings = new Map();
+    const listings = new Map();
 
     for (const entry of input) {
-      if (!hasFields(entry)) continue;
+      if (!entry || typeof entry !== 'object') continue;
 
       const candidate = entry;
-      const id = isString(candidate.id) ? candidate.id.trim() : '';
-      const rawPath = isString(candidate.path) ? candidate.path.trim() : '';
+      const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+      const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
       const resolvedPath = rawPath ? safeRealpathSync(path.resolve(normalizeDirectoryPath(rawPath)), listings) : '';
       const normalizedPath = resolvedPath ? normalizePathForPersistence(resolvedPath, { resolveRealpath: false }) : '';
-      const label = isString(candidate.label) ? candidate.label.trim() : '';
+      const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
       const labelSource = candidate.labelSource === 'manual' || candidate.labelSource === 'auto'
         ? candidate.labelSource
         : '';
-      const icon = isString(candidate.icon) ? candidate.icon.trim() : '';
-      const iconImage = hasFields(candidate.iconImage)
+      const icon = typeof candidate.icon === 'string' ? candidate.icon.trim() : '';
+      const iconImage = candidate.iconImage && typeof candidate.iconImage === 'object'
         ? candidate.iconImage
         : null;
       const iconBackground = normalizeIconBackground(candidate.iconBackground);
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-normalization-runtime.js
       const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
       const defaultModel = typeof candidate.defaultModel === 'string' ? candidate.defaultModel.trim() : '';
       const defaultVariant = typeof candidate.defaultVariant === 'string' ? candidate.defaultVariant.trim() : '';
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-normalization-runtime.js
-      const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
-      const defaultAgent = typeof candidate.defaultAgent === 'string' ? candidate.defaultAgent.trim() : '';
-      const defaultModel = typeof candidate.defaultModel === 'string' ? candidate.defaultModel.trim() : '';
-      const defaultVariant = typeof candidate.defaultVariant === 'string' ? candidate.defaultVariant.trim() : '';
-========
-      const color = isString(candidate.color) ? candidate.color.trim() : '';
-      const defaultAgent = isString(candidate.defaultAgent) ? candidate.defaultAgent.trim() : '';
-      const defaultModel = isString(candidate.defaultModel) ? candidate.defaultModel.trim() : '';
-      const defaultVariant = isString(candidate.defaultVariant) ? candidate.defaultVariant.trim() : '';
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-normalization-runtime.ts
       const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
       const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt)
         ? Number(candidate.lastOpenedAt)
@@ -288,10 +244,9 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
       seenIds.add(id);
       seenPaths.add(normalizedPath);
 
-      const project: SettingsProject = {
+      const project = {
         id,
         path: normalizedPath,
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-normalization-runtime.js
         ...(label ? { label } : {}),
         ...(icon ? { icon } : {}),
         ...(iconBackground ? { iconBackground } : {}),
@@ -301,37 +256,15 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
         ...(defaultModel && defaultModel.includes('/') && defaultVariant ? { defaultVariant } : {}),
         ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
         ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-normalization-runtime.js
-        ...(label ? { label } : {}),
-        ...(icon ? { icon } : {}),
-        ...(iconBackground ? { iconBackground } : {}),
-        ...(color ? { color } : {}),
-        ...(defaultAgent ? { defaultAgent } : {}),
-        ...(defaultModel && defaultModel.includes('/') ? { defaultModel } : {}),
-        // A variant is meaningless without the model it belongs to.
-        ...(defaultModel && defaultModel.includes('/') && defaultVariant ? { defaultVariant } : {}),
-        ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
-        ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
-========
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-normalization-runtime.ts
       };
-      if (label) project.label = label;
-      if (icon) project.icon = icon;
-      if (iconBackground) project.iconBackground = iconBackground;
-      if (color) project.color = color;
-      if (defaultAgent) project.defaultAgent = defaultAgent;
-      if (defaultModel && defaultModel.includes('/')) project.defaultModel = defaultModel;
-      if (defaultModel && defaultModel.includes('/') && defaultVariant) project.defaultVariant = defaultVariant;
-      if (isFiniteNumber(addedAt) && addedAt >= 0) project.addedAt = addedAt;
-      if (isFiniteNumber(lastOpenedAt) && lastOpenedAt >= 0) project.lastOpenedAt = lastOpenedAt;
 
       if (label && labelSource) project.labelSource = labelSource;
 
       if (candidate.iconImage === null) {
         project.iconImage = null;
       } else if (iconImage) {
-        const mime = isString(iconImage.mime) ? iconImage.mime.trim() : '';
-        const updatedAt = isNumber(iconImage.updatedAt) && Number.isFinite(iconImage.updatedAt)
+        const mime = typeof iconImage.mime === 'string' ? iconImage.mime.trim() : '';
+        const updatedAt = typeof iconImage.updatedAt === 'number' && Number.isFinite(iconImage.updatedAt)
           ? Math.max(0, Math.round(iconImage.updatedAt))
           : 0;
         const source = iconImage.source === 'custom' || iconImage.source === 'auto'
@@ -346,7 +279,7 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
         project.iconBackground = null;
       }
 
-      if (isBoolean(candidate.sidebarCollapsed)) {
+      if (typeof candidate.sidebarCollapsed === 'boolean') {
         project.sidebarCollapsed = candidate.sidebarCollapsed;
       }
 
@@ -356,8 +289,8 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return result;
   };
 
-  const normalizeSettingsPaths = (input: SettingsDocument[string]) => {
-    const settings = hasFields(input) ? input : {};
+  const normalizeSettingsPaths = (input) => {
+    const settings = input && typeof input === 'object' ? input : {};
     let next = settings;
     let changed = false;
 
@@ -367,8 +300,8 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
       }
     };
 
-    const normalizePathField = (key: string) => {
-      if (!isString(settings[key]) || settings[key].length === 0) {
+    const normalizePathField = (key) => {
+      if (typeof settings[key] !== 'string' || settings[key].length === 0) {
         return;
       }
       const normalized = normalizePathForPersistence(settings[key]);
@@ -379,15 +312,15 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
       }
     };
 
-    const normalizePathArrayField = (key: string) => {
+    const normalizePathArrayField = (key) => {
       if (!Array.isArray(settings[key])) {
         return;
       }
 
       const normalized = normalizeStringArray(
         settings[key]
-          .map((entry) => (isString(entry) ? normalizePathForPersistence(entry) : entry))
-          .filter((entry) => isString(entry) && entry.length > 0)
+          .map((entry) => (typeof entry === 'string' ? normalizePathForPersistence(entry) : entry))
+          .filter((entry) => typeof entry === 'string' && entry.length > 0)
       );
 
       if (!areStringArraysEqual(normalized, settings[key])) {
@@ -413,27 +346,27 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return { settings: next, changed };
   };
 
-  const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
 
-  const normalizeTunnelBootstrapTtlMs = (value: SettingsDocument[string]) => {
+  const normalizeTunnelBootstrapTtlMs = (value) => {
     if (value === null) {
       return null;
     }
-    if (!isFiniteNumber(value)) {
+    if (!Number.isFinite(value)) {
       return tunnelBootstrapTtlDefaultMs;
     }
     return clampNumber(Math.round(value), tunnelBootstrapTtlMinMs, tunnelBootstrapTtlMaxMs);
   };
 
-  const normalizeTunnelSessionTtlMs = (value: SettingsDocument[string]) => {
-    if (!isFiniteNumber(value)) {
+  const normalizeTunnelSessionTtlMs = (value) => {
+    if (!Number.isFinite(value)) {
       return tunnelSessionTtlDefaultMs;
     }
     return clampNumber(Math.round(value), tunnelSessionTtlMinMs, tunnelSessionTtlMaxMs);
   };
 
-  const normalizeManagedRemoteTunnelHostname = (value: SettingsDocument[string]) => {
-    if (!isString(value)) {
+  const normalizeManagedRemoteTunnelHostname = (value) => {
+    if (typeof value !== 'string') {
       return undefined;
     }
     const trimmed = value.trim();
@@ -459,20 +392,20 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return hostname;
   };
 
-  const normalizeManagedRemoteTunnelPresets = (value: SettingsDocument[string]) => {
+  const normalizeManagedRemoteTunnelPresets = (value) => {
     if (!Array.isArray(value)) {
       return undefined;
     }
 
-    const result: ManagedRemoteTunnelPreset[] = [];
+    const result = [];
     const seenIds = new Set();
     const seenHostnames = new Set();
 
     for (const entry of value) {
-      if (!hasFields(entry)) continue;
+      if (!entry || typeof entry !== 'object') continue;
       const candidate = entry;
-      const id = isString(candidate.id) ? candidate.id.trim() : '';
-      const name = isString(candidate.name) ? candidate.name.trim() : '';
+      const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+      const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
       const hostname = normalizeManagedRemoteTunnelHostname(candidate.hostname);
       if (!id || !name || !hostname) continue;
       if (seenIds.has(id) || seenHostnames.has(hostname)) continue;
@@ -484,15 +417,15 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return result;
   };
 
-  const normalizeManagedRemoteTunnelPresetTokens = (value: SettingsDocument[string]) => {
-    if (!hasFields(value) || Array.isArray(value)) {
+  const normalizeManagedRemoteTunnelPresetTokens = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return undefined;
     }
 
-    const result: Record<string, string> = {};
+    const result = {};
     for (const [rawId, rawToken] of Object.entries(value)) {
-      const id = rawId.trim();
-      const token = isString(rawToken) ? rawToken.trim() : '';
+      const id = typeof rawId === 'string' ? rawId.trim() : '';
+      const token = typeof rawToken === 'string' ? rawToken.trim() : '';
       if (!id || !token) {
         continue;
       }
@@ -502,50 +435,16 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return Object.keys(result).length > 0 ? result : undefined;
   };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/settings-normalization-runtime.js
   const sanitizeTypographySizesPartial = (input) => {
     if (!input || typeof input !== 'object') {
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/settings-normalization-runtime.js
-  const isUnsafeSkillRelativePath = (value) => {
-    if (typeof value !== 'string' || value.length === 0) {
-      return true;
-    }
-
-    const normalized = value.replace(/\\/g, '/');
-    if (path.posix.isAbsolute(normalized)) {
-      return true;
-    }
-
-    return normalized.split('/').some((segment) => segment === '..');
-  };
-
-  const sanitizeTypographySizesPartial = (input) => {
-    if (!input || typeof input !== 'object') {
-========
-  const isUnsafeSkillRelativePath = (value: SettingsDocument[string]) => {
-    if (!isString(value) || value.length === 0) {
-      return true;
-    }
-
-    const normalized = value.replace(/\\/g, '/');
-    if (path.posix.isAbsolute(normalized)) {
-      return true;
-    }
-
-    return normalized.split('/').some((segment) => segment === '..');
-  };
-
-  const sanitizeTypographySizesPartial = (input: SettingsDocument[string]) => {
-    if (!hasFields(input)) {
->>>>>>>> upstream/main:packages/web/server/lib/settings/settings-normalization-runtime.ts
       return undefined;
     }
     const candidate = input;
-    const result: Partial<Record<TypographyKey, string>> = {};
+    const result = {};
     let populated = false;
 
-    const assign = (key: TypographyKey) => {
-      if (isString(candidate[key]) && candidate[key].length > 0) {
+    const assign = (key) => {
+      if (typeof candidate[key] === 'string' && candidate[key].length > 0) {
         result[key] = candidate[key];
         populated = true;
       }
@@ -561,18 +460,18 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return populated ? result : undefined;
   };
 
-  const sanitizeModelRefs = (input: SettingsDocument[string], limit: number) => {
+  const sanitizeModelRefs = (input, limit) => {
     if (!Array.isArray(input)) {
       return undefined;
     }
 
-    const result: SettingsModelRef[] = [];
+    const result = [];
     const seen = new Set();
 
     for (const entry of input) {
-      if (!hasFields(entry)) continue;
-      const providerID = isString(entry.providerID) ? entry.providerID.trim() : '';
-      const modelID = isString(entry.modelID) ? entry.modelID.trim() : '';
+      if (!entry || typeof entry !== 'object') continue;
+      const providerID = typeof entry.providerID === 'string' ? entry.providerID.trim() : '';
+      const modelID = typeof entry.modelID === 'string' ? entry.modelID.trim() : '';
       if (!providerID || !modelID) continue;
       const key = modelRefKey(providerID, modelID);
       if (seen.has(key)) continue;
@@ -584,35 +483,34 @@ export const createSettingsNormalizationRuntime = (dependencies: SettingsNormali
     return result;
   };
 
-  const sanitizeSkillCatalogs = (input: SettingsDocument[string]) => {
+  const sanitizeSkillCatalogs = (input) => {
     if (!Array.isArray(input)) {
       return undefined;
     }
 
-    const result: SettingsSkillCatalog[] = [];
+    const result = [];
     const seen = new Set();
 
     for (const entry of input) {
-      if (!hasFields(entry)) continue;
+      if (!entry || typeof entry !== 'object') continue;
 
-      const id = isString(entry.id) ? entry.id.trim() : '';
-      const label = isString(entry.label) ? entry.label.trim() : '';
-      const source = isString(entry.source) ? entry.source.trim() : '';
-      const subpath = isString(entry.subpath) ? entry.subpath.trim() : '';
-      const gitIdentityId = isString(entry.gitIdentityId) ? entry.gitIdentityId.trim() : '';
+      const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+      const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+      const source = typeof entry.source === 'string' ? entry.source.trim() : '';
+      const subpath = typeof entry.subpath === 'string' ? entry.subpath.trim() : '';
+      const gitIdentityId = typeof entry.gitIdentityId === 'string' ? entry.gitIdentityId.trim() : '';
 
       if (!id || !label || !source) continue;
       if (seen.has(id)) continue;
       seen.add(id);
 
-      const catalog: SettingsSkillCatalog = {
+      result.push({
         id,
         label,
         source,
-      };
-      if (subpath) catalog.subpath = subpath;
-      if (gitIdentityId) catalog.gitIdentityId = gitIdentityId;
-      result.push(catalog);
+        ...(subpath ? { subpath } : {}),
+        ...(gitIdentityId ? { gitIdentityId } : {}),
+      });
     }
 
     return result;
