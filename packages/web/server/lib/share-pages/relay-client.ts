@@ -28,7 +28,11 @@ const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 export const isSharingAvailable = () => !isEnterpriseMode() || pinnedRelayUrl() !== null;
 
-export const resolveShareRelayBase = (settings: ShareRelaySettings | null | undefined) => relayHttpBase(pinnedRelayUrl() ?? normalizeRelayUrl(settings?.privateRelay?.relayUrl));
+export const resolveShareRelayBase = (settings: ShareRelaySettings | null | undefined) => {
+  const relayUrl = pinnedRelayUrl() ?? normalizeRelayUrl(settings?.privateRelay?.relayUrl);
+  if (!relayUrl) throw new ShareRelayError('No share relay URL is configured', 503);
+  return relayHttpBase(relayUrl);
+};
 
 export const relayHttpBase = (relayUrl: string) => {
   const url = new URL(relayUrl);

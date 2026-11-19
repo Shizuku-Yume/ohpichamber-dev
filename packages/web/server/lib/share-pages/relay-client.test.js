@@ -82,10 +82,10 @@ describe('where shares go', () => {
     expect(relayHttpBase('wss://acme.test/relay/ws')).toBe('https://acme.test/relay');
   });
 
-  it('uses the pinned relay, else the setting, else ours', () => {
+  it('uses the pinned relay or the setting and refuses an unconfigured relay', () => {
     process.env.OPENCHAMBER_ENTERPRISE_MODE = '';
     process.env.OPENCHAMBER_RELAY_URL = '';
-    expect(resolveShareRelayBase(null)).toBe('https://relay.openchamber.dev');
+    expect(() => resolveShareRelayBase(null)).toThrow('No share relay URL is configured');
     expect(resolveShareRelayBase({ privateRelay: { relayUrl: 'wss://mine.test/ws' } })).toBe('https://mine.test');
     process.env.OPENCHAMBER_RELAY_URL = 'ws://localhost:8788/ws';
     expect(resolveShareRelayBase({ privateRelay: { relayUrl: 'wss://mine.test/ws' } })).toBe('http://localhost:8788');
