@@ -1,16 +1,8 @@
-<<<<<<< HEAD
 import { modelRefKey } from '@openchamber/agent-contract';
 /**
  * Selection Store — per-session model, agent, and variant selections.
  * Extracted from session-ui-store for subscription isolation.
  */
-||||||| bc50ba56aa
-/**
- * Selection Store — per-session model, agent, and variant selections.
- * Extracted from session-ui-store for subscription isolation.
- */
-=======
->>>>>>> upstream/main
 
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
@@ -77,16 +69,6 @@ type SelectionState = {
   saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void
   getAgentModelForSession: (sessionId: string, agentName: string) => { providerId: string; modelId: string } | null
   clearSessionSelections: (sessionId: string) => void
-<<<<<<< HEAD
-  /** The selected native route for this agent/model; null explicitly selects no route. */
-||||||| bc50ba56aa
-  /**
-   * `variant` is the effort chosen for this agent/model in this session:
-   * a name, `null` for an explicit "Default" (send no effort), or `undefined`
-   * to forget the choice so the inherited default applies again.
-   */
-=======
->>>>>>> upstream/main
   saveAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, variant: string | null | undefined) => void
   getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | null | undefined
   /** `off`, a catalog effort, or undefined when no session-specific effort was chosen. */

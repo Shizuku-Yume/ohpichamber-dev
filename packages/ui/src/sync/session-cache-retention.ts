@@ -21,7 +21,6 @@ type DirectoryEntry = {
   unsubscribe: () => void
 }
 
-<<<<<<< HEAD
 const sameMessageMembership = (left: Record<string, unknown>, right: Record<string, unknown>): boolean => {
   let leftCount = 0;
   let rightCount = 0;
@@ -35,15 +34,6 @@ const sameMessageMembership = (left: Record<string, unknown>, right: Record<stri
 };
 
 /** Whole-session retention keeps active and viewed native histories intact. */
-||||||| bc50ba56aa
-/**
- * Whole-session eviction, never partial trimming. A cached history is either
- * fully present or gone. Settled sessions nobody is looking at are dropped
- * after an idle grace period, so a quick return needs no request; the count
- * limit is a safety net that evicts the least recently visited session first.
- */
-=======
->>>>>>> upstream/main
 export class SessionCacheRetention {
   private readonly directories = new Map<string, DirectoryEntry>()
   private readonly pending = new Set<string>()
@@ -72,15 +62,7 @@ export class SessionCacheRetention {
     if (entry.seen.has(target.sessionId) || messages[target.sessionId] !== undefined) return true
     const occupied = new Set([...entry.seen, ...Object.keys(messages)])
     if (occupied.size >= this.options.limit) return false
-<<<<<<< HEAD
     entry.seen = new Set([target.sessionId, ...entry.seen])
-||||||| bc50ba56aa
-    // Reserve capacity before HTTP starts. Speculative history is older than
-    // every visited session and never promotes a cache hit's navigation recency.
-    entry.seen = new Set([target.sessionID, ...entry.seen])
-=======
-    entry.seen = new Set([target.sessionID, ...entry.seen])
->>>>>>> upstream/main
     return true
   }
 

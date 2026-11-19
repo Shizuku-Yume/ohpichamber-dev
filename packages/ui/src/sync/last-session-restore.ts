@@ -9,20 +9,6 @@ export type LastSessionRestoreResult =
     | 'none'
     | 'failed';
 
-<<<<<<< HEAD
-/**
- * A failed or partial native discovery retains the pointer. Only a completed
- * current-runtime global snapshot may prove that a session is gone.
- */
-||||||| bc50ba56aa
-/**
- * The session load resolves even when the server could not be read (OpenCode
- * still starting, a network error): it then returns the cached or fallback
- * list and marks the store `error`. Only a completed load may say a session is
- * gone.
- */
-=======
->>>>>>> upstream/main
 const isSessionListAuthoritative = (): boolean => {
     const { hasLoaded, status } = useGlobalSessionsStore.getState();
     return hasLoaded && status === 'ready';
@@ -53,14 +39,6 @@ export const restoreLastActiveSession = async (options: {
     if (latest.currentSessionId || readLastActiveSession(runtimeKey)?.sessionId !== persisted.sessionId) {
         return 'none';
     }
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // Opening a session admits its folder. A launch is not the user's choice,
-    // so a session outside every project waits for them to open it.
-    if (!isSessionAdmitted(resolveGlobalSessionDirectory(session))) return 'none';
-=======
-    if (!isSessionAdmitted(resolveGlobalSessionDirectory(session))) return 'none';
->>>>>>> upstream/main
     void latest.setCurrentSession(
         session.sessionId,
         resolveGlobalSessionDirectory(session) ?? persisted.directory ?? undefined,
@@ -70,22 +48,6 @@ export const restoreLastActiveSession = async (options: {
 
 type ReopenedSession = { readonly runtimeKey: string; readonly sessionId: string };
 
-<<<<<<< HEAD
-/**
- * Selects the last session at once, before the session list confirms it, so
- * the launch never shows the automatic draft first. Needs the session's
- * directory without asking the runtime: the pointer's own, or the persisted
- * session list's. Returns null when it selected nothing.
- */
-||||||| bc50ba56aa
-/**
- * Selects the last session at once, before the session list confirms it, so
- * the launch never shows the automatic draft first. Needs the session's
- * directory without asking OpenCode: the pointer's own, or the persisted
- * session list's. Returns null when it selected nothing.
- */
-=======
->>>>>>> upstream/main
 const reopenLastActiveSession = (): ReopenedSession | null => {
     const ui = useSessionUIStore.getState();
     if (ui.currentSessionId) return null;
@@ -94,17 +56,8 @@ const reopenLastActiveSession = (): ReopenedSession | null => {
     if (!persisted) return null;
     const cached = useGlobalSessionsStore.getState().entityById.get(persisted.sessionId);
     const directory = persisted.directory ?? (cached ? resolveGlobalSessionDirectory(cached) : null);
-<<<<<<< HEAD
     if (!directory) return null;
     void ui.setCurrentSession(persisted.sessionId, directory);
-||||||| bc50ba56aa
-    // `setCurrentSession` opens the cached record's folder over the pointer's.
-    if (!directory || !isSessionAdmitted((cached ? resolveGlobalSessionDirectory(cached) : null) ?? directory)) return null;
-    void ui.setCurrentSession(persisted.sessionId, directory, { keepSingleProject: true });
-=======
-    if (!directory || !isSessionAdmitted((cached ? resolveGlobalSessionDirectory(cached) : null) ?? directory)) return null;
-    void ui.setCurrentSession(persisted.sessionId, directory, { keepSingleProject: true });
->>>>>>> upstream/main
     return { runtimeKey, sessionId: persisted.sessionId };
 };
 

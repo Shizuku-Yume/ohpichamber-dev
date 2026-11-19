@@ -12,12 +12,6 @@ export type NativeTitleContext = { session: Session; turns: NativeTitleTurn[] };
 const keyFor = (target: TitleTarget) => JSON.stringify([target.runtimeKey, normalizePath(target.directory), target.sessionId]);
 const useTitleGenerations = create<{ pending: ReadonlyMap<string, PendingTitle> }>(() => ({ pending: new Map() }));
 
-<<<<<<< HEAD
-/** The title comparison belongs to the operation, independently of its menu. */
-||||||| bc50ba56aa
-/** The metadata check belongs to the operation, independently of its menu. */
-=======
->>>>>>> upstream/main
 export async function generateAndSaveSessionTitle(input: {
   signal: AbortSignal;
   prepare: (signal: AbortSignal) => Promise<NativeTitleContext>;

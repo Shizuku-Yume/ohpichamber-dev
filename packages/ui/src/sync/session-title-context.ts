@@ -1,7 +1,6 @@
 import type { Message, Turn } from "@openchamber/agent-contract"
 import type { SessionMessageLoader, SessionMessageTarget } from './session-message-loader';
 
-<<<<<<< HEAD
 /** A completed user/assistant pair used by native title generation. */
 export type NativeTitleTurn = { user: Message; assistant: Message };
 
@@ -26,10 +25,6 @@ export function collectNativeTitleTurns(messages: readonly Message[], turns: rea
 }
 
 /** Share the normal loader's requests, stopping as soon as three pairs are covered. */
-||||||| bc50ba56aa
-/** Share the normal loader's requests, stopping as soon as three pairs are covered. */
-=======
->>>>>>> upstream/main
 export async function loadSessionTitleTurns(input: {
   loader: Pick<SessionMessageLoader, 'getSnapshot' | 'ensure' | 'loadOlder'>;
   target: SessionMessageTarget;

@@ -22,17 +22,6 @@ const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boole
   return Number.isFinite(timestamp) && timestamp > 0 && timestamp < cutoff;
 };
 
-<<<<<<< HEAD
-/** Sessions the user asked to keep: pinned on this client, or in the In work block. */
-/** In work keeps a session unless retention was told to take those too. */
-||||||| bc50ba56aa
-/**
- * Whether the In work block keeps its sessions from retention: unless the
- * user includes them, and only while sessions in work are shown, since
- * without the block nobody can see them or press Done.
- */
-=======
->>>>>>> upstream/main
 export const inWorkKeepsSessions = (settings: { sessionWorkEnabled: boolean; sessionRetentionIncludeInWork: boolean }): boolean => (
   settings.sessionWorkEnabled && !settings.sessionRetentionIncludeInWork
 );
@@ -84,15 +73,7 @@ export function buildSessionRetentionCandidates({
   const candidates = sorted.filter((session) => !protectedIds.has(session.sessionId));
   if (action === 'archive' && !onlyArchived) return candidates.map((session) => session.sessionId);
 
-<<<<<<< HEAD
   const ids = new Set(candidates.map((session) => session.sessionId));
-||||||| bc50ba56aa
-  // Children first: each request deletes one eligible session, and a failed child
-  // can prevent its parent from bypassing that failure with a cascading delete.
-  const ids = new Set(candidates.map((session) => session.id));
-=======
-  const ids = new Set(candidates.map((session) => session.id));
->>>>>>> upstream/main
   const childrenLeft = new Map<string, number>();
   for (const session of candidates) {
     if (session.parentSessionId && ids.has(session.parentSessionId)) {

@@ -218,29 +218,7 @@ const extensionOf = (name: string): string => {
   return index === -1 ? "" : name.slice(index + 1).toLowerCase()
 }
 
-<<<<<<< HEAD
 export const isDocumentAttachmentFilename = (name: string): boolean => DOCUMENT_EXTENSIONS.has(extensionOf(name))
-||||||| bc50ba56aa
-const isDocumentAttachmentFilename = (name: string): boolean => DOCUMENT_EXTENSIONS.has(extensionOf(name))
-
-/**
- * An `@` mention of these files is read and attached by the client, like a
- * picked file. Anything else reaches OpenCode as a path it reads itself; an
- * image sent that way has no preview in the message. A PDF stays a path, so a
- * model without PDF input can still extract its text with tools.
- */
-export const isReadOnSendMentionFilename = (name: string): boolean => {
-  const extension = extensionOf(name)
-  return DOCUMENT_EXTENSIONS.has(extension) || IMAGE_MENTION_EXTENSIONS.has(extension)
-}
-=======
-const isDocumentAttachmentFilename = (name: string): boolean => DOCUMENT_EXTENSIONS.has(extensionOf(name))
-
-export const isReadOnSendMentionFilename = (name: string): boolean => {
-  const extension = extensionOf(name)
-  return DOCUMENT_EXTENSIONS.has(extension) || IMAGE_MENTION_EXTENSIONS.has(extension)
-}
->>>>>>> upstream/main
 
 const declaredMimeOf = (file: File): string => file.type.split(";", 1)[0]?.trim().toLowerCase() ?? ""
 

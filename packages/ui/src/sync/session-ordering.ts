@@ -24,46 +24,9 @@ const promoteSessions = (sessionIds: Iterable<string>, shared = false): void => 
     return { rankById };
   });
 };
-<<<<<<< HEAD
 export const promoteRestoredSessionOrdering = (sessionId: string): void => { if (sessionId) promoteSessions([sessionId]); };
 export const observeSessionActivityEvent = (sessionId: string, phase: SessionActivityPhase): void => applySessionOrderingMutations([{ type: phase, sessionId }]);
 export const applySessionOrderingMutations = (mutations: readonly SessionOrderingMutation[]): void => {
-||||||| bc50ba56aa
-
-/** Promote a confirmed restore without deriving or changing session activity. */
-export const promoteRestoredSessionOrdering = (sessionId: string): void => {
-  if (!sessionId) return;
-  promoteSessions([sessionId]);
-};
-
-export const observeSessionActivityEvent = (
-  sessionId: string,
-  phase: SessionActivityPhase,
-): void => {
-  applySessionOrderingMutations([{ type: 'observe', sessionId, phase }]);
-};
-
-export const applySessionOrderingMutations = (
-  mutations: readonly SessionOrderingMutation[],
-): void => {
-=======
-
-export const promoteRestoredSessionOrdering = (sessionId: string): void => {
-  if (!sessionId) return;
-  promoteSessions([sessionId]);
-};
-
-export const observeSessionActivityEvent = (
-  sessionId: string,
-  phase: SessionActivityPhase,
-): void => {
-  applySessionOrderingMutations([{ type: 'observe', sessionId, phase }]);
-};
-
-export const applySessionOrderingMutations = (
-  mutations: readonly SessionOrderingMutation[],
-): void => {
->>>>>>> upstream/main
   if (mutations.length === 0) return;
   const current = useSessionOrderingStore.getState().rankById;
   let next: Map<string, number> | null = null;
@@ -89,17 +52,9 @@ export const reconcileSessionActivitySnapshot = (activeSessionIds: Iterable<stri
     const previous = phaseById.get(id); phaseById.set(id, phase);
     if (previous !== undefined && previous !== phase) promoted.push(id);
   }
-<<<<<<< HEAD
-||||||| bc50ba56aa
 
-  // A snapshot cannot recover the order of missed transitions. Give the batch
-  // one rank and let authoritative timestamps break ties deterministically.
-=======
-
->>>>>>> upstream/main
   promoteSessions(promoted, true);
 };
-<<<<<<< HEAD
 export const removeSessionOrdering = (sessionId: string): void => applySessionOrderingMutations([{ type: 'remove', sessionId }]);
 export const resetSessionOrdering = (): void => { phaseById.clear(); baselineRankById.clear(); lastRank = 0; useSessionOrderingStore.setState({ rankById: new Map() }); };
 const updatedAt = (session: Session): number => session.updatedAt;
@@ -107,83 +62,6 @@ const createdAt = (session: Session): number => session.createdAt;
 const parentIdOf = (session: Session): string | null => session.parentSessionId ?? null;
 const isPinned = (session: Session, pinnedSessionIds: Set<string>): boolean => session.metadata?.isPinned === true
   || isSessionPinned(pinnedSessionIds, resolveWorkspaceDirectory(session.workspaceId), session.sessionId);
-||||||| bc50ba56aa
-
-export const removeSessionOrdering = (sessionId: string): void => {
-  applySessionOrderingMutations([{ type: 'remove', sessionId }]);
-};
-
-export const resetSessionOrdering = (): void => {
-  phaseById.clear();
-  baselineRankById.clear();
-  lastRank = 0;
-  useSessionOrderingStore.setState({ rankById: new Map() });
-};
-
-const finiteTime = (value: unknown): number => (
-  typeof value === 'number' && Number.isFinite(value) ? value : 0
-);
-
-/**
- * When the session last had a conversation. `time.idle` moves only when a turn
- * ends; `time.updated` also moves on title and metadata writes, which must not
- * lift a session nobody touched. Sessions migrated from 1.x have no `idle`
- * until their first 2.x turn, so they fall back to `updated`.
- */
-export const getSessionActivityTime = (session: Session): number => (
-  finiteTime(session.time?.idle) || finiteTime(session.time?.updated) || finiteTime(session.time?.created)
-);
-
-const createdAt = (session: Session): number => finiteTime(session.time?.created);
-
-const parentIdOf = (session: Session): string | null => (
-  (session as Session & { parentID?: string | null }).parentID ?? null
-);
-
-const sessionDirectory = (session: Session): string | null => {
-  const record = session as Session & {
-    directory?: string | null;
-    project?: { worktree?: string | null } | null;
-  };
-  return record.directory ?? record.project?.worktree ?? null;
-};
-
-=======
-
-export const removeSessionOrdering = (sessionId: string): void => {
-  applySessionOrderingMutations([{ type: 'remove', sessionId }]);
-};
-
-export const resetSessionOrdering = (): void => {
-  phaseById.clear();
-  baselineRankById.clear();
-  lastRank = 0;
-  useSessionOrderingStore.setState({ rankById: new Map() });
-};
-
-const finiteTime = (value: unknown): number => (
-  typeof value === 'number' && Number.isFinite(value) ? value : 0
-);
-
-export const getSessionActivityTime = (session: Session): number => (
-  finiteTime(session.time?.idle) || finiteTime(session.time?.updated) || finiteTime(session.time?.created)
-);
-
-const createdAt = (session: Session): number => finiteTime(session.time?.created);
-
-const parentIdOf = (session: Session): string | null => (
-  (session as Session & { parentID?: string | null }).parentID ?? null
-);
-
-const sessionDirectory = (session: Session): string | null => {
-  const record = session as Session & {
-    directory?: string | null;
-    project?: { worktree?: string | null } | null;
-  };
-  return record.directory ?? record.project?.worktree ?? null;
-};
-
->>>>>>> upstream/main
 const baselineRank = (session: Session, pinned: boolean): number => {
   const existing = baselineRankById.get(session.sessionId);
   const key = pinned ? 'created' : 'updated';
@@ -192,80 +70,17 @@ const baselineRank = (session: Session, pinned: boolean): number => {
   baselineRankById.set(session.sessionId, { ...existing, [key]: rank });
   return rank;
 };
-<<<<<<< HEAD
-||||||| bc50ba56aa
 
-/**
- * Raise cached baselines to the sessions' current authoritative timestamps.
- *
- * The frozen baseline keeps live metadata churn from reordering an open list,
- * but a client that slept through a session's whole active→settled cycle never
- * saw the transition that would have promoted its live rank — so its stale
- * baseline pins it in place forever. Call this when an authoritative session
- * SNAPSHOT arrives (global refresh); monotonic, so it can never demote.
- */
-=======
-
->>>>>>> upstream/main
 export const raiseSessionOrderingBaselines = (sessions: Iterable<Session>): void => {
   const current = useSessionOrderingStore.getState().rankById;
   let next: Map<string, number> | null = null;
   let baselineChanged = false;
   for (const session of sessions) {
-<<<<<<< HEAD
     const fresh = updatedAt(session); const live = current.get(session.sessionId);
     if (live !== undefined) { if (fresh > live) { next ??= new Map(current); next.set(session.sessionId, fresh); } continue; }
     const existing = baselineRankById.get(session.sessionId);
-||||||| bc50ba56aa
-    const fresh = getSessionActivityTime(session);
-    const liveRank = currentRanks.get(session.id);
-    if (liveRank !== undefined) {
-      // A live rank frozen BEFORE this newer authoritative stamp is stale —
-      // the session was active again while this client wasn't watching (its
-      // transition events never arrived, e.g. another device + sleep). Ranks
-      // share the epoch-ms scale with `updated`, so raising is well-ordered.
-      if (fresh > liveRank) {
-        nextRanks = nextRanks ?? new Map(currentRanks);
-        nextRanks.set(session.id, fresh);
-      }
-      continue;
-    }
-    const existing = baselineRankById.get(session.id);
-=======
-    const fresh = getSessionActivityTime(session);
-    const liveRank = currentRanks.get(session.id);
-    if (liveRank !== undefined) {
-      if (fresh > liveRank) {
-        nextRanks = nextRanks ?? new Map(currentRanks);
-        nextRanks.set(session.id, fresh);
-      }
-      continue;
-    }
-    const existing = baselineRankById.get(session.id);
->>>>>>> upstream/main
     if (existing?.updated !== undefined && existing.updated >= fresh) continue;
-<<<<<<< HEAD
     baselineRankById.set(session.sessionId, { ...existing, updated: fresh }); baselineChanged = true;
-||||||| bc50ba56aa
-    baselineRankById.set(session.id, { ...existing, updated: fresh });
-    baselinesChanged = true;
-  }
-
-  if (nextRanks) {
-    useSessionOrderingStore.setState({ rankById: nextRanks });
-  } else if (baselinesChanged) {
-    // Baselines live outside the store; nudge subscribers so open lists re-sort.
-    useSessionOrderingStore.setState((state) => ({ rankById: new Map(state.rankById) }));
-=======
-    baselineRankById.set(session.id, { ...existing, updated: fresh });
-    baselinesChanged = true;
-  }
-
-  if (nextRanks) {
-    useSessionOrderingStore.setState({ rankById: nextRanks });
-  } else if (baselinesChanged) {
-    useSessionOrderingStore.setState((state) => ({ rankById: new Map(state.rankById) }));
->>>>>>> upstream/main
   }
   if (next) useSessionOrderingStore.setState({ rankById: next });
   else if (baselineChanged) useSessionOrderingStore.setState((state) => ({ rankById: new Map(state.rankById) }));

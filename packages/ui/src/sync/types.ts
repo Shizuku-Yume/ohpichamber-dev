@@ -18,30 +18,12 @@ import type {
  SessionMetadataState,
 } from "@openchamber/agent-contract"
 
-<<<<<<< HEAD
-/** Resolved filesystem context retained for UI routing and directory selection. */
-||||||| bc50ba56aa
-/** Resolved filesystem context of a directory (from `/api/location` plus the server home). */
-=======
->>>>>>> upstream/main
 export type Path = {
-<<<<<<< HEAD
  directory: string
  worktree: string
  home: string
  projectId?: string
  workspaceId?: string
-||||||| bc50ba56aa
-  /** Directory the store is scoped to. */
-  directory: string
-  /** Project root that contains `directory`. */
-  worktree: string
-  home: string
-=======
-  directory: string
-  worktree: string
-  home: string
->>>>>>> upstream/main
 }
 
 export type ProjectMeta = {
@@ -50,14 +32,7 @@ export type ProjectMeta = {
  commands?: { start?: string }
 }
 
-<<<<<<< HEAD
-/** Per-directory canonical runtime state. Host metadata is revisioned on Session. */
-||||||| bc50ba56aa
-/** Per-directory store state */
-=======
->>>>>>> upstream/main
 export type State = {
-<<<<<<< HEAD
  status: "loading" | "partial" | "complete"
  project: string
  projectMeta: ProjectMeta | undefined
@@ -124,62 +99,8 @@ export type CleanseProgressState = {
  diagnosticsCount?: number
  summary?: string
  updatedAt: number
-||||||| bc50ba56aa
-  status: "loading" | "partial" | "complete"
-  project: string
-  projectMeta: ProjectMeta | undefined
-  icon: string | undefined
-  config: Config
-  path: Path
-  session: Session[]
-  sessionTotal: number
-  sessionListSource?: "empty" | "persisted" | "live" | "authoritative"
-  sessionRevision?: number
-  sessionEventRevision?: Record<string, number>
-  sessionDeletedRevision?: Record<string, number>
-  session_status: Record<string, SessionStatus>
-  /** A successful status snapshot makes omitted sessions authoritatively idle. */
-  sessionStatusReady?: boolean
-  /** Archive evicts a session's status; the earlier snapshot no longer covers it. */
-  sessionStatusInvalidated?: Record<string, true>
-  permission: Record<string, PermissionRequest[]>
-  /** Pending forms (the agent asking the user for input), keyed by session. */
-  form: Record<string, FormRequest[]>
-  vcs: Vcs | undefined
-  limit: number
-  message: Record<string, Message[]>
-  part: Record<string, Part[]>
-=======
-  status: "loading" | "partial" | "complete"
-  project: string
-  projectMeta: ProjectMeta | undefined
-  icon: string | undefined
-  config: Config
-  path: Path
-  session: Session[]
-  sessionTotal: number
-  sessionListSource?: "empty" | "persisted" | "live" | "authoritative"
-  sessionRevision?: number
-  sessionEventRevision?: Record<string, number>
-  sessionDeletedRevision?: Record<string, number>
-  session_status: Record<string, SessionStatus>
-  sessionStatusReady?: boolean
-  sessionStatusInvalidated?: Record<string, true>
-  permission: Record<string, PermissionRequest[]>
-  form: Record<string, FormRequest[]>
-  vcs: Vcs | undefined
-  limit: number
-  message: Record<string, Message[]>
-  part: Record<string, Part[]>
->>>>>>> upstream/main
 }
 
-<<<<<<< HEAD
-
-||||||| bc50ba56aa
-/** Global store state */
-=======
->>>>>>> upstream/main
 export type GlobalState = {
  ready: boolean
  error?: InitError

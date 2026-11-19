@@ -16,18 +16,8 @@ export const cleanupPersistedSessionState = (identity: {
 
   const queueTarget = createMessageQueueTarget(identity.sessionId, identity.directory, identity.runtimeKey);
   if (queueTarget) {
-<<<<<<< HEAD
     // The server drops the deleted session's queue; only the local projection remains.
     useMessageQueueStore.getState().forgetQueue(queueTarget);
-||||||| bc50ba56aa
-    // A server-owned queue drops the deleted session itself; only the local
-    // projection needs to go. VS Code owns its queue and clears it here.
-    if (isServerOwnedMessageQueue()) useMessageQueueStore.getState().forgetQueue(queueTarget);
-    else useMessageQueueStore.getState().clearQueue(queueTarget);
-=======
-    if (isServerOwnedMessageQueue()) useMessageQueueStore.getState().forgetQueue(queueTarget);
-    else useMessageQueueStore.getState().clearQueue(queueTarget);
->>>>>>> upstream/main
   }
   useSessionFoldersStore.getState().removeSessionEverywhere(identity.runtimeKey, identity.sessionId);
   useSessionMultiSelectStore.getState().removeMany([identity.sessionId]);
