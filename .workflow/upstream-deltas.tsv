@@ -2294,3 +2294,11 @@ packages/ui/src/apps/DOCUMENTATION.md	fork-differs	decision	2026-11-19 - Give te
 packages/ui/src/components/views/TerminalView.tsx	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Marks terminal chrome and padding for the compact keyboard viewport.
 packages/ui/src/components/views/TerminalView.test.tsx	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Covers keeping terminal output and quick keys visible while reclaiming vertical space.
 packages/ui/src/styles/mobile.css	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Gives terminal rows priority in a short native Android keyboard viewport.
+packages/ui/src/components/terminal/TerminalViewport.test.tsx	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Checks resize offsets in replay-safe text.
+packages/ui/src/components/terminal/terminalChunkReplay.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Composes buffered history and its PTY resize boundaries.
+packages/ui/src/lib/ghostty/DOCUMENTATION.md	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Documents replaying ordered resize boundaries while PTY writes are detached.
+packages/ui/src/lib/ghostty/core.test.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Verifies interleaved replay matches a live resize.
+packages/ui/src/lib/ghostty/core.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Disables PTY writes throughout replay, including recorded resizes.
+packages/ui/src/lib/ghostty/surface.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Replays output at each recorded PTY size before fitting the viewport.
+packages/ui/src/stores/useTerminalStore.ts	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Retains PTY size transitions with terminal output.
+packages/web/server/lib/terminal/runtime.js	fork-differs	decision	2026-11-19 - Replay terminal history at its recorded PTY sizes	Orders resize events with output and keeps their offsets in bounded history.

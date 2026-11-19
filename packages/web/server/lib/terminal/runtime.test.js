@@ -732,6 +732,23 @@ describe('terminal runtime', () => {
     } finally { await harness.runtime.shutdown(); }
   });
 
+  it('keeps accepted dimensions for a restart after exit without resizing the dead PTY', async () => {
+    const harness = createHarness();
+    try {
+      await harness.routes.post.get('/api/terminal/create')({ body: { sessionId: 'term-1', cwd: '/repo', cols: 80, rows: 24 } }, createResponse());
+      harness.processes[0].emitExit(0);
+      const resized = createResponse();
+      const params = { sessionId: 'term-1' };
+      harness.routes.post.get('/api/terminal/:sessionId/resize')({ params, body: { cols: 120, rows: 40 } }, resized);
+      expect(resized.body).toMatchObject({ cols: 120, rows: 40 });
+      expect(harness.processes[0].resizes).toEqual([]);
+      const restarted = createResponse();
+      await harness.routes.post.get('/api/terminal/:sessionId/restart')({ params }, restarted);
+      expect(restarted.body).toMatchObject({ cols: 120, rows: 40, status: 'running' });
+      expect(harness.processes[1].options).toMatchObject({ cols: 120, rows: 40 });
+    } finally { await harness.runtime.shutdown(); }
+  });
+
   it('serializes concurrent restarts without orphaning replacement processes', async () => {
     const harness = createHarness();
     try {
@@ -957,22 +974,26 @@ describe('terminal runtime', () => {
       expect(first.messages.some(message => message?.t === 'output' && message.s === 'term-live')).toBe(false);
       const secondClosed = await fetch(`${base}/api/terminal/term-second`, { method: 'DELETE' });
       expect(secondClosed.status).toBe(200);
-      first.socket.close();
-
-      // A reconnecting client replays history at the size the PTY currently has.
+      // A reconnecting client replays both sides of the resize in PTY order.
       const resized = await fetch(`${base}/api/terminal/term-live/resize`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ cols: 120, rows: 40 }),
       });
       expect(resized.status).toBe(200);
+      expect(await first.next('resize', 'term-live')).toMatchObject({ q: 7, cols: 120, rows: 40 });
+      first.socket.close();
 
       const second = await openTerminalSocket(socketUrl);
       sockets.push(second.socket);
       second.socket.send(createTerminalWsControlFrame({ t: 'attach', v: 3, s: 'term-live' }));
-      expect(await second.next('snapshot')).toMatchObject({ s: 'term-live', q: 6, history: `ok\r\n${'x'.repeat(8193)}beforeafterlead${sizedChunk}`, status: 'running', cols: 120, rows: 40 });
+      const initialHistory = `ok\r\n${'x'.repeat(8193)}beforeafterlead${sizedChunk}`;
+      expect(await second.next('snapshot')).toMatchObject({
+        s: 'term-live', q: 7, history: initialHistory, status: 'running', cols: 120, rows: 40,
+        sizes: [{ offset: 0, cols: 80, rows: 24 }, { offset: initialHistory.length, cols: 120, rows: 40 }],
+      });
       // Compare snapshots to the old whole-string trim rule, including UTF-16
       // pairs split across PTY callbacks and a boundary inside UTF-8 bytes.
-      let expectedHistory = `ok\r\n${'x'.repeat(8193)}beforeafterlead${sizedChunk}`;
+      let expectedHistory = initialHistory;
       const appendExpected = (text, chunks = [text]) => {
         expectedHistory += text;
         const bytes = Buffer.from(expectedHistory);
@@ -991,6 +1012,7 @@ describe('terminal runtime', () => {
       second.socket.send(createTerminalWsControlFrame({ t: 'attach', v: 3, s: 'term-live' }));
       const bounded = await second.next('snapshot');
       expect(bounded.history).toBe(expectedHistory);
+      expect(bounded.sizes).toBeUndefined();
       expect(Buffer.byteLength(bounded.history)).toBeLessThanOrEqual(512 * 1024);
       processes[0].emitExit(7);
       expect(await second.next('exit')).toMatchObject({ s: 'term-live', q: bounded.q + 1, exitCode: 7 });
