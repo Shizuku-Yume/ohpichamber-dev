@@ -246,6 +246,7 @@ export class WorkerSession {
     private readonly permissionBridge: NativePermissionBridge,
     /** The shared catalog identity; a `/btw` branch rekeys its root in place. */
     private readonly workerIdentity: { rootSessionId: string },
+    private readonly sanitizeProviderError: (text: string) => string,
     private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
@@ -255,7 +256,7 @@ export class WorkerSession {
       () => this.publishContinuationPending(),
       mode => this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]),
     );
-    this.projection = new WorkerProjection(session.sessionManager, this._sessionId, [], () => session.getTodoPhases());
+    this.projection = new WorkerProjection(session.sessionManager, this._sessionId, [], () => session.getTodoPhases(), sanitizeProviderError);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
     this.defaultRegisteredNames = session.getAllToolNames();
@@ -779,7 +780,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, hostToolsController);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, runtime.sanitizeProviderError, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -1744,7 +1745,7 @@ export class WorkerSession {
         this.hostToolsController?.rekey(newSessionId);
         this.mcp?.rekey(newSessionId);
         this.workerIdentity.rootSessionId = newSessionId;
-        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases());
+        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases(), this.sanitizeProviderError);
         this.projection.resetSelection();
         this.syncTodoAutoClear();
         await this.session.sessionManager.flush();

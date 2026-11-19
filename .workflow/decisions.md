@@ -1663,6 +1663,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Confirm external mobile pairing links before connecting
+
+- **Decided:** deliver validated native URL pairing offers to the shared confirmation UI before probing, redeeming or changing Hosts. Reuse the mobile pairing controller after confirmation.
+- **Instead of:** treating a URL handoff as consent or waiting for a connected workspace before showing the offer.
+- **Because:** Safari and other apps can launch the URL scheme. Opening an offer is not consent to store its credentials or switch the active Host, and first-time onboarding must also receive it. Existing mobile authentication regressions and fork deep-link behavior remain in force.
+- **Revisit when:** upstream provides a native consent flow for external Host pairing links.
+
+## 2026-11-19 - Keep native mobile visible through Host outages
+
+- **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.
+- **Instead of:** treating a reachable network or a successful startup probe as proof the Host is still live, or clearing the runtime when a resume probe times out.
+- **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and its ready event confirms recovery and lets stalled startup retry without a separate poll. Native direct connections use the header-aware stream reader because EventSource cannot send saved proxy headers; when configured, those headers stay on the selected endpoint by rejecting redirects.
+- **Mine:** yes
+- **Revisit when:** upstream provides a native, authenticated Host connectivity signal independent of its session streams.
+
 ## 2026-11-19 - Keep interactive terminal input bound to its attachment
 
 - **Decided:** interactive input requires the current socket's terminal snapshot and an explicit resume after reconnect. Project-action interrupts can still use a socket without attaching a viewport.
@@ -1758,3 +1773,32 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** A startup snapshot failure was terminal. Manual retry could read a worker-free cold snapshot, which correctly skipped SSE; the pre-send stream request still saw that cold snapshot and never retried after the worker opened.
 - **Instead of:** Removing the cold-session stream guard, retaining cold journals in the service, opening workers just to read history, or replaying accepted prompts. Recovery failure stays a loader error, never a failed-send rollback.
 - **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor use the shared loader/actions/provider. Guest SDK, Host admission and transport/auth behavior are unchanged. Earlier scoped discovery-error clearing remains in the same SyncProvider paths.
+
+## 2026-11-19 - Preserve sanitized native provider failure details
+
+- **Decided:** project the last unrecovered assistant error message into canonical run failure and turn history after removing resolved provider credentials and credential-shaped text. Preserve generic detail only when OMP supplies none.
+- **Instead of:** replacing every provider failure with a generic service failure or teaching the UI to read native transcripts.
+- **Because:** OMP owns the provider outcome and the existing canonical failure string already reaches the chat error notice. Credential values must not cross that boundary even when a provider echoes them.
+- **Mine:** yes
+- **Revisit when:** the canonical API introduces a structured provider-error contract.
+
+## 2026-11-19 - Complete repository dialog dismissal before opening Git Settings
+
+- **Decided:** retain the repository popup through dismissal and open Git Settings on close completion. Recheck the draft warning when its directory's Git index revision changes and use action names for commit accessible labels.
+- **Instead of:** opening sibling modals during dismissal or keeping a one-shot dirty snapshot after a commit.
+- **Because:** closing modal focus cleanup must complete before the next surface opens, and a successful Git mutation invalidates the earlier dirty answer.
+- **Revisit when:** the shared dialog supports an atomic modal handoff or the draft target reads its dirty answer from the shared Git store.
+
+## 2026-11-19 - Restore chat failure notices from canonical turns
+
+- **Decided:** use the latest canonical failed turn when no equally recent live notification explains the failure.
+- **Instead of:** persisting the notification cache or relying on replay of a terminal event after a reload.
+- **Because:** snapshots already own sanitized terminal outcomes; transient notification state is not a complete history source. Completed, cancelled and superseded turns must not become current failures.
+- **Revisit when:** the chat renders terminal explanations inline with each canonical turn.
+
+## 2026-11-19 - Recheck draft dirtiness on working-tree status updates
+
+- **Decided:** subscribe the draft dirty probe to its selected directory's shared Git status in addition to index revision changes.
+- **Instead of:** waiting for staging to change the index or introducing another status poller.
+- **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
+- **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.

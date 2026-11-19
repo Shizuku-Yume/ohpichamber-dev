@@ -369,7 +369,7 @@ test('a recovered retry clears the failed attempt and completes the run', async 
       projection.bindPending();
     };
     deliver({ role: 'user', content: 'Ask a question.', timestamp: 1 });
-    deliver(assistant([], 'error', 2));
+    deliver({ ...assistant([], 'error', 2), errorMessage: '401 Invalid API key' });
     deliver(assistant([{ type: 'text', text: 'Answered after retry.' }], 'stop', 3));
     const terminal = projection.consume({ type: 'agent_end', isTerminal: true });
     journal.append(terminal);
@@ -378,6 +378,7 @@ test('a recovered retry clears the failed attempt and completes the run', async 
     const snapshot = journal.snapshot();
     expect(snapshot.turns).toHaveLength(1);
     expect(snapshot.turns[0]).toMatchObject({ status: 'completed' });
+    expect(snapshot.turns[0]?.error).toBeUndefined();
     expect(snapshot.activeRun).toBeNull();
     await manager.flush();
   } finally {
@@ -386,7 +387,12 @@ test('a recovered retry clears the failed attempt and completes the run', async 
   }
 });
 
-test('an unrecovered live assistant error fails the run at agent_end', async () => {
+test.each([
+  ['401 Invalid API key', '401 Invalid API key'],
+  ['', 'Agent execution failed'],
+  ['   ', 'Agent execution failed'],
+  [undefined, 'Agent execution failed'],
+])('an unrecovered assistant error preserves detail %p at agent_end', async (errorMessage, expectedError) => {
   const root = await mkdtemp(join(tmpdir(), 'canonical-error-live-'));
   const manager = SessionManager.create(root, root);
   try {
@@ -401,13 +407,17 @@ test('an unrecovered live assistant error fails the run at agent_end', async () 
       projection.bindPending();
     };
     deliver({ role: 'user', content: 'Ask a question.', timestamp: 1 });
-    deliver(assistant([], 'error', 2));
+    deliver({ ...assistant([], 'error', 2), errorMessage });
     const terminal = projection.consume({ type: 'agent_end', isTerminal: true });
     journal.append(terminal);
     expect(terminal.map(({ event }) => event.type)).toContain('run.failed');
     expect(terminal.map(({ event }) => event.type)).not.toContain('run.completed');
-    expect(journal.snapshot().turns[0]).toMatchObject({ status: 'failed' });
+    expect(terminal.find(({ event }) => event.type === 'run.failed')?.event).toMatchObject({ error: expectedError });
+    expect(journal.snapshot().turns[0]).toMatchObject({ status: 'failed', error: expectedError });
     await manager.flush();
+    expect(new WorkerProjection(manager, 'session').seed().turns[0]).toMatchObject({ status: 'failed', error: expectedError });
+    projection.beginRun('next-run', Date.now());
+    expect(projection.consume({ type: 'agent_end', isTerminal: true }).map(({ event }) => event.type)).toContain('run.completed');
   } finally {
     await manager.close();
     await rm(root, { recursive: true, force: true });

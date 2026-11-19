@@ -386,6 +386,7 @@ export class WorkerProjection {
   private readonly queuedPrompts = new WeakMap<NativeMessage, { messageId: string; attachments: PromptAttachment[]; sessionMentions: SessionMention[] }>();
   private entryOffset: number;
   private stopReason: 'error' | 'aborted' | undefined;
+  private providerError: string | undefined;
   private cancelRequestedRunId: string | undefined;
   private readonly privateRoots: PrivateRoot[];
   private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
@@ -470,6 +471,7 @@ export class WorkerProjection {
     private readonly sessionId: string,
     privateRoots: readonly PrivateRoot[] = [],
     private readonly readLiveTodos?: () => readonly NativeTodoPhaseInput[],
+    private readonly sanitizeProviderError: (text: string) => string = text => text,
   ) {
     this.entryOffset = manager.getBranch().length;
     const roots = new Map(nativePrivateRootContext(manager).map((value) => [value.root, value]));
@@ -707,6 +709,7 @@ export class WorkerProjection {
     this.turn = undefined;
     this.message = undefined;
     this.stopReason = undefined;
+    this.providerError = undefined;
     this.liveToolCallOwners.clear();
     this.publishedResultParts.clear();
     this.completedResultParts.clear();
@@ -1081,6 +1084,9 @@ export class WorkerProjection {
           this.stopReason = event.message.stopReason === 'error' || event.message.stopReason === 'aborted'
             ? event.message.stopReason
             : undefined;
+          this.providerError = this.stopReason === 'error'
+            ? this.publicText(this.sanitizeProviderError(event.message.errorMessage ?? '')).trim() || undefined
+            : undefined;
         }
         this.message = undefined;
         break;
@@ -1174,7 +1180,7 @@ export class WorkerProjection {
         if (this.cancelRequestedRunId === run.runId) { result.push(...this.cancelRun(timestamp)); break; }
         // The pinned SDK also marks completed requests yielded; isTerminal owns completion.
         if (event.isTerminal === false || event.awaitingAsyncWork === true) break;
-        if (this.stopReason === 'error') result.push(...this.failRun('Agent execution failed', timestamp));
+        if (this.stopReason === 'error') result.push(...this.failRun(this.providerError ?? 'Agent execution failed', timestamp));
         else if (this.stopReason === 'aborted') result.push(...this.cancelRun(timestamp));
         else result.push(...this.completeRun(timestamp));
         break;
