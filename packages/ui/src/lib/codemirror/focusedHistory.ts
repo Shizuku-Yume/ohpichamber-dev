@@ -1,6 +1,23 @@
 import { undo, redo } from '@codemirror/commands';
-import { Prec } from '@codemirror/state';
+import { EditorState, Prec } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+
+const runFocusedHistory = (document: Document, action: 'undo' | 'redo', event?: Event): void => {
+  const activeElement = document.activeElement;
+  const focused = activeElement instanceof HTMLElement ? EditorView.findFromDOM(activeElement) : null;
+  if (!focused?.hasFocus || !focused.contentDOM.contains(activeElement)) return;
+  event?.preventDefault();
+  if (focused.state.facet(EditorView.editable) && !focused.state.facet(EditorState.readOnly)) {
+    (action === 'undo' ? undo : redo)(focused);
+  }
+};
+
+export const handleNativeHistoryMenu = (event: Event): void => {
+  const action = (event as CustomEvent<unknown>).detail;
+  if (action === 'undo' || action === 'redo') {
+    runFocusedHistory(document, action, event);
+  }
+};
 
 export const focusedHistory = Prec.highest(EditorView.domEventHandlers({
   beforeinput(event, view) {
@@ -9,11 +26,7 @@ export const focusedHistory = Prec.highest(EditorView.domEventHandlers({
 
     // Native history can target a previously edited contenteditable.
     event.preventDefault();
-    const activeElement = view.dom.ownerDocument.activeElement;
-    const focused = activeElement instanceof HTMLElement ? EditorView.findFromDOM(activeElement) : null;
-    if (focused?.hasFocus && focused.contentDOM.contains(activeElement) && focused.state.facet(EditorView.editable)) {
-      command(focused);
-    }
+    runFocusedHistory(view.dom.ownerDocument, event.inputType === 'historyUndo' ? 'undo' : 'redo');
     return true;
   },
 }));

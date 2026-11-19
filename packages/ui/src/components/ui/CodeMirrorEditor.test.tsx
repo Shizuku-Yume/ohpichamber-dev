@@ -13,6 +13,7 @@ Object.assign(globalThis, {
   Node: dom.Node,
   HTMLElement: dom.HTMLElement,
   InputEvent: dom.InputEvent,
+  CustomEvent: dom.CustomEvent,
   getComputedStyle: dom.getComputedStyle.bind(dom),
   requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0),
   cancelAnimationFrame: (id: number) => clearTimeout(id),
@@ -24,7 +25,8 @@ const { CodeMirrorEditor } = await import('./CodeMirrorEditor');
 const { ComposerEditorView } = await import('../chat/composer/editor/ComposerEditorView');
 const { ComposerEditor } = await import('../chat/composer/editor/ComposerEditor');
 const { history, undo } = await import('@codemirror/commands');
-const { focusedHistory } = await import('@/lib/codemirror/focusedHistory');
+const { EditorState, StateEffect } = await import('@codemirror/state');
+const { focusedHistory, handleNativeHistoryMenu } = await import('@/lib/codemirror/focusedHistory');
 
 type EditorProps = React.ComponentProps<typeof CodeMirrorEditor>;
 
@@ -54,6 +56,7 @@ const render = async (props: Partial<EditorProps> = {}) => {
 };
 
 beforeEach(() => {
+  window.addEventListener('openchamber:history-action', handleNativeHistoryMenu);
   view = null;
   reconfigures = 0;
   container = document.createElement('div');
@@ -61,6 +64,7 @@ beforeEach(() => {
   root = createRoot(container);
 });
 afterEach(async () => {
+  window.removeEventListener('openchamber:history-action', handleNativeHistoryMenu);
   await act(async () => root.unmount());
   document.body.replaceChildren();
 });
@@ -121,6 +125,13 @@ const nativeHistory = async (target: InstanceType<typeof EditorView>, inputType:
   return event;
 };
 
+const menuHistory = async (action: unknown) => {
+  const event = new CustomEvent('openchamber:history-action', { detail: action, cancelable: true });
+  let unhandled = true;
+  await act(async () => { unhandled = window.dispatchEvent(event); });
+  return !unhandled;
+};
+
 test('routes undo and redo to the focused composer without file changes', async () => {
   const changes: string[] = [];
   await render({ onChange: (value) => changes.push(value) });
@@ -153,6 +164,20 @@ test('routes undo and redo to the focused composer without file changes', async 
     expect(other.state.doc.toString()).toBe('pasted composer');
     await nativeHistory(other, 'historyRedo');
     expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+    changes.length = 0;
+    other.focus();
+    expect(await menuHistory('undo')).toBe(true);
+    expect(other.state.doc.toString()).toBe('composer');
+    expect(await menuHistory('redo')).toBe(true);
+    expect(other.state.doc.toString()).toBe('pasted composer');
+    expect(changes).toEqual([]);
+    expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+    file.focus();
+    expect(await menuHistory('undo')).toBe(true);
+    expect(file.state.doc.toString()).toBe('one\ntwo\nthree');
+    expect(await menuHistory('redo')).toBe(true);
+    expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+    expect(other.state.doc.toString()).toBe('pasted composer');
   } finally {
     await act(async () => composerRoot.unmount());
   }
@@ -180,10 +205,12 @@ test('empty focused history never falls back to the file history', async () => {
     other.focus();
     changes.length = 0;
     await nativeHistory(file, 'historyUndo');
+    expect(await menuHistory('undo')).toBe(true);
     expect(changes).toEqual([]);
     await act(async () => { undo(file); });
     changes.length = 0;
     await nativeHistory(file, 'historyRedo');
+    expect(await menuHistory('redo')).toBe(true);
     expect(changes).toEqual([]);
     expect(file.state.doc.toString()).toBe('one\ntwo\nthree');
     expect(other.state.doc.toString()).toBe('composer');
@@ -201,9 +228,44 @@ test('a focused native input or no focused editor makes stale history a no-op', 
   const input = document.createElement('input');
   document.body.append(input);
   input.focus();
+  expect(await menuHistory('undo')).toBe(false);
+  expect(await menuHistory('redo')).toBe(false);
   await nativeHistory(file, 'historyUndo');
   input.blur();
+  expect(await menuHistory('undo')).toBe(false);
   await nativeHistory(file, 'historyUndo');
   expect(changes).toEqual([]);
   expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+});
+
+test('menu history ignores invalid actions and consumes read-only CodeMirror history', async () => {
+  const changes: string[] = [];
+  await render({ onChange: (value) => changes.push(value) });
+  const file = view!;
+  file.focus();
+  expect(await menuHistory('copy')).toBe(false);
+  expect(await menuHistory(null)).toBe(false);
+  await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+  file.dispatch({ effects: StateEffect.appendConfig.of(EditorState.readOnly.of(true)) });
+  changes.length = 0;
+  expect(await menuHistory('undo')).toBe(true);
+  expect(changes).toEqual([]);
+  expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+});
+
+test('menu history claims focus ownership before dispatching the edit', async () => {
+  await render();
+  const file = view!;
+  await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+  file.focus();
+  const event = new CustomEvent('openchamber:history-action', { detail: 'undo', cancelable: true });
+  const dispatch = file.dispatch;
+  let claimed = false;
+  file.dispatch = () => { claimed = event.defaultPrevented; };
+  try {
+    window.dispatchEvent(event);
+    expect(claimed).toBe(true);
+  } finally {
+    file.dispatch = dispatch;
+  }
 });

@@ -4,17 +4,24 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
-**2026-11-19 Native Undo focus:** File and composer CodeMirror views share a
-high-precedence native history-event guard. A stale `beforeinput` Undo/Redo
-target cannot mutate an unfocused file editor; routing uses the currently
-focused editable CodeMirror content, with no fallback for empty history.
-Happy DOM reproduced the unguarded file mutation from a synthetic stale event.
-Focused file/composer history regressions passed (9 tests); composer paste,
-view setup, and value-writeback tests passed (15 tests). UI type-check, lint,
-and dead-code checks exited 0. The existing paste harness logs missing `Window`
-diagnostics, and the file-editor harness logs a React `act` warning.
-Native macOS menu delivery remains unverified; no Electron or dev server was
-launched during this fix.
+**2026-11-19 Native history focus:** Native testing of `85df60fa5` verified that
+Undo targets the focused composer without changing the file, but native menu
+Redo did not restore the composer while its keyboard binding did. Desktop now
+uses explicit Undo/Redo menu callbacks and an acknowledged, cancelable
+`openchamber:history-action` query in main and Mini Chat app documents. Focused
+CodeMirror content owns both commands, even with empty or read-only history;
+ordinary inputs, DevTools, and browser guests retain native history. Failed
+renderer queries do not fall back. Labels and accelerators match Electron's
+platform defaults. The shared stale-`beforeinput` guard remains for history
+commands arriving outside the app menu. Happy DOM reproduced the original
+unguarded unfocused-file mutation. Native validation of the explicit menu route
+remains pending; no Electron or dev server was launched during this follow-up.
+Electron menu tests passed (33 tests), UI file/composer history tests passed
+(11 tests), and existing composer paste/view/writeback tests passed (15 tests).
+Electron syntax type-check, UI type-check, both package lint commands, and
+dead-code checks exited 0. Electron's lint script is currently a no-op. Existing
+Happy DOM paste tests log missing `Window` diagnostics despite passing, and the
+file-editor harness retains its React `act` warning.
 
 **2026-11-19 Final main audit (task 06):** The candidate includes sidebar admission PR #2 and the PR #3 review fixes. The archived base reference, Agent Service lint and dead-code issues, Oxlint diagnostic parsing, and the Git clone timeout fixture are fixed. After the Web router test harness fix, the Ubuntu 24.04 gate passed on `d4feabd8c`, including all seven workspace suites and workflow validation. Devin signed off on local verification; Devin Review and maintainer merge are pending. See [task 06](tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md) for evidence and runtime walkthrough limitations. M7 release verification remains proposed.
 
