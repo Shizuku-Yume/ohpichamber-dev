@@ -1731,3 +1731,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** opening sibling modals during dismissal or keeping a one-shot dirty snapshot after a commit.
 - **Because:** closing modal focus cleanup must complete before the next surface opens, and a successful Git mutation invalidates the earlier dirty answer.
 - **Revisit when:** the shared dialog supports an atomic modal handoff or the draft target reads its dirty answer from the shared Git store.
+
+## 2026-11-19 - Recheck draft dirtiness on working-tree status updates
+
+- **Decided:** subscribe the draft dirty probe to its selected directory's shared Git status in addition to index revision changes.
+- **Instead of:** waiting for staging to change the index or introducing another status poller.
+- **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
+- **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
