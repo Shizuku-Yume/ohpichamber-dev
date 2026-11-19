@@ -1498,7 +1498,7 @@ export interface FilesAPI {
   statFile?(path: string, options?: FileReadOptions): Promise<{ path: string; isFile: boolean; size: number; mtimeMs?: number }>;
   readFile?(path: string, options?: FileReadOptions): Promise<{ content: string; path: string }>;
   readFileBinary?(path: string, options?: FileReadOptions): Promise<{ dataUrl: string; path: string }>;
-  writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>;
+  writeFile?(path: string, content: string, options?: { mustExist?: boolean }): Promise<{ success: boolean; path: string }>;
   uploadFile?(path: string, file: Blob, options?: { overwrite?: boolean; directory?: string }): Promise<{ success: boolean; path: string }>;
   delete?(path: string): Promise<{ success: boolean }>;
   rename?(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }>;

@@ -80,9 +80,10 @@ export const useSidebarGroupStatus = ({
           ),
         );
         if (hasGroupScopedError) {
+          // The global list owns this failure even when it names one directory.
           statuses.set(key, {
             state: 'load-failed',
-            directory: groupDirectories[0] ?? null,
+            directory: null,
             canGrantAccess: false,
           });
         } else {
