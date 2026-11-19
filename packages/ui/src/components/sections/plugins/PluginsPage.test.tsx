@@ -414,6 +414,80 @@ test('a selected marketplace category resets when its source leaves the catalog,
   expect(container.textContent).not.toContain('lint-kit');
 });
 
+test.each([false, true])('marketplace metadata and actions stay independently bounded on narrow panes (installed: %s)', async installed => {
+  const name = 'very-long-plugin-name-without-any-breaks'.repeat(3);
+  const marketplace = 'very-long-marketplace-source'.repeat(3);
+  await showCatalog({
+    ...emptyCatalog,
+    plugins: installed ? [{ ...plugin, name, scope: 'workspace', target: { kind: 'marketplace', name, marketplace, scope: 'project' } }] : [],
+    marketplace: [{ name, marketplace, version: '1.0.0-long-version'.repeat(3), description: 'long-description'.repeat(30) }],
+  });
+
+  const label = Array.from(container.querySelectorAll('p')).find(element => element.textContent === name);
+  const metadata = label?.parentElement;
+  const content = metadata?.parentElement;
+  const row = content?.parentElement;
+  const action = row?.lastElementChild;
+  expect(label?.classList.contains('truncate')).toBe(true);
+  expect(content?.classList.contains('min-w-0')).toBe(true);
+  expect(content?.classList.contains('break-words')).toBe(true);
+  expect(metadata?.classList.contains('flex-wrap')).toBe(true);
+  for (const item of Array.from(metadata?.children ?? [])) {
+    expect(item.classList.contains('max-w-full')).toBe(true);
+    expect(item.classList.contains('truncate')).toBe(true);
+  }
+  expect(action?.tagName).toBe('BUTTON');
+  expect(action?.classList.contains('self-start')).toBe(true);
+  expect(action?.classList.contains('max-w-full')).toBe(true);
+  expect(action?.classList.contains('whitespace-normal')).toBe(true);
+  expect((action as HTMLButtonElement).disabled).toBe(installed);
+
+  const add = buttonWith('Add plugin');
+  if (!add) throw new Error('Missing Add plugin action');
+  await act(async () => { add.click(); });
+  await waitFor(() => document.querySelector('[data-slot="dialog-content"]') !== null);
+  const dialog = document.querySelector('[data-slot="dialog-content"]');
+  const dialogName = Array.from(dialog?.querySelectorAll('span') ?? []).find(element => element.textContent === name);
+  const dialogContent = dialogName?.parentElement?.parentElement;
+  const dialogAction = dialogContent?.parentElement?.lastElementChild;
+  expect(dialogName?.classList.contains('max-w-full')).toBe(true);
+  expect(dialogContent?.classList.contains('break-words')).toBe(true);
+  expect(dialogAction?.tagName).toBe('BUTTON');
+  expect(dialogAction?.classList.contains('self-start')).toBe(true);
+  expect(dialogAction?.classList.contains('max-w-full')).toBe(true);
+  expect(dialogAction?.classList.contains('whitespace-normal')).toBe(true);
+});
+
+test('plugin section headings stack above bounded, wrapping actions on narrow panes', async () => {
+  await showCatalog(emptyCatalog);
+  for (const title of ['Installed', 'Marketplace', 'Capabilities']) {
+    const heading = Array.from(container.querySelectorAll('h2')).find(element => element.textContent === title);
+    const header = heading?.parentElement?.parentElement?.parentElement;
+    expect(header?.classList.contains('flex-col')).toBe(true);
+    expect(header?.classList.contains('@xl:flex-row')).toBe(true);
+    const actions = header?.lastElementChild;
+    expect(actions?.classList.contains('max-w-full')).toBe(true);
+    expect(actions?.classList.contains('min-w-0')).toBe(true);
+    if (title !== 'Capabilities') expect(actions?.firstElementChild?.classList.contains('flex-wrap')).toBe(true);
+  }
+});
+
+test('a long installed plugin name stays inside the card above its reserved controls area', async () => {
+  const name = 'long-installed-plugin-name'.repeat(12);
+  await showCatalog({ ...emptyCatalog, plugins: [{ ...plugin, name }] });
+  const title = container.querySelector(`[title="${name}"]`);
+  const card = title?.closest('button');
+  expect(title?.classList.contains('truncate')).toBe(true);
+  expect(title?.parentElement?.classList.contains('self-stretch')).toBe(true);
+  expect(card?.classList.contains('min-w-0')).toBe(true);
+  expect(card?.parentElement?.classList.contains('min-w-0')).toBe(true);
+  const footer = card?.querySelector('.mt-auto');
+  expect(footer?.classList.contains('min-h-10')).toBe(true);
+  expect(footer?.classList.contains('@xl:min-h-0')).toBe(true);
+  expect(footer?.classList.contains('shrink-0')).toBe(true);
+  expect(card?.parentElement?.querySelector('[role="switch"]')).not.toBeNull();
+});
+
 test('installed plugin capability chips sit in one shrinkable, wrapping container in the card footer', async () => {
   const installed: InstalledPluginEntry = {
     ...plugin,
