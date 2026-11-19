@@ -7,7 +7,7 @@ test('native resume reports unreachable only after both probes fail', async () =
     timers.push(run);
   }) as typeof setTimeout);
   const reprobe = mock(async () => 'unreachable' as const);
-  const disconnect = mock();
+  const disconnect = mock<Parameters<typeof retryNativeResumeConnection>[0]['disconnect']>();
   const refreshInPlace = mock();
 
   try {
@@ -18,13 +18,13 @@ test('native resume reports unreachable only after both probes fail', async () =
     await Promise.resolve();
     await Promise.resolve();
     expect(reprobe).toHaveBeenCalledTimes(1);
-    expect(reprobe).toHaveBeenNthCalledWith(1, { fast: true });
+    expect(reprobe.mock.calls).toEqual([[{ fast: true }]]);
     expect(disconnect).not.toHaveBeenCalled();
 
-    expect(schedule).toHaveBeenNthCalledWith(2, expect.any(Function), 10000);
+    expect(schedule.mock.calls[1]?.[1]).toBe(10000);
     timers.shift()?.();
     await result;
-    expect(reprobe).toHaveBeenNthCalledWith(2, { fast: false });
+    expect(reprobe.mock.calls).toEqual([[{ fast: true }], [{ fast: false }]]);
     expect(disconnect).toHaveBeenCalledTimes(1);
     expect(disconnect).toHaveBeenCalledWith('retry-unreachable', 'unreachable');
     expect(refreshInPlace).not.toHaveBeenCalled();
