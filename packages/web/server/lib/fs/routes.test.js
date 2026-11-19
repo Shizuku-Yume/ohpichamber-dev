@@ -5,28 +5,13 @@ import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import * as nativeFs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { tmpdir } from 'node:os';
-<<<<<<< HEAD
 import { execFileSync, spawn } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
-||||||| bc50ba56aa
-import { execFileSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
-=======
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
->>>>>>> upstream/main
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mintOutsideFileGrant, registerFsRoutes } from './routes.js';
-<<<<<<< HEAD
 import { createRipgrepResolver } from './ripgrep.js';
-import { createProjectDirectoryRuntime } from '../host/project-directory-runtime.js';
-||||||| bc50ba56aa
-import { createProjectDirectoryRuntime } from '../opencode/project-directory-runtime.js';
-=======
 import { createProjectDirectoryRuntime } from '../projects/project-directory-runtime.js';
->>>>>>> upstream/main
 
 const createRouteRegistry = () => {
   const routes = new Map();
@@ -2211,27 +2196,6 @@ describe('fs stat directory error handling', () => {
       await mkdir(path.join(directory, 'fs'));
       await mkdir(path.join(directory, 'git'));
       await mkdir(path.join(directory, 'shared'));
-<<<<<<< HEAD
-      await copyFile(new URL('./routes.js', import.meta.url), path.join(directory, 'fs/routes.mjs'));
-      await copyFile(new URL('./byte-range.js', import.meta.url), path.join(directory, 'fs/byte-range.js'));
-      await copyFile(new URL('./workspace-file-names.js', import.meta.url), path.join(directory, 'fs/workspace-file-names.js'));
-      await copyFile(new URL('./search.js', import.meta.url), path.join(directory, 'fs/search.js'));
-      await copyFile(new URL('./content-search.js', import.meta.url), path.join(directory, 'fs/content-search.js'));
-      await copyFile(new URL('./preview-bridge.js', import.meta.url), path.join(directory, 'fs/preview-bridge.js'));
-      await copyFile(new URL('../path-realpath-cache.js', import.meta.url), path.join(directory, 'path-realpath-cache.js'));
-      await copyFile(new URL('../git/redaction.js', import.meta.url), path.join(directory, 'git/redaction.js'));
-      await copyFile(new URL('../shared/guards.js', import.meta.url), path.join(directory, 'shared/guards.js'));
-||||||| bc50ba56aa
-      await copyFile(new URL('./routes.js', import.meta.url), path.join(directory, 'fs/routes.mjs'));
-      await copyFile(new URL('./byte-range.js', import.meta.url), path.join(directory, 'fs/byte-range.js'));
-      await copyFile(new URL('./preview-bridge.js', import.meta.url), path.join(directory, 'fs/preview-bridge.js'));
-      await copyFile(new URL('./workspace-file-names.js', import.meta.url), path.join(directory, 'fs/workspace-file-names.js'));
-      await copyFile(new URL('./content-search.js', import.meta.url), path.join(directory, 'fs/content-search.js'));
-      await copyFile(new URL('./search.js', import.meta.url), path.join(directory, 'fs/search.js'));
-      await copyFile(new URL('../path-realpath-cache.js', import.meta.url), path.join(directory, 'path-realpath-cache.js'));
-      await copyFile(new URL('../git/redaction.js', import.meta.url), path.join(directory, 'git/redaction.js'));
-      await copyFile(new URL('../shared/guards.js', import.meta.url), path.join(directory, 'shared/guards.js'));
-=======
       const helpers = ['routes', 'canonical-path', 'byte-range', 'preview-bridge', 'workspace-file-names', 'content-search', 'search'];
       const require = createRequire(import.meta.url);
       const compiler = path.join(path.dirname(require.resolve('typescript/package.json')), 'bin/tsc');
@@ -2245,7 +2209,6 @@ describe('fs stat directory error handling', () => {
          fileURLToPath(new URL('../path-realpath-cache.ts', import.meta.url)),
       ], { cwd: directory, stdio: 'pipe' });
       await copyFile(new URL('../shared/guards.ts', import.meta.url), path.join(directory, 'shared/guards.js'));
->>>>>>> upstream/main
       expect(() => execFileSync('node', [
         '--input-type=module',
         '--eval',
@@ -2720,7 +2683,7 @@ describe('fs html preview grants', () => {
     expect(managed.getHeader('access-control-allow-origin')).toBeUndefined();
   });
 
-  it('limits a page inside the OpenChamber folder to reading its own folder', async () => {
+  it('limits a page inside the OhPiChamber folder to reading its own folder', async () => {
     const { mint, serve } = register();
     const { grant } = (await mint('/home/user/.config/ohpichamber/projects/p1/canvases/c1/index.html')).body;
 

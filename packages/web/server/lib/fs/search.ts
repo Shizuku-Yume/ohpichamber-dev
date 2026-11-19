@@ -55,13 +55,7 @@ const shouldSkipSearchDirectory = (name: string, includeHidden: boolean) => {
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
 };
 
-<<<<<<< HEAD:packages/web/server/lib/fs/search.js
 const listDirectoryEntries = async (dirPath, fsPromises, strict) => {
-||||||| bc50ba56aa:packages/web/server/lib/fs/search.js
-const listDirectoryEntries = async (dirPath, fsPromises) => {
-=======
-const listDirectoryEntries = async (dirPath: string, fsPromises: FsSearchOptions['fsPromises']) => {
->>>>>>> upstream/main:packages/web/server/lib/fs/search.ts
   try {
     return await fsPromises.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
@@ -138,24 +132,8 @@ export const createGitCheckIgnoreTimeoutMs = () => {
 
 export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch = false }: FsSearchOptions) => {
   const gitCheckIgnoreTimeoutMs = createGitCheckIgnoreTimeoutMs();
-<<<<<<< HEAD:packages/web/server/lib/fs/search.js
   const readIgnoredPaths = async (directory, names, signal) => {
     if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set();
-||||||| bc50ba56aa:packages/web/server/lib/fs/search.js
-  const readDirectory = (directory) => workspaceSearch
-    ? fsPromises.readdir(directory, { withFileTypes: true })
-    : listDirectoryEntries(directory, fsPromises);
-
-  const readIgnoredPaths = async (directory, names, signal) => {
-    if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set();
-=======
-  const readDirectory = (directory: string) => workspaceSearch
-    ? fsPromises.readdir(directory, { withFileTypes: true })
-    : listDirectoryEntries(directory, fsPromises);
-
-  const readIgnoredPaths = async (directory: string, names: string[], signal: AbortSignal | undefined) => {
-    if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set<string>();
->>>>>>> upstream/main:packages/web/server/lib/fs/search.ts
     try {
       const result = await new Promise<string>((resolve) => {
         const args = workspaceSearch
@@ -197,14 +175,8 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
         child.on('close', () => finish(stdout));
         child.on('error', () => finish(''));
         if (!workspaceSearch) {
-<<<<<<< HEAD:packages/web/server/lib/fs/search.js
-          child.stdin.on('error', () => { });
-||||||| bc50ba56aa:packages/web/server/lib/fs/search.js
-          child.stdin.on('error', () => {});
-=======
           if (!child.stdin) throw new Error('Git stdin is unavailable');
           child.stdin.on('error', () => {});
->>>>>>> upstream/main:packages/web/server/lib/fs/search.ts
           child.stdin.end(`${names.join('\0')}\0`);
         }
       });
@@ -214,16 +186,8 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/fs/search.js
   const searchFilesystemFiles = async (rootPath, options) => {
     const { limit, query, includeHidden, respectGitignore, type = 'file', signal, strict = false } = options;
-||||||| bc50ba56aa:packages/web/server/lib/fs/search.js
-  const searchFilesystemFiles = async (rootPath, options) => {
-    const { limit, query, includeHidden, respectGitignore, signal } = options;
-=======
-  const searchFilesystemFiles = async (rootPath: string, options: FileSearchOptions): Promise<FilesystemFile[]> => {
-    const { limit, query, includeHidden, respectGitignore, signal } = options;
->>>>>>> upstream/main:packages/web/server/lib/fs/search.ts
     const includeHiddenEntries = Boolean(includeHidden);
     const normalizedQuery = query.trim().toLowerCase();
     const matchAll = normalizedQuery.length === 0;
@@ -246,7 +210,6 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
       const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
 
       const dirResults = await Promise.all(batch.map(async ({ dir, gitRoot }) => {
-<<<<<<< HEAD:packages/web/server/lib/fs/search.js
         // The walk's root is the search the caller asked for, not one entry
         // among many: a workspace search that cannot read it must fail
         // rather than answer as if the tree were empty.
@@ -254,12 +217,6 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
           ? await fsPromises.readdir(dir, { withFileTypes: true })
           : await listDirectoryEntries(dir, fsPromises, strict && dir === rootPath);
         // A nested checkout has its own index and ignore rules.
-||||||| bc50ba56aa:packages/web/server/lib/fs/search.js
-        const dirents = await readDirectory(dir);
-        // A nested checkout has its own index and ignore rules.
-=======
-        const dirents = await readDirectory(dir);
->>>>>>> upstream/main:packages/web/server/lib/fs/search.ts
         if (!workspaceSearch || dirents.some((entry) => entry.name === '.git')) gitRoot = dir;
         if (workspaceSearch && shouldRespectGitignore && !ignoredByRoot.has(gitRoot)) {
           ignoredByRoot.set(gitRoot, readIgnoredPaths(gitRoot, dirents.map((entry) => entry.name).filter(Boolean), signal));
