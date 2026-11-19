@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, jest, test } from "bun:test"
+import { CanonicalApiError } from "@/api/canonicalClient"
 import type { HistoryPage, SessionSnapshot } from "@openchamber/agent-contract"
 import { ChildStoreManager } from "./child-store"
 import { SessionMessageLoader, type LoaderConfiguration } from "./session-message-loader"
@@ -9,7 +10,7 @@ import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { resetSessionRekeyRegistry, retireSessionIdentity } from "./session-rekey-registry"
 
 const cleanups: Array<() => void> = []
-afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
+afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); jest.useRealTimers() })
 const target = { directory: "/loader-repo", sessionId: "session-a" }
 
 function setup(configuration: Partial<LoaderConfiguration> = {}) {
@@ -28,6 +29,78 @@ function historyWindow(): SessionSnapshot {
 }
 
 describe("canonical session snapshot loading", () => {
+  const unavailable = (retryable = true) => new CanonicalApiError({ type: "urn:test:unavailable", title: "Unavailable", status: 500, detail: "Agent service is not accepting requests", code: "INTERNAL_ERROR", retryable })
+  const advanceStartup = async () => {
+    for (let second = 0; second < 45; second += 1) {
+      for (let turn = 0; turn < 40; turn += 1) await Promise.resolve()
+      jest.advanceTimersByTime(1000)
+    }
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve()
+  }
+
+  test.each([false, true])("retryable startup snapshot failure recovers and publishes its cursor (empty=%s)", async empty => {
+    jest.useFakeTimers()
+    let calls = 0
+    const ready = nativeSnapshot(target.sessionId, empty ? [] : undefined)
+    const snapshots: SessionSnapshot[] = []
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => { if (++calls < 3) throw unavailable(); return ready } }), onSnapshot: (_target, snapshot) => snapshots.push(snapshot) })
+    const pending = loader.ensure(target)
+    await advanceStartup()
+    await pending
+    expect(calls).toBe(3)
+    expect(snapshots).toEqual([ready])
+    expect(store.getState().message[target.sessionId]).toEqual(ready.messages)
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "ready", error: null })
+  })
+
+  test.each([false, true])("snapshot failure preserves prior state and exposes the bounded failure (retryable=%s)", async retryable => {
+    jest.useFakeTimers()
+    let calls = 0
+    const error = unavailable(retryable)
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => { calls += 1; throw error } }) })
+    const old = nativeSnapshot()
+    store.setState({ snapshot: { [target.sessionId]: old }, message: { [target.sessionId]: old.messages } })
+    const before = store.getState()
+    const pending = loader.refresh(target)
+    await advanceStartup()
+    await pending
+    expect(calls).toBe(retryable ? 8 : 1)
+    expect(store.getState()).toBe(before)
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "error", error })
+  })
+
+  test("retired snapshot recovery makes no further requests or publications", async () => {
+    jest.useFakeTimers()
+    let current = true
+    let calls = 0
+    let publications = 0
+    const { loader, store } = setup({ isCurrent: () => current, client: nativeClient({ getSnapshot: async () => { calls += 1; throw unavailable() } }), onSnapshot: () => { publications += 1 } })
+    const pending = loader.ensure(target)
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve()
+    current = false
+    await advanceStartup()
+    await pending
+    expect(calls).toBe(1)
+    expect(publications).toBe(0)
+    expect(store.getState().snapshot[target.sessionId]).toBeUndefined()
+  })
+
+  test.each([false, true])("accepted-send recovery waits for an available worker within budget (exhausted=%s)", async exhausted => {
+    jest.useFakeTimers()
+    let calls = 0
+    const cold = nativeSnapshot()
+    cold.session.runtimeStatus = "unavailable"
+    const ready = nativeSnapshot()
+    const snapshots: SessionSnapshot[] = []
+    const { loader } = setup({ client: nativeClient({ getSnapshot: async () => ++calls < 3 || exhausted ? cold : ready }), onSnapshot: (_target, snapshot) => snapshots.push(snapshot) })
+    const pending = loader.refresh(target, undefined, { recovered: true, requireAvailable: true })
+    await advanceStartup()
+    await pending
+    expect(calls).toBe(exhausted ? 8 : 3)
+    expect(snapshots).toEqual(exhausted ? [] : [ready])
+    expect(loader.getSnapshot(target).status).toBe(exhausted ? "error" : "ready")
+  })
+
   test("deduplicates foreground and speculative demands", async () => {
     const pending = deferred<SessionSnapshot>()
     let calls = 0
@@ -42,6 +115,29 @@ describe("canonical session snapshot loading", () => {
     expect(loader.getSnapshot(target)).toMatchObject({ status: "ready", complete: true, resolved: true })
     await loader.ensure(target)
     expect(calls).toBe(1)
+  })
+
+  test("cold-send recovery queued behind an initial read retains the worker-availability requirement", async () => {
+    jest.useFakeTimers()
+    const pending = deferred<SessionSnapshot>()
+    const cold = nativeSnapshot()
+    cold.session.runtimeStatus = "unavailable"
+    const ready = nativeSnapshot()
+    let calls = 0
+    const snapshots: SessionSnapshot[] = []
+    const { loader } = setup({ client: nativeClient({ getSnapshot: async () => {
+      calls += 1
+      if (calls === 1) return pending.promise
+      return calls === 2 ? cold : ready
+    } }), onSnapshot: (_target, snapshot) => snapshots.push(snapshot) })
+    const initial = loader.ensure(target)
+    const recovery = loader.refresh(target, undefined, { recovered: true, requireAvailable: true })
+    pending.resolve(cold)
+    await advanceStartup()
+    await Promise.all([initial, recovery])
+    expect(calls).toBe(3)
+    expect(snapshots).toEqual([cold, ready])
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "ready", error: null })
   })
 
   test("commits recovery snapshot atomically before reporting the exact SSE cursor", async () => {

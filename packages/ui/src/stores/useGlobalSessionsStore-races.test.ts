@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 import type { Session, Subagent } from '@openchamber/agent-contract';
-import { canonicalClient } from '@/api/canonicalClient';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -21,6 +21,13 @@ const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 const ids = (records: readonly Session[]) => records.map((record) => record.sessionId).sort();
+const advanceStartup = async (seconds = 45) => {
+  for (let second = 0; second < seconds; second += 1) {
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+    jest.advanceTimersByTime(1000);
+  }
+  for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+};
 let runtime = 0;
 let request = deferred<SessionDiscoveryResult>();
 let list = spyOn(canonicalClient, 'listSessions');
@@ -49,6 +56,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   list.mockRestore();
   resolveWorkspace.mockRestore();
   listWorkspaces.mockRestore();
@@ -57,6 +65,60 @@ afterEach(() => {
 });
 
 describe('native global mutation reconciliation', () => {
+  const warmup = () => new CanonicalApiError({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true });
+
+  test.each([false, true])('startup discovery recovers after delayed readiness (empty=%s)', async (empty) => {
+    jest.useFakeTimers();
+    const readyAt = Date.now() + 25000;
+    list.mockImplementation(async () => {
+      if (Date.now() < readyAt) throw warmup();
+      return { items: empty ? [] : [session('ses_ready')], errors: {} };
+    });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(false);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(empty ? [] : ['ses_ready']);
+    expect(listWorkspaces).toHaveBeenCalledTimes(1);
+  });
+
+  test('a real failure after warmup stays an error and retains the previous snapshot', async () => {
+    jest.useFakeTimers();
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_saved')], []);
+    list.mockRejectedValueOnce(warmup()).mockRejectedValue(new CanonicalApiError({ type: 'urn:test:failed', title: 'Failed', status: 500, detail: 'Discovery failed', code: 'INTERNAL_ERROR', retryable: false }));
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(useGlobalSessionsStore.getState().status).toBe('error');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(true);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_saved']);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  test('startup retries are bounded when the service stays unavailable', async () => {
+    jest.useFakeTimers();
+    list.mockRejectedValue(warmup());
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(useGlobalSessionsStore.getState().status).toBe('error');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(true);
+    expect(list).toHaveBeenCalledTimes(8);
+  });
+
+  test('runtime reset cancels delayed startup retries', async () => {
+    jest.useFakeTimers();
+    list.mockRejectedValue(warmup());
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(useGlobalSessionsStore.getState().status).toBe('idle');
+  });
+
   test('keeps a create after discovery starts', async () => {
     const loading = useGlobalSessionsStore.getState().loadSessions();
     useGlobalSessionsStore.getState().upsertSession(session('ses_created'));
@@ -169,6 +231,30 @@ describe('native global mutation reconciliation', () => {
 });
 
 describe('native discovery completeness scopes', () => {
+  test.each(['global', 'directory'] as const)('a later healthy %s listing clears stale discovery errors without needing new records', async (scope) => {
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_failed')], []);
+    useGlobalSessionsStore.setState({ discoveryErrors: new Map([['wsp_repo', 'SERVICE_UNAVAILABLE'], ['ses_failed', 'METADATA_READ_FAILED'], ['wsp_other', 'SERVICE_UNAVAILABLE']]) });
+    list.mockResolvedValue({ items: [session('ses_failed')], errors: {} });
+    if (scope === 'global') await useGlobalSessionsStore.getState().refreshSessionHead();
+    else await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('wsp_repo')).toBe(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('ses_failed')).toBe(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('wsp_other')).toBe(scope === 'directory');
+  });
+
+  test.each([false, true])('all-unavailable HTTP 200 discovery retries before accepting an empty=%s result', async (empty) => {
+    jest.useFakeTimers();
+    list.mockResolvedValueOnce({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE', wsp_other: 'SERVICE_UNAVAILABLE' } })
+      .mockResolvedValue({ items: empty ? [] : [session('ses_ready')], errors: {} });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(empty ? [] : ['ses_ready']);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+  });
+
   test('an entity failure preserves its owner while healthy siblings reconcile', async () => {
     const failed = session('ses_failed', { archivedAt: 4 });
     useGlobalSessionsStore.getState().applySnapshot([session('ses_removed'), session('ses_healthy')], [failed]);
@@ -181,12 +267,76 @@ describe('native discovery completeness scopes', () => {
     expect(state.status).toBe('ready');
     expect(state.hasLoaded).toBe(true);
     expect(state.discoveryErrors.get('ses_failed')).toBe('METADATA_READ_FAILED');
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([false, true])('transient partial discovery recovers without losing healthy results (empty=%s)', async (empty) => {
+    jest.useFakeTimers();
+    useGlobalSessionsStore.getState().upsertSession(session('ses_cached'));
+    const recovered = deferred<SessionDiscoveryResult>();
+    list.mockResolvedValueOnce({
+      items: [session('ses_healthy', { workspaceId: 'wsp_other', projectId: 'pro_other' })],
+      errors: { wsp_repo: 'SERVICE_UNAVAILABLE' },
+    }).mockImplementation(() => recovered.promise);
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup(1);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_cached', 'ses_healthy']);
+    expect(useGlobalSessionsStore.getState().status).toBe('loading');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    recovered.resolve({
+      items: empty ? [] : [session('ses_healthy', { workspaceId: 'wsp_other', projectId: 'pro_other' }), session('ses_recovered')],
+      errors: {},
+    });
+    await loading;
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(empty ? [] : ['ses_healthy', 'ses_recovered']);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  test('transient exhaustion preserves healthy results and exposes only failed scopes', async () => {
+    jest.useFakeTimers();
+    list.mockResolvedValue({
+      items: [session('ses_healthy')],
+      errors: { wsp_other: 'SERVICE_UNAVAILABLE', ses_failed: 'METADATA_READ_FAILED' },
+    }).mockRejectedValueOnce(new CanonicalApiError({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true }));
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup(1);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_healthy']);
+    expect([...useGlobalSessionsStore.getState().discoveryErrors]).toEqual([['ses_failed', 'METADATA_READ_FAILED']]);
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(8);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_healthy']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('wsp_other')).toBe('SERVICE_UNAVAILABLE');
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(false);
+  });
+
+  test('runtime switch retires transient partial discovery before another request', async () => {
+    jest.useFakeTimers();
+    list.mockResolvedValue({ items: [session('ses_old')], errors: { wsp_other: 'SERVICE_UNAVAILABLE' } });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup(1);
+    const attempts = list.mock.calls.length;
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://replacement.test', runtimeKey: `replacement-${++runtime}` });
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(attempts);
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
   });
 
   test('a failed workspace preserves its records but not missing healthy-workspace siblings', async () => {
+    jest.useFakeTimers();
     useGlobalSessionsStore.getState().upsertSessions([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })]);
     request.resolve({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE' } });
-    await useGlobalSessionsStore.getState().loadSessions();
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
     const state = useGlobalSessionsStore.getState();
     expect(ids(state.activeSessions)).toEqual(['ses_failed']);
     expect(state.hasLoaded).toBe(true);
@@ -195,9 +345,12 @@ describe('native discovery completeness scopes', () => {
   });
 
   test('a failed project preserves its records but not missing healthy-project siblings', async () => {
+    jest.useFakeTimers();
     useGlobalSessionsStore.getState().upsertSessions([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })]);
     request.resolve({ items: [], errors: { pro_repo: 'SERVICE_UNAVAILABLE' } });
-    await useGlobalSessionsStore.getState().loadSessions();
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
     const state = useGlobalSessionsStore.getState();
     expect(ids(state.activeSessions)).toEqual(['ses_failed']);
     expect(state.hasLoaded).toBe(true);
@@ -264,6 +417,86 @@ describe('canonical sidebar child discovery', () => {
     return directory ? useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo'])
       : useGlobalSessionsStore.getState().loadSessions();
   };
+
+  test.each(['head', 'directory', 'workspace'] as const)('a healthy %s root listing cannot clear a failed child lookup', async (scope) => {
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    if (scope === 'head') await useGlobalSessionsStore.getState().refreshSessionHead();
+    else if (scope === 'directory') await discover(true);
+    else useGlobalSessionsStore.getState().clearWorkspaceDiscoveryErrors('wsp_repo');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    expect([...useGlobalSessionsStore.getState().failedChildDiscoveryParents]).toEqual(['ses_root']);
+    expect(subagents).toHaveBeenCalledTimes(scope === 'workspace' ? 1 : 2);
+
+    subagents.mockResolvedValue([child()]);
+    if (scope === 'directory') await discover(true);
+    else await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(true);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().failedChildDiscoveryParents.size).toBe(0);
+  });
+
+  test('successful empty child retry clears the failure and removes only omitted children', async () => {
+    subagents.mockResolvedValue([child()]);
+    await discover(false);
+    const previous = useGlobalSessionsStore.getState().entityById.get('ses_child');
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toBe(previous);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('ses_root')).toBe(true);
+    subagents.mockResolvedValue([]);
+    await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_root']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().failedChildDiscoveryParents.size).toBe(0);
+  });
+
+  test('a root-only head response cannot erase a child failure discovered while it was in flight', async () => {
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_root')], []);
+    const rootRead = deferred<SessionDiscoveryResult>();
+    list.mockImplementation((workspaceId) => workspaceId ? Promise.resolve({ items: [session('ses_root')], errors: {} }) : rootRead.promise);
+    const head = useGlobalSessionsStore.getState().refreshSessionHead();
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    rootRead.resolve({ items: [session('ses_root')], errors: {} });
+    await head;
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    expect([...useGlobalSessionsStore.getState().failedChildDiscoveryParents]).toEqual(['ses_root']);
+    subagents.mockResolvedValue([child()]);
+    list.mockResolvedValue({ items: [session('ses_root')], errors: {} });
+    await useGlobalSessionsStore.getState().refreshSessionHead();
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(true);
+  });
+
+  test('a healthy sibling directory does not clear another parent failure', async () => {
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    list.mockResolvedValue({ items: [session('ses_other', { workspaceId: 'wsp_other' })], errors: {} });
+    subagents.mockResolvedValue([]);
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/other']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('ses_root')).toBe('SERVICE_UNAVAILABLE');
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_other')).toBe(true);
+    expect([...useGlobalSessionsStore.getState().failedChildDiscoveryParents]).toEqual(['ses_root']);
+  });
+
+  test('runtime reset retires a pending child retry and its errors', async () => {
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(false);
+    const started = deferred<void>();
+    const pending = deferred<Subagent[]>();
+    subagents.mockImplementation(() => { started.resolve(); return pending.promise; });
+    const retry = useGlobalSessionsStore.getState().refreshSessionHead();
+    await started.promise;
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    pending.resolve([child()]);
+    await retry;
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().failedChildDiscoveryParents.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+  });
 
   test.each([false, true])('projects canonical children and indexes hierarchy (directory=%s)', async (directory) => {
     subagents.mockResolvedValue([child()]);

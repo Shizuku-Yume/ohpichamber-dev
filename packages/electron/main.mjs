@@ -95,6 +95,7 @@ import { assertUpdaterCapability, readLinuxPackageType } from './updater-capabil
 import { relaunchAfterExit } from './linux-relaunch.mjs';
 import { installLinuxPackage } from './linux-package-install.mjs';
 import { checkForDesktopUpdate, downloadPendingDesktopUpdate, markDesktopUpdateDownloaded } from './updater-check.mjs';
+import { shouldRefreshLoginItemSettings } from './login-item-settings.mjs';
 import { resolveUpdaterChannel } from './updater-channel.mjs';
 import { convertShortcutComboToAccelerator, MINI_CHAT_GLOBAL_SHORTCUT_SETTING_KEY, normalizeStoredShortcutCombo, selectMiniChatGlobalShortcutAction } from './mini-chat-global-shortcut.mjs';
 import {
@@ -6246,12 +6247,12 @@ app.whenReady().then(async () => {
   applyDesktopMiniChatGlobalShortcut();
   applyDesktopQuakeModeShortcut();
 
-  if ((process.platform === 'darwin' || process.platform === 'win32') && app.isPackaged) {
-    const openAtLogin = loginItemSettings?.openAtLogin === true;
+  if ((process.platform === 'darwin' || process.platform === 'win32') && app.isPackaged
+    && shouldRefreshLoginItemSettings(loginItemSettings)) {
     app.setLoginItemSettings({
-      openAtLogin,
-      ...(process.platform === 'darwin' ? { args: openAtLogin ? [BACKGROUND_START_ARG] : [] } : {}),
-      ...(process.platform === 'win32' ? { ...getLoginItemOptions(), enabled: openAtLogin } : {}),
+      openAtLogin: true,
+      ...(process.platform === 'darwin' ? { args: [BACKGROUND_START_ARG] } : {}),
+      ...(process.platform === 'win32' ? { ...getLoginItemOptions(), enabled: true } : {}),
     });
   }
 

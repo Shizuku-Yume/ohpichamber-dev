@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import type { ModelCatalog, ProviderCatalog } from '@openchamber/agent-contract';
 import { canonicalClient, type CanonicalClient } from '@/api/canonicalClient';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { emitConfigChange } from '@/lib/configSync';
 
 type ProviderClient = Pick<CanonicalClient, 'resolveWorkspace' | 'getProviders' | 'getModels'>;
 export interface ProviderSettingsState {
@@ -48,7 +49,10 @@ export function createProviderSettingsStore(client: ProviderClient = canonicalCl
     },
     refresh: async () => {
       const directory = get().directory;
-      if (directory) await get().load(directory);
+      if (directory && get().runtimeKey === runtimeKey()) {
+        emitConfigChange('providers', { source: 'useProviderSettingsStore' });
+        await get().load(directory);
+      }
     },
   }));
 }

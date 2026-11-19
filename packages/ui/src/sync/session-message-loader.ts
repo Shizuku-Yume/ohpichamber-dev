@@ -17,6 +17,7 @@ import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { dropSessionCaches } from "./session-cache"
 import { SessionCacheRetention } from "./session-cache-retention"
 import { SESSION_CACHE_LIMIT, type State } from "./types"
+import { retry, STARTUP_RETRY } from "./retry"
 
 const HISTORY_PAGE_SIZE = 100
 const INITIAL_USER_TURNS = 10
@@ -253,7 +254,7 @@ export class SessionMessageLoader {
     return this.ensure(normalized, { reason: "prefetch" })
   }
 
-  refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot, options?: { recovered?: boolean }): Promise<void> {
+  refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot, options?: { recovered?: boolean; requireAvailable?: boolean }): Promise<void> {
     const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     if (snapshot) this.invalidateSession(normalized)
@@ -267,7 +268,7 @@ export class SessionMessageLoader {
         const queued = entry.inflight.then(() => {
           if (this.disposed || configurationGeneration !== this.configurationGeneration
             || generation !== entry.snapshot.generation || this.entries.get(key) !== entry) return
-          return this.refresh(normalized, undefined, { recovered: true })
+          return this.refresh(normalized, undefined, options)
         })
         entry.queuedRecovery = queued
         const clear = () => { if (entry.queuedRecovery === queued) entry.queuedRecovery = null }
@@ -283,13 +284,13 @@ export class SessionMessageLoader {
         if (entry.queuedRefresh === queued) entry.queuedRefresh = null
         if (this.disposed || configurationGeneration !== this.configurationGeneration
           || generation !== entry.snapshot.generation || this.entries.get(key) !== entry) return
-        return this.refresh(normalized)
+        return this.refresh(normalized, undefined, options)
       })
       entry.queuedRefresh = queued
       return queued
     }
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
-    return this.startSnapshotLoad(normalized, entry, store, "refresh", snapshot, options?.recovered === true)
+    return this.startSnapshotLoad(normalized, entry, store, "refresh", snapshot, options?.recovered === true, options?.requireAvailable === true)
   }
 
   loadOlder(target: SessionMessageTarget): Promise<void> {
@@ -643,7 +644,7 @@ export class SessionMessageLoader {
     })
   }
 
-  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot, recovered = false): Promise<void> {
+  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot, recovered = false, requireAvailable = false): Promise<void> {
     // A composer draft is a local `draft_<draftId>` identity the Host has never
     // seen. Its transcript is the optimistic echo in the child store, so there
     // is no snapshot to request and no failure to report.
@@ -660,10 +661,17 @@ export class SessionMessageLoader {
       const requestedRevision = store.getState().sessionRevision ?? 0
       const requestedRunControlRevision = store.getState().runControlRevision?.[target.sessionId] ?? 0
       const knownWorkspace = store.getState().workspace
-      const [snapshot, workspace] = await Promise.all([
-        suppliedSnapshot ? Promise.resolve(suppliedSnapshot) : client.getSnapshot(target.sessionId),
-        knownWorkspace ? Promise.resolve(knownWorkspace) : client.resolveWorkspace(target.directory),
-      ])
+      const [snapshot, workspace] = await retry(async () => {
+        if (!isCurrent()) throw new Error("Session snapshot load is no longer current")
+        const result = await Promise.all([
+          suppliedSnapshot ? Promise.resolve(suppliedSnapshot) : client.getSnapshot(target.sessionId),
+          knownWorkspace ? Promise.resolve(knownWorkspace) : client.resolveWorkspace(target.directory),
+        ])
+        if (requireAvailable && result[0].session.runtimeStatus === "unavailable") {
+          throw Object.assign(new Error("Session worker is not accepting requests yet"), { status: 503 })
+        }
+        return result
+      }, STARTUP_RETRY)
       if (!isCurrent()) return
       const current = store.getState()
       const deletedRevision = current.sessionDeletedRevision?.[target.sessionId]
