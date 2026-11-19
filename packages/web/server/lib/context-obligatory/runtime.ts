@@ -1,83 +1,20 @@
 import { isRecord } from '../shared/guards.js';
-import { assertPromptResponse } from '../opencode/prompt-response.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
-import { sessionParentId } from '../session-lineage.js';
-const FETCH_TIMEOUT_MS = 15_000;
-const MESSAGE_FETCH_LIMIT = 20;
+const MESSAGE_FETCH_LIMIT = 100;
 
-interface PinnedMessage {
-  id: string;
-  createdAt: number;
-  role: 'user' | 'assistant';
-}
-
-interface ContextEntry {
-  pinned: PinnedMessage;
-  text: string;
-}
-
-export interface ContextObligatoryOptions {
-  buildOpenCodeUrl: (path: string, query: string) => string | URL;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
-  persistContextCursor?: ((sessionId: string, directory: string, patch: {
-    openchamber: { context_obligatory_last_compaction_message_id: unknown };
-  }) => Promise<StoredMetadata | void>) | null;
-  readSessionMetadata?: ((sessionId: string) => Promise<StoredMetadata | null | undefined>) | null;
-}
-
-export interface StoredMetadata {
-  openchamber?: unknown;
-}
-
-interface BoundaryFields extends StoredMetadata {
-  parentID?: unknown;
-  metadata?: unknown;
-  context_obligatory_messages?: unknown;
-  context_obligatory_last_compaction_message_id?: unknown;
-  id?: unknown;
-  createdAt?: unknown;
-  role?: unknown;
-  type?: unknown;
-  status?: unknown;
-  text?: unknown;
-  content?: unknown;
-  data?: unknown;
-}
-
-interface FetchOptions {
-  directory: string;
-  method?: string;
-  body?: { text: string; resume: boolean };
-  query?: Record<string, string>;
-}
-
-export interface ContextObligatoryEvent {
-  type?: string;
-  properties?: { sessionID?: unknown; directory?: string | undefined };
-}
-
-const isMetadataRecord = (value: unknown): value is BoundaryFields => isRecord(value);
-const isUnknownArray = (value: unknown): value is unknown[] => Array.isArray(value);
-const isPinnedMessage = (item: unknown): item is PinnedMessage => isMetadataRecord(item)
-  && typeof item.id === 'string'
-  && typeof item.createdAt === 'number'
-  && (item.role === 'user' || item.role === 'assistant');
-const isTextPart = (part: unknown): part is { type: 'text'; text: string } => isMetadataRecord(part)
-  && part.type === 'text' && typeof part.text === 'string';
-const hasMessageText = (message: unknown): message is { text: string } => isMetadataRecord(message)
-  && typeof message.text === 'string';
-const isSessionId = (value: unknown): value is string => typeof value === 'string';
-
-const readContextState = (session: { metadata: unknown }) => {
-  const metadata = isMetadataRecord(session.metadata) ? session.metadata : {};
-  const openchamber = isMetadataRecord(metadata.openchamber) ? metadata.openchamber : {};
+const readContextState = (session) => {
+  const metadata = isRecord(session?.metadata) ? session.metadata : {};
+  const openchamber = isRecord(metadata.openchamber) ? metadata.openchamber : {};
   const messages = Array.isArray(openchamber.context_obligatory_messages)
-    ? openchamber.context_obligatory_messages.filter(isPinnedMessage)
+    ? openchamber.context_obligatory_messages.filter((item) =>
+      isRecord(item)
+      && typeof item.id === 'string'
+      && typeof item.createdAt === 'number'
+      && (item.role === 'user' || item.role === 'assistant'))
     : [];
   return { metadata, openchamber, messages };
 };
 
-const buildContextPrompt = (entries: ContextEntry[]) => {
+const buildContextPrompt = (entries) => {
   const timeline = entries.map(({ pinned, text }) => {
     const timestamp = new Date(pinned.createdAt).toISOString();
     return `## ${pinned.role} — ${timestamp}\n\n${text}`;
@@ -91,123 +28,86 @@ const buildContextPrompt = (entries: ContextEntry[]) => {
   ].join('\n');
 };
 
+/**
+ * Re-injects the messages the user pinned as obligatory after a compaction.
+ *
+ * Both the pinned list and the cursor live in OpenChamber's own session
+ * metadata store — v2 accepts session metadata only at create time.
+ * `readSessionMetadata` reads it and `persistContextCursor` records how far we
+ * got; without both seams the runtime stays inert.
+ */
 export const createContextObligatoryRuntime = ({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
+  sessionKnowledgeRuntime = null,
   persistContextCursor = null,
   readSessionMetadata = null,
-}: ContextObligatoryOptions) => {
-  const inflight = new Set<string>();
+}) => {
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function' || typeof sessionService.send !== 'function') {
+    throw new Error('context-obligatory requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function') throw new Error('context-obligatory requires a session scope resolver');
+  const inflight = new Set();
   let stopped = false;
 
-  const openCodeFetch = async (fetchPath: string, { directory, method = 'GET', body, query }: FetchOptions) => {
-    const params = new URLSearchParams(query || {});
-    if (directory) params.set('directory', directory);
-    const search = params.toString();
-    const url = `${buildOpenCodeUrl(fetchPath, '')}${search ? `?${search}` : ''}`;
-    const headers = {
-      Accept: 'application/json',
-    };
-    if (body) Object.assign(headers, { 'Content-Type': 'application/json' });
-    Object.assign(headers, getOpenCodeAuthHeaders());
-    const init: RequestInit = {
-      method,
-      headers,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    };
-    if (body) init.body = JSON.stringify(body);
-    const response = await fetch(url, init);
-    if (method === 'POST' && fetchPath.endsWith('/synthetic')) {
-      await assertPromptResponse(response, 'session.synthetic');
-    } else if (!response.ok) {
-      throw new Error(`OpenCode ${method} ${fetchPath} failed with ${response.status}`);
+  const readHistory = async (sessionId, signal) => {
+    const messages = [];
+    let cursor;
+    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+      signal?.throwIfAborted();
+      const query = new URLSearchParams({ limit: String(MESSAGE_FETCH_LIMIT), ...(cursor ? { cursor } : {}) });
+      const page = await sessionService.history(sessionId, query.toString());
+      messages.push(...(Array.isArray(page?.messages) ? page.messages : []));
+      if (!page?.nextCursor) break;
+      cursor = page.nextCursor;
     }
-    const value: unknown = unwrapOpenCodeResponse(await response.json().catch(() => null));
-    return isMetadataRecord(value) ? value : null;
+    return messages;
   };
 
-  const tick = async (
-    sessionId: string,
-    directory: string,
-    readSessionMetadata: NonNullable<ContextObligatoryOptions['readSessionMetadata']>,
-    persistContextCursor: NonNullable<ContextObligatoryOptions['persistContextCursor']>,
-  ) => {
-    const session = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}`, { directory });
-    if (sessionParentId(session)) return;
+  const textOf = (message) => (Array.isArray(message?.parts) ? message.parts : [])
+    .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+    .map((part) => part.content.trim()).filter(Boolean).join('\n\n');
+
+  const tick = async (sessionId, compactionId) => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) return;
+    const snapshot = await sessionService.open(sessionId);
+    if (snapshot?.session && snapshot.session.rootSessionId !== snapshot.session.sessionId) return;
     const stored = { metadata: await readSessionMetadata(sessionId) };
     const state = readContextState(stored);
-
-    if (state.messages.length === 0) return;
-
-    const recent = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/message`, {
-      directory,
-      query: { limit: String(MESSAGE_FETCH_LIMIT) },
+    const knowledge = sessionKnowledgeRuntime
+      ? await sessionKnowledgeRuntime.resolvePending(scope.cwd, '', sessionKnowledgeRuntime.readPins(stored)).catch(() => ({ text: '', signature: '' }))
+      : { text: '', signature: '' };
+    if (state.messages.length === 0 && !knowledge.text) return;
+    if (state.openchamber.context_obligatory_last_compaction_id === compactionId) return;
+    const messages = await readHistory(sessionId);
+    const entries = state.messages.map((pinned) => {
+      const message = messages.find((candidate) => candidate.messageId === pinned.id);
+      return message ? { pinned, text: textOf(message) } : null;
+    }).filter((entry) => entry?.text).sort((left, right) => left.pinned.createdAt - right.pinned.createdAt);
+    if (entries.length === 0 && !knowledge.text) return;
+    const text = [knowledge.text, entries.length > 0 ? buildContextPrompt(entries) : ''].filter(Boolean).join('\n\n---\n\n');
+    const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+    if (!latestAssistant?.providerId || !latestAssistant.modelId) return;
+    await sessionService.send(sessionId, {
+      input: { text: '', attachments: [], context: [{ kind: 'synthetic', text }] },
+      options: { providerId: latestAssistant.providerId, modelId: latestAssistant.modelId, agentId: null, variant: null, reasoningEffort: null },
     });
-    const recentMessages = isMetadataRecord(recent) && isUnknownArray(recent.data) ? recent.data : [];
-    if (recentMessages.length === 0) return;
-    const summary = recentMessages.find((message): message is BoundaryFields =>
-      isMetadataRecord(message) && message.type === 'compaction' && message.status === 'completed');
-    if (!summary?.id) return;
-    if (state.openchamber.context_obligatory_last_compaction_message_id === summary.id) return;
-
-    const fetched = await Promise.allSettled(state.messages.map(async (pinned) => {
-      const message = await openCodeFetch(
-        `/api/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(pinned.id)}`,
-        { directory },
-      );
-      const parts = isMetadataRecord(message) && isUnknownArray(message.content)
-        ? message.content
-        : (hasMessageText(message) ? [{ type: 'text', text: message.text }] : []);
-      const text = parts
-        .filter(isTextPart)
-        .map((part) => part.text.trim())
-        .filter(Boolean)
-        .join('\n\n');
-      return { pinned, text };
-    }));
-    const entries = fetched
-      .filter((result): result is PromiseFulfilledResult<ContextEntry> => result.status === 'fulfilled' && Boolean(result.value.text))
-      .map((result) => result.value)
-      .sort((left, right) => left.pinned.createdAt - right.pinned.createdAt);
-    if (entries.length === 0) return;
-
-    await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/synthetic`, {
-      directory,
-      method: 'POST',
-      body: {
-        text: buildContextPrompt(entries),
-        resume: false,
-      },
-    });
-
-    await persistContextCursor(sessionId, directory, {
-      openchamber: { context_obligatory_last_compaction_message_id: summary.id },
-    });
+    const patch = { context_obligatory_last_compaction_id: compactionId };
+    if (knowledge.signature) patch[sessionKnowledgeRuntime.metadataKey] = knowledge.signature;
+    await persistContextCursor(sessionId, scope.cwd, { openchamber: patch });
   };
 
-  let parkedNoticeLogged = false;
-  const processPayload = (payload: ContextObligatoryEvent | null | undefined, directoryHint = '') => {
-    if (stopped) return;
-    if (persistContextCursor === null || readSessionMetadata === null) {
-      if (!parkedNoticeLogged) {
-        parkedNoticeLogged = true;
-        console.log('[context-obligatory] parked: no session metadata store is wired, so the compaction cursor cannot be saved');
-      }
-      return;
-    }
-    if (payload?.type !== 'session.compacted') return;
-    const sessionId = payload.properties?.sessionID;
-    if (!isSessionId(sessionId) || inflight.has(sessionId)) return;
-    const directory = payload.properties?.directory || directoryHint;
-    inflight.add(sessionId);
-    return tick(sessionId, directory, readSessionMetadata, persistContextCursor)
+  const processCanonicalEvent = (event, scope) => {
+    if (stopped || typeof persistContextCursor !== 'function' || typeof readSessionMetadata !== 'function') return;
+    if (event?.type !== 'session.compacted' || typeof event.sessionId !== 'string' || inflight.has(event.sessionId)) return;
+    if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
+    inflight.add(event.sessionId);
+    return tick(event.sessionId, event.compactionId)
       .catch((error) => console.warn('[context-obligatory] injection failed:', error?.message || error))
-      .finally(() => inflight.delete(sessionId));
+      .finally(() => inflight.delete(event.sessionId));
   };
 
-  const stop = () => {
-    stopped = true;
-  };
-
-  return { processPayload, stop };
+  const stop = () => { stopped = true; };
+  return { processCanonicalEvent, stop };
 };
