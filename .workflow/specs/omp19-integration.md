@@ -45,6 +45,9 @@ Keep startup failures visible. Investigate concrete worker stderr and initializa
 - **W4.** Agent Service real worker startup and service-worktree lease tests pass with isolated HOME and application data directories.
 - **W5.** Root `bun run type-check` passes through mobile. Agent Service `bun test src` passes, except failures reproduced on origin/main with the same test inputs and isolation.
 - **W6.** Affected lint, contract checks and dead-code checks pass; a fresh review finds no unresolved correctness or security issue. Update development status and remove the obsolete stage-1 failure inventory after verification.
+- **W7.** Worker, manager, contract and shared FormDock tests cover native forms, selector hints, media safety, Other answers, validation, current-value timeout and cancellation.
+- **W8.** Native-session/projection and relevant UI tests cover handoff compaction/cancellation, warming, intents, task progress and historical placeholders; browser policy retains Host authority.
+- **W9.** Full type-check through mobile, Agent Service tests and affected UI/contract suites pass; implementation decisions and any unavailable checks are recorded. Commit locally without pushing or integrating main.
 
 ## Implementation order
 
@@ -54,3 +57,11 @@ Keep startup failures visible. Investigate concrete worker stderr and initializa
 4. Startup root causes, full verification, independent review, development status and logical local commits.
 
 The owner approved this plan. Execution receipts are archived in `.workflow/done/omp19-integration/`; development.md records results and remaining verification limits.
+
+## Stage 2b: Behavioral integration
+
+The owner requested implementation on the same branch. Extend the existing canonical question surface for parsed HTML forms and selector presentation; never execute model HTML. Preserve native values, optional fields, disabled choices, Other answers, and defaults. Draft answers stay worker-local and use the pending question's CAS boundary so timeout and message interruption can return current values. Form media uses the existing safe Markdown/SVG presentation, without granting local-file or network execution authority.
+
+Web/PWA, Electron, hosted mobile and Capacitor all use the shared FormDock and canonical question replies. Mobile remains remote-only. Guest SDK execution is unchanged.
+
+Audit handoff compaction and cancellation, cache-warming caps, browser inspection/rendering, intent tracing, task steps/progress/completion and historical secret placeholders against the pinned upstream source. Record explicit no-op decisions where existing integration already preserves native semantics.
