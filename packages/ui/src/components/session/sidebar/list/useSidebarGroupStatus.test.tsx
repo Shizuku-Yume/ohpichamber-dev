@@ -7,6 +7,7 @@ import { FilesystemError } from '@/lib/api/files-errors';
 import { installHookTestDom } from '../test-utils/testDom';
 import type { SessionGroup, SessionNode } from '../types';
 import type { ProjectSection } from '../projects/sessionProjectRender';
+import { retryGroupStatus } from '../projects/sessionProjectListActions';
 import { useSidebarGroupStatus, type SidebarGroupStatusResult } from './useSidebarGroupStatus';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 
@@ -260,6 +261,49 @@ test('scoped discovery error degrades only the failing workspace while healthy g
     dom.restore();
   }
 });
+
+test('Chats Retry refreshes the global list that reported the workspace error', async () => {
+  const dom = installHookTestDom();
+  const root = createRoot(dom.container);
+  const manager = new ChildStoreManager();
+  const bootstrapped: string[] = [];
+  manager.configure({ onBootstrap: ({ directory }) => { bootstrapped.push(directory); } });
+  const captured = React.createRef<SidebarGroupStatusResult | null>();
+  const Harness = () => {
+    captured.current = useSidebarGroupStatus({ childStores: manager, sections, chatGroup, canGrantAccess: false });
+    return null;
+  };
+  const { loadSessions } = useGlobalSessionsStore.getState();
+  registerWorkspaceDirectory('wsp_managed_chats', '/chats');
+  try {
+    await act(async () => {
+      useGlobalSessionsStore.setState({
+        hasLoaded: true,
+        status: 'ready',
+        discoveryErrors: new Map([['wsp_managed_chats', 'SERVICE_UNAVAILABLE']]),
+        loadSessions: async () => {
+          useGlobalSessionsStore.setState({ discoveryErrors: new Map() });
+          return { activeSessions: [], archivedSessions: [] };
+        },
+      });
+      root.render(<Harness />);
+    });
+    const status = captured.current?.groupStatusByKey.get('activity:chats');
+    if (!status) throw new Error('Expected Chats status');
+    expect(status.state).toBe('load-failed');
+    await act(async () => retryGroupStatus({
+      kind: 'status', key: 'chats-status', estimateSize: 20, status, group: chatGroup, groupKey: 'activity:chats',
+    }, manager));
+    expect(captured.current?.groupStatusByKey.get('activity:chats')?.state).toBe('ready');
+    expect(bootstrapped).toEqual([]);
+  } finally {
+    await act(async () => root.unmount());
+    useGlobalSessionsStore.setState({ loadSessions });
+    manager.disposeAll();
+    dom.restore();
+  }
+});
+
 test('scoped discovery error degrades group by exact session workspaceId even when directory is unregistered', async () => {
   const dom = installHookTestDom();
   const root = createRoot(dom.container);
