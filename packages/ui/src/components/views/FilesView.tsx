@@ -43,7 +43,9 @@ import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
 import { syncVimMappings } from '@/lib/codemirror/vimModeExtension';
 import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
-import { File as PierreFile, VirtualizerContext, WorkerPoolContext } from '@pierre/diffs/react';
+import { VirtualizerContext, WorkerPoolContext } from '@pierre/diffs/react';
+import { FileCodePreview as PierreFile } from './FileCodePreview';
+import { getFilePreviewTheme } from './filePreview';
 import { useWorkerPool } from '@/contexts/DiffWorkerProvider';
 import { useFileViewVirtualizer, type FileViewVirtualizer } from './useFileViewVirtualizer';
 import { useFilePreviewScrollPosition } from './useFilePreviewScrollPosition';
@@ -131,7 +133,6 @@ import {
 } from './files/fileTreeRow';
 import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
-import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { DIFFS_HIGHLIGHTER, toDiffsLanguage } from '@/lib/shiki/diffsHighlighter';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { isBrowserClientRuntime, isDesktopLocalOriginActive, openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
@@ -923,11 +924,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     () => availableThemes.find((theme) => theme.metadata.id === darkThemeId) ?? getDefaultTheme(true),
     [availableThemes, darkThemeId],
   );
-
-  React.useEffect(() => {
-    ensurePierreThemeRegistered(lightTheme);
-    ensurePierreThemeRegistered(darkTheme);
-  }, [lightTheme, darkTheme]);
 
   const EMPTY_PATHS: string[] = React.useMemo(() => [], []);
   const openPaths = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.openPaths ?? EMPTY_PATHS) : EMPTY_PATHS));
@@ -3544,8 +3540,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard, editorFontSize, pinPreviewOnEditExtension, fileEditorKeymap, t, importLinksExtension]);
 
   const pierreTheme = React.useMemo(
-    () => ({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id }),
-    [lightTheme.metadata.id, darkTheme.metadata.id],
+    () => getFilePreviewTheme(lightTheme, darkTheme),
+    [lightTheme, darkTheme],
   );
 
   // PDFs, audio, video and fonts are handed to the browser as a URL it owns
