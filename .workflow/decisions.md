@@ -1570,3 +1570,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream gates its binding reads on a repository probe itself, or its router already keeps `general` distinct from the settings root.
 - **Effort:** final-main-audit
+
+## 2026-11-19 - Document the Host STT-only voice-key contract
+
+- **Decided:** retain the fork's `packages/web/server/lib/tts/DOCUMENTATION.md` description of the STT-only voice-key store and classify that upstream difference with a decision row in the drift ledger.
+- **Instead of:** reverting the module documentation to upstream's speech-key ownership, inserting artificial OMP boundary tokens, or excluding the module from drift checks.
+- **Because:** PR #15 aligns shared UI to the Host's `{ stt: boolean }` contract. The owning documentation must explain rejected retired speech-key fields, confirmed legacy transcription-key migration, and SDK-selected speech credentials rather than restore a second credential authority.
+- **Mine:** yes
+- **Revisit when:** upstream documents the same credential ownership or the Host retires the custom transcription-key store.
