@@ -418,6 +418,17 @@ test('deletes a cold session reopened with an MCP path absent from its reference
   } finally { await harness.close(); }
 }, 60000);
 
+test('permanent deletion removes the transcript and artifacts of a session with assistant history', async () => {
+  const harness = await fixture();
+  try {
+    expect(await harness.sessions.delete(rootSessionId)).toEqual({ sessionId: rootSessionId, deletedSessionIds: [rootSessionId] });
+    expect(existsSync(harness.source.sessionFile)).toBe(false);
+    expect(existsSync(harness.sourceArtifacts)).toBe(false);
+    await harness.restart();
+    expect((await harness.sessions.list(harness.source)).items).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
 test('explicit idle restart preserves native transcript files and publishes a new generation and epoch', async () => {
   const harness = await fixture();
   try {
