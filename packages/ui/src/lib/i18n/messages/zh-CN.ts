@@ -5455,6 +5455,8 @@ export const dict = {
   "mobile.files.rootDirectory": "项目文件",
   "mobile.files.search.placeholder": "搜索文件",
   "mobile.files.search.empty": "未找到文件。",
+  "mobile.files.search.failed": "无法搜索文件。",
+  "mobile.files.search.retry": "重试",
   "mobile.files.parentDirectory": "上级目录",
   "mobile.files.empty.noDirectory": "选择一个项目以浏览文件。",
   "mobile.files.empty.directory": "此目录为空。",

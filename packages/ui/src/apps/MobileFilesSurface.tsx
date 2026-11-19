@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
+import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -26,6 +27,7 @@ type MobileFilesRoute =
   | { type: 'browser'; directory: string }
   | { type: 'file'; path: string; returnDirectory: string };
 
+type MobileSearchOutcome = { kind: 'success'; results: FileSearchResult[] } | { kind: 'error' };
 
 const getNameFromPath = (path: string): string => {
   const normalized = normalizePathImpl(path) ?? '';
@@ -83,8 +85,9 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const [isLoadingDirectory, setIsLoadingDirectory] = React.useState(false);
   const [directoryError, setDirectoryError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
-  const [searchResults, setSearchResults] = React.useState<FileSearchResult[]>([]);
-  const [isSearching, setIsSearching] = React.useState(false);
+  const [searchOutcome, setSearchOutcome] = React.useState<MobileSearchOutcome | null>(null);
+  const [searchAttempt, setSearchAttempt] = React.useState(0);
+  const normalizedQuery = query.trim();
   const directoryLoadRequestIdRef = React.useRef(0);
 
   const currentDirectory = route.type === 'browser' ? route.directory : route.returnDirectory;
@@ -156,26 +159,17 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const isUploading = uploadingDirectory !== null;
 
   React.useEffect(() => {
-    if (route.type !== 'browser') return;
-    const normalizedQuery = query.trim();
-    if (!normalizedQuery) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
+    setSearchOutcome(null);
+    if (route.type !== 'browser' || !normalizedQuery) return;
 
     let cancelled = false;
     const timeoutId = window.setTimeout(() => {
-      setIsSearching(true);
       void files.search({ directory: route.directory, query: normalizedQuery, maxResults: 40 })
         .then((results) => {
-          if (!cancelled) setSearchResults(results);
+          if (!cancelled) setSearchOutcome({ kind: 'success', results });
         })
         .catch(() => {
-          if (!cancelled) setSearchResults([]);
-        })
-        .finally(() => {
-          if (!cancelled) setIsSearching(false);
+          if (!cancelled) setSearchOutcome({ kind: 'error' });
         });
     }, 250);
 
@@ -183,7 +177,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [files, query, route]);
+  }, [files, normalizedQuery, route, searchAttempt]);
 
   const openDirectory = (directory: string) => {
     setQuery('');
@@ -248,14 +242,13 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   }
 
   const directoryLabel = route.directory === root ? t('mobile.files.rootDirectory') : getNameFromPath(route.directory);
-  const visibleSearchResults = query.trim() ? searchResults : [];
 
   // Cap parent navigation at the project root: only allow stepping up while
   // the parent stays inside (or equal to) the root.
   const rawParent = getParentDirectory(route.directory);
   const parentWithinRoot =
     route.directory !== root && rawParent !== null && (rawParent === root || rawParent.startsWith(`${root}/`));
-  const canGoBack = parentWithinRoot && !query.trim();
+  const canGoBack = parentWithinRoot && !normalizedQuery;
   const parentDirectory = parentWithinRoot ? rawParent : null;
 
   return (
@@ -322,10 +315,14 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
       </div>
 
       <ScrollShadow className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
-        {directoryError ? (
+        {normalizedQuery ? (
+          <MobileSearchResults
+            outcome={searchOutcome}
+            onOpenFile={openFile}
+            onRetry={() => setSearchAttempt((attempt) => attempt + 1)}
+          />
+        ) : directoryError ? (
           <MobileFilesState message={directoryError} />
-        ) : query.trim() ? (
-          <MobileSearchResults results={visibleSearchResults} isSearching={isSearching} onOpenFile={openFile} />
         ) : (
           <div className="overflow-hidden rounded-2xl border border-border/70 bg-[var(--surface-elevated)]">
             {entries.length === 0 && !isLoadingDirectory ? (
@@ -373,17 +370,24 @@ const MobileFileRow: React.FC<{
 );
 
 const MobileSearchResults: React.FC<{
-  results: FileSearchResult[];
-  isSearching: boolean;
+  outcome: MobileSearchOutcome | null;
   onOpenFile: (path: string) => void;
-}> = ({ results, isSearching, onOpenFile }) => {
+  onRetry: () => void;
+}> = ({ outcome, onOpenFile, onRetry }) => {
   const { t } = useI18n();
   const root = normalizePathImpl(useEffectiveDirectory() ?? null) ?? '';
-  if (isSearching) return <MobileFilesState loading message={t('common.loading')} />;
-  if (results.length === 0) return <MobileFilesState message={t('mobile.files.search.empty')} />;
+  if (!outcome) return <MobileFilesState loading message={t('common.loading')} />;
+  if (outcome.kind === 'error') {
+    return (
+      <MobileFilesState message={t('mobile.files.search.failed')}>
+        <Button type="button" variant="outline" size="lg" onClick={onRetry}>{t('mobile.files.search.retry')}</Button>
+      </MobileFilesState>
+    );
+  }
+  if (outcome.results.length === 0) return <MobileFilesState message={t('mobile.files.search.empty')} />;
   return (
     <div className="overflow-hidden rounded-2xl border border-border/70 bg-[var(--surface-elevated)]">
-      {results.map((result) => (
+      {outcome.results.map((result) => (
         <MobileFileRow
           key={result.path}
           name={getNameFromPath(result.path)}
@@ -398,11 +402,12 @@ const MobileSearchResults: React.FC<{
 };
 
 
-const MobileFilesState: React.FC<{ message: string; loading?: boolean }> = ({ message, loading = false }) => (
+const MobileFilesState: React.FC<React.PropsWithChildren<{ message: string; loading?: boolean }>> = ({ message, loading = false, children }) => (
   <div className="flex h-full items-center justify-center px-6 text-center">
     <div className="flex max-w-sm flex-col items-center gap-2">
       {loading ? <Icon name="loader-4" className="size-5 animate-spin text-muted-foreground" /> : <Icon name="folder-open-fill" className="size-6 text-muted-foreground" />}
-      <p className="typography-ui-label font-semibold text-foreground">{message}</p>
+      <p role="status" className="typography-ui-label font-semibold text-foreground">{message}</p>
+      {children}
     </div>
   </div>
 );
