@@ -1638,3 +1638,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Keep composer image removal from sending drafts
+
+- **Decided:** mark the shared composer's image removal control as a non-submit button.
+- **Instead of:** preventing the click's default action in the removal handler.
+- **Because:** the button has no submission role; native button semantics keep removal separate from sending without changing the form.
+- **Mine:** no
+- **Revisit when:** upstream marks the same control as non-submit.
