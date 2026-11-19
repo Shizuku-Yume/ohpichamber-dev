@@ -144,8 +144,6 @@ function createFixture(initialGenerator: SuggestionGenerator = 'session') {
     },
     completedEvent: {
       type: 'agent_end' as const,
-      isTerminal: true,
-      awaitingAsyncWork: false,
       messages,
     },
   };
@@ -239,7 +237,6 @@ describe('Worker SuggestionDriver', () => {
     fixture.setAborted(false);
     const abortedEvent = {
       type: 'agent_end' as const,
-      isTerminal: true,
       messages: [
         { role: 'user', content: [{ type: 'text', text: 'Hi' }], timestamp: 1 } as AgentMessage,
         { role: 'assistant', content: [], stopReason: 'aborted', timestamp: 2 } as unknown as AgentMessage,
@@ -276,18 +273,10 @@ describe('Worker SuggestionDriver', () => {
     expect(fixture.smallModelCalls).toHaveLength(0);
   });
 
-  test('skip rule: non-terminal agent_end makes no call', async () => {
+  test('skip rule: a new active run prevents suggestions from an earlier agent_end', async () => {
     const fixture = createFixture('session');
-    await fixture.driver.handleAgentEnd({
-      ...fixture.completedEvent,
-      isTerminal: false,
-    });
-    expect(fixture.ephemeralCalls).toHaveLength(0);
-
-    await fixture.driver.handleAgentEnd({
-      ...fixture.completedEvent,
-      awaitingAsyncWork: true,
-    });
+    (fixture.session as { isRunActive: boolean }).isRunActive = true;
+    await fixture.driver.handleAgentEnd(fixture.completedEvent);
     expect(fixture.ephemeralCalls).toHaveLength(0);
   });
 

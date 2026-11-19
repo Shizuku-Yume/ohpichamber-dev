@@ -26,6 +26,10 @@ function sessionMentions(context: readonly PromptContext[]): SessionMention[] {
 const REF_TYPE = 'ohpichamber.canonical.v1';
 const RUN_TYPE = 'ohpichamber.run.v1';
 const WORKER_RUN_TYPE = 'ohpichamber.worker-run.v1';
+const HistoricalTodoReminderSchema = z.looseObject({
+  noticeType: z.literal('todo_reminder'),
+  details: z.looseObject({ todos: z.array(z.looseObject({ status: z.string() })) }),
+});
 const TURN_TYPE = 'ohpichamber.turn.v1';
 const ReferenceSchema = z.strictObject({
   nativeEntryId: EntityIdSchema, messageId: EntityIdSchema, turnId: EntityIdSchema,
@@ -246,7 +250,7 @@ const TodoToolResultDetailsSchema = z.looseObject({ op: z.string().optional(), p
 
 type NativeTodoPhaseInput = {
   readonly name: string;
-  readonly tasks: readonly { readonly content: string; readonly status: TodoStatus; readonly blocker?: string }[];
+  readonly tasks: readonly { readonly content: string; readonly status: TodoStatus }[];
 };
 
 function mapCompactionAction(action: string | undefined): CompactionMethod {
@@ -640,7 +644,6 @@ export class WorkerProjection {
       tasks: phase.tasks.map((task) => ({
         content: this.publicText(task.content),
         status: task.status,
-        ...(task.blocker !== undefined ? { blocker: this.publicText(task.blocker) } : {}),
       })),
     }));
   }
@@ -650,7 +653,6 @@ export class WorkerProjection {
       tasks: phase.tasks.map((task) => ({
         content: task.content,
         status: task.status,
-        ...(task.blocker !== undefined ? { blocker: task.blocker } : {}),
       })),
     }));
   }
@@ -765,6 +767,11 @@ export class WorkerProjection {
     const emit = (payload: ProjectionEvent): void => { result.push({ timestamp, event: payload }); };
 
     switch (event.type) {
+      case 'agent_start': case 'agent_pause': case 'agent_end': {
+        const todoUpdate = this.syncTodosIfChanged(timestamp);
+        if (todoUpdate) emit(todoUpdate.event);
+        break;
+      }
       case 'auto_compaction_start': {
         const method = mapCompactionAction(event.action);
         this.compactingState = { method, reason: event.reason, startedAt: timestamp };
@@ -1178,8 +1185,6 @@ export class WorkerProjection {
       case 'agent_end':
         // An abort latched before the native await owns the outcome, including an end that loses its aborted message.
         if (this.cancelRequestedRunId === run.runId) { result.push(...this.cancelRun(timestamp)); break; }
-        // The pinned SDK also marks completed requests yielded; isTerminal owns completion.
-        if (event.isTerminal === false || event.awaitingAsyncWork === true) break;
         if (this.stopReason === 'error') result.push(...this.failRun(this.providerError ?? 'Agent execution failed', timestamp));
         else if (this.stopReason === 'aborted') result.push(...this.cancelRun(timestamp));
         else result.push(...this.completeRun(timestamp));
@@ -1294,7 +1299,15 @@ export class WorkerProjection {
     for (const entry of this.manager.getEntries()) {
       if (entry.type === 'custom' && entry.customType === 'ohpichamber.notice.v1') {
         const payload = entry.data as { messageId?: string | null; part?: unknown };
-        const parsed = NoticePartSchema.safeParse(payload?.part ?? entry.data);
+        const part = payload?.part ?? entry.data;
+        const historical = HistoricalTodoReminderSchema.safeParse(part);
+        const parsed = NoticePartSchema.safeParse(historical.success ? {
+          ...historical.data,
+          details: {
+            ...historical.data.details,
+            todos: historical.data.details.todos.map(todo => ({ ...todo, status: todo.status === 'blocked' ? 'pending' : todo.status })),
+          },
+        } : part);
         if (parsed.success) {
           if (payload?.messageId) {
             const list = noticesByMessageId.get(payload.messageId) ?? [];

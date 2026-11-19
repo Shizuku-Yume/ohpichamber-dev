@@ -96,7 +96,7 @@ test('snapshot carries compacting state and todo phases when present', () => {
       name: 'Execution',
       tasks: [
         { content: 'Build schema', status: 'completed' },
-        { content: 'Verify snapshot', status: 'blocked', blocker: 'Needs sign-off' },
+        { content: 'Verify snapshot', status: 'pending' },
       ],
     },
   ];

@@ -335,12 +335,11 @@ export const SessionMoveToWorktreeResultSchema = z.strictObject({
 });
 export type SessionMoveToWorktreeResult = z.infer<typeof SessionMoveToWorktreeResultSchema>;
 
-export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'abandoned', 'blocked']);
+export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'abandoned']);
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 export const TodoItemSchema = z.strictObject({
   content: z.string(),
   status: TodoStatusSchema,
-  blocker: z.string().optional(),
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 export const TodoPhaseSchema = z.strictObject({

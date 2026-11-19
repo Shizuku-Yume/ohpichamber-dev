@@ -94,7 +94,7 @@ describe('canonical event boundaries', () => {
           name: 'Phase 1',
           tasks: [
             { content: 'Write tests', status: 'in_progress' },
-            { content: 'Deploy', status: 'blocked', blocker: 'Waiting on review' },
+            { content: 'Deploy', status: 'pending' },
           ],
         },
       ],
@@ -108,6 +108,10 @@ describe('canonical event boundaries', () => {
     expect(CanonicalEventSchema.safeParse({
       ...todosUpdate,
       todos: [{ name: 'Phase 1', tasks: [{ content: 'Bad', status: 'done' }] }],
+    }).success).toBe(false);
+    expect(CanonicalEventSchema.safeParse({
+      ...todosUpdate,
+      todos: [{ name: 'Phase 1', tasks: [{ content: 'Legacy', status: 'blocked', blocker: 'Waiting' }] }],
     }).success).toBe(false);
     expect(CanonicalEventSchema.safeParse({
       ...todosUpdate,

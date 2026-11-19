@@ -41,7 +41,6 @@ import { evaluateLoopCondition, describeLoopCondition } from '@oh-my-pi/pi-codin
 type LoopConditionConfig = { command: string; until: boolean };
 import { parseGeneratedRule, sanitizeRuleName } from '@oh-my-pi/pi-coding-agent/modes/controllers/omfg-rule';
 import { runCleanse, type CleanseRunUi } from '@oh-my-pi/pi-coding-agent/cleanse/index';
-import { resolveSeanceSource } from '@oh-my-pi/pi-coding-agent/task/seance';
 import { cfgTaskAgentIdleTtlMs } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { createPersistedSubagentReviverFactory } from '@oh-my-pi/pi-coding-agent/task/persisted-revive';
 import { registerPersistedSubagents, sessionFileBelongsToRoot } from '@oh-my-pi/pi-coding-agent/registry/persisted-agents';
@@ -375,7 +374,7 @@ export class WorkerSession {
       if (event.type === 'auto_compaction_end' || event.type === 'manual_compaction_end' || event.type === 'todo_auto_clear') {
         this.syncTodoAutoClear();
       }
-      if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') {
+      if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_pause' || event.type === 'agent_end') {
         const isTodoToolResultEnd =
           event.type === 'message_end' &&
           event.message.role === 'toolResult' &&
@@ -387,7 +386,7 @@ export class WorkerSession {
             const todoUpdate = this.projection.syncTodosIfChanged(Date.now());
             if (todoUpdate) this.emit([todoUpdate]);
           }
-          if (isTodoToolResultEnd || event.type === 'turn_end' || event.type === 'agent_end') {
+          if (isTodoToolResultEnd || event.type === 'turn_end' || event.type === 'agent_pause' || event.type === 'agent_end') {
             this.syncTodoAutoClear();
           }
         }).catch(() => this.fail());
@@ -1332,7 +1331,7 @@ export class WorkerSession {
   }
   private async selectBranch(input: SessionBranchRequest): Promise<Extract<WorkerOperationResult, { type: 'branch' }>> {
     const request = SessionBranchRequestSchema.parse(input);
-    if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    if (this.preparation || this.projection.activeRun() || this.session.isRunActive) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     this.controllingBranch = true;
     const manager = this.session.sessionManager;
     let previousLeaf: string | null = manager.getLeafId();
@@ -1343,7 +1342,7 @@ export class WorkerSession {
       await this.promptTask;
       await this.bind();
       if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
-      if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+      if (this.preparation || this.projection.activeRun() || this.session.isRunActive) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
       const before = this.projection.seed();
       if (before.branch.branchId !== request.branchId || before.branch.branchVersion !== request.branchVersion) {
         throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'The selected branch has changed');
@@ -1488,8 +1487,7 @@ export class WorkerSession {
       } : undefined);
     } finally { this.session.clearPlanInternalAbortPending(); }
     if (targetExecutionModel) {
-      const thinkingLevel = this.session.resolveTemporaryModelThinkingLevel(targetExecutionModel);
-      await this.session.setModelTemporary(targetExecutionModel, thinkingLevel);
+      await this.session.setModelTemporary(targetExecutionModel);
       this.emit([{
         timestamp: Date.now(), event: {
           type: 'session.updated', mode: this.modeController.mode(), selection: {
@@ -1523,6 +1521,7 @@ export class WorkerSession {
         this.suggestionDriver.cancel();
         await this.session.sessionManager.flush();
         const dispatched = await start();
+        if (dispatched) await this.session.waitForRunEnd();
         await this.bind();
         await this.modeController.settleTransition();
         if (!dispatched && this.projection.activeRun()?.runId === runId) {
@@ -1558,7 +1557,7 @@ export class WorkerSession {
 
   /** Start one best-effort title attempt once the session is idle and still unnamed. */
   private scheduleAutoTitle(): void {
-    if (this.closed || this.failed || process.env.PI_NO_TITLE || this.titleGeneration || this.session.isStreaming || this.projection.activeRun() || this.cancellingRunId || this.session.sessionManager.getSessionName()) return;
+    if (this.closed || this.failed || process.env.PI_NO_TITLE || this.titleGeneration || this.session.isRunActive || this.projection.activeRun() || this.cancellingRunId || this.session.sessionManager.getSessionName()) return;
     const turns = this.projection.seed().turns;
     if (!turns.some(turn => turn.status === 'completed')) return;
     const text = this.pendingTitleInput || firstUserMessageText(this.session.agent.state.messages);
@@ -1643,7 +1642,7 @@ export class WorkerSession {
           await this.selectOptions({ providerId: request.providerId ?? null, modelId: request.modelId ?? null, agentId: null, variant: request.variant ?? null, reasoningEffort: request.reasoningEffort ?? null });
         }
         if (request.op === 'create' || request.op === 'resume') {
-          if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+          if (this.preparation || this.projection.activeRun() || this.session.isRunActive || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         }
         if (request.op === 'create' && !request.objective?.trim()) throw new ProjectionError(400, 'INVALID_REQUEST', 'A goal objective is required');
         if (request.op === 'create' && ['plan', 'vibe'].includes(this.mode().kind)) await this.modeController.set('main');
@@ -1662,8 +1661,8 @@ export class WorkerSession {
       case 'mode.set': {
         const currentMode = this.modeController.mode();
         const isDisarming = operation.mode === 'main' && currentMode.kind === 'plan' && currentMode.status === 'armed';
-        const isDeferredPlan = operation.mode === 'plan' && this.session.isStreaming;
-        if (!isDeferredPlan && !isDisarming && (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending)) {
+        const isDeferredPlan = operation.mode === 'plan' && this.session.isRunActive;
+        if (!isDeferredPlan && !isDisarming && (this.preparation || this.projection.activeRun() || this.session.isRunActive || this.continuationPending)) {
           throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         }
         const mode = await this.modeController.set(operation.mode);
@@ -1706,6 +1705,10 @@ export class WorkerSession {
       case 'btw.ask': {
         this.suggestionDriver.cancel();
         await this.stopAutoTitle();
+        if (!this.session.isRunActive) {
+          await this.promptTask;
+          await this.bind();
+        }
         const record = await this.btw.ask(operation.question, operation.recordId);
         return { type: 'btw.ask', recordId: record.id };
       }
@@ -1713,7 +1716,7 @@ export class WorkerSession {
         return { type: 'btw.cancel', cancelled: this.btw.cancel(operation.recordId) };
       case 'btw.branch': {
         if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
-        if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (this.preparation || this.projection.activeRun() || this.session.isRunActive) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         const history = await this.btw.history();
         const record = history.find(r => r.id === operation.recordId);
         if (!record) throw new ProjectionError(404, 'SESSION_NOT_FOUND', `BTW record not found: ${operation.recordId}`);
@@ -1721,7 +1724,9 @@ export class WorkerSession {
         if (record.status !== 'complete') {
           throw new ProjectionError(400, 'INVALID_REQUEST', 'Cannot branch from an incomplete /btw question');
         }
-        if (!record.leafId || record.leafId !== currentLeafId) {
+        const branch = this.session.sessionManager.getBranch();
+        const recordIndex = branch.findIndex(entry => entry.id === record.leafId);
+        if (!currentLeafId || recordIndex < 0 || branch.slice(recordIndex + 1).some(entry => entry.type !== 'model_usage')) {
           throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'Session branch changed since /btw started');
         }
         const assistantMessage: AssistantMessage = {
@@ -1734,7 +1739,7 @@ export class WorkerSession {
           stopReason: 'stop',
           timestamp: Date.now(),
         };
-        const branchRes = await this.session.branchFromBtw(record.question, assistantMessage, record.leafId, this.session.sessionManager.getSessionId());
+        const branchRes = await this.session.branchFromBtw(record.question, assistantMessage, currentLeafId, this.session.sessionManager.getSessionId());
         if (branchRes.cancelled) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Branching from /btw was cancelled');
         if (branchRes.sessionFile) this._sessionFile = branchRes.sessionFile;
         const newSessionId = this.session.sessionManager.getSessionId();
@@ -1834,7 +1839,7 @@ export class WorkerSession {
       case 'command': {
         const parsed = parseSlashCommand(operation.text);
         if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');
-        const active = this.preparation || this.projection.activeRun() || this.session.isStreaming;
+        const active = this.preparation || this.projection.activeRun() || this.session.isRunActive;
         if (active && !isReadOnlyBuiltinCommand(parsed.name)) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'jobs' && parsed.args.startsWith('kill')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'usage' && parsed.args.startsWith('reset')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
@@ -2113,6 +2118,7 @@ export class WorkerSession {
             });
 
             void created.session.prompt(work, { streamingBehavior: 'followUp' })
+              .then(() => created.session.waitForRunEnd())
               .then(() => finalize('completed'))
               .catch(() => finalize('failed'));
 
@@ -2120,27 +2126,6 @@ export class WorkerSession {
           } catch (error) {
             throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Background session clone dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
           }
-        }
-        if (parsed.name === 'seance') {
-          const target = parsed.args.trim();
-          if (!target) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /seance <sessionId>');
-          const resolved = await resolveSeanceSource(target, { cwd: this.cwd });
-          const taskTool = this.session.agent.state.tools.find(t => t.name === 'task');
-          if (!taskTool) {
-            throw new ProjectionError(503, 'UNSUPPORTED_CAPABILITY', 'The task tool is required for /seance consultation');
-          }
-          const seanceResult = await taskTool.execute(`seance-${randomUUID().slice(0, 8)}`, {
-            agent: 'seance',
-            sourceSession: resolved.id,
-            task: 'Read historical session transcript and provide summary analysis.',
-            solutionSpace: 'Historical consult only; read-only.',
-          });
-          const text = seanceResult.content
-            .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-            .map(p => p.text)
-            .join('\n')
-            .trim();
-          return { type: 'command', output: `Seance (${resolved.id}): ${text || 'Consultation complete.'}` };
         }
         if (parsed.name === 'advisor') {
           const args = parsed.args.trim();
@@ -2252,6 +2237,7 @@ export class WorkerSession {
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
         const accepted: Run = { ...run };
         this.promptTask = this.session.prompt(prepared.text, prepared.options).then(async dispatched => {
+          if (dispatched) await this.session.waitForRunEnd();
           await this.bind();
           if (!dispatched) {
             this.emit(this.cancellingRunId === operation.runId
@@ -2299,7 +2285,7 @@ export class WorkerSession {
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
       case 'compact': {
-        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (this.preparation || this.projection.activeRun() || this.session.isRunActive || this.continuationPending || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         this.compacting = true;
         try {
           await this.binding;

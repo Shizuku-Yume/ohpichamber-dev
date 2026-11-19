@@ -16,6 +16,49 @@ function assistant(content: Assistant['content'], stopReason: Assistant['stopRea
   };
 }
 
+test('a run stays running across pauses, async wakes and queued prompts until its single end', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-run-wake-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const events: ReturnType<WorkerProjection['consume']> = [];
+    const deliver = (event: AgentSessionEvent) => {
+      const projected = projection.consume(event);
+      events.push(...projected);
+      journal.append(projected);
+    };
+    deliver({ type: 'agent_start' });
+    deliver({ type: 'agent_pause', messages: [], yielded: true, awaiting: true });
+    expect(projection.activeRun()?.runId).toBe('run');
+    expect(journal.snapshot().session.runtimeStatus).toBe('running');
+    // A background completion wakes the same run; it is not a second run.
+    deliver({ type: 'agent_start' });
+    const resumed = assistant([{ type: 'text', text: 'Background work finished' }], 'stop', 3);
+    deliver({ type: 'message_start', message: resumed });
+    deliver({ type: 'message_end', message: resumed });
+    deliver({ type: 'agent_pause', messages: [resumed], yielded: true, awaiting: false });
+    const queued = { role: 'user' as const, content: 'Follow up', timestamp: 4 };
+    projection.admitQueuedPrompt(queued, []);
+    deliver({ type: 'agent_start' });
+    deliver({ type: 'message_start', message: queued });
+    deliver({ type: 'message_end', message: queued });
+    expect(projection.activeRun()?.runId).toBe('run');
+    expect(events.filter(item => item.event.type === 'run.completed')).toHaveLength(0);
+    deliver({ type: 'agent_end', messages: [resumed, queued] });
+    deliver({ type: 'agent_end', messages: [] });
+    expect(events.filter(item => item.event.type === 'run.completed')).toHaveLength(1);
+    expect(events.filter(item => item.event.type === 'run.started')).toHaveLength(0);
+    expect(projection.activeRun()).toBeNull();
+    expect(journal.snapshot().session.runtimeStatus).toBe('idle');
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('binds queued mention provenance to its native entry even when timestamps collide', async () => {
   const root = await mkdtemp(join(tmpdir(), 'canonical-mention-identity-'));
   const manager = SessionManager.create(root, root);
@@ -371,7 +414,7 @@ test('a recovered retry clears the failed attempt and completes the run', async 
     deliver({ role: 'user', content: 'Ask a question.', timestamp: 1 });
     deliver({ ...assistant([], 'error', 2), errorMessage: '401 Invalid API key' });
     deliver(assistant([{ type: 'text', text: 'Answered after retry.' }], 'stop', 3));
-    const terminal = projection.consume({ type: 'agent_end', isTerminal: true });
+    const terminal = projection.consume({ type: 'agent_end', messages: [] });
     journal.append(terminal);
     expect(terminal.map(({ event }) => event.type)).toContain('run.completed');
     expect(terminal.map(({ event }) => event.type)).not.toContain('run.failed');
@@ -408,7 +451,7 @@ test.each([
     };
     deliver({ role: 'user', content: 'Ask a question.', timestamp: 1 });
     deliver({ ...assistant([], 'error', 2), errorMessage });
-    const terminal = projection.consume({ type: 'agent_end', isTerminal: true });
+    const terminal = projection.consume({ type: 'agent_end', messages: [] });
     journal.append(terminal);
     expect(terminal.map(({ event }) => event.type)).toContain('run.failed');
     expect(terminal.map(({ event }) => event.type)).not.toContain('run.completed');
@@ -417,7 +460,7 @@ test.each([
     await manager.flush();
     expect(new WorkerProjection(manager, 'session').seed().turns[0]).toMatchObject({ status: 'failed', error: expectedError });
     projection.beginRun('next-run', Date.now());
-    expect(projection.consume({ type: 'agent_end', isTerminal: true }).map(({ event }) => event.type)).toContain('run.completed');
+    expect(projection.consume({ type: 'agent_end', messages: [] }).map(({ event }) => event.type)).toContain('run.completed');
   } finally {
     await manager.close();
     await rm(root, { recursive: true, force: true });
@@ -471,7 +514,7 @@ test('an abort latch settles turn_end and agent_end cancelled without an aborted
     const turnEnd = projection.consume({ type: 'turn_end', message: assistant([{ type: 'text', text: 'Partial' }], 'stop', 2), toolResults: [] });
     journal.append(turnEnd);
     expect(turnEnd.map(({ event }) => event.type)).not.toContain('turn.completed');
-    const end = projection.consume({ type: 'agent_end', isTerminal: true });
+    const end = projection.consume({ type: 'agent_end', messages: [] });
     journal.append(end);
     expect(end.map(({ event }) => event.type)).toContain('run.cancelled');
     expect(end.map(({ event }) => event.type)).not.toContain('run.completed');
@@ -482,7 +525,7 @@ test('an abort latch settles turn_end and agent_end cancelled without an aborted
     expect(snapshot.session).toMatchObject({ runtimeStatus: 'idle', activeRunId: null });
     expect(projection.history({ sessionId: 'session' }).turns.at(-1)).toMatchObject({ status: 'cancelled' });
     expect(projection.activeRun()).toBeNull();
-    expect(projection.consume({ type: 'agent_end', isTerminal: true })).toEqual([]);
+    expect(projection.consume({ type: 'agent_end', messages: [] })).toEqual([]);
 
     journal.append(projection.beginRun('next', 10));
     projection.requestCancel('run');
@@ -492,7 +535,7 @@ test('an abort latch settles turn_end and agent_end cancelled without an aborted
     const nextTurnEnd = projection.consume({ type: 'turn_end', message: reply, toolResults: [] });
     journal.append(nextTurnEnd);
     expect(nextTurnEnd.map(({ event }) => event.type)).toContain('turn.completed');
-    const nextEnd = projection.consume({ type: 'agent_end', isTerminal: true });
+    const nextEnd = projection.consume({ type: 'agent_end', messages: [] });
     journal.append(nextEnd);
     expect(nextEnd.map(({ event }) => event.type)).toContain('run.completed');
     expect(nextEnd.map(({ event }) => event.type)).not.toContain('run.cancelled');

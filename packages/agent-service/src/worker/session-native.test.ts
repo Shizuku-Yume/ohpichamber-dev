@@ -31,8 +31,8 @@ import { WorkerModeController } from './mode.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import { HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 import { credentialReference } from './catalog-models.ts';
-import { closeDaemonClients, daemonClientForProject } from '@oh-my-pi/pi-coding-agent/launch/client';
-import type { DaemonCompletionNotification } from '@oh-my-pi/pi-coding-agent/launch/protocol';
+import { daemonClient, isolateDaemonForSmokeTest } from '@oh-my-pi/pi-coding-agent/daemon/client';
+import type { DaemonCompletionEvent } from '@oh-my-pi/pi-coding-agent/daemon/protocol';
 import { logger } from '@oh-my-pi/pi-utils';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
@@ -88,7 +88,6 @@ const HOST_TOOL_BYPASS_NAMES = [...Object.keys(HOST_TOOL_DESCRIPTIONS), 'bash'];
 test('every registered Host tool is bypassed by the worker tool_call guard', () => {
  expect(HOST_TOOL_BYPASS_NAMES).toEqual(expect.arrayContaining([...HOST_TOOL_NAMES, 'bash']));
 });
-const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})(?:: \`[^\`]+\`)?$`);
 /**
  * Callable Host tools necessarily appear in OMP's tool inventory. That listing
  * is the tools' own presentation, the one difference W4 allows alongside pins
@@ -96,7 +95,9 @@ const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})
  */
 const TextBlockSchema = z.object({ text: z.string() }).catchall(JsonValueSchema);
 function withoutHostToolInventory(messages: Array<{ role: string; content: JsonValue }>) {
- const stripLines = (text: string) => text.split('\n').filter(line => !HOST_TOOL_INVENTORY_LINE.test(line)).join('\n');
+ const stripLines = (text: string) => text.replace(/(# Tool Inventory\n)([^\n]+)/, (_match, heading: string, names: string) =>
+  heading + names.split(', ').filter(name => !(HOST_TOOL_NAMES as readonly string[]).includes(name)).join(', ')
+ );
  const strip = (content: JsonValue): JsonValue => {
   const text = z.string().safeParse(content);
   if (text.success) return stripLines(text.data);
@@ -480,7 +481,7 @@ test('a cold session reopens with web disabled; web is absent from model tool li
   if (!model) throw new Error('Native fixture model is required');
   await harness.worker.session.setModelTemporary(model);
   const warmDone = Promise.withResolvers<void>();
-  const unsubWarm = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) warmDone.resolve(); });
+  const unsubWarm = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') warmDone.resolve(); });
   await harness.worker.operation({ type: 'prompt', runId: 'warm-run', request: prompt('Warm turn.') });
   await warmDone.promise;
   unsubWarm();
@@ -490,7 +491,7 @@ test('a cold session reopens with web disabled; web is absent from model tool li
   expect(harness.worker.session.getActiveToolNames()).not.toContain('web');
 
   const coldDone = Promise.withResolvers<void>();
-  const unsubCold = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) coldDone.resolve(); });
+  const unsubCold = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') coldDone.resolve(); });
   await harness.worker.operation({ type: 'prompt', runId: 'cold-run', request: prompt('Try web.') });
   await coldDone.promise;
   unsubCold();
@@ -782,7 +783,7 @@ test('turn budget and standalone magic keywords apply budget ceiling and notices
  const harness = await fixture({ respond: () => completion() });
  try {
   const terminal = Promise.withResolvers<void>();
-  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
   await harness.worker.operation({
    type: 'prompt',
    runId: 'budget-test-run',
@@ -794,7 +795,7 @@ test('turn budget and standalone magic keywords apply budget ceiling and notices
   expect(harness.worker.session.sessionManager.getTurnBudget()?.hard).toBe(true);
 
   const terminal2 = Promise.withResolvers<void>();
-  const unsubscribe2 = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal2.resolve(); });
+  const unsubscribe2 = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal2.resolve(); });
   await harness.worker.operation({
    type: 'prompt',
    runId: 'budget-test-run-2',
@@ -817,7 +818,7 @@ test('native web_search tool routes to Host web-search authorization and perform
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   cfgWebSearchEnabled.override(harness.worker.session.settings, true);
   cfgSearxngEndpoint.override(harness.worker.session.settings, search.url);
@@ -845,7 +846,7 @@ test('enterprise Host refusal of web-search blocks the native tool before any lo
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   cfgWebSearchEnabled.override(harness.worker.session.settings, true);
   cfgSearxngEndpoint.override(harness.worker.session.settings, search.url);
@@ -868,7 +869,7 @@ test('native lsp tool routes to Host authorization and succeeds when authorized'
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   await harness.worker.operation({ type: 'prompt', runId: 'lsp-run', request: prompt('Query LSP status.') });
   await terminal.promise;
@@ -886,7 +887,7 @@ test('Host policy refusal blocks native lsp tool before execution', async () => 
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   await harness.worker.operation({ type: 'prompt', runId: 'lsp-denied-run', request: prompt('Try LSP status.') });
   await terminal.promise;
@@ -909,7 +910,7 @@ for (const approvalMode of ['always-ask', 'yolo'] as const) {
     }
    });
    const terminal = Promise.withResolvers<void>();
-   const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+   const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
    try {
     cfgToolsApprovalMode.override(harness.worker.session.settings, approvalMode);
     await harness.worker.operation({ type: 'prompt', runId: 'bash-run', request: prompt('Run the native bash tool exactly once.') });
@@ -942,7 +943,7 @@ for (const decision of ['allow', 'deny'] as const) {
    }
   });
   const terminal = Promise.withResolvers<void>();
-  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
   try {
    cfgToolsApprovalMode.override(harness.worker.session.settings, 'always-ask');
    cfgBashPatterns.override(harness.worker.session.settings, [{ match: command, approval: decision }]);
@@ -986,7 +987,7 @@ test('actual SDK Bash always-allow caches natively and still grants each executi
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   cfgToolsApprovalMode.override(harness.worker.session.settings, 'always-ask');
   await harness.worker.operation({ type: 'prompt', runId: 'always-run', request: prompt('Run both native bash steps.') });
@@ -1020,7 +1021,7 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   await expect(readFile(harness.mcpConfigPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
@@ -1037,10 +1038,57 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   expect(harness.fatal()).toBe(false);
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+test('native async work pauses and wakes one canonical run without reporting idle', async () => {
+ const harness = await fixture({ planModel: true, respond: () => completion() });
+ const session = harness.worker.session;
+ const paused = Promise.withResolvers<void>();
+ const work = Promise.withResolvers<string>();
+ const manager = session.asyncJobManager;
+ if (!manager) throw new Error('Native async job manager is required');
+ const ownerId = session.getAgentId();
+ const jobId = manager.register('bash', 'Async wake proof', () => work.promise, { ownerId, foreground: false });
+ let wakeWasArmed = false;
+ const unsubscribe = session.subscribe(event => {
+  if (event.type === 'agent_pause' && event.awaiting) paused.resolve();
+  if (event.type === 'message_start' && harness.requests.length === 2) {
+   const mode = harness.worker.mode();
+   wakeWasArmed ||= mode.kind === 'plan' && mode.status === 'armed';
+  }
+ });
+ try {
+  await harness.worker.operation({ type: 'prompt', runId: 'async-run', request: prompt('Wait for the background result.') });
+  await paused.promise;
+  expect(session.isRunActive).toBe(true);
+  expect(session.isStreaming).toBe(false);
+  expect(session.wakeSources?.jobs).toContain(jobId);
+  expect(harness.journal.snapshot().session.runtimeStatus).toBe('running');
+  expect(harness.events.some(input => input.event.type === 'run.completed')).toBe(false);
+  await expect(harness.worker.operation({ type: 'mode.set', mode: 'vibe' })).rejects.toMatchObject({ code: 'RUN_ACTIVE' });
+  await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+  expect(harness.worker.mode()).toMatchObject({ kind: 'plan', status: 'armed' });
+  const ended = session.waitForRunEnd();
+  work.resolve('The background job finished.');
+  await ended;
+  await harness.worker['modeController'].settleTransition();
+  expect(session.isRunActive).toBe(false);
+  expect(session.wakeSources).toBeUndefined();
+  expect(harness.requests).toHaveLength(2);
+  expect(wakeWasArmed).toBe(true);
+  expect(harness.worker.mode()).toMatchObject({ kind: 'plan', status: 'active' });
+  expect(harness.events.filter(input => input.event.type === 'run.completed')).toHaveLength(1);
+  expect(harness.journal.snapshot().session.runtimeStatus).toBe('idle');
+ } finally {
+  work.resolve('Finished');
+  unsubscribe();
+  await harness.close();
+ }
+}, 30000);
+
 test('native daemon service callbacks retain the AgentSession receiver', async () => {
  const harness = await fixture({ respond: () => completion() });
+ const cleanupDaemon = await isolateDaemonForSmokeTest();
  const session = harness.worker.session;
- const client = await daemonClientForProject(harness.root);
+ const client = await daemonClient();
  const subscriptions = spyOn(client, 'onCompletion');
  const warnings = spyOn(logger, 'warn');
  try {
@@ -1052,21 +1100,23 @@ test('native daemon service callbacks retain the AgentSession receiver', async (
   expect(result.type).toBe('shell');
   if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new Error('Expected shell snapshot');
   expect(result.result.snapshot.running).toEqual([]);
-  expect(warnings.mock.calls.filter(([message]) => message === 'Daemon broker list failed; continuing without service state')).toEqual([]);
+  expect(warnings.mock.calls.filter(([message]) => message === 'Daemon list failed; continuing without service state')).toEqual([]);
   const subscription = subscriptions.mock.calls.find(([owner]) => owner === rootSessionId);
   if (!subscription) throw new Error('Native daemon completion subscription is missing');
-  const notification: DaemonCompletionNotification = {
-   event: 'daemon-completed', completionId: 'completion-native', owner: rootSessionId,
-   daemon: { name: 'native-service', id: 'native-service-id', state: 'exited', createdAt: 1, startedAt: 1,
-    restartCount: 0, outputBytes: 0, persist: false, detached: false, owner: rootSessionId },
+  const notification: DaemonCompletionEvent = {
+   ev: 'completed', completionId: 'completion-native', owner: rootSessionId,
+   unit: { key: 'native-service', kind: 'proc', scope: { kind: 'project', dir: harness.root },
+    label: 'native-service', generation: 'generation', pids: [], leases: 0, supervised: true,
+    policy: { hold: 'leases', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'exec' },
+    id: 'native-service-id', state: 'exited', createdAt: 1, startedAt: 1,
+    restartCount: 0, outputBytes: 0, owner: rootSessionId },
   };
   await harness.worker.close();
   await expect(Promise.resolve().then(() => subscription[1](notification))).rejects.toThrow('Session disposed before launch completion delivery');
  } finally {
   subscriptions.mockRestore();
   warnings.mockRestore();
-  try { await client.request({ op: 'shutdown' }); } finally {
-   await closeDaemonClients();
+  try { await cleanupDaemon(); } finally {
    await harness.close();
   }
  }
@@ -1107,7 +1157,7 @@ test('worker sends plain OMP system and developer context plus only the user pin
  try {
   const workerTerminal = Promise.withResolvers<void>();
   const unsubscribeWorker = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) workerTerminal.resolve();
+   if (event.type === 'agent_end') workerTerminal.resolve();
   });
   await harness.worker.operation({
    type: 'prompt', runId: 'parity-run', request: {
@@ -1135,7 +1185,7 @@ test('worker sends plain OMP system and developer context plus only the user pin
   await plain.setModelTemporary(model);
   const plainTerminal = Promise.withResolvers<void>();
   unsubscribePlain = plain.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) plainTerminal.resolve();
+   if (event.type === 'agent_end') plainTerminal.resolve();
   });
   const observed = harness.requests.length;
   await plain.prompt(marker, { throwOnDrop: true, images: [], runCommands: false, expandPromptTemplates: false });
@@ -1145,8 +1195,8 @@ test('worker sends plain OMP system and developer context plus only the user pin
   const workerInstructions = instructionMessages(workerRequest);
   const plainInstructions = instructionMessages(plainRequest);
   expect(withoutHostToolInventory(workerInstructions)).toEqual(plainInstructions);
-  for (const toolName of ENABLED_HOST_TOOL_NAMES) expect(JSON.stringify(workerInstructions)).toContain(`- ${toolName}: \`${toolName}\``);
-  expect(JSON.stringify(workerInstructions)).not.toContain('- notify: `notify`');
+  for (const toolName of ENABLED_HOST_TOOL_NAMES) expect(JSON.stringify(workerInstructions)).toContain(`, ${toolName}`);
+  expect(JSON.stringify(workerInstructions)).not.toContain(', notify');
   expect(JSON.stringify(plainInstructions)).not.toContain('openchamber');
   expect(JSON.stringify(workerRequest.messages)).toContain('USER_PIN_MARKER');
   expect(JSON.stringify(instructionMessages(workerRequest))).not.toContain('USER_PIN_MARKER');
@@ -1184,7 +1234,7 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
  let seen = false;
  const unsubscribe = harness.worker.session.subscribe(event => {
   if (event.type === 'message_start' && event.message.role === 'user' && JSON.stringify(event.message.content).includes('FOLLOW_UP_MARKER')) { seen = true; followedUp.resolve(); }
-  if (seen && event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) finished.resolve();
+  if (seen && event.type === 'agent_end') finished.resolve();
  });
  try {
   await expect(harness.worker.operation({ type: 'steer', request: prompt('idle steer') })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND', status: 404 });
@@ -1364,7 +1414,7 @@ test('native compact refuses while a run is active', async () => {
  });
  const terminal = Promise.withResolvers<void>();
  const unsubscribe = harness.worker.session.subscribe(event => {
-  if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  if (event.type === 'agent_end') terminal.resolve();
  });
  try {
   await harness.worker.operation({ type: 'prompt', runId: 'compact-active-run', request: prompt('Keep this run active.') });
@@ -1432,7 +1482,7 @@ test('native branch CAS rejects stale owner/version and redo expires after a new
   });
   if (again.type !== 'branch') throw new Error('Native branch response is required');
   const terminal = Promise.withResolvers<void>();
-  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
   try {
    await harness.worker.operation({ type: 'prompt', runId: 'new-branch-run', request: prompt('A new branch prompt') });
    await expect(harness.worker.operation({
@@ -1464,7 +1514,7 @@ test('branch revert on unchanged leaf returns 409 without failing worker and sub
 
   const terminal = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+   if (event.type === 'agent_end') terminal.resolve();
   });
   try {
    await harness.worker.operation({ type: 'prompt', runId: 'first-run', request: prompt('First prompt') });
@@ -1510,7 +1560,7 @@ test('branch revert on unchanged leaf returns 409 without failing worker and sub
   // Subsequent prompt in the SAME worker generation succeeds
   const secondTerminal = Promise.withResolvers<void>();
   const unsubscribeSecond = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) secondTerminal.resolve();
+   if (event.type === 'agent_end') secondTerminal.resolve();
   });
   try {
    await harness.worker.operation({ type: 'prompt', runId: 'second-run', request: prompt('Second prompt in same generation') });
@@ -1532,7 +1582,7 @@ test('branch revert rollback restores previous leaf and in-memory messages witho
  try {
   const terminal = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+   if (event.type === 'agent_end') terminal.resolve();
   });
   try {
    await harness.worker.operation({ type: 'prompt', runId: 'p1', request: prompt('Prompt 1') });
@@ -1580,7 +1630,7 @@ test('branch revert rollback restores previous leaf and in-memory messages witho
   // Subsequent prompt succeeds in same worker generation
   const secondTerminal = Promise.withResolvers<void>();
   const unsubscribeSecond = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) secondTerminal.resolve();
+   if (event.type === 'agent_end') secondTerminal.resolve();
   });
   try {
    await harness.worker.operation({ type: 'prompt', runId: 'p2', request: prompt('Prompt 2') });
@@ -1606,7 +1656,7 @@ test('actual native TaskTool owns a child session and persists its history', asy
  });
  const terminal = Promise.withResolvers<void>();
  const unsubscribe = harness.worker.session.subscribe(event => {
-  if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  if (event.type === 'agent_end') terminal.resolve();
  });
  try {
   cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
@@ -1653,7 +1703,7 @@ test('native child tool calls re-enter Host authorization', async () => {
  });
  const terminal = Promise.withResolvers<void>();
  const unsubscribe = harness.worker.session.subscribe(event => {
-  if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  if (event.type === 'agent_end') terminal.resolve();
  });
  try {
   cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
@@ -1672,7 +1722,7 @@ test('provider.use authorization is requested once per provider/model/endpoint t
  const harness = await fixture({ respond: () => completion() });
  const turnDone = () => {
   const done = Promise.withResolvers<void>();
-  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) done.resolve(); });
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') done.resolve(); });
   return { done: done.promise, unsubscribe };
  };
  const providerUseRequests = () => harness.hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
@@ -1700,7 +1750,7 @@ test('a denied provider.use is never cached, so the next turn asks the Host agai
  const turnSettled = () => {
   const done = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) done.resolve();
+   if (event.type === 'agent_end') done.resolve();
   });
   return { done: done.promise, unsubscribe };
  };
@@ -1736,7 +1786,7 @@ test('actual SDK edit reaches Host policy and projects its exact replace argumen
   }
  });
  const terminal = Promise.withResolvers<void>();
- const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+ const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end') terminal.resolve(); });
  try {
   cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
   cfgEditMode.override(harness.worker.session.settings, 'replace');
@@ -2052,7 +2102,7 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
   const executionEnded = Promise.withResolvers<void>();
   let ended = 0;
   const unsubscribe = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) {
+   if (event.type === 'agent_end') {
     ended++;
     if (ended === 1) planningEnded.resolve();
     if (executionStarted) executionEnded.resolve();
@@ -2141,7 +2191,7 @@ test('a prompt with no explicit effort runs at OMP default thinking level', asyn
  const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });
  const terminal = Promise.withResolvers<void>();
  const unsubscribe = harness.worker.session.subscribe(event => {
-  if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  if (event.type === 'agent_end') terminal.resolve();
  });
  try {
   await harness.worker.operation({ type: 'prompt', runId: 'default-effort-run', request: prompt('Use the default thinking level.') });
@@ -2156,7 +2206,7 @@ test('an explicit off effort reaches the native agent while an omitted effort ke
  const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });
  const terminal = Promise.withResolvers<void>();
  const unsubscribe = harness.worker.session.subscribe(event => {
-  if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  if (event.type === 'agent_end') terminal.resolve();
  });
  try {
   await harness.worker.operation({
@@ -2192,7 +2242,7 @@ test('deferred mid-run Plan mode entry arms during active stream and enters plan
  });
  const terminal = Promise.withResolvers<void>();
  const unsubscribe = harness.worker.session.subscribe(event => {
-  if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  if (event.type === 'agent_end') terminal.resolve();
  });
  try {
   // Start prompt
@@ -2246,7 +2296,7 @@ test('btw.branch validates leafId and status, forks session, and rehydrates stat
   // First run to have a valid leaf
   const terminal = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
-   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+   if (event.type === 'agent_end') terminal.resolve();
   });
   try {
    await harness.worker.operation({ type: 'prompt', runId: 'base-run', request: prompt('Initial turn') });
@@ -2285,6 +2335,11 @@ test('btw.branch validates leafId and status, forks session, and rehydrates stat
 
   // Promote valid completed record
   (harness.worker.btw as unknown as { history: () => Promise<typeof history> }).history = async () => history;
+  const branch = harness.worker.session.sessionManager.getBranch();
+  const recordIndex = branch.findIndex(entry => entry.id === record?.leafId);
+  expect(recordIndex).toBeGreaterThanOrEqual(0);
+  expect(branch.slice(recordIndex + 1).map(entry => entry.type)).toEqual(['model_usage']);
+  expect(branch.at(-1)).toMatchObject({ type: 'model_usage', purpose: 'btw' });
   const branchRes = await harness.worker.operation({ type: 'btw.branch', recordId: askRes.recordId });
   if (branchRes.type !== 'btw.branch') throw new Error('Expected btw.branch result');
   expect(branchRes.branch).toBeDefined();
@@ -2293,6 +2348,8 @@ test('btw.branch validates leafId and status, forks session, and rehydrates stat
   expect(harness.worker.sessionFile).toBe(branchRes.sessionFile);
   expect(harness.worker.sessionId).toBe(branchRes.sessionId);
   expect(harness.fatal()).toBe(false);
+  await expect(harness.worker.operation({ type: 'btw.branch', recordId: askRes.recordId }))
+   .rejects.toMatchObject({ status: 409, code: 'SESSION_BRANCH_CONFLICT' });
  } finally {
   await harness.close();
  }
@@ -2412,7 +2469,7 @@ test('valid execution model with thinking level applies to session execution', a
  }
 }, 30000);
 
-test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and loop.stop resolve properly', async () => {
+test('autonomous commands /loop, /omfg, /cleanse, /tan, /advisor and loop.stop resolve properly', async () => {
  const ttsrJson = JSON.stringify({
   name: 'no-any',
   description: 'Never use any in TypeScript',
@@ -2457,6 +2514,7 @@ test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and lo
   expect(tanCancel).toEqual({ type: 'subagent.cancel', subagentId: cloneId, cancelled: true });
 
   await expect(harness.worker.operation({ type: 'command', text: '/seance non-existent-session' })).rejects.toThrow();
+  await expect(harness.worker.operation({ type: 'command', text: '/commit' })).rejects.toThrow();
 
   const advisorRes = await harness.worker.operation({ type: 'command', text: '/advisor' });
   expect(advisorRes.type).toBe('command');

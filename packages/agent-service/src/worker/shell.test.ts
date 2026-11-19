@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { AsyncJobManager, type AsyncJob } from '@oh-my-pi/pi-coding-agent/async/job-manager';
 import type { AgentRegistryApi } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import type { PipeStreams } from '@oh-my-pi/pi-natives';
-import type { DaemonSnapshot } from '@oh-my-pi/pi-tui/tools/daemon';
+import type { UnitSnapshot } from '@oh-my-pi/pi-tui/tools/daemon';
 import type { RunningShell } from '@openchamber/agent-contract';
 import { WorkerShell } from './shell.ts';
 
@@ -206,44 +206,41 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
     let sentInput: { name: string; input: string } | null = null;
     const stoppedServices: string[] = [];
 
-    const daemons: DaemonSnapshot[] = [
+    const daemons: UnitSnapshot[] = [
       {
-        name: 'service-a',
+        key: 'service-a', kind: 'proc', scope: { kind: 'project', dir: '/workspace' }, label: 'service', generation: 'generation', leases: 1, supervised: true,
         id: 'daemon-a-1',
         state: 'running',
-        pid: 1111,
+        pids: [1111],
         createdAt: 1000,
         startedAt: 1000,
         restartCount: 0,
         outputBytes: 50,
-        persist: true,
-        detached: false,
+        policy: { hold: 'persist', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'exec' },
         owner: 'session-1',
       },
       {
-        name: 'service-b',
+        key: 'service-b', kind: 'proc', scope: { kind: 'project', dir: '/workspace' }, label: 'service', generation: 'generation', leases: 1, supervised: true,
         id: 'daemon-b-2',
         state: 'running',
-        pid: 2222,
+        pids: [2222],
         createdAt: 1000,
         startedAt: 1000,
         restartCount: 0,
         outputBytes: 80,
-        persist: false,
-        detached: true,
+        policy: { hold: 'detached', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'detached' },
         owner: 'session-1',
       },
       {
-        name: 'foreign-service',
+        key: 'foreign-service', kind: 'proc', scope: { kind: 'project', dir: '/workspace' }, label: 'foreign-service', generation: 'generation', leases: 1, supervised: true,
         id: 'daemon-foreign-9',
         state: 'running',
-        pid: 9999,
+        pids: [9999],
         createdAt: 1000,
         startedAt: 1000,
         restartCount: 0,
         outputBytes: 100,
-        persist: true,
-        detached: false,
+        policy: { hold: 'persist', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'exec' },
         owner: 'session-other-victim',
       },
     ];
@@ -263,7 +260,7 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
       },
       stopService: async (name) => {
         stoppedServices.push(name);
-        const match = daemons.find(d => d.name === name);
+        const match = daemons.find(d => d.key === name);
         if (match) {
           match.state = 'failed';
           match.exitedAt = Date.now();
@@ -546,13 +543,13 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
 
 test('a fresh worker retains service control for every retired session id but rejects foreign owners', async () => {
   const manager = new AsyncJobManager({ onJobComplete: () => { } });
-  const daemon: DaemonSnapshot = {
-    name: 'original-service', id: 'original', state: 'running', pid: 1111, createdAt: 1000, startedAt: 1000,
-    restartCount: 0, outputBytes: 0, persist: true, detached: false, owner: 'session-a',
+  const daemon: UnitSnapshot = {
+    key: 'original-service', kind: 'proc', scope: { kind: 'project', dir: '/workspace' }, label: 'service', generation: 'generation', leases: 1, supervised: true, id: 'original', state: 'running', pids: [1111], createdAt: 1000, startedAt: 1000,
+    restartCount: 0, outputBytes: 0, policy: { hold: 'persist', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'exec' }, owner: 'session-a',
   };
-  const daemons = [daemon, { ...daemon, id: 'intermediate', name: 'intermediate-service', owner: 'session-b' },
-    { ...daemon, id: 'current', name: 'current-service', owner: 'session-c' },
-    { ...daemon, id: 'foreign', name: 'foreign-service', owner: 'foreign-session' }];
+  const daemons = [daemon, { ...daemon, id: 'intermediate', key: 'intermediate-service', owner: 'session-b' },
+    { ...daemon, id: 'current', key: 'current-service', owner: 'session-c' },
+    { ...daemon, id: 'foreign', key: 'foreign-service', owner: 'foreign-session' }];
   const sent: string[] = [];
   const shell = new WorkerShell({
     manager, workspaceId: 'ws-1', projectId: 'proj-1', sessionId: 'session-c',
@@ -562,7 +559,7 @@ test('a fresh worker retains service control for every retired session id but re
     serviceLogs: async name => `logs: ${name}`,
     sendServiceInput: async name => { sent.push(name); },
     stopService: async name => {
-      const service = daemons.find(item => item.name === name);
+      const service = daemons.find(item => item.key === name);
       if (service) service.state = 'exited';
     },
   });
@@ -592,9 +589,9 @@ test('a fresh worker retains service control for every retired session id but re
 
 test('a session rekey moves every shell job identity and the snapshot scope to the minted id', async () => {
   const manager = new AsyncJobManager({ onJobComplete: () => { } });
-  const daemon: DaemonSnapshot = {
-    name: 'service', id: 'daemon-1', state: 'running', pid: 1111, createdAt: 1000, startedAt: 1000,
-    restartCount: 0, outputBytes: 0, persist: true, detached: false, owner: 'session-1',
+  const daemon: UnitSnapshot = {
+    key: 'service', kind: 'proc', scope: { kind: 'project', dir: '/workspace' }, label: 'service', generation: 'generation', leases: 1, supervised: true, id: 'daemon-1', state: 'running', pids: [1111], createdAt: 1000, startedAt: 1000,
+    restartCount: 0, outputBytes: 0, policy: { hold: 'persist', idleMs: 0, onIdle: 'stop', restart: 'no', survive: 'exec' }, owner: 'session-1',
   };
   const shell = new WorkerShell({
     manager, workspaceId: 'ws-1', projectId: 'proj-1', sessionId: 'session-1',

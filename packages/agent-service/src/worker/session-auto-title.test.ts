@@ -292,7 +292,7 @@ test('auto-title re-arm test', async () => {
   if (workerRef) {
    const terminal = Promise.withResolvers<void>();
    const unsubscribe = workerRef.session.subscribe(event => {
-    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+    if (event.type === 'agent_end') terminal.resolve();
    });
    try {
     const thirdPrompt: PromptRequest = {

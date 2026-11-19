@@ -15,7 +15,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'in progress',
     'chat.todoTray.status.completed': 'completed',
     'chat.todoTray.status.abandoned': 'abandoned',
-    'chat.todoTray.status.blocked': 'blocked',
   },
   de: {
     'chat.todoTray.expandAria': 'Alle Aufgaben anzeigen',
@@ -25,7 +24,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'in Bearbeitung',
     'chat.todoTray.status.completed': 'abgeschlossen',
     'chat.todoTray.status.abandoned': 'verworfen',
-    'chat.todoTray.status.blocked': 'blockiert',
   },
   fr: {
     'chat.todoTray.expandAria': 'Afficher toutes les tâches',
@@ -35,7 +33,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'en cours',
     'chat.todoTray.status.completed': 'terminée',
     'chat.todoTray.status.abandoned': 'abandonnée',
-    'chat.todoTray.status.blocked': 'bloquée',
   },
   nl: {
     'chat.todoTray.expandAria': 'Alle taken tonen',
@@ -45,7 +42,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'in uitvoering',
     'chat.todoTray.status.completed': 'voltooid',
     'chat.todoTray.status.abandoned': 'opgegeven',
-    'chat.todoTray.status.blocked': 'geblokkeerd',
   },
   es: {
     'chat.todoTray.expandAria': 'Mostrar todas las tareas',
@@ -55,7 +51,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'en curso',
     'chat.todoTray.status.completed': 'completada',
     'chat.todoTray.status.abandoned': 'abandonada',
-    'chat.todoTray.status.blocked': 'bloqueada',
   },
   ja: {
     'chat.todoTray.expandAria': 'すべてのタスクを表示',
@@ -65,7 +60,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': '進行中',
     'chat.todoTray.status.completed': '完了',
     'chat.todoTray.status.abandoned': '中止',
-    'chat.todoTray.status.blocked': 'ブロック中',
   },
   'pt-BR': {
     'chat.todoTray.expandAria': 'Mostrar todas as tarefas',
@@ -75,7 +69,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'em andamento',
     'chat.todoTray.status.completed': 'concluída',
     'chat.todoTray.status.abandoned': 'abandonada',
-    'chat.todoTray.status.blocked': 'bloqueada',
   },
   uk: {
     'chat.todoTray.expandAria': 'Показати всі завдання',
@@ -85,7 +78,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'виконується',
     'chat.todoTray.status.completed': 'виконано',
     'chat.todoTray.status.abandoned': 'покинуто',
-    'chat.todoTray.status.blocked': 'заблоковано',
   },
   ko: {
     'chat.todoTray.expandAria': '모든 할 일 표시',
@@ -95,7 +87,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': '진행 중',
     'chat.todoTray.status.completed': '완료됨',
     'chat.todoTray.status.abandoned': '중단됨',
-    'chat.todoTray.status.blocked': '차단됨',
   },
   pl: {
     'chat.todoTray.expandAria': 'Pokaż wszystkie zadania',
@@ -105,7 +96,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'w toku',
     'chat.todoTray.status.completed': 'ukończone',
     'chat.todoTray.status.abandoned': 'porzucone',
-    'chat.todoTray.status.blocked': 'zablokowane',
   },
   'zh-CN': {
     'chat.todoTray.expandAria': '显示所有任务',
@@ -115,7 +105,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': '进行中',
     'chat.todoTray.status.completed': '已完成',
     'chat.todoTray.status.abandoned': '已放弃',
-    'chat.todoTray.status.blocked': '已阻塞',
   },
   'zh-TW': {
     'chat.todoTray.expandAria': '顯示所有任務',
@@ -125,7 +114,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': '進行中',
     'chat.todoTray.status.completed': '已完成',
     'chat.todoTray.status.abandoned': '已放棄',
-    'chat.todoTray.status.blocked': '已封鎖',
   },
   tr: {
     'chat.todoTray.expandAria': 'Tüm görevleri göster',
@@ -135,7 +123,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'devam ediyor',
     'chat.todoTray.status.completed': 'tamamlandı',
     'chat.todoTray.status.abandoned': 'bırakıldı',
-    'chat.todoTray.status.blocked': 'engellendi',
   },
   ar: {
     'chat.todoTray.expandAria': 'عرض كل المهام',
@@ -145,7 +132,6 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'قيد التنفيذ',
     'chat.todoTray.status.completed': 'مكتملة',
     'chat.todoTray.status.abandoned': 'متروكة',
-    'chat.todoTray.status.blocked': 'محظورة',
   },
   he: {
     'chat.todoTray.expandAria': 'הצג את כל המשימות',
@@ -155,6 +141,5 @@ export const todoTrayI18n = {
     'chat.todoTray.status.inProgress': 'בתהליך',
     'chat.todoTray.status.completed': 'הושלמה',
     'chat.todoTray.status.abandoned': 'ננטשה',
-    'chat.todoTray.status.blocked': 'חסומה',
   },
 } as const;

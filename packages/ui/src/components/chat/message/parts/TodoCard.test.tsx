@@ -10,7 +10,7 @@ const renderCard = (phases: TodoPhase[], defaultExpanded = false) =>
   renderToStaticMarkup(<I18nProvider><TodoCard phases={phases} defaultExpanded={defaultExpanded} /></I18nProvider>);
 
 const phases: JsonValue = [
-  { name: 'Plan', tasks: [{ content: 'Inspect', status: 'completed' }, { content: 'Implement', status: 'in_progress', blocker: 'waiting' }] },
+  { name: 'Plan', tasks: [{ content: 'Inspect', status: 'completed' }, { content: 'Implement', status: 'in_progress' }] },
   { name: 'Verify', tasks: [{ content: 'Run checks', status: 'pending' }] },
 ];
 
