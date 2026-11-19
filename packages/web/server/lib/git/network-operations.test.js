@@ -3831,7 +3831,7 @@ process.exit(safe ? 0 : 1);
   });
 
   it('waits for a late filesystem mutation before recording timeout and cleaning it up', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-network-clone-fs-timeout-'));
     temporaryDirectories.push(parent);
     const destination = path.join(parent, 'repository');
