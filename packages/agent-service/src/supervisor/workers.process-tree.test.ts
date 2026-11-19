@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkerRegistry, cleanupWorkerDescendants, snapshotWorkerDescendants, stopWorkerProcess, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
+import { WorkerRegistry, cleanupWorkerDescendants, listWindowsWorkerProcesses, snapshotWorkerDescendants, stopWorkerProcess, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
 
 const identity = (pid: number, parentPid = 4242, creationDate = '2026-11-19T00:00:00.0000000Z') => ({ pid, parentPid, creationDate });
 
@@ -14,7 +14,7 @@ test('descendant snapshot walks every level without including siblings or the le
 });
 
 test('snapshot inspection errors and missing identities are not successful snapshots', async () => {
-  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => { throw new Error('CIM failed'); } })).rejects.toThrow('CIM failed');
+  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => { throw new Error('snapshot failed'); } })).rejects.toThrow('snapshot failed');
   await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(5001, 4242, '')] })).rejects.toThrow('Invalid descendant identity');
 });
 
@@ -243,6 +243,75 @@ process.on('message', message => {
     await rm(root, { recursive: true, force: true });
   }
 }, 10_000);
+
+(process.platform === 'win32' ? test : test.skip)('Windows process snapshot is fast and carries live parent and creation identities', async () => {
+  const started = performance.now();
+  const processes = await listWindowsWorkerProcesses();
+  expect(performance.now() - started).toBeLessThan(1_000);
+  const self = processes.find(entry => entry.pid === process.pid);
+  expect(self?.parentPid).toBe(process.ppid);
+  expect(self?.creationDate).toMatch(/^\d+$/);
+  expect(processes.every(entry => entry.pid > 1)).toBe(true);
+});
+
+// Detached children leave the worker's kill-on-close job, and a cooperative
+// stop lets the worker exit before taskkill /T runs. The windowless child and
+// grandchild are then orphans that only the readiness snapshot still names.
+(process.platform === 'win32' ? test : test.skip)('readiness stop removes orphaned windowless Windows descendants but not siblings', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'worker-windows-tree-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const pids = join(root, 'pids');
+  const workerPid = join(root, 'worker-pid');
+  await Promise.all([mkdir(cwd), mkdir(agentDirectory)]);
+  const grandchild = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(pids)}, String(process.pid)); setInterval(() => {}, 1_000);`;
+  const child = `import { spawn } from 'node:child_process'; spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore', windowsHide: true, detached: true }).unref(); setInterval(() => {}, 1_000);`;
+  const entrypoint = join(root, 'worker-fixture.mjs');
+  await writeFile(entrypoint, `import { spawn } from 'node:child_process';
+import { existsSync, writeFileSync } from 'node:fs';
+process.on('message', message => {
+  if (message?.type === 'bootstrap') {
+    writeFileSync(${JSON.stringify(workerPid)}, String(process.pid));
+    spawn(process.execPath, ['-e', ${JSON.stringify(child)}], { stdio: 'ignore', windowsHide: true, detached: true }).unref();
+    const wait = setInterval(() => {
+      if (!existsSync(${JSON.stringify(pids)})) return;
+      clearInterval(wait);
+      process.send({ type: 'ready', workerGeneration: message.workerGeneration });
+    }, 10);
+  }
+  if (message?.type === 'stop') process.exit(0);
+});`);
+  const registry = new WorkerRegistry({ workerEntrypoint: entrypoint, workerRuntime: process.execPath });
+  const sibling = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)'], { stdio: 'ignore', windowsHide: true });
+  const alive = async (pid: number) => (await listWindowsWorkerProcesses()).some(entry => entry.pid === pid);
+  let tracked: number[] = [];
+  try {
+    await registry.start({ rootSessionId: 'root', projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory });
+    const descendants = await snapshotWorkerDescendants(Number(await readFile(workerPid, 'utf8')));
+    tracked = descendants.map(entry => entry.pid);
+    expect(tracked).toContain(Number(await readFile(pids, 'utf8')));
+    expect(tracked.length).toBeGreaterThanOrEqual(2);
+    const started = performance.now();
+    expect(await registry.stop('root', { cooperativeGraceMs: 1_000 })).toBe(true);
+    expect(performance.now() - started).toBeLessThan(5_000);
+    for (const pid of tracked) expect(await alive(pid)).toBe(false);
+    expect(await alive(sibling.pid!)).toBe(true);
+  } finally {
+    sibling.kill('SIGKILL');
+    for (const pid of tracked) await terminateWorkerProcessTree(pid, 'SIGKILL');
+    await registry.close();
+    // Windows releases a killed process's working-directory handle shortly after it exits.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rm(root, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if (attempt >= 50) throw error;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }
+}, 20_000);
 
 test('Windows worker tree termination uses direct hidden taskkill', async () => {
   const calls: unknown[][] = [];

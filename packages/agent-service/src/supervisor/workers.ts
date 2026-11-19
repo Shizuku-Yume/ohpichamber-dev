@@ -241,10 +241,59 @@ async function waitWithin(operation: Promise<void>, milliseconds: number): Promi
 
 type WindowsWorkerProcess = { pid: number; parentPid: number; creationDate: string };
 
-const listWindowsWorkerProcesses = async (): Promise<WindowsWorkerProcess[]> => {
-  const script = "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -gt 1 } | ForEach-Object { [PSCustomObject]@{pid=[int]$_.ProcessId;parentPid=[int]$_.ParentProcessId;creationDate=$(if($_.CreationDate){$_.CreationDate.ToUniversalTime().ToString('O')}else{''})} }) | ConvertTo-Json -Compress";
-  const { stdout } = await defaultExecFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, encoding: 'utf8', timeout: 5_000, maxBuffer: 1024 * 1024 });
-  return z.array(z.object({ pid: z.number().int().min(2), parentPid: z.number().int().nonnegative(), creationDate: z.string() })).parse(JSON.parse(stdout));
+const TH32CS_SNAPPROCESS = 0x2;
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+const INVALID_HANDLE_VALUE = 0xffff_ffff_ffff_ffffn;
+// PROCESSENTRY32W on 64-bit Windows: dwSize, th32ProcessID and th32ParentProcessID offsets.
+const PROCESS_ENTRY_SIZE = 568;
+const PROCESS_ENTRY_PID_OFFSET = 8;
+const PROCESS_ENTRY_PARENT_PID_OFFSET = 32;
+
+let windowsKernel32: Promise<{
+  CreateToolhelp32Snapshot: (flags: number, pid: number) => bigint;
+  Process32FirstW: (snapshot: bigint, entry: Uint8Array) => number;
+  Process32NextW: (snapshot: bigint, entry: Uint8Array) => number;
+  OpenProcess: (access: number, inherit: number, pid: number) => bigint;
+  GetProcessTimes: (handle: bigint, creation: BigUint64Array, exit: BigUint64Array, kernel: BigUint64Array, user: BigUint64Array) => number;
+  CloseHandle: (handle: bigint) => number;
+}> | undefined;
+
+const loadWindowsKernel32 = () => windowsKernel32 ??= import('bun:ffi').then(({ dlopen, FFIType }) => dlopen('kernel32.dll', {
+  CreateToolhelp32Snapshot: { args: [FFIType.u32, FFIType.u32], returns: FFIType.u64 },
+  Process32FirstW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  Process32NextW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  OpenProcess: { args: [FFIType.u32, FFIType.i32, FFIType.u32], returns: FFIType.u64 },
+  GetProcessTimes: { args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+  CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
+}).symbols as unknown as Awaited<NonNullable<typeof windowsKernel32>>);
+
+// One Toolhelp snapshot plus a creation-time query per process takes a few
+// milliseconds. Spawning PowerShell for Win32_Process took seconds per call,
+// too slow for the readiness probe inside the Host's startup deadline.
+export const listWindowsWorkerProcesses = async (): Promise<WindowsWorkerProcess[]> => {
+  const kernel32 = await loadWindowsKernel32();
+  const snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot === INVALID_HANDLE_VALUE || snapshot === 0n) throw new Error('Process snapshot failed');
+  const entry = new Uint8Array(PROCESS_ENTRY_SIZE);
+  const view = new DataView(entry.buffer);
+  view.setUint32(0, PROCESS_ENTRY_SIZE, true);
+  const [creation, exit, kernel, user] = [new BigUint64Array(1), new BigUint64Array(1), new BigUint64Array(1), new BigUint64Array(1)];
+  const processes: WindowsWorkerProcess[] = [];
+  try {
+    for (let found = kernel32.Process32FirstW(snapshot, entry); found; found = kernel32.Process32NextW(snapshot, entry)) {
+      const pid = view.getUint32(PROCESS_ENTRY_PID_OFFSET, true);
+      if (pid <= 1) continue;
+      let creationDate = '';
+      const handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+      if (handle !== 0n) {
+        if (kernel32.GetProcessTimes(handle, creation, exit, kernel, user)) creationDate = String(creation[0]);
+        kernel32.CloseHandle(handle);
+      }
+      processes.push({ pid, parentPid: view.getUint32(PROCESS_ENTRY_PARENT_PID_OFFSET, true), creationDate });
+    }
+  } finally { kernel32.CloseHandle(snapshot); }
+  if (!processes.length) throw new Error('Process snapshot was empty');
+  return processes;
 };
 
 export async function snapshotWorkerDescendants(pid: number | undefined, { listProcesses = listWindowsWorkerProcesses } = {}): Promise<WindowsWorkerProcess[]> {
