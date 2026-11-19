@@ -126,7 +126,7 @@ export function createContentCachedFiles(files: FilesAPI): { files: FilesAPI; di
   const cachedFiles: FilesAPI = {
     ...files,
     readFile: cachedReadFile,
-    writeFile: files.writeFile ? (path, content) => mutate([path], () => files.writeFile!(path, content)) : undefined,
+    writeFile: files.writeFile ? (path, content, options) => mutate([path], () => files.writeFile!(path, content, options)) : undefined,
     delete: files.delete ? (path) => mutate([path], () => files.delete!(path)) : undefined,
     rename: files.rename ? (oldPath, newPath) => mutate([oldPath, newPath], () => files.rename!(oldPath, newPath)) : undefined,
   };
