@@ -76,13 +76,13 @@ describe('openchamber events', () => {
     expect(isOpenchamberEventsReconnecting()).toBe(false);
   });
 
-  test('native direct control events use the saved runtime auth and proxy headers', async () => {
+  test.each([true, false])('native direct control events scope redirects to requests without saved proxy headers (has headers: %s)', async (hasProxyHeaders) => {
     Object.assign(window, {
       Capacitor: { isNativePlatform: () => true },
       __OPENCHAMBER_API_BASE_URL__: 'http://runtime.test:3902',
     });
     setRuntimeBearerToken('fixture-token');
-    setRuntimeExtraHeaders({ 'X-Fixture-Proxy': 'fixture' });
+    if (hasProxyHeaders) setRuntimeExtraHeaders({ 'X-Fixture-Proxy': 'fixture' });
     const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
     const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
       'data: {"type":"openchamber:event-stream-ready"}\n\n',
@@ -102,8 +102,8 @@ describe('openchamber events', () => {
       const headers = new Headers(init?.headers);
       expect(String(url)).toBe('http://runtime.test:3902/api/openchamber/events');
       expect(headers.get('authorization')).toBe('Bearer fixture-token');
-      expect(headers.get('x-fixture-proxy')).toBe('fixture');
-      expect(init?.redirect).toBe('error');
+      expect(headers.get('x-fixture-proxy')).toBe(hasProxyHeaders ? 'fixture' : null);
+      expect(init?.redirect).toBe(hasProxyHeaders ? 'error' : undefined);
     } finally {
       unsubscribe();
       fetchSpy.mockRestore();

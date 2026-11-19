@@ -1,5 +1,6 @@
 import { getRuntimeUrlResolver } from './runtime-url';
 import { runtimeFetch } from './runtime-fetch';
+import { getRuntimeExtraHeadersSync } from './runtime-auth';
 import { useAuthSessionStore, waitForAuthSession } from './runtime-auth-expiry';
 import { isRelayModeActive } from './relay/runtime-tunnel';
 import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged } from './runtime-switch';
@@ -385,7 +386,7 @@ const connectFetchStream = (canControlBrowser: boolean, directNative: boolean) =
    const response = await runtimeFetch('/api/openchamber/events', {
     query: canControlBrowser ? { browser: '1' } : undefined,
     headers: { Accept: 'text/event-stream' },
-    redirect: directNative ? 'error' : undefined,
+    redirect: directNative && Object.keys(getRuntimeExtraHeadersSync()).length ? 'error' : undefined,
     signal: controller.signal,
    });
    if (controller.signal.aborted) {
