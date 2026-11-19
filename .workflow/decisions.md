@@ -1638,3 +1638,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Confirm external mobile pairing links before connecting
+
+- **Decided:** deliver validated native URL pairing offers to the shared confirmation UI before probing, redeeming or changing Hosts. Reuse the mobile pairing controller after confirmation.
+- **Instead of:** treating a URL handoff as consent or waiting for a connected workspace before showing the offer.
+- **Because:** Safari and other apps can launch the URL scheme. Opening an offer is not consent to store its credentials or switch the active Host, and first-time onboarding must also receive it. Existing mobile authentication regressions and fork deep-link behavior remain in force.
+- **Revisit when:** upstream provides a native consent flow for external Host pairing links.
