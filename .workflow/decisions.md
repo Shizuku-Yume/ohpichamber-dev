@@ -1732,6 +1732,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** shared card button alignment guarantees a bounded text column without an explicit self-alignment.
 
+## 2026-11-19 - Ship Windows Agent dependencies without archive links
+
+- **Decided:** Windows afterPack removes dependency directory links from the archive, records their relative payload targets, and copies native file aliases. Runtime resolution creates directory junctions at the installed location, validating existing junctions against those targets. Linux and macOS retain their relative symlink payloads.
+- **Instead of:** accepting electron-builder's absolute links into win-unpacked, or relying on NSIS to recreate symlinks.
+- **Because:** electron-builder rewrites relative links during copying, and NSIS extracts through Nsis7z and CopyFiles. An archive containing only ordinary files avoids symlink privilege and preservation requirements; per-user installation permits junction creation without administrator privileges.
+- **Mine:** yes
+- **Revisit when:** Windows packaging offers a verified relocatable dependency graph without runtime junction creation.
 ## 2026-11-19 - Preserve file descriptor identity in code previews
 
 - **Decided:** memoize the complete Pierre file descriptor by its contents and metadata at the preview component boundary.
@@ -1821,6 +1828,12 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
 - **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
 
+## 2026-11-19 - Remove Agent junctions before NSIS atomic uninstall
+
+- **Decided:** The new Windows installer's customCheckAppRunning wraps the stock PowerShell availability and running-app checks, then removes directory reparse points beneath the physical Agent runtime root. A cancelled check exits before cleanup. The generated uninstaller's customUnInstall runs after its own stock app-running check and before removal. Cleanup uses non-recursive RMDir without following targets; physical directories and files remain for normal NSIS removal.
+- **Because:** electron-builder's atomic upgrade removal traverses dependency junctions into paths beyond MAX_PATH and aborts. New-installer cleanup also covers older uninstallers without this hook.
+- **Instead of:** Materializing dependency directory copies or relying on the newly installed uninstaller to repair an upgrade executed by the old one.
+- **Surfaces:** Windows NSIS only; runtime junction semantics and Linux/macOS packaging remain unchanged.
 ## 2026-11-19 - Bind native daemon callbacks to their session owner
 
 - **Decided:** retain Host session identity overrides for named services while binding session-change registration and launch-completion delivery to the native AgentSession instance.

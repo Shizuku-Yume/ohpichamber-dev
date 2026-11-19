@@ -5,12 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolveAgentRuntime } from '../agent-runtime.mjs';
+import { verifyWindowsAgentLinks } from '../windows-agent-links.mjs';
 
 const electronRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function verifyAgentPayload(root, { platform = process.platform, architecture = process.arch, runBunVersion } = {}) {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
   if (manifest.platform !== platform || manifest.architecture !== architecture) throw new Error('Agent payload platform/architecture mismatch');
+  if (platform === 'win32') verifyWindowsAgentLinks(root, manifest);
   const within = relative => {
     const resolved = path.resolve(root, relative);
     if (!resolved.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error('Agent payload path escapes resource directory');

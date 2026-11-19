@@ -176,6 +176,7 @@
       "afterRemove": "resources/linux/after-remove.tpl"
     },
     "nsis": {
+      "include": "resources/installer.nsh",
       "oneClick": true,
       "perMachine": false,
       "installerIcon": "resources/icons/icon.ico",
