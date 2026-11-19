@@ -29,11 +29,21 @@ export class NativeFormDialog {
     if (fields.length === 0) throw new Error('Form requires a named control');
     const contexts = fieldContexts(this.form);
     const questions = fieldQuestions(this.form);
+    const mediaByField = new Map<(typeof fields)[number], string[]>();
+    let pendingMedia: string[] = [];
+    let lastMedia: string[] | undefined;
+    for (const section of this.form.sections) {
+      pendingMedia.push(...section.blocks.map(mediaMarkdown).filter(Boolean));
+      const first = section.blocks.find(block => block.kind === 'field' && block.field.name);
+      if (first?.kind === 'field') {
+        mediaByField.set(first.field, pendingMedia);
+        lastMedia = pendingMedia;
+        pendingMedia = [];
+      }
+    }
+    lastMedia?.push(...pendingMedia);
     const controls: AskQuestion[] = fields.map((field, index) => {
-      const section = this.form.sections.find(section => section.blocks.some(block => block.kind === 'field' && block.field === field));
-      const firstInSection = section?.blocks.find(block => block.kind === 'field' && block.field.name);
-      const media = firstInSection?.kind === 'field' && firstInSection.field === field
-        ? section?.blocks.map(mediaMarkdown).filter(Boolean).join('\n\n') : undefined;
+      const media = mediaByField.get(field)?.join('\n\n');
       const context = [contexts.get(field), media].filter(Boolean).join('\n\n');
       const base = {
         id: `field-${index}`, question: questions.get(field) || field.name!,

@@ -62,6 +62,25 @@ describe('native HTML forms', () => {
     expect(context).not.toContain('bad()');
   });
 
+  test('retains safe media before, between and after fieldsets exactly once', () => {
+    const form = new NativeFormDialog(`<form>
+<img src="https://example.com/before.png" alt="Before"><svg xmlns="http://www.w3.org/2000/svg"><circle r="2"/></svg>
+<fieldset><legend>First</legend><input name="first"></fieldset>
+<img src="https://example.com/between.png" alt="Between"><img src="file:///private.png" alt="Private">
+<fieldset><legend>Second</legend><input name="second"></fieldset>
+<img src="https://example.com/after.png" alt="After"></form>`);
+    const controls = AskRequestSchema.parse(form.schema).questions;
+    expect(controls[0]?.context).toContain('![Before](<https://example.com/before.png>)');
+    expect(controls[0]?.context).toContain('```svg\n');
+    expect(controls[1]?.context).toContain('![Between](<https://example.com/between.png>)');
+    expect(controls[1]?.context).toContain('![After](<https://example.com/after.png>)');
+    const context = controls.map(control => control.context).join('\n');
+    expect(context.match(/before.png/g)).toHaveLength(1);
+    expect(context.match(/between.png/g)).toHaveLength(1);
+    expect(context.match(/after.png/g)).toHaveLength(1);
+    expect(context).not.toContain('file:///');
+  });
+
   test('worker returns current draft on timeout, including incomplete required values, and releases the handle', async () => {
     const requests: Interaction[] = [];
     const worker = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => 'turn' });
