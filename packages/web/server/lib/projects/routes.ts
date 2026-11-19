@@ -1,34 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/projects/routes.js
-/**
- * Project setup routes: the client-owned part of a project's config file
- * (worktree setup commands, the new-worktree folder, project actions, draft
- * starters).
- *
- * These replace the shared UI's direct `/api/fs/*` access to
- * `~/.config/ohpichamber/projects/<projectId>.json`. The client no longer
- * resolves the home directory or composes the path, and every write goes
- * through the same lock the scheduled-task writers hold.
- *
- * `/api/projects` is on the JSON-body allowlist in `core-routes.js`, so
- * `req.body` is parsed here without a per-route parser.
- */
-
-||||||| bc50ba56aa:packages/web/server/lib/projects/routes.js
-/**
- * Project setup routes: the client-owned part of a project's config file
- * (worktree setup commands, project actions, draft starters).
- *
- * These replace the shared UI's direct `/api/fs/*` access to
- * `~/.config/openchamber/projects/<projectId>.json`. The client no longer
- * resolves the home directory or composes the path, and every write goes
- * through the same lock the scheduled-task writers hold.
- *
- * `/api/projects` is on the JSON-body allowlist in `core-routes.js`, so
- * `req.body` is parsed here without a per-route parser.
- */
-
-=======
->>>>>>> upstream/main:packages/web/server/lib/projects/routes.ts
 import { isRecord as isObjectRecord } from '../shared/guards.js';
 import path from 'node:path';
 import { z } from 'zod';

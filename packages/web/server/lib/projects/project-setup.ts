@@ -1,38 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/projects/project-setup.js
-// A project's setup — worktree setup commands, project actions, pinned draft
-// starters — comes from two files:
-//
-// - the personal file `~/.config/ohpichamber/projects/<projectId>.json`
-//   (client-owned keys; server-owned `version` / `scheduledTasks` live beside
-//   them and are never touched here), and
-// - the shared file `<repo>/.openchamber/project.json`, committed by a team so
-//   a teammate who pulls the code gets the setup without configuring anything.
-//
-// This module knows both shapes and the one merge rule per field. The route
-// and the VS Code bridge (`packages/vscode/src/project-setup.ts`, a mirror of
-// this file) use the same code paths so a value reads back the same on every
-// surface.
-
-import { isRecord as isObjectRecord } from '../shared/guards.js';
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-setup.js
-// A project's setup — worktree setup commands, project actions, pinned draft
-// starters — comes from two files:
-//
-// - the personal file `~/.config/openchamber/projects/<projectId>.json`
-//   (client-owned keys; server-owned `version` / `scheduledTasks` live beside
-//   them and are never touched here), and
-// - the shared file `<repo>/.openchamber/project.json`, committed by a team so
-//   a teammate who pulls the code gets the setup without configuring anything.
-//
-// This module knows both shapes and the one merge rule per field. The route
-// and the VS Code bridge (`packages/vscode/src/project-setup.ts`, a mirror of
-// this file) use the same code paths so a value reads back the same on every
-// surface.
-
-import { isRecord as isObjectRecord } from '../shared/guards.js';
-=======
 import { isRecord } from '../shared/guards.js';
->>>>>>> upstream/main:packages/web/server/lib/projects/project-setup.ts
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import type { JsonObject, JsonValue } from '../magic-prompts/runtime.js';
@@ -60,7 +26,6 @@ const clamp = (value: string, maxLength: number) => (value.length > maxLength ? 
 
 const trimmedString = z.unknown().transform((value) => (isText(value) ? value.trim() : '')).parse;
 
-<<<<<<< HEAD:packages/web/server/lib/projects/project-setup.js
 /**
  * `worktreeDirectory` is a personal path override for new worktrees. Only a
  * non-empty string is meaningful; anything else reads as unset.
@@ -71,18 +36,8 @@ const normalizeWorktreeDirectory = (value) => trimmedString(value) || null;
 export const worktreeDirectoryOf = (raw) => normalizeWorktreeDirectory(isObjectRecord(raw) ? raw.worktreeDirectory : null);
 
 /** Setup commands: non-empty trimmed strings, capped in count and length. */
-export const sanitizeSetupCommands = (value) => {
-  if (!Array.isArray(value)) return [];
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-setup.js
-/** Setup commands: non-empty trimmed strings, capped in count and length. */
-export const sanitizeSetupCommands = (value) => {
-  if (!Array.isArray(value)) return [];
-=======
-const sanitizeCreateWorktreeCommand = z.unknown().transform((value) => clamp(trimmedString(value), SETUP_COMMAND_MAX_LENGTH)).parse;
-
 export const sanitizeSetupCommands = z.unknown().transform((value): string[] => {
-  if (!isInputArray(value)) return [];
->>>>>>> upstream/main:packages/web/server/lib/projects/project-setup.ts
+  if (!Array.isArray(value)) return [];
   const commands = [];
   for (const entry of value) {
     const command = clamp(trimmedString(entry), SETUP_COMMAND_MAX_LENGTH);
@@ -164,17 +119,9 @@ export const projectSetupViewOf = z.unknown().transform((raw): PersonalProjectSe
   const primaryRaw = trimmedString(document.projectActionsPrimaryId);
   return {
     setupWorktree: sanitizeSetupCommands(document['setup-worktree']),
-<<<<<<< HEAD:packages/web/server/lib/projects/project-setup.js
     setupWorktreeWait: typeof document['setup-worktree-wait'] === 'boolean' ? document['setup-worktree-wait'] : null,
     setupWorktreeMode: SETUP_WORKTREE_MODES.has(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
     worktreeDirectory: worktreeDirectoryOf(document),
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-setup.js
-    setupWorktreeWait: typeof document['setup-worktree-wait'] === 'boolean' ? document['setup-worktree-wait'] : null,
-    setupWorktreeMode: SETUP_WORKTREE_MODES.has(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
-=======
-    setupWorktreeWait: isBoolean(document['setup-worktree-wait']) ? document['setup-worktree-wait'] : null,
-    setupWorktreeMode: isWorktreeMode(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
->>>>>>> upstream/main:packages/web/server/lib/projects/project-setup.ts
     teardownWorktree: sanitizeSetupCommands(document.teardownWorktree),
     createWorktreeCommand: sanitizeCreateWorktreeCommand(document.createWorktreeCommand),
     projectActions,

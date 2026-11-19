@@ -1015,14 +1015,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
   const projectPathOf = (projectID: string | undefined, personalRaw: SharedProjectDocument) => (
     projectPathFromId(projectID ?? '') || (isString(personalRaw.projectPath) ? personalRaw.projectPath.trim() : '')
   );
-<<<<<<< HEAD:packages/web/server/lib/projects/project-config.js
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-config.js
-  const sharedConfigPathOf = (projectPath) => path.join(projectPath, ...SHARED_CONFIG_RELATIVE_PATH.split('/'));
-=======
-  const sharedConfigPathOf = (projectPath: string) => path.join(projectPath, ...SHARED_CONFIG_RELATIVE_PATH.split('/'));
->>>>>>> upstream/main:packages/web/server/lib/projects/project-config.ts
 
-<<<<<<< HEAD:packages/web/server/lib/projects/project-config.js
   // The selected checkout itself may be a symlink, but entries inside it are
   // repository-controlled. Reject symlinked parents and files before reading
   // or mutating them. The checks do not make an unrelated concurrent namespace
@@ -1059,27 +1052,12 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
 
   const readSharedProjectFile = async (projectPath) => {
     let handle;
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-config.js
-  // A missing file is `missing`; one that cannot be read or parsed is
-  // `invalid` with a reason, never "no shared setup".
-  const readSharedProjectFile = async (projectPath) => {
-    let raw;
-=======
-  const readSharedProjectFile = async (projectPath: string): Promise<SharedProjectRead<JsonObject>> => {
-    let raw;
->>>>>>> upstream/main:packages/web/server/lib/projects/project-config.ts
     try {
       const checked = await checkedSharedProjectPath(projectPath);
       if (!checked.fileExists) return { status: 'missing' };
       handle = await fsPromises.open(checked.file, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
       return parseSharedProjectConfig(await handle.readFile('utf8'));
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/projects/project-config.js
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-config.js
-      if (error && typeof error === 'object' && error.code === 'ENOENT') return { status: 'missing' };
-=======
-      if (hasObjectErrorFields(error) && error.code === 'ENOENT') return { status: 'missing' };
->>>>>>> upstream/main:packages/web/server/lib/projects/project-config.ts
       return { status: 'invalid', reason: error instanceof Error ? error.message : String(error) };
     } finally {
       await handle?.close();
@@ -1101,24 +1079,12 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/projects/project-config.js
   // Replace the shared file through a unique temporary sibling, so a failed
   // write or rename leaves the previous bytes in place and no temporary file.
   // An empty result removes the file, and the `.openchamber` folder when that
   // leaves it empty.
   const writeSharedProjectFile = async (projectPath, text) => {
     const checked = await checkedSharedProjectPath(projectPath, text !== null);
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-config.js
-  // Replace the shared file through a unique temporary sibling, so a failed
-  // write or rename leaves the previous bytes in place and no temporary file.
-  // An empty result removes the file, and the `.openchamber` folder when that
-  // leaves it empty.
-  const writeSharedProjectFile = async (projectPath, text) => {
-    const filePath = sharedConfigPathOf(projectPath);
-=======
-  const writeSharedProjectFile = async (projectPath: string, text: string | null) => {
-    const filePath = sharedConfigPathOf(projectPath);
->>>>>>> upstream/main:packages/web/server/lib/projects/project-config.ts
     if (text === null) {
       if (checked.fileExists) {
         await checkedSharedProjectPath(projectPath);
@@ -1243,7 +1209,6 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
 
   const readProjectSetup = async (projectID: string | undefined) => mergedProjectSetupOf(projectID, await readRawProjectConfigFromDisk(projectID));
 
-<<<<<<< HEAD:packages/web/server/lib/projects/project-config.js
   /**
    * The personal `worktreeDirectory` override, or null when the project has
    * none. Git reads this through Host composition; the value is resolved into
@@ -1254,11 +1219,6 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
   );
 
   const updateProjectSetup = async (projectID, patch) => {
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-config.js
-  const updateProjectSetup = async (projectID, patch) => {
-=======
-  const updateProjectSetup = async (projectID: string | undefined, patch: SharedProjectDocument) => {
->>>>>>> upstream/main:packages/web/server/lib/projects/project-config.ts
     const stored = projectSetupPatchToStored(patch);
     return withProjectWriteLock(projectID, async () => {
       const existing = await readRawProjectConfigFromDisk(projectID);
@@ -1355,12 +1315,7 @@ export const createProjectConfigRuntime = (deps: ProjectConfigDependencies) => {
     readSharedProjectFile,
     updateSharedProjectEntry,
     resolveSharedPlansDir,
-<<<<<<< HEAD:packages/web/server/lib/projects/project-config.js
     migrateProjectScheduledTasks,
-||||||| bc50ba56aa:packages/web/server/lib/projects/project-config.js
-=======
-    resolveNotesTodosFile,
->>>>>>> upstream/main:packages/web/server/lib/projects/project-config.ts
     listScheduledTasks,
     listScheduledWorktreeCleanups,
     saveScheduledWorktreeCleanup,

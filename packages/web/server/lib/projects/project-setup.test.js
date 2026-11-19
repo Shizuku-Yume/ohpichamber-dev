@@ -451,7 +451,6 @@ describe('project setup runtime', () => {
     }
   });
 
-<<<<<<< HEAD
   it('round-trips the personal worktree directory and clears it with null', async () => {
     const { runtime, readRaw, cleanup } = await createRuntime();
     try {
@@ -471,46 +470,6 @@ describe('project setup runtime', () => {
     }
   });
 
-||||||| bc50ba56aa
-=======
-  it('turns repository notes and todos on per project through the switch, which commits the option', async () => {
-    const switched = [];
-    const { runtime, tempRoot, cleanup } = await createRuntime({
-      switchNotesTodosStorage: async (id, { enabled, file, commit }) => {
-        switched.push({ id, enabled, file });
-        await commit();
-      },
-    });
-    try {
-      const projectID = createProjectIdFromPath(path.join(tempRoot, 'repo'));
-      const file = path.join(tempRoot, 'repo', '.openchamber', 'notes-todos.json');
-      expect(await runtime.resolveNotesTodosFile(projectID)).toBeNull();
-      await runtime.updateProjectSetup(projectID, { notesTodosInRepository: true });
-      expect((await runtime.readProjectSetup(projectID)).personal.notesTodosInRepository).toBe(true);
-      expect(await runtime.resolveNotesTodosFile(projectID)).toBe(file);
-      await runtime.updateProjectSetup(projectID, { notesTodosInRepository: true });
-      await runtime.updateProjectSetup(projectID, { notesTodosInRepository: false });
-      expect(await runtime.resolveNotesTodosFile(projectID)).toBeNull();
-      expect(switched).toEqual([{ id: projectID, enabled: true, file }, { id: projectID, enabled: false, file }]);
-    } finally {
-      await cleanup();
-    }
-  });
-
-  it('keeps the option when the switch fails', async () => {
-    const { runtime, tempRoot, cleanup } = await createRuntime({
-      switchNotesTodosStorage: async () => { throw new Error('move failed'); },
-    });
-    try {
-      const projectID = createProjectIdFromPath(path.join(tempRoot, 'repo'));
-      await expect(runtime.updateProjectSetup(projectID, { notesTodosInRepository: true })).rejects.toThrow('move failed');
-      expect((await runtime.readProjectSetup(projectID)).personal.notesTodosInRepository).toBe(false);
-    } finally {
-      await cleanup();
-    }
-  });
-
->>>>>>> upstream/main
   it('leaves the file alone when the patch is invalid', async () => {
     const { runtime, tempRoot, cleanup } = await createRuntime();
     try {
