@@ -1089,6 +1089,29 @@ function MobileAppContent({ apis }: MobileAppProps) {
   }, [connectionEpoch, initializeApp, isNativeMobileApp]);
 
   React.useEffect(() => {
+    if (!isNativeMobileApp) return;
+    let cancelled = false;
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type !== 'event-stream-ready') return;
+      const { isConnected, isInitialized, lastInitFailure } = useConfigStore.getState();
+      if (isConnected && isInitialized) return;
+      const runtimeKey = getRuntimeKey();
+      const apiBaseUrl = getRuntimeApiBaseUrl();
+      if (!apiBaseUrl) return;
+      void initializeApp().then(() => {
+        if (cancelled || runtimeKey !== getRuntimeKey() || apiBaseUrl !== getRuntimeApiBaseUrl()) return;
+        const failure = useConfigStore.getState().lastInitFailure;
+        // A ready stream can arrive while an earlier startup attempt is still failing.
+        if (failure !== lastInitFailure && failure?.step === 'serverUnreachable') void initializeApp();
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [initializeApp, isNativeMobileApp]);
+
+  React.useEffect(() => {
     if (!isConnected) return;
     if (!providersLoaded) void loadProviders({ source: 'mobileApp:recovery' });
     void loadAgents(currentDirectory);
