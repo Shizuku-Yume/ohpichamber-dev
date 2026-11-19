@@ -183,6 +183,44 @@ test('routes undo and redo to the focused composer without file changes', async 
   }
 });
 
+test('inactive document history stays with its active composer', async () => {
+  const changes: string[] = [];
+  await render({ onChange: (value) => changes.push(value) });
+  const file = view!;
+  const composer = new ComposerEditorView({ doc: 'composer', extensions: [history(), focusedHistory], parent: document.body });
+  const hasFocus = document.hasFocus;
+  try {
+    await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
+    composer.dispatch({ changes: { from: 0, insert: 'pasted ' } });
+    composer.focus();
+    document.hasFocus = () => false;
+    expect(document.activeElement).toBe(composer.contentDOM);
+    expect(composer.hasFocus).toBe(false);
+    changes.length = 0;
+    expect(await menuHistory('undo')).toBe(true);
+    expect(composer.state.doc.toString()).toBe('composer');
+    expect(await menuHistory('redo')).toBe(true);
+    expect(composer.state.doc.toString()).toBe('pasted composer');
+    expect((await nativeHistory(file, 'historyUndo')).defaultPrevented).toBe(true);
+    expect(composer.state.doc.toString()).toBe('composer');
+    expect((await nativeHistory(file, 'historyRedo')).defaultPrevented).toBe(true);
+    expect(composer.state.doc.toString()).toBe('pasted composer');
+    expect(await menuHistory('undo')).toBe(true);
+    expect(await menuHistory('undo')).toBe(true);
+    expect(composer.state.doc.toString()).toBe('composer');
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+    expect(await menuHistory('undo')).toBe(false);
+    expect(await menuHistory('redo')).toBe(false);
+    expect(file.state.doc.toString()).toBe('saved one\ntwo\nthree');
+    expect(changes).toEqual([]);
+  } finally {
+    document.hasFocus = hasFocus;
+    composer.destroy();
+  }
+});
+
 test('focused file undo and redo keep working', async () => {
   const changes: string[] = [];
   await render({ onChange: (value) => changes.push(value) });

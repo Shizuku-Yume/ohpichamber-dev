@@ -5,7 +5,7 @@ import { EditorView } from '@codemirror/view';
 const runFocusedHistory = (document: Document, action: 'undo' | 'redo', event?: Event): void => {
   const activeElement = document.activeElement;
   const focused = activeElement instanceof HTMLElement ? EditorView.findFromDOM(activeElement) : null;
-  if (!focused?.hasFocus || !focused.contentDOM.contains(activeElement)) return;
+  if (!focused || !focused.contentDOM.contains(activeElement)) return;
   event?.preventDefault();
   if (focused.state.facet(EditorView.editable) && !focused.state.facet(EditorState.readOnly)) {
     (action === 'undo' ? undo : redo)(focused);
