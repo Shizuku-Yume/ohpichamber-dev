@@ -34,6 +34,7 @@ import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUn
 import { markSessionUnreadSeen } from "./session-unread"
 import { getRuntimeKey, getRuntimeSwitchRevision } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
+import { retireSessionIdentity } from "./session-rekey-registry"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
 import { promoteRestoredSessionOrdering } from "./session-ordering"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -373,9 +374,10 @@ function invalidateSessionLoads(sessionId: string, directories: Iterable<string 
  * loads and its live recovery stream are dropped in one pass; otherwise the
  * pipeline keeps refreshing a transcript the service now answers 404 for.
  */
-export function retireRekeyedSession(previousSessionId: string, directories: Iterable<string | null | undefined>): void {
+export function retireRekeyedSession(previousSessionId: string, sessionId: string, directories: Iterable<string | null | undefined>): void {
  const owned = new Set(directories)
  for (const directory of owned) if (directory) _detachSessionStream?.(previousSessionId, directory)
+ retireSessionIdentity(previousSessionId, sessionId)
  invalidateSessionLoadBatch([previousSessionId], owned, true)
 }
 

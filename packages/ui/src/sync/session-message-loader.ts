@@ -9,6 +9,7 @@ import { clearDirectorySessionPrefetch, clearRuntimeSessionPrefetch, clearSessio
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
 import { isDraftSessionId } from "@/lib/sessionIdentity"
+import { isRetiredSessionId } from "./session-rekey-registry"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
@@ -229,7 +230,7 @@ export class SessionMessageLoader {
   }
 
   ensure(target: SessionMessageTarget, options?: { force?: boolean; reason?: "navigation" | "reactive" | "prefetch" }): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
@@ -245,7 +246,7 @@ export class SessionMessageLoader {
   }
 
   prefetch(target: SessionMessageTarget): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     this.childStores.ensureChild(normalized.directory, { bootstrap: false })
     if (this.retention && !this.retention.admitPrefetch(normalized)) return Promise.resolve()
@@ -253,7 +254,7 @@ export class SessionMessageLoader {
   }
 
   refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot, options?: { recovered?: boolean }): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     if (snapshot) this.invalidateSession(normalized)
     const entry = this.getEntry(normalized)
@@ -292,7 +293,7 @@ export class SessionMessageLoader {
   }
 
   loadOlder(target: SessionMessageTarget): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
     if (entry.inflight && entry.snapshot.loadingKind === "older") return entry.inflight
@@ -365,7 +366,7 @@ export class SessionMessageLoader {
   }
 
   async loadComplete(target: SessionMessageTarget): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) throw new Error("Session message loader is unavailable")
     const release = this.retainSessionHistory(normalized)
     const configurationGeneration = this.configurationGeneration
@@ -497,6 +498,20 @@ export class SessionMessageLoader {
     const directory = normalizePath(target.directory)
     return directory && target.sessionId ? { directory, sessionId: target.sessionId } : null
   }
+
+  /**
+   * The boundary every *read* enters. A session id the rekey retired is not
+   * addressable any more, so it is refused here and no request leaves the
+   * browser for it: a deferred consumer holding one pre-rekey commit would
+   * otherwise ask the Host for a session both authorities now answer 404 for.
+   * Cache cleanup keeps addressing the raw id, so its own entry still clears.
+   */
+  private readTarget(target: SessionMessageTarget): SessionMessageTarget | null {
+    const normalized = this.normalizeTarget(target)
+    if (!normalized) return null
+    return isRetiredSessionId(normalized.sessionId, this.configuration.runtimeKey) ? null : normalized
+  }
+
 
   private keyFor(target: SessionMessageTarget): string {
     return `${this.configuration.runtimeKey}\n${target.directory}\n${target.sessionId}`

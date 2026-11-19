@@ -6,6 +6,7 @@ import { deferred, nativeApproval, nativeClient, nativeHistory, nativeHostSessio
 import { clearRuntimeSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
+import { resetSessionRekeyRegistry, retireSessionIdentity } from "./session-rekey-registry"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
@@ -254,7 +255,6 @@ describe("canonical session snapshot loading", () => {
     expect(store.getState().message[target.sessionId]).toBeUndefined()
     expect(loader.getSnapshot(target)).toMatchObject({ status: "idle", resolved: false })
   })
-
 })
 
 describe("native history coverage", () => {
@@ -743,5 +743,33 @@ describe("subagent children known only through the live subagent index", () => {
     await loader.ensure(subagentChild)
     expect(store.getState().message[subagentChild.sessionId]).toBeUndefined()
     expect(loader.getSnapshot(subagentChild)).toMatchObject({ status: "error", error })
+  })
+})
+
+describe("a rekeyed session retires its pre-branch id", () => {
+  test("no read leaves the browser for an id the rekey retired, even when a deferred consumer lags", async () => {
+    const retired = "session-before-promote"
+    const minted = "session-after-promote"
+    const requested: string[] = []
+    const { loader } = setup({
+      client: nativeClient({ getSnapshot: async (sessionId: string) => { requested.push(sessionId); return nativeSnapshot(sessionId) } }),
+    })
+    try {
+      // The promote ack names the minted id; the selection moves with it, but a
+      // deferred consumer keeps one pre-rekey commit and asks for the old one.
+      retireSessionIdentity(retired, minted, "runtime-a")
+      await loader.ensure({ directory: target.directory, sessionId: retired }, { reason: "navigation" })
+      await loader.refresh({ directory: target.directory, sessionId: retired })
+      await loader.prefetch({ directory: target.directory, sessionId: retired })
+      await loader.ensure({ directory: target.directory, sessionId: retired }, { reason: "reactive" })
+      // The Host and the service answer 404 for the retired id, so one request
+      // for it is the one console error per promote this guard exists to stop.
+      expect(requested).toEqual([])
+      // The minted id still loads normally; the guard rejects only the retired one.
+      await loader.ensure({ directory: target.directory, sessionId: minted }, { reason: "navigation" })
+      expect(requested).toEqual([minted])
+    } finally {
+      resetSessionRekeyRegistry("runtime-a")
+    }
   })
 })

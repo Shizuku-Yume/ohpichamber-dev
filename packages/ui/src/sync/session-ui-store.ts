@@ -2510,7 +2510,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     // projection and live recovery stream all address an id both authorities
     // now answer 404 for, so leaving the stream attached makes it retry forever.
     if (ownedDirectory) {
-      retireRekeyedSession(previousSessionId, [ownedDirectory])
+      retireRekeyedSession(previousSessionId, sessionId, [ownedDirectory])
       getImperativeSessionMessageLoader()?.touchSessionCache({ directory: ownedDirectory, sessionId })
     }
     const previousDirectory = get().currentSessionDirectory
