@@ -44,6 +44,7 @@ const DRAWER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 export const MobileWorkspaceDrawer: React.FC<{
   open: boolean;
   onClose: () => void;
+  registerBackHandler?: (handler: (() => boolean) | null) => void;
   tab: MobileWorkspaceTab;
   onTabChange: (tab: MobileWorkspaceTab) => void;
   /** When set, the Changes tab opens directly into the per-file diff. */
@@ -51,7 +52,7 @@ export const MobileWorkspaceDrawer: React.FC<{
   /** Notes tab: opens a plan fullscreen (layered above the drawer). */
   onOpenPlan: (plan: { id: string; title: string; projectRef: ProjectRef }) => void;
   variant?: 'drawer' | 'panel';
-}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer' }) => {
+}> = ({ open, onClose, registerBackHandler, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer' }) => {
   const { t, direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
@@ -258,7 +259,7 @@ export const MobileWorkspaceDrawer: React.FC<{
         {visitedTabs.has('files') ? (
           <div className={cn('h-full', tab !== 'files' && 'hidden')}>
             <ErrorBoundary>
-              <MobileFilesSurface visible={open && tab === 'files'} />
+              <MobileFilesSurface visible={open && tab === 'files'} registerBackHandler={registerBackHandler} />
             </ErrorBoundary>
           </div>
         ) : null}
