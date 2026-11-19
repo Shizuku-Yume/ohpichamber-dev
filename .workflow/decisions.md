@@ -1645,3 +1645,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** adding another keyboard inset or forcing a minimum height that would clip the terminal or its quick keys.
 - **Because:** Android already resizes the WebView. In Android 15 landscape the keyboard can leave 122 CSS pixels, while the tab bars and quick keys alone take 163.
 - **Revisit when:** upstream preserves terminal rows in the short Android keyboard viewport.
+
+## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
+
+- **Decided:** the desktop strip consults a file-editor selection guard before selecting a different file path. Reuse Save/Discard/Cancel and pause autosave through the existing confirmation hook; failed saves and Cancel leave the active tab and dirty draft unchanged. Clean drafts, the same path, and non-file surfaces select immediately.
+- **Instead of:** clearing a dirty draft on strip selection or adding a per-tab draft cache.
+- **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
+- **Mine:** yes
+- **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
