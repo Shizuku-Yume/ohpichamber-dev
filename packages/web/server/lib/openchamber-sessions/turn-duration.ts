@@ -1,59 +1,73 @@
-import { z } from 'zod';
-import { hasMessage } from './contracts.js';
-import type { TranslatedEvent } from '../event-stream/translate-v2.js';
+/**
+ * How long each session's last run took, kept on the session itself.
+ *
+ * The sidebar shows the length of a finished turn while the session is unread.
+ * A page can only measure a turn while it is open, and the unread mark outlives
+ * the page, so the Host measures every run from the canonical event stream it
+ * always holds and writes the result into the session's metadata:
+ * `openchamber.turn = { endedAt, durationMs }` beside
+ * `openchamber.workbench = { lastIdleAt, lastTurnOutcome }`.
+ *
+ * Starts live in memory. A run is matched to its own start by `runId`, so a
+ * start whose end was missed (a restart or a dropped stream) can never be
+ * paired with the next run's end; forgetting starts on any subscribe or
+ * reconnect would need the same bookkeeping and would not improve on it.
+ */
+import { CanonicalEventSchema } from '@openchamber/agent-contract';
 
-const sessionEventSchema = z.object({
-  type: z.string(),
-  created: z.number().finite(),
-  properties: z.object({ sessionID: z.string().min(1) }).loose(),
-});
+const TERMINAL_OUTCOMES = { 'run.completed': 'completed', 'run.failed': 'failed', 'run.cancelled': 'cancelled' };
+const DEFAULT_LIMIT = 5000;
 
-const statusSchema = z.object({ type: z.string() }).loose();
+/**
+ * @param {object} deps
+ * @param {(sessionID: string, patch: object, options: { directory: string }) => Promise<unknown>} deps.persistSessionMetadataPatch
+ * @param {(sessionID: string) => boolean | undefined} deps.isChildSession true for a known subsession
+ * @param {number} [deps.limit] bound on remembered starts
+ */
+export const createTurnDurationRecorder = ({ persistSessionMetadataPatch, isChildSession, limit = DEFAULT_LIMIT }) => {
+ /** sessionID → the running outer run's id and the time it started. */
+ const running = new Map();
 
-interface TurnDurationDependencies<Result> {
-  persistSessionMetadataPatch: (sessionID: string, patch: { openchamber: { turn: { endedAt: number; durationMs: number } } }, options: { directory: string }) => Promise<Result>;
-  isChildSession: (sessionID: string) => boolean | undefined;
-}
+ const remember = (sessionID, run) => {
+  running.delete(sessionID);
+  running.set(sessionID, run);
+  while (running.size > limit) running.delete(running.keys().next().value);
+ };
 
-const hasEventType = (value: unknown): value is { type: unknown } =>
-  value !== null && value !== undefined && 'type' in Object(value);
-
-export const createTurnDurationRecorder = <Result>({ persistSessionMetadataPatch, isChildSession }: TurnDurationDependencies<Result>) => {
-  const startedAt = new Map<string, number>();
-
-  const record = (sessionID: string, start: number, endedAt: number, directory: string) => {
-    if (isChildSession(sessionID) === true) return;
-    const turn = { endedAt, durationMs: Math.max(0, endedAt - start) };
-    void Promise.resolve(persistSessionMetadataPatch(sessionID, { openchamber: { turn } }, { directory }))
-      .catch((cause: unknown) => console.warn('[turn-duration] could not record a turn length:', (hasMessage(cause) ? cause.message : undefined) ?? cause));
+ const record = (sessionID, start, finishedAt, outcome, directory) => {
+  // A subsession's runs belong to its parent, which is what the sidebar shows.
+  if (isChildSession(sessionID) === true) return;
+  const patch = {
+   openchamber: {
+    workbench: { lastIdleAt: finishedAt, lastTurnOutcome: outcome },
+    turn: { endedAt: finishedAt, durationMs: Math.max(0, finishedAt - start) },
+   },
   };
+  void Promise.resolve(persistSessionMetadataPatch(sessionID, patch, { directory }))
+   .catch((error) => console.warn('[turn-duration] could not record a turn length:', error?.message ?? error));
+ };
 
-  const processPayload = (payload: TranslatedEvent | undefined, directory = '') => {
-    if (hasEventType(payload) && payload.type === 'server.connected') {
-      startedAt.clear();
-      return;
-    }
-    const parsed = sessionEventSchema.safeParse(payload);
-    if (!parsed.success) return;
-    const { type, created, properties } = parsed.data;
-    const { sessionID } = properties;
+ /** Takes the Hub's validated canonical events, with the session's Host scope. */
+ const processCanonicalEvent = (payload, scope) => {
+  const parsed = CanonicalEventSchema.safeParse(payload);
+  if (!parsed.success) return;
+  const event = parsed.data;
+  if (event.type === 'session.deleted') {
+   for (const sessionId of event.deletedSessionIds) running.delete(sessionId);
+   return;
+  }
+  if (event.type === 'run.started') {
+   remember(event.sessionId, { runId: event.runId, startedAt: event.createdAt });
+   return;
+  }
+  const outcome = TERMINAL_OUTCOMES[event.type];
+  if (!outcome) return;
+  const start = running.get(event.sessionId);
+  running.delete(event.sessionId);
+  // Only a run this recorder watched start can be measured.
+  if (!start || start.runId !== event.runId) return;
+  record(event.sessionId, start.startedAt, event.finishedAt, outcome, scope?.cwd ?? '');
+ };
 
-    if (type === 'session.status') {
-      const status = statusSchema.safeParse(properties.status);
-      if (status.success && (status.data.type === 'busy' || status.data.type === 'retry') && !startedAt.has(sessionID)) {
-        startedAt.set(sessionID, created);
-      }
-      return;
-    }
-    if (type === 'session.deleted') {
-      startedAt.delete(sessionID);
-      return;
-    }
-    if (type !== 'session.idle' && type !== 'session.error') return;
-    const start = startedAt.get(sessionID);
-    startedAt.delete(sessionID);
-    if (start !== undefined) record(sessionID, start, created, directory);
-  };
-
-  return { processPayload };
+ return { processCanonicalEvent };
 };
