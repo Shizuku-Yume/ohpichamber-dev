@@ -5455,6 +5455,8 @@ export const dict = {
   "mobile.files.rootDirectory": "프로젝트 파일",
   "mobile.files.search.placeholder": "파일 검색",
   "mobile.files.search.empty": "파일을 찾을 수 없습니다.",
+  "mobile.files.search.failed": "파일을 검색할 수 없습니다.",
+  "mobile.files.search.retry": "다시 시도",
   "mobile.files.parentDirectory": "상위 디렉터리",
   "mobile.files.empty.noDirectory": "파일을 탐색할 프로젝트를 선택하세요.",
   "mobile.files.empty.directory": "이 디렉터리는 비어 있습니다.",

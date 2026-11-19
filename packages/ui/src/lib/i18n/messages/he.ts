@@ -585,6 +585,8 @@ export const dict = {
   "mobile.files.rootDirectory": "קובצי הפרויקט",
   "mobile.files.search.placeholder": "חיפוש קבצים",
   "mobile.files.search.empty": "לא נמצאו קבצים.",
+  "mobile.files.search.failed": "לא ניתן היה לחפש קבצים.",
+  "mobile.files.search.retry": "לנסות שוב",
   "mobile.files.parentDirectory": "תיקיית האב",
   "mobile.files.empty.noDirectory": "יש לבחור פרויקט כדי לעיין בקבצים.",
   "mobile.files.empty.directory": "התיקייה הזו ריקה.",

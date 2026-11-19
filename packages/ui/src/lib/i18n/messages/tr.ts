@@ -5377,6 +5377,8 @@ export const dict = {
   "mobile.files.rootDirectory": "Proje dosyaları",
   "mobile.files.search.placeholder": "Dosyalarda ara",
   "mobile.files.search.empty": "Dosya bulunamadı.",
+  "mobile.files.search.failed": "Dosyalarda arama yapılamadı.",
+  "mobile.files.search.retry": "Yeniden dene",
   "mobile.files.parentDirectory": "Üst klasör",
   "mobile.files.empty.noDirectory": "Dosyalara göz atmak için bir proje seçin.",
   "mobile.files.empty.directory": "Bu klasör boş.",

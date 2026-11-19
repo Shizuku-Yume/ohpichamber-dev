@@ -5455,6 +5455,8 @@ export const dict = {
   "mobile.files.rootDirectory": "Projectbestanden",
   "mobile.files.search.placeholder": "Bestanden zoeken",
   "mobile.files.search.empty": "Geen bestanden gevonden.",
+  "mobile.files.search.failed": "Zoeken naar bestanden is mislukt.",
+  "mobile.files.search.retry": "Opnieuw proberen",
   "mobile.files.parentDirectory": "Bovenliggende map",
   "mobile.files.empty.noDirectory": "Kies een project om bestanden te bekijken.",
   "mobile.files.empty.directory": "Deze map is leeg.",

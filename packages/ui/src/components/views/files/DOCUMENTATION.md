@@ -21,6 +21,10 @@ name filter remains as a fallback. Search already follows the same setting.
 
 ## Searching
 
+The mobile file browser keeps the name query when a request fails and lets the
+user retry it. It only reports an empty result after a successful search, and
+folder-listing errors do not block name search.
+
 The field above the sidebar tree searches file names, as it always did. Where
 the runtime has `files.searchContents` (web and desktop; VS Code has its own
 search and the mobile browser keeps name search), the search icon is a menu
