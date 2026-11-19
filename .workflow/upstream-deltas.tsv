@@ -1506,7 +1506,7 @@ packages/ui/src/lib/i18n/messages/extensions.settings.i18n.ts	fork-differs	decis
 packages/ui/src/lib/i18n/messages/integrations-catalog.i18n.ts	fork-differs	decision	2026-11-13 - MCP installs choose project or user scope	MCP scope choice copy.
 packages/ui/src/lib/notifications/channels.test.ts	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Notification channels test.
 packages/web/server/lib/auto-review/runtime.js	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Auto-review runtime restoration.
-packages/ui/src/apps/MobileWorkspaceDrawer.tsx	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Restores overwritten fork fix: unmounts terminal pane on last tab close (W1, task 02).
+packages/ui/src/apps/MobileWorkspaceDrawer.tsx	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Scopes the compact header to the active Terminal workspace; retains the fork's last-tab unmount (W1, task 02).
 packages/ui/src/components/chat/message/ChatQuoteHighlightLayer.test.tsx	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Restores overwritten fork fix test for quote reveal mount frames retry (W1, task 02).
 packages/ui/src/components/chat/message/ChatQuoteHighlightLayer.tsx	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Restores overwritten fork fix: quote reveal frame retry up to ROW_MOUNT_FRAMES (W1, task 02).
 packages/ui/src/components/chat/work-status/usageHeadline.test.ts	fork-differs	decision	2026-11-13 - The Usage page is an OMP-native dashboard	Restores native-to-logical quota mapping tests (W3, task 02).
@@ -2290,3 +2290,7 @@ packages/ui/src/apps/mobileNativeChrome.ts	fork-differs	decision	2026-11-19 - An
 packages/ui/src/components/ui/CodeMirrorEditor.tsx	fork-differs	decision	2026-11-19 - Route native history to the focused editor	Installs focus-scoped CodeMirror history so a chat action cannot undo or redo a file edit.
 packages/ui/src/components/ui/CodeMirrorEditor.test.tsx	fork-differs	decision	2026-11-19 - Route native history to the focused editor	Covers composer and file isolation, empty history and native input fallback.
 packages/ui/src/components/ui/DOCUMENTATION.md	fork-differs	decision	2026-11-19 - Route native history to the focused editor	Documents the focus contract and which controls retain native history.
+packages/ui/src/apps/DOCUMENTATION.md	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Documents the Android keyboard layout and how to restore the tab bars.
+packages/ui/src/components/views/TerminalView.tsx	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Marks terminal chrome and padding for the compact keyboard viewport.
+packages/ui/src/components/views/TerminalView.test.tsx	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Covers keeping terminal output and quick keys visible while reclaiming vertical space.
+packages/ui/src/styles/mobile.css	fork-differs	decision	2026-11-19 - Give terminal rows priority above the Android keyboard	Gives terminal rows priority in a short native Android keyboard viewport.

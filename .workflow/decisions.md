@@ -1631,3 +1631,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Give terminal rows priority above the Android keyboard
+
+- **Decided:** on native Android, when the software keyboard is open and the viewport is at most 240 CSS pixels tall, collapse the active Terminal workspace's two tab bars and reclaim vertical padding without hiding quick keys or unmounting the terminal.
+- **Instead of:** adding another keyboard inset or forcing a minimum height that would clip the terminal or its quick keys.
+- **Because:** Android already resizes the WebView. In Android 15 landscape the keyboard can leave 122 CSS pixels, while the tab bars and quick keys alone take 163.
+- **Revisit when:** upstream preserves terminal rows in the short Android keyboard viewport.
