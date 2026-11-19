@@ -690,21 +690,23 @@ const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false }) => {
 
  return (
   <div className={cn(
-   'oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
+   'oc-draft-center flex min-h-0 flex-1 flex-col overflow-y-auto px-6 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
    exiting && 'pointer-events-none opacity-0',
   )}>
-   <h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
-    {renderDraftTitle(
-     projectLabel
-      ? t('chat.emptyState.draftTitleWithProject', { project: projectLabel })
-      : t('chat.emptyState.draftTitle'),
-     projectLabel,
-    )}
-   </h1>
-   <DraftPresetChips
-    onSubmit={(starter) => useInputStore.getState().requestPresetSubmit(starter.submitText, starter.ref.type)}
-    className="oc-draft-starters mt-8 max-w-md"
-   />
+   <div className="my-auto flex w-full shrink-0 flex-col items-center py-6">
+    <h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
+     {renderDraftTitle(
+      projectLabel
+       ? t('chat.emptyState.draftTitleWithProject', { project: projectLabel })
+       : t('chat.emptyState.draftTitle'),
+      projectLabel,
+     )}
+    </h1>
+    <DraftPresetChips
+     onSubmit={(starter) => useInputStore.getState().requestPresetSubmit(starter.submitText, starter.ref.type)}
+     className="oc-draft-starters mt-8 max-w-md"
+    />
+   </div>
   </div>
  );
 };

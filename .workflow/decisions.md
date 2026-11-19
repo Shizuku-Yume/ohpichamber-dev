@@ -1639,6 +1639,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Compact draft welcomes scroll before clipping large text
+
+- **Decided:** give the compact draft welcome a bounded vertical scroll area and center its non-shrinking title/starter group with automatic margins.
+- **Instead of:** unconditional flex centering, shrinking the text, or scrolling the composer out of view with the welcome.
+- **Because:** at large system font sizes or short viewport heights, centered overflow begins above the scroll origin. Automatic margins preserve the normal centered appearance but collapse when content needs to scroll from its top.
+- **Mine:** yes
+- **Revisit when:** upstream provides the same scroll-safe compact welcome layout.
+
 ## 2026-11-19 - Give terminal rows priority above the Android keyboard
 
 - **Decided:** on native Android, when the software keyboard is open and the viewport is at most 240 CSS pixels tall, collapse the active Terminal workspace's two tab bars and reclaim vertical padding without hiding quick keys or unmounting the terminal.
