@@ -1,5 +1,7 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
 path	state	class	decision	reason
+packages/ui/src/stores/useProviderSettingsStore.ts	fork-only	decision	2026-11-19 - Refresh composer catalogs after provider settings mutations	Notify existing provider catalog consumers on explicit settings refresh without notifying stale runtimes.
+packages/ui/src/stores/useProviderSettingsStore.test.ts	fork-only	decision	2026-11-19 - Refresh composer catalogs after provider settings mutations	Cover provider refresh notifications, empty catalogs, failed rereads and runtime isolation.
 packages/ui/src/stores/useCommandsStore.ts	fork-differs	decision	2026-11-19 - Retry native session and command discovery during Agent Service startup	Retry native command workspace/catalog reads during bounded service warmup without masking failure.
 packages/ui/src/stores/useCommandsStore.test.ts	fork-differs	decision	2026-11-19 - Retry native session and command discovery during Agent Service startup	Cover delayed readiness, empty catalogs, bounded failure and runtime cancellation.
 packages/electron/main.mjs	fork-differs	decision	2026-11-19 - Refresh desktop login items only when enabled	Skip packaged-startup OS login-item writes for disabled items; keep refreshing enabled ones and explicit settings IPC.

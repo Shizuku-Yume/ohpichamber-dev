@@ -57,6 +57,13 @@ addressed root session. They are not provider, model, or agent reload notices;
 the sync layer stores them separately from Settings catalog reads. A failed
 authoritative read must remain an error and cannot clear the last known list.
 
+Provider Settings keeps its page catalog in `useProviderSettingsStore`. Its
+explicit `refresh` after provider configuration or credential/account changes
+emits the existing `providers` config-change notification before rereading the
+page catalog. This also invalidates and refreshes the composer's known-directory
+catalogs through `useConfigStore`, even if the page reread fails. Ordinary page
+loads do not emit, and reset or stale-runtime stores cannot notify a new runtime.
+
 The agents store counts load generations: `invalidateAgentsLoadCache` starts a
 new one, and a load never joins a read that began in an older generation. It
 waits for that read and reads again, so a refresh after a delete cannot be

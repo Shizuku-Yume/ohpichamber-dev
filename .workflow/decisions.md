@@ -1736,3 +1736,10 @@ The OS login-item settings are the desktop's stored launch-at-login preference. 
 ## 2026-11-19 - Retry native session and command discovery during Agent Service startup
 
 Global sessions and native command catalogs use the existing bounded `STARTUP_RETRY` policy in their owning stores, including command workspace resolution. A successful native read establishes authority; readiness does not manufacture an empty snapshot. Session workspace binding follows successful discovery so it cannot exhaust its own retry window before the service is ready. Non-retryable or exhausted failures retain the existing error and cached-data behavior. Runtime generation changes retire retries before another request. This shared behavior applies to Web/PWA, Electron, hosted mobile, and Capacitor; the Guest SDK contract is unchanged.
+
+## 2026-11-19 - Refresh composer catalogs after provider settings mutations
+
+- **Decided:** Explicit provider-settings refreshes emit the existing `providers` config-change notification before rereading their page-owned catalog. The existing config-store subscriber invalidates and freshly loads known-directory catalogs for the composer.
+- **Because:** Custom provider save and credential/account changes refreshed only the settings page, leaving the composer's separate catalog stale until reload. A failed page reread must not suppress notification of a completed write. Ordinary loads and stale-runtime refreshes do not emit.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the same store and notification path. Guest SDK is unchanged.
+- **Instead of:** Directly mutating composer catalogs from Settings or adding another event channel.
