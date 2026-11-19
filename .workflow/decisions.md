@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-11-19 - Empty GitHub release feeds mean no desktop update
+
+Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
+
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here
