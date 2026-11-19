@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-11-19 - Bound plugin marketplace metadata and actions on narrow panes
+
+- **Decided:** bound and truncate marketplace names, versions and source labels; wrap long description text and keep install/status actions in their own compact, width-bounded container in the Plugins page and Add plugin dialog.
+- **Instead of:** letting non-shrinking metadata overflow a phone pane or stretching the install action across the narrow row.
+- **Because:** Capacitor shares these components with web and desktop. The existing container-query stacking remains intact, and ordinary wide-pane rows keep their layout.
+- **Revisit when:** upstream adopts equivalent narrow-pane marketplace bounds.
+
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here
