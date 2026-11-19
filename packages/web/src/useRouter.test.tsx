@@ -41,6 +41,9 @@ vi.mock('@openchamber/ui/stores/useUIStore', async () => {
 vi.mock('@openchamber/ui/stores/useDirectoryStore', () => ({
   useDirectoryStore: { getState: () => ({ currentDirectory: '/project' }) },
 }));
+vi.mock('@openchamber/ui/hooks/useEffectiveDirectory', () => ({
+  resolveEffectiveDirectory: () => '/project',
+}));
 vi.mock('@openchamber/ui/lib/settings/metadata', () => ({ resolveSettingsSlug: (slug: string) => slug }));
 
 let root: Root;
