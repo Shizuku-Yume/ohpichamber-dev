@@ -286,12 +286,6 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  }, [route.type, returnToList]);
 
  React.useEffect(() => {
-  if (!visible || route.type === 'list' || !registerBackHandler) return;
-  registerBackHandler(goBack);
-  return () => registerBackHandler(null);
- }, [visible, route.type, registerBackHandler, goBack]);
-
- React.useEffect(() => {
   setNavigation((current) => current.ownerKey === ownerKey ? current : { ownerKey, mode: 'working', route: LIST_ROUTE });
   setModeMenuOpen(false);
  }, [ownerKey]);
@@ -620,6 +614,18 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   if (comparisonSource.kind === 'pr') return prComparison.readContext ? { source: comparisonSource, context: prComparison.readContext } : null;
   return { source: comparisonSource };
  }, [changeEntries.length, comparisonFiles, comparisonSource, mode, prComparison.readContext]);
+
+ const rendersDetail = Boolean(currentDirectory)
+  && !(rootIsGitRepo === false && isGitRepo !== true)
+  && !(isLoadingStatus && isGitRepo === null)
+  && (route.type === 'turn' || route.type === 'diff'
+   || (route.type === 'walkthrough' && Boolean(walkthroughTarget))
+   || Boolean(activeComparisonPath && activeComparisonDiff));
+ React.useEffect(() => {
+  if (!visible || !rendersDetail || !registerBackHandler) return;
+  registerBackHandler(goBack);
+  return () => registerBackHandler(null);
+ }, [visible, rendersDetail, registerBackHandler, goBack]);
 
 
  React.useEffect(() => {

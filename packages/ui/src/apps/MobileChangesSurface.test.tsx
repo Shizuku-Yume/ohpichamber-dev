@@ -389,6 +389,15 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
     expect(backHandler).toBeNull();
 
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    expect(container.textContent).toContain('Review this change');
+    await act(async () => { seed('/repo'); });
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+    workspaceOpen = true;
+    back();
+    expect(workspaceOpen).toBe(false);
+
     // A nested-repository answer must not outlive the read that produced it.
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'nested/', index: '?', working_dir: '?' }] }); });
     initialDiff = { path: 'nested/', staged: false };

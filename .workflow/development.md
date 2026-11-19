@@ -4,6 +4,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 PR #30 rendered-detail Back review:** Git registers workspace Back only while a detail screen actually renders. A refresh that removes the last walkthrough target, a stale comparison source, and repository discovery/list states relinquish the handler. Regression coverage reproduced a retained handler after clearing the last changed file on the prior commit; it now permits workspace closure.
+
 **2026-11-19 PR #30 walkthrough Back review:** hardware Back now delegates to the walkthrough's header action, preserving step → contents → Changes. The real Git-surface regression reproduced the skipped contents on `2f33e4745` before the fix. Emulator/APK untouched; native behavior remains unverified.
 
 **2026-11-19 Mobile Git detail Back:** `MobileChangesPane` now registers its return-to-list action with the existing workspace Back callback; the drawer forwards the same callback used by Files. The handler is scoped to visible detail routes and clears on list navigation, hidden tabs, repository/runtime changes and unmount. Header arrows share that action, so Back returns to the list before panel closure and reopening does not replay a consumed diff. The shell's overlay-first ladder is unchanged. Regression coverage exercises failed/working comparison details, overlay priority, second-Back closure, reopen, empty lists and tab handoff. Android and hosted mobile share the behavior; desktop web and Electron do not mount the pane. No emulator, APK or visual verification was performed, as requested. Test, lint and full type-check evidence is under `/home/ubuntu/mobile-testing/git-back-*.log`.

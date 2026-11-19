@@ -1638,3 +1638,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** discarding an open step and its contents in one hardware Back.
 - **Because:** the walkthrough owns its reading depth; step, contents and Changes must follow the same ladder for header and hardware Back. Global overlays retain their shell priority.
 - **Revisit when:** upstream shares walkthrough navigation through the workspace Back contract.
+
+## 2026-11-19 - Git Back ownership follows the rendered screen
+
+- **Decided:** register workspace Back only while Git renders a diff or walkthrough, including its repository and source availability gates.
+- **Instead of:** treating every retained non-list route as a visible detail screen.
+- **Because:** refresh can remove the last walkthrough target or change a comparison source while retaining its route. The resulting Changes list must let Back close the workspace immediately.
+- **Revisit when:** Git navigation normalizes unavailable detail routes before rendering.
