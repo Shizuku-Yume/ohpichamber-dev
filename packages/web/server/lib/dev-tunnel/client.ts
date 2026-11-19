@@ -8,7 +8,6 @@ const HANDSHAKE_TIMEOUT_MS = 15_000;
 
 const SPACE_ID = /^[0-9a-f]{12}$/;
 
-<<<<<<< HEAD:packages/web/server/lib/dev-tunnel/client.js
 /**
  * The host's own tunnel, or the one of an isolated space on that host: the
  * host forwards `/api/spaces/<id>/dev-tunnel` to the server inside the space,
@@ -23,27 +22,6 @@ const toWebSocketUrl = (baseUrl, port, spaceId) => {
   // Without this check the stale scheme survives into `new WebSocket(...)`,
   // which then throws inside the connection handler and takes the whole
   // process down; rejecting here fails the open() call cleanly instead.
-||||||| bc50ba56aa:packages/web/server/lib/dev-tunnel/client.js
-/**
- * The host's own tunnel, or the one of an isolated space on that host: a
- * tunnel that names the space's root as its `directory` is forwarded by the
- * host to the server inside the space, which dials the port on its own
- * loopback, the space's.
- */
-const toWebSocketUrl = (baseUrl, port, spaceId) => {
-  const parsed = new URL('/api/dev-tunnel', baseUrl);
-  // WHATWG URL silently ignores a protocol assignment that crosses from a
-  // non-special scheme (custom app protocols, relay-virtual URLs) to `ws:`.
-  // Without this check the stale scheme survives into `new WebSocket(...)`,
-  // which then throws inside the connection handler and takes the whole
-  // process down; rejecting here fails the open() call cleanly instead.
-=======
-const hasErrorMessage = (value: unknown): value is { message?: unknown } => value != null;
-const isPipeAddress = (value: net.AddressInfo | string): value is string => typeof value === 'string';
-
-const toWebSocketUrl = (baseUrl: string, port: number, spaceId: string | null) => {
-  const parsed = new URL('/api/dev-tunnel', baseUrl);
->>>>>>> upstream/main:packages/web/server/lib/dev-tunnel/client.ts
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`The remote base URL must be http(s); got "${parsed.protocol}"`);
   }
