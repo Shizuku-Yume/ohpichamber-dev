@@ -10,7 +10,7 @@ import { createChangeRequestStatusCache } from './status-cache.js';
 import { allowsTopLevelProjects } from './project-path.js';
 import { isProviderUserId, isProviderUsername } from './provider-id.js';
 import { assertMutationContextObject } from './binding-input.js';
-import type { SourceControlJson } from '@openchamber/sdk';
+import type { SourceControlJson } from 'ohpichamber-sdk';
 import type { Query, QueryValue, Request, RequestHandler, Response, Router } from '../shared/http-contracts.js';
 import type { AccountIdentity, ProviderDescriptor, ProviderMutationContext, ProviderReadContext, ReadContextRequest } from './provider-contract.js';
 import type { createMutationExecutor } from './mutation-executor.js';
@@ -1157,25 +1157,11 @@ export function registerProviderRoutes(app: Router, {
       }
       try {
         return { connected: true, ...(await impl.resources.liveSummaries({ session, refs, issueRefs, discussionRefs: askedDiscussions, details })) };
-<<<<<<< HEAD:packages/web/server/lib/source-control/provider-routes.js
-      } catch (error) {
-        // A service login that answers for another user is written off: nothing
-        // may keep reading through a login the service itself disowned.
-        if (error?.sourceControlServiceLogin && error.code === 'ACCOUNT_CHANGED' && error.sourceControlIdentity?.accountId) {
-          const identity = error.sourceControlIdentity;
-          statusCaches.get(identity.provider)?.invalidate({ instance: identity.instance, accountId: identity.accountId });
-||||||| bc50ba56aa:packages/web/server/lib/source-control/provider-routes.js
-      } catch (error) {
-        if (error?.sourceControlServiceLogin && error.code === 'ACCOUNT_CHANGED' && error.sourceControlIdentity?.accountId) {
-          const identity = error.sourceControlIdentity;
-          statusCaches.get(identity.provider)?.invalidate({ instance: identity.instance, accountId: identity.accountId });
-=======
       } catch (cause) {
         const error = routeError(cause);
         const identity = error?.sourceControlServiceLogin && error.code === 'ACCOUNT_CHANGED' ? failedIdentity(error) : undefined;
         if (identity?.accountId) {
           (isString(identity.provider) ? statusCaches.get(identity.provider) : undefined)?.invalidate({ instance: identity.instance, accountId: identity.accountId });
->>>>>>> upstream/main:packages/web/server/lib/source-control/provider-routes.ts
           await impl.auth.invalidateAccount({ instance: identity.instance, accountId: identity.accountId, persisted: false });
         }
         throw cause;

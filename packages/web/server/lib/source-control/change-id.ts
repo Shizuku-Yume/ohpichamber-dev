@@ -101,7 +101,6 @@ export async function readBranchChangeIds(directory: string, branch: string, bas
 
 const refused = (message: string, code: string, status = 409) => Object.assign(new Error(message), { code, status });
 
-<<<<<<< HEAD:packages/web/server/lib/source-control/change-id.js
 /**
  * The last valid `Change-Id` trailer of one commit, or null. The commit path
  * reads this for the commit it just wrote, so a message that already carries
@@ -114,10 +113,6 @@ export async function readCommitChangeId(directory, sha, { git = runGit } = {}) 
 }
 
 // Left behind while a cherry-pick, revert, rebase or `git am` is stopped.
-||||||| bc50ba56aa:packages/web/server/lib/source-control/change-id.js
-// Left behind while a cherry-pick, revert, rebase or `git am` is stopped.
-=======
->>>>>>> upstream/main:packages/web/server/lib/source-control/change-id.ts
 const SEQUENCE_STATE = ['CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply'];
 
 const sequenceInProgress = async (directory: string, git: GitCommand) => {
@@ -127,7 +122,6 @@ const sequenceInProgress = async (directory: string, git: GitCommand) => {
   return paths.some((statePath) => fs.existsSync(path.resolve(directory, statePath)));
 };
 
-<<<<<<< HEAD:packages/web/server/lib/source-control/change-id.js
 /**
  * Gives the checked-out commit a `Change-Id` trailer, the way a review host's
  * commit-msg hook would have: `I` plus the SHA-1 Git computes for a blob of
@@ -151,29 +145,6 @@ const sequenceInProgress = async (directory: string, git: GitCommand) => {
  * only the commit object. Every other refusal still applies.
  */
 export async function addChangeIdToHead(directory, expectedHead, { git = runGit, requireClean = true } = {}) {
-||||||| bc50ba56aa:packages/web/server/lib/source-control/change-id.js
-/**
- * Gives the checked-out commit a `Change-Id` trailer, the way a review host's
- * commit-msg hook would have: `I` plus the SHA-1 Git computes for a blob of
- * the commit's tree, parents, author, committer and message. Nothing is
- * downloaded from the host.
- *
- * Refused (409) unless HEAD is a branch at `expectedHead`, the working tree
- * and index have no tracked changes, no merge, cherry-pick, revert, rebase or
- * `git am` is in progress (each can stop with HEAD on the branch and a clean
- * tree, and would then carry on from a tip that is gone), and HEAD has no
- * Change-Id yet. The commit is rebuilt with its tree, parents and author
- * (`git commit-tree`) and the branch moves only if it still points at
- * `expectedHead` (`git update-ref` compare-and-swap), so a commit made in
- * between is never lost. As with `git commit --amend`, the committer becomes
- * the current user; unlike it, a GPG signature on the old commit is dropped
- * (the new one is signed only when `commit.gpgSign` says so). Answers
- * `{ sha, changeId, branch }`.
- */
-export async function addChangeIdToHead(directory, expectedHead, { git = runGit } = {}) {
-=======
-export async function addChangeIdToHead<Head>(directory: string, expectedHead: Head, { git = runGit } = {}) {
->>>>>>> upstream/main:packages/web/server/lib/source-control/change-id.ts
   const expected = isString(expectedHead) ? expectedHead.trim().toLowerCase() : '';
   if (!/^[0-9a-f]{40}$/.test(expected)) throw refused('expectedHead must be a full commit SHA', 'INVALID_REQUEST', 400);
   let branchRef;
