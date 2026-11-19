@@ -744,6 +744,8 @@ The desktop tab strip asks the mounted editor before closing its dirty file,
 including through a bulk tab-close command. Cancel leaves the tabs and draft
 unchanged; Save closes only after a successful write; Discard closes without
 writing. Closing clean or unrelated tabs does not prompt.
+Autosave pauses while the confirmation is open. If a write had already
+started, the confirmation waits for it and closes only if the draft is clean.
 
 Visual draw.io edits update the same draft as source edits. The XML sent to
 the iframe stays stable while editing; loads, Discard, and switching from

@@ -90,6 +90,7 @@ import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 import { DirectoryRequests } from './files/directoryRequests';
 import { useFileTreeUpload } from './files/useFileTreeUpload';
+import { useFileDraftConfirmation } from './files/useFileDraftConfirmation';
 import { moveWorkspacePath } from './files/moveWorkspacePath';
 import { areDirectoryNodesEqual, buildFileTreeStatusIndex } from './files/fileTreeStatus';
 import { BinaryArtifact } from './files/previews/BinaryArtifact';
@@ -1085,8 +1086,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const autoSaveEnabled = useUIStore((state) => state.autoSaveEnabled);
   const setAutoSaveEnabled = useUIStore((state) => state.setAutoSaveEnabled);
 
-  const [confirmDiscardOpen, setConfirmDiscardOpen] = React.useState(false);
-  const pendingDraftActionRef = React.useRef<(() => void) | null>(null);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
@@ -1940,6 +1939,33 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   }, [applyLoadedTextContent, contentDetectedBinary, draftContent, canvasDirty, fileContent, fileLoading, files, isDirty, loadedFileLineEnding, loadedFilePath, readFileStat, root, selectedFile, t]);
   saveDraftRef.current = saveDraft;
 
+  const discardDraft = React.useCallback(() => {
+    setCanvasDirty(false);
+    setCanvasRemountNonce((nonce) => nonce + 1);
+    setDiagramSourceXml(fileContent);
+    setDraftContent(fileContent);
+  }, [fileContent]);
+
+  const {
+    open: confirmDiscardOpen,
+    confirm: confirmDraftAction,
+    isPending: isDraftActionPending,
+    cancel: cancelConfirmation,
+    discard: discardAndContinue,
+    save: saveAndContinue,
+  } = useFileDraftConfirmation({
+    scope: fileScope,
+    path: selectedFilePath,
+    isDirty,
+    isSaving,
+    saveDraft,
+    discardDraft,
+  });
+
+  const cancelDraftAction = React.useCallback(() => {
+    if (cancelConfirmation()) setPendingFileNavigation(null);
+  }, [cancelConfirmation, setPendingFileNavigation]);
+
   React.useEffect(() => {
     if (autoSaveEnabled) {
       return;
@@ -1959,7 +1985,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     const canWrite = Boolean(selectedFile && files.writeFile);
     const selectedIsBinary = Boolean(selectedFile?.path && (isBinaryFile(selectedFile.path) || contentDetectedBinary)) && !binaryCanvasRef.current;
     if (!shouldScheduleFileAutosave({
-      autoSaveEnabled,
+      autoSaveEnabled: autoSaveEnabled && !confirmDiscardOpen,
       isDirty,
       canWrite,
       isSaving,
@@ -1977,6 +2003,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     // for the full delay, like typing does.
     const schedule = (delay: number) => {
       autoSaveTimerRef.current = setTimeout(() => {
+        autoSaveTimerRef.current = null;
+        if (isDraftActionPending()) return;
         const quietFor = Date.now() - canvasLastEditAtRef.current;
         if (quietFor < AUTO_SAVE_DELAY) {
           schedule(AUTO_SAVE_DELAY - quietFor);
@@ -1997,7 +2025,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         autoSaveTimerRef.current = null;
       }
     };
-  }, [autoSaveEnabled, contentDetectedBinary, draftContent, fileContent, fileLoading, isDirty, loadedFilePath, selectedFile, files.writeFile, isSaving, saveDraft]);
+  }, [autoSaveEnabled, confirmDiscardOpen, contentDetectedBinary, draftContent, fileContent, fileLoading, isDirty, isDraftActionPending, loadedFilePath, selectedFile, files.writeFile, isSaving, saveDraft]);
 
   // Reset auto-save status when switching files
   React.useEffect(() => {
@@ -2005,6 +2033,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   }, [selectedFile?.path]);
 
   const saveNow = React.useCallback(() => {
+    if (isDraftActionPending()) return;
     // Cancel pending auto-save because the explicit save should run immediately.
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -2017,7 +2046,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         setTimeout(() => setAutoSaveStatus('idle'), 2000);
       });
     }
-  }, [isSaving, saveDraft]);
+  }, [isDraftActionPending, isSaving, saveDraft]);
 
   useKeybinds({
     // An extension editor's frame never forwards key events here; it sends
@@ -2256,12 +2285,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       setShowMobilePageContent(true);
     }
   }, [ensurePathVisible, isMobile, root, setSelectedPath]);
-
-  const confirmDraftAction = React.useCallback((action: () => void) => {
-    if (pendingDraftActionRef.current) return;
-    pendingDraftActionRef.current = action;
-    setConfirmDiscardOpen(true);
-  }, []);
 
   const handleSelectFile = React.useCallback((node: FileNode) => {
     if (isDirty) {
@@ -2516,40 +2539,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       setShowMobilePageContent(false);
     }
   }, [isMobile, onCloseFile, removeOpenPath, root, selectFile, selectedFile?.path, setSelectedPath]);
-
-  const clearDraftAction = React.useCallback(() => {
-    pendingDraftActionRef.current = null;
-    setConfirmDiscardOpen(false);
-  }, []);
-
-  React.useLayoutEffect(() => {
-    if (pendingDraftActionRef.current) clearDraftAction();
-  }, [clearDraftAction, fileScope, selectedFilePath]);
-
-  const cancelDraftAction = React.useCallback(() => {
-    if (isSaving) return;
-    clearDraftAction();
-    setPendingFileNavigation(null);
-  }, [clearDraftAction, isSaving, setPendingFileNavigation]);
-
-  const discardAndContinue = React.useCallback(() => {
-    const action = pendingDraftActionRef.current;
-    if (!action || isSaving) return;
-    clearDraftAction();
-    setCanvasDirty(false);
-    setCanvasRemountNonce((nonce) => nonce + 1);
-    setDiagramSourceXml(fileContent);
-    setDraftContent(fileContent);
-    action();
-  }, [clearDraftAction, fileContent, isSaving]);
-
-  const saveAndContinue = React.useCallback(async () => {
-    const action = pendingDraftActionRef.current;
-    if (!action || isSaving) return;
-    if (!await saveDraft() || pendingDraftActionRef.current !== action) return;
-    clearDraftAction();
-    action();
-  }, [clearDraftAction, isSaving, saveDraft]);
 
   React.useLayoutEffect(() => {
     if (!fileTabCloseGuard) return;
