@@ -96,12 +96,14 @@ export type PlanReviewResponse = z.infer<typeof PlanReviewResponseSchema>;
 export const QuestionReplySchema = z.discriminatedUnion('action', [
   RequestCASSchema.extend({ action: z.literal('answer'), response: JsonValueSchema }),
   RequestCASSchema.extend({ action: z.literal('cancel') }),
+  RequestCASSchema.extend({ action: z.literal('update'), response: JsonValueSchema }),
 ]);
 export type QuestionReply = z.infer<typeof QuestionReplySchema>;
 export const QuestionRequestSchema = RequestCASSchema.extend({
   questionId: EntityIdSchema, sessionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),
   schema: JsonObjectSchema.optional(), status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: JsonValueSchema.optional(), requestedAt: TimestampSchema, answeredAt: TimestampSchema.optional(),
+  timeoutResetAt: TimestampSchema.optional(),
   resolvedAt: TimestampSchema.optional(), resolvedBy: EntityIdSchema.optional(),
 }).superRefine((request, context) => {
   if (request.schema?.type === 'plan-review') {
@@ -112,8 +114,9 @@ export const QuestionRequestSchema = RequestCASSchema.extend({
     }
   }
   if (request.status === 'pending') {
-    if (request.version !== '1' || request.response !== undefined || request.answeredAt !== undefined || request.resolvedAt !== undefined || request.resolvedBy !== undefined) {
-      context.addIssue({ code: 'custom', message: 'Pending question must be unresolved at initial version 1' });
+    const updatedForm = request.schema?.type === 'omp.ask' && request.schema.form === true && request.timeoutResetAt !== undefined;
+    if ((request.version !== '1' && !updatedForm) || request.response !== undefined || request.answeredAt !== undefined || request.resolvedAt !== undefined || request.resolvedBy !== undefined) {
+      context.addIssue({ code: 'custom', message: 'Pending question must be unresolved; only form drafts may advance version' });
     }
     return;
   }

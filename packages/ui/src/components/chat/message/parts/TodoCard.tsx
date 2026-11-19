@@ -11,12 +11,11 @@ const STATUS_LABEL_KEY = {
     in_progress: 'chat.todoTray.status.inProgress',
     completed: 'chat.todoTray.status.completed',
     abandoned: 'chat.todoTray.status.abandoned',
-    blocked: 'chat.todoTray.status.blocked',
 } as const satisfies Record<TodoItem['status'], I18nKey>;
 
 const statusDotClass = (task: TodoItem): string => {
     if (task.status === 'completed') return 'bg-status-success';
-    if (task.status === 'blocked' || task.status === 'abandoned') return 'bg-status-error';
+    if (task.status === 'abandoned') return 'bg-status-error';
     if (task.status === 'in_progress') return 'bg-status-info';
     return 'bg-muted-foreground';
 };

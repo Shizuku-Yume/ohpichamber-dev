@@ -716,6 +716,9 @@ export class AgentService {
         if (control.type === 'compact') {
           respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
         }
+        if (control.type === 'compact.abort') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.abortCompaction(sessionId))); return;
+        }
         if (control.type === 'command') {
           respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.command(sessionId, control.text))); return;
         }

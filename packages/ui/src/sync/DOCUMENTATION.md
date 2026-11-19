@@ -152,6 +152,8 @@ Runtime parity: Web/PWA and Electron use the authenticated Host Canonical gatewa
 
 ## Event pipeline and sequence gating
 
+Ephemeral BTW and subagent observations consume the same per-session sequence as durable events. The directory reducer advances the live head before their dedicated stores apply them; duplicates and epoch/sequence gaps cannot mutate those stores. Omitting that advance causes false gap recovery that can lose a subagent's terminal frame.
+
 The event pipeline (`event-pipeline.ts`) connects to the Host's canonical SSE endpoint via `canonicalClient.subscribeSessionEvents(sessionId, cursor, onEvent, onInvalidated, onError)`.
 
 The Host SSE stream emits native `CanonicalEvent` variants directly. There is no intermediate wire-event translation layer. `CanonicalEvent` is a discriminated union of 24 variants:

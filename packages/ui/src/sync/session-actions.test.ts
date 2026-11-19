@@ -608,11 +608,23 @@ describe("native delivery and execution controls", () => {
     expect(abort).toHaveBeenCalledTimes(1)
   })
 
-  test("publishes the abort acknowledgement as terminal control state", async () => {
+  test("cancels authoritative compaction without requiring an active run", async () => {
+    const store = seed()
+    const live = nativeSnapshot("session-a", [])
+    live.compacting = { method: "handed-off", startedAt: 1 }
+    spyOn(canonicalClient, "getSnapshot").mockResolvedValue(live)
+    const compactionAbort = spyOn(canonicalClient, "abortCompaction").mockResolvedValue({ type: "compact.abort", aborted: true })
+    await abortCurrentOperation("session-a")
+    expect(compactionAbort).toHaveBeenCalledWith("session-a")
+    expect(store.getState().snapshot["session-a"]?.activeRun).toBeUndefined()
+  })
+
+  test("publishes the run abort acknowledgement as terminal control state", async () => {
     const store = seed()
     const live = nativeSnapshot("session-a", [])
     live.session = { ...live.session, runtimeStatus: "running", activeRunId: run.runId }
     live.activeRun = run
+    live.compacting = { method: "soft-compacted", startedAt: 1 }
     store.setState({
       snapshot: { "session-a": live },
       session_status: { "session-a": "running" },

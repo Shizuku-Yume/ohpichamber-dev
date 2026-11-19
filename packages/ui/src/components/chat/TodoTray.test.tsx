@@ -54,7 +54,7 @@ const twoPhaseTodos: TodoPhase[] = [
     name: 'Discovery',
     tasks: [
       { content: 'Search codebase', status: 'completed' },
-      { content: 'Inspect findings', status: 'in_progress', blocker: 'waiting on review' },
+      { content: 'Inspect findings', status: 'in_progress' },
     ],
   },
   {
@@ -315,16 +315,14 @@ describe('TodoTray integration', () => {
     expect(strip?.textContent).toContain('2/3');
   });
 
-  test('names a blocked task in the folded row while the tray stays visible', async () => {
+  test('names a pending task in the folded row while the tray stays visible', async () => {
     await renderTray();
     await setTodos([
-      { name: 'Plan', tasks: [{ content: 'Wait on upstream fix', status: 'blocked' }] },
+      { name: 'Plan', tasks: [{ content: 'Wait on upstream fix', status: 'pending' }] },
     ]);
 
     const strip = tray();
     expect(strip).not.toBeNull();
-    // A blocked task is still open work, so the folded row must name it
-    // rather than render the empty header and 0/0 of a finished plan.
     expect(strip?.textContent).toContain('Wait on upstream fix');
     expect(strip?.textContent).toContain('0/1');
   });

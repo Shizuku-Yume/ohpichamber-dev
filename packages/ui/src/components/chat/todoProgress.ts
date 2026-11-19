@@ -30,22 +30,19 @@ export const todoProgress = (phases: readonly TodoPhase[]): TodoProgress => {
 
 /**
  * The task named on the card's folded row: the one being worked on, else the
- * next one waiting, else the first one blocked (a plan whose only open work is
- * blocked still names it rather than going blank), else the last task that
- * closed. A finished plan no longer reaches a tray, but the tool card still
+ * next one waiting, else the last task that closed. A finished plan no longer
+ * reaches a tray, but the tool card still
  * names what it finished.
  */
 export const activeTodoTask = (phases: readonly TodoPhase[]): TodoItem | null => {
     let firstPending: TodoItem | null = null;
-    let firstBlocked: TodoItem | null = null;
     let lastClosed: TodoItem | null = null;
     for (const phase of phases) {
         for (const task of phase.tasks) {
             if (task.status === 'in_progress') return task;
             if (!firstPending && task.status === 'pending') firstPending = task;
-            if (!firstBlocked && task.status === 'blocked') firstBlocked = task;
             if (isClosedTodo(task)) lastClosed = task;
         }
     }
-    return firstPending ?? firstBlocked ?? lastClosed;
+    return firstPending ?? lastClosed;
 };

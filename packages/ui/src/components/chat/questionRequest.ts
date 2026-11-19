@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import { PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanReviewResponse, type QuestionRequest } from '@openchamber/agent-contract';
+import { AskRequestSchema, PlanReviewSchema, PlanReviewResponseSchema, type AskQuestion as CanonicalAskQuestion, type PlanReview, type PlanReviewResponse, type QuestionRequest } from '@openchamber/agent-contract';
 
 /**
  * Native `omp.ask` questions, shaped exactly like the request boundary:
@@ -11,36 +10,8 @@ import { PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanR
  * dock only render them.
  */
 
-// The Agent Service's `QuestionItemSchema` is the owner of this shape; the UI
-// receives it through `QuestionRequest.schema`, so parse it once at this
-// boundary instead of inspecting JSON values.
-const AskQuestionOptionSchema = z.object({
-  label: z.string(),
-  description: z.string().optional(),
-  preview: z.string().optional(),
-});
-const AskQuestionSchema = z.object({
-  id: z.string().min(1),
-  question: z.string().optional(),
-  header: z.string().optional(),
-  options: z.array(AskQuestionOptionSchema),
-  multi: z.boolean().optional(),
-  recommended: z.number().optional(),
-});
-const AskRequestSchema = z.object({
-  type: z.literal('omp.ask'),
-  questions: z.array(AskQuestionSchema),
-  timeout: z.number().int().positive().optional(),
-});
-
-export type AskQuestion = {
-  id: string;
-  question?: string;
-  header?: string;
-  options: z.infer<typeof AskQuestionOptionSchema>[];
+export type AskQuestion = CanonicalAskQuestion & {
   multi: boolean;
-  /** Index of the recommended option in `options`. */
-  recommended?: number;
 };
 
 export type AskAnswerState = {
@@ -94,15 +65,7 @@ export function parseAskQuestions(schema: QuestionRequest['schema']): AskQuestio
   const parsed = AskRequestSchema.safeParse(schema);
   if (!parsed.success) return [];
   return parsed.data.questions.map((item) => {
-    const question: AskQuestion = {
-      id: item.id,
-      options: item.options,
-      multi: item.multi === true,
-    };
-    if (item.question !== undefined) question.question = item.question;
-    if (item.header !== undefined) question.header = item.header;
-    if (item.recommended !== undefined) question.recommended = item.recommended;
-    return question;
+    return { ...item, multi: item.multi === true };
   });
 }
 
@@ -115,6 +78,9 @@ const emptyState = (): AskAnswerState => ({ selected: [], custom: false, text: '
 
 export const initialAskAnswers = (questions: readonly AskQuestion[]): AskAnswerState[] =>
   questions.map((question) => {
+    if (question.initialSelected !== undefined || question.initialInput !== undefined) return {
+      selected: question.initialSelected ?? [], custom: false, text: question.initialInput ?? '',
+    };
     const recommended = question.recommended;
     const option = recommended === undefined ? undefined : question.options[recommended];
     return option ? { selected: [option.label], custom: false, text: '' } : emptyState();
@@ -129,6 +95,7 @@ export function toggleAskOption(
   state: AskAnswerState,
   label: string,
 ): AskAnswerState {
+  if (question.options.find(option => option.label === label)?.disabled) return state;
   if (question.multi) {
     const selected = state.selected.includes(label)
       ? state.selected.filter((entry) => entry !== label)
@@ -148,6 +115,7 @@ export const setAskText = (state: AskAnswerState, value: string): AskAnswerState
 /** A free-text-only question (no options) reads the text box directly. */
 const customTextFor = (question: AskQuestion, state: AskAnswerState): string | undefined => {
   if (question.options.length === 0 || state.custom) {
+    if (question.inputType !== undefined) return state.text;
     const value = state.text.trim();
     return value.length === 0 ? undefined : value;
   }
@@ -155,8 +123,9 @@ const customTextFor = (question: AskQuestion, state: AskAnswerState): string | u
 };
 
 export const isAskQuestionAnswered = (question: AskQuestion, state: AskAnswerState): boolean => {
+  if (question.required === false) return true;
   const custom = customTextFor(question, state);
-  if (question.options.length === 0) return custom !== undefined;
+  if (question.options.length === 0) return custom !== undefined && custom.trim().length > 0;
   if (question.multi) return state.selected.length > 0 || custom !== undefined;
   return custom !== undefined || state.selected.length === 1;
 };
@@ -240,7 +209,7 @@ export function serializeAskQuestionsMarkdown(prompt: string, questions: readonl
 type QuestionAnswerDelivery = {
   reply: (payload: QuestionAnswerPayload) => Promise<void>;
   recover: () => void;
-  failed: () => void;
+  failed: (error: unknown) => void;
 };
 
 /**
@@ -255,8 +224,8 @@ export async function deliverQuestionAnswer(
   try {
     await delivery.reply(payload);
     return true;
-  } catch {
-    delivery.failed();
+  } catch (error) {
+    delivery.failed(error);
     delivery.recover();
     return false;
   }

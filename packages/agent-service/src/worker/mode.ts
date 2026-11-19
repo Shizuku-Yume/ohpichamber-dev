@@ -96,7 +96,7 @@ class GoalVerifyingController extends RpcGoalController {
   }
 
   override observe(event: AgentSessionEvent): void {
-    if (event.type !== 'agent_end' || event.isTerminal === false) {
+    if (event.type !== 'agent_end') {
       super.observe(event);
       return;
     }
@@ -412,7 +412,7 @@ export class WorkerModeController {
     // The controller itself awaits the verdict before handing the same terminal
     // event to OMP, so the native continuation and journal stay authoritative.
     this.goal.observe(event);
-    if (this.armedPlan && event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) {
+    if (this.armedPlan && event.type === 'agent_end') {
       const currentArmed = this.armedPlan;
       this.pendingTransition = this.enterPlan()
         .then(() => {
@@ -451,7 +451,7 @@ export class WorkerModeController {
   }
 
   async set(kind: 'main' | 'plan' | 'vibe'): Promise<SessionMode> {
-    if (this.session.isStreaming) {
+    if (this.session.isRunActive) {
       if (kind === 'plan') {
         this.armedPlan = { planReference: 'local://PLAN.md' };
         return this.mode();
@@ -515,7 +515,7 @@ export class WorkerModeController {
     const previous = this.vibePrevious;
     const registry = VibeSessionRegistry.global();
     await this.session.runModeExitTeardown(async () => {
-      if (this.session.isStreaming) await this.session.abort();
+      if (this.session.isRunActive) await this.session.abort();
       await registry.killAll(this.vibeParent(), previous?.ownerScope);
       await this.session.deactivateVibeTools(previous?.tools ?? []);
       this.session.setVibeModeState(undefined);
@@ -595,7 +595,7 @@ export class WorkerModeController {
   }
 
   async approve(compact?: () => Promise<void>): Promise<SessionMode> {
-    if (this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    if (this.session.isRunActive) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     if (this.current.kind !== 'plan') throw new ProjectionError(409, 'INVALID_REQUEST', 'Plan mode is not active');
     const previous = this.previous ?? {
       tools: this.session.getEnabledToolNames().filter(name => !isMCPToolName(name)),

@@ -1286,6 +1286,13 @@ export class SessionRegistry {
       return result;
     } finally { this.controls.delete(sessionId); }
   }
+  async abortCompaction(sessionId: string) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'compact.abort' });
+    if (result.type !== 'compact.abort') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match compaction cancellation.');
+    return result;
+  }
   async command(sessionId: string, text: string) {
     this.ensureOpen();
     this.assertWritable(sessionId);

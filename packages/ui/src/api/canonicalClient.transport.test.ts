@@ -223,6 +223,10 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     respondWith({ type: 'compact', compactionId: 'compact_1', tokensBefore: 4096, completedAt: 1 });
     await expect(client.compactSession(sessionId, 'Keep key details.')).resolves.toMatchObject({ type: 'compact', tokensBefore: 4096 });
     expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+    respondWith({ type: 'compact.abort', aborted: true });
+    await expect(client.abortCompaction(sessionId)).resolves.toEqual({ type: 'compact.abort', aborted: true });
+    respondWith({ type: 'command', output: '' });
+    await expect(client.abortCompaction(sessionId)).rejects.toThrow();
   });
   test('sends mode.set through canonical session control and validates the authoritative mode ack', async () => {
     respondWith({ type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: 'local://plans/session-1.md' } });

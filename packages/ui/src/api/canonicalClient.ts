@@ -358,6 +358,12 @@ export class CanonicalClient {
       body: bodyFor(C.SessionControlRequestSchema, { type: 'compact', ...(instructions === undefined ? {} : { instructions }) }),
     });
   }
+  abortCompaction(sessionId: string): Promise<C.SessionControlAck> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'compact.abort'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'compact.abort' }),
+    });
+  }
   runBuiltinCommand(sessionId: string, text: string): Promise<Extract<C.SessionControlAck, { type: 'command' }>> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'command'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -58,6 +58,22 @@ function assistant(
 }
 
 describe('WorkerProjection notices and compaction integration', () => {
+  test('historical blocked snapshots and reminders restore as pending', async () => {
+    const { manager } = await createTestManager();
+    try {
+      manager.appendMessage(user('Historical work', 1000));
+      manager.appendCustomEntry('user_todo_edit', { phases: [{ name: 'Work', tasks: [{ content: 'Review', status: 'blocked', blocker: 'Waiting' }] }] });
+      manager.appendCustomEntry('ohpichamber.notice.v1', {
+        partId: 'legacy-notice', type: 'notice', noticeType: 'todo_reminder', level: 'warning',
+        details: { attempt: 1, maxAttempts: 3, todos: [{ content: 'Review', status: 'blocked' }] },
+      });
+      const seed = new WorkerProjection(manager, manager.getSessionId()).seed();
+      expect(seed.todos).toEqual([{ name: 'Work', tasks: [{ content: 'Review', status: 'pending' }] }]);
+      expect(JSON.stringify(seed.messages)).toContain('legacy-notice');
+      expect(JSON.stringify(seed.messages)).not.toContain('blocked');
+    } finally { await manager.close(); }
+  });
+
   test('projects todo_reminder live and survives cold restore from disk', async () => {
     const { manager, dir } = await createTestManager();
     const sessionId = manager.getSessionId();
@@ -631,7 +647,7 @@ describe('WorkerProjection notices and compaction integration', () => {
           name: `Phase ${dir}/src`,
           tasks: [
             { content: `Inspect ${dir}/app.ts`, status: 'in_progress' },
-            { content: 'Wait on dependency', status: 'blocked', blocker: `Missing ${dir}/lock` },
+            { content: 'Wait on dependency', status: 'pending' },
           ],
         },
       ];
@@ -660,7 +676,7 @@ describe('WorkerProjection notices and compaction integration', () => {
             name: 'Phase [workspace]/src',
             tasks: [
               { content: 'Inspect [workspace]/app.ts', status: 'in_progress' },
-              { content: 'Wait on dependency', status: 'blocked', blocker: 'Missing [workspace]/lock' },
+              { content: 'Wait on dependency', status: 'pending' },
             ],
           },
         ],
@@ -672,7 +688,7 @@ describe('WorkerProjection notices and compaction integration', () => {
           name: 'Phase [workspace]/src',
           tasks: [
             { content: 'Inspect [workspace]/app.ts', status: 'in_progress' },
-            { content: 'Wait on dependency', status: 'blocked', blocker: 'Missing [workspace]/lock' },
+            { content: 'Wait on dependency', status: 'pending' },
           ],
         },
       ]);

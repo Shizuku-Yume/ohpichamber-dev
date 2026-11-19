@@ -1,8 +1,7 @@
 diff --git a/src/async/job-manager.ts b/src/async/job-manager.ts
-index 8b519c9..a44b4bc 100644
 --- a/src/async/job-manager.ts
 +++ b/src/async/job-manager.ts
-@@ -48,6 +48,12 @@ export const ASYNC_JOB_MANAGER_SHUTDOWN_REASON = Symbol("AsyncJobManager shutdow
+@@ -50,6 +50,12 @@
  /** Kind of work a managed job runs; drives job-row badges and delivery labels. */
  export type AsyncJobType = "bash" | "task" | "eval";
  
@@ -15,35 +14,30 @@ index 8b519c9..a44b4bc 100644
  /** Settled job-body payload: delivery text plus its parsed structured output. */
  export interface AsyncJobRunResult {
  	text: string;
-@@ -310,6 +316,16 @@ export interface AsyncJobManagerApi {
+@@ -360,6 +366,9 @@
  	readonly atCapacity: boolean;
  	/** Calls `listener` whenever a job settles; returns the unsubscribe. */
  	onJobSettled(listener: () => void): () => void;
-+	/**
-+	 * Observes bash job start, output chunks and finish on this manager's thread.
-+	 * The tool publishes from this thread, so a remote (worker-thread) manager
-+	 * does not implement it; callers treat it as unavailable there.
-+	 */
 +	observeBashJobs?(listener: (event: BashJobEvent) => void): () => void;
-+	/** True when an observer is attached, so bash runs publish their observations. */
 +	readonly hasBashJobObservers?: boolean;
-+	/** Publish one bash job observation to every observer. */
 +	emitBashJobEvent?(event: BashJobEvent): void;
- 	/** Start tracking `run` as a job; returns its id. */
- 	register(type: AsyncJobType, label: string, run: AsyncJobRun, options?: AsyncJobRegisterOptions): string;
- 	/** Deliver an already-completed result without consuming a running-job slot. */
-@@ -397,6 +413,7 @@ export class AsyncJobManager implements AsyncJobManagerApi {
+ 	/**
+ 	 * Calls `listener` whenever what a job view shows may have moved: a job was
+ 	 * registered, started, reported progress, settled, was promoted to the
+@@ -470,6 +479,7 @@
  	/** Live widgets of this root's jobs; set by the root session when widgets are available. */
  	widgets: JobWidgetRegistry | undefined;
  	readonly #settleListeners = new Set<() => void>();
 +	readonly #bashJobObservers = new Set<(event: BashJobEvent) => void>();
+ 	readonly #changeListeners = new Set<() => void>();
  
  	/**
- 	 * Calls `listener` whenever a job settles (completed, failed or cancelled), so
-@@ -410,6 +427,22 @@ export class AsyncJobManager implements AsyncJobManagerApi {
- 		};
- 	}
- 
+@@ -502,6 +512,22 @@
+ 				});
+ 			}
+ 		}
++	}
++
 +	observeBashJobs(listener: (event: BashJobEvent) => void): () => void {
 +		if (this.#disposed) throw new Error("Async job manager is disposed");
 +		this.#bashJobObservers.add(listener);
@@ -58,12 +52,10 @@ index 8b519c9..a44b4bc 100644
 +
 +	emitBashJobEvent(event: BashJobEvent): void {
 +		for (const observer of this.#bashJobObservers) observer(event);
-+	}
-+
+ 	}
+ 
  	#filterJobs(jobs: Iterable<AsyncJob>, filter?: AsyncJobFilter): AsyncJob[] {
- 		if (!filter) return Array.from(jobs);
- 		const out: AsyncJob[] = [];
-@@ -970,6 +1003,7 @@ export class AsyncJobManager implements AsyncJobManagerApi {
+@@ -1096,6 +1122,7 @@
  		this.#consumedJobResults.clear();
  		this.#releasedForegroundJobs.clear();
  		this.#deliverySinks.clear();
@@ -72,30 +64,29 @@ index 8b519c9..a44b4bc 100644
  		this.widgets = undefined;
  		return jobsSettled && drained;
 diff --git a/src/sdk.ts b/src/sdk.ts
-index 64e5d68..cf86fc6 100644
 --- a/src/sdk.ts
 +++ b/src/sdk.ts
-@@ -33,6 +33,7 @@ import { isOpenAICodexWebSocketPreferred } from "@oh-my-pi/pi-ai/providers/opena
- import { withCredentialRedaction } from "@oh-my-pi/pi-ai/providers/transform-messages";
+@@ -39,6 +39,7 @@
  import { sendsImageInputOnWire } from "@oh-my-pi/pi-ai/providers/vision-guard";
+ import { syncOpenAIResponsesHistoryTexts } from "@oh-my-pi/pi-ai/utils";
  import { FALLBACK_DIALECT, preferredDialect } from "@oh-my-pi/pi-catalog/identity";
 +import type { ModelRefreshStrategy } from "@oh-my-pi/pi-catalog/model-manager";
  import type { Component } from "@oh-my-pi/pi-tui";
- import { $env } from "@oh-my-pi/pi-utils/env";
+ import { $env, isInteractiveHost } from "@oh-my-pi/pi-utils/env";
  import { getAgentDir, getModelDbPath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
-@@ -590,6 +591,11 @@ export interface CreateAgentSessionOptions {
- 	authStorage?: AuthStorage;
+@@ -642,6 +643,11 @@
  	/** Model registry. Default: discoverModels(authStorage, agentDir) */
  	modelRegistry?: ModelRegistry;
-+	/**
+ 	/**
 +	 * Refresh strategy for the initial default-model discovery fallback only.
 +	 * Defaults to "online-if-uncached"; later explicit discovery remains unchanged.
 +	 */
 +	initialModelRefreshStrategy?: ModelRefreshStrategy;
- 	/**
++	/**
  	 * Request credential resolver. Defaults to the model registry's normal
  	 * session-affine resolver. Security scans use this narrow seam to keep one
-@@ -3633,7 +3639,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 	 * durable OAuth row pinned for the operation without changing ordinary
+@@ -3830,7 +3836,9 @@
  					(defaultRoleConfigured || !pick) &&
  					modelRegistry.getDiscoverableProviders().length > 0
  				) {
@@ -107,24 +98,19 @@ index 64e5d68..cf86fc6 100644
  						fallbackCandidates = await resolveAllowedModels(modelRegistry, settings, modelMatchPreferences);
  						pick = pickDefaultAvailableModel(fallbackCandidates.filter(hasModelAuth), provider =>
 diff --git a/src/tools/bash.ts b/src/tools/bash.ts
-index 9e01fc2..46ec76f 100644
 --- a/src/tools/bash.ts
 +++ b/src/tools/bash.ts
-@@ -1069,7 +1069,10 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
- 						filesystem: this.#urlFilesystem(runSignal, options.approvalTier, onReply).shellFilesystem(),
- 						artifactPath,
+@@ -1455,6 +1455,7 @@
  						artifactId,
--						onChunk: chunk => outputTap.append(chunk),
-+						onChunk: chunk => {
-+							outputTap.append(chunk);
+ 						onChunk: chunk => {
+ 							outputTap.append(chunk);
 +							if (manager.hasBashJobObservers) manager.emitBashJobEvent?.({ type: "chunk", jobId, chunk });
-+						},
- 						onPreview: text => {
- 							void report(text, { output: text, async: { state: "running", jobId, type: "bash" } });
+ 							notifier?.poll();
  						},
-@@ -1093,6 +1096,15 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
- 						liveTrace = undefined;
- 						outputTap.close();
+ 						onPreview: text => {
+@@ -1481,6 +1482,15 @@
+ 						// The result that follows carries the job's last output, matches included.
+ 						notifier?.stop();
  					});
 +					if (manager.hasBashJobObservers) {
 +						manager.emitBashJobEvent?.({
@@ -138,15 +124,15 @@ index 9e01fc2..46ec76f 100644
  					if (result.artifactError) latestProgressDetails = { meta: { artifactError: result.artifactError } };
  					const wallTimeMs = performance.now() - wallTimeStart;
  					const finalResult = await this.#buildCompletedResult(result, options.timeoutSec, {
-@@ -1154,6 +1166,11 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+@@ -1541,6 +1551,11 @@
+ 				},
  			},
  		);
- 
++
 +		if (manager.hasBashJobObservers) {
 +			const sessionKey = options.foreground ? (options.sessionId ?? "") : `${options.sessionId ?? ""}:async:${jobId}`;
 +			manager.emitBashJobEvent?.({ type: "started", jobId, sessionKey });
 +		}
-+
+ 
  		return {
  			jobId,
- 			completion: completion.promise,

@@ -56,6 +56,12 @@ const render = async (content: string, isStreaming = false, allowRawHtml = false
   void isStreaming;
 };
 
+test('historical secret placeholders of either format render literally without secret resolution', async () => {
+  const placeholders = ['$$0123456789ab$$', '$$0123456789ab:U$$', '$$OLDNAME_0123456789ab:L$$', '$$RENAMED_abcdefgh1234:M$$'];
+  await render(placeholders.map(value => `Stored: \`${value}\``).join('\n\n'));
+  for (const placeholder of placeholders) expect(host.textContent).toContain(placeholder);
+});
+
 test('renders semantic Markdown through native Streamdown code and table components', async () => {
   await render('**bold**\n\n`inline`\n\n```text\nfirst\nsecond\n```\n\n| name | value |\n| --- | --- |\n| [link](https://example.com) | 2 |');
   expect(host.querySelector('[data-streamdown="code-block"]')).not.toBeNull();

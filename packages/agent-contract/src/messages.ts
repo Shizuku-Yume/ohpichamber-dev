@@ -71,7 +71,7 @@ export const TodoNoticePartSchema = z.strictObject({
     maxAttempts: z.number().int().positive(),
     todos: z.array(z.strictObject({
       content: z.string(),
-      status: z.enum(['pending', 'in_progress', 'completed', 'blocked', 'abandoned']),
+      status: z.enum(['pending', 'in_progress', 'completed', 'abandoned']),
     })),
   }),
 });

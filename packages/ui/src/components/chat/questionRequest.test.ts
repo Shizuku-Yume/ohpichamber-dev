@@ -42,6 +42,18 @@ const schema = JsonObjectSchema.parse({
 });
 
 describe('parseAskQuestions', () => {
+  test('preserves form defaults, optional controls, exact text and disabled choices', () => {
+    const questions = parseAskQuestions({ type: 'omp.ask', form: true, questions: [
+      { id: 'choice', options: [{ label: '0', displayLabel: 'A' }, { label: '1', disabled: true }], initialSelected: ['0'], allowCustom: false },
+      { id: 'text', options: [], inputType: 'textarea', initialInput: ' exact ', required: false },
+    ] });
+    const answers = initialAskAnswers(questions);
+    expect(answers).toEqual([{ selected: ['0'], custom: false, text: '' }, { selected: [], custom: false, text: ' exact ' }]);
+    expect(toggleAskOption(questions[0]!, answers[0]!, '1')).toBe(answers[0]!);
+    expect(isAskQuestionAnswered(questions[1]!, { selected: [], custom: false, text: '' })).toBe(true);
+    expect(buildAskAnswer(questions, answers)).toEqual({ results: [{ id: 'choice', selectedOptions: ['0'] }, { id: 'text', selectedOptions: [], customInput: ' exact ' }] });
+  });
+
   test('reads the optional native timeout', () => {
     expect(parseAskTimeout(schema)).toBe(45_000);
   });
@@ -174,6 +186,19 @@ describe('question answer delivery', () => {
 
     expect(accepted).toBe(false);
     expect(calls).toEqual(['failed', 'recover']);
+  });
+
+  test('a rejected native field constraint reaches the error presenter without answering the form', async () => {
+    const error = new Error('Count: Must be at most 5');
+    let reported: unknown;
+    let recovered = false;
+    expect(await deliverQuestionAnswer({
+      reply: async () => { throw error; },
+      failed: (cause: unknown) => { reported = cause; },
+      recover: () => { recovered = true; },
+    }, payload)).toBe(false);
+    expect(reported).toBe(error);
+    expect(recovered).toBe(true);
   });
 
   test('acceptance marks the reply complete without recovering a stale card', async () => {

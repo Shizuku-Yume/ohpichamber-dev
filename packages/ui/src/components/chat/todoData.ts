@@ -8,8 +8,7 @@ const TodoDetailsSchema = z.object({
     name: z.string(),
     tasks: z.array(z.object({
       content: z.string(),
-      status: TodoStatusSchema,
-      blocker: z.string().optional(),
+      status: z.preprocess(status => status === 'blocked' ? 'pending' : status, TodoStatusSchema),
     })),
   })),
 });
@@ -23,7 +22,6 @@ export function extractTodoPhases(value: unknown): TodoPhase[] | null {
     tasks: phase.tasks.map((task) => ({
       content: task.content,
       status: task.status,
-      ...(task.blocker !== undefined ? { blocker: task.blocker } : {}),
     })),
   }));
 }

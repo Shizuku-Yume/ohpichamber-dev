@@ -65,7 +65,7 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
     switch (notice.noticeType) {
       case 'todo_reminder': {
         const incompleteCount = notice.details.todos.filter(
-          tItem => tItem.status === 'pending' || tItem.status === 'in_progress' || tItem.status === 'blocked'
+          tItem => tItem.status === 'pending' || tItem.status === 'in_progress'
         ).length;
         return incompleteCount === 1
           ? t('chat.notice.todoReminderSingle', { count: incompleteCount, attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts })

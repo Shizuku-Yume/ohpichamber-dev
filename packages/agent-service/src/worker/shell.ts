@@ -3,7 +3,7 @@ import type {
   ShellJobIdentity, ShellOutput, ShellSnapshot, ShellStartRequest, ShellStdinRequest,
   ShellStdinResult, ShellStopRequest, ShellStopResult, ShellStreamRequest, ShellStreamResponse, ShellTermination,
 } from '@openchamber/agent-contract';
-import type { DaemonSnapshot } from '@oh-my-pi/pi-tui/tools/daemon';
+import type { UnitSnapshot } from '@oh-my-pi/pi-tui/tools/daemon';
 import type { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
 import { type AsyncJob, type AsyncJobManagerApi, type BashJobEvent } from '@oh-my-pi/pi-coding-agent/async/job-manager';
 import { executeBash, releaseShellSessions, type BashResult } from '@oh-my-pi/pi-coding-agent/exec/bash-executor';
@@ -32,7 +32,7 @@ type Job = {
 };
 type ServiceRecord = {
   identity: Running;
-  daemon: DaemonSnapshot;
+  daemon: UnitSnapshot;
 };
 
 export interface WorkerShellContext {
@@ -46,7 +46,7 @@ export interface WorkerShellContext {
   cwd: string;
   nativeOwner?: { agentId: string; registry: AgentRegistryApi };
   widgets?: JobWidgets;
-  listServices?: () => Promise<DaemonSnapshot[]>;
+  listServices?: () => Promise<UnitSnapshot[]>;
   serviceLogs?: (name: string) => Promise<string>;
   sendServiceInput?: (serviceName: string, input: string) => Promise<void>;
   stopService?: (name: string) => Promise<void>;
@@ -290,7 +290,7 @@ export class WorkerShell {
 
   private async refreshServices(): Promise<void> {
     if (!this.context.listServices) return;
-    let daemons: DaemonSnapshot[];
+    let daemons: UnitSnapshot[];
     try {
       daemons = await this.context.listServices();
     } catch {
@@ -298,13 +298,13 @@ export class WorkerShell {
     }
     const currentIds = new Set<string>();
     for (const daemon of daemons) {
-      if (!daemon.owner || !this.serviceOwnerIds.has(daemon.owner)) continue;
+      if (daemon.kind !== 'proc' || !daemon.owner || !this.serviceOwnerIds.has(daemon.owner)) continue;
       const jobId = `service:${daemon.id}`;
       currentIds.add(jobId);
-      const isEnded = (daemon.state as string) === 'stopped' || daemon.state === 'exited' || daemon.state === 'failed';
+      const isEnded = daemon.state === 'exited' || daemon.state === 'failed';
       const serviceMode: 'persist' | 'detached' | 'session' =
-        daemon.persist ? 'persist' : daemon.detached ? 'detached' : 'session';
-      const pids = daemon.pid ? [daemon.pid] : undefined;
+        daemon.policy.hold === 'leases' ? 'session' : daemon.policy.hold;
+      const pids = daemon.pids;
       const startedAt = daemon.startedAt || daemon.createdAt || Date.now();
       const identity: Running = {
         jobId,
@@ -313,11 +313,11 @@ export class WorkerShell {
         workerGeneration: this.context.workerGeneration,
         workspaceId: this.context.workspaceId,
         projectId: this.context.projectId,
-        command: this.publicText(daemon.name),
+        command: this.publicText(daemon.key),
         background: true,
         startedAt,
         outputCursor: daemon.outputBytes ? daemon.outputBytes.toString() : '0',
-        serviceName: daemon.name,
+        serviceName: daemon.key,
         serviceMode,
         canReceiveStdin: !isEnded,
         pids,
@@ -372,7 +372,7 @@ export class WorkerShell {
       if (!this.context.sendServiceInput) {
         throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Service stdin routing is unavailable');
       }
-      await this.context.sendServiceInput(daemon.name, request.input);
+      await this.context.sendServiceInput(daemon.key, request.input);
       return {
         job: request.job,
         writtenBytes: Buffer.byteLength(request.input, 'utf-8'),
@@ -518,7 +518,7 @@ export class WorkerShell {
       if (!this.context.serviceLogs) {
         throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Service logs are unavailable');
       }
-      const text = await this.context.serviceLogs(daemon.name);
+      const text = await this.context.serviceLogs(daemon.key);
       const encoded = encoder.encode(this.publicText(text));
       const total = BigInt(encoded.length);
       const requested = BigInt(cursor);
@@ -604,14 +604,14 @@ export class WorkerShell {
       if (!this.context.stopService) {
         throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Service stop is unavailable');
       }
-      await this.context.stopService(daemon.name);
+      await this.context.stopService(daemon.key);
       if (!this.context.listServices) {
         throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Service list is unavailable to verify stop');
       }
       const updatedDaemons = await this.context.listServices();
       const updated = updatedDaemons.find(d => d.id === daemon.id);
-      if (!updated || ((updated.state as string) !== 'stopped' && updated.state !== 'exited' && updated.state !== 'failed')) {
-        throw new ProjectionError(503, 'SHELL_STOP_TIMEOUT', `Named service ${daemon.name} did not stop (state: ${updated?.state ?? 'unobservable'})`);
+      if (!updated || (updated.state !== 'exited' && updated.state !== 'failed')) {
+        throw new ProjectionError(503, 'SHELL_STOP_TIMEOUT', `Named service ${daemon.key} did not stop (state: ${updated?.state ?? 'unobservable'})`);
       }
       const endedJob: Ended = {
         jobId: request.job.jobId,
@@ -620,15 +620,15 @@ export class WorkerShell {
         workerGeneration: request.job.workerGeneration,
         workspaceId: this.context.workspaceId,
         projectId: this.context.projectId,
-        command: this.publicText(daemon.name),
+        command: this.publicText(daemon.key),
         background: true,
         startedAt: daemon.startedAt || daemon.createdAt || Date.now(),
         outputCursor: updated?.outputBytes ? updated.outputBytes.toString() : daemon.outputBytes ? daemon.outputBytes.toString() : '0',
         status: 'ended',
         endedAt: updated?.exitedAt ?? Date.now(),
         termination: { reason: 'stopped', exitCode: updated?.exitCode ?? null },
-        serviceName: daemon.name,
-        serviceMode: daemon.persist ? 'persist' : daemon.detached ? 'detached' : 'session',
+        serviceName: daemon.key,
+        serviceMode: daemon.policy.hold === 'leases' ? 'session' : daemon.policy.hold,
         canReceiveStdin: false,
       };
       this.authorizedServices.delete(request.job.jobId);

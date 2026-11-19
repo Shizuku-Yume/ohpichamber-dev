@@ -112,15 +112,12 @@ export class SuggestionDriver {
 
   async handleAgentEnd(event: {
     type: 'agent_end';
-    isTerminal?: boolean;
-    awaitingAsyncWork?: boolean;
     messages?: AgentMessage[];
   }): Promise<void> {
     const generator = this.generator;
     if (generator === 'off') return;
 
-    // Skip rule 1: Non-terminal settles or awaiting async work
-    if (event.isTerminal === false || event.awaitingAsyncWork === true) return;
+    if (this.session.isRunActive) return;
 
     // Skip rule 2: Aborted runs
     if (this.isAborted()) return;

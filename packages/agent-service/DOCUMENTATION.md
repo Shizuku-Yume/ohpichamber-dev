@@ -26,6 +26,14 @@ Unexposed settings are omitted from state and refused on write with 400 `INVALID
 
 ## OMP TUI visual parity and tool streaming
 
+OMP 19's SDK emits `agent_end` once per run. `agent_pause` ends an intermediate model loop, not the run: the canonical run and its running status remain open across retries, queued prompts and background-work wakes. Admission checks use `AgentSession.isRunActive`; prompt completion waits for `waitForRunEnd()` before binding final history. End-of-run mode transitions, goal verification and suggestions run only at `agent_end`. Todo projection reconciles native state on start, pause and end as well as tool and turn events. OMP's live `wakeSources` owns whether outside work can resume the paused run; persisted messages never establish live activity.
+
+Historical todo snapshots and reminder notices normalize removed `blocked` statuses to `pending`, while the canonical contract accepts only the four current statuses. Tool transcript details use the same normalization in the UI. Internal spilled-output links use `local://N.log`; they remain SDK-owned URIs, not Host filesystem or external-browser links. `artifact://` is not an allowed internal read scheme.
+
+The removed seance command and IDA tool are not dispatched. `/commit` is deliberately excluded from generic headless slash dispatch: its selective Git mutation bypasses the Host Git capability. Plugin extension discovery uses enabled plugin records and their resolved extension paths. Named services project OMP daemon `proc` units using their key, PIDs and hold policy, retaining the session-owner checks.
+
+OMP 19 journals `/btw` usage on the main branch. Promotion permits only `model_usage` descendants of the question's captured leaf, then passes the current native leaf into `branchFromBtw` for its own transition CAS. A changed conversational or custom entry, missing ancestor or active run still refuses promotion.
+
 Top-level worker sessions are initialized with `tuiTranscript: true`, which informs the pinned OMP SDK that the transcript renders Mermaid, SVG figures, and table auto-charts, and activates `out://` mid-turn replies by default via `outRepliesActive(settings, tuiTranscript)` while respecting user `out.enabled` configuration overrides.
 
 `WorkerProjection` handles `toolcall_start`, `toolcall_delta`, and `tool_stream_update` events to project progressive tool arguments (`write.content`, `edit.input`, `eval.code`) live into `part.started` and `part.updated` canonical events, keeping `status: 'running'` and redacting private paths via `publicJsonObject(...)` before arguments are emitted over the canonical event stream.

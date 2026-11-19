@@ -4,7 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { stageDependencyClosure } from './prepare-agent-runtime.mjs';
+import { assertNativeRuntimePackageAvailable, stageDependencyClosure } from './prepare-agent-runtime.mjs';
+
+test('requires an exact registry pin for the selected native target', () => {
+  const target = { platform: 'linux', architecture: 'x64' };
+  const name = '@oh-my-pi/pi-natives-linux-x64';
+  assert.doesNotThrow(() => assertNativeRuntimePackageAvailable({ overrides: { [name]: '19.0.0' } }, target));
+  for (const pin of [undefined, '', '^19.0.0', 'latest', 'file:vendor/native.tgz']) {
+    assert.throws(() => assertNativeRuntimePackageAvailable({ overrides: { [name]: pin } }, target), /requires an exact registry version/);
+  }
+  assert.throws(() => assertNativeRuntimePackageAvailable({}, target), /requires an exact registry version/);
+});
 
 const fixture = t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-closure-'));

@@ -131,6 +131,9 @@ export const SubagentSchema = z.strictObject({
   description: z.string().optional(),
   task: z.string().optional(),
   lastIntent: z.string().optional(),
+  stage: z.string().optional(),
+  completionPercent: z.number().min(0).max(100).optional(),
+  recentOutput: z.array(z.string()).optional(),
   durationMs: z.number().nonnegative().optional(),
   createdAt: TimestampSchema.optional(),
   updatedAt: TimestampSchema.optional(),
@@ -222,6 +225,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
   GoalControlRequestSchema,
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
+  z.strictObject({ type: z.literal('compact.abort') }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
@@ -234,6 +238,7 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mode.set'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('goal'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
+  z.strictObject({ type: z.literal('compact.abort'), aborted: z.boolean() }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
@@ -335,12 +340,11 @@ export const SessionMoveToWorktreeResultSchema = z.strictObject({
 });
 export type SessionMoveToWorktreeResult = z.infer<typeof SessionMoveToWorktreeResultSchema>;
 
-export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'abandoned', 'blocked']);
+export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'abandoned']);
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 export const TodoItemSchema = z.strictObject({
   content: z.string(),
   status: TodoStatusSchema,
-  blocker: z.string().optional(),
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 export const TodoPhaseSchema = z.strictObject({

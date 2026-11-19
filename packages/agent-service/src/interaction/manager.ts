@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ApprovalReplySchema, ApprovalRequestSchema, EntityIdSchema, JsonObjectSchema, JsonValueSchema,
   QuestionReplySchema, QuestionRequestSchema, PlanReviewResponseSchema,
+  AskAnswerSchema, AskQuestionSchema,
 } from '@openchamber/agent-contract';
 import type {
   ApprovalReply, ApprovalRequest, ApprovalResolution, JsonObject, JsonValue, QuestionReply, QuestionRequest,
@@ -22,7 +23,7 @@ type ApprovalRecordState = {
   /** Publishes this record as a card; kept so a later mode switch can still show it. */
   publish?: () => void;
 };
-type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout; timeoutMs: number };
+type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout; timeoutMs?: number };
 type SessionState = {
   epoch: string; generation: string; workspaceId: string;
   dispatch: (operation: WorkerOperation) => Promise<void>; append: (input: ProjectionInput) => void;
@@ -62,24 +63,6 @@ export interface ApprovalPolicyLoad {
   (request: ApprovalPolicyLoadRequest): Promise<ApprovalPolicyRecord[]>;
 }
 
-const QuestionAnswerSchema = z.strictObject({
-  results: z.array(z.strictObject({
-    id: z.string().min(1), selectedOptions: z.array(z.string()), customInput: z.string().optional(), note: z.string().optional(),
-  })),
-});
-const QuestionOptionSchema = z.object({
-  label: z.string(),
-  description: z.string().optional(),
-  preview: z.string().optional(),
-});
-const QuestionItemSchema = z.object({
-  id: z.string(),
-  question: z.string().optional(),
-  header: z.string().optional(),
-  options: z.array(QuestionOptionSchema),
-  multi: z.boolean().optional(),
-  recommended: z.number().optional(),
-});
 function increment(version: string): string { return (BigInt(version) + 1n).toString(); }
 function terminalResolution(decision: ApprovalReply['decision'], policy: { policyId: string; revision: string } | undefined): ApprovalResolution {
   if (decision === 'approve' || decision === 'reject') return { decision };
@@ -291,7 +274,7 @@ export class InteractionManager {
     if (!state || state.generation !== generation) return;
     const now = Date.now();
     if (interaction.kind === 'cancel') {
-      this.cancelPending(sessionId, interaction.approvalId);
+      this.cancelPending(sessionId, interaction.approvalId ?? interaction.questionId!);
       return;
     }
     if (interaction.kind === 'approval') {
@@ -362,8 +345,8 @@ export class InteractionManager {
       questionId: interaction.questionId, sessionId, turnId: interaction.turnId, prompt: interaction.prompt, schema: interaction.schema,
       status: 'pending', version: '1', epoch: state.epoch, workerGeneration: state.generation, requestedAt: now,
     });
-    const timeoutMs = Math.min(this.timeoutMs, interaction.timeout ?? this.timeoutMs);
-    const timer = setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, timeoutMs);
+    const timeoutMs = interaction.schema.form === true ? interaction.timeout : Math.min(this.timeoutMs, interaction.timeout ?? this.timeoutMs);
+    const timer = timeoutMs === undefined ? undefined : setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, timeoutMs);
     this.records.set(request.questionId, { kind: 'question', request, timer, timeoutMs });
     state.append({ timestamp: now, event: { type: 'question.requested', question: request } });
   }
@@ -482,6 +465,16 @@ export class InteractionManager {
     this.reservations.add(questionId);
     clearTimeout(record.timer);
     try {
+      if (reply.action === 'update') {
+        if (request.schema?.form !== true) throw new ProjectionError(400, 'INVALID_REQUEST', 'Only native forms accept draft updates');
+        const response = this.validateAnswer(request, reply.response, true);
+        await state.dispatch({ type: 'question.resolve', questionId, action: 'update', response });
+        this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(questionId), 'question');
+        this.assertCas(this.records.get(questionId)!.request, reply.version, 'question');
+        record.request = QuestionRequestSchema.parse({ ...request, version: increment(request.version), timeoutResetAt: Date.now() });
+        state.append({ timestamp: record.request.timeoutResetAt!, event: { type: 'question.requested', question: record.request } });
+        return record.request;
+      }
       const answered = reply.action === 'answer' ? { response: this.validateAnswer(request, reply.response) } : undefined;
       await state.dispatch(
         answered
@@ -503,7 +496,7 @@ export class InteractionManager {
       return terminal;
     } finally {
       this.reservations.delete(questionId);
-      if (this.records.get(questionId) === record) record.timer = setTimeout(() => { void this.expirePending(sessionId, questionId); }, Math.max(0, request.requestedAt + record.timeoutMs - Date.now()));
+      if (this.records.get(questionId) === record && record.timeoutMs !== undefined) record.timer = setTimeout(() => { void this.expirePending(sessionId, questionId); }, Math.max(0, (record.request.timeoutResetAt ?? request.requestedAt) + record.timeoutMs - Date.now()));
     }
   }
 
@@ -521,7 +514,7 @@ export class InteractionManager {
         : { type: 'question.resolved', question: expired.request },
     }));
     try {
-      await state.dispatch(record.kind === 'approval' ? { type: 'approval.resolve', approvalId: id, decision: 'reject' } : { type: 'question.resolve', questionId: id, action: 'cancel' });
+      await state.dispatch(record.kind === 'approval' ? { type: 'approval.resolve', approvalId: id, decision: 'reject' } : { type: 'question.resolve', questionId: id, action: record.request.schema?.form === true ? 'timeout' : 'cancel' });
     } catch { this.invalidate(sessionId, state.generation); }
   }
   cancelPending(sessionId: string, id: string): void {
@@ -589,27 +582,30 @@ export class InteractionManager {
     });
   }
 
-  private validateAnswer(request: QuestionRequest, response: JsonValue): JsonValue {
+  private validateAnswer(request: QuestionRequest, response: JsonValue, draft = false): JsonValue {
     if (request.schema?.type === 'plan-review') {
       const parsed = PlanReviewResponseSchema.safeParse(response);
       if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Plan review response is invalid');
       return parsed.data;
     }
-    const parsed = QuestionAnswerSchema.safeParse(response);
+    const parsed = AskAnswerSchema.safeParse(response);
     if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response does not match the requested result shape');
     const schema = request.schema;
     const questions = schema && Array.isArray(schema.questions) ? schema.questions : [];
     if (parsed.data.results.length !== questions.length) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response count does not match the request');
     for (const [index, result] of parsed.data.results.entries()) {
-      const parsedQuestion = QuestionItemSchema.safeParse(questions[index]);
+      const parsedQuestion = AskQuestionSchema.safeParse(questions[index]);
       if (!parsedQuestion.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question schema is invalid');
       const question = parsedQuestion.data;
       if (question.id !== result.id) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response order does not match the request');
       const labels = question.options.map(option => option.label);
       if (result.selectedOptions.some(option => !labels.includes(option))) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains an unknown option');
+      if (result.selectedOptions.some(label => question.options.find(option => option.label === label)?.disabled)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains a disabled option');
       if (new Set(result.selectedOptions).size !== result.selectedOptions.length) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains duplicate selections');
-      if (result.customInput !== undefined && result.customInput.trim().length === 0) throw new ProjectionError(400, 'INVALID_REQUEST', 'Custom question input must not be blank');
-      if (!question.multi && result.selectedOptions.length + (result.customInput === undefined ? 0 : 1) !== 1) {
+      if (question.allowCustom === false && result.customInput !== undefined) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question does not accept custom input');
+      if (request.schema?.form !== true && result.customInput !== undefined && result.customInput.trim().length === 0) throw new ProjectionError(400, 'INVALID_REQUEST', 'Custom question input must not be blank');
+      const count = result.selectedOptions.length + (result.customInput === undefined ? 0 : 1);
+      if (!question.multi && (count > 1 || (!draft && question.required !== false && count !== 1))) {
         throw new ProjectionError(400, 'INVALID_REQUEST', result.selectedOptions.length === 0 ? 'Question response must contain a selection or custom input' : 'Single-choice question has multiple selections');
       }
     }
