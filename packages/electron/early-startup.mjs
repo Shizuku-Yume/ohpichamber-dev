@@ -22,6 +22,7 @@ import { app, BrowserWindow, nativeTheme, protocol, screen } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createShellEnvironmentLoader } from './shell-environment.mjs';
 import { isSplashColor } from './remote-page-policy.mjs';
@@ -340,7 +341,7 @@ export const isMacMenuBarEnabled = () => (
 export const resolvePreloadPath = () => path.join(app.getAppPath(), 'preload.mjs');
 
 export const resolveBrowserPanelPreloadPath = () => (
-  isDev ? path.join(__dirname, 'browser-panel-preload.cjs') : path.join(app.getAppPath(), 'browser-panel-preload.cjs')
+  isDev ? fileURLToPath(new URL('./browser-panel-preload.cjs', import.meta.url)) : path.join(app.getAppPath(), 'browser-panel-preload.cjs')
 );
 
 // Arguments the preload reads from process.argv. They are fixed at window
