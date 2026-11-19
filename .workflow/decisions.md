@@ -1354,6 +1354,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** the npm name `ohpichamber` turns out to be unavailable, or a pre-release channel becomes needed.
 - **Supersedes:** 2026-10-27 - Keep the fork version at 3.0.0
 
+## 2026-11-19 - Sign local iOS simulator builds for Keychain
+
+- **Decided:** sign iOS simulator builds with Xcode's ad-hoc identity and no development team.
+- **Instead of:** disabling code signing for simulator builds.
+- **Because:** unsigned builds cannot save mobile Host credentials to Keychain and fail with error `-34018`.
+- **Revisit when:** upstream's simulator build supports Keychain without a development team.
+
 ## 2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names
 
 - **Decided:** what a user or the operating system sees is renamed. The product is OhPiChamber on every user-facing surface, with an About credit "Based on OpenChamber" and the upstream MIT notice. Electron uses `dev.ohpichamber.desktop`, mobile `dev.ohpichamber.app` (extensions under it), the CLI is `ohpichamber`, the URL scheme `ohpichamber://`, the data directory `~/.config/ohpichamber`, and Electron's user-data folder `OhPiChamber`. Nothing is imported from `~/.config/openchamber`. Environment variables keep the `OPENCHAMBER_*` prefix (209 names, 2845 references) and are documented as the fork's configuration names. Private workspace packages keep their `@openchamber/*` names, and code identifiers (`OpenChamberLogo`, the `OpenChamberWidget` Xcode target) stay.
