@@ -776,7 +776,7 @@ describe("subagent children known only through the live subagent index", () => {
     const { loader, store } = setupSubagent({ client: nativeClient({ getHistory: () => pending.promise }) })
     // Discovery lists the child as running in its own epoch while the history
     // read is in flight — the race a child spawning right now produces.
-    const liveChild = { ...nativeHostSession(nativeSnapshot(subagentChild.sessionId)), parentSessionId: "session-root", epoch: "child-epoch", headSequence: "12", runtimeStatus: "running" as const, activeRunId: "run-child" }
+    const liveChild = { ...nativeHostSession(nativeSnapshot(subagentChild.sessionId)), parentSessionId: "session-root", rootSessionId: "session-root", epoch: "child-epoch", headSequence: "12", runtimeStatus: "running" as const, activeRunId: "run-child" }
     const loading = loader.ensure(subagentChild)
     store.setState({ session: [...store.getState().session, liveChild] })
     pending.resolve(nativeHistory([nativeMessage(subagentChild.sessionId)], null, nativeSnapshot(subagentChild.sessionId)))

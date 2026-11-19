@@ -292,6 +292,35 @@ describe("SyncProvider native scope and selection boundaries", () => {
       dom.restore()
     }
   })
+  test("a self-rooted fork with a parent loads its own snapshot and event stream", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/fork-boundary"
+    const resolved = workspace(directory)
+    const snapshot = nativeSnapshot("fork-session")
+    const fork = { ...snapshot.session, workspaceId: resolved.workspaceId, parentSessionId: "source-session", metadata: null, metadataRevision: "0", archiveRevision: "0" }
+    const client = createNativeClient()
+    const snapshots: string[] = []
+    const streams: string[] = []
+    client.getSnapshot = async (id) => { snapshots.push(id); return { ...snapshot, session: fork } }
+    client.subscribeSessionEvents = (id) => { streams.push(id); return () => {} }
+    let runtime: ReturnType<typeof useSyncRuntime> | undefined
+    const Probe = () => { runtime = useSyncRuntime(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!runtime) throw new Error("Sync runtime was not mounted")
+      const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
+      store.setState({ workspace: resolved, session: [fork] })
+      const { messageLoader } = runtime
+      await act(async () => { await messageLoader.ensure({ directory, sessionId: fork.sessionId }) })
+      expect(snapshots).toContain(fork.sessionId)
+      expect(streams).toContain(fork.sessionId)
+    } finally {
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+
   test("a child session never attaches events or reads the root-only snapshot route", async () => {
     const dom = installHookTestDom()
     const root = createRoot(dom.container)

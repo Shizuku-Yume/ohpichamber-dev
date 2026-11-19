@@ -580,7 +580,7 @@ export class SessionMessageLoader {
    */
   private knownChild(target: SessionMessageTarget, store: ChildStore): Session | undefined {
     const listed = this.knownSession(target.sessionId, store)
-    if (listed) return listed.parentSessionId || listed.rootSessionId !== listed.sessionId ? listed : undefined
+    if (listed) return listed.rootSessionId !== listed.sessionId ? listed : undefined
     const subagents = useSubagentsStore.getState().byParent
     for (const parentId in subagents) {
       const found = subagents[parentId].find(child => child.subagentId === target.sessionId || child.childSessionId === target.sessionId)

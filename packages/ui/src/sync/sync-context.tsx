@@ -219,7 +219,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const store = childStores.getChild(directory)
     const projected = store?.getState().session.find((item) => item.sessionId === sessionId)
       ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
-    if (projected) return Boolean(projected.parentSessionId) || projected.rootSessionId !== projected.sessionId
+    if (projected) return projected.rootSessionId !== projected.sessionId
     const subagents = useSubagentsStore.getState().byParent
     for (const parentId in subagents) {
       const child = subagents[parentId].find((item) => item.subagentId === sessionId || item.childSessionId === sessionId)
