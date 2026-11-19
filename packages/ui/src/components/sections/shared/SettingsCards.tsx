@@ -23,7 +23,7 @@ import { SETTINGS_WIDTH_LONG_TEXT_CLASS } from '@/components/sections/shared/Set
 export const SETTINGS_CARD_GRID_CLASS = 'grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3';
 
 const CARD_CLASS = cn(
-  'group flex min-h-[132px] flex-col rounded-xl p-4 text-start',
+  'group flex min-h-[132px] min-w-0 flex-col rounded-xl p-4 text-start',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]',
 );
 
@@ -113,7 +113,7 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
       </div>
       {/* The ⋯ button shows on touch screens only; with a mouse the card's
           menu is its right click, so the footer keeps no room for it there. */}
-      <div className={cn('mt-auto flex min-w-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
+      <div className={cn('mt-auto flex min-w-0 shrink-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', (hasControl || hasActions) && 'min-h-10 @xl:min-h-0', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
         {footer}
         {onOpen ? (
           <Icon
@@ -151,9 +151,9 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
   // the card button, never inside it, so they stay separate controls.
   return (
     <ContextMenu>
-      <ContextMenuTrigger render={<div className="group relative" />}>
+      <ContextMenuTrigger render={<div className="group relative min-w-0" />}>
         {card}
-        <div className="absolute bottom-3 inset-e-3 flex items-center gap-1">
+        <div className="absolute bottom-3 inset-e-3 flex shrink-0 items-center gap-1">
           {hasActions && actions ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -458,6 +458,35 @@ test.each([false, true])('marketplace metadata and actions stay independently bo
   expect(dialogAction?.classList.contains('whitespace-normal')).toBe(true);
 });
 
+test('plugin section headings stack above bounded, wrapping actions on narrow panes', async () => {
+  await showCatalog(emptyCatalog);
+  for (const title of ['Installed', 'Marketplace', 'Capabilities']) {
+    const heading = Array.from(container.querySelectorAll('h2')).find(element => element.textContent === title);
+    const header = heading?.parentElement?.parentElement?.parentElement;
+    expect(header?.classList.contains('flex-col')).toBe(true);
+    expect(header?.classList.contains('@xl:flex-row')).toBe(true);
+    const actions = header?.lastElementChild;
+    expect(actions?.classList.contains('max-w-full')).toBe(true);
+    expect(actions?.classList.contains('min-w-0')).toBe(true);
+    if (title !== 'Capabilities') expect(actions?.firstElementChild?.classList.contains('flex-wrap')).toBe(true);
+  }
+});
+
+test('a long installed plugin name stays inside the card above its reserved controls area', async () => {
+  const name = 'long-installed-plugin-name'.repeat(12);
+  await showCatalog({ ...emptyCatalog, plugins: [{ ...plugin, name }] });
+  const title = container.querySelector(`[title="${name}"]`);
+  const card = title?.closest('button');
+  expect(title?.classList.contains('truncate')).toBe(true);
+  expect(card?.classList.contains('min-w-0')).toBe(true);
+  expect(card?.parentElement?.classList.contains('min-w-0')).toBe(true);
+  const footer = card?.querySelector('.mt-auto');
+  expect(footer?.classList.contains('min-h-10')).toBe(true);
+  expect(footer?.classList.contains('@xl:min-h-0')).toBe(true);
+  expect(footer?.classList.contains('shrink-0')).toBe(true);
+  expect(card?.parentElement?.querySelector('[role="switch"]')).not.toBeNull();
+});
+
 test('installed plugin capability chips sit in one shrinkable, wrapping container in the card footer', async () => {
   const installed: InstalledPluginEntry = {
     ...plugin,

@@ -838,7 +838,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           divider={false}
           settingsItem="plugins.installed"
           headerAction={(
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setAddOpen(true)}>
                 <Icon name="add" className="size-3.5" />
                 {t('settings.plugins.sidebar.actions.addTitle')}
@@ -928,7 +928,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           title={t('settings.plugins.marketplace.title')}
           settingsItem="plugins.marketplace"
           headerAction={(
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void refreshMarketplace()}>
                 <Icon name="refresh" className={cn('size-3.5', marketplaceRefreshing && 'animate-spin')} />
                 {t('settings.plugins.action.refresh')}
