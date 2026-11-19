@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 
 import {
   asNonEmptyString,
@@ -118,6 +119,9 @@ describe('re-exported public APIs', () => {
     expect(validation.isPlainObject).toBe(isPlainObject);
   });
 
+  it('does not restore the retired OpenCode configuration reader', async () => {
+    expect(existsSync(new URL('../opencode/config-v2.js', import.meta.url))).toBe(false);
+  });
 
   it('quota/utils/transformers.js re-exports the shared asNonEmptyString', async () => {
     const transformers = await import('../quota/utils/transformers.js');
