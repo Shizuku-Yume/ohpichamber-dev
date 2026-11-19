@@ -1747,3 +1747,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** opening sibling modals during dismissal or keeping a one-shot dirty snapshot after a commit.
 - **Because:** closing modal focus cleanup must complete before the next surface opens, and a successful Git mutation invalidates the earlier dirty answer.
 - **Revisit when:** the shared dialog supports an atomic modal handoff or the draft target reads its dirty answer from the shared Git store.
+
+## 2026-11-19 - Restore chat failure notices from canonical turns
+
+- **Decided:** use the latest canonical failed turn when no equally recent live notification explains the failure.
+- **Instead of:** persisting the notification cache or relying on replay of a terminal event after a reload.
+- **Because:** snapshots already own sanitized terminal outcomes; transient notification state is not a complete history source. Completed, cancelled and superseded turns must not become current failures.
+- **Revisit when:** the chat renders terminal explanations inline with each canonical turn.
