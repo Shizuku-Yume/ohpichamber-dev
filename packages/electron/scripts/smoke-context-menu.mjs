@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { app, BrowserWindow, clipboard, ClipboardItem } from 'electron';
+import { app, BrowserWindow, clipboard, ClipboardItem, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import { createCopyLinkMenuHook } from '../context-menu-clipboard.mjs';
 import { createContextMenuLabels } from '../menu-locales.mjs';
+import { createHistoryMenuAction, createHistoryContextMenuItems } from '../menu-history-action.mjs';
 
 const profile = mkdtempSync(path.join(os.tmpdir(), 'openchamber-copy-link-'));
 app.setPath('userData', profile);
@@ -20,8 +21,13 @@ const run = async () => {
   let exitCode = 0;
   try {
     await app.whenReady();
-    const win = new BrowserWindow({ width: 800, height: 500, webPreferences: { sandbox: true } });
+    const win = new BrowserWindow({ width: 800, height: 500, webPreferences: { sandbox: true, backgroundThrottling: false } });
     const { labels, apply } = createContextMenuLabels();
+    const historyAction = createHistoryMenuAction({
+      getFocusedWebContents: () => webContents.getFocusedWebContents(),
+      getAppWindows: () => BrowserWindow.getAllWindows(),
+    });
+    let nextHistory;
     let nextMenu;
     let nextWrite;
     let writes = 0;
@@ -51,6 +57,7 @@ const run = async () => {
       <p><a id="first" href="https://example.com/a%20b?q=one&amp;x=two#section">Read this</a></p>
       <p><a id="second" href="https://example.org/%E2%9C%93#two">Another link</a></p>
       <p id="plain">Plain text</p>
+      <input id="editable" value="original">
       <img id="image" width="32" height="32" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' fill='red'/%3E%3C/svg%3E">
     `)}`);
 
@@ -61,6 +68,7 @@ const run = async () => {
         return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
       })()`);
       win.focus();
+      win.webContents.focus();
       win.webContents.sendInputEvent({ type: 'mouseDown', button: 'right', clickCount: 1, ...point });
       win.webContents.sendInputEvent({ type: 'mouseUp', button: 'right', clickCount: 1, ...point });
       const menu = await nextMenu.promise;
@@ -74,7 +82,18 @@ const run = async () => {
       baseline.set(selector, describe(await openMenu(selector)));
     }
     dispose();
-    dispose = contextMenu({ ...options, prepend: hook });
+    dispose = contextMenu({
+      ...options,
+      prepend: (defaultActions, properties, browserWindow) => {
+        const target = browserWindow.webContents;
+        return [
+          ...hook(defaultActions, properties),
+          ...createHistoryContextMenuItems(properties, 'en', process.platform, action => {
+            nextHistory.resolve(historyAction(action, target));
+          }),
+        ];
+      },
+    });
     for (const selector of baseline.keys()) {
       assert.deepEqual(describe(await openMenu(selector)), baseline.get(selector));
     }
@@ -85,12 +104,18 @@ const run = async () => {
     ]) {
       apply(locale);
       let nativeSelection;
+      let nativeBookmark;
       if (process.platform === 'linux') {
         // X11 can mirror ordinary clipboard writes to PRIMARY. Preserve the
         // runtime's own writeText semantics instead of restoring selection.
         await clipboard.selection.writeText('previous selection');
         await clipboard.writeText(url);
         nativeSelection = await clipboard.selection.readText();
+      } else {
+        // Windows' native bookmark format retains the URL, not the title.
+        await clipboard.write([new ClipboardItem({ 'electron application/bookmark': { title, url } })]);
+        const [entry] = await clipboard.read();
+        nativeBookmark = await entry.getType('electron application/bookmark');
       }
       await clipboard.writeText('previous clipboard');
       if (process.platform === 'linux') await clipboard.selection.writeText('previous selection');
@@ -106,12 +131,39 @@ const run = async () => {
         assert.equal(await clipboard.selection.readText(), nativeSelection);
       } else {
         const [entry] = await clipboard.read();
-        assert.deepEqual(await entry.getType('electron application/bookmark'), { title, url });
+        assert.deepEqual(await entry.getType('electron application/bookmark'), nativeBookmark);
       }
     }
     assert.equal(writes, 2);
+    apply('en');
+    win.webContents.focus();
+    await win.webContents.executeJavaScript(`document.querySelector('#editable').focus(); document.querySelector('#editable').select()`);
+    win.webContents.insertText('edited');
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelector('#editable').value`), 'edited');
+    for (const [index, label, value] of [[0, 'Undo', 'original'], [1, 'Redo', 'edited']]) {
+      const menu = await openMenu('#editable');
+      assert.deepEqual(menu.items.slice(0, 3).map(item => item.type === 'separator' ? 'separator' : item.label), ['Undo', 'Redo', 'separator']);
+      const item = menu.items[index];
+      assert.equal(item.label, label);
+      assert.equal(item.enabled, true);
+      nextHistory = Promise.withResolvers();
+      item.click();
+      await nextHistory.promise;
+      const restored = await win.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 2000;
+        const poll = () => {
+          const input = document.querySelector('#editable');
+          if (input.value === ${JSON.stringify(value)}) resolve(input.value);
+          else if (Date.now() >= deadline) reject(new Error('History did not restore input: ' + JSON.stringify({ value: input.value, active: document.activeElement.id, focused: document.hasFocus() })));
+          else setTimeout(poll, 20);
+        };
+        poll();
+      })`);
+      assert.equal(restored, value);
+    }
     dispose();
     console.log(`PASS: real native menus, visibility/order, live locale, successive URL writes and clipboard formats on ${process.platform}, Electron ${process.versions.electron}`);
+    console.log(`PASS: real editable-field popup Undo/Redo restores input history on ${process.platform}, Electron ${process.versions.electron}`);
   } catch (error) {
     console.error(error);
     exitCode = 1;
