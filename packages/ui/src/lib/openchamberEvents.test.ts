@@ -103,6 +103,7 @@ describe('openchamber events', () => {
       expect(String(url)).toBe('http://runtime.test:3902/api/openchamber/events');
       expect(headers.get('authorization')).toBe('Bearer fixture-token');
       expect(headers.get('x-fixture-proxy')).toBe('fixture');
+      expect(init?.redirect).toBe('error');
     } finally {
       unsubscribe();
       fetchSpy.mockRestore();

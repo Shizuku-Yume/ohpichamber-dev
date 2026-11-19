@@ -361,7 +361,7 @@ export const retryOpenchamberEventsNow = () => {
  connect();
 };
 
-const connectFetchStream = (canControlBrowser: boolean) => {
+const connectFetchStream = (canControlBrowser: boolean, directNative: boolean) => {
  const controller = new AbortController();
  streamAbortController = controller;
  resetHeartbeatTimer();
@@ -370,6 +370,7 @@ const connectFetchStream = (canControlBrowser: boolean) => {
    const response = await runtimeFetch('/api/openchamber/events', {
     query: canControlBrowser ? { browser: '1' } : undefined,
     headers: { Accept: 'text/event-stream' },
+    redirect: directNative ? 'error' : undefined,
     signal: controller.signal,
    });
    if (controller.signal.aborted) {
@@ -752,10 +753,11 @@ const connect = () => {
  const canControlBrowser = canDriveBrowserPage();
  const native = isCapacitorApp();
  if (native && !getRuntimeApiBaseUrl()) return;
- if (isRelayModeActive() || native) {
+ const relay = isRelayModeActive();
+ if (relay || native) {
   // Native direct connections can require both bearer auth and saved proxy
   // headers, neither of which can be attached to an EventSource request.
-  connectFetchStream(canControlBrowser);
+  connectFetchStream(canControlBrowser, native && !relay);
   return;
  }
  if (typeof EventSource !== 'function') return;
