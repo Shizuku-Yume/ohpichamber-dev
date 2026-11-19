@@ -30,7 +30,7 @@ const startBodySchema = z.object({
  * stop and resume buttons.
  * Registered only in builds with workflows.
  */
-const registerWorkflowRoutes = (app, runtime) => {
+export const registerWorkflowRoutes = (app, runtime) => {
   app.get('/api/openchamber/workflows', async (req, res) => {
     const query = listQuerySchema.safeParse(req.query);
     if (!query.success) return res.status(400).json({ error: 'sessionId or directory is required' });

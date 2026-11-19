@@ -1,4 +1,3 @@
-import { OpenCode } from '@opencode/client';
 import { describe, expect, it } from 'vitest';
 
 import { SessionCreateRequestSchema } from '@openchamber/agent-contract';
