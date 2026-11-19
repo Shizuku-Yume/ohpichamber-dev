@@ -5,7 +5,9 @@ import { Window } from 'happy-dom';
 import { buildPairingConnectionPayload, encodePairingConnectionPayload } from '@/lib/connectionPayload';
 import { serveTestHttp } from '@/lib/test-http-server';
 
-test('manual reconnect preserves secure headers through success and password cancellation; Instances can clear them', async () => {
+const capacitorBridge = {};
+
+test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] as const)('mobile reconnect preserves secure headers and confirms pairing once via %s', async (delivery) => {
   const dom = new Window({ url: 'http://localhost' });
   const secrets = new Map<string, string>();
   let authenticated = true;
@@ -14,6 +16,9 @@ test('manual reconnect preserves secure headers through success and password can
   let healthRequests = 0;
   let allowPairing = false;
   let onAppUrlOpen: ((event: { url: string }) => void) | undefined;
+  const launch = Promise.withResolvers<{ url: string } | undefined>();
+  let launchRequested = false;
+  let confirmations = 0;
   const server = await serveTestHttp((request, response) => {
     if (request.url === '/api/client-auth/pairing/redeem') {
       pairingRequests.push(request.method ?? '');
@@ -36,7 +41,7 @@ test('manual reconnect preserves secure headers through success and password can
     requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
     HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event, CustomEvent: dom.CustomEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
-    Capacitor: {
+    Capacitor: Object.assign(capacitorBridge, {
       PluginHeaders: [
         { name: 'App', methods: [{ name: 'addListener', rtype: 'callback' }, { name: 'removeListener', rtype: 'callback' }, { name: 'getLaunchUrl', rtype: 'promise' }] },
         { name: 'SecureStorage', methods: ['internalGetItem', 'internalSetItem', 'internalRemoveItem'].map((name) => ({ name, rtype: 'promise' })) },
@@ -49,7 +54,10 @@ test('manual reconnect preserves secure headers through success and password can
         return Promise.resolve('fixture-listener');
       },
       nativePromise: async (plugin: string, method: string, options: { prefixedKey: string; data?: unknown; url: string; method?: string; headers: Record<string, string> }) => {
-        if (plugin === 'App' && method === 'getLaunchUrl') return undefined;
+        if (plugin === 'App' && method === 'getLaunchUrl') {
+          launchRequested = true;
+          return launch.promise;
+        }
         if (plugin === 'CapacitorHttp') {
           const response = await fetch(options.url, { method: options.method, body: options.data === undefined ? undefined : JSON.stringify(options.data), headers: options.headers, redirect: 'manual' });
           return { status: response.status, data: await response.text(), headers: {}, url: response.url };
@@ -59,7 +67,7 @@ test('manual reconnect preserves secure headers through success and password can
         secrets.delete(options.prefixedKey);
         return { success: true };
       },
-    },
+    }),
   })) {
     originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
@@ -81,7 +89,10 @@ test('manual reconnect preserves secure headers through success and password can
   const onConnected = () => { connected += 1; };
   const PairingLinkReceiver = () => {
     const { onPairing, pairingConfirmation } = useMobilePairingConfirmation(onConnected);
-    useDeepLinkSource({ ready: false, onPairing });
+    useDeepLinkSource({ ready: false, onPairing: (payload) => {
+      confirmations += 1;
+      void onPairing(payload);
+    } });
     return pairingConfirmation;
   };
   const input = async (selector: string, value: string) => {
@@ -189,9 +200,16 @@ test('manual reconnect preserves secure headers through success and password can
     allowPairing = true;
     const connectedBeforeLink = connected;
     await act(async () => root.render(<I18nProvider><PairingLinkReceiver /></I18nProvider>));
-    await settle(() => Boolean(onAppUrlOpen));
+    await settle(() => Boolean(onAppUrlOpen) && launchRequested);
     const probesBeforeLink = healthRequests;
-    await act(async () => onAppUrlOpen?.({ url: pairingLink }));
+    expect(confirmations).toBe(0);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => {
+      if (delivery === 'getLaunchUrl only') launch.resolve({ url: pairingLink });
+      else onAppUrlOpen?.({ url: pairingLink });
+    });
+    expect(confirmations).toBe(1);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(url);
     expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('synthetic-fixture');
     expect(healthRequests).toBe(probesBeforeLink);
@@ -201,7 +219,17 @@ test('manual reconnect preserves secure headers through success and password can
     expect(pairingRequests).toEqual(['POST']);
     expect(connected).toBe(connectedBeforeLink);
 
+    if (delivery !== 'getLaunchUrl only') {
+      await act(async () => launch.resolve(delivery === 'appUrlOpen before getLaunchUrl' ? { url: pairingLink } : undefined));
+    }
+    expect(confirmations).toBe(1);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(healthRequests).toBe(probesBeforeLink);
+    expect(pairingRequests).toEqual(['POST']);
+    expect(connected).toBe(connectedBeforeLink);
+
     await act(async () => onAppUrlOpen?.({ url: pairingLink }));
+    expect(confirmations).toBe(2);
     await clickText('Connect');
     await settle(() => connected === connectedBeforeLink + 1);
     expect(pairingRequests).toEqual(['POST', 'POST']);
