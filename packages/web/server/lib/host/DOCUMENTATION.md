@@ -59,6 +59,8 @@ An OMP executable selected as the Bun interpreter travels with `BUN_BE_BUN=1` fr
 
 The agent-service registry records the actual Linux process birth identity when registering it. Reaping requires that identity and the recorded binary/entrypoint, checked again before signalling; an assigned ephemeral port is not compared with the literal `--port 0` command. Missing birth verification leaves the process untouched. Non-Linux agent orphan reaping remains unverified and refuses to guess identity. Legacy managed registrations remain until task17 retires their callers.
 
+On Linux x64 and arm64, the process-cleanup helper can call the same kernel pidfd operations through libc's `syscall` when glibc lacks the named wrappers. An unsupported kernel still fails closed; cleanup never falls back to numeric PID signalling.
+
 ## Operational session state
 
 `createHostSessionState({ dataDir, fsPromises?, path?, now? })` opens `host-metadata.sqlite` under the Host data directory and returns `sessionMetadataStore`, `archiveStore`, `sessionFoldersStore`, `agentScopeStore`, `attachmentStore`, `initialize()`, `flush()`, `close()`, and `databasePath`. Composition injects these stores into the sessions service, feature routes, canonical gateway, and session projections. Route registration does not create hidden connections.

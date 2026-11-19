@@ -99,7 +99,7 @@ describe('portable process-tree fallback', () => {
     ]);
     expect(processTreeKillArgs(4242)).toEqual(['/T', '/F', '/PID', '4242']);
     expect(processTreeKillArgs(4242, 'SIGTERM')).toEqual(['/T', '/PID', '4242']);
-    expect(terminateProcessTree(1, 'SIGKILL', { platform: 'win32' })).resolves.toBe(false);
+    await expect(terminateProcessTree(1, 'SIGKILL', { platform: 'win32' })).resolves.toBe(false);
     expect(() => processTreeKillArgs(process.pid)).toThrow('Unsafe process id');
     expect(() => processTreeKillArgs(4242, 'SIGUSR1')).toThrow('Unsupported process signal');
   });
