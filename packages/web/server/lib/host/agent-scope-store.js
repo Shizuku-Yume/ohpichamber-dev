@@ -288,7 +288,10 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
         }
         db.prepare('UPDATE host_agent_sessions SET session_id = ?, root_session_id = ? WHERE session_id = ? AND root_session_id = ?')
           .run(to, to, from, from);
-        db.prepare('UPDATE session_metadata SET session_id = ? WHERE session_id = ?').run(to, from);
+        db.prepare(`UPDATE session_metadata SET session_id = ?, payload = CASE
+          WHEN json_extract(CASE WHEN json_valid(payload) THEN payload END, '$.openchamber.multirun.sessionID') = ?
+          THEN json_set(payload, '$.openchamber.multirun.sessionID', ?)
+          ELSE payload END WHERE session_id = ?`).run(to, from, to, from);
         return readSession(to);
       });
     } catch (error) { throw writeFailure(error); }

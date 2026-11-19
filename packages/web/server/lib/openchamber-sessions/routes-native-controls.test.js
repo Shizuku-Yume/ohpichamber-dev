@@ -149,6 +149,26 @@ describe('Host native session control saga', () => {
     await expect(owner.sessionMetadataStore.getState('public-root')).resolves.toBeNull();
   });
 
+  it.each([
+    ['public-root', 'btw-branched-root'],
+    ['another-root', 'another-root'],
+    [null, null],
+  ])('rekeys only a multi-run membership owned by the promoted root (%s)', async (ownerId, expectedId) => {
+    const { makeService } = await fixture();
+    const service = makeService();
+    const multirun = {
+      version: 1, sessionID: ownerId, group: { kind: 'id', id: '957a6bd0-bf88-4497-9add-da381ed07ca5' },
+      groupSlug: 'comparison', providerID: 'provider', modelID: 'model', role: 'run',
+    };
+    const saved = await service.setMetadata('public-root', { changes: { openchamber: { multirun } } });
+    await service.control('public-root', { type: 'btw.branch', recordId: 'btw-record-1' });
+    const expectedMembership = expectedId === null ? saved.metadata.openchamber.multirun : { ...multirun, sessionID: expectedId };
+    await expect(service.getMetadata('btw-branched-root')).resolves.toEqual({
+      sessionId: 'btw-branched-root', revision: saved.revision,
+      metadata: { openchamber: { multirun: expectedMembership } },
+    });
+  });
+
   it('releases an admission on a known pre-dispatch refusal', async () => {
     const { store, source, native, makeService } = await fixture();
     native.refusePath = '/internal/sessions/public-root/reopen';
