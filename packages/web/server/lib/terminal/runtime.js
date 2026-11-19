@@ -695,7 +695,7 @@ export function createTerminalRuntime({
         recordHistoryResize(session.history, cols, rows);
         publish(session, { t: 'resize', cols, rows });
       }
-      res.json({ success: true, cols: session.cols, rows: session.rows });
+      res.json({ success: true, cols: session.cols, rows: session.rows, orderedResize: true });
     }
     catch (error) { res.status(500).json({ error: error?.message || 'Failed to resize terminal' }); }
   });

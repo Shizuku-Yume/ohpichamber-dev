@@ -94,6 +94,7 @@ const terminalSizeSchema = {
   cols: z.number().int().min(1).max(1000),
   rows: z.number().int().min(1).max(500),
 };
+const terminalResizeResponseSchema = z.object({ ...terminalSizeSchema, orderedResize: z.boolean().optional() });
 const terminalSnapshotSizeSchema = {
   cols: terminalSizeSchema.cols.optional(),
   rows: terminalSizeSchema.rows.optional(),
@@ -362,6 +363,17 @@ export class TerminalTransport {
     this.closeSocket();
     await this.ensureConnected();
     if (!this.send({ t: 'write', v: 3, s: sessionId, d: data })) throw new Error('Terminal connection is unavailable');
+  }
+
+  async resize(sessionId: string, cols: number, rows: number, directory?: string | null): Promise<void> {
+    const response = await command(`/api/terminal/${sessionId}/resize`, 'POST', { cols, rows }, directory);
+    const result = terminalResizeResponseSchema.safeParse(await response.json().catch(() => null)).data;
+    if (!result || result.orderedResize) return;
+    const projection = this.projections.get(sessionId);
+    if (!projection) return;
+    // Old Hosts only acknowledge resize over HTTP; they cannot order it against output.
+    projection.history.sizes = [{ offset: 0, cols: result.cols, rows: result.rows }];
+    this.projections.set(sessionId, { ...projection, cols: result.cols, rows: result.rows });
   }
 
   dispose(): void {
@@ -664,7 +676,7 @@ async function command(path: string, method: string, body?: unknown, directory?:
   return response;
 }
 export async function resizeTerminal(sessionId: string, cols: number, rows: number, directory?: string | null): Promise<void> {
-  await command(`/api/terminal/${sessionId}/resize`, 'POST', { cols, rows }, directory);
+  await transportFor(directory).resize(sessionId, cols, rows, directory);
 }
 export async function updateTerminalAppearance(sessionId: string, appearance: Pick<CreateTerminalOptions, 'themeMode' | 'terminalBackground' | 'terminalForeground'>, directory?: string | null): Promise<void> { await command(`/api/terminal/${sessionId}/appearance`, 'POST', appearance, directory); }
 export async function closeTerminal(sessionId: string, directory?: string | null): Promise<void> { await command(`/api/terminal/${sessionId}`, 'DELETE', undefined, directory); transportFor(directory).forget(sessionId); }

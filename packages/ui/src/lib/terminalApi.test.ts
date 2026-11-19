@@ -123,6 +123,41 @@ describe('terminal transport', () => {
     }
   });
 
+  test('uses the HTTP size only for Hosts that do not publish ordered resize events', async () => {
+    const socket = new FakeSocket();
+    const transport = new TerminalTransport({ refreshAuth: async () => undefined, openSocket: () => socket });
+    const latest = (sessionId: string) => {
+      const events: TerminalStreamEvent[] = [];
+      transport.subscribe(sessionId, { onEvent: (event) => events.push(event) })();
+      return events[0];
+    };
+    try {
+      for (const id of ['legacy', 'ordered']) transport.subscribe(id, { onEvent: () => undefined });
+      await tick();
+      socket.open();
+      for (const id of ['legacy', 'ordered']) {
+        socket.emit({ t: 'snapshot', s: id, q: 1, history: 'prompt', status: 'running', cols: 80, rows: 24 });
+      }
+      nextFetchResponse = () => Response.json({ success: true, cols: 120, rows: 40 });
+      await transport.resize('legacy', 120, 40);
+      socket.emit({ t: 'output', s: 'legacy', q: 2, d: ' wide' });
+      expect(latest('legacy')).toMatchObject({ sequence: 2, cols: 120, rows: 40, data: 'prompt wide' });
+
+      nextFetchResponse = () => Response.json({ success: true, cols: 120, rows: 40, orderedResize: true });
+      await transport.resize('ordered', 120, 40);
+      expect(latest('ordered')).toMatchObject({ sequence: 1, cols: 80, rows: 24 });
+      socket.emit({ t: 'output', s: 'ordered', q: 2, d: ' narrow' });
+      socket.emit({ t: 'resize', s: 'ordered', q: 3, cols: 120, rows: 40 });
+      expect(latest('ordered')).toMatchObject({
+        sequence: 3, cols: 120, rows: 40,
+        sizes: [{ offset: 0, cols: 80, rows: 24 }, { offset: 13, cols: 120, rows: 40 }],
+      });
+    } finally {
+      nextFetchResponse = () => new Response(null, { status: 500 });
+      transport.dispose();
+    }
+  });
+
   test('preserves drawing sizes across snapshots and ordered resize events for late subscribers', async () => {
     const socket = new FakeSocket();
     const transport = new TerminalTransport({ refreshAuth: async () => '', openSocket: () => socket });
