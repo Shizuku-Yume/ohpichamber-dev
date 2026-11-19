@@ -37,10 +37,10 @@ export function createSkillCatalogOwner({ owner, getDependencies, policyOptions,
       workspaceId: scope.workspaceId, items: result.items.filter(item => !excludedSkills.includes(item.skillName)).map(item => {
         const installed = authored.skills.find(skill => skill.scope === 'workspace' && skill.skillId === item.skillName)
           ?? authored.skills.find(skill => skill.scope === 'agent' && skill.skillId === item.skillName);
-        return {
-          ...item, sourceId, ...(input.gitIdentityId ? { gitIdentityId: input.gitIdentityId } : {}), installed: installed
-            ? { isInstalled: true, scope: installed.scope, authoredSkillId: installed.skillId } : { isInstalled: false }
-        };
+        const repositoryItem = { ...item, sourceId };
+        if (input.gitIdentityId) repositoryItem.gitIdentityId = input.gitIdentityId;
+        return { ...repositoryItem, installed: installed
+          ? { isInstalled: true, scope: installed.scope, authoredSkillId: installed.skillId } : { isInstalled: false } };
       })
     });
   }
