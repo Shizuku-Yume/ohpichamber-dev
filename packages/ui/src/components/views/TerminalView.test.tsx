@@ -113,7 +113,7 @@ mock.module('@/stores/useUIStore', () => ({ useUIStore: useUiStoreMock }));
 mock.module('@/stores/useInlineCommentDraftStore', () => ({ useInlineCommentDraftStore: () => ({ addDraft: () => undefined }) }));
 mock.module('@/components/terminal/TerminalViewport', () => ({
   TerminalViewport: React.forwardRef(function TerminalViewportMock(
-    { sessionKey, chunks, isVisible, onInput, onResize }: { sessionKey: string; chunks: unknown[]; isVisible: boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void },
+    { sessionKey, chunks, isVisible, onInput, onReply, onResize }: { sessionKey: string; chunks: unknown[]; isVisible: boolean; onInput: (data: string) => void; onReply: (data: string) => void; onResize: (cols: number, rows: number) => void },
     ref: React.ForwardedRef<{ focus: () => void; fit: () => void; getSelection: () => null; pasteClipboard: () => Promise<void> }>,
   ) {
     React.useImperativeHandle(ref, () => ({
@@ -134,6 +134,7 @@ mock.module('@/components/terminal/TerminalViewport', () => ({
       'data-visible': String(isVisible),
       'data-chunk-count': String(chunks.length),
       onKeyDown: (event: React.KeyboardEvent) => onInput(event.key),
+      onDoubleClick: () => onReply('\x1b[1;1R'),
     });
   }),
 }));
@@ -476,18 +477,20 @@ describe('TerminalView project action tab indicator', () => {
       type('a');
       reconnect(1);
       type('b');
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       reconnect(2);
       snapshot();
       type('c');
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
-    expect(inputCalls).toEqual(['a']);
+    expect(inputCalls).toEqual(['a', '\x1b[1;1R']);
     expect(host.textContent).toContain('terminalView.status.inputPaused');
 
     const resume = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'terminalView.actions.resumeInput');
     if (!resume) throw new Error('resume button not shown');
     await act(async () => resume.click());
     await act(async () => { type('d'); });
-    expect(inputCalls).toEqual(['a', 'd']);
+    expect(inputCalls).toEqual(['a', '\x1b[1;1R', 'd']);
     expect(host.textContent).not.toContain('terminalView.status.inputPaused');
   });
 

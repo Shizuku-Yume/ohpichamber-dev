@@ -492,8 +492,9 @@ requires an explicit resume; cached output never makes the tab writable.
 Reopening the input gate automatically at an arbitrary
 keystroke could send the tail of a command whose beginning was never received.
 The terminal neither queues input for replay nor clears the shell's command
-line; the user can see what the shell received before continuing. Programmatic
-project-action interrupts can still open a socket without waiting for a snapshot.
+line; the user can see what the shell received before continuing. Live terminal
+query replies still reach the attached PTY while typing is paused. Programmatic
+project-action interrupts can open a socket without waiting for a snapshot.
 
 ## Office documents in a diff
 

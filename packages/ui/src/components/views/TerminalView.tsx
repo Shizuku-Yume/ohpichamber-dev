@@ -62,6 +62,7 @@ type TerminalTabViewportProps = {
  isTerminalVisible: boolean;
  registerController: (tabId: string, controller: TerminalController | null) => void;
  onInput: (data: string) => void;
+ onReply: (tabId: string, data: string) => void;
  onResize: (cols: number, rows: number) => void;
  onProvisionalSize: (cols: number, rows: number) => void;
  theme: TerminalTheme;
@@ -81,7 +82,7 @@ type TerminalTabViewportProps = {
  */
 const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
  directory, tabId, isActive, isTerminalVisible, registerController,
- onInput, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll, clipboard,
+ onInput, onReply, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll, clipboard,
 }) => {
  // Scrollback is a leaf subscription: streaming output must not rerender the tab strip.
  const chunks = useTerminalStore((s) => s.getBuffer(directory, tabId).chunks);
@@ -93,6 +94,7 @@ const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
     sessionKey={viewportKey}
     chunks={chunks}
     onInput={onInput}
+    onReply={(data) => onReply(tabId, data)}
     onResize={onResize}
     onProvisionalSize={onProvisionalSize}
     theme={theme}
@@ -1002,6 +1004,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   terminalControllerRef.current?.focus();
  }, [setInputRecovery]);
 
+ const handleViewportReply = React.useCallback((tabId: string, data: string) => {
+  const terminalId = terminalIdRef.current;
+  if (!data || !terminalId || tabId !== activeTabIdRef.current
+   || !hasAttachmentRef.current || terminalId !== activeTerminalIdRef.current) return;
+  void terminal.sendInput(terminalId, data, directoryRef.current, { requireAttachment: true }).catch(() => undefined);
+ }, [terminal]);
+
  // The estimate only seeds the size a brand-new shell is spawned with. A
  // running PTY keeps its size until Ghostty has fitted the viewport for
  // real; resizing it to an estimate makes the shell redraw for a width the
@@ -1447,6 +1456,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
        isTerminalVisible={isTerminalVisible}
        registerController={registerTabController}
        onInput={handleViewportInput}
+       onReply={handleViewportReply}
        onResize={handleViewportResize}
        onProvisionalSize={handleProvisionalSize}
        theme={xtermTheme}
