@@ -1,6 +1,8 @@
 import express from 'express';
 import { constants as fsConstants } from 'node:fs';
 import { EntityIdSchema, HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+const asString = (value) => typeof value === 'string' ? value.trim() : '';
+
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_SOURCES = 12;
