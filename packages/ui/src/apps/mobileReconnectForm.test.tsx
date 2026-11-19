@@ -5,19 +5,30 @@ import { Window } from 'happy-dom';
 import { buildPairingConnectionPayload, encodePairingConnectionPayload } from '@/lib/connectionPayload';
 import { serveTestHttp } from '@/lib/test-http-server';
 
-test('manual reconnect preserves secure headers through success and password cancellation; Instances can clear them', async () => {
+const capacitorBridge = {};
+
+test.each(['appUrlOpen', 'getLaunchUrl only', 'appUrlOpen before getLaunchUrl'] as const)('mobile reconnect preserves secure headers and confirms pairing once via %s', async (delivery) => {
   const dom = new Window({ url: 'http://localhost' });
   const secrets = new Map<string, string>();
   let authenticated = true;
   const received: string[] = [];
   const pairingRequests: string[] = [];
+  let healthRequests = 0;
+  let allowPairing = false;
+  let onAppUrlOpen: ((event: { url: string }) => void) | undefined;
+  const launch = Promise.withResolvers<{ url: string } | undefined>();
+  let launchRequested = false;
+  let confirmations = 0;
   const server = await serveTestHttp((request, response) => {
     if (request.url === '/api/client-auth/pairing/redeem') {
       pairingRequests.push(request.method ?? '');
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ error: 'Invalid or expired pairing session' }));
+      response.writeHead(allowPairing ? 200 : 400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(allowPairing
+        ? { clientToken: 'synthetic-paired-token' }
+        : { error: 'Invalid or expired pairing session' }));
       return;
     }
+    if (request.url === '/health') healthRequests += 1;
     received.push(String(request.headers['x-proxy'] || ''));
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify(request.url === '/health' ? { status: 'ok' } : request.method === 'POST'
@@ -30,12 +41,23 @@ test('manual reconnect preserves secure headers through success and password can
     requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
     HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event, CustomEvent: dom.CustomEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
-    Capacitor: {
+    Capacitor: Object.assign(capacitorBridge, {
       PluginHeaders: [
+        { name: 'App', methods: [{ name: 'addListener', rtype: 'callback' }, { name: 'removeListener', rtype: 'callback' }, { name: 'getLaunchUrl', rtype: 'promise' }] },
         { name: 'SecureStorage', methods: ['internalGetItem', 'internalSetItem', 'internalRemoveItem'].map((name) => ({ name, rtype: 'promise' })) },
         { name: 'CapacitorHttp', methods: [{ name: 'request', rtype: 'promise' }] },
       ],
+      nativeCallback: (plugin: string, method: string, options: { eventName: string }, callback: (event: { url: string }) => void) => {
+        if (plugin === 'App' && options.eventName === 'appUrlOpen') {
+          onAppUrlOpen = method === 'addListener' ? callback : undefined;
+        }
+        return Promise.resolve('fixture-listener');
+      },
       nativePromise: async (plugin: string, method: string, options: { prefixedKey: string; data?: unknown; url: string; method?: string; headers: Record<string, string> }) => {
+        if (plugin === 'App' && method === 'getLaunchUrl') {
+          launchRequested = true;
+          return launch.promise;
+        }
         if (plugin === 'CapacitorHttp') {
           const response = await fetch(options.url, { method: options.method, body: options.data === undefined ? undefined : JSON.stringify(options.data), headers: options.headers, redirect: 'manual' });
           return { status: response.status, data: await response.text(), headers: {}, url: response.url };
@@ -45,7 +67,7 @@ test('manual reconnect preserves secure headers through success and password can
         secrets.delete(options.prefixedKey);
         return { success: true };
       },
-    },
+    }),
   })) {
     originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
@@ -55,6 +77,8 @@ test('manual reconnect preserves secure headers through success and password can
   const { I18nProvider } = await import('@/lib/i18n');
   const { MobileConnectionWelcome } = await import('./MobileConnectionWelcome');
   const { MobileInstancesSurface } = await import('./MobileInstancesSurface');
+  const { useDeepLinkSource } = await import('./deepLinkNavigation');
+  const { useMobilePairingConfirmation } = await import('./useMobilePairingConfirmation');
   const { upsertMobileConnection, loadMobileConnectionHeaders, loadMobileConnections } = await import('./mobileConnections');
   const { switchRuntimeEndpoint } = await import('@/lib/runtime-switch');
   const container = document.createElement('div');
@@ -63,6 +87,14 @@ test('manual reconnect preserves secure headers through success and password can
   const url = server.url.toString().replace(/\/$/, '');
   let connected = 0;
   const onConnected = () => { connected += 1; };
+  const PairingLinkReceiver = () => {
+    const { onPairing, pairingConfirmation } = useMobilePairingConfirmation(onConnected);
+    useDeepLinkSource({ ready: false, onPairing: (payload) => {
+      confirmations += 1;
+      void onPairing(payload);
+    } });
+    return pairingConfirmation;
+  };
   const input = async (selector: string, value: string) => {
     const element = document.querySelector<HTMLInputElement>(selector);
     if (!element) throw new Error(`Missing input ${selector}`);
@@ -164,6 +196,44 @@ test('manual reconnect preserves secure headers through success and password can
     await settle(() => document.body.textContent!.includes('This server needs a password or client token.'));
     expect(pairingRequests).toEqual(['POST']);
     expect(document.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe('');
+
+    allowPairing = true;
+    const connectedBeforeLink = connected;
+    await act(async () => root.render(<I18nProvider><PairingLinkReceiver /></I18nProvider>));
+    await settle(() => Boolean(onAppUrlOpen) && launchRequested);
+    const probesBeforeLink = healthRequests;
+    expect(confirmations).toBe(0);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => {
+      if (delivery === 'getLaunchUrl only') launch.resolve({ url: pairingLink });
+      else onAppUrlOpen?.({ url: pairingLink });
+    });
+    expect(confirmations).toBe(1);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(url);
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('synthetic-fixture');
+    expect(healthRequests).toBe(probesBeforeLink);
+    expect(pairingRequests).toEqual(['POST']);
+    await clickText('Cancel');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(pairingRequests).toEqual(['POST']);
+    expect(connected).toBe(connectedBeforeLink);
+
+    if (delivery !== 'getLaunchUrl only') {
+      await act(async () => launch.resolve(delivery === 'appUrlOpen before getLaunchUrl' ? { url: pairingLink } : undefined));
+    }
+    expect(confirmations).toBe(1);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(healthRequests).toBe(probesBeforeLink);
+    expect(pairingRequests).toEqual(['POST']);
+    expect(connected).toBe(connectedBeforeLink);
+
+    await act(async () => onAppUrlOpen?.({ url: pairingLink }));
+    expect(confirmations).toBe(2);
+    await clickText('Connect');
+    await settle(() => connected === connectedBeforeLink + 1);
+    expect(pairingRequests).toEqual(['POST', 'POST']);
+    expect([...secrets.values()]).toContain('synthetic-paired-token');
   } finally {
     await act(async () => root.unmount());
     switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null });

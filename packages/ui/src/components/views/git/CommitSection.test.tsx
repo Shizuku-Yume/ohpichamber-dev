@@ -38,7 +38,8 @@ describe('commit panel generation gate', () => {
       expect(html).toContain('fix: keep the message');
       expect(html).toContain('git-commit');
     }
-    const count = 'aria-label="Commit  aria label"';
+    const count = 'aria-label="Commit"';
+    expect(withoutGeneration).toContain(count);
     expect(withoutGeneration.split(count).length - 1).toBe(withGeneration.split(count).length - 1);
     expect(withoutGeneration).not.toMatch(/disabled=""[^>]*aria-label="Generate commit message/);
   });
