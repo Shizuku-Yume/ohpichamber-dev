@@ -1,6 +1,8 @@
 import React, { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
+
+import { buildPairingConnectionPayload, encodePairingConnectionPayload } from '@/lib/connectionPayload';
 import { serveTestHttp } from '@/lib/test-http-server';
 
 test('manual reconnect preserves secure headers through success and password cancellation; Instances can clear them', async () => {
@@ -8,7 +10,14 @@ test('manual reconnect preserves secure headers through success and password can
   const secrets = new Map<string, string>();
   let authenticated = true;
   const received: string[] = [];
+  const pairingRequests: string[] = [];
   const server = await serveTestHttp((request, response) => {
+    if (request.url === '/api/client-auth/pairing/redeem') {
+      pairingRequests.push(request.method ?? '');
+      response.writeHead(400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ error: 'Invalid or expired pairing session' }));
+      return;
+    }
     received.push(String(request.headers['x-proxy'] || ''));
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify(request.url === '/health' ? { status: 'ok' } : request.method === 'POST'
@@ -26,7 +35,7 @@ test('manual reconnect preserves secure headers through success and password can
         { name: 'SecureStorage', methods: ['internalGetItem', 'internalSetItem', 'internalRemoveItem'].map((name) => ({ name, rtype: 'promise' })) },
         { name: 'CapacitorHttp', methods: [{ name: 'request', rtype: 'promise' }] },
       ],
-      nativePromise: async (plugin: string, method: string, options: { prefixedKey: string; data?: unknown; url: string; method: string; headers: Record<string, string> }) => {
+      nativePromise: async (plugin: string, method: string, options: { prefixedKey: string; data?: unknown; url: string; method?: string; headers: Record<string, string> }) => {
         if (plugin === 'CapacitorHttp') {
           const response = await fetch(options.url, { method: options.method, body: options.data === undefined ? undefined : JSON.stringify(options.data), headers: options.headers, redirect: 'manual' });
           return { status: response.status, data: await response.text(), headers: {}, url: response.url };
@@ -132,6 +141,18 @@ test('manual reconnect preserves secure headers through success and password can
     const retainedRelay = (await loadMobileConnections()).find((connection) => connection.id === relaySaved.id);
     expect(retainedRelay?.label).toBe('Relay only');
     expect(retainedRelay?.candidates).toEqual([{ kind: 'relay', relay }]);
+
+    await act(async () => root.render(<I18nProvider><MobileConnectionWelcome onConnected={onConnected} /></I18nProvider>));
+    await clickText('Connect by address');
+    const pairingLink = encodePairingConnectionPayload(buildPairingConnectionPayload({
+      pairingId: 'pair_fixture',
+      secret: 'synthetic-fixture',
+      candidates: [{ type: 'lan', url, priority: 10 }],
+    }));
+    await input('input[type="url"]', pairingLink);
+    await settle(() => document.body.textContent!.includes('This server needs a password or client token.'));
+    expect(pairingRequests).toEqual(['POST']);
+    expect(document.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe('');
   } finally {
     await act(async () => root.unmount());
     switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null });
