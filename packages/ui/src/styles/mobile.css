@@ -554,6 +554,23 @@
   padding-bottom: var(--oc-safe-area-bottom);
 }
 
+/* The two tab bars and quick keys take most of a short Android IME viewport.
+   Keep the quick keys and give the rows the space until the keyboard closes. */
+@media (max-height: 240px) {
+  html.oc-capacitor-app.oc-platform-android.oc-keyboard-open .oc-mobile-workspace-terminal .oc-terminal-chrome {
+    display: none;
+  }
+
+  html.oc-capacitor-app.oc-platform-android.oc-keyboard-open .oc-mobile-workspace-terminal .oc-terminal-output {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  html.oc-capacitor-app.oc-platform-android.oc-keyboard-open .oc-mobile-workspace-terminal .oc-terminal-quick-keys {
+    padding-bottom: 0.375rem;
+  }
+}
+
 :root.oc-capacitor-app.oc-platform-android [data-sonner-toaster][data-y-position='top'] {
   top: calc(var(--oc-safe-area-top) + 16px) !important;
 }
