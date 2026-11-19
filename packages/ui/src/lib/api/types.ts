@@ -156,6 +156,8 @@ export interface TerminalStreamEvent {
   sequence?: number;
   data?: string;
   replayData?: string;
+  /** False for a cached snapshot that does not confirm the current socket's attachment. */
+  attached?: false;
   /** Current PTY size. Snapshot sizes describe how the history reached it. */
   cols?: number;
   rows?: number;

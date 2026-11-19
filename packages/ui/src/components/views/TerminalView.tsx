@@ -204,7 +204,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
  const [connectionError, setConnectionError] = React.useState<string | null>(null);
  const [isFatalError, setIsFatalError] = React.useState(false);
- const [inputRecovery, setInputRecoveryState] = React.useState<'reconnecting' | 'ready' | null>(null);
+ const [inputRecovery, setInputRecoveryState] = React.useState<'attaching' | 'reconnecting' | 'ready' | null>(null);
  const inputRecoveryRef = React.useRef(inputRecovery);
  const setInputRecovery = React.useCallback((next: typeof inputRecovery) => {
   inputRecoveryRef.current = next;
@@ -215,6 +215,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
  const streamCleanupRef = React.useRef<(() => void) | null>(null);
  const activeTerminalIdRef = React.useRef<string | null>(null);
+ const hasAttachmentRef = React.useRef(false);
  const activeTabIdRef = React.useRef<string | null>(activeTabId);
  const terminalIdRef = React.useRef<string | null>(terminalSessionId);
  const directoryRef = React.useRef<string | null>(terminalDirectory);
@@ -323,6 +324,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   streamCleanupRef.current?.();
   streamCleanupRef.current = null;
   activeTerminalIdRef.current = null;
+  hasAttachmentRef.current = false;
   setInputRecovery(null);
  }, [setInputRecovery]);
 
@@ -417,17 +419,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
       switch (event.type) {
        case 'snapshot': {
-        setConnecting(directory, tabId, false);
-        setConnectionError(null);
-        setIsFatalError(false);
-        if (inputRecoveryRef.current === 'reconnecting') {
-         setInputRecovery(event.status === 'running' ? 'ready' : null);
+        if (event.attached !== false) {
+         hasAttachmentRef.current = event.status === 'running';
+         setConnecting(directory, tabId, false);
+         setConnectionError(null);
+         setIsFatalError(false);
+         if (inputRecoveryRef.current === 'reconnecting' || inputRecoveryRef.current === 'attaching') {
+          setInputRecovery(hasAttachmentRef.current ? 'ready' : null);
+         }
+         focusTerminalWhenWindowActive();
         }
-        focusTerminalWhenWindowActive();
 
         replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event), event.sizes);
         scanTerminalPreviewOutput(directory, tabId, event.data ?? '');
-        if (event.status === 'exited') {
+        if (event.attached !== false && event.status === 'exited') {
          if (closesOnExit()) {
           void closeTerminalTab({
            terminal,
@@ -444,7 +449,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         break;
        }
        case 'reconnecting': {
-        void event;
+        hasAttachmentRef.current = false;
         setConnectionError(null);
         setIsFatalError(false);
         setInputRecovery('reconnecting');
@@ -959,6 +964,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     return;
    }
 
+   const terminalId = terminalIdRef.current;
+   if (!terminalId || terminalLifecycle === 'exited') return;
+   if (!hasAttachmentRef.current || activeTerminalIdRef.current !== terminalId) {
+    setInputRecovery('attaching');
+    setActiveModifier(null);
+    return;
+   }
+
    let payload = data;
    let modifierConsumed = false;
 
@@ -966,9 +979,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     payload = applyTerminalModifier(data, activeModifier);
     modifierConsumed = true;
    }
-
-   const terminalId = terminalIdRef.current;
-   if (!terminalId) return;
 
    void terminal.sendInput(terminalId, payload, directoryRef.current, { requireAttachment: true }).catch((error) => {
     if (!inputRecoveryRef.current) {
@@ -983,7 +993,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     focusTerminalController();
    }
   },
-  [activeModifier, focusTerminalController, setActiveModifier, t, terminal]
+  [activeModifier, focusTerminalController, setActiveModifier, setInputRecovery, t, terminal, terminalLifecycle]
  );
 
  const resumeTerminalInput = React.useCallback(() => {
@@ -1469,9 +1479,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    </div>
    {inputRecovery && (
     <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/40 bg-[var(--surface-background)] px-3 py-2 text-xs text-muted-foreground">
-     <span role="status">{t(inputRecovery === 'reconnecting'
-      ? 'contextPanel.surface.status.reconnecting'
-      : 'terminalView.status.inputPaused')}</span>
+     <span role="status">{t(inputRecovery === 'ready' ? 'terminalView.status.inputPaused'
+      : inputRecovery === 'reconnecting' ? 'contextPanel.surface.status.reconnecting'
+      : 'contextPanel.surface.status.connecting')}</span>
      {inputRecovery === 'ready' && (
       <Button type="button" size="sm" variant="secondary" onClick={resumeTerminalInput}>
        {t('terminalView.actions.resumeInput')}

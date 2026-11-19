@@ -491,6 +491,35 @@ describe('TerminalView project action tab indicator', () => {
     expect(host.textContent).not.toContain('terminalView.status.inputPaused');
   });
 
+  test('requires an explicit resume if typing begins while a cached terminal attaches', async () => {
+    const store = useTerminalStore.getState();
+    const tab = store.getActiveTab('/repo')!;
+    store.setTabSessionId('/repo', tab.id, 'srv-interactive');
+    store.setTabLifecycle('/repo', tab.id, 'running');
+    let stream: TerminalHandlers | undefined;
+    connectBehavior = (_sessionId, handlers) => {
+      stream = handlers;
+      handlers.onEvent({ type: 'snapshot', status: 'running', data: '$ ', attached: false });
+      return { close: () => undefined };
+    };
+    await act(async () => root.render(React.createElement(TerminalView, { visible: true })));
+    const viewport = host.querySelector('[data-terminal-viewport][data-visible="true"]')!;
+    const type = (key: string) => viewport.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key }));
+    await act(async () => { type('prefix'); });
+    expect(inputCalls).toEqual([]);
+    expect(host.textContent).toContain('contextPanel.surface.status.connecting');
+    await act(async () => {
+      stream?.onEvent({ type: 'snapshot', status: 'running', sequence: 2, data: '$ ' });
+      type('suffix');
+      type('Enter');
+    });
+    expect(inputCalls).toEqual([]);
+    const resume = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'terminalView.actions.resumeInput');
+    if (!resume) throw new Error('resume button not shown');
+    await act(async () => { resume.click(); type('full command'); });
+    expect(inputCalls).toEqual(['full command']);
+  });
+
   test('replacing an exited action does not show a connection failure', async () => {
     const store = useTerminalStore.getState();
     const actionTab = store.getDirectoryState('/repo')?.tabs.find(tab => tab.label === 'Build');

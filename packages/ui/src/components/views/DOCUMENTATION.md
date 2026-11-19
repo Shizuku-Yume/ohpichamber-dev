@@ -487,7 +487,9 @@ The terminal socket (`lib/terminalApi.ts`) retries indefinitely with backoff.
 Interactive viewport writes never cross socket connections: the current socket
 must receive the terminal's snapshot before it sends input. After a reconnect,
 the viewport shows the recovered prompt but keeps input paused until the user
-selects Resume typing. Reopening the input gate automatically at an arbitrary
+selects Resume typing. An early keypress while a cached tab reattaches also
+requires an explicit resume; cached output never makes the tab writable.
+Reopening the input gate automatically at an arbitrary
 keystroke could send the tail of a command whose beginning was never received.
 The terminal neither queues input for replay nor clears the shell's command
 line; the user can see what the shell received before continuing. Programmatic

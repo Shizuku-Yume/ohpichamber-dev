@@ -610,6 +610,9 @@ describe('terminal transport', () => {
       await transport.write('term-1', 'first', true);
       first.close();
       await expect(transport.write('term-1', 'while offline', true)).rejects.toThrow('Terminal is not attached');
+      const projections: TerminalStreamEvent[] = [];
+      transport.subscribe('term-1', { onEvent: (event) => projections.push(event) });
+      expect(projections[0]).toMatchObject({ type: 'snapshot', attached: false, data: '$ ' });
       await new Promise(resolve => setTimeout(resolve, 550));
       second.open();
       expect(second.sent.some(message => message.t === 'attach')).toBe(true);

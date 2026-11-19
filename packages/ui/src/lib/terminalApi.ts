@@ -320,7 +320,9 @@ export class TerminalTransport {
     const projection = this.projections.get(sessionId);
     if (projection) {
       subscriber.lastSequence = projection.sequence;
-      handlers.onEvent(projectionSnapshot(projection));
+      const snapshot = projectionSnapshot(projection);
+      if (!this.attached.has(sessionId)) snapshot.attached = false;
+      handlers.onEvent(snapshot);
     }
     const socketWasOpen = this.socket?.readyState === SOCKET_OPEN;
     this.ensureConnected().then(() => {
