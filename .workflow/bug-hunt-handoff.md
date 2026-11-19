@@ -15,7 +15,7 @@ The state of the post-audit bug hunt on `Shizuku-Yume/ohpichamber-dev`, so a new
 ## Merged into main (since the audit, PR #3)
 - Electron: #1 ESM `__dirname` startup crash, #4 OMP Bun-mode readiness, #6 old-glibc pidfd cleanup, #7 Linux Add-project label, #9 Windows Vite left running after exit, #10 worktree/project/draft lost on restart, #12 native Undo/Redo hitting the wrong editor (it autosaved a file revert), #22 Chats Retry couldn't clear a scoped discovery error.
 - Web/PWA: #5 mobile file search showed a false "No files found" and now has an error state with Retry, #14 confirm before closing a dirty file tab, #23 mobile editor back arrow dropped drafts, #24 save recreated a file renamed outside the app (now 409), #25 terminal history scrambled after resize and reload, #26 file tab switch silently dropped a dirty draft.
-- Mobile: #11 `ohpichamber://` pairing-link paste, #13 passwordless Host bearer auth (agent calls returned 401), #15 voice-key save reported failure, #16 Android Back in the Files viewer, #17 iOS sim ad-hoc signing, #18 drift ledger for mobile tests, #19 iOS malformed pairing link feedback, #20 Android status bar contrast, #21 empty Voice row.
+- Mobile: #11 `ohpichamber://` pairing-link paste, #13 passwordless Host bearer auth (agent calls returned 401), #15 voice-key save reported failure, #16 Android Back in the Files viewer, #17 iOS sim ad-hoc signing, #18 drift ledger for mobile tests, #19 iOS malformed pairing link feedback, #20 Android status bar contrast, #21 empty Voice row, [#31](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/31) terminal rows above the landscape keyboard, [#36](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/36) scrollable welcome at 200% Android font size.
 - Host: #32 session delete failed with 409 "Session scope cannot be changed" on every client.
 - Plus #8 broker ownership after `/btw` promotion and worker replacement, and #29 plugin settings overlap at portrait width.
 
@@ -25,17 +25,16 @@ Recheck GitHub before picking up a PR; these states can change.
 
 | PR | State and next step |
 | --- | --- |
-| [#27](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/27) Windows Electron readiness shutdown race | Open, mergeable. The earlier head passed 10 native Windows launches, review, and full type-check. Approval was given; verify against current main before merging. |
+| [#27](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/27) Windows Electron readiness shutdown race | Open, conflicts with main. The earlier head passed 10 native Windows launches, review, and full type-check. Approval was given; verify against current main before merging. |
 | [#28](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/28) iOS resume disconnect notice | Open, conflicts with main. Superseded by [#35](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/35); close it after #35 merges. |
 | [#30](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/30) Android Back from a Git diff | Open, conflicts with main. Update the branch, rerun full type-check, and verify hardware Back returns to the changes list in the Android emulator. |
 | [#33](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/33) Terminal input lost before reattach | Open, conflicts with main. Desktop and mobile web passed on the earlier head; both review fixes are pushed at `c06d668ce`. Update against main, clear review, and rerun full type-check and browser tests on the final head. |
 | [#34](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/34) Removing a pasted image submits the draft | Open, conflicts with main. iOS simulator confirmed the draft stays and no send request fires on the earlier head; update against main and rerun the gates. |
-| [#35](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/35) Keep mobile workspace mounted while reconnecting | Open, mergeable. Android Host-stop/resume/recovery passed; finish iOS simulator retest with the Host down and confirm review and full type-check. |
-| [#36](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/36) Android large-font welcome scrolling | Open, conflicts with main. Android 15 at 200% reached the last action chip and kept the composer fixed; at 100% it stayed centered. Review was clean on the tested head. Update against main and rerun the gates. |
+| [#35](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/35) Keep mobile workspace mounted while reconnecting | Open, conflicts with main. Android Host-stop/resume/recovery passed; finish iOS simulator retest with the Host down and confirm review and full type-check. |
 | [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37) Remove the session transcript on delete | Open. Focused Agent Service and Host tests passed; verify the final head and review before merging. The fix does not remove transcripts left by earlier deletions. |
-| [#38](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/38) Record plugin layout verification | Open, mergeable. Docs-only follow-up to #29; full type-check and workflow validation were reported green. The Add plugin search placeholder still clips at 393 CSS px. |
+| [#38](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/38) Record plugin layout verification | Open, conflicts with main. Docs-only follow-up to #29; full type-check and workflow validation were reported green on the earlier head. The Add plugin search placeholder still clips at 393 CSS px. |
 
-[#31](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/31) (Android terminal rows with the landscape keyboard) merged; recheck alongside the #35 reconnect banner.
+Recheck Android landscape terminal rows alongside the #35 reconnect banner.
 
 ## Known bugs not yet fixed
 - draw.io: undo restores the graph but still shows the unsaved prompt (the embed rewrites the XML).
