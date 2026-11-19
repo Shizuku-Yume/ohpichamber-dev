@@ -118,7 +118,7 @@ const persistence = await import('@/lib/persistence');
 const syncRefs = await import('@/sync/sync-refs');
 // The composer's Plan availability is read from the workspace catalog, which
 // the sync layer re-reads when a role write changes it.
-const catalogRefreshCalls: string[] = [];
+let catalogRefreshCalls = 0;
 let refreshSpy: ReturnType<typeof spyOn> | undefined;
 const settle = async () => {
   await act(async () => {
@@ -135,12 +135,12 @@ describe('DefaultsSettings', () => {
   beforeEach(() => {
     failOmpSettings = false;
     updatedDesktopSettingsPayload = null;
-    catalogRefreshCalls.length = 0;
+    catalogRefreshCalls = 0;
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    refreshSpy = spyOn(syncRefs, 'refreshDirectoryCatalog').mockImplementation((directory) => {
-      catalogRefreshCalls.push(directory);
+    refreshSpy = spyOn(syncRefs, 'refreshDirectoryCatalogs').mockImplementation(() => {
+      catalogRefreshCalls += 1;
     });
     updateSpy = spyOn(persistence, 'updateDesktopSettings').mockImplementation(async (payload) => {
       updatedDesktopSettingsPayload = payload as Record<string, unknown>;
@@ -265,7 +265,7 @@ describe('DefaultsSettings', () => {
   });
 
   test('writing a model role re-reads the catalog that decides Plan availability', async () => {
-    catalogRefreshCalls.length = 0;
+    catalogRefreshCalls = 0;
 
     await act(async () => {
       root.render(
@@ -292,7 +292,9 @@ describe('DefaultsSettings', () => {
     });
     await settle();
 
-    expect(catalogRefreshCalls).toEqual(['/repo']);
+    // The write is in the shared agent directory, so the composer's directory —
+    // not only the one this page names — must re-read its catalog.
+    expect(catalogRefreshCalls).toBe(1);
   });
 
   test('default session mode selector updates useUIStore', async () => {

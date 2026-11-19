@@ -28,7 +28,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
-import { refreshDirectoryCatalog } from '@/sync/sync-refs';
+import { refreshDirectoryCatalogs } from '@/sync/sync-refs';
 
 
 type SessionModeValue = 'main' | 'plan' | 'vibe' | 'goal';
@@ -168,17 +168,20 @@ export const DefaultsSettings: React.FC = () => {
           }
         }
         setOmpState(next);
-        // The composer decides whether Plan is selectable from the workspace
-        // catalog's `planRoleAvailable`, which OMP derives from `modelRoles`.
-        // The bootstrap lane owns that read, so a role write asks it to re-run.
-        if (directory) refreshDirectoryCatalog(directory);
+        // `modelRoles` lives in the shared agent directory, so this write moved
+        // `planRoleAvailable` for every workspace — not only the one Settings
+        // is describing. The composer reads the catalog of its session's
+        // directory, which can be a managed chat or another project, so every
+        // initialized directory re-reads through the bootstrap lane that owns
+        // the read.
+        refreshDirectoryCatalogs();
       } catch (err) {
         console.warn('Failed to update default model role:', err);
       } finally {
         setIsSavingOmp(false);
       }
     },
-    [directory],
+    [],
   );
 
   const handleDefaultModelChange = React.useCallback(
