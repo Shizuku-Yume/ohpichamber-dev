@@ -25,10 +25,10 @@ const writePackage = (root, manifest) => {
 };
 
 const webManifest = {
-  name: '@openchamber/web',
+  name: 'ohpichamber',
   type: 'module',
   main: './server/index.js',
-  bin: { openchamber: './bin/cli.js' },
+  bin: { ohpichamber: './bin/cli.js' },
 };
 
 const expectPaths = (paths, root, prefix = '') => {
@@ -59,7 +59,7 @@ describe('web package paths', () => {
     writePackage(root, {
       ...webManifest,
       main: './build/server/index.js',
-      bin: { openchamber: './build/bin/cli.js' },
+      bin: { ohpichamber: './build/bin/cli.js' },
     });
     const modulePath = path.join(root, 'build/server/lib/web-package-paths.js');
     fs.mkdirSync(path.dirname(modulePath), { recursive: true });
@@ -73,7 +73,7 @@ describe('web package paths', () => {
     const root = temporaryDirectory();
     writePackage(root, { name: 'another-package' });
     expect(() => getWebPackagePaths(pathToFileURL(path.join(root, 'nested/entry.js'))))
-      .toThrow('Could not find @openchamber/web package.json above');
+      .toThrow('Could not find ohpichamber package.json above');
   });
 
   it('keeps Node path errors for malformed entry fields in its named manifest', () => {

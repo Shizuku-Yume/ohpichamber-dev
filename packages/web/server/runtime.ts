@@ -14,7 +14,7 @@ import { RuntimeSessionSchema } from '@openchamber/agent-contract';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { createUiAuth } from './lib/ui-auth/ui-auth.js';
-import { createTunnelAuth } from './lib/host/tunnel-auth.js';
+import { createTunnelAuth } from './lib/tunnels/tunnel-auth.js';
 import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.js';
 import { createTunnelProviderRegistry } from './lib/tunnels/registry.js';
 import { createCloudflareTunnelProvider } from './lib/tunnels/providers/cloudflare.js';
@@ -88,7 +88,7 @@ import { resolveScheduledTaskOptions, resolveSessionDefaults } from './lib/sched
 import { createScheduledTaskContext } from './lib/scheduled-tasks/existing-session.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
 import { createServerStartupRuntime } from './lib/server-frame/server-startup-runtime.js';
-import { createTunnelWiringRuntime } from './lib/host/tunnel-wiring-runtime.js';
+import { createTunnelWiringRuntime } from './lib/tunnels/tunnel-wiring-runtime.js';
 import { createStartupPipelineRuntime } from './lib/server-frame/startup-pipeline-runtime.js';
 import { registerNotificationRoutes } from './lib/notifications/routes.js';
 import { createNotificationEmitterRuntime } from './lib/notifications/emitter-runtime.js';
@@ -1094,16 +1094,17 @@ const workflowsModule = createWorkflowsModule({
 });
 
 // Full-text search over this server's conversations (user messages and agent
-// replies). Opt-in: off by default, and off means idle. The index is derived
+// replies). Off means idle. The index is derived
 // data in the data dir, fed from the same event stream; see lib/message-search.
 const messageSearchRuntime = createMessageSearchRuntime({
  dataDir: OPENCHAMBER_DATA_DIR,
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+ readArchiveStates: () => openChamberSessionService.archiveStore.listAll(),
  globalEventHub: globalMessageStreamHub,
  readSettings: async () => {
   const settings = await readSettingsFromDisk();
-  return { enabled: settings.messageSearchEnabled === true, reasoning: settings.messageSearchReasoningEnabled === true };
+  return { enabled: settings.messageSearchEnabled !== false, reasoning: settings.messageSearchReasoningEnabled === true };
  },
 });
 
@@ -1993,6 +1994,7 @@ async function main(options = {}) {
   addOrUpdateApnsToken,
   removeApnsToken,
   resolveApnsStatus,
+  isLocalOnlyPushRequest: (req, uiSessionToken) => clientPushAccess.isLocalOnlyRequest(req, uiSessionToken),
   updateUiVisibility,
   clearPendingPushBadge: () => clearPendingPushBadge(),
   isUiVisible,

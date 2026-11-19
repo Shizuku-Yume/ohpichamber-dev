@@ -1,84 +1,39 @@
-import { z } from 'zod';
+/**
+ * Which canonical runtime sessions are children of another root. A child is
+ * identified by the Host-owned relation `sessionId !== rootSessionId`; no
+ * OpenCode parent field or inferred directory relationship is used.
+ */
+import { CanonicalEventSchema } from '@openchamber/agent-contract';
 
 const DEFAULT_LIMIT = 5000;
 
-interface SessionRecord {
-  parentID?: unknown;
-  metadata?: unknown;
-}
+export function createSessionLineage({ limit = DEFAULT_LIMIT } = {}) {
+  // sessionId -> true for a child, false for an independent root.
+  const isChildById = new Map();
 
-interface SessionEvent {
-  type?: unknown;
-  properties?: unknown;
-}
-
-interface SessionMetadata {
-  openchamber?: unknown;
-}
-
-export const OPERATOR_CHILD_KIND = 'operator-child';
-
-const linkedSessionSchema = z.object({
-  metadata: z.object({ openchamber: z.object({ kind: z.enum(['workflow-agent', OPERATOR_CHILD_KIND]), parentID: z.string().min(1) }) }),
-});
-
-const hasParentId = (record: unknown): record is { parentID: string } =>
-  record != null && typeof record === 'object' && 'parentID' in record && typeof record.parentID === 'string';
-
-export const sessionParentId = (record: SessionRecord | readonly unknown[] | null | undefined) => {
-  if (hasParentId(record) && record.parentID) return record.parentID;
-  const link = linkedSessionSchema.safeParse(record);
-  return link.success ? link.data.metadata.openchamber.parentID : null;
-};
-
-export const isOperatorChildSession = (record: SessionRecord | readonly unknown[] | null | undefined) => linkedSessionSchema.safeParse(record).data?.metadata.openchamber.kind === OPERATOR_CHILD_KIND;
-
-const createdSchema = z.object({
-  type: z.literal('session.created'),
-  properties: z.object({
-    sessionID: z.string().min(1),
-    info: z.object({ parentID: z.string().min(1).optional() }).optional(),
-  }),
-});
-
-const deletedSchema = z.object({
-  type: z.literal('session.deleted'),
-  properties: z.object({ sessionID: z.string().min(1) }),
-});
-
-export function createSessionLineage({ limit = DEFAULT_LIMIT }: { limit?: number } = {}) {
-  const isChildById = new Map<string, boolean>();
-
-  const remember = (sessionId: string, parentId: string | null) => {
-    if (!sessionId) return;
+  const remember = (sessionId, rootSessionId) => {
+    if (typeof sessionId !== 'string' || !sessionId || typeof rootSessionId !== 'string' || !rootSessionId) return;
     isChildById.delete(sessionId);
-    isChildById.set(sessionId, Boolean(parentId));
-    while (isChildById.size > limit) {
-      const oldest = isChildById.keys().next();
-      if (!oldest.done) isChildById.delete(oldest.value);
-    }
+    isChildById.set(sessionId, rootSessionId !== sessionId);
+    while (isChildById.size > limit) isChildById.delete(isChildById.keys().next().value);
   };
 
-  const observe = (payload: SessionEvent | null | undefined) => {
-    const created = createdSchema.safeParse(payload);
-    if (created.success) {
-      remember(created.data.properties.sessionID, created.data.properties.info?.parentID ?? null);
+  /** Learn session lineage only from validated canonical Host events. */
+  const observe = (payload) => {
+    const parsed = CanonicalEventSchema.safeParse(payload);
+    if (!parsed.success) return;
+    const event = parsed.data;
+    if (event.type === 'session.updated' && event.session) {
+      remember(event.session.sessionId, event.session.rootSessionId);
       return;
     }
-    const deleted = deletedSchema.safeParse(payload);
-    if (deleted.success) isChildById.delete(deleted.data.properties.sessionID);
-  };
-
-  const isChild = (sessionId: string) => isChildById.get(sessionId);
-
-  const noteMetadata = (sessionId: string, metadata: SessionMetadata | null | undefined) => {
-    const parentId = sessionParentId({ metadata });
-    if (parentId) {
-      remember(sessionId, parentId);
-      return false;
+    if (event.type === 'session.deleted') {
+      for (const sessionId of event.deletedSessionIds) isChildById.delete(sessionId);
     }
-    return isChildById.get(sessionId) === true && isChildById.delete(sessionId);
   };
 
-  return { observe, remember, isChild, noteMetadata };
+  /** True for a known child, false for a known root, undefined when unknown. */
+  const isChild = (sessionId) => isChildById.get(sessionId);
+
+  return { observe, remember, isChild };
 }
