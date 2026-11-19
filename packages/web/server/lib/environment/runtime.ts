@@ -8,64 +8,6 @@ import { overlayEnvironment, parseEnvironmentOutput } from './variables.js';
 import type { EnvironmentVariables, ProcessEnvironment } from './variables.js';
 import type { EnvironmentStore } from './store.js';
 
-<<<<<<< HEAD:packages/web/server/lib/environment/runtime.js
-/**
- * Which environment variables each process OpenChamber starts receives on top
- * of its own environment:
- *
- * - Git, the terminal (and the project actions it runs), worktree setup
- *   commands and command execution for a directory: the user's variables,
- *   then what the project's environment command printed, then the project's
- *   own variables, later layers winning.
- *
- * The project is found from the directory: a configured project that
- * contains it, or, for a linked worktree, the project at the same place in
- * the repository's primary checkout. A worktree uses the project's settings
- * but runs the command in its own checkout, so direnv or devenv sees the
- * worktree's files.
- *
- * Only work the user started runs the command (`refresh`: a commit, a
- * checkout, a terminal, a project action; see `refresh-scope.js`). Reads the
- * UI repeats on its own, like Git status polling, use what an earlier run
- * left and never start one, so an idle Git tab costs nothing. A user action
- * waits for the first run in a checkout; once the result is older than
- * `commandTtlMs`, the next user action uses it and refreshes it in the
- * background. A failed run applies nothing from the command and is reported
- * through `projectStatus`, never as a silent success. Command output and its error
- * text are never logged or returned: they may hold secrets.
- */
-||||||| bc50ba56aa:packages/web/server/lib/environment/runtime.js
-/**
- * Which environment variables each process OpenChamber starts receives on top
- * of its own environment:
- *
- * - the managed OpenCode: the user's variables, over the variables
- *   `opencode service set env` stored. One OpenCode serves every project, so
- *   a project's variables cannot reach it. Enterprise mode passes nothing:
- *   a variable can carry a provider key, and enterprise mode refuses new
- *   provider keys from the app.
- * - Git, the terminal (and the project actions it runs), worktree setup
- *   commands and command execution for a directory: the user's variables,
- *   then what the project's environment command printed, then the project's
- *   own variables, later layers winning.
- *
- * The project is found from the directory: a configured project that
- * contains it, or, for a linked worktree, the project at the same place in
- * the repository's primary checkout. A worktree uses the project's settings
- * but runs the command in its own checkout, so direnv or devenv sees the
- * worktree's files.
- *
- * Only work the user started runs the command (`refresh`: a commit, a
- * checkout, a terminal, a project action; see `refresh-scope.js`). Reads the
- * UI repeats on its own, like Git status polling, use what an earlier run
- * left and never start one, so an idle Git tab costs nothing. A user action
- * waits for the first run in a checkout; once the result is older than
- * `commandTtlMs`, the next user action uses it and refreshes it in the
- * background. A failed run applies nothing from the command and is reported
- * through `projectStatus`, never as a silent success. Command output and its error
- * text are never logged or returned: they may hold secrets.
- */
-=======
 export type ProjectEnvironmentStatus = { state: 'applied'; count: number; at: number }
   | { state: 'failed'; reason: 'spawn' | 'timeout' | 'output-too-large' | 'exit' | 'unrecognized-output'; exitCode?: number | null; at: number };
 
@@ -91,7 +33,6 @@ interface EnvironmentRuntimeOptions {
 }
 
 export type EnvironmentRuntime = ReturnType<typeof createEnvironmentRuntime>;
->>>>>>> upstream/main:packages/web/server/lib/environment/runtime.ts
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 15_000;
 const DEFAULT_COMMAND_TTL_MS = 5 * 60_000;
@@ -314,31 +255,6 @@ export const createEnvironmentRuntime = ({
     return Object.keys(variables).length > 0 ? variables : null;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/environment/runtime.js
-||||||| bc50ba56aa:packages/web/server/lib/environment/runtime.js
-  /** The variables for the managed OpenCode process; none in enterprise mode. */
-  const forOpenCode = () => {
-    if (isEnterpriseMode()) return {};
-    let serviceVariables = {};
-    try {
-      serviceVariables = readOpenCodeServiceEnv();
-    } catch {
-      serviceVariables = {};
-    }
-    return { ...serviceVariables, ...readUserVariables() };
-  };
-=======
-  const forOpenCode = () => {
-    if (isEnterpriseMode()) return {};
-    let serviceVariables: EnvironmentVariables = {};
-    try {
-      serviceVariables = readOpenCodeServiceEnv();
-    } catch {
-      serviceVariables = {};
-    }
-    return { ...serviceVariables, ...readUserVariables() };
-  };
->>>>>>> upstream/main:packages/web/server/lib/environment/runtime.ts
 
   const projectStatus = (projectId: string) => statuses.get(projectId) ?? null;
 

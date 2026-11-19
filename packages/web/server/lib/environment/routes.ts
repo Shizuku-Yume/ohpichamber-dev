@@ -3,51 +3,6 @@ import type { EnvironmentStore } from './store.js';
 import type { EnvironmentRuntime } from './runtime.js';
 import type { Response } from '../shared/http-contracts.js';
 
-<<<<<<< HEAD:packages/web/server/lib/environment/routes.js
-/**
- * Environment variables for what OpenChamber starts. Every answer names the
- * variables and never carries a value: anyone signed in to the UI, over a
- * tunnel or from a paired phone too, can manage them but not read them back.
- *
- * GET  /api/environment                          -> { names }
- * PUT  /api/environment                          { variables: { NAME: "value" | null } } -> { names }
- * GET  /api/environment/projects/:id             -> { names, command, status }
- * PUT  /api/environment/projects/:id             { variables?, command? } -> { names, command, status }
- * POST /api/environment/projects/:id/reload      -> { names, command, status }
- *
- * `status` is the last outcome of the project's environment command:
- * null before it ran, `{ state: "applied", count }`, or
- * `{ state: "failed", reason, exitCode? }`.
- *
- * `/api/environment` is on the JSON-body allowlist in `host/core-routes.js`.
- */
-export const registerEnvironmentRoutes = (app, { store, runtime, listProjects }) => {
-  const respondWithError = (res, error, fallback) => {
-    if (error instanceof EnvironmentPatchError) return res.status(400).json({ error: error.message });
-    return res.status(500).json({ error: error instanceof Error ? error.message : fallback });
-||||||| bc50ba56aa:packages/web/server/lib/environment/routes.js
-/**
- * Environment variables for what OpenChamber starts. Every answer names the
- * variables and never carries a value: anyone signed in to the UI, over a
- * tunnel or from a paired phone too, can manage them but not read them back.
- *
- * GET  /api/environment                          -> { names }
- * PUT  /api/environment                          { variables: { NAME: "value" | null } } -> { names }
- * GET  /api/environment/projects/:id             -> { names, command, status }
- * PUT  /api/environment/projects/:id             { variables?, command? } -> { names, command, status }
- * POST /api/environment/projects/:id/reload      -> { names, command, status }
- *
- * `status` is the last outcome of the project's environment command:
- * null before it ran, `{ state: "applied", count }`, or
- * `{ state: "failed", reason, exitCode? }`.
- *
- * `/api/environment` is on the JSON-body allowlist in `opencode/core-routes.js`.
- */
-export const registerEnvironmentRoutes = (app, { store, runtime, listProjects }) => {
-  const respondWithError = (res, error, fallback) => {
-    if (error instanceof EnvironmentPatchError) return res.status(400).json({ error: error.message });
-    return res.status(500).json({ error: error instanceof Error ? error.message : fallback });
-=======
 type ProjectView = ReturnType<EnvironmentStore['describeProject']> & { status: ReturnType<EnvironmentRuntime['projectStatus']> };
 type EnvironmentResponseBody = ReturnType<EnvironmentStore['describeUser']> | ProjectView | { error: string };
 type EnvironmentResponse = Response<EnvironmentResponseBody>;
@@ -68,7 +23,6 @@ export const registerEnvironmentRoutes = (app: EnvironmentRouteApp, { store, run
   const respondWithError = (res: EnvironmentResponse, cause: unknown, fallback: string) => {
     if (cause instanceof EnvironmentPatchError) return res.status(400).json({ error: cause.message });
     return res.status(500).json({ error: cause instanceof Error ? cause.message : fallback });
->>>>>>> upstream/main:packages/web/server/lib/environment/routes.ts
   };
 
   const projectView = (projectId: string) => ({
