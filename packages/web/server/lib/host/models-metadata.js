@@ -1,21 +1,15 @@
-import { isString } from '../shared/object-guards.js';
-
-export interface ModelsMetadataOptions {
-  url?: string;
-  ttlMs?: number;
-  timeoutMs?: number;
-}
-export type ModelsMetadataCatalog = object;
-
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8000;
 
-let cachedMetadata: ModelsMetadataCatalog | null = null;
+// Shared in-process cache of the models.dev catalog. Used by the
+// /api/openchamber/models-metadata route and the small-model resolver so the
+// server fetches the catalog once, not per consumer.
+let cachedMetadata = null;
 let cachedAt = 0;
-let inflight: Promise<ModelsMetadataCatalog> | null = null;
+let inflight = null;
 
-const fetchCatalog = async (url: string, timeoutMs: number) => {
+const fetchCatalog = async (url, timeoutMs) => {
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(timeoutMs),
@@ -23,18 +17,23 @@ const fetchCatalog = async (url: string, timeoutMs: number) => {
   if (!response.ok) {
     throw new Error(`models.dev responded with status ${response.status}`);
   }
-  const metadata: unknown = await response.json();
-  if (!isCatalog(metadata)) {
+  const metadata = await response.json();
+  if (!metadata || typeof metadata !== 'object') {
     throw new Error('models.dev returned an unexpected payload');
   }
   return metadata;
 };
 
+/**
+ * Returns the models.dev catalog, serving the in-memory copy while fresh.
+ * On fetch failure a stale cached copy is returned when available; otherwise
+ * the error propagates.
+ */
 export async function getModelsMetadata({
   url = MODELS_DEV_API_URL,
   ttlMs = DEFAULT_TTL_MS,
   timeoutMs = DEFAULT_TIMEOUT_MS,
-}: ModelsMetadataOptions = {}) {
+} = {}) {
   const now = Date.now();
   if (cachedMetadata && now - cachedAt < ttlMs) {
     return { metadata: cachedMetadata, fromCache: true };
@@ -59,6 +58,9 @@ export async function getModelsMetadata({
   }
 }
 
+// The model fields the UI reads (packages/ui stores/useConfigStore.ts,
+// transformModelsDevResponse). The full catalog is several megabytes; the
+// browser needs only these, so the route sends nothing else.
 const CLIENT_MODEL_FIELDS = [
   'id',
   'name',
@@ -73,46 +75,31 @@ const CLIENT_MODEL_FIELDS = [
   'knowledge',
   'release_date',
   'last_updated',
-] as const;
+];
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const isCatalog = (value: unknown): value is ModelsMetadataCatalog => Boolean(value && typeof value === 'object');
+const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export interface ClientModelMetadata {
-  id?: unknown;
-  name?: unknown;
-  tool_call?: unknown;
-  reasoning?: unknown;
-  temperature?: unknown;
-  attachment?: unknown;
-  structured_output?: unknown;
-  modalities?: unknown;
-  cost?: unknown;
-  limit?: unknown;
-  knowledge?: unknown;
-  release_date?: unknown;
-  last_updated?: unknown;
-}
-export type ClientModelsMetadata = Record<string, { id?: string; models: Record<string, ClientModelMetadata> }>;
-const projections = new WeakMap<object, ClientModelsMetadata>();
+// The catalog object is reused until the next fetch, so its projection is too.
+const projections = new WeakMap();
 
-export function toClientModelsMetadata<Metadata>(metadata: Metadata) {
+/** Projects the models.dev catalog to the provider ids and model fields the UI reads. */
+export function toClientModelsMetadata(metadata) {
   if (!isObject(metadata)) return {};
   const cached = projections.get(metadata);
   if (cached) return cached;
-  const result: ClientModelsMetadata = {};
+  const result = {};
   for (const [providerKey, provider] of Object.entries(metadata)) {
     if (!isObject(provider) || !isObject(provider.models)) continue;
-    const models: Record<string, ClientModelMetadata> = {};
+    const models = {};
     for (const [modelKey, model] of Object.entries(provider.models)) {
       if (!isObject(model)) continue;
-      const projected: ClientModelMetadata = {};
+      const projected = {};
       for (const field of CLIENT_MODEL_FIELDS) {
         if (model[field] !== undefined) projected[field] = model[field];
       }
       models[modelKey] = projected;
     }
-    result[providerKey] = isString(provider.id) ? { id: provider.id, models } : { models };
+    result[providerKey] = typeof provider.id === 'string' ? { id: provider.id, models } : { models };
   }
   projections.set(metadata, result);
   return result;
