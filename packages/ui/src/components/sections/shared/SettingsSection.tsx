@@ -190,7 +190,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
       )}
     >
       {hasHeader ? (
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col items-start justify-between gap-3 @xl:flex-row">
           <div className="min-w-0 space-y-1">
             {title != null ? (
               <div className="flex items-center gap-2">
@@ -207,7 +207,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
               <div className={SETTINGS_DESCRIPTION_CLASS}>{description}</div>
             ) : null}
           </div>
-          {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
+          {headerAction ? <div className="min-w-0 max-w-full @xl:shrink-0">{headerAction}</div> : null}
         </div>
       ) : null}
       <div className={cn(contentClassName)}>{children}</div>

@@ -1645,3 +1645,50 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** treating a URL handoff as consent or waiting for a connected workspace before showing the offer.
 - **Because:** Safari and other apps can launch the URL scheme. Opening an offer is not consent to store its credentials or switch the active Host, and first-time onboarding must also receive it. Existing mobile authentication regressions and fork deep-link behavior remain in force.
 - **Revisit when:** upstream provides a native consent flow for external Host pairing links.
+
+## 2026-11-19 - Compact draft welcomes scroll before clipping large text
+
+- **Decided:** give the compact draft welcome a bounded vertical scroll area and center its non-shrinking title/starter group with automatic margins.
+- **Instead of:** unconditional flex centering, shrinking the text, or scrolling the composer out of view with the welcome.
+- **Because:** at large system font sizes or short viewport heights, centered overflow begins above the scroll origin. Automatic margins preserve the normal centered appearance but collapse when content needs to scroll from its top.
+- **Mine:** yes
+- **Revisit when:** upstream provides the same scroll-safe compact welcome layout.
+
+## 2026-11-19 - Give terminal rows priority above the Android keyboard
+
+- **Decided:** on native Android, when the software keyboard is open and the viewport is at most 240 CSS pixels tall, collapse the active Terminal workspace's two tab bars and reclaim vertical padding without hiding quick keys or unmounting the terminal.
+- **Instead of:** adding another keyboard inset or forcing a minimum height that would clip the terminal or its quick keys.
+- **Because:** Android already resizes the WebView. In Android 15 landscape the keyboard can leave 122 CSS pixels, while the tab bars and quick keys alone take 163.
+- **Revisit when:** upstream preserves terminal rows in the short Android keyboard viewport.
+
+## 2026-11-19 - Bound plugin marketplace metadata and actions on narrow panes
+
+- **Decided:** bound and truncate marketplace names, versions and source labels; wrap long description text and keep install/status actions in their own compact, width-bounded container in the Plugins page and Add plugin dialog.
+- **Instead of:** letting non-shrinking metadata overflow a phone pane or stretching the install action across the narrow row.
+- **Because:** Capacitor shares these components with web and desktop. The existing container-query stacking remains intact, and ordinary wide-pane rows keep their layout.
+- **Mine:** yes
+- **Revisit when:** upstream adopts equivalent narrow-pane marketplace bounds.
+
+## 2026-11-19 - Stack settings headers and bound installed plugin cards on narrow panes
+
+- **Decided:** shared settings section headers stack their actions below the heading below `@xl`. Plugins Installed and Marketplace action groups wrap. Shared cards constrain their grid item's intrinsic width and reserve a non-shrinking narrow-pane footer area for sibling menu and toggle controls.
+- **Instead of:** forcing headings and controls into one narrow line or letting a long installed title size its card beyond the pane.
+- **Because:** Android portrait verification showed heading/action collisions in Installed and Marketplace and an overflowing installed plugin title under its controls. Capabilities uses the same header primitive and needs the same stacking. Wide-pane direction and control placement remain unchanged. Existing fork section/disclosure and card-chip contracts are retained.
+- **Mine:** yes
+- **Revisit when:** upstream adopts equivalent narrow-pane section and card layout constraints.
+
+## 2026-11-19 - Stretch the settings card text column within its button
+
+- **Decided:** explicitly stretch the shared settings card text wrapper across the card's available inner width.
+- **Instead of:** relying on `min-w-0` to bound a flex child when the card button aligns children to the start.
+- **Because:** Android WebView measured a long installed plugin title extending to 423.1px past the card edge at 357.1px. Start alignment let the text wrapper use its intrinsic width, preventing the existing title ellipsis from taking effect.
+- **Mine:** yes
+- **Revisit when:** shared card button alignment guarantees a bounded text column without an explicit self-alignment.
+
+## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
+
+- **Decided:** the desktop strip consults a file-editor selection guard before selecting a different file path. Reuse Save/Discard/Cancel and pause autosave through the existing confirmation hook; failed saves and Cancel leave the active tab and dirty draft unchanged. Clean drafts, the same path, and non-file surfaces select immediately.
+- **Instead of:** clearing a dirty draft on strip selection or adding a per-tab draft cache.
+- **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
+- **Mine:** yes
+- **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.

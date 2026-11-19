@@ -1,5 +1,6 @@
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { I18nProvider } from '@/lib/i18n';
@@ -87,6 +88,49 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+  });
+
+  test.each([
+    { name: 'short Android terminal with keyboard', height: 122, android: true, keyboard: true, tab: 'terminal', compact: true },
+    { name: 'short Android terminal without keyboard', height: 122, android: true, keyboard: false, tab: 'terminal', compact: false },
+    { name: 'tall Android terminal with keyboard', height: 360, android: true, keyboard: true, tab: 'terminal', compact: false },
+    { name: 'short iOS terminal with keyboard', height: 122, android: false, keyboard: true, tab: 'terminal', compact: false },
+    { name: 'short Android Files surface with keyboard', height: 122, android: true, keyboard: true, tab: 'files', compact: false },
+  ] as const)('only collapses terminal chrome when space is tight: $name', async ({ height, android, keyboard, tab, compact }) => {
+    const testWindow = window as unknown as Window;
+    const html = document.documentElement;
+    const style = document.createElement('style');
+    style.textContent = readFileSync(new URL('../styles/mobile.css', import.meta.url), 'utf8');
+    document.head.append(style);
+    const platformClass = android ? 'oc-platform-android' : 'oc-platform-ios';
+    html.classList.add('oc-capacitor-app', platformClass);
+    html.classList.toggle('oc-keyboard-open', keyboard);
+    const previousHeight = testWindow.innerHeight;
+    testWindow.happyDOM.setViewport({ height });
+
+    try {
+      await act(async () => root.render(
+        <I18nProvider>
+          <MobileWorkspaceDrawer
+            open
+            tab={tab}
+            onClose={() => undefined}
+            onTabChange={() => undefined}
+            pendingChangesDiff={null}
+            onOpenPlan={() => undefined}
+          />
+        </I18nProvider>,
+      ));
+      const header = document.querySelector('[role="dialog"] [data-testid="tabs-strip"]')!.parentElement!.parentElement!;
+      expect(getComputedStyle(header).display === 'none').toBe(compact);
+      if (tab === 'terminal') {
+        expect(document.querySelector('[data-testid="terminal-view"]')?.getAttribute('data-visible')).toBe('true');
+      }
+    } finally {
+      html.classList.remove('oc-capacitor-app', platformClass, 'oc-keyboard-open');
+      testWindow.happyDOM.setViewport({ height: previousHeight });
+      style.remove();
+    }
   });
 
   test('forwards viewer Back registration only with the Files visibility state', async () => {
