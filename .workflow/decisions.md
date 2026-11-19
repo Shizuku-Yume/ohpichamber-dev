@@ -1821,6 +1821,13 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
 - **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
 
+## 2026-11-19 - Bind native daemon callbacks to their session owner
+
+- **Decided:** retain Host session identity overrides for named services while binding session-change registration and launch-completion delivery to the native AgentSession instance.
+- **Instead of:** invoking inherited native private-field methods on an `Object.create(nativeSession)` wrapper or patching the OMP dependency.
+- **Because:** JavaScript private fields belong to the constructed instance, not objects inheriting from it. OMP's own ToolSession delegates these calls to the real session; our adapter must preserve the same receiver.
+- **Revisit when:** the worker no longer needs a separate Host-identity ToolSession for broker services.
+
 ## 2026-11-19 - Keep child discovery failures distinct from healthy root listings
 
 - **Decided:** Track failed child-discovery parents separately from root-listing failures. Root-only head and workspace listings cannot retire them. A head poll with pending child failures reuses full discovery to retry child reads; full and directory refreshes clear a pending parent only after successful child discovery, including empty results.
