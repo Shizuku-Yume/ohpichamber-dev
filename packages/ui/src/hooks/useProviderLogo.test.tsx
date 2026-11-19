@@ -69,6 +69,29 @@ describe('provider logo sources', () => {
     expect(await renderLogoSource('deepseek')).toBe('https://models.dev/logos/deepseek.svg');
   });
 
+  test('a catalog that arrives after mount turns into the remote logo without a re-render', async () => {
+    // The catalog loads lazily (when the browser is idle), so a provider the
+    // app does not bundle can be known only after the logo mounted. The hook
+    // must subscribe to that arrival; sampling the store once leaves no logo.
+    useConfigStore.setState({ modelsMetadata: new Map() });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<I18nProvider><ProviderLogo providerId="deepseek" /></I18nProvider>);
+    });
+    expect(container.querySelector('img')).toBeNull();
+
+    await act(async () => {
+      useConfigStore.setState({
+        modelsMetadata: new Map<string, ModelMetadata>([['deepseek/deepseek-chat', { id: 'deepseek-chat', providerId: 'deepseek' }]]),
+      });
+    });
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://models.dev/logos/deepseek.svg');
+    await act(async () => { root.unmount(); });
+    container.remove();
+  });
+
   test('an empty catalog alone never turns into a request', async () => {
     useConfigStore.setState({ modelsMetadata: new Map() });
     expect(await renderLogoSource('CLIProxyAPI')).toBeNull();

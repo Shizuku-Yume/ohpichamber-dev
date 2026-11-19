@@ -54,20 +54,26 @@ const LOGO_ALIAS = new Map<string, string>([
 // `CLIProxyAPI` — has no logo to fetch: probing `models.dev/logos/<id>.svg` for
 // it was a failed image request in every session that used one
 // (`net::ERR_CONNECTION_CLOSED`).
-const inModelsDevCatalog = (providerId: string): boolean => {
+const catalogCarriesProvider = (modelsMetadata: ReadonlyMap<string, unknown>, providerId: string): boolean => {
     const prefix = `${providerId}/`;
-    for (const key of useConfigStore.getState().modelsMetadata.keys()) {
+    for (const key of modelsMetadata.keys()) {
         if (key.startsWith(prefix)) return true;
     }
     return false;
 };
 
 // A bundled logo proves the id is a provider the app knows even before the
-// catalog arrives; an alias names one the app draws already.
-const isKnownProviderLogo = (providerId: string, candidates: readonly string[]): boolean =>
+// catalog arrives; an alias names one the app draws already. `catalogCarries`
+// is the lazily loaded catalog's evidence, supplied by each caller (the hook
+// subscribes to it; the preloader reads it once).
+const isKnownProviderLogo = (
+    providerId: string,
+    candidates: readonly string[],
+    catalogCarries: boolean,
+): boolean =>
     LOGO_ALIAS.has(providerId)
     || candidates.some((candidate) => LOCAL_PROVIDER_LOGO_MAP.has(candidate))
-    || inModelsDevCatalog(providerId);
+    || catalogCarries;
 
 const normalizeProviderId = (providerId: string | null | undefined) => {
     return (providerId ?? '')
@@ -106,11 +112,16 @@ export const providerLogoIds = (providerId: string): string[] => [providerId, ..
  * catalog gets the bundled fallback mark instead of a request that cannot
  * succeed.
  */
-const remoteProviderLogoSrc = (providerId: string | null | undefined, candidates: readonly string[]): string | null => {
+const remoteProviderLogoSrc = (
+    providerId: string | null | undefined,
+    candidates: readonly string[],
+    catalogCarries: boolean,
+): string | null => {
     const remoteResolvedId = candidates[0] ?? null;
     if (!remoteResolvedId) return null;
-    const normalized = normalizeProviderId(providerId);
-    return isKnownProviderLogo(normalized, candidates) ? `https://models.dev/logos/${remoteResolvedId}.svg` : null;
+    return isKnownProviderLogo(normalizeProviderId(providerId), candidates, catalogCarries)
+        ? `https://models.dev/logos/${remoteResolvedId}.svg`
+        : null;
 };
 
 const resolveProviderLogoSrc = (providerId: string | null | undefined): string | null => {
@@ -121,7 +132,11 @@ const resolveProviderLogoSrc = (providerId: string | null | undefined): string |
         return localLogoSrc;
     }
 
-    return remoteProviderLogoSrc(providerId, candidates);
+    return remoteProviderLogoSrc(
+        providerId,
+        candidates,
+        catalogCarriesProvider(useConfigStore.getState().modelsMetadata, normalizeProviderId(providerId)),
+    );
 };
 
 const preloadProviderLogo = (providerId: string | null | undefined): void => {
@@ -157,9 +172,19 @@ for (const [path, url] of Object.entries(localLogoModules)) {
 }
 
 export function useProviderLogo(providerId: string | null | undefined): UseProviderLogoReturn {
+    // The models.dev catalog arrives lazily (the store loads it when idle), and
+    // it is the only evidence a remote logo can succeed for a provider the app
+    // does not ship. Subscribe to that evidence as a boolean so the logo appears
+    // when it lands, without re-rendering on an unrelated store change.
+    const catalogCarriesThisProvider = useConfigStore(
+        useCallback(
+            (state) => catalogCarriesProvider(state.modelsMetadata, normalizeProviderId(providerId)),
+            [providerId],
+        ),
+    );
     const candidates = buildLogoCandidates(providerId);
     const localResolvedId = candidates.find((candidate) => LOCAL_PROVIDER_LOGO_MAP.has(candidate)) ?? null;
-    const remoteLogoSrc = remoteProviderLogoSrc(providerId, candidates);
+    const remoteLogoSrc = remoteProviderLogoSrc(providerId, candidates, catalogCarriesThisProvider);
     const hasLocalLogo = Boolean(localResolvedId);
     const localLogoSrc = localResolvedId ? LOCAL_PROVIDER_LOGO_MAP.get(localResolvedId) ?? null : null;
 
@@ -167,7 +192,7 @@ export function useProviderLogo(providerId: string | null | undefined): UseProvi
 
     useEffect(() => {
         setSource(hasLocalLogo ? 'local' : 'remote');
-    }, [hasLocalLogo, localResolvedId, remoteLogoSrc]);
+    }, [hasLocalLogo, localResolvedId, remoteLogoSrc, catalogCarriesThisProvider]);
 
     const handleError = useCallback(() => {
         setSource((current) => (current === 'local' && hasLocalLogo ? 'remote' : 'none'));

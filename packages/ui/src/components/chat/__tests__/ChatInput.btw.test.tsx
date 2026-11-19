@@ -223,6 +223,68 @@ test('bare /btw enters pending mode and the next submit asks the btw route', asy
   }
 });
 
+test('a submit while a btw answer is displayed sends the main prompt, not a lost draft', async () => {
+  const view = await mount();
+  useConfigStore.setState({ isConnected: true });
+  const askBtw = spyOn(canonicalClient, 'askBtw').mockResolvedValue({ recordId: 'btw-record-3' });
+  const createRun = spyOn(canonicalClient, 'createRun').mockResolvedValue({ run: { runId: 'run-c', sessionId: SESSION_ID, status: 'running', origin: 'host', createdAt: 1 } });
+  try {
+    // An answer is displayed: the panel stays open, its question is no longer
+    // pending, and the composer is the main session's input again.
+    useBtwStore.getState().setPanelState(SESSION_ID, {
+      pending: false, collapsed: false, ephemeralRecordId: 'btw-record', ephemeralText: 'Four.', ephemeralStatus: 'completed',
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(container.querySelector('[aria-label="btw"]')).not.toBeNull();
+
+    await typeAndSubmit(view, 'next main question');
+    // Pre-fix the submit returned after the composer cleared: no btw request,
+    // no run, and the typed prompt was gone.
+    expect(askBtw).not.toHaveBeenCalled();
+    expect(createRun).toHaveBeenCalledTimes(1);
+    expect(createRun.mock.calls[0]?.[0]).toBe(SESSION_ID);
+    const request = createRun.mock.calls[0]?.[1] as { input?: { text?: string } } | undefined;
+    expect(request?.input?.text).toBe('next main question');
+    expect(view.state.doc.length).toBe(0);
+
+    // The typed prompt was sent, so it is not restored as a draft.
+    const { readChatDraft } = await import('@/lib/chatDraftPersistence');
+    const identity = { runtimeKey: (await import('@/lib/runtime-switch')).getRuntimeKey(), directory: '/workspace', sessionId: SESSION_ID };
+    expect(readChatDraft(identity).text).toBe('');
+  } finally {
+    askBtw.mockRestore();
+    createRun.mockRestore();
+  }
+});
+
+test('a submit while the btw question is pending asks the btw route and keeps the main draft', async () => {
+  const view = await mount();
+  useConfigStore.setState({ isConnected: true });
+  const { clearChatDraft, readChatDraft } = await import('@/lib/chatDraftPersistence');
+  const { getRuntimeKey } = await import('@/lib/runtime-switch');
+  const mainIdentity = { runtimeKey: getRuntimeKey(), directory: '/workspace', sessionId: SESSION_ID };
+  const pendingIdentity = { ...mainIdentity, sessionId: `btw-pending:${SESSION_ID}` };
+  clearChatDraft(mainIdentity);
+  clearChatDraft(pendingIdentity);
+  const askBtw = spyOn(canonicalClient, 'askBtw').mockResolvedValue({ recordId: 'btw-record-4' });
+  const createRun = spyOn(canonicalClient, 'createRun').mockResolvedValue({ run: { runId: 'run-d', sessionId: SESSION_ID, status: 'running', origin: 'host', createdAt: 1 } });
+  try {
+    await typeAndSubmit(view, '/btw');
+    expect(useBtwStore.getState().byParent[SESSION_ID]?.pending).toBe(true);
+    await typeAndSubmit(view, 'what about the weather?');
+    expect(askBtw).toHaveBeenCalledTimes(1);
+    expect(askBtw.mock.calls[0]?.[1]).toBe('what about the weather?');
+    expect(createRun).not.toHaveBeenCalled();
+    // The question is the btw composer's, so the main session's draft stays its
+    // own; the btw prompt must never leak into it.
+    expect(readChatDraft(mainIdentity).text).toBe('');
+    expect(readChatDraft(pendingIdentity).text).toBe('');
+  } finally {
+    askBtw.mockRestore();
+    createRun.mockRestore();
+  }
+});
+
 test('compacting a too-small session is an informational notice, not a failure', async () => {
   const view = await mount();
   const tooSmall = new CanonicalApiError({

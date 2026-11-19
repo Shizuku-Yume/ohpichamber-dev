@@ -386,7 +386,10 @@ export const DefaultsSettings: React.FC = () => {
           what makes that claim name a real control rather than a search entry. */}
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
         {ompStateFailed && (
-          <SettingsInset settingsItem="sessions.default-model-error">
+          // A read failure is a notice, not a control: it carries no settings
+          // anchor, because every anchor is a jump target the search index must
+          // name, and listing a failure notice there would target nothing.
+          <SettingsInset>
             <p className="text-xs text-muted-foreground" role="status">
               {t('settings.openchamber.spaces.idleStop.loadFailed')}
             </p>

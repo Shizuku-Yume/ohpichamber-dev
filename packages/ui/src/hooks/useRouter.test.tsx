@@ -12,7 +12,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useRouter } from './useRouter';
+import { takeHeldContextSurface, useRouter } from './useRouter';
 
 const DIRECTORY = '/project';
 
@@ -141,6 +141,60 @@ test('a tab deep link opens the surface in the session directory, not the worksp
   expect(useUIStore.getState().contextPanelByDirectory['/other']).toBeUndefined();
   const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
   expect(panel?.tabs.map((tab) => tab.mode)).toEqual(['terminal']);
+});
+
+test('a held tab link opens once the session publishes its directory', async () => {
+  // Cold load: the URL names the session but neither the workspace nor the
+  // active directory is known, so the tab request must be held, not applied to
+  // '' or to a guessed workspace directory.
+  window.history.replaceState({}, '', '/?tab=terminal&session=next');
+  resetWorkspaceDirectories();
+  useProjectsStore.setState({ projects: [] });
+  useDirectoryStore.setState({ currentDirectory: undefined });
+  const snapshot = { activeSessions: [previous, next], archivedSessions: [] };
+  const loading = Promise.withResolvers<typeof snapshot>();
+  const load = spyOn(useGlobalSessionsStore.getState(), 'loadSessions').mockImplementation(() => loading.promise);
+  useGlobalSessionsStore.setState({ activeSessions: [], entityById: new Map(), hasLoaded: false, status: 'loading' });
+  useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null });
+  // The context panel store outlives a test; this one asserts its own open.
+  useUIStore.setState({ contextPanelByDirectory: {} });
+  try {
+    await act(async () => root.render(<Harness />));
+    expect(useSessionUIStore.getState().currentSessionId).toBe('next');
+    expect(useSessionUIStore.getState().currentSessionDirectory).toBeNull();
+
+    // Discovery lands without a directory: the router reaches the tab branch
+    // with nothing to open, so the request must be held.
+    await act(async () => {
+      useGlobalSessionsStore.setState({ ...snapshot, hasLoaded: true, status: 'ready' });
+      loading.resolve(snapshot);
+      await loading.promise;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[DIRECTORY]).toBeUndefined();
+
+    // The session owner publishes the directory later; until this change the
+    // hold was dropped because only a change event applied it.
+    await act(async () => {
+      useSessionUIStore.setState({ currentSessionDirectory: DIRECTORY });
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[DIRECTORY]?.tabs.map((tab) => tab.mode)).toEqual(['terminal']);
+  } finally {
+    loading.resolve(snapshot);
+    load.mockRestore();
+  }
+});
+
+test('a held tab applies when the directory is already known at the subscription', () => {
+  const hold: { current: 'terminal' | null } = { current: 'terminal' };
+  expect(takeHeldContextSurface(hold, DIRECTORY)).toBe('terminal');
+  // The hold is cleared: a later directory change must not open it again.
+  expect(hold.current).toBeNull();
+  expect(takeHeldContextSurface(hold, DIRECTORY)).toBeNull();
+  // An unknown directory keeps the request for the next publication.
+  const unknown: { current: 'terminal' | null } = { current: 'terminal' };
+  expect(takeHeldContextSurface(unknown, null)).toBeNull();
+  expect(unknown.current).toBe('terminal');
 });
 
 test('a PWA notification opens one entry and preserves one-step Back', async () => {

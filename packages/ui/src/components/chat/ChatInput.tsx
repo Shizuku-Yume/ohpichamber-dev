@@ -521,13 +521,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const isNewChatDraft = useSessionUIStore((s) => (
         !columnPinned && !currentSessionId && Boolean(s.newSessionDraft?.open) && s.newSessionDraft.target === 'chat'
     ));
+    // The composer belongs to the btw question only while that question is
+    // pending; once its answer is displayed the composer is the main session's
+    // input again, so an answered panel does not duplicate its draft.
+    const btwQuestionPending = isBtwActive && btwPanel.pending;
     const chatDraftIdentity = React.useMemo(
         () => createChatDraftIdentity(
             activeRuntimeKey,
             isNewChatDraft ? NEW_CHAT_DRAFT_DIRECTORY : currentSessionDirectoryForSync ?? currentDirectory,
-            isBtwActive && currentSessionId ? `btw-pending:${currentSessionId}` : currentSessionId,
+            btwQuestionPending && currentSessionId ? `btw-pending:${currentSessionId}` : currentSessionId,
         ),
-        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, isBtwActive, isNewChatDraft],
+        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, btwQuestionPending, isNewChatDraft],
     );
     const claimAttachmentSlot = React.useCallback(() => {
         useInputStore.getState().selectAttachmentDraft(chatDraftIdentity);
@@ -2297,19 +2301,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // never claims the new message.
         scrollToBottom?.();
 
-        if (isBtwActive && currentSessionId) {
-            if (btwPanel.pending) {
-                try {
-                    const result = await canonicalClient.askBtw(currentSessionId, primaryText);
-                    if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
-                    useBtwStore.getState().setPanelState(currentSessionId, { pending: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
-                    scrollToBottom?.();
-                } catch (error) {
-                    if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
-                    useBtwStore.getState().setPanelState(currentSessionId, { pending: true, collapsed: false, pendingSend: undefined });
-                    restoreConsumedInput();
-                    toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
-                }
+        // Only the btw question owns the composer. An ephemeral answer keeps
+        // the panel open (`isBtwActive`), but the composer is then the main
+        // session's input again, so a submit must fall through to the regular
+        // send path rather than return after the composer was cleared.
+        if (isBtwActive && btwPanel.pending && currentSessionId) {
+            try {
+                const result = await canonicalClient.askBtw(currentSessionId, primaryText);
+                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
+                scrollToBottom?.();
+            } catch (error) {
+                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, collapsed: false, pendingSend: undefined });
+                restoreConsumedInput();
+                toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
             }
             return;
         }

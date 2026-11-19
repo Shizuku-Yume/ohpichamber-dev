@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { Root } from 'react-dom/client';
-import { HTMLDivElement as HappyDivElement, Window } from 'happy-dom';
+import { Window } from 'happy-dom';
 import type { Model, Provider } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost' });
@@ -61,13 +61,15 @@ const providerWith = (entry: Model): Provider & { models: Model[] } => ({
 });
 
 let root: Root | undefined;
-let container: HappyDivElement;
+let container: HTMLDivElement;
 const configInitial = useConfigStore.getState();
 
 beforeEach(() => {
-  container = browser.document.createElement('div') as HappyDivElement;
-  browser.document.body.appendChild(container);
-  root = createRoot(container as unknown as Element);
+  // happy-dom's global document is installed above, so this is the DOM type
+  // React's createRoot accepts; no cast is needed to mount into it.
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
 });
 
 afterEach(async () => {

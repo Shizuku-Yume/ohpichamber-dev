@@ -132,7 +132,7 @@ describe('useSessionWarmingSync', () => {
     // The active id arrives from a deep link or a just-created session before
     // the discovery snapshot carries it; the warming route answers 404 then.
     useGlobalSessionsStore.setState({ entityById: new Map() });
-    expect(isHydratableRootSession('ses-unlisted')).toBe(false);
+    expect(isHydratableRootSession('ses-unlisted', undefined)).toBe(false);
 
     useConfigStore.setState({ isConnected: true });
     useSessionUIStore.setState({ currentSessionId: 'ses-unlisted' });
@@ -140,18 +140,23 @@ describe('useSessionWarmingSync', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(loadCalls).toEqual([]);
 
-    // Once discovery lists it, the read is safe and happens.
+    // Once discovery lists it, the read is safe and happens. The effect samples
+    // the listing once, so the appearance must re-run it (cold load order).
     const listed = makeSession({ sessionId: 'ses-unlisted' });
     await act(async () => {
       useGlobalSessionsStore.setState({ entityById: new Map([[listed.sessionId, listed]]) });
     });
-    expect(isHydratableRootSession('ses-unlisted')).toBe(true);
+    expect(isHydratableRootSession('ses-unlisted', listed)).toBe(true);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    // The connection did not flap; discovery merely finished listing it.
+    expect(loadCalls).toEqual([{ sessionId: 'ses-unlisted', options: undefined }]);
   });
 
   test('draft_* session IDs do not hydrate or call loadSessionWarming', async () => {
-    expect(isHydratableRootSession(null)).toBe(false);
-    expect(isHydratableRootSession('draft_1')).toBe(false);
-    expect(isHydratableRootSession('draft_42')).toBe(false);
+    expect(isHydratableRootSession(null, undefined)).toBe(false);
+    expect(isHydratableRootSession('draft_1', undefined)).toBe(false);
+    expect(isHydratableRootSession('draft_42', undefined)).toBe(false);
+    expect(isHydratableRootSession('draft_1', makeSession({ sessionId: 'draft_1' }))).toBe(false);
 
     useConfigStore.setState({ isConnected: true });
     useSessionUIStore.setState({ currentSessionId: 'draft_1' });
@@ -182,8 +187,8 @@ describe('useSessionWarmingSync', () => {
       ]),
     });
 
-    expect(isHydratableRootSession('ses-archived')).toBe(false);
-    expect(isHydratableRootSession('ses-child')).toBe(false);
+    expect(isHydratableRootSession('ses-archived', archivedRoot)).toBe(false);
+    expect(isHydratableRootSession('ses-child', childSession)).toBe(false);
 
     useConfigStore.setState({ isConnected: true });
     useSessionUIStore.setState({ currentSessionId: 'ses-archived' });

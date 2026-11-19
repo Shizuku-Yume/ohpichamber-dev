@@ -9,6 +9,21 @@ import type { RouteState, AppRouteState } from '@/lib/router';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
 
 /**
+ * Takes the context surface a deep link is holding for a session whose
+ * directory is not published yet. Answers `null` while the directory is
+ * unknown, and clears the hold so a later call cannot re-open it.
+ */
+export const takeHeldContextSurface = (
+ pending: { current: ContextPanelMode | null },
+ directory: string | null,
+): ContextPanelMode | null => {
+ if (!pending.current || !directory) return null;
+ const mode = pending.current;
+ pending.current = null;
+ return mode;
+};
+
+/**
  * Hook that provides bidirectional URL routing for OpenChamber.
  *
  * On mount:
@@ -183,20 +198,22 @@ export function useRouter(): void {
  // Subscribe to session changes
  React.useEffect(() => {
   let prevSessionId: string | null = useSessionUIStore.getState().currentSessionId;
-  let prevDirectory: string | null = useSessionUIStore.getState().currentSessionDirectory;
+
+  // A deep-linked surface waits for the directory the session really lives
+  // in: until it is published, `openContextSurface` would address ''.
+  // Applied once here as well as on every later update: a directory that was
+  // already published before this subscription existed produces no change
+  // event, and the held request must not be dropped for that.
+  const applyHeldSurface = (directory: string | null): void => {
+   if (!directory) return;
+   const mode = takeHeldContextSurface(pendingSurfaceRef, directory);
+   if (mode) useUIStore.getState().openContextSurface(directory, mode);
+  };
+  applyHeldSurface(useSessionUIStore.getState().currentSessionDirectory);
 
   const unsubscribe = useSessionUIStore.subscribe((state) => {
    const sessionId = state.currentSessionId;
-   const directory = state.currentSessionDirectory;
-
-   // A deep-linked surface waits for the directory the session really lives
-   // in: until it is published, `openContextSurface` would address ''.
-   if (pendingSurfaceRef.current && directory && directory !== prevDirectory) {
-    const mode = pendingSurfaceRef.current;
-    pendingSurfaceRef.current = null;
-    useUIStore.getState().openContextSurface(directory, mode);
-   }
-   prevDirectory = directory;
+   applyHeldSurface(state.currentSessionDirectory);
 
    // Track route-driven changes too, even while URL writes are suppressed.
    if (sessionId === prevSessionId) {

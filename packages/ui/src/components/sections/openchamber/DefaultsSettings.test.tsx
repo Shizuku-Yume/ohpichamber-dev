@@ -230,9 +230,12 @@ describe('DefaultsSettings', () => {
     });
     await settle();
 
-    const notice = host.querySelector('[data-settings-item="sessions.default-model-error"]');
+    // A failure is a status notice, never a settings jump target: it names no
+    // anchor, so searching for it cannot land on nothing.
+    const notice = host.querySelector('p[role="status"]');
     expect(notice).not.toBeNull();
     expect(notice?.textContent).toBeTruthy();
+    expect((notice?.parentElement as HTMLElement | null)?.dataset.settingsItem).toBeUndefined();
 
     // The plan row is still drawn; the read failure is what it reports.
     const planRow = host.querySelector('[data-settings-item="sessions.default-plan"]');
