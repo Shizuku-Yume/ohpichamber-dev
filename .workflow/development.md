@@ -4,6 +4,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Desktop runtime handoff:** A controlled Linux launch of the embedded Host with an OMP interpreter fixture that requires `BUN_BE_BUN=1` went from readiness HTTP 503 to 200 after forwarding the selected mode to the service, its readiness worker, and the Linux process cleanup helper. The fixture executes the real Bun Agent Service and SDK worker; it does not certify provider-backed turns or packaged release artifacts.
+
 **2026-11-19 Final main audit (task 06):** The candidate includes sidebar admission PR #2 and the PR #3 review fixes. The archived base reference, Agent Service lint and dead-code issues, Oxlint diagnostic parsing, and the Git clone timeout fixture are fixed. After the Web router test harness fix, the Ubuntu 24.04 gate passed on `d4feabd8c`, including all seven workspace suites and workflow validation. Devin signed off on local verification; Devin Review and maintainer merge are pending. See [task 06](tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md) for evidence and runtime walkthrough limitations. M7 release verification remains proposed.
 
 **2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**

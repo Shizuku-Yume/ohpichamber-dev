@@ -194,15 +194,16 @@ const WORKER_ENV_KEYS = Object.freeze([
 ]);
 
 // A directory overlay comes from user/project settings, but it must not be able
-// to forge the process-tree proof, the service token, or the worker's own
-// agent-directory binding. OMP_PROFILE/PI_PROFILE remain part of the
-// Host-authorized overlay: named profiles intentionally select their own
+// to forge the process-tree proof, the service token, the selected interpreter
+// mode, or the worker's own agent-directory binding. OMP_PROFILE/PI_PROFILE
+// remain part of the Host-authorized overlay: named profiles intentionally select their own
 // config/plugin roots, while settings and AuthStorage keep the explicit agent
 // directory captured by the Host.
 const RESERVED_WORKER_ENV_KEYS: Record<string, true> = Object.freeze({
   ohpichamber_internal_secret: true,
   openchamber_managed_process_token: true,
   pi_coding_agent_dir: true,
+  bun_be_bun: true,
 });
 
 const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
@@ -218,6 +219,7 @@ const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirec
     if (Object.hasOwn(RESERVED_WORKER_ENV_KEYS, key.toLowerCase())) delete environment[key];
   }
   environment.PI_CODING_AGENT_DIR = input.agentDirectory;
+  if (sourceEnv.BUN_BE_BUN === '1') environment.BUN_BE_BUN = '1';
   const managedToken = sourceEnv.OPENCHAMBER_MANAGED_PROCESS_TOKEN;
   if (managedToken !== undefined) environment.OPENCHAMBER_MANAGED_PROCESS_TOKEN = managedToken;
   return environment;
@@ -995,7 +997,8 @@ export class WorkerRegistry {
     // a second registered workspace from freezing out the first.
     if (this.spareWorkers.filter(spare => !spare.adopted).length >= this.sparePoolSize) return;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
-    const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
+    const workerArgs = environment.BUN_BE_BUN === '1' || /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime)
+      ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
     this.spareRefill = (async () => {
       try {
         if (this.closing) return;
@@ -1099,7 +1102,8 @@ export class WorkerRegistry {
     const ready = Promise.withResolvers<void>();
     const exited = Promise.withResolvers<void>();
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
-    const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
+    const workerArgs = environment.BUN_BE_BUN === '1' || /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime)
+      ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
     if (owner.kind === 'session') {
       const pendingSpare = this.spareWorkers.find(spare => !spare.adopted && spare.cwd === input.cwd);
       if (pendingSpare && !pendingSpare.loaded && pendingSpare.readyPromise) {

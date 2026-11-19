@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createPidfdTerminator, processTreeKillArgs, terminateProcessTree, processTreeAlive, waitForProcessTreeExit } from './pidfd-terminator.js';
 
@@ -31,6 +31,22 @@ const alive = (pid) => {
 };
 
 describe('pidfd terminator', () => {
+  it('passes the selected OMP interpreter mode to the helper', async () => {
+    const execFileAsync = vi.fn(async () => ({ stdout: '[]' }));
+    const terminator = createPidfdTerminator({ bunPath: 'omp', execFileAsync });
+    const identities = [{ pid: 123, startTicks: '1' }];
+    try {
+      vi.stubEnv('BUN_BE_BUN', '1');
+      await terminator(identities, 'SIGTERM');
+      expect(execFileAsync.mock.calls[0][2].env.BUN_BE_BUN).toBe('1');
+      vi.stubEnv('BUN_BE_BUN', undefined);
+      await terminator(identities, 'SIGTERM');
+      expect(execFileAsync.mock.calls[1][2].env).not.toHaveProperty('BUN_BE_BUN');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   linuxOnly('signals the exact identity and refuses a stale birth', async () => {
     const controlled = child();
     try {

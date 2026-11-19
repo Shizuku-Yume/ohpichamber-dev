@@ -166,6 +166,7 @@ export const createPidfdTerminator = ({ bunPath = process.env.OHPICHAMBER_BUN ||
     windowsHide: true,
     env: {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
+      ...(process.env.BUN_BE_BUN === '1' ? { BUN_BE_BUN: '1' } : {}),
       [REQUEST_ENV]: JSON.stringify(request),
     },
   });
