@@ -586,7 +586,7 @@ const upsertContextPanelTab = (
     ? {
      ...tab,
      mode: nextTab.mode,
-     targetPath: nextTab.targetPath || tab.targetPath,
+     targetPath: descriptor.targetPath === null ? null : nextTab.targetPath || tab.targetPath,
      targetDirectory: nextTab.targetDirectory,
      dedupeKey: nextTab.dedupeKey,
      label: nextTab.label,
@@ -1231,7 +1231,7 @@ interface UIStore {
  toggleContextEditorTree: () => void;
  toggleContextEditor: () => void;
  setContextEditorTreeWidth: (width: number) => void;
- openContextSurface: (directory: string, mode: ContextPanelMode, options?: { toggle?: boolean }) => void;
+ openContextSurface: (directory: string, mode: ContextPanelMode, intent?: 'toggle' | 'link') => void;
  openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor, options?: { reveal?: boolean }) => void;
  /**
   * Opens an issue, pull or merge request or tracker item in the panel's
@@ -1773,7 +1773,7 @@ export const useUIStore = create<UIStore>()(
 
     // Activates the most recent tab of the requested mode, or opens one.
     // Rail presses also toggle an already visible surface closed.
-    openContextSurface: (directory, mode, options) => {
+    openContextSurface: (directory, mode, intent = 'toggle') => {
      const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
      if (!normalizedDirectory) {
       return;
@@ -1802,10 +1802,12 @@ export const useUIStore = create<UIStore>()(
      };
 
      if (zoneView?.isOpen && activeTab?.mode === mode) {
-      if (options?.toggle === false) return;
-      clearTerminalTarget();
-      state.closeContextZone(normalizedDirectory, zone);
-      return;
+      if (intent === 'toggle') {
+       clearTerminalTarget();
+       state.closeContextZone(normalizedDirectory, zone);
+       return;
+      }
+      if (!activeTab.targetDirectory) return;
      }
 
      // A hidden tree stays hidden while a file is open, so the editor
@@ -1816,9 +1818,9 @@ export const useUIStore = create<UIStore>()(
       set({ contextEditorTreeVisible: true });
      }
 
-     const tabsOfMode = tabs.filter((tab) => tab.mode === mode);
+     const tabsOfMode = tabs.filter((tab) => tab.mode === mode && (intent !== 'link' || !tab.targetDirectory));
      if (tabsOfMode.length > 0) {
-      clearTerminalTarget();
+      if (intent === 'toggle') clearTerminalTarget();
       // `>=` so equal timestamps (same-millisecond opens) resolve to the
       // later tab in insertion order.
       const mostRecent = tabsOfMode.reduce((best, tab) => (tab.touchedAt >= best.touchedAt ? tab : best));
@@ -1845,7 +1847,7 @@ export const useUIStore = create<UIStore>()(
       return;
      }
 
-     state.openContextPanelTab(normalizedDirectory, { mode });
+     state.openContextPanelTab(normalizedDirectory, intent === 'link' ? { mode, targetPath: null } : { mode });
     },
 
     openContextPanelTab: (directory, tab, options) => {

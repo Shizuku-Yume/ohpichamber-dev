@@ -96,7 +96,7 @@ export function useRouter(): void {
     }
     if (directory) {
      pendingSurfaceRef.current = null;
-     useUIStore.getState().openContextSurface(directory, mode, { toggle: false });
+     useUIStore.getState().openContextSurface(directory, mode, 'link');
     } else {
      pendingSurfaceRef.current = mode;
     }
@@ -217,7 +217,7 @@ export function useRouter(): void {
   const applyHeldSurface = (directory: string | null): void => {
    if (!directory) return;
    const mode = takeHeldContextSurface(pendingSurfaceRef, directory);
-   if (mode) useUIStore.getState().openContextSurface(directory, mode, { toggle: false });
+   if (mode) useUIStore.getState().openContextSurface(directory, mode, 'link');
   };
   applyHeldSurface(useSessionUIStore.getState().currentSessionDirectory);
 

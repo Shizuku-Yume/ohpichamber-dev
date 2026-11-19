@@ -10,6 +10,7 @@ import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useTerminalStore } from '@/stores/useTerminalStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { takeHeldContextSurface, useRouter } from './useRouter';
@@ -178,6 +179,45 @@ test('a workspace tab deep link opens in the draft directory instead of the prev
     expect(useUIStore.getState().contextPanelByDirectory[draftDirectory]?.isOpen).toBe(true);
   } finally {
     useSessionUIStore.setState({ newSessionDraft });
+  }
+});
+
+test('a Changes link replaces an active comparison from another project', async () => {
+  window.history.replaceState({}, '', '/?tab=diff');
+  useUIStore.setState({ contextPanelByDirectory: {} });
+  useUIStore.getState().openContextPanelTab(DIRECTORY, {
+    mode: 'diff', targetDirectory: '/other-project', targetPath: 'foreign.ts', diffScope: 'staged',
+  });
+
+  await act(async () => root.render(<Harness />));
+
+  const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
+  expect(panel?.isOpen).toBe(true);
+  expect(panel?.tabs.find((tab) => tab.id === panel.activeTabId)).toMatchObject({
+    mode: 'diff', targetDirectory: null, targetPath: null, diffScope: null,
+  });
+});
+
+test('a Terminal link leaves the foreign exited action and shows the session terminal', async () => {
+  window.history.replaceState({}, '', '/?tab=terminal');
+  useUIStore.setState({ contextPanelByDirectory: {} });
+  const foreignDirectory = '/other-project';
+  const terminal = useTerminalStore.getState();
+  const foreignTab = terminal.createTab(foreignDirectory);
+  terminal.setTabPurpose(foreignDirectory, foreignTab, { type: 'project-action', actionId: 'build', executionId: 'exec-1' });
+  terminal.setTabLifecycle(foreignDirectory, foreignTab, 'exited', { expectedExecutionId: 'exec-1' });
+  useUIStore.getState().openContextPanelTab(DIRECTORY, { mode: 'terminal', targetDirectory: foreignDirectory });
+
+  try {
+    await act(async () => root.render(<Harness />));
+
+    const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
+    expect(panel?.isOpen).toBe(true);
+    expect(panel?.tabs.find((tab) => tab.id === panel.activeTabId)).toMatchObject({
+      mode: 'terminal', targetDirectory: null,
+    });
+  } finally {
+    terminal.clearAll();
   }
 });
 
