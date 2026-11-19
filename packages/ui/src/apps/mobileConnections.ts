@@ -950,7 +950,7 @@ type ChosenTransport =
   | { kind: 'relay'; relay: MobileRelayConfig; tunnel?: HeldRelayTunnel };
 
 type ProbeResult =
-  | { status: 'ok'; transport: ChosenTransport }
+  | { status: 'ok'; transport: ChosenTransport; sessionToken?: string }
   | { status: 'needs-login' }
   | { status: 'unreachable' }
   | { status: 'relay-limit' };
@@ -1010,14 +1010,26 @@ const probeConnectionCandidates = async (
       // requests. Cookie auth stays for the token-less (browser) flow.
       const session = await requestWithTimeout(`${url}/auth/session`, { method: 'GET', credentials: token ? 'omit' : 'include', headers, redirect }, requestOptions);
       logConnect('probe:direct:session', { url, ok: session?.ok === true, status: session?.status ?? null, source: session?.source ?? null, hasToken: Boolean(token) });
-      if (session?.status === 401) return { status: 'needs-login' };
-      if (!session || (!session.ok && session.status !== 404)) continue;
+      if (!session) continue;
       const status = await readSessionStatus(session);
+      const bootstrapPasswordless = isCapacitorApp() && status?.disabled === true && (!token || session.status === 401);
+      if (session.status === 401 && !bootstrapPasswordless) return { status: 'needs-login' };
+      if (!session.ok && session.status !== 404 && !bootstrapPasswordless) continue;
       if (status && status.disabled !== true && status.authenticated === false) return { status: 'needs-login' };
       // A cookie-only native session (authenticated, but not a `client` bearer scope
       // and not auth-disabled) is not enough — the native runtime transport needs a
       // bearer token, so fall through to the password flow to mint one.
       const authDisabled = status?.disabled === true;
+      if (bootstrapPasswordless) {
+        const bootstrap = await requestWithTimeout(`${url}/auth/session`, {
+          method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, redirect,
+          body: JSON.stringify({ issueSessionToken: true, trustDevice: true }),
+        }, requestOptions);
+        if (!bootstrap?.ok) return { status: 'unreachable' };
+        const parsed = z.object({ sessionToken: z.string().trim().min(1) }).safeParse(await bootstrap.json().catch(() => null));
+        if (!parsed.success) return { status: 'unreachable' };
+        return { status: 'ok', transport: { kind: 'direct', url }, sessionToken: parsed.data.sessionToken };
+      }
       if (!token && isCapacitorApp() && !authDisabled && status?.scope !== 'client') return { status: 'needs-login' };
       return { status: 'ok', transport: { kind: 'direct', url } };
     }
@@ -1222,7 +1234,11 @@ export const autoConnectLastInstance = async (options?: { fast?: boolean; skipIf
     return { status: 'no-candidate' };
   }
   try {
-    await upsertMobileConnection({ id: candidate.id, label: candidate.label, candidates: candidate.candidates }); // bump lastUsedAt (keeps token)
+    if (result.sessionToken) {
+      if (!await writeSecureToken(secureTokenKeyOf(candidate), result.sessionToken)) return { status: 'unreachable', label: candidate.label };
+      token = result.sessionToken;
+    }
+    await persistMobileConnection({ id: candidate.id, label: candidate.label, candidates: candidate.candidates, clientToken: token });
   } catch {
     if (result.transport.kind === 'relay') releaseHeldRelayTunnel(result.transport.tunnel);
     return { status: 'unreachable', label: candidate.label };
@@ -1450,7 +1466,11 @@ export const reprobeActiveConnection = async (options?: { fast?: boolean }): Pro
   logConnect('reprobe:better', { status: better.status, probed: higher.length });
   if (better.status === 'ok') {
     try {
-      await upsertMobileConnection({ id: active.id, label: active.label, candidates: active.candidates });
+      if (better.sessionToken) {
+        if (!await writeSecureToken(secureTokenKeyOf(active), better.sessionToken)) return 'unreachable';
+        token = better.sessionToken;
+      }
+      await persistMobileConnection({ id: active.id, label: active.label, candidates: active.candidates, clientToken: token });
     } catch {
       if (better.transport.kind === 'relay') releaseHeldRelayTunnel(better.transport.tunnel);
       return 'unreachable';
@@ -1476,13 +1496,19 @@ export const reprobeActiveConnection = async (options?: { fast?: boolean }): Pro
     }
   }
 
-  // 3. Current transport is dead — fall through to lower-priority candidates.
-  const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + 1) : [];
+  // 3. Current transport is dead — fall through to lower-priority candidates. A
+  // rejected credential is re-probed on the current transport too, so an expired
+  // passwordless session is renewed (or reports needs-login) instead of dropped.
+  const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + (current === 'invalid' ? 0 : 1)) : [];
   const fallback = await probeConnectionCandidates(lower, token, { fast, requestHeaders });
   logConnect('reprobe:fallback', { status: fallback.status, probed: lower.length });
   if (fallback.status === 'ok') {
     try {
-      await upsertMobileConnection({ id: active.id, label: active.label, candidates: active.candidates });
+      if (fallback.sessionToken) {
+        if (!await writeSecureToken(secureTokenKeyOf(active), fallback.sessionToken)) return 'unreachable';
+        token = fallback.sessionToken;
+      }
+      await persistMobileConnection({ id: active.id, label: active.label, candidates: active.candidates, clientToken: token });
     } catch {
       if (fallback.transport.kind === 'relay') releaseHeldRelayTunnel(fallback.transport.tunnel);
       return 'unreachable';
@@ -1724,10 +1750,10 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
         return;
       }
 
-      // Connected. Persist a user-supplied token before switching so a cold
-      // restart won't re-prompt.
-      if (token && tokenIsNew && isCapacitorApp()) {
-        await writeSecureToken(tokenKey, token);
+      // Persist newly supplied or bootstrapped credentials before switching.
+      if (result.sessionToken) token = result.sessionToken;
+      if (token && (tokenIsNew || result.sessionToken) && isCapacitorApp()) {
+        if (!await writeSecureToken(tokenKey, token)) throw new MobileHeaderStorageError();
       }
       await persistMetadata({ id: saved?.id, label, candidates, clientToken: token, requestHeaders: headerUpdate });
       switchToTransport(result.transport, token ?? null, { runtimeKey: tokenKey, grant, requestHeaders });

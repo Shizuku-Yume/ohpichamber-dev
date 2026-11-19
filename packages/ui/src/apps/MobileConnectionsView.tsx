@@ -127,18 +127,10 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
   };
 
   const handleUrlChange = (value: string) => {
-    // The first screen takes a pasted pairing link (ohpichamber://connect?...) in
-    // the URL field and splits it back into the server URL and token.
-    if (mode === 'welcome' && /^openchamber:\/\//i.test(value.trim())) {
+    if (mode === 'welcome') {
       const payload = parseConnectionPayload(value);
-      if (payload) {
-        if ('pairing' in payload) {
-          void conn.redeemPairingConnection(payload.pairing);
-          return;
-        }
-        setUrl(payload.url);
-        if (payload.label) setLabel(payload.label);
-        if (payload.clientToken) setClientToken(payload.clientToken);
+      if (payload && 'pairing' in payload) {
+        void conn.redeemPairingConnection(payload.pairing);
         return;
       }
     }

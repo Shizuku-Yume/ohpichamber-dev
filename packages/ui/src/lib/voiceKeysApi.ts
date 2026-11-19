@@ -2,29 +2,25 @@ import { z } from 'zod';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 /**
- * Voice API keys live on the server (`/api/voice/keys`, mode 0600 there);
- * the UI only learns whether each is set. Speech and transcription requests
- * carry no key: the server fills it in.
+ * Custom transcription keys live on the server (`/api/voice/keys`, mode 0600
+ * there); the UI only learns whether one is set. Speech credentials remain
+ * SDK-owned and are not part of this store.
  */
 const voiceApiKeyStateSchema = z.object({
-  openai: z.boolean(),
-  openaiCompatible: z.boolean(),
   stt: z.boolean(),
 });
 
 export type VoiceApiKeyState = z.infer<typeof voiceApiKeyStateSchema>;
 export type VoiceApiKeyKind = keyof VoiceApiKeyState;
 
-export const EMPTY_VOICE_API_KEYS = { openai: false, openaiCompatible: false, stt: false } satisfies VoiceApiKeyState;
+export const EMPTY_VOICE_API_KEYS = { stt: false } satisfies VoiceApiKeyState;
 
 /** Where builds before the server-side store kept each key in the browser. */
 const LEGACY_STORAGE_KEYS = {
-  openai: 'openaiApiKey',
-  openaiCompatible: 'openaiCompatibleApiKey',
   stt: 'sttApiKey',
 } as const satisfies Record<VoiceApiKeyKind, string>;
 
-const VOICE_API_KEY_KINDS = ['openai', 'openaiCompatible', 'stt'] as const satisfies readonly VoiceApiKeyKind[];
+const VOICE_API_KEY_KINDS = ['stt'] as const satisfies readonly VoiceApiKeyKind[];
 
 export const fetchVoiceApiKeys = async (): Promise<VoiceApiKeyState> => {
   const response = await runtimeFetch('/api/voice/keys', { headers: { Accept: 'application/json' } });

@@ -36,6 +36,7 @@ export const WorkerBootstrapSchema = z.strictObject({
 });
 export type WorkerBootstrap = z.infer<typeof WorkerBootstrapSchema>;
 export const WorkerBootstrapMessageSchema = WorkerBootstrapSchema.omit({ env: true }).extend({
+  retiredSessionIds: z.array(EntityIdSchema).optional(),
   type: z.literal('bootstrap'), workerGeneration: EntityIdSchema, approvalPolicies: z.array(WorkerApprovalPolicySchema).optional(),
 });
 export type WorkerBootstrapMessage = z.infer<typeof WorkerBootstrapMessageSchema>;
