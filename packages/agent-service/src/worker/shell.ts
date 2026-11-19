@@ -81,8 +81,16 @@ export class WorkerShell {
   private readonly unsubscribeWidgets?: () => void;
   private observationFailure: unknown;
   private closed = false;
+  /**
+   * The root session this worker currently serves. A completed `/btw` branch
+   * rekeys the native session in place, so the shell projection must follow it:
+   * every job identity and the snapshot's scope name it, and a stale id makes
+   * the Host's root check refuse every shell read with 503.
+   */
+  private sessionId: string;
 
   constructor(private readonly context: WorkerShellContext) {
+    this.sessionId = context.sessionId;
     this.unsubscribe = context.manager.observeBashJobs?.(event => {
       try { this.observeNative(event); }
       catch (error) {
@@ -100,6 +108,22 @@ export class WorkerShell {
     }
   }
 
+  /**
+   * Follow a native session rekey (a completed `/btw` branch). Every job this
+   * shell owns is addressed by its root session id, so the running and ended
+   * records, the guest job keys and the scope all move together; a stale id
+   * answers 404 to the Host's root-addressed output read.
+   */
+  rekey(sessionId: string): void {
+    if (this.closed || this.sessionId === sessionId) return;
+    for (const job of this.jobs.values()) job.identity.sessionId = sessionId;
+    for (const record of this.ended.values()) record.job.sessionId = sessionId;
+    for (const record of this.authorizedServices.values()) record.identity.sessionId = sessionId;
+    for (const record of this.endedServices.values()) record.sessionId = sessionId;
+    this.sessionId = sessionId;
+    this.revision++;
+  }
+
   private observeNative(event: BashJobEvent): void {
     if (event.type === 'started') {
       const native = this.context.manager.getJob(event.jobId);
@@ -112,7 +136,7 @@ export class WorkerShell {
       const jobId = `native:${JSON.stringify([native.ownerId, native.id])}`;
       const job: Job = {
         identity: {
-          jobId, sessionId: this.context.sessionId, epoch: this.context.epoch,
+          jobId, sessionId: this.sessionId, epoch: this.context.epoch,
           workerGeneration: this.context.workerGeneration, workspaceId: this.context.workspaceId,
           projectId: this.context.projectId, command: this.publicText(native.process.command), background: native.foreground !== true,
           startedAt: native.startTime, outputCursor: '0', status: 'running',
@@ -172,14 +196,14 @@ export class WorkerShell {
   private start(request: ShellStartRequest): ShellResult {
     const jobId = crypto.randomUUID();
     const identity: Running = {
-      jobId, sessionId: this.context.sessionId, epoch: this.context.epoch,
+      jobId, sessionId: this.sessionId, epoch: this.context.epoch,
       workerGeneration: this.context.workerGeneration, workspaceId: this.context.workspaceId,
       projectId: this.context.projectId, command: this.publicText(request.command), background: request.background,
       startedAt: Date.now(), outputCursor: '0', status: 'running',
     };
     const job: Job = {
       identity, output: new Uint8Array(), totalBytes: 0n, stopped: false,
-      origin: 'guest', sessionKey: `${this.context.sessionId}:shell:${jobId}`,
+      origin: 'guest', sessionKey: `${this.sessionId}:shell:${jobId}`,
     };
     const nativeId = this.context.manager.register('bash', request.command, async ({ signal, reportProgress }) => {
       const result = await executeBash(request.command, {
@@ -194,7 +218,7 @@ export class WorkerShell {
       // The final preview is cumulative and may elide bytes. Only onChunk advances cursors.
       if (result.cancelled) throw new Error(result.timedOut ? 'Command timed out' : 'Command stopped');
       return result.output;
-    }, { id: jobId, ownerId: this.context.sessionId, foreground: true });
+    }, { id: jobId, ownerId: this.sessionId, foreground: true });
     const native = this.context.manager.getJob(nativeId);
     if (!native) throw new ProjectionError(503, 'SHELL_OUTPUT_UNAVAILABLE', 'Native shell job was not registered');
     job.native = native;
@@ -270,7 +294,7 @@ export class WorkerShell {
     }
     const currentIds = new Set<string>();
     for (const daemon of daemons) {
-      if (daemon.owner !== this.context.sessionId) continue;
+      if (daemon.owner !== this.sessionId) continue;
       const jobId = `service:${daemon.id}`;
       currentIds.add(jobId);
       const isEnded = (daemon.state as string) === 'stopped' || daemon.state === 'exited' || daemon.state === 'failed';
@@ -280,7 +304,7 @@ export class WorkerShell {
       const startedAt = daemon.startedAt || daemon.createdAt || Date.now();
       const identity: Running = {
         jobId,
-        sessionId: this.context.sessionId,
+        sessionId: this.sessionId,
         epoch: this.context.epoch,
         workerGeneration: this.context.workerGeneration,
         workspaceId: this.context.workspaceId,
@@ -562,7 +586,7 @@ export class WorkerShell {
     }
 
     return {
-      scope: { kind: 'session', sessionId: this.context.sessionId },
+      scope: { kind: 'session', sessionId: this.sessionId },
       epoch: this.context.epoch, revision: this.revision.toString(),
       running: runningJobs,
       ended: endedJobs.sort((left, right) => left.endedAt - right.endedAt),

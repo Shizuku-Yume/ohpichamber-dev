@@ -1,5 +1,5 @@
 import { isString } from '../shared/guards.js';
-import { getRepositoryRoot } from '../git/service.js';
+import { getRepositoryRoot, isOutsideGitRepository } from '../git/service.js';
 import { describeSmallModel, generateSmallModelText } from '../small-model/index.js';
 import { buildDigest } from './digest.js';
 import { indexHunks } from './hunks.js';
@@ -177,6 +177,26 @@ export function isGenerating(repoRoot, sourceKeyValue, readContext) {
   return jobs.has(jobKey(repoRoot, sourceKeyValue, readContext));
 }
 
+// A walkthrough is keyed by the repository it documents. A directory outside
+// any repository is a caller-visible precondition (the client asked about a
+// folder that is not a repository), not a fault in this module: the routes
+// answer 422 with the same code the source-control binding routes use instead
+// of a 500. The classification asks Git's exit status and the filesystem, not
+// its message: Git translates and rewords that diagnostic, so a regex over it
+// would turn a localized refusal into a 500.
+const UNSUPPORTED_REPOSITORY_MESSAGE = 'Directory is not a supported Git repository';
+const resolveRepositoryRoot = async (directory) => {
+  try {
+    return await getRepositoryRoot(directory);
+  } catch (error) {
+    if (!await isOutsideGitRepository(directory)) throw error;
+    throw Object.assign(new Error(UNSUPPORTED_REPOSITORY_MESSAGE), {
+      code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY',
+      reason: 'not-a-git-repository',
+    });
+  }
+};
+
 /**
  * Resolve the pair the job registry is keyed by, for callers that need to look
  * a job up without doing any diff work.
@@ -185,7 +205,7 @@ export function isGenerating(repoRoot, sourceKeyValue, readContext) {
 export async function getRepositoryRootFor(directory, rawSource, rawReadContext) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
-  return { repoRoot: await getRepositoryRoot(directory), sourceKey: sourceKey(source), readContext };
+  return { repoRoot: await resolveRepositoryRoot(directory), sourceKey: sourceKey(source), readContext };
 }
 
 /**
@@ -195,7 +215,7 @@ export async function getRepositoryRootFor(directory, rawSource, rawReadContext)
 export async function cancelWalkthroughGeneration({ directory, source: rawSource, readContext: rawReadContext }) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
-  const repoRoot = await getRepositoryRoot(directory);
+  const repoRoot = await resolveRepositoryRoot(directory);
   const job = jobs.get(jobKey(repoRoot, sourceKey(source), readContext));
   if (!job) return addReadContext({ cancelled: false }, readContext);
   job.controller.abort();
@@ -293,7 +313,7 @@ const serializeHunks = (files) => files.flatMap((file) => file.hunks.map((hunk) 
 export async function getWalkthrough({ directory, workspaceId, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
-  const repoRoot = await getRepositoryRoot(directory);
+  const repoRoot = await resolveRepositoryRoot(directory);
   const key = sourceKey(source);
   const language = normalizeLanguage(rawLanguage);
 
@@ -434,7 +454,7 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
 export async function generateWalkthrough({ directory, workspaceId, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
-  const repoRoot = await getRepositoryRoot(directory);
+  const repoRoot = await resolveRepositoryRoot(directory);
   const key = sourceKey(source);
   const language = normalizeLanguage(rawLanguage);
 

@@ -259,6 +259,38 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
   const listSessionFamily = (rootSessionId) => lifecycle.run(() => {
     try { return readFamily(EntityIdSchema.parse(rootSessionId)); } catch (error) { throw readFailure(error); }
   });
+  /**
+   * Move one root binding to a new id after the Agent Service rekeys the
+   * session itself (a completed `/btw` branch mints a new native session).
+   * The workspace scope is unchanged; only the addressed identity moves, and
+   * the old row is retired in the same transaction so the id can never
+   * outlive the transcript it no longer names.
+   */
+  const rebindSessionRoot = (sessionId, rootSessionId) => lifecycle.run(() => {
+    try {
+      const from = EntityIdSchema.parse(sessionId);
+      const to = EntityIdSchema.parse(rootSessionId);
+      if (from === to) throw new MetadataWriteError('A session rekey must name a new identity');
+      return withTransaction(db, () => {
+        const existing = readSession(from);
+        if (!existing || existing.sessionId !== from) throw new MetadataWriteError('The addressed session scope is not registered');
+        if (existing.rootSessionId !== from) throw new MetadataWriteError('Only a root session can be rekeyed');
+        const family = readFamily(from);
+        if (!family.some((member) => member.sessionId === from)) throw new MetadataWriteError('The addressed session scope is not its family root');
+        if (readSession(to)) throw new MetadataWriteError('The new session identity is already registered');
+        assertWorktreeScopeAvailable(existing.cwd);
+        // The native branch keeps a root's subagents on the same moved root, so
+        // every member of the family follows the same rekey.
+        for (const member of family) if (member.sessionId !== from) {
+          db.prepare('UPDATE host_agent_sessions SET root_session_id = ? WHERE session_id = ? AND root_session_id = ?')
+            .run(to, member.sessionId, from);
+        }
+        db.prepare('UPDATE host_agent_sessions SET session_id = ?, root_session_id = ? WHERE session_id = ? AND root_session_id = ?')
+          .run(to, to, from, from);
+        return readSession(to);
+      });
+    } catch (error) { throw writeFailure(error); }
+  });
   const getRelocation = (rootSessionId) => lifecycle.run(() => {
     try { return readRelocation(EntityIdSchema.parse(rootSessionId)); } catch (error) { throw readFailure(error); }
   });
@@ -835,5 +867,5 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       return { items, errors };
     } catch (error) { throw readFailure(error); }
   });
-  return { ensureWorkspace, getWorkspace, bindSession, getSession, removeSessionFamily, listSessionFamily, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, listArchivedWorktreeWorkspaces, isWorktreeArchived, createWorktreeArchive, getWorktreeArchive, claimWorktreeArchive, pinWorktreeRestore, markWorktreeRestoreAttempted, releaseWorktreeArchiveClaim, markWorktreeRestoreMove, completeWorktreeRestoreFamily, reserveWorktreeArchiveDeleteFamily, completeWorktreeArchiveDeleteFamily, recheckWorktreeArchive, setWorktreeArchivePhase, archiveWorktreeSessions, rollbackWorktreeSessions, finishWorktreeArchive, markWorktreeArchiveDeleteFinalizing, markWorktreeArchiveDeleteCasCompleted, markWorktreeArchiveRestoreCasStarted, markWorktreeArchiveRestoreCasCompleted, discardWorktreeArchive, checkWorktreeScope, assertSessionWritable, reserveSessionDelete, releaseSessionDelete, reserveSessionAdmission, releaseSessionAdmission, markSessionAdmissionUncertain, flush: lifecycle.flush, close: lifecycle.close };
+  return { ensureWorkspace, getWorkspace, bindSession, getSession, removeSessionFamily, listSessionFamily, rebindSessionRoot, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, listArchivedWorktreeWorkspaces, isWorktreeArchived, createWorktreeArchive, getWorktreeArchive, claimWorktreeArchive, pinWorktreeRestore, markWorktreeRestoreAttempted, releaseWorktreeArchiveClaim, markWorktreeRestoreMove, completeWorktreeRestoreFamily, reserveWorktreeArchiveDeleteFamily, completeWorktreeArchiveDeleteFamily, recheckWorktreeArchive, setWorktreeArchivePhase, archiveWorktreeSessions, rollbackWorktreeSessions, finishWorktreeArchive, markWorktreeArchiveDeleteFinalizing, markWorktreeArchiveDeleteCasCompleted, markWorktreeArchiveRestoreCasStarted, markWorktreeArchiveRestoreCasCompleted, discardWorktreeArchive, checkWorktreeScope, assertSessionWritable, reserveSessionDelete, releaseSessionDelete, reserveSessionAdmission, releaseSessionAdmission, markSessionAdmissionUncertain, flush: lifecycle.flush, close: lifecycle.close };
 };

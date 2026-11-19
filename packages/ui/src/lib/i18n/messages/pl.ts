@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Modele Zen',
   'quota.value.requests': 'Żądania: {count}',
@@ -6492,6 +6493,7 @@ export const dict = {
   "chat.chatInput.largeTextPaste.attach": "Dołącz jako plik",
   "chat.chatInput.largeTextPaste.inline": "Wklej w treści",
   "chat.chatInput.toast.compactFailed": "Nie udało się skompaktować sesji",
+  "chat.chatInput.toast.compactNotNeeded": "Ta sesja jest jeszcze zbyt krótka, aby ją skompaktować.",
   "chat.chatInput.toast.forkFailed": "Nie udało się rozgałęzić sesji",
   "chat.chatInput.toast.forkNothingToFork": "Nie ma jeszcze czego rozgałęzić: w tej sesji nie zakończyła się żadna odpowiedź",
   "chat.chatInput.toast.forkSendFailed": "Rozgałęziono, ale wiadomość nie została wysłana. Wróciła do pola wpisywania.",
@@ -8117,6 +8119,7 @@ export const dict = {
   "projectEditDialog.toast.failedToRemoveIcon": "Nie udało się usunąć ikony projektu",
   "projectEditDialog.toast.failedToUploadIcon": "Nie udało się przesłać ikony projektu",
   "projectEditDialog.toast.iconDiscovered": "Wykryto ikonę projektu",
+  "projectEditDialog.toast.iconNotFound": "Nie znaleziono favikony w tym projekcie",
   "projectEditDialog.toast.iconRemoved": "Usunięto ikonę projektu",
   "projectEditDialog.toast.iconUpdated": "Zaktualizowano ikonę projektu",
   "rightSidebar.contextNotesTodo.empty.selectProject": "Wybierz projekt, aby dodać notatki i zadania.",
@@ -9318,4 +9321,5 @@ export const dict = {
   "settings.usage.state.error": "Nie udało się wczytać użycia.",
 
   "chat.workStatus.mcp.unknown": "Serwery MCP nie zostały jeszcze wczytane.",
+  ...effortI18n.pl,
 };

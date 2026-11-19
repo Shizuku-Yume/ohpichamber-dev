@@ -37,6 +37,7 @@ import { VariantSelect } from './VariantSelect';
 import {
   MAX_CATEGORIES,
   buildUniqueCategoryId,
+  getBuiltinCategoryDisplayName,
   knownVariant,
   useModelReasoningEfforts,
 } from './routingCategoryUtils';
@@ -86,7 +87,7 @@ const CategoryRow: React.FC<{
     : undefined;
   const missingName = category.name.trim().length === 0;
   const missingDescription = category.description.trim().length === 0;
-  const displayName = category.name.trim() || category.id;
+  const displayName = getBuiltinCategoryDisplayName(category, t);
 
   return (
     <SettingsDisclosure
@@ -445,7 +446,9 @@ export const RoutingPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     {removedBuiltins.map((builtin) => (
                       <Button key={builtin.id} size="xs" variant="ghost" onClick={() => restoreCategory(builtin.id)}>
-                        {t('settings.routing.category.restore', { name: builtin.name })}
+                        {t('settings.routing.category.restore', {
+                          name: getBuiltinCategoryDisplayName({ id: builtin.id, builtin: true, name: builtin.name }, t),
+                        })}
                       </Button>
                     ))}
                   </div>

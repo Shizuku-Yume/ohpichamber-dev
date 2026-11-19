@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen 模型',
   'quota.value.requests': '请求数：{count}',
@@ -7601,6 +7602,7 @@ export const dict = {
   "snippets.source.global": "全局",
   "snippets.source.project": "项目",
   "chat.chatInput.toast.compactFailed": "压缩会话失败",
+  "chat.chatInput.toast.compactNotNeeded": "会话太短，暂时无法压缩。",
   "chat.chatInput.toast.forkFailed": "无法分叉会话",
   "chat.chatInput.toast.forkNothingToFork": "暂无可分叉内容：此会话中还没有已完成的回复",
   "chat.chatInput.toast.forkSendFailed": "已分叉，但消息未发送，已放回输入框。",
@@ -7984,6 +7986,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "发现项目图标失败",
   "projectEditDialog.toast.customIconAlreadySet": "该项目已设置自定义图标",
   "projectEditDialog.toast.iconDiscovered": "项目图标已发现",
+  "projectEditDialog.toast.iconNotFound": "在此项目中未找到网站图标",
   "openInApp.actions.open": "打开",
   "openInApp.actions.openInAria": "在 {app} 中打开",
   "openInApp.actions.chooseAppAria": "选择要打开的应用",
@@ -9309,4 +9312,5 @@ export const dict = {
   "settings.usage.state.error": "用量加载失败。",
 
   "chat.workStatus.mcp.unknown": "MCP 服务器尚未加载。",
+  ...effortI18n['zh-CN'],
 };

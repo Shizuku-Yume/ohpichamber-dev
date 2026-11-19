@@ -29,7 +29,7 @@ function useNativeRecap(sessionId: string, enabled: boolean): string | null {
   const [recap, setRecap] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!enabled || !sessionId) {
+    if (!enabled || !sessionId || sessionId.startsWith('draft_')) {
       setRecap(null);
       return undefined;
     }
@@ -65,6 +65,11 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   // Service reports a session it no longer holds as `unavailable`, and a
   // session whose event stream has not connected yet has no status at all.
   const isSettled = sessionActivityPhase(status, boundRunId) === 'idle';
+  // The recap journal route is root-only: a draft, an unknown id, and a
+  // subagent child all answer 403/404 there. Without a projected root row
+  // there is nothing to read.
+  const recapReadable = session !== undefined && session !== null && !session.parentSessionId
+    && session.rootSessionId === session.sessionId;
   // Same freshness rule as the sidebar row's recap tooltip: the canonical
   // session update is authoritative, not the last loaded assistant answer.
   const assist = isSettled ? getCurrentSessionAssist(session) : null;
@@ -79,7 +84,7 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   const pushedSuggestion = useSessionSuggestionStore(
     React.useCallback((state) => state.suggestions[sessionId]?.suggestion ?? null, [sessionId]),
   );
-  const journalledRecap = useNativeRecap(sessionId, sessionRecapEnabled && isSettled);
+  const journalledRecap = useNativeRecap(sessionId, sessionRecapEnabled && isSettled && recapReadable);
   const promoted = pushedRecap ?? journalledRecap ?? (assist && assist.recap ? assist.recap : null);
 
   return {

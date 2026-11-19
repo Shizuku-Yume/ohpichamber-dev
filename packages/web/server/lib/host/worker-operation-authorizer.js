@@ -224,6 +224,10 @@ export const createWorkerOperationAuthorizer = ({
     if (internalReadUrls.length > 0 && request.toolName !== 'read') {
      return denied(`The ${request.toolName} tool may read OMP internal URLs but may not write them`);
     }
+    const internalWriteUrls = descriptor.internalWriteUrls ?? [];
+    if (internalWriteUrls.length > 0 && request.toolName !== 'write') {
+     return denied(`The ${request.toolName} tool may not target an OMP internal write URL; only the write tool may`);
+    }
     for (const target of [...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
      if (!await pathAllowed(target)) return denied(`The ${request.toolName} tool targets a path outside the authorized workspace`);
     }
@@ -279,7 +283,10 @@ export const createWorkerOperationAuthorizer = ({
    if (tier === 'write') {
     if (!policy.fileTools.includes('write')) return denied(`The workspace does not grant file writes to the ${request.toolName} tool`);
     if (request.toolName === 'edit' && descriptor && descriptor.effectiveMode === undefined) return denied(`The ${request.toolName} tool carries no effective edit mode`);
-    if (['write', 'edit'].includes(request.toolName) && descriptor && descriptor.destinationPaths.length === 0 && (!descriptor.fileOps || descriptor.fileOps.length === 0)) {
+    if (['write', 'edit'].includes(request.toolName) && descriptor &&
+     descriptor.destinationPaths.length === 0 &&
+     (!descriptor.fileOps || descriptor.fileOps.length === 0) &&
+     (descriptor.internalWriteUrls ?? []).length === 0) {
      return denied(`The ${request.toolName} tool names no writable destination`);
     }
     // A write tier the tool declared itself proves only that it will write; when

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Modèles Zen',
   'quota.value.requests': 'Requêtes : {count}',
@@ -7350,6 +7351,7 @@ export const dict = {
   "snippets.source.global": "mondial",
   "snippets.source.project": "projet",
   "chat.chatInput.toast.compactFailed": "Échec du compactage de la session",
+  "chat.chatInput.toast.compactNotNeeded": "Cette session est trop courte pour être compactée pour l'instant.",
   "chat.chatInput.toast.forkFailed": "Impossible de dupliquer la session",
   "chat.chatInput.toast.forkNothingToFork": "Rien à dupliquer pour l'instant : aucune réponse n'est terminée dans cette session",
   "chat.chatInput.toast.forkSendFailed": "Session dupliquée, mais le message n'a pas été envoyé. Il est de retour dans la zone de saisie.",
@@ -7715,6 +7717,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "Échec de la découverte de l'icône du projet",
   "projectEditDialog.toast.customIconAlreadySet": "Icône personnalisée déjà définie pour ce projet",
   "projectEditDialog.toast.iconDiscovered": "Icône de projet découverte",
+  "projectEditDialog.toast.iconNotFound": "Aucun favicon trouvé dans ce projet",
   "openInApp.actions.open": "Ouvrir",
   "openInApp.actions.openInAria": "Ouvert dans {app}",
   "openInApp.actions.chooseAppAria": "Choisissez l'application à ouvrir",
@@ -9318,4 +9321,5 @@ export const dict = {
   "settings.usage.state.error": "Échec du chargement de l'utilisation.",
 
   "chat.workStatus.mcp.unknown": "Les serveurs MCP ne sont pas encore chargés.",
+  ...effortI18n.fr,
 };

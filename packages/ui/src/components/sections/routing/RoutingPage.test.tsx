@@ -69,11 +69,34 @@ const mockConfig: RoutingConfig = {
   ],
 };
 
+// The page names a builtin category in the reader's language only while the
+// stored name still equals the seeded English one, so the mock must translate
+// those keys the way a real dictionary does instead of echoing the key.
+const BUILTIN_NAMES = {
+  en: { trivial: 'Trivial', research: 'Research', implement: 'Implement', hard: 'Hard' },
+  'zh-CN': { trivial: '简单', research: '研究', implement: '实现', hard: '困难' },
+} as const;
+type MockBuiltinId = keyof (typeof BUILTIN_NAMES)['en'];
+type MockLocale = keyof typeof BUILTIN_NAMES;
+let mockLocale: MockLocale = 'en';
+
+const builtinIdOfKey = (key: string): MockBuiltinId | null => {
+  switch (key) {
+    case 'settings.routing.builtin.trivial.name': return 'trivial';
+    case 'settings.routing.builtin.research.name': return 'research';
+    case 'settings.routing.builtin.implement.name': return 'implement';
+    case 'settings.routing.builtin.hard.name': return 'hard';
+    default: return null;
+  }
+};
+
 mock.module('@/lib/i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
-      if (params?.name && typeof params.name === 'string') return `${key}:${params.name}`;
-      return key;
+    locale: mockLocale,
+    t: (key: string, params?: { name?: string }) => {
+      const builtinId = builtinIdOfKey(key);
+      if (builtinId !== null) return BUILTIN_NAMES[mockLocale][builtinId];
+      return params?.name === undefined ? key : `${key}:${params.name}`;
     },
   }),
 }));
@@ -167,6 +190,7 @@ describe('RoutingPage', () => {
   let root: Root;
 
   beforeEach(() => {
+    mockLocale = 'en';
     saveCalls.length = 0;
     saveStateCalls.length = 0;
     useRoutingStore.setState({
@@ -199,6 +223,36 @@ describe('RoutingPage', () => {
       root.unmount();
     });
     container.remove();
+  });
+
+// Only a builtin that still carries the seeded English name is translated:
+  // the stored config is never rewritten, and a renamed builtin shows what the
+  // user typed.
+  test('builtin categories are translated while their stored name is the seeded English one', async () => {
+    const localizedConfig: RoutingConfig = {
+      ...mockConfig,
+      categories: [
+        { id: 'trivial', builtin: true, enabled: true, name: 'Trivial', description: 'Quick mechanical task', model: null, variant: null, agent: null },
+        { id: 'hard', builtin: true, enabled: true, name: 'Hard', description: 'Hard reasoning and architecture', model: null, variant: null, agent: null },
+        { id: 'research', builtin: true, enabled: true, name: 'My Research', description: 'My own description', model: null, variant: null, agent: null },
+      ],
+    };
+    useRoutingStore.setState({ config: localizedConfig, builtins: localizedConfig.categories });
+
+    mockLocale = 'zh-CN';
+    await act(async () => { root.render(<RoutingPage />); });
+
+    expect(container.textContent).toContain('简单');
+    expect(container.textContent).toContain('困难');
+    expect(container.textContent).toContain('My Research');
+    // The stored names keep their English text; only the display changes.
+    expect(localizedConfig.categories[0]?.name).toBe('Trivial');
+    expect(saveCalls).toHaveLength(0);
+
+    // The enabled checkbox names the same localized title.
+    const enabledAria = container.querySelector('[aria-label]');
+    expect(container.textContent).not.toContain('Trivial');
+    expect(enabledAria).not.toBeNull();
   });
 
   test('does not render AgentSelector in routing category editor (W2 invariant)', async () => {

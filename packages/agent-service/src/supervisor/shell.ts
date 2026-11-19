@@ -10,13 +10,22 @@ import type {
   ShellStreamRequest, ShellStreamResponse, ShellStdinResult,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
-import type { SessionRegistry } from '../sessions/registry.ts';
 import { ShellResultSchema, type ShellOperation, type ShellResult } from '../shell/protocol.ts';
-import { WorkerOperationError, type RegisteredWorkerInfo, type WorkerRegistry } from './workers.ts';
+import type { WorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
+import { WorkerOperationError, type RegisteredWorkerInfo, type WorkerAuthorizationScope } from './workers.ts';
 
 type ShellResponse = { status: number; body: ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult };
 type BodyReader = <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>;
 type ScopeRevision = { members: string; membershipRevision: bigint; revision: bigint };
+/** The worker accessors a shell observation reads; testable without a worker process. */
+export interface ShellWorkerPort {
+  list(): RegisteredWorkerInfo[];
+  bootstrap(rootSessionId: string): WorkerBootstrap | undefined;
+  authorizationScope(rootSessionId: string): WorkerAuthorizationScope | undefined;
+  requestSerialized(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult>;
+}
+/** Only the runtime identity lookup is needed; the registry supplies the rest. */
+export interface ShellSessionPort { runtime(sessionId: string): { rootSessionId: string } }
 
 function identity(value: string): string {
   try { return EntityIdSchema.parse(decodeURIComponent(value)); }
@@ -42,8 +51,8 @@ export class ShellCoordinator {
   private readonly observationEpoch: string;
 
   constructor(
-    private readonly workers: WorkerRegistry,
-    private readonly sessions: SessionRegistry,
+    private readonly workers: ShellWorkerPort,
+    private readonly sessions: ShellSessionPort,
     observationEpoch: string,
     private readonly isAuthorizedRoot: (rootSessionId: string) => boolean,
   ) {
@@ -195,19 +204,27 @@ export class ShellCoordinator {
 
   private roots(scope: ShellScope): RegisteredWorkerInfo[] {
     if (scope.kind === 'session') return [this.root(scope.sessionId)];
-    const roots = this.workers.list().filter(worker => worker.kind === 'session'
+    // A workspace, project or global observation reports what the live sessions
+    // currently hold. A session still booting, or one whose capture no longer
+    // matches, holds nothing yet: asking it fails the whole scope with a 503 and
+    // blocks the shells of every other session, so it is simply not a candidate.
+    return this.workers.list().filter(worker => worker.kind === 'session'
+      && worker.state === 'ready'
       && this.isAuthorizedRoot(worker.rootSessionId)
+      && this.capturedOwner(worker)
       && (scope.kind !== 'workspace' || worker.workspaceId === scope.workspaceId)
       && (scope.kind !== 'project' || worker.projectId === scope.projectId));
-    for (const root of roots) this.assertCapturedOwner(root);
-    return roots;
+  }
+
+  private capturedOwner(root: RegisteredWorkerInfo): boolean {
+    const bootstrap = this.workers.bootstrap(root.rootSessionId);
+    return bootstrap !== undefined && bootstrap.rootSessionId === root.rootSessionId
+      && bootstrap.workspaceId === root.workspaceId && bootstrap.projectId === root.projectId
+      && bootstrap.observationEpoch === this.observationEpoch;
   }
 
   private assertCapturedOwner(root: RegisteredWorkerInfo): void {
-    const bootstrap = this.workers.bootstrap(root.rootSessionId);
-    if (!bootstrap || bootstrap.rootSessionId !== root.rootSessionId
-      || bootstrap.workspaceId !== root.workspaceId || bootstrap.projectId !== root.projectId
-      || bootstrap.observationEpoch !== this.observationEpoch) throw unavailable();
+    if (!this.capturedOwner(root)) throw unavailable();
   }
 
   private assertCurrent(root: RegisteredWorkerInfo, job: ShellJobIdentity): void {
@@ -255,6 +272,10 @@ export class ShellCoordinator {
   }
 
   private async snapshot(scope: ShellScope): Promise<ShellSnapshot> {
+    // An authorized non-session scope with no ready root has nothing to observe,
+    // and that empty snapshot is a valid answer: a worker retires or boots on
+    // its own, so "no current root" is ordinary, not a runtime failure. A
+    // session scope still requires its addressed root.
     const roots = this.roots(scope);
     const members = membership(roots);
     const snapshots = await Promise.all(roots.map(async root => {
@@ -265,8 +286,13 @@ export class ShellCoordinator {
       for (const job of result.snapshot.ended) this.assertJobOwner(root, job);
       return result.snapshot;
     }));
-    // A scope is complete only if its admitted generations are unchanged during the read.
-    if (membership(this.roots(scope)) !== members) throw unavailable();
+    // A scope is complete only if the generations it read are still admitted.
+    // Growth is ordinary: another session in the workspace may become ready
+    // during this read, and the next poll observes it. A generation that left
+    // means a job snapshot is stale, so that read is refused.
+    if (scope.kind !== 'session' && !roots.every(root => this.roots(scope).some(
+      current => current.rootSessionId === root.rootSessionId && current.workerGeneration === root.workerGeneration,
+    ))) throw unavailable();
     const running: ShellSnapshot['running'] = [];
     const ended: ShellSnapshot['ended'] = [];
     let workerRevision = 0n;

@@ -49,7 +49,7 @@ Host tools (`openchamber`, `openchamber_knowledge`, `web`, `memory`, `notify`, `
 
 Notices are persisted as native custom entries (`ohpichamber.notice.v1`) on the session branch and restored on cold history reload.
 
-`session.compacted` projects authoritative compaction metadata (`method`: `soft-compacted`, `remote-compacted`, `shaken`, `snap-compacted`, `handed-off`), `tokensBefore`, `tokensAfter`, and markdown summaries.
+`session.compacted` projects authoritative compaction metadata (`method`: `soft-compacted`, `remote-compacted`, `shaken`, `snap-compacted`, `handed-off`), `tokensBefore`, `tokensAfter`, and markdown summaries. A manual `/compact` that OMP refuses as a no-op (`ManualCompactionNoOpError`: the branch already ends in a compaction or holds too little) surfaces as HTTP 422 `SESSION_TOO_SMALL` instead of an opaque 503; every other compaction error keeps its own surface, and the plan-approval compaction stays best-effort.
 ## Live tool catalog
 
 `GET /api/agent/v1/sessions/:sessionId/tools` queries the live session worker's registered tools with their OMP tier (`read`, `write`, `exec`) and descriptions. When no live session is running, `GET /api/agent/v1/workspaces/:workspaceId/tools` queries the workspace worker, evaluating built-in tool availability against the native workspace settings via `resolveBuiltinToolPlan` so unavailable capabilities are marked `availability: false`. The Agent tool permissions editor consumes this endpoint to prevent selecting unavailable tools and triggering 422 `UNSUPPORTED_CAPABILITY` on profile activation.
@@ -153,7 +153,9 @@ Web and Electron reach these operations through the authenticated Host Gateway. 
 
 The worker registers `openchamber`, `web`, `memory` and `notify` as essential extension tools, so OMP presents them in the ordinary callable tool schema with only their own descriptions. Their `execute` path still calls the Host action owner; they are never `xd://` devices in the chat prompt.
 
-Native `read` targets may be OMP internal URLs. The supervisor's execution-free descriptor normalizes a target with OMP's `InternalUrlRouter` and admits only `agent`, `history`, `artifact`, `local`, `proc`, `skill`, `xd`, `mcp`, `omp`, `issue` and `pr` into the Host authorization request. Host policy accepts those internal targets only for `read`, still checks every local path in a mixed delimited list, and leaves `write`, `edit`, `grep` and `glob` on the filesystem-only path. Unknown schemes and NUL bytes remain refused. Native `wait` observes only this session's async jobs and is admitted without a machine capability.
+Native `read` targets may be OMP internal URLs. The supervisor's execution-free descriptor normalizes a target with OMP's `InternalUrlRouter` and admits only `agent`, `history`, `artifact`, `local`, `proc`, `skill`, `xd`, `mcp`, `omp`, `issue` and `pr` into the Host authorization request. Host policy accepts those internal targets only for `read`, still checks every local path in a mixed delimited list, and leaves `edit`, `grep` and `glob` on the filesystem-only path.
+
+A native `write` may target OMP's `local://` session artifact sandbox, which is where Plan mode drafts `local://<slug>.md` before proposing it. The descriptor carries those targets as `internalWriteUrls` (schema-restricted to the `local` scheme) instead of `destinationPaths`, and the Host admits them only for the `write` tool and only when the workspace grants `fileTools: ['write']`. Every other internal scheme stays read-only for a write, a real filesystem destination is still contained to the workspace, and `write` with neither a destination nor an internal write URL remains refused. Unknown schemes and NUL bytes remain refused. Native `wait` observes only this session's async jobs and is admitted without a machine capability.
 
 ## Native web search
 

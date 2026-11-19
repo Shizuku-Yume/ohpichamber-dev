@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen-modellen',
   'quota.value.requests': 'Verzoeken: {count}',
@@ -7636,6 +7637,7 @@ export const dict = {
   "snippets.source.global": "globaal",
   "snippets.source.project": "project",
   "chat.chatInput.toast.compactFailed": "Kan de sessie niet comprimeren",
+  "chat.chatInput.toast.compactNotNeeded": "Deze sessie is te kort om al te comprimeren.",
   "chat.chatInput.toast.forkFailed": "Kan de sessie niet forken",
   "chat.chatInput.toast.forkNothingToFork": "Nog niets om te forken: in deze sessie is nog geen antwoord afgerond",
   "chat.chatInput.toast.forkSendFailed": "Geforkt, maar het bericht is niet verzonden. Het staat weer in het invoerveld.",
@@ -8019,6 +8021,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "Kan het projecticoon niet vinden",
   "projectEditDialog.toast.customIconAlreadySet": "Er is al een aangepast icoon ingesteld voor dit project",
   "projectEditDialog.toast.iconDiscovered": "Projecticoon gevonden",
+  "projectEditDialog.toast.iconNotFound": "Geen favicon gevonden in dit project",
   "openInApp.actions.open": "Openen",
   "openInApp.actions.openInAria": "Openen in {app}",
   "openInApp.actions.chooseAppAria": "Kies de app om te openen",
@@ -9318,4 +9321,5 @@ export const dict = {
   "settings.usage.state.error": "Kan gebruik niet laden.",
 
   "chat.workStatus.mcp.unknown": "MCP-servers zijn nog niet geladen.",
+  ...effortI18n.nl,
 };

@@ -33,3 +33,30 @@ describe('parseRoute message', () => {
     expect(parseRoute(new URLSearchParams('session=ses_abc&message=msg"]')).messageId).toBeNull();
   });
 });
+
+describe('parseRoute settings', () => {
+  test('keeps the General page distinct from the settings root', () => {
+    // Folding general into home stranded mobile deep links on the nav list;
+    // desktop then redirected home back to general, hiding it.
+    expect(parseRoute(new URLSearchParams('settings=general')).settingsPath).toBe('general');
+    expect(parseRoute(new URLSearchParams('settings=general&surface=mobile')).settingsPath).toBe('general');
+  });
+
+  test('keeps every settings page slug as a page, not the root', () => {
+    for (const slug of ['projects', 'remote-instances', 'tunnel', 'tools', 'memory', 'behavior', 'shortcuts']) {
+      expect(parseRoute(new URLSearchParams(`settings=${slug}`)).settingsPath).toBe(slug);
+    }
+  });
+
+  test('keeps an explicit settings=home request as the root for desktop to resolve', () => {
+    // Desktop redirects the settings root to General when it opens; the route
+    // must still say "root" so that redirect keeps working.
+    expect(parseRoute(new URLSearchParams('settings=home')).settingsPath).toBe('home');
+    expect(parseRoute(new URLSearchParams('settings=home&surface=mobile')).settingsPath).toBe('home');
+  });
+
+  test('still folds the settings root aliases', () => {
+    expect(parseRoute(new URLSearchParams('settings=openchamber')).settingsPath).toBe('home');
+    expect(parseRoute(new URLSearchParams('settings=preferences')).settingsPath).toBe('home');
+  });
+});

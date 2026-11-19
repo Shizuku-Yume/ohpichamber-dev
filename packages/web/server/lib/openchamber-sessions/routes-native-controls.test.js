@@ -77,11 +77,16 @@ const fixture = async () => {
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
     if (pathname.endsWith('/control')) {
+      if (body.type === 'btw.branch') return Response.json({ type: 'btw.branch', sessionId: 'btw-branched-root', rootSessionId: 'btw-branched-root', sessionFile: '/tmp/btw-branched-root.jsonl', branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: null } });
       if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : body.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
       if (body.type === 'goal') return Response.json({ type: 'goal', mode: body.op === 'drop' ? { kind: 'main' } : { kind: 'goal', status: body.op === 'pause' ? 'paused' : 'active', objective: body.objective || 'Finish the task', tokenBudget: body.tokenBudget ?? null, tokensUsed: 0 } });
       return Response.json(native.compactResult);
     }
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
+    if (pathname.endsWith('/snapshot')) {
+      const sessionId = decodeURIComponent(pathname.split('/').at(-2));
+      return Response.json(snapshot([], [], { ...runtime(sessionId), rootSessionId: sessionId }));
+    }
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
   };
@@ -123,6 +128,20 @@ describe('Host native session control saga', () => {
     expect(native.calls).toHaveLength(count);
     await expect(service.control('missing-session', create)).rejects.toMatchObject({ statusCode: 404 });
   });
+  it('moves the Host binding with the identity a /btw branch mints', async () => {
+    const { store, native, makeService } = await fixture();
+    const service = makeService();
+    const ack = await service.control('public-root', { type: 'btw.branch', recordId: 'btw-record-1' });
+    expect(ack).toMatchObject({ type: 'btw.branch', sessionId: 'btw-branched-root' });
+    expect(native.calls.at(-1)).toEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'btw.branch', recordId: 'btw-record-1' } });
+    // The transcript moved to the minted id: every root-addressed read must
+    // resolve against it, and the pre-branch id must no longer name a session.
+    await expect(store.getSession('btw-branched-root')).resolves.toMatchObject({ sessionId: 'btw-branched-root', rootSessionId: 'btw-branched-root' });
+    await expect(store.getSession('public-root')).resolves.toBeNull();
+    await expect(service.open('btw-branched-root')).resolves.toMatchObject({ session: { sessionId: 'btw-branched-root' } });
+    await expect(service.open('public-root')).rejects.toMatchObject({ statusCode: 404 });
+  });
+
   it('releases an admission on a known pre-dispatch refusal', async () => {
     const { store, source, native, makeService } = await fixture();
     native.refusePath = '/internal/sessions/public-root/reopen';

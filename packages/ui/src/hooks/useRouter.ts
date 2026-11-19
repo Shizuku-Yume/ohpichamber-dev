@@ -7,7 +7,21 @@ import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { listenForNotificationNavigation } from '@/lib/router/notificationNavigation';
 import type { RouteState, AppRouteState } from '@/lib/router';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
+
+/**
+ * Takes the context surface a deep link is holding for a session whose
+ * directory is not published yet. Answers `null` while the directory is
+ * unknown, and clears the hold so a later call cannot re-open it.
+ */
+export const takeHeldContextSurface = (
+ pending: { current: ContextPanelMode | null },
+ directory: string | null,
+): ContextPanelMode | null => {
+ if (!pending.current || !directory) return null;
+ const mode = pending.current;
+ pending.current = null;
+ return mode;
+};
 
 /**
  * Hook that provides bidirectional URL routing for OpenChamber.
@@ -26,6 +40,8 @@ export function useRouter(): void {
  const initializedRef = React.useRef(false);
  const isApplyingRouteRef = React.useRef(false);
  const pendingRouteRef = React.useRef<{ route: RouteState; initial: boolean; normalize: boolean } | null>(null);
+ // A deep link's context surface while its session directory is still unknown.
+ const pendingSurfaceRef = React.useRef<ContextPanelMode | null>(null);
 
  // Get store actions (stable references)
  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
@@ -60,12 +76,22 @@ export function useRouter(): void {
    // surfaces live in the context panel, so a non-chat tab deep link
    // opens the matching panel surface; activeSurface itself stays 'chat'
    // (nothing renders non-chat surfaces in the main area).
+   //
+   // On a cold load the session's directory is not known yet (the URL is
+   // what names it). The request is held and applied by the subscription
+   // below once the session owner publishes its directory, never dropped
+   // and never applied to a guessed workspace directory.
    if (route.tab && route.tab !== 'chat') {
-    const directory = useDirectoryStore.getState().currentDirectory;
+    const mode: ContextPanelMode = route.tab === 'files' ? 'file' : route.tab;
+    const directory = useSessionUIStore.getState().currentSessionDirectory;
     if (directory) {
-     const mode: ContextPanelMode = route.tab === 'files' ? 'file' : route.tab;
+     pendingSurfaceRef.current = null;
      useUIStore.getState().openContextSurface(directory, mode);
+    } else {
+     pendingSurfaceRef.current = mode;
     }
+   } else {
+    pendingSurfaceRef.current = null;
    }
 
    // 4. Apply diff file (only if going to diff tab)
@@ -173,8 +199,21 @@ export function useRouter(): void {
  React.useEffect(() => {
   let prevSessionId: string | null = useSessionUIStore.getState().currentSessionId;
 
+  // A deep-linked surface waits for the directory the session really lives
+  // in: until it is published, `openContextSurface` would address ''.
+  // Applied once here as well as on every later update: a directory that was
+  // already published before this subscription existed produces no change
+  // event, and the held request must not be dropped for that.
+  const applyHeldSurface = (directory: string | null): void => {
+   if (!directory) return;
+   const mode = takeHeldContextSurface(pendingSurfaceRef, directory);
+   if (mode) useUIStore.getState().openContextSurface(directory, mode);
+  };
+  applyHeldSurface(useSessionUIStore.getState().currentSessionDirectory);
+
   const unsubscribe = useSessionUIStore.subscribe((state) => {
    const sessionId = state.currentSessionId;
+   applyHeldSurface(state.currentSessionDirectory);
 
    // Track route-driven changes too, even while URL writes are suppressed.
    if (sessionId === prevSessionId) {

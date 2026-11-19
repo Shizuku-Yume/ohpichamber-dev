@@ -543,3 +543,31 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
     expect(res.stream.open).toBe(false);
   });
 });
+
+test('a session rekey moves every shell job identity and the snapshot scope to the minted id', async () => {
+  const manager = new AsyncJobManager({ onJobComplete: () => { } });
+  const shell = new WorkerShell({
+    manager, workspaceId: 'ws-1', projectId: 'proj-1', sessionId: 'session-1',
+    workerGeneration: 'gen-1', epoch: 'epoch-1', cwd: '/workspace',
+  });
+  const startRes = await shell.operation({ type: 'start', request: { command: 'sleep 5', background: true } });
+  expect(startRes.type).toBe('start');
+  if (startRes.type !== 'start') throw new Error('A shell start must return its job');
+  expect(startRes.job.sessionId).toBe('session-1');
+  shell.rekey('session-minted');
+  // The Host resolves a shell job by the root the worker registers under, so
+  // the job, the ended records and the scope must all name the minted id.
+  // Before the rekey these stayed on the retired id and every read 503ed.
+  const snapshot = await shell.operation({ type: 'snapshot' });
+  expect(snapshot.type).toBe('snapshot');
+  if (snapshot.type !== 'snapshot') throw new Error('A shell snapshot must return its scope');
+  expect(snapshot.snapshot.scope).toEqual({ kind: 'session', sessionId: 'session-minted' });
+  const running = snapshot.snapshot.running.find(job => job.jobId === startRes.job.jobId);
+  expect(running?.sessionId).toBe('session-minted');
+  const stop = await shell.operation({
+    type: 'stop',
+    request: { job: { jobId: startRes.job.jobId, sessionId: 'session-minted', epoch: startRes.job.epoch, workerGeneration: startRes.job.workerGeneration } },
+  });
+  expect(stop.type).toBe('stop');
+  await shell.close();
+});

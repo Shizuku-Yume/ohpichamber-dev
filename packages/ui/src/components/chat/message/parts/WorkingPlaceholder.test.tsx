@@ -3,6 +3,8 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { I18nProvider } from '@/lib/i18n';
+import type { ModelMetadata } from '@/types';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { WorkingPlaceholder } from './WorkingPlaceholder';
 
@@ -71,6 +73,12 @@ describe('WorkingPlaceholder provider mark', () => {
 
   test('a failed remote logo leaves the chip empty and is not announced', async () => {
     useUIStore.setState({ customProviderIcons: {} });
+    // A remote logo is only drawn for a provider the catalog carries; a custom
+    // id gets the bundled fallback instead and never requests one.
+    const initialMetadata = useConfigStore.getState().modelsMetadata;
+    useConfigStore.setState({
+      modelsMetadata: new Map<string, ModelMetadata>([['sharellm/sharellm-model', { id: 'sharellm-model', providerId: 'sharellm' }]]),
+    });
     const view = await renderPlaceholder(
       <WorkingPlaceholder
         isWorking
@@ -89,6 +97,7 @@ describe('WorkingPlaceholder provider mark', () => {
     expect(view.container.querySelector('use')).toBeNull();
 
     await view.unmount();
+    useConfigStore.setState({ modelsMetadata: initialMetadata });
   });
 });
 

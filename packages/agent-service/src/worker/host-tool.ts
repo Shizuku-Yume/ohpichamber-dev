@@ -106,6 +106,8 @@ export interface HostToolController {
   readonly toggle: (tool: HostToolName, enabled: boolean) => Promise<void>;
   readonly configure: (tools: Partial<Record<HostToolName, boolean>>) => Promise<void>;
   readonly bindSession: (session: AgentSession) => void;
+  /** Follow a native session rekey (a completed `/btw` branch) so tool calls name the live session. */
+  readonly rekey: (sessionId: string) => void;
   readonly extension: ExtensionFactory;
 }
 
@@ -118,7 +120,7 @@ export function createHostToolController({
   invoke: (request: HostToolInvocation) => Promise<JsonValue>;
   initialEnablement?: Partial<Record<HostToolName, boolean>> | ((tool: HostToolName) => boolean);
 }): HostToolController {
-  const captured = Object.freeze({ ...scope });
+  const captured: HostToolScope = { ...scope };
   const enablement: Record<HostToolName, boolean> = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
   if (typeof initialEnablement === 'function') {
     for (const name of HOST_TOOL_NAMES) enablement[name] = initialEnablement(name);
@@ -221,6 +223,7 @@ export function createHostToolController({
     toggle,
     configure,
     bindSession: (session: AgentSession) => { boundSession = session; },
+    rekey: sessionId => { captured.sessionId = sessionId; captured.rootSessionId = sessionId; },
     extension,
   };
 }

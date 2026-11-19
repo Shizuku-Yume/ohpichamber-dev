@@ -54,6 +54,7 @@ import {
  readRenameableGeneratedBranch,
  renameGeneratedWorktreeBranch,
  isGitRepository,
+ isOutsideGitRepository,
  isPatchEquivalentOfHead,
  observeWorktreeTopology,
  populateWorktreeWithLockRecovery,
@@ -1270,6 +1271,69 @@ describe('getStatus', () => {
    }
   }
   await expect(isGitRepository(repo, { failOnGitError: true })).resolves.toBe(true);
+ });
+
+ describe('isOutsideGitRepository', () => {
+  // The decision is Git's exit status plus the `.git` entry discovery would
+  // have used; the message is never read, so no wording can flip it. These
+  // fixtures assert exactly that against real Git exits.
+
+  it('reports a folder outside any repository, including its subdirectory', async () => {
+   if (!canRunGit()) return;
+   const plain = createTempDir();
+   const nested = path.join(plain, 'nested', 'deeper');
+   fs.mkdirSync(nested, { recursive: true });
+   // Git refuses at 128 with no git directory and no `.git` above: outside.
+   await expect(isOutsideGitRepository(plain)).resolves.toBe(true);
+   await expect(isOutsideGitRepository(nested)).resolves.toBe(true);
+  });
+
+  it('reports a repository and its subdirectory as inside it', async () => {
+   if (!canRunGit()) return;
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   const nested = path.join(repo, 'src');
+   fs.mkdirSync(nested);
+   await expect(isOutsideGitRepository(repo)).resolves.toBe(false);
+   await expect(isOutsideGitRepository(nested)).resolves.toBe(false);
+  });
+
+  it('does not call a repository Git refused outside it', async () => {
+   if (!canRunGit()) return;
+   // A corrupt config exits 128 over a `.git` entry that is present: the
+   // repository exists and is broken, which is its own failure.
+   const repo = createTempDir();
+   runGit(repo, ['init', '-b', 'main']);
+   fs.appendFileSync(path.join(repo, '.git', 'config'), 'garbage [[[\n');
+   await expect(isOutsideGitRepository(repo)).resolves.toBe(false);
+
+   // A gitfile pointing nowhere is likewise a broken repository, not a folder
+   // outside one.
+   const dangling = createTempDir();
+   fs.writeFileSync(path.join(dangling, '.git'), `gitdir: ${path.join(createTempDir(), 'nowhere')}\n`);
+   await expect(isOutsideGitRepository(dangling)).resolves.toBe(false);
+
+   // The discriminating case: an empty `.git` directory (an aborted
+   // `git init`) exits 128 with Git's own "not a git repository" wording, so a
+   // classification that reads the message calls it a folder outside a
+   // repository. The entry on disk says otherwise: it is a repository that
+   // cannot be read.
+   const aborted = createTempDir();
+   fs.mkdirSync(path.join(aborted, '.git'));
+   await expect(isOutsideGitRepository(aborted)).resolves.toBe(false);
+  });
+
+  it('does not claim a bare repository or a missing directory as outside', async () => {
+   if (!canRunGit()) return;
+   const bare = createTempDir();
+   runGit(bare, ['init', '--bare', '-q']);
+   // Git answers its git directory and then refuses the work tree, so it found
+   // a repository.
+   await expect(isOutsideGitRepository(bare)).resolves.toBe(false);
+   // A directory that does not exist never reached a discovery answer, so the
+   // caller keeps its own failure.
+   await expect(isOutsideGitRepository(path.join(createTempDir(), 'missing'))).resolves.toBe(false);
+  });
  });
 
  it('reads status for a git repo when process.cwd() is elsewhere', async () => {

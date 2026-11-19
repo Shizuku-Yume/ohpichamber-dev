@@ -5,6 +5,8 @@ import { SessionMessageLoader, type LoaderConfiguration } from "./session-messag
 import { deferred, nativeApproval, nativeClient, nativeHistory, nativeHostSession, nativeMessage, nativeQuestion, nativeSnapshot } from "./session-message-loader-test-fixtures"
 import { clearRuntimeSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
+import { resetSessionRekeyRegistry, retireSessionIdentity } from "./session-rekey-registry"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
@@ -91,6 +93,18 @@ describe("canonical session snapshot loading", () => {
     await recovery
     expect(seen).toEqual([{ previous: undefined, current: "4" }, { previous: "4", current: "5" }])
     expect(store.getState().snapshot[target.sessionId]?.session.headSequence).toBe("5")
+  })
+
+  test("a draft session id never requests a snapshot and stays idle-empty, not error", async () => {
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => { calls += 1; throw new Error("Host has no snapshot for a draft") } }) })
+    const draft = { directory: "/loader-repo", sessionId: "draft_2" }
+    await loader.ensure(draft, { reason: "navigation" })
+    await loader.refresh(draft)
+    await loader.prefetch(draft)
+    expect(calls).toBe(0)
+    expect(loader.getSnapshot(draft)).toMatchObject({ status: "idle", error: null, resolved: true, complete: true, loadingKind: null })
+    expect(store.getState().snapshot[draft.sessionId]).toBeUndefined()
   })
 
   test("snapshot failure preserves authoritative state and reports one load failure without retry", async () => {
@@ -241,7 +255,6 @@ describe("canonical session snapshot loading", () => {
     expect(store.getState().message[target.sessionId]).toBeUndefined()
     expect(loader.getSnapshot(target)).toMatchObject({ status: "idle", resolved: false })
   })
-
 })
 
 describe("native history coverage", () => {
@@ -671,5 +684,133 @@ describe("history-only canonical child sessions", () => {
     await loader.loadOlder(childTarget)
     expect(loader.getSnapshot(childTarget).status).toBe("error")
     expect(store.getState().message[childTarget.sessionId]).toBe(previous)
+  })
+})
+
+describe("subagent children known only through the live subagent index", () => {
+  const subagentChild = { directory: "/loader-repo", sessionId: "vibe-child" }
+  let subagentManager: ChildStoreManager | null = null
+  function setupSubagent(configuration: Partial<LoaderConfiguration>) {
+    subagentManager = new ChildStoreManager()
+    const client = configuration.client ?? nativeClient()
+    const loader = new SessionMessageLoader(subagentManager, { runtimeKey: "runtime-a", ...configuration, client })
+    cleanups.push(() => { loader.dispose(); subagentManager?.disposeAll(); subagentManager = null })
+    const store = subagentManager.ensureChild(subagentChild.directory, { bootstrap: false })
+    const originalGlobal = useGlobalSessionsStore.getState()
+    const originalSubagents = useSubagentsStore.getState()
+    cleanups.push(() => { useSubagentsStore.setState(originalSubagents); useGlobalSessionsStore.setState(originalGlobal) })
+    // The child is never projected; only its parent and the live subagent row exist.
+    store.setState({ session: [{ ...nativeHostSession(nativeSnapshot("session-root")), sessionId: "session-root", parentSessionId: undefined, rootSessionId: "session-root" }] })
+    useSubagentsStore.getState().applySubagentUpdate("session-root", {
+      subagentId: "subagent-a", parentSessionId: "session-root", childSessionId: subagentChild.sessionId,
+      role: "coder", status: "running",
+    })
+    return { loader, store }
+  }
+
+  test("loads history without snapshot, metadata, queue or snapshot reporting", async () => {
+    const recent = nativeMessage(subagentChild.sessionId, "recent", 2)
+    let forbiddenCalls = 0
+    let snapshotCallbacks = 0
+    const forbidden = async () => { forbiddenCalls += 1; throw new Error("Child snapshot/metadata/queue is unavailable") }
+    const { loader, store } = setupSubagent({
+      onSnapshot: () => { snapshotCallbacks += 1 },
+      client: nativeClient({
+        getSnapshot: forbidden, getSessionMetadata: forbidden, getQueue: forbidden,
+        getHistory: async (sessionId, options) => {
+          expect(sessionId).toBe(subagentChild.sessionId)
+          return nativeHistory(options?.cursor ? [] : [recent], options?.cursor ? null : "older-page", nativeSnapshot(subagentChild.sessionId))
+        },
+      }),
+    })
+    await loader.ensure(subagentChild)
+    expect(forbiddenCalls).toBe(0)
+    expect(snapshotCallbacks).toBe(0)
+    expect(store.getState().message[subagentChild.sessionId]).toEqual([recent])
+    expect(store.getState().snapshot[subagentChild.sessionId]).toBeUndefined()
+    expect(store.getState().sessionCursor[subagentChild.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(subagentChild)).toMatchObject({ status: "ready", resolved: true, complete: false })
+    // The projection carries the parent's workspace identity so the row is a
+    // usable child record rather than a guessed one.
+    expect(store.getState().session.find(row => row.sessionId === subagentChild.sessionId)).toMatchObject({
+      parentSessionId: "session-root", workspaceId: "workspace-a",
+    })
+  })
+
+  test("a child history failure reports the real error instead of empty success", async () => {
+    const error = new Error("child history unavailable")
+    const { loader, store } = setupSubagent({ client: nativeClient({ getHistory: async () => { throw error } }) })
+    await loader.ensure(subagentChild)
+    expect(store.getState().message[subagentChild.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(subagentChild)).toMatchObject({ status: "error", error })
+  })
+
+  test("a child history load keeps the child's own identity, never the parent's cursor", async () => {
+    const { loader, store } = setupSubagent({})
+    // A running subagent belongs to a live root: its own run is the root's run.
+    const runningParent = { ...nativeHostSession(nativeSnapshot("session-root")), sessionId: "session-root", parentSessionId: undefined, rootSessionId: "session-root", epoch: "root-epoch", headSequence: "41", runtimeStatus: "running" as const, activeRunId: "run-root" }
+    store.setState({ session: [runningParent] })
+    // The global cache still carries its own older copy of the parent. The
+    // directory store is the live authority for this directory, so the child's
+    // identity must come from the live row, not the cache copy.
+    useGlobalSessionsStore.getState().upsertSession({ ...runningParent, epoch: "stale-epoch", headSequence: "0", runtimeStatus: "idle", activeRunId: null })
+    useSubagentsStore.getState().applySubagentUpdate("session-root", {
+      subagentId: "subagent-a", parentSessionId: "session-root", childSessionId: subagentChild.sessionId,
+      role: "coder", status: "running", createdAt: 7, updatedAt: 8,
+    })
+    await loader.ensure(subagentChild)
+    const row = store.getState().session.find(candidate => candidate.sessionId === subagentChild.sessionId)
+    // The parent's epoch and head describe the parent's event stream. Copying
+    // them claims the child is replaying events it never received.
+    expect(row?.epoch).toBe(subagentChild.sessionId)
+    expect(row?.headSequence).toBe("0")
+    // The subagent record's own timestamps, not the parent's row age.
+    expect(row?.createdAt).toBe(7)
+    expect(row?.updatedAt).toBe(8)
+    // Running because the subagent says it runs, not forced idle.
+    expect(row).toMatchObject({ runtimeStatus: "running", activeRunId: "run-root" })
+  })
+
+  test("a live listed child keeps its own status instead of being clobbered by history", async () => {
+    const pending = deferred<HistoryPage>()
+    const { loader, store } = setupSubagent({ client: nativeClient({ getHistory: () => pending.promise }) })
+    // Discovery lists the child as running in its own epoch while the history
+    // read is in flight — the race a child spawning right now produces.
+    const liveChild = { ...nativeHostSession(nativeSnapshot(subagentChild.sessionId)), parentSessionId: "session-root", epoch: "child-epoch", headSequence: "12", runtimeStatus: "running" as const, activeRunId: "run-child" }
+    const loading = loader.ensure(subagentChild)
+    store.setState({ session: [...store.getState().session, liveChild] })
+    pending.resolve(nativeHistory([nativeMessage(subagentChild.sessionId)], null, nativeSnapshot(subagentChild.sessionId)))
+    await loading
+    expect(store.getState().message[subagentChild.sessionId]).toHaveLength(1)
+    // The committed page must not rewrite the session row the projection now owns.
+    expect(store.getState().session.find(candidate => candidate.sessionId === subagentChild.sessionId)).toBe(liveChild)
+  })
+})
+
+describe("a rekeyed session retires its pre-branch id", () => {
+  test("no read leaves the browser for an id the rekey retired, even when a deferred consumer lags", async () => {
+    const retired = "session-before-promote"
+    const minted = "session-after-promote"
+    const requested: string[] = []
+    const { loader } = setup({
+      client: nativeClient({ getSnapshot: async (sessionId: string) => { requested.push(sessionId); return nativeSnapshot(sessionId) } }),
+    })
+    try {
+      // The promote ack names the minted id; the selection moves with it, but a
+      // deferred consumer keeps one pre-rekey commit and asks for the old one.
+      retireSessionIdentity(retired, minted, "runtime-a")
+      await loader.ensure({ directory: target.directory, sessionId: retired }, { reason: "navigation" })
+      await loader.refresh({ directory: target.directory, sessionId: retired })
+      await loader.prefetch({ directory: target.directory, sessionId: retired })
+      await loader.ensure({ directory: target.directory, sessionId: retired }, { reason: "reactive" })
+      // The Host and the service answer 404 for the retired id, so one request
+      // for it is the one console error per promote this guard exists to stop.
+      expect(requested).toEqual([])
+      // The minted id still loads normally; the guard rejects only the retired one.
+      await loader.ensure({ directory: target.directory, sessionId: minted }, { reason: "navigation" })
+      expect(requested).toEqual([minted])
+    } finally {
+      resetSessionRekeyRegistry("runtime-a")
+    }
   })
 })

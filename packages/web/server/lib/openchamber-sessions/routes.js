@@ -879,7 +879,23 @@ const createCanonicalSessionService = (dependencies) => {
     // a cold root has no active run, so reopening would only waste a slot.
     await reopen(scope);
     const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/control`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed) });
-    return SessionControlAckSchema.parse(body);
+    const ack = SessionControlAckSchema.parse(body);
+    // A completed /btw branch rekeys the Agent Service session to the id the
+    // native branch minted. The Host binding the caller addressed is now that
+    // old id, so it must follow the rekey here; otherwise every later
+    // root-addressed read answers "Session scope was not found" for a live
+    // session and the composer loses its chat.
+    if (ack.type === 'btw.branch' && ack.sessionId !== undefined && ack.sessionId !== sessionId) {
+      // The registry rekeys to a self-rooted identity: the minted id is its own
+      // root, and the retired id names no session. Only the branch's session
+      // file records the pre-branch file as its native lineage.
+      if (ack.rootSessionId !== undefined && ack.rootSessionId !== ack.sessionId) throw new OpenChamberControlError('A BTW branch must stay its own root', 502);
+      const rebound = await agentScopeStore.rebindSessionRoot(sessionId, ack.sessionId);
+      if (!rebound || rebound.sessionId !== ack.sessionId) throw new OpenChamberControlError('Canonical session rekey was not persisted', 503);
+      forgetLive(sessionId);
+      rememberLive(ack.sessionId);
+    }
+    return ack;
   };
   const remove = async (id) => {
     const scope = await scopeFor(id);

@@ -69,13 +69,24 @@ interface ProjectsStore {
   }) => void;
   uploadProjectIcon: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
   removeProjectIcon: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  discoverProjectIcon: (id: string, options?: { force?: boolean }) => Promise<{ ok: boolean; skipped?: boolean; reason?: string; error?: string }>;
+  discoverProjectIcon: (id: string, options?: { force?: boolean }) => Promise<ProjectIconDiscoveryResult>;
   reorderProjects: (fromIndex: number, toIndex: number) => void;
   resetForRuntimeSwitch: () => void;
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings, options?: { adoptActiveProject?: boolean }) => void;
   getActiveProject: () => ProjectEntry | null;
 }
+
+/**
+ * What icon discovery did. "No favicon in this project" is a normal outcome,
+ * not a failure: the project keeps its symbol icon and nothing is reported as
+ * broken. Fetch failures and a project the Host does not know stay failures.
+ */
+type ProjectIconDiscoveryResult =
+  | { status: 'discovered' }
+  | { status: 'no-favicon-found' }
+  | { status: 'custom-icon-present' }
+  | { status: 'failed'; error?: string };
 
 const safeStorage = getDeferredSafeStorage();
 const PROJECTS_STORAGE_KEY = 'projects';
@@ -384,7 +395,7 @@ const persistProjects = (projects: ProjectEntry[], activeProjectId: string | nul
   if (manualOrder) {
     persistManualProjectOrder(manualOrder);
   }
-  void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
+  return updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
 };
 
 const persistManualProjectOrder = (manualOrder: string[]) => {
@@ -440,8 +451,12 @@ export const useProjectsStore = create<ProjectsStore>()(
       };
       if (!isCurrent()) return false;
       const projects = [...get().projects, entry];
+      // The server has to know this project before anything reads its
+      // workspace: a directory resolved too early answers 404, and the
+      // sessions refresh would fail against a project it cannot see.
+      const persisted = await persistProjects(projects, get().activeProjectId);
+      if (!persisted.ok) return false;
       set({ projects });
-      persistProjects(projects, get().activeProjectId);
       void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
       return true;
     },
@@ -473,6 +488,11 @@ export const useProjectsStore = create<ProjectsStore>()(
       };
 
       const nextProjects = [...get().projects, entry];
+      // Persist before publishing the project: the workspace resolve and the
+      // icon discovery below are answered by the server, which cannot see a
+      // project that has not landed in the settings document yet.
+      const persisted = await persistProjects(nextProjects, entry.id);
+      if (!persisted.ok) return null;
       set({ projects: nextProjects });
 
       if (streamDebugEnabled()) {
@@ -480,8 +500,10 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       get().setActiveProject(entry.id);
-      void get().discoverProjectIcon(entry.id);
-      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
+      await get().discoverProjectIcon(entry.id);
+      // Dynamic import to avoid circular dependency between ProjectsStore and GlobalSessionsStore.
+      const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
+      await useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]);
       return entry;
     },
 
@@ -517,6 +539,10 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       const nextProjects = [...current.projects, ...entries];
+      // Same order as addProject: the server answers workspace and icon reads
+      // only for projects already in the settings document.
+      const persisted = await persistProjects(nextProjects, entries[0].id);
+      if (!persisted.ok) return [];
       set({ projects: nextProjects });
 
       if (streamDebugEnabled()) {
@@ -544,7 +570,7 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       const nextManualOrder = get().manualProjectOrder.filter((oid) => oid !== id);
       set({ projects: nextProjects, activeProjectId: nextActiveId, manualProjectOrder: nextManualOrder });
-      persistProjects(nextProjects, nextActiveId, nextManualOrder);
+      void persistProjects(nextProjects, nextActiveId, nextManualOrder);
 
       // Clean up worktree entries for the removed project
       if (project) {
@@ -595,7 +621,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       );
 
       set({ projects: nextProjects, activeProjectId: id });
-      persistProjects(nextProjects, id, get().manualProjectOrder);
+      void persistProjects(nextProjects, id, get().manualProjectOrder);
 
       hostFilesystem.setDirectory(target.path);
       useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
@@ -626,7 +652,7 @@ export const useProjectsStore = create<ProjectsStore>()(
         project.id === id ? { ...project, label: trimmed } : project
       );
       set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
+      void persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
     },
 
     updateProjectMeta: (id: string, meta: {
@@ -674,7 +700,7 @@ export const useProjectsStore = create<ProjectsStore>()(
         return updated;
       });
       set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
+      void persistProjects(nextProjects, activeProjectId, get().manualProjectOrder);
     },
 
     uploadProjectIcon: async (id: string, file: File) => {
@@ -765,21 +791,23 @@ export const useProjectsStore = create<ProjectsStore>()(
         } | null;
 
         if (!response.ok) {
-          return { ok: false, error: payload?.error || 'Failed to discover project icon' };
+          return { status: 'failed', error: payload?.error || 'Failed to discover project icon' };
         }
 
         if (payload?.settings) {
           get().synchronizeFromSettings(payload.settings, { adoptActiveProject: false });
         }
 
-        return {
-          ok: true,
-          skipped: payload?.skipped === true,
-          reason: typeof payload?.reason === 'string' ? payload.reason : undefined,
-        };
+        if (payload?.skipped === true && payload.reason === 'no-favicon-found') {
+          return { status: 'no-favicon-found' };
+        }
+        if (payload?.skipped === true && payload.reason === 'custom-icon-present') {
+          return { status: 'custom-icon-present' };
+        }
+        return { status: 'discovered' };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: message || 'Failed to discover project icon' };
+        return { status: 'failed', error: message || 'Failed to discover project icon' };
       }
     },
 
@@ -801,7 +829,7 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       const newOrder = nextProjects.map((p) => p.id);
       set({ projects: nextProjects, manualProjectOrder: newOrder });
-      persistProjects(nextProjects, activeProjectId, newOrder);
+      void persistProjects(nextProjects, activeProjectId, newOrder);
     },
 
     resetForRuntimeSwitch: () => {

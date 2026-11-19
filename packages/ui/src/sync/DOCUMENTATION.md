@@ -387,6 +387,7 @@ When an unpinned idle store exceeds the TTL, `ChildStoreManager` disposes it, tr
 10. **Generation and deletion guards**: Async completions verify loader generation and active runtime key. Snapshot, history, metadata, queue, and discovery reads preserve newer session deletion tombstones and cannot resurrect a session deleted while a request was in flight.
 11. **Failure preservation**: Snapshot/history failures preserve visible authoritative state and cursor, mark the load failed, and do not report complete. Independent metadata and queue failures do not erase the other authority.
 12. **Eviction authority**: Eviction drops messages, snapshot, part ownership, `sessionEpoch`, `sessionCursor`, and `sessionStatusInvalidated`, detaches the stream, and releases idle timers so stale transcript authority cannot return.
+13. **Child transcript identity**: A child session is read only through the history route; its snapshot, metadata, queue and event routes are root-only. The child row is resolved from the directory store first and the global cache second, and the live subagent record supplies its activity: a running subagent on a live root is `running`, not forced `idle`. A child's `epoch` is its own identity and its `headSequence` is `"0"`, because no event stream ever addressed it — the parent's epoch and head describe the parent's stream and must never be copied onto a child. A history page establishes the transcript only; it does not overwrite a session row the projection already lists.
 
 ### Whole-session cache retention
 

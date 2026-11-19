@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Zen 模型',
   'quota.value.requests': '請求數：{count}',
@@ -7604,6 +7605,7 @@ export const dict = {
   "snippets.source.global": "全局",
   "snippets.source.project": "項目",
   "chat.chatInput.toast.compactFailed": "壓縮會話失敗",
+  "chat.chatInput.toast.compactNotNeeded": "會話太短，暫時無法壓縮。",
   "chat.chatInput.toast.forkFailed": "無法分叉工作階段",
   "chat.chatInput.toast.forkNothingToFork": "尚無可分叉內容：此工作階段中還沒有已完成的回覆",
   "chat.chatInput.toast.forkSendFailed": "已分叉，但訊息未送出，已放回輸入框。",
@@ -7987,6 +7989,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "發現專案圖示失敗",
   "projectEditDialog.toast.customIconAlreadySet": "該專案已設定自訂圖示",
   "projectEditDialog.toast.iconDiscovered": "專案圖示已發現",
+  "projectEditDialog.toast.iconNotFound": "在此專案中找不到網站圖示",
   "openInApp.actions.open": "開啟",
   "openInApp.actions.openInAria": "在 {app} 中開啟",
   "openInApp.actions.chooseAppAria": "選擇要開啟的應用程式",
@@ -9309,4 +9312,5 @@ export const dict = {
   "settings.usage.state.error": "用量載入失敗。",
 
   "chat.workStatus.mcp.unknown": "MCP 伺服器尚未載入。",
+  ...effortI18n['zh-TW'],
 };

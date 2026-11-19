@@ -326,7 +326,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  const showBranchOption = isBranchScopeAvailable(currentBranch, defaultBranch);
  const branchUnavailable = isGitRepo === false || isBranchScopeDefinitelyUnavailable(currentBranch, defaultBranch, status !== null, branches !== null);
  const setBaseOverride = useGitBaseBranchStore((state) => state.setOverride);
- const binding = useRepositoryBinding(currentDirectory || null, sourceControl);
+ const binding = useRepositoryBinding(currentDirectory || null, sourceControl, isGitRepo === true);
  const branchRemoteNames = React.useMemo(
   () => new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
   [binding.read],

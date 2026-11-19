@@ -28,6 +28,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { refreshDirectoryCatalogs } from '@/sync/sync-refs';
 
 
 type SessionModeValue = 'main' | 'plan' | 'vibe' | 'goal';
@@ -50,6 +51,9 @@ export const DefaultsSettings: React.FC = () => {
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
   const setDefaultSessionMode = useUIStore((state) => state.setDefaultSessionMode);
   const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
+  // A failed settings read leaves `ompState` null, which the role editors
+  // cannot tell apart from "still loading": the row would spin forever.
+  const [ompStateFailed, setOmpStateFailed] = React.useState(false);
   // The catalog loader already read this directory's models; a second fetch
   // here duplicated the slowest request the Settings page made.
   const models = useSettingsModels(directory);
@@ -62,11 +66,13 @@ export const DefaultsSettings: React.FC = () => {
   React.useEffect(() => {
     if (!directory) {
       setOmpState(null);
+      setOmpStateFailed(false);
       return;
     }
 
     const abort = new AbortController();
     let cancelled = false;
+    setOmpStateFailed(false);
 
     void (async () => {
       try {
@@ -77,7 +83,9 @@ export const DefaultsSettings: React.FC = () => {
         setOmpState(snapshot);
       } catch (err) {
         if (!cancelled && !(err instanceof Error && err.name === 'AbortError')) {
+          // Failure is not loading: the row must stop spinning.
           setOmpState(null);
+          setOmpStateFailed(true);
         }
       }
     })();
@@ -160,6 +168,13 @@ export const DefaultsSettings: React.FC = () => {
           }
         }
         setOmpState(next);
+        // `modelRoles` lives in the shared agent directory, so this write moved
+        // `planRoleAvailable` for every workspace — not only the one Settings
+        // is describing. The composer reads the catalog of its session's
+        // directory, which can be a managed chat or another project, so every
+        // initialized directory re-reads through the bootstrap lane that owns
+        // the read.
+        refreshDirectoryCatalogs();
       } catch (err) {
         console.warn('Failed to update default model role:', err);
       } finally {
@@ -373,6 +388,16 @@ export const DefaultsSettings: React.FC = () => {
           `omp.modelRoles` as that record's owner. Stamping the record here is
           what makes that claim name a real control rather than a search entry. */}
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
+        {ompStateFailed && (
+          // A read failure is a notice, not a control: it carries no settings
+          // anchor, because every anchor is a jump target the search index must
+          // name, and listing a failure notice there would target nothing.
+          <SettingsInset>
+            <p className="text-xs text-muted-foreground" role="status">
+              {t('settings.openchamber.spaces.idleStop.loadFailed')}
+            </p>
+          </SettingsInset>
+        )}
         <div className={SETTINGS_SPACE_ROW_CLASS}>
           <ModelRoleEditor
             role="default"
@@ -382,7 +407,7 @@ export const DefaultsSettings: React.FC = () => {
             globalLevel={configuredThinkingLevel || undefined}
             settingsItem="sessions.default-model"
             disabled={isSavingOmp || !ompState}
-            loading={!ompState}
+            loading={!ompState && !ompStateFailed}
             label={t('settings.openchamber.defaults.field.defaultModel')}
             onChange={handleDefaultModelChange}
           />
@@ -468,7 +493,7 @@ export const DefaultsSettings: React.FC = () => {
           globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.small-model"
           disabled={!usesOwnSmallModel || isSavingOmp || !ompState}
-          loading={!ompState}
+          loading={!ompState && !ompStateFailed}
           label={t('settings.openchamber.defaults.smallModel.title')}
           onChange={(selector) => setRole('smol', selector)}
         />
@@ -492,7 +517,7 @@ export const DefaultsSettings: React.FC = () => {
           globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.walkthrough-model"
           disabled={!usesOwnWalkthroughModel || isSavingOmp || !ompState}
-          loading={!ompState}
+          loading={!ompState && !ompStateFailed}
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
           info={t('settings.openchamber.defaults.walkthroughModel.description')}
           onChange={(selector) => setWalkthroughModel(selector)}
@@ -509,6 +534,22 @@ export const DefaultsSettings: React.FC = () => {
         settingsItem="sessions.plan-goal"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
+          {/* The composer disables Plan when the workspace catalog says the
+              `plan` role is unresolvable; this is the one control that writes
+              that role, so it sits with the modes it unlocks. */}
+          <ModelRoleEditor
+            role="plan"
+            roles={roleSelectors}
+            models={models}
+            directory={directory ?? undefined}
+            globalLevel={configuredThinkingLevel || undefined}
+            settingsItem="sessions.default-plan"
+            disabled={isSavingOmp || !ompState}
+            loading={!ompState && !ompStateFailed}
+            label={t('settings.openchamber.defaults.planModel.title')}
+            info={t('settings.openchamber.defaults.planModel.description')}
+            onChange={(selector) => setRole('plan', selector)}
+          />
           {getSectionRows('plan').map((s) => (
             <OmpRowControl
               key={s.id}

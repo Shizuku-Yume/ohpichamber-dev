@@ -5,8 +5,17 @@ import type { GitNetworkOperation, GitNetworkOperationPlan } from '@/lib/api/typ
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useGitOperationRecovery } from './useGitOperationRecovery';
 import { createGitOperationRecoveryOwner } from '@/lib/source-control/git-operation-recovery';
+import { useGitStore } from '@/stores/useGitStore';
 
 type Recovery = ReturnType<typeof useGitOperationRecovery>;
+
+/** The probe's answer for a directory, without any Git data behind it. */
+const directoryState = (isGitRepo: boolean) => ({
+  isGitRepo, repoUnreadable: null, status: null, branches: null, log: null, identity: null,
+  diffCache: new Map(), indexRevision: 0, lastRepoCheckAt: 0, lastStatusFetch: 0, lastStatusChange: 0,
+  lastLogFetch: 0, lastBranchesFetch: 0, lastIdentityFetch: 0, logMaxCount: 25, askedRemoteOnlyBranches: [],
+  isLoadingStatus: false, isLoadingLog: false, isLoadingBranches: false, isLoadingIdentity: false,
+});
 
 const plan: GitNetworkOperationPlan = {
   state: 'planned', operationId: 'git_original', runtimeIdentity: { id: 'server-a', platform: 'web' },
@@ -19,7 +28,7 @@ const plan: GitNetworkOperationPlan = {
 const cleanups: Array<() => void> = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); });
 
-const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnType<typeof createGitOperationRecoveryOwner>, initial: { offline?: boolean; operation?: GitNetworkOperation } = {}) => {
+const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnType<typeof createGitOperationRecoveryOwner>, initial: { offline?: boolean; operation?: GitNetworkOperation; isGitRepo?: boolean } = {}) => {
   let failWrite = false;
   const owner = existingOwner ?? createGitOperationRecoveryOwner(() => ({
     getItem: (key) => saved.get(key) ?? null,
@@ -62,6 +71,9 @@ const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnTy
     },
   };
   const Probe = () => { recovery = useGitOperationRecovery(directory, git, sourceControl, { owner }); return null; };
+  // The hook waits for Git's probe before reading the binding route, which
+  // answers 422 for a folder outside a repository.
+  useGitStore.setState({ directories: new Map([['/repo', directoryState(initial.isGitRepo ?? true)]]) });
   const render = () => act(() => { root.render(React.createElement(Probe)); });
   render();
   const settle = async () => {
@@ -71,9 +83,18 @@ const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnTy
     }
     throw new Error('Recovery did not settle');
   };
-  await settle();
+  // A folder outside a repository stays unresolved by design, so there is
+  // nothing to settle there; the probes it would have made are what the
+  // mount-time calls say.
+  if (initial.isGitRepo === false) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    }
+  } else {
+    await settle();
+  }
   const initialCalls = [...calls];
-  calls.length = 0;
+  if (initial.isGitRepo !== false) calls.length = 0;
   let mounted = true;
   const unmount = () => { if (mounted) { act(() => root.unmount()); mounted = false; } };
   cleanups.push(() => {
@@ -97,7 +118,12 @@ const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnTy
     setOperation: (next: GitNetworkOperation) => { operation = next; },
     setOffline: (next: boolean) => { offline = next; },
     setRepository: (next: string) => { repositoryId = next; },
-    setDirectory: async (next: string) => { directory = next; render(); await settle(); calls.length = 0; },
+    setDirectory: async (next: string) => {
+      useGitStore.setState((state) => ({
+        directories: new Map([...state.directories, [next, directoryState(true)]]),
+      }));
+      directory = next; render(); await settle(); calls.length = 0;
+    },
     setRuntime: async (next: string) => {
       act(() => {
         runtimeWindow.dispatchEvent(new Event('openchamber:runtime-endpoint-will-change'));
@@ -252,5 +278,12 @@ describe('mounted Git action recovery', () => {
     expect(fixture.calls).toEqual(['repository:/repo', 'get:git_original']);
     expect(fixture.recovery.blocked).toBe(true);
     expect(fixture.recovery.start()).toBeNull();
+  });
+
+  test('a folder outside a repository reads no binding', async () => {
+    const { recovery, calls } = await mount(new Map(), undefined, { isGitRepo: false });
+    // The route answers 422 for such a folder, so the scope waits without asking.
+    expect(calls.filter((call) => call === 'repository:/repo')).toEqual([]);
+    expect(recovery.entry?.problem).toBe('reconciling');
   });
 });

@@ -30,6 +30,18 @@ function ompInternalUrl(value: string): string | null {
   ? normalized : null;
 }
 
+/**
+ * A write only ever reaches OMP's `local://` session artifact sandbox, where
+ * Plan mode drafts its plan file. Every other scheme stays a read source or a
+ * device transport, so a write to it is refused before any Host capability is
+ * asked for.
+ */
+function ompWritableUrl(value: string): string | null {
+ const normalized = ompInternalUrl(value);
+ if (normalized === null) return null;
+ return URL_SCHEME_PREFIX.exec(normalized)?.[1]?.toLowerCase() === 'local' ? normalized : null;
+}
+
 function requireNoNul(raw: string): void {
  if (raw.includes('\0')) throw new Error('Native target contains an invalid byte');
 }
@@ -85,7 +97,7 @@ async function fileTargets(raw: string, cwd: string, read: boolean): Promise<{ t
  for (const part of parts) {
   // OMP owns the URL grammar, including selectors; the Host neither peels nor
   // resolves these targets and only admits the allowlisted scheme.
-  const internal = read ? ompInternalUrl(part) : null;
+  const internal = read ? ompInternalUrl(part) : ompWritableUrl(part);
   if (internal !== null) {
    internalUrls.push(internal);
    continue;
@@ -132,7 +144,10 @@ export async function describeNativeOperation(cwd: string, request: WorkerPolicy
   const path = z.string().safeParse(input.path);
   if (!path.success) throw new Error('Native file path is missing');
   const { targets, internalUrls } = await fileTargets(path.data, cwd, toolName === 'read');
-  if (toolName !== 'read') return NativeOperationDescriptorSchema.parse({ ...effective, destinationPaths: targets });
+  if (toolName === 'write') {
+   const descriptor = { ...effective, destinationPaths: targets };
+   return NativeOperationDescriptorSchema.parse(internalUrls.length > 0 ? { ...descriptor, internalWriteUrls: internalUrls } : descriptor);
+  }
   const descriptor = { ...effective, sourcePaths: targets };
   return NativeOperationDescriptorSchema.parse(internalUrls.length > 0 ? { ...descriptor, internalReadUrls: internalUrls } : descriptor);
  }

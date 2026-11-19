@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'نماذج Zen',
   'quota.value.requests': 'الطلبات: {count}',
@@ -2743,6 +2744,7 @@ export const dict = {
   "snippets.source.global": "عام",
   "snippets.source.project": "المشروع",
   "chat.chatInput.toast.compactFailed": "تعذّر ضغط الجلسة",
+  "chat.chatInput.toast.compactNotNeeded": "هذه الجلسة قصيرة جدًا بحيث لا يمكن ضغطها بعد.",
   "chat.chatInput.toast.forkFailed": "تعذّر اشتقاق الجلسة",
   "chat.chatInput.toast.forkNothingToFork": "لا شيء للاشتقاق بعد: لم يكتمل أي رد في هذه الجلسة",
   "chat.chatInput.toast.forkSendFailed": "تم الاشتقاق، لكن الرسالة لم تُرسل. أُعيدت إلى حقل الكتابة.",
@@ -3126,6 +3128,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "تعذّر اكتشاف أيقونة المشروع",
   "projectEditDialog.toast.customIconAlreadySet": "تم تعيين أيقونة مخصصة لهذا المشروع بالفعل",
   "projectEditDialog.toast.iconDiscovered": "تم اكتشاف أيقونة المشروع",
+  "projectEditDialog.toast.iconNotFound": "لم يُعثر على أيقونة موقع في هذا المشروع",
   "openInApp.actions.open": "فتح",
   "openInApp.actions.openInAria": "فتح في {app}",
   "openInApp.actions.chooseAppAria": "اختيار التطبيق للفتح",
@@ -9294,4 +9297,5 @@ export const dict = {
   "startup.initRecovery.agentServiceUnavailable": "يمكن الوصول إلى OhPiChamber، لكن خدمة الوكيل غير جاهزة. تحقّق من خدمة الوكيل على الخادم، ثم أعد المحاولة.",
   "chat.workStatus.linkedIssues.open": "فتح #{number} على GitHub",
   "chat.workStatus.linkedIssues.openGitLab": "فتح {reference} على GitLab",
+  ...effortI18n.ar,
 };

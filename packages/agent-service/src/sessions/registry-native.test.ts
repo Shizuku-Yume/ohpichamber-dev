@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
-import { JsonValueSchema, RuntimeSessionSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
+import { JsonValueSchema, RuntimeSessionSchema, SessionControlAckSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
 import type { WorkerBootstrap, WorkerOperationResult } from '../protocol.ts';
 import { z } from 'zod';
 import { WorkerRegistry } from '../supervisor/workers.ts';
@@ -807,7 +807,7 @@ test('btwBranch rekeys live session entry, worker, journal and reference to new 
           sessionId: newSessionId,
           rootSessionId: newSessionId,
           sessionFile: newFile,
-          branch: { branchId: 'b-1', branchVersion: 1, leafTurnId: null },
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
         };
       }
       return origRequest(sessionId, op);
@@ -827,7 +827,257 @@ test('btwBranch rekeys live session entry, worker, journal and reference to new 
     expect(harness.workers.info(newSessionId)).toBeDefined();
     const newRef = harness.sessions['references'].get(newSessionId);
     expect(newRef?.sessionFile).toBe(newFile);
+    // The rekey moves the identity, so the pre-branch reference must not stay
+    // listed: it would answer every root-addressed read with 404 for a session
+    // the Host still binds.
+    expect(harness.sessions['references'].get(rootSessionId)).toBeNull();
   } finally {
     await harness.close();
   }
+}, 60000);
+
+test('btwBranch leaves no root-addressed read pointing at the retired session id', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-read-session-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          // A real branch replies with the seed of its rekeyed projection, so the
+          // journal history is re-addressed to the minted id as well.
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    const ack = await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    expect(ack.type === 'btw.branch' && ack.sessionId).toBe(newSessionId);
+    // Every route the composer reads after a Promote to Branch: the snapshot,
+    // the roster runtime and the subagent list. Before the rekey fan-out these
+    // answered 404 / "The session has no listed root" for the minted id because
+    // the registry kept the retired one.
+    expect((await harness.sessions.snapshot(newSessionId)).session.sessionId).toBe(newSessionId);
+    expect(harness.sessions.runtime(newSessionId).sessionId).toBe(newSessionId);
+    expect(harness.sessions.listSubagents(newSessionId)).toEqual([]);
+    // The retired id must not resolve to the session the Host no longer binds.
+    expect(() => harness.sessions.runtime(rootSessionId)).toThrow();
+    expect(harness.workers.bootstrap(newSessionId)?.rootSessionId).toBe(newSessionId);
+    expect(harness.workers.bootstrap(rootSessionId)).toBeUndefined();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('a promoted btw branch is a root with no dangling parent', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-root-session-id';
+    // A real branched file, so the archive manifest genuinely reads the
+    // branch header instead of failing on a fabricated path.
+    const branchManager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    branchManager.appendMessage({ role: 'user', content: 'Branched prompt', timestamp: Date.now() });
+    await branchManager.ensureOnDisk();
+    await branchManager.flush();
+    const newFile = branchManager.getSessionFile()!;
+    await branchManager.close();
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: newFile,
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    // The branch rekeys to a self-rooted identity, so the id it retired has no
+    // session left to be its parent. Recording it as one made every parent-chain
+    // reader address an id that no longer exists: the archive manifest emitted
+    // the branch after its "parent" and refused to find it, the roster re-sorted
+    // it as a child, and a restart restored a runtime pointing at the retired id.
+    const reference = harness.sessions['references'].get(newSessionId);
+    expect(reference?.parentSessionId).toBeUndefined();
+    expect(harness.sessions.runtime(newSessionId).parentSessionId).toBeUndefined();
+    const listed = await harness.sessions.list(harness.source);
+    // A root is listed before any linked session, and it is listed at all.
+    expect(listed.items.find(session => session.sessionId === newSessionId)?.parentSessionId).toBeUndefined();
+    expect(listed.items.find(session => session.sessionId === newSessionId)).toBeDefined();
+    await expect(harness.sessions.archiveManifest()).resolves.toMatchObject({ complete: true });
+    const manifest = await harness.sessions.archiveManifest();
+    expect(manifest.chats.find(chat => chat.id === newSessionId)?.parentSessionId).toBeUndefined();
+    // The reference that survives a restart carries no parent either.
+    await harness.restart();
+    expect(harness.sessions.runtime(newSessionId).parentSessionId).toBeUndefined();
+    expect(harness.sessions['references'].get(newSessionId)?.parentSessionId).toBeUndefined();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('a promoted btw branch keeps the pre-branch parent while it still exists', async () => {
+  const harness = await fixture();
+  try {
+    // A branch of a session that is itself linked to a root: the branch
+    // continues that lineage, so the existing parent stays the parent.
+    const linkedId = 'linked-branch-source';
+    const linkedManager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    linkedManager.appendMessage({ role: 'user', content: 'Linked prompt', timestamp: Date.now() });
+    await linkedManager.ensureOnDisk();
+    await linkedManager.flush();
+    const linkedFile = linkedManager.getSessionFile()!;
+    await linkedManager.close();
+    await harness.sessions.open({
+      rootSessionId: linkedId, projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
+      cwd: harness.source.cwd, agentDirectory: harness.source.agentDirectory, agentDirectoryId: harness.source.agentDirectoryId,
+      displayPath: 'source', sessionFile: linkedFile, sessionsDirectory: harness.source.sessionsDirectory,
+      parentSessionId: rootSessionId, env: harness.source.env,
+    });
+    const newSessionId = 'minted-linked-branch-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch', sessionId: newSessionId, rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    await harness.sessions.btwBranch(linkedId, 'rec-1');
+    expect(harness.sessions['references'].get(newSessionId)?.parentSessionId).toBe(rootSessionId);
+    expect(harness.sessions.runtime(newSessionId).parentSessionId).toBe(rootSessionId);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('btwBranch leaves the interaction owner on the epoch a later pending request must carry', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-epoch-session-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          // A real branch replies with the seed of its rekeyed projection, which
+          // also mints the journal epoch every request published after it needs.
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      // The plan review is minted by this test rather than by the worker, so the
+      // answer has nowhere to go; reply as the worker would for its own dialog.
+      if (op.type === 'question.resolve') return { type: 'question.resolve', questionId: op.questionId };
+      return origRequest(sessionId, op);
+    };
+    await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    const generation = harness.workers.authorizationScope(newSessionId)?.workerGeneration;
+    if (!generation) throw new Error('The rekeyed worker generation is required');
+    // A plan review reaches the user after the branch, so its request is minted
+    // after the seed re-epoch. A stale epoch makes every snapshot poll answer
+    // 503: the pending request would not belong to the captured session.
+    harness.sessions.onInteraction(newSessionId, generation, {
+      kind: 'question', questionId: 'plan-review', turnId: 'turn-1', prompt: 'Review plan',
+      schema: { type: 'plan-review', title: 'Review plan', planReference: 'local://review-plan.md', planText: '# Plan\nImplement review.' },
+    });
+    const snapshot = await harness.sessions.snapshot(newSessionId);
+    expect(snapshot.questions).toHaveLength(1);
+    expect(snapshot.questions[0]?.epoch).toBe(snapshot.session.epoch);
+    expect(snapshot.questions[0]?.sessionId).toBe(newSessionId);
+    // The card must still be answerable under the epoch the snapshot advertises.
+    const answered = await harness.sessions.resolveQuestion(newSessionId, 'plan-review', {
+      action: 'answer', version: '1', epoch: snapshot.session.epoch,
+      workerGeneration: snapshot.questions[0]!.workerGeneration, response: { action: 'approve' },
+    });
+    expect(answered).toMatchObject({ status: 'answered', sessionId: newSessionId });
+  } finally { await harness.close(); }
+}, 60000);
+
+test('btwBranch returns an ack the strict public SessionControlAckSchema accepts', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-ack-session-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          // The worker replies with a projection seed the strict public ack does
+          // not carry; a real branch reply always includes it.
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    const ack = SessionControlAckSchema.parse(await harness.sessions.btwBranch(rootSessionId, 'rec-1'));
+    expect(ack.type).toBe('btw.branch');
+    expect(ack.type === 'btw.branch' && ack.sessionId).toBe(newSessionId);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('a vibe_spawn child stays authorized through its root after a restart', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'vibe-spawn-child', status: 'completed', role: 'vibe_spawn', sessionFile: harness.childFile,
+    });
+    const childId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
+    if (!childId) throw new Error('Native child identity is required');
+    // The registry side of the reported 403: after a restart the child still
+    // resolves its root through the durable child index, so the Agent Service is
+    // not what refuses the Host's read. This is a guard, not the defect.
+    await harness.restart();
+    expect(harness.sessions.runtime(childId).rootSessionId).toBe(rootSessionId);
+    expect(harness.sessions.listSubagents(childId)).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('a vibe_spawn child stays authorized through its rekeyed root', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'vibe-spawn-child', status: 'completed', role: 'vibe_spawn', sessionFile: harness.childFile,
+    });
+    const childId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
+    if (!childId) throw new Error('Native child identity is required');
+    const newSessionId = 'minted-child-branch-root';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch', sessionId: newSessionId, rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    // The rekey fan-out already moves the child index; the guard keeps that
+    // true so the Host's refusal can never be blamed on a stale registry.
+    await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    expect(harness.sessions.runtime(childId).rootSessionId).toBe(newSessionId);
+    await harness.restart();
+    expect(harness.sessions.runtime(childId).rootSessionId).toBe(newSessionId);
+    expect(harness.sessions.listSubagents(childId)).toEqual([]);
+  } finally { await harness.close(); }
 }, 60000);

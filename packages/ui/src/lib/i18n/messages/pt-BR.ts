@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Modelos Zen',
   'quota.value.requests': 'Solicitações: {count}',
@@ -7592,6 +7593,7 @@ export const dict = {
   "snippets.source.global": "global",
   "snippets.source.project": "projeto",
   "chat.chatInput.toast.compactFailed": "Não foi possível comprimir a sessão",
+  "chat.chatInput.toast.compactNotNeeded": "Esta sessão é curta demais para ser compactada ainda.",
   "chat.chatInput.toast.forkFailed": "Não foi possível bifurcar a sessão",
   "chat.chatInput.toast.forkNothingToFork": "Ainda não há o que bifurcar: nenhuma resposta foi concluída nesta sessão",
   "chat.chatInput.toast.forkSendFailed": "Bifurcada, mas a mensagem não foi enviada. Ela voltou para o editor.",
@@ -7975,6 +7977,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "Não foi possível descobrir o ícone do projeto",
   "projectEditDialog.toast.customIconAlreadySet": "Ícone personalizado já definido para este projeto",
   "projectEditDialog.toast.iconDiscovered": "Ícone do projeto descoberto",
+  "projectEditDialog.toast.iconNotFound": "Nenhum favicon encontrado neste projeto",
   "openInApp.actions.open": "Abrir",
   "openInApp.actions.openInAria": "Abrir em {app}",
   "openInApp.actions.chooseAppAria": "Escolher aplicativo para abrir",
@@ -9309,4 +9312,5 @@ export const dict = {
   "settings.usage.state.error": "Falha ao carregar o uso.",
 
   "chat.workStatus.mcp.unknown": "Os servidores MCP ainda não foram carregados.",
+  ...effortI18n['pt-BR'],
 };

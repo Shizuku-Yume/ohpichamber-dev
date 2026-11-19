@@ -266,11 +266,15 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
     setIsDiscoveringIcon(true);
     try {
       const result = await discoverProjectIcon(project.id);
-      if (!result.ok) {
+      if (result.status === 'failed') {
         toast.error(result.error || t('settings.projects.page.toast.discoverIconFailed'));
         return;
       }
-      if (result.skipped) {
+      if (result.status === 'no-favicon-found') {
+        toast.info(t('settings.projects.page.toast.iconNotFound'));
+        return;
+      }
+      if (result.status === 'custom-icon-present') {
         toast.success(t('settings.projects.page.toast.customIconAlreadySet'));
         return;
       }

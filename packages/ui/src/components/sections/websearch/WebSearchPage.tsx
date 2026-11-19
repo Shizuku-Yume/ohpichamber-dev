@@ -33,6 +33,7 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsSortableList, type SettingsSortableListItem } from '@/components/sections/shared/SettingsSortableList';
 import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from '@/stores/useWebSearchStore';
+import { getWebSearchProviderName } from './websearchProviderName';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 
 /**
@@ -107,7 +108,7 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
     : snapshot.selectedProviderId === null
       ? t('settings.webSearch.option.defaultDescription')
       : selectedProvider
-        ? t('settings.webSearch.mode.providerDescription', { provider: selectedProvider.name })
+        ? t('settings.webSearch.mode.providerDescription', { provider: getWebSearchProviderName(selectedProvider, t) })
         : t('settings.webSearch.mode.missingDescription', { provider: snapshot.selectedProviderId });
 
   return (
@@ -165,13 +166,13 @@ const ProviderCard: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSe
   return (
     <SettingsCard
       icon={<SettingsCardIcon name="global" />}
-      title={provider.name}
+      title={getWebSearchProviderName(provider, t)}
       badges={pill}
       footer={footer ? <span className="min-w-0 truncate">{footer}</span> : null}
       muted={!provider.configured || needsKey}
       onOpen={onOpen}
       actions={actions}
-      actionsLabel={t('settings.webSearch.card.actions', { provider: provider.name })}
+      actionsLabel={t('settings.webSearch.card.actions', { provider: getWebSearchProviderName(provider, t) })}
     />
   );
 };
@@ -253,7 +254,11 @@ const FallbacksSection: React.FC<{
   const { busy, commit } = useChoose(snapshot);
   const rows: FallbackRow[] = snapshot.fallbackProviderIds.map((providerId) => {
     const provider = snapshot.providers.find((entry) => entry.providerId === providerId);
-    return { id: providerId, label: provider?.name ?? providerId, provider };
+    return {
+      id: providerId,
+      label: provider ? getWebSearchProviderName(provider, t) : getWebSearchProviderName({ providerId, name: providerId }, t),
+      provider,
+    };
   });
   // The primary provider is never offered as a fallback, and an unconfigured
   // provider cannot be added: the Use action gates on the same flag.
@@ -336,7 +341,7 @@ const FallbacksSection: React.FC<{
                     fallbackProviderIds: [...snapshot.fallbackProviderIds, provider.providerId],
                   })}
                 >
-                  {provider.name}
+                  {getWebSearchProviderName(provider, t)}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -367,7 +372,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
     const ok = await saveKey(provider.providerId, key);
     if (ok) setDraft('');
     reportSettingsSaveState(ok ? 'saved' : 'error');
-    if (ok) toast.success(t('settings.webSearch.toast.keySaved', { provider: provider.name }));
+    if (ok) toast.success(t('settings.webSearch.toast.keySaved', { provider: getWebSearchProviderName(provider, t) }));
     else toast.error(t('settings.webSearch.toast.keySaveFailed'));
   };
 
@@ -380,14 +385,14 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
   };
 
   const useLine = inUse
-    ? t('settings.webSearch.mode.providerDescription', { provider: provider.name })
+    ? t('settings.webSearch.mode.providerDescription', { provider: getWebSearchProviderName(provider, t) })
     : !provider.configured
-      ? t('settings.webSearch.detail.needsSetup', { provider: provider.name })
+      ? t('settings.webSearch.detail.needsSetup', { provider: getWebSearchProviderName(provider, t) })
       : null;
 
   return (
     <SettingsPageLayout
-      title={provider.name}
+      title={getWebSearchProviderName(provider, t)}
       titleLeading={<SettingsBackButton label={t('settings.webSearch.detail.back')} onClick={onBack} />}
       showSaveStatus
     >
@@ -428,7 +433,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
                     if (event.key === 'Enter') void handleSave();
                   }}
                   placeholder={t('settings.webSearch.keys.placeholder')}
-                  aria-label={t('settings.webSearch.keys.inputAria', { provider: provider.name })}
+                  aria-label={t('settings.webSearch.keys.inputAria', { provider: getWebSearchProviderName(provider, t) })}
                   inputSize="compact"
                   className="min-w-0 flex-1 font-mono"
                 />

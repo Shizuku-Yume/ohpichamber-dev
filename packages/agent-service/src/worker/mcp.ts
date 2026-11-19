@@ -601,12 +601,32 @@ export class WorkerMcp extends MCPManager {
   #authHandler: MCPAuthHandler | undefined;
   #notificationsEnabled = false;
 
+  /**
+   * The root session this catalog names. A completed `/btw` branch rekeys the
+   * native session in place, so every published catalog and the persisted
+   * configuration read must address the minted id.
+   */
+  private worker: CatalogWorkerIdentity;
+
   constructor(private readonly deps: NativeMcpDependencies) {
     super(deps.cwd, null);
+    this.worker = CatalogWorkerIdentitySchema.parse(deps.worker);
     this.#catalog = MCPCatalogStateSchema.parse({
-      worker: CatalogWorkerIdentitySchema.parse(deps.worker), runtimeStatus: 'unavailable',
+      worker: this.worker, runtimeStatus: 'unavailable',
       appliedRevision: null, catalogRevision: '0', activeServers: [], tools: [],
     });
+  }
+
+  /**
+   * Follow the native session rekey. The worker generation and workspace stay
+   * put; only the addressed root moves, so the published catalog keeps naming
+   * the live session the Host now binds.
+   */
+  rekey(rootSessionId: string): void {
+    if (this.worker.rootSessionId === rootSessionId) return;
+    this.worker = CatalogWorkerIdentitySchema.parse({ ...this.worker, rootSessionId });
+    this.#catalog = { ...this.#catalog, worker: this.worker };
+    this.deps.onCatalog(this.#catalog);
   }
 
   /** Pass this manager with enableMCP:true, then attach the factory's real session. */
@@ -689,7 +709,7 @@ export class WorkerMcp extends MCPManager {
     return this.#serialize(async () => {
       const request = MCPConfigureRequestSchema.parse(raw);
       const configuration = this.#capture(next);
-      const current = await readNativeMcpConfiguration(this.deps.configPath, this.deps.worker.workspaceId, this.deps.userConfigPath);
+      const current = await readNativeMcpConfiguration(this.deps.configPath, this.worker.workspaceId, this.deps.userConfigPath);
       if (current.config.servers.some(s => s.managed === false && s.scope === 'project')) {
         throw new NativeMcpError('CATALOG_CONFLICT', 'Hand-written or unmanaged MCP configuration cannot be mutated in place.', false);
       }
@@ -729,7 +749,7 @@ export class WorkerMcp extends MCPManager {
       }
       try {
         await this.#publish(next, configuration, configuration.persistedRevision);
-        return MCPWorkerApplyOutcomeSchema.parse({ worker: this.deps.worker, outcome: 'applied', revisions: this.#revisions(configuration) });
+        return MCPWorkerApplyOutcomeSchema.parse({ worker: this.worker, outcome: 'applied', revisions: this.#revisions(configuration) });
       } catch {
         await this.#release([...next.values()].filter(manager => ![...this.#active.values()].includes(manager)));
         return this.#failed(configuration, 'MCP_APPLY_FAILED', 'MCP runtime application or cleanup failed.');
@@ -741,7 +761,7 @@ export class WorkerMcp extends MCPManager {
     return this.#serialize(async () => {
       EntityIdSchema.parse(serverId);
       const request = MCPReconnectRequestSchema.parse(raw);
-      if (request.workerGeneration !== this.deps.worker.workerGeneration) {
+      if (request.workerGeneration !== this.worker.workerGeneration) {
         throw new NativeMcpError('WORKER_GENERATION_CONFLICT', 'The MCP worker generation changed.', false);
       }
       const configuration = this.#capture(captured);
@@ -779,7 +799,7 @@ export class WorkerMcp extends MCPManager {
     if (entry && !entry.settled && entry.pendingFlow) {
       return MCPOAuthResultSchema.parse({
         serverId,
-        worker: this.deps.worker,
+        worker: this.worker,
         persistedRevision: configuration.persistedRevision,
         status: 'pending',
         authenticated,
@@ -797,7 +817,7 @@ export class WorkerMcp extends MCPManager {
       if (this.#oauth.get(serverId) === entry) this.#oauth.delete(serverId);
       return MCPOAuthResultSchema.parse({
         serverId,
-        worker: this.deps.worker,
+        worker: this.worker,
         persistedRevision: configuration.persistedRevision,
         status: 'unauthenticated',
         authenticated: false,
@@ -810,14 +830,14 @@ export class WorkerMcp extends MCPManager {
       authenticated
         ? {
           serverId,
-          worker: this.deps.worker,
+          worker: this.worker,
           persistedRevision: configuration.persistedRevision,
           status: 'authenticated',
           authenticated: true,
         }
         : {
           serverId,
-          worker: this.deps.worker,
+          worker: this.worker,
           persistedRevision: configuration.persistedRevision,
           status: 'unauthenticated',
           authenticated: false,
@@ -828,7 +848,7 @@ export class WorkerMcp extends MCPManager {
   async oauthExecute(serverId: string, raw: MCPOAuthRequest, captured: MCPConfigurationState): Promise<MCPOAuthResult> {
     EntityIdSchema.parse(serverId);
     const request = MCPOAuthRequestSchema.parse(raw);
-    if (request.workerGeneration !== this.deps.worker.workerGeneration) {
+    if (request.workerGeneration !== this.worker.workerGeneration) {
       throw new NativeMcpError('WORKER_GENERATION_CONFLICT', 'The MCP worker generation changed.', false);
     }
     const configuration = this.#capture(captured);
@@ -868,7 +888,7 @@ export class WorkerMcp extends MCPManager {
       flowId,
       serverId,
       persistedRevision: configuration.persistedRevision,
-      workerGeneration: this.deps.worker.workerGeneration,
+      workerGeneration: this.worker.workerGeneration,
       server,
       abort,
       requiresCallbackInput: false,
@@ -888,7 +908,7 @@ export class WorkerMcp extends MCPManager {
       await this.#assertPersistedFlow(entry);
       return MCPOAuthResultSchema.parse({
         serverId,
-        worker: this.deps.worker,
+        worker: this.worker,
         persistedRevision: configuration.persistedRevision,
         status: 'pending',
         authenticated,
@@ -1066,7 +1086,7 @@ export class WorkerMcp extends MCPManager {
     }
     return MCPOAuthResultSchema.parse({
       serverId,
-      worker: this.deps.worker,
+      worker: this.worker,
       persistedRevision: configuration.persistedRevision,
       status: 'authenticated',
       authenticated: true,
@@ -1234,7 +1254,7 @@ export class WorkerMcp extends MCPManager {
     }))));
     if ([...next].some(([name, manager]) => manager.getConnectionStatus(name) !== 'connected')) throw new Error('MCP connection lost');
     const catalog = MCPCatalogStateSchema.parse({
-      worker: this.deps.worker, runtimeStatus: 'ready', appliedRevision,
+      worker: this.worker, runtimeStatus: 'ready', appliedRevision,
       catalogRevision: CounterSchema.parse((BigInt(this.#catalog.catalogRevision) + 1n).toString()),
       activeServers: [...next.keys()].sort(), tools,
     });
@@ -1280,14 +1300,14 @@ export class WorkerMcp extends MCPManager {
   }
   #failed(configuration: MCPConfigurationState, code: string, detail: string): MCPWorkerApplyOutcome {
     return MCPWorkerApplyOutcomeSchema.parse({
-      worker: this.deps.worker, outcome: 'failed',
+      worker: this.worker, outcome: 'failed',
       revisions: this.#revisions(configuration), error: { code, detail, retryable: true }
     });
   }
   #capture(raw: MCPConfigurationState): MCPConfigurationState {
     this.#assertCurrent();
     const configuration = MCPConfigurationStateSchema.parse(raw);
-    if (configuration.workspaceId !== this.deps.worker.workspaceId) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP workspace does not match this worker.', false);
+    if (configuration.workspaceId !== this.worker.workspaceId) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP workspace does not match this worker.', false);
     if (this.#catalog.appliedRevision !== null && BigInt(configuration.persistedRevision) < BigInt(this.#catalog.appliedRevision)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration capture is stale.', false);
     this.#markIncompatibleOAuth(configuration);
     return configuration;
@@ -1306,7 +1326,7 @@ export class WorkerMcp extends MCPManager {
   }
   async #assertPersistedServer(configuration: MCPConfigurationState, server: RemoteServerConfig): Promise<void> {
     this.#assertCurrent();
-    const persisted = await readNativeMcpConfiguration(this.deps.configPath, this.deps.worker.workspaceId, this.deps.userConfigPath);
+    const persisted = await readNativeMcpConfiguration(this.deps.configPath, this.worker.workspaceId, this.deps.userConfigPath);
     this.#assertCurrent();
     if (persisted.persistedRevision !== configuration.persistedRevision) {
       await this.#retireIncompatibleOAuth(persisted);
@@ -1320,7 +1340,7 @@ export class WorkerMcp extends MCPManager {
   }
   async #assertPersistedFlow(entry: OAuthFlowEntry): Promise<void> {
     this.#assertFlowCurrent(entry);
-    const persisted = await readNativeMcpConfiguration(this.deps.configPath, this.deps.worker.workspaceId, this.deps.userConfigPath);
+    const persisted = await readNativeMcpConfiguration(this.deps.configPath, this.worker.workspaceId, this.deps.userConfigPath);
     this.#assertFlowCurrent(entry);
     const persistedServer = persisted.config.servers.find(item => item.serverId === entry.serverId);
     if (persisted.persistedRevision !== entry.persistedRevision
@@ -1365,7 +1385,7 @@ export class WorkerMcp extends MCPManager {
   async #credentialProvider(server: RemoteServerConfig): Promise<string> {
     return server.transport.credentialRef
       ? await this.deps.resolveCredentialRef(server.transport.credentialRef)
-      : `openchamber-mcp-oauth-${createHash('sha256').update(JSON.stringify([this.deps.worker.workspaceId, server.serverId, server.transport.url])).digest('hex')}`;
+      : `openchamber-mcp-oauth-${createHash('sha256').update(JSON.stringify([this.worker.workspaceId, server.serverId, server.transport.url])).digest('hex')}`;
   }
   async #isAuthenticated(server: RemoteServerConfig): Promise<boolean> {
     const provider = await this.#credentialProvider(server);

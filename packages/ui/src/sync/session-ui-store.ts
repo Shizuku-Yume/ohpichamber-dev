@@ -59,6 +59,8 @@ import {
 } from "./session-directory-resolution"
 import { markSessionViewed } from "./notification-store"
 import { setActiveSession } from "./sync-context"
+import { registerSessionDirectory } from "./sync-refs"
+import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import {
   createSession as createSessionAction,
   sendMessage as sendMessageAction,
@@ -76,6 +78,7 @@ import {
   forkAfterMessage as forkAfterMessageAction,
   fetchMessagesForSession,
   refetchSessionMessages,
+  retireRekeyedSession,
   revertToMessage as revertToMessageAction,
   clearStagedRevert,
   type ArchiveSessionsOptions,
@@ -548,6 +551,14 @@ export type SessionUIState = {
   debugSessionMessages: (sessionId: string) => Promise<void>
   pollForTokenUpdates: () => void
   setSessionDirectory: (sessionId: string, directory: string | null) => void
+  /**
+   * Follow a session the Agent Service rekeyed to a new id (a completed `/btw`
+   * branch mints a new native session). The pre-branch id is retired by the
+   * service and the Host, so every identity keyed by it — the selected
+   * session, the projected row, cached history and the active stream — is
+   * replaced in one publish before any later read can address the old id.
+   */
+  rekeySession: (previousSessionId: string, sessionId: string, directory?: string | null) => void
   /**
    * Replace a guessed selection directory with the authoritative one once sync
    * has indexed the session. Safe to call at any time: it only ever promotes a
@@ -2473,10 +2484,58 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     writeRuntimeSessionMemory(runtimeMemoryKey(), { sessionId: target, directory: authoritative })
   },
 
+  /**
+   * Follow the Agent Service's rekey to the identity a `/btw` branch minted.
+   * One publish replaces the identity keyed everywhere it is read: the
+   * projected row, the remembered directory, cached history/status, and the
+   * selected session. The retired id must leave no cache behind, because a
+   * later read for it can only answer 404.
+   */
+  rekeySession: (previousSessionId, sessionId, directory) => {
+    if (!previousSessionId || !sessionId || previousSessionId === sessionId) return
+    const ownedDirectory = normalizePath(directory ?? get().getDirectoryForSession(previousSessionId))
+    const globalStore = useGlobalSessionsStore.getState()
+    const previousRow = globalStore.entityById.get(previousSessionId)
+    if (previousRow) globalStore.removeSessions([previousSessionId])
+    // The service rekeys a root to a self-rooted session whose branch carries
+    // the pre-branch conversation, so the projection keeps the same owner and
+    // only the identity changes.
+    if (previousRow && ownedDirectory) {
+      useGlobalSessionsStore.getState().upsertSession({
+        ...previousRow, sessionId, rootSessionId: sessionId, parentSessionId: undefined,
+      })
+      registerSessionDirectory(sessionId, ownedDirectory)
+    }
+    // Retire the pre-branch identity in one pass: its cached loads, child-store
+    // projection and live recovery stream all address an id both authorities
+    // now answer 404 for, so leaving the stream attached makes it retry forever.
+    if (ownedDirectory) {
+      retireRekeyedSession(previousSessionId, sessionId, [ownedDirectory])
+      getImperativeSessionMessageLoader()?.touchSessionCache({ directory: ownedDirectory, sessionId })
+    }
+    const previousDirectory = get().currentSessionDirectory
+    if (get().currentSessionId === previousSessionId) {
+      guessedSelectionSessionId = null
+      set({ currentSessionId: sessionId, currentSessionDirectory: ownedDirectory ?? previousDirectory })
+      const activeDirectory = ownedDirectory ?? previousDirectory
+      setActiveSession(activeDirectory ?? "", sessionId)
+      const key = runtimeMemoryKey()
+      writeRuntimeSessionMemory(key, { sessionId, directory: ownedDirectory })
+      persistLastActiveSession(key, { sessionId, directory: ownedDirectory })
+      if (ownedDirectory && useDirectoryStore.getState().currentDirectory !== ownedDirectory) {
+        useDirectoryStore.getState().setDirectory(ownedDirectory, { showOverlay: false })
+      }
+    }
+    if (get().webUICreatedSessions.has(previousSessionId)) {
+      const next = new Set(get().webUICreatedSessions)
+      next.delete(previousSessionId)
+      next.add(sessionId)
+      set({ webUICreatedSessions: next })
+    }
+  },
+
   setSessionDirectory: (sessionId, directory) => {
     const normalized = normalizePath(directory)
-    // Callers set this from a confirmed destination (a completed move, a
-    // created worktree), so the selection is no longer a guess.
     if (sessionId === guessedSelectionSessionId) {
       guessedSelectionSessionId = null
     }

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'מודלי Zen',
   'quota.value.requests': 'בקשות: {count}',
@@ -2743,6 +2744,7 @@ export const dict = {
   "snippets.source.global": "כללי",
   "snippets.source.project": "פרויקט",
   "chat.chatInput.toast.compactFailed": "לא ניתן היה לדחוס את ההפעלה",
+  "chat.chatInput.toast.compactNotNeeded": "ההפעלה קצרה מדי כדי לדחוס אותה עדיין.",
   "chat.chatInput.toast.forkFailed": "לא ניתן היה לפצל את ההפעלה",
   "chat.chatInput.toast.forkNothingToFork": "אין עדיין מה לפצל: אף תגובה לא הסתיימה בהפעלה זו",
   "chat.chatInput.toast.forkSendFailed": "ההפעלה פוצלה, אבל ההודעה לא נשלחה. היא הוחזרה לתיבת הכתיבה.",
@@ -3126,6 +3128,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "איתור סמל הפרויקט נכשל",
   "projectEditDialog.toast.customIconAlreadySet": "כבר הוגדר סמל מותאם אישית לפרויקט זה",
   "projectEditDialog.toast.iconDiscovered": "סמל הפרויקט אותר",
+  "projectEditDialog.toast.iconNotFound": "לא נמצא פביקון בפרויקט הזה",
   "openInApp.actions.open": "פתח",
   "openInApp.actions.openInAria": "פתח ב-{app}",
   "openInApp.actions.chooseAppAria": "בחר יישום לפתיחה",
@@ -9291,6 +9294,7 @@ export const dict = {
   "settings.usage.state.error": "טעינת השימוש נכשלה.",
 
   "chat.workStatus.mcp.unknown": "שרתי MCP טרם נטענו.",
+  ...effortI18n.he,
 };
 
 export type I18nKey = keyof typeof dict;

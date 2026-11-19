@@ -151,11 +151,15 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
     setIsDiscovering(true);
     void discoverProjectIcon(project.id)
       .then((result) => {
-        if (!result.ok) {
+        if (result.status === 'failed') {
           toast.error(result.error || t('projectEditDialog.toast.failedToDiscoverIcon'));
           return;
         }
-        if (result.skipped) {
+        if (result.status === 'no-favicon-found') {
+          toast.info(t('projectEditDialog.toast.iconNotFound'));
+          return;
+        }
+        if (result.status === 'custom-icon-present') {
           toast.success(t('projectEditDialog.toast.customIconAlreadySet'));
           return;
         }

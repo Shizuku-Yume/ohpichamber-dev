@@ -300,6 +300,32 @@ const showCatalog = async (catalog: PluginCatalogState) => {
 };
 const buttonWith = (text: string) => Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(text));
 
+test('the bundled provider is named in the reader language while other providers keep their reported name', async () => {
+  useI18nStore.getState().setLocale('zh-CN');
+  for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) await settle();
+  const { dict: zhCn } = await import('@/lib/i18n/messages/zh-CN');
+  await showCatalog({
+    ...emptyCatalog, extensions: {
+      ...kindInventory([ruleItem({ name: 'project-rule' })]),
+      providers: [
+        { id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule', 'skill'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 1 },
+        { id: 'builtin-defaults', displayName: 'Builtin Defaults', description: '', priority: 9, capabilities: ['rule'], enabled: true, userSourceEnabled: false, foreignUserSource: false, itemCount: 1 },
+      ],
+    },
+  });
+
+  expect(container.textContent).toContain(zhCn['settings.plugins.provider.builtinDefaults']);
+  expect(container.textContent).toContain('Agent Dirs (.agent/.agents)');
+  expect(container.textContent).not.toContain('Builtin Defaults');
+  // The switch's accessible name uses the same localized label.
+  const bundledSwitch = [...container.querySelectorAll<HTMLElement>('[role="switch"]')]
+    .find((element) => element.getAttribute('aria-label')?.includes(zhCn['settings.plugins.provider.builtinDefaults']));
+  expect(bundledSwitch).toBeDefined();
+  expect(bundledSwitch?.getAttribute('aria-label')).toBe(
+    zhCn['settings.extensions.actions.disable.aria'].replace('{name}', zhCn['settings.plugins.provider.builtinDefaults']),
+  );
+});
+
 test('capability kind tabs use localized labels instead of the worker English labels', async () => {
   useI18nStore.getState().setLocale('fr');
   for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) await settle();

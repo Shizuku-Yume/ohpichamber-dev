@@ -306,6 +306,18 @@ export function registerCanonicalHostRoutes(app, {
   res.once('close', disconnect);
   try {
    const groups = route.pattern.exec(req.path).groups;
+   // The subagent list is addressed by query parameter, not a path segment, so
+   // it refuses a session before any work and answers a condition: "no such
+   // session" is 404, while a session someone else owns stays 403. Both used to
+   // be 403, so a caller asking about its own child after a `/btw` rekey or a
+   // worktree archive could not tell a retired id from a foreign one. Session
+   // paths keep the plain 403: their routes refuse before forwarding, and a
+   // temperature check there would forward for every refusal.
+   const deniedSession = async (sessionId) => {
+    const response = await service.request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}`);
+    if (response.status === 404) return problem(res, 404, 'SESSION_NOT_FOUND', 'The requested session does not exist.');
+    return problem(res, 403, 'UNAUTHORIZED', 'The selected session is not authorized.');
+   };
    let scope;
    if (groups?.workspaceId) {
     const workspaceId = C.EntityIdSchema.parse(decodeURIComponent(groups.workspaceId));
@@ -324,7 +336,7 @@ export function registerCanonicalHostRoutes(app, {
     const sessionId = C.EntityIdSchema.safeParse(req.query.sessionId);
     if (!sessionId.success) return problem(res, 400, 'INVALID_REQUEST', 'The subagent session identity is invalid.');
     scope = capturedScope(await resolveSessionScope(sessionId.data));
-    if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected session is not authorized.');
+    if (!scope) return deniedSession(sessionId.data);
    }
    if (groups?.extensionId) C.LocalExtensionIdSchema.parse(decodeURIComponent(groups.extensionId));
    // Reads go straight to the cold projection. Only a mutating session
