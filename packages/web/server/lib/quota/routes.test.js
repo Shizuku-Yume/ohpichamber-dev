@@ -31,7 +31,6 @@ describe('selected quota routes', () => {
     expect(response.body).toMatchObject({ providerId: 'claude', providerName: 'Claude', ok: false, configured: false, usage: null });
     expect(response.body.error).toBeUndefined();
   });
-<<<<<<< HEAD
   it('wires the unconfigured result through the production quota module', async () => {
     const resolveUnavailable = async () => {
       throw Object.assign(new Error('no stored credential'), { code: 'CREDENTIAL_UNAVAILABLE', status: 422 });
@@ -39,69 +38,6 @@ describe('selected quota routes', () => {
     const productionApp = createApp({
       getQuotaProviders: () => import('./index.js'),
       resolveQuotaSelection: resolveUnavailable,
-||||||| bc50ba56aa
-});
-
-describe('z.ai gift reset activation route', () => {
-  beforeEach(() => {
-    configureOpenCodeCredentials({ list: async () => [{
-      id: 'test-zai', integrationID: 'zai-coding-plan', label: 'default', active: true,
-      value: { type: 'key', key: 'test-token' },
-    }] });
-  });
-
-  afterEach(() => {
-    configureOpenCodeCredentials(null);
-    vi.unstubAllGlobals();
-  });
-
-  const activate = async (body) => {
-    const upstream = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ code: 200, msg: 'success', data: 1, success: true }),
-=======
-});
-
-describe('managed credential dictionary boundary', () => {
-  it.each([
-    ['missing-provider', 404, 'UNSUPPORTED_PROVIDER', 'Unsupported credential provider'],
-    ['constructor', 404, 'UNSUPPORTED_PROVIDER', 'Unsupported credential provider'],
-    ['__proto__', 404, 'UNSUPPORTED_PROVIDER', 'Unsupported credential provider'],
-  ])('answers 404 for %s, which is not a credential provider', async (providerId, status, code, error) => {
-    const server = app({});
-    server.use((cause, _req, res, _next) => {
-      res.status(500).json({ code: cause.name, error: cause.message });
-    });
-
-    const response = await request(server)
-      .put(`/api/quota/credentials/${providerId}`)
-      .send({ usageToken: 'test-token' });
-
-    expect(response.status).toBe(status);
-    expect(response.body).toEqual({ code, error });
-  });
-});
-
-describe('z.ai gift reset activation route', () => {
-  beforeEach(() => {
-    configureOpenCodeCredentials({ list: async () => [{
-      id: 'test-zai', integrationID: 'zai-coding-plan', label: 'default', active: true,
-      value: { type: 'key', key: 'test-token' },
-    }] });
-  });
-
-  afterEach(() => {
-    configureOpenCodeCredentials(null);
-    vi.unstubAllGlobals();
-  });
-
-  const activate = async (body) => {
-    const upstream = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ code: 200, msg: 'success', data: 1, success: true }),
->>>>>>> upstream/main
     });
     const configured = await request(productionApp).get('/api/quota/claude');
     expect(configured.status).toBe(200);

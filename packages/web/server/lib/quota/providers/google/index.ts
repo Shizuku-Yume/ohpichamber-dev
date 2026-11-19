@@ -15,15 +15,7 @@ import type { JsonObject, JsonValue, ProviderUsage } from '../../utils/contracts
 export const providerId = 'google';
 export const providerName = 'Google';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/google/index.js
 export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/google/index.js
-export const isConfigured = (auth) => resolveGoogleAuthSources(auth).length > 0;
-=======
-const isJsonContainer = (value: JsonValue): value is JsonObject | JsonValue[] => value !== null && typeof value === 'object';
-
-export const isConfigured = (auth: JsonObject) => resolveGoogleAuthSources(auth).length > 0;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/google/index.ts
 
 export const fetchGoogleQuota = async ({ credential } = {}) => {
   const authSources = resolveGoogleAuthSources(credential);
@@ -42,15 +34,7 @@ export const fetchGoogleQuota = async ({ credential } = {}) => {
 
   for (const source of authSources) {
     let accessToken = source.accessToken;
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/google/index.js
     if (!accessToken || (typeof source.expires === 'number' && source.expires <= Date.now())) {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/google/index.js
-
-    if (!accessToken || (typeof source.expires === 'number' && source.expires <= now)) {
-=======
-
-    if (!accessToken || (source.expires !== null && source.expires <= now)) {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/google/index.ts
       if (!source.refreshToken) {
         sourceErrors.push(`${source.sourceLabel}: Missing refresh token`);
         continue;

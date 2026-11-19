@@ -1,19 +1,7 @@
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/ollama-cloud.js
 import { credentialAccessToken } from './selected-credential.js';
-import { asNonEmptyString, asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/ollama-cloud.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { deleteLegacyOllamaCloudCredential } from '../credentials/store.js';
-import { asNonEmptyString, asObject, buildResult, formatMoney, getAuthEntry, normalizeAuthEntry, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
-=======
 import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
-import { deleteLegacyOllamaCloudCredential } from '../credentials/store.js';
-import { asNonEmptyString, asObject, buildResult, formatMoney, getAuthEntry, normalizeAuthEntry, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/ollama-cloud.ts
+import { asNonEmptyString, asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
 
 interface OllamaFields {
   key?: unknown;
@@ -40,7 +28,6 @@ export const providerName = 'Ollama Cloud';
 const BALANCE_URL = 'https://ollama.com/api/balance';
 const ME_URL = 'https://ollama.com/api/me';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/ollama-cloud.js
 /**
  * The account's windows, read from an already-parsed `/api/balance` payload.
  *
@@ -57,46 +44,9 @@ const ME_URL = 'https://ollama.com/api/me';
  * is a money balance, not a fraction of anything, so it is surfaced only while
  * positive; a zero or absent balance adds no row.
  */
-export const toUsageWindows = (payload) => {
-  const windows = {};
-  const included = asObject(asObject(payload)?.included);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/ollama-cloud.js
-const apiKeyFromAuth = (auth) => {
-  const entry = asObject(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  if (!entry) return null;
-  return asNonEmptyString(entry.key) ?? asNonEmptyString(entry.token);
-};
-
-/**
- * The account's windows, read from an already-parsed `/api/balance` payload.
- *
- * `included` is one of two documented shapes. A credits plan reports the month's
- * pool: the used fraction is `(allowance_usd - balance_usd) / allowance_usd`,
- * clamped because a pool at or over its cap must read as 100 and never above,
- * with the reset at `period.until`. A legacy plan reports `session` and
- * `weekly` limits instead, each a `remaining_percent` with a `resets_at`; those
- * become their own windows. Whichever buckets are present are rendered, so a
- * plan on one shape keeps reporting while Ollama serves the other. A pool with
- * no positive allowance is skipped, not guessed at.
- *
- * `purchased.balance_usd` is pay-as-you-go credit bought on top of the plan. It
- * is a money balance, not a fraction of anything, so it is surfaced only while
- * positive; a zero or absent balance adds no row.
- */
-export const toUsageWindows = (payload) => {
-  const windows = {};
-  const included = asObject(asObject(payload)?.included);
-=======
-const apiKeyFromAuth = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  if (!entry) return null;
-  return asNonEmptyString(entry.key) ?? asNonEmptyString(entry.token);
-};
-
 export const toUsageWindows = z.unknown().transform((payload) => {
-  const windows: Record<string, UsageWindow> = {};
-  const included = asFields(asFields(payload)?.included);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/ollama-cloud.ts
+  const windows = {};
+  const included = asObject(asObject(payload)?.included);
   const allowance = toNumber(included?.allowance_usd);
   const remaining = toNumber(included?.balance_usd);
   if (allowance !== null && allowance > 0 && remaining !== null) {
@@ -130,13 +80,7 @@ export const toUsageWindows = z.unknown().transform((payload) => {
   return windows;
 }).parse;
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/ollama-cloud.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/ollama-cloud.js
-export const isConfigured = (auth) => Boolean(apiKeyFromAuth(auth));
-=======
-export const isConfigured = (auth: LegacyAuthFile) => Boolean(apiKeyFromAuth(auth));
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/ollama-cloud.ts
 
 export const fetchOllamaCloudUsage = async (apiKey: string, fetchImpl = fetch) => {
   const response = await fetchImpl(BALANCE_URL, {
@@ -164,23 +108,8 @@ export const fetchOllamaCloudPlan = async (apiKey: string, fetchImpl = fetch) =>
   return asNonEmptyString(asFields(await response.json())?.Plan);
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/ollama-cloud.js
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/ollama-cloud.js
-export const fetchQuota = async () => {
-  // Mirrors the OpenCode Go cleanup: the stored cookie is obsolete now. It is
-  // removed on the first refresh whether or not a key is readable, so a user
-  // who only ever pasted a cookie never keeps a browser session cookie on disk.
-  deleteLegacyOllamaCloudCredential();
-
-  const apiKey = apiKeyFromAuth(await readOpenCodeCredentials());
-=======
-export const fetchQuota = async () => {
-  deleteLegacyOllamaCloudCredential();
-
-  const apiKey = apiKeyFromAuth(await readOpenCodeCredentials());
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/ollama-cloud.ts
   if (!apiKey) {
     return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });
   }

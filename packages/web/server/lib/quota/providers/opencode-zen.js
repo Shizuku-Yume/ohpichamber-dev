@@ -70,7 +70,7 @@ const fetchConsoleJson = async (path, credential, fetchImpl) => {
     Accept: 'application/json',
     Authorization: `Bearer ${'apiKey' in credential ? credential.apiKey : credential.accessToken}`,
     'x-opencode-session': 'openchamber-usage',
-    'User-Agent': 'OpenChamber quota provider',
+    'User-Agent': 'OhPiChamber quota provider',
     ...('orgID' in credential ? { 'x-org-id': credential.orgID } : {}),
   };
   const response = await fetchImpl(`${CONSOLE_API_BASE}${path}`, {

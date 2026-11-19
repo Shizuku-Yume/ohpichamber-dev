@@ -1,4 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
 /**
  * Zhipu AI Coding Plan quota fetch
  *
@@ -18,33 +17,6 @@
  * `data.level` is the plan tier (for example "lite") and becomes `planLabel`.
  */
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
-/**
- * Zhipu AI Coding Plan quota fetch
- *
- * API: https://open.bigmodel.cn/api/monitor/usage/quota/limit
- *
- * bigmodel.cn reports business failures inside HTTP 200 bodies
- * (`{code, msg, success: false}`), so the envelope must be validated before
- * `data.limits` is parsed. A missing envelope is treated as legacy success.
- *
- * Response limits:
- * - TOKENS_LIMIT / CREDIT_LIMIT: token/credit usage windows (5-hour and weekly).
- *   The API renamed TOKENS_LIMIT to CREDIT_LIMIT; CREDIT_LIMIT entries
- *   additionally carry `usage` (total), `currentValue` (consumed), `remaining`,
- *   and `percentage` (used percent, derived from currentValue/usage when absent).
- * - TIME_LIMIT: MCP tools usage (monthly window)
- *
- * `data.level` is the plan tier (for example "lite") and becomes `planLabel`.
- */
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { readConfigLayers } from '../../opencode/shared.js';
-=======
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import { readConfigLayers } from '../../opencode/config-files.js';
-import type { TokenWindowLimit, UsageWindow } from '../utils/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zhipuai-coding-plan.ts
 import {
   asNonEmptyString,
   buildResult,
@@ -57,13 +29,7 @@ import {
 
 export const providerId = 'zhipuai-coding-plan';
 export const providerName = 'Zhipu AI Coding Plan';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
 
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
-const aliases = ['zhipuai-coding-plan', 'zhipuai', 'zhipu'];
-=======
-const aliases = ['zhipuai-coding-plan', 'zhipuai', 'zhipu'] as const;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zhipuai-coding-plan.ts
 
 export interface EnvelopeFields {
   code?: unknown;
@@ -124,73 +90,11 @@ export const envelopeError = (payload: EnvelopeFields | null | undefined) => {
   return Number.isSafeInteger(code) ? `API error: ${code}` : 'Provider request failed';
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
-function getApiKey(auth) {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKeyFromAuth = entry?.key ?? entry?.token;
-=======
-function getApiKey(auth: LegacyAuthFile) {
-  const rawEntry: unknown = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const entry = hasAuthFields(rawEntry) ? rawEntry : null;
-  const apiKeyFromAuth = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zhipuai-coding-plan.ts
 
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
-  try {
-    const { mergedConfig } = readConfigLayers();
-
-    for (const alias of aliases) {
-      const providerConfig = mergedConfig?.provider?.[alias];
-      if (providerConfig?.options?.apiKey) {
-        return resolveConfigApiKey(providerConfig.options.apiKey);
-      }
-    }
-  } catch {
-    // Ignore config read errors; the provider will be treated as not configured.
-  }
-
-  return null;
-}
-
-export const isConfigured = (auth) => {
-  return Boolean(getApiKey(auth));
-};
-
-export const fetchQuota = async () => {
-  const apiKey = getApiKey(await readOpenCodeCredentials());
-=======
-  try {
-    const { mergedConfig } = readConfigLayers();
-
-    for (const alias of aliases) {
-      const provider = mergedConfig?.provider;
-      const providerConfig = hasProviderAliases(provider) ? provider[alias] : undefined;
-      const options = hasProviderOptions(providerConfig) ? providerConfig.options : undefined;
-      if (hasApiKey(options) && options.apiKey) {
-        const key: unknown = resolveConfigApiKey(options.apiKey);
-        return key;
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
-export const isConfigured = (auth: LegacyAuthFile) => {
-  return Boolean(getApiKey(auth));
-};
-
-export const fetchQuota = async () => {
-  const apiKey = getApiKey(await readOpenCodeCredentials());
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zhipuai-coding-plan.ts
 
   if (!apiKey) {
     return buildResult({
@@ -257,13 +161,7 @@ export const fetchQuota = async () => {
     if (mcpToolsTimeLimit) {
       const monthSeconds = 30 * 24 * 60 * 60;
       const resetAt = mcpToolsTimeLimit?.nextResetTime ? normalizeTimestamp(mcpToolsTimeLimit.nextResetTime) : null;
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
       const usedPercent = toNumber(mcpToolsTimeLimit?.percentage);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zhipuai-coding-plan.js
-      const usedPercent = typeof mcpToolsTimeLimit?.percentage === 'number' ? mcpToolsTimeLimit.percentage : null;
-=======
-      const usedPercent = isNumber(mcpToolsTimeLimit.percentage) ? mcpToolsTimeLimit.percentage : null;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zhipuai-coding-plan.ts
 
       windows['MCP Tools'] = toUsageWindow({
         usedPercent,

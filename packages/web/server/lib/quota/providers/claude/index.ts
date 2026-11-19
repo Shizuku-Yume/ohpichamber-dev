@@ -2,16 +2,7 @@
 import { createHash } from 'crypto';
 
 import { buildResult } from '../../utils/index.js';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/claude/index.js
 import { credentialAccessToken, credentialRefreshToken } from '../selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/claude/index.js
-import { findClaudeCredential, loadClaudeCredential } from './auth.js';
-=======
-import type { ProviderUsage, QuotaResult } from '../../utils/contracts.js';
-import type { LegacyAuthFile } from '../../../opencode/auth.js';
-import { findClaudeCredential, loadClaudeCredential } from './auth.js';
-import type { ClaudeCredential } from './auth.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/claude/index.ts
 import { toClaudeUsage } from './transforms.js';
 
 export const providerId = 'claude';
@@ -21,25 +12,10 @@ const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 const MAX_COOLDOWN_MS = 60 * 60 * 1000;
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/claude/index.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/claude/index.js
-const SESSION_EXPIRED_ERROR = 'Claude session expired. Open Claude Code to sign in again.';
-=======
-const SESSION_EXPIRED_ERROR = 'Claude session expired. Open Claude Code to sign in again.';
-const USAGE_DENIED_ERROR = 'Anthropic does not let this Claude token read usage. A token from `claude setup-token` cannot; a Claude Code sign-in (`/login`) can.';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/claude/index.ts
 
 let cachedUsage: { fingerprint: string; usage: ProviderUsage; planLabel: string | null } | null = null;
 let cooldownUntil = 0;
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/claude/index.js
 const pendingFetches = new Map();
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/claude/index.js
-let pendingFetch = null;
-let lastFingerprint = null;
-=======
-let pendingFetch: Promise<QuotaResult> | null = null;
-let lastFingerprint: string | null = null;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/claude/index.ts
 
 const fingerprintOf = (credential: ClaudeCredential) =>
   createHash('sha256').update(`${credential.accessToken}\0${credential.refreshToken ?? ''}`).digest('hex');
@@ -72,13 +48,7 @@ const cachedResultFor = (fingerprint: string, planLabel: string | null) => {
 const failure = (error: string, { configured = true } = {}) =>
   buildResult({ providerId, providerName, ok: false, configured, error });
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/claude/index.js
 export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/claude/index.js
-export const isConfigured = (auth) => Boolean(findClaudeCredential(auth));
-=======
-export const isConfigured = (auth: LegacyAuthFile) => Boolean(findClaudeCredential(auth));
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/claude/index.ts
 
 const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) => {
   const accessToken = isConfigured(selectedCredential) ? credentialAccessToken(selectedCredential) : null;
@@ -93,22 +63,6 @@ const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) =>
     cachedUsage = null;
     cooldownUntil = 0;
   }
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/claude/index.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/claude/index.js
-  lastFingerprint = fingerprint;
-
-  const expiresAt = credential.expiresAt;
-  if (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= Date.now()) {
-    return failure(SESSION_EXPIRED_ERROR);
-  }
-=======
-  lastFingerprint = fingerprint;
-
-  const expiresAt = credential.expiresAt;
-  if (expiresAt !== null && Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= Date.now()) {
-    return failure(SESSION_EXPIRED_ERROR);
-  }
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/claude/index.ts
 
   if (Date.now() < cooldownUntil) {
     return cachedResultFor(fingerprint, credential.planLabel)
@@ -134,16 +88,8 @@ const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) =>
       ?? failure('Rate limited. Retrying soon.');
   }
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/claude/index.js
   if (response.status === 401 || response.status === 403) {
     return failure('Claude session expired. Open Claude Code to sign in again.');
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/claude/index.js
-  if (response.status === 401 || response.status === 403) {
-    return failure(SESSION_EXPIRED_ERROR);
-=======
-  if (response.status === 401) {
-    return failure(SESSION_EXPIRED_ERROR);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/claude/index.ts
   }
 
   if (response.status === 403) {

@@ -1,26 +1,9 @@
 
 import { buildResult } from '../utils/index.js';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/index.js
 import {
   requireSelectedCredential,
   SELECTED_CREDENTIAL_UNAVAILABLE,
 } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/index.js
-=======
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { QuotaResult } from '../utils/contracts.js';
-
-interface QuotaProvider {
-  readonly providerId: string | null;
-  readonly providerName: string;
-  readonly isConfigured: (auth: LegacyAuthFile) => boolean;
-  readonly fetchQuota: () => Promise<QuotaResult<string | null>>;
-}
-
-interface QuotaProviderRegistry {
-  [providerId: string]: QuotaProvider;
-}
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/index.ts
 
 import * as claude from './claude/index.js';
 import * as clinePass from './cline-pass.js';
@@ -205,14 +188,7 @@ const registry: QuotaProviderRegistry = {
   zenmux: {
     providerId: zenmux.providerId,
     providerName: zenmux.providerName,
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/index.js
     isConfigured: zenmux.isConfigured,
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/index.js
-    // ZenMux reads its own managed credential; the list's OpenCode auth is not for it.
-    isConfigured: () => zenmux.isConfigured(),
-=======
-    isConfigured: () => zenmux.isConfigured(),
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/index.ts
     fetchQuota: zenmux.fetchQuota
   },
   xai: {
@@ -229,36 +205,9 @@ const registry: QuotaProviderRegistry = {
   }
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/index.js
 const pendingFetches = new Map();
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/index.js
-export { attachExtensionQuotaProvider, detachExtensionQuotaProvider } from '../extension-registry.js';
 
-// `hasOwn`, so an id such as `constructor` never resolves to the object's own prototype members.
-const providerOf = (providerId) => (Object.hasOwn(registry, providerId) ? registry[providerId] : extensionQuotaProvider(providerId));
-const providerEntries = () => [...Object.entries(registry), ...extensionQuotaProviderEntries()];
 
-const pendingFetches = new Map();
-=======
-export { attachExtensionQuotaProvider, detachExtensionQuotaProvider } from '../extension-registry.js';
-
-const providerOf = (providerId: string | null) => (Object.hasOwn(registry, String(providerId)) ? registry[String(providerId)] : extensionQuotaProvider(providerId));
-const providerEntries = (): [string | null, QuotaProvider][] => [...Object.entries(registry), ...extensionQuotaProviderEntries()];
-
-const pendingFetches = new Map<string | null, Promise<QuotaResult<string | null, string | null>>>();
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/index.ts
-
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/index.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/index.js
-// The registry entries Settings > Usage never reads. Its built-in list
-// (`QUOTA_PROVIDERS` in packages/ui/src/lib/quota/providers/index.ts) shows
-// GitHub Copilot once; the add-on entry asks GitHub a second time.
-const NOT_ON_USAGE_PAGE = new Set([copilot.providerIdAddon]);
-=======
-const NOT_ON_USAGE_PAGE = new Set<string | null>([copilot.providerIdAddon]);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/index.ts
-
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/index.js
 /**
  * Provider selections are supplied by the Host's selected workspace catalog.
  * This registry never enumerates or reads a credential store itself.
@@ -268,58 +217,10 @@ export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => 
   for (const selection of selections) {
     const providerId = selection?.quotaProviderId ?? selection?.providerId;
     if (Object.hasOwn(registry, providerId)) providerIds.add(providerId);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/index.js
-/**
- * The providers Settings > Usage reads, built-ins first, then the attached
- * extensions: what an agent reading usage may ask, so it never makes a
- * request the page does not make.
- */
-export const listUsagePageProviders = () => providerEntries()
-  .filter(([id]) => !NOT_ON_USAGE_PAGE.has(id))
-  .map(([providerId, provider]) => ({ providerId, providerName: provider.providerName }));
-
-
-/**
- * Providers with a usable credential. OpenCode's stored credentials are read
- * once and handed to every provider; when OpenCode cannot be asked this
- * throws, so a transient failure does not look like "nothing configured".
- */
-export const listConfiguredQuotaProviders = async () => {
-  const auth = await readOpenCodeCredentials();
-  const configured = [];
-
-  for (const [id, provider] of providerEntries()) {
-    try {
-      if (provider.isConfigured(auth)) {
-        configured.push(id);
-      }
-    } catch {
-      // Ignore provider-specific config errors in list API.
-    }
-=======
-export const listUsagePageProviders = () => providerEntries()
-  .filter(([id]) => !NOT_ON_USAGE_PAGE.has(id))
-  .map(([providerId, provider]) => ({ providerId, providerName: provider.providerName }));
-
-
-export const listConfiguredQuotaProviders = async () => {
-  const auth = await readOpenCodeCredentials();
-  const configured = [];
-
-  for (const [id, provider] of providerEntries()) {
-    try {
-      if (provider.isConfigured(auth)) {
-        configured.push(id);
-      }
-    } catch {
-      continue;
-    }
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/index.ts
   }
   return [...providerIds];
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/index.js
 /** A provider outside the registry is unsupported, not unconfigured. */
 export const buildUnconfiguredQuotaResult = (providerId) => {
   const provider = registry[providerId];
@@ -329,76 +230,6 @@ export const buildUnconfiguredQuotaResult = (providerId) => {
     providerName: provider.providerName,
     ok: false,
     configured: false,
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/index.js
-const fetchQuotaForProviderUncoalesced = async (providerId) => {
-  const provider = providerOf(providerId);
-
-  if (!provider) {
-    return buildResult({
-      providerId,
-      providerName: providerId,
-      ok: false,
-      configured: false,
-      error: 'Unsupported provider'
-    });
-  }
-
-  try {
-    return await provider.fetchQuota();
-  } catch (error) {
-    // The extension layer's own answer for a service reply OpenChamber cannot use: the route answers its status and code.
-    if (error instanceof QuotaRouteError) throw error;
-    return buildResult({
-      providerId: provider.providerId,
-      providerName: provider.providerName,
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
-  }
-};
-
-export const fetchQuotaForProvider = (providerId) => {
-  const existing = pendingFetches.get(providerId);
-  if (existing) return existing;
-
-  const pending = fetchQuotaForProviderUncoalesced(providerId).finally(() => {
-    if (pendingFetches.get(providerId) === pending) pendingFetches.delete(providerId);
-=======
-const fetchQuotaForProviderUncoalesced = async (providerId: string | null) => {
-  const provider = providerOf(providerId);
-
-  if (!provider) {
-    return buildResult({
-      providerId,
-      providerName: providerId,
-      ok: false,
-      configured: false,
-      error: 'Unsupported provider'
-    });
-  }
-
-  try {
-    return await provider.fetchQuota();
-  } catch (error) {
-    if (error instanceof QuotaRouteError) throw error;
-    return buildResult({
-      providerId: provider.providerId,
-      providerName: provider.providerName,
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
-  }
-};
-
-export const fetchQuotaForProvider = (providerId: string | null) => {
-  const existing = pendingFetches.get(providerId);
-  if (existing) return existing;
-
-  const pending = fetchQuotaForProviderUncoalesced(providerId).finally(() => {
-    if (pendingFetches.get(providerId) === pending) pendingFetches.delete(providerId);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/index.ts
   });
 };
 

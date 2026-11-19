@@ -1,12 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zenmux.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zenmux.js
-import { readManagedCredential } from '../credentials/providers.js';
-=======
-import { z } from 'zod';
-import { readManagedCredential } from '../credentials/providers.js';
-import type { ZenmuxCredential } from '../credentials/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zenmux.ts
 import {
   buildResult,
   toUsageWindow,
@@ -31,47 +23,18 @@ export interface ZenmuxDependencies {
 
 export const providerId = 'zenmux';
 export const providerName = 'ZenMux';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zenmux.js
 
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zenmux.js
-const aliases = ['zenmux'];
-=======
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zenmux.ts
 const ZENMUX_BALANCE_URL = 'https://zenmux.ai/api/v1/management/payg/balance';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zenmux.js
 const getPlatformApiKey = (credential) => credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zenmux.js
-const readStoredCredential = () => readManagedCredential(providerId);
-
-const getPlatformApiKey = (credential) => asNonEmptyString(credential?.platformApiKey);
-=======
-const readStoredCredential = () => readManagedCredential(providerId);
-
-const getPlatformApiKey = (credential: ZenmuxCredential | null) => asNonEmptyString(credential?.platformApiKey);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zenmux.ts
 
 const parseCredits = z.unknown().transform((value) => toNumber(asNonEmptyString(value)
   ?? (Number.isFinite(value) ? value : null))).parse;
 
 export const isConfigured = (credential) => Boolean(getPlatformApiKey(credential));
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zenmux.js
 export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   const apiKey = getPlatformApiKey(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zenmux.js
-export const fetchQuota = async ({
-  readCredential = readStoredCredential,
-  fetchImpl = fetch
-} = {}) => {
-  const apiKey = getPlatformApiKey(readCredential());
-=======
-export const fetchQuota = async ({
-  readCredential = readStoredCredential,
-  fetchImpl = fetch
-}: ZenmuxDependencies = {}) => {
-  const apiKey = getPlatformApiKey(readCredential());
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zenmux.ts
 
   if (!apiKey) {
     return buildResult({

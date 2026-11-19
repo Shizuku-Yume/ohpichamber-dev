@@ -1,35 +1,5 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kilo.js
 import { credentialAccessToken } from './selected-credential.js';
 import { buildResult, toUsageWindow, toNumber, formatMoney, asNonEmptyString, asObject } from '../utils/index.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kilo.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { readConfig } from '../../opencode/shared.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  formatMoney,
-  asObject,
-  asNonEmptyString
-} from '../utils/index.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import { readConfig } from '../../opencode/config-files.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  formatMoney,
-  asObject,
-  asNonEmptyString
-} from '../utils/index.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kilo.ts
 
 interface KiloFields {
   key?: unknown;
@@ -66,90 +36,20 @@ export const providerName = 'Kilo Code';
 
 const KILO_BALANCE_URL = 'https://api.kilo.ai/api/profile/balance';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kilo.js
 const getApiKey = (credential) => credentialAccessToken(credential);
 
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kilo.js
-const getAuthEntryForKilo = (auth) => normalizeAuthEntry(getAuthEntry(auth, aliases));
-=======
-const getAuthEntryForKilo = (auth: LegacyAuthFile) => asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kilo.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kilo.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kilo.js
-const getApiKey = (auth) => {
-  const entry = getAuthEntryForKilo(auth);
-  return asNonEmptyString(entry?.key)
-    ?? asNonEmptyString(entry?.token)
-    ?? asNonEmptyString(entry?.access);
-};
-=======
-const getApiKey = (auth: LegacyAuthFile) => {
-  const entry = getAuthEntryForKilo(auth);
-  return asNonEmptyString(entry?.key)
-    ?? asNonEmptyString(entry?.token)
-    ?? asNonEmptyString(entry?.access);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kilo.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kilo.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kilo.js
-const organizationIdFromEntry = (entry) => asNonEmptyString(entry?.kilocodeOrganizationId)
-  ?? asNonEmptyString(entry?.organizationId)
-  ?? asNonEmptyString(entry?.accountId);
-=======
-const organizationIdFromEntry = (entry: KiloFields | null) => asNonEmptyString(entry?.kilocodeOrganizationId)
-  ?? asNonEmptyString(entry?.organizationId)
-  ?? asNonEmptyString(entry?.accountId);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kilo.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kilo.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kilo.js
-const organizationIdFromConfig = (config) => {
-  const provider = asObject(asObject(config)?.provider);
-  const kilo = asObject(provider?.kilo) ?? asObject(provider?.kilocode);
-  const options = asObject(kilo?.options);
-  return asNonEmptyString(options?.kilocodeOrganizationId)
-    ?? asNonEmptyString(options?.organizationId);
-};
-=======
-const organizationIdFromConfig = z.unknown().transform((config) => {
-  const provider = asFields(asFields(config)?.provider);
-  const kilo = asFields(provider?.kilo) ?? asFields(provider?.kilocode);
-  const options = asFields(kilo?.options);
-  return asNonEmptyString(options?.kilocodeOrganizationId)
-    ?? asNonEmptyString(options?.organizationId);
-}).parse;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kilo.ts
 
 const parseBalance = z.unknown().transform((value) => toNumber(asNonEmptyString(value)
   ?? (Number.isFinite(value) ? value : null))).parse;
 
 export const isConfigured = (auth: LegacyAuthFile) => Boolean(getApiKey(auth));
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kilo.js
 export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   
   const apiKey = getApiKey(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kilo.js
-export const fetchQuota = async ({
-  readAuth = readOpenCodeCredentials,
-  readOpencodeConfig = readConfig,
-  fetchImpl = fetch
-} = {}) => {
-  const auth = await readAuth();
-  const entry = getAuthEntryForKilo(auth);
-  const apiKey = getApiKey(auth);
-=======
-export const fetchQuota = async ({
-  readAuth = readOpenCodeCredentials,
-  readOpencodeConfig = readConfig,
-  fetchImpl = fetch
-}: KiloDependencies = {}) => {
-  const auth = await readAuth();
-  const entry = getAuthEntryForKilo(auth);
-  const apiKey = getApiKey(auth);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kilo.ts
 
   if (!apiKey) {
     return buildResult({

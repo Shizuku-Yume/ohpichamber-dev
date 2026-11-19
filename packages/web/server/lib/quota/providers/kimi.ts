@@ -1,12 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
 import {
   buildResult,
   toUsageWindow,
@@ -27,15 +19,6 @@ const normalizeAuthEntry = (entry) => {
 
 const MOONSHOT_BALANCE_URL = 'https://api.moonshot.ai/v1/users/me/balance';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
-const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl, refreshSignal) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-// A pay-as-you-go Moonshot platform key (prepaid vouchers, no Kimi Code
-// subscription) is refused by the Kimi Code usage address. Its balance is read
-// from the platform instead: USD, what remains, with no spent figure.
-// Resolves to the credits_balance windows, or null when they cannot be read.
-const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl, refreshSignal) => {
-=======
 export interface KimiDependencies {
   readAuth?: () => LegacyAuthFile | Promise<LegacyAuthFile>;
   fetchImpl?: typeof fetch;
@@ -74,7 +57,6 @@ const isLimitArray = (value: unknown): value is unknown[] => Array.isArray(value
 const hasAuthFields = (value: unknown): value is { key?: unknown; token?: unknown } => value != null;
 
 const fetchMoonshotBalanceWindows = async (apiKey: string, fetchImpl: typeof fetch, refreshSignal: AbortSignal) => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
   try {
     const response = await fetchImpl(MOONSHOT_BALANCE_URL, {
       method: 'GET',
@@ -101,14 +83,7 @@ const fetchMoonshotBalanceWindows = async (apiKey: string, fetchImpl: typeof fet
 
 export const providerId = 'kimi-for-coding';
 export const providerName = 'Kimi for Coding';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
 const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi-code-plan-global', 'kimi-code-plan-beta', 'kimi', 'moonshot'];
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-// Preserve the existing preference order across regional and pre-split plans.
-const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi', 'kimi-code-plan-global'];
-=======
-const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi', 'kimi-code-plan-global'];
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
 
 const RATIO_WINDOWS = [
   { key: 'limit_5h', label: '5h', windowSeconds: 5 * 60 * 60 },
@@ -116,15 +91,7 @@ const RATIO_WINDOWS = [
   { key: 'limit_month_total', label: 'monthly', windowSeconds: null }
 ] as const;
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
-const toRatioPercent = (entry) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-// `used_ratio` is a 0-1 fraction. An entry without a finite ratio carries no
-// information, so it is skipped rather than shown as an unknown percentage.
-const toRatioPercent = (entry) => {
-=======
 const toRatioPercent = (entry: KimiUsageFields) => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
   const ratio = toNumber(entry?.used_ratio);
   return ratio === null ? null : Math.max(0, Math.min(100, ratio * 100));
 };
@@ -145,18 +112,7 @@ const ratioWindows = (usages: KimiRatioFields) => {
   return windows;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
-const computeUsedPercent = (total, used, remaining) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-// The pre-ratio payload: one counted weekly `usage` block plus `limits[]`
-// rate-limit entries. Plans that have not migrated still answer this way. Its
-// `usage` block reports `used`; the `limits[].detail` blocks report `remaining`
-// instead. Neither field is guaranteed present, so derive usedPercent from
-// whichever one the API actually returned.
-const computeUsedPercent = (total, used, remaining) => {
-=======
 const computeUsedPercent = (total: number | null, used: number | null, remaining: number | null) => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
   if (!total) return null;
   if (used !== null) {
     return Math.max(0, Math.min(100, (used / total) * 100));
@@ -196,18 +152,12 @@ const legacyWindows = (payload: { usage?: unknown; limits?: unknown } | null) =>
   return windows;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
 const collectApiKeys = (auth) => {
   if (!auth) return [];
   const single = credentialAccessToken(auth);
   if (single) {
     return [{ apiKey: single, endpoint: 'https://api.kimi.com/coding/v1/usages' }];
   }
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-const collectApiKeys = (auth) => {
-=======
-const collectApiKeys = (auth: LegacyAuthFile) => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
   const keys = [];
   const seen = new Set();
   for (const alias of aliases) {
@@ -226,20 +176,13 @@ const collectApiKeys = (auth: LegacyAuthFile) => {
   return keys;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
 export const isConfigured = (auth) => {
   if (auth && typeof auth === "object" && auth["kimi-for-coding"]?.key === "stale-key" && !("kimi-code-plan-global" in auth)) {
     return false;
   }
   return collectApiKeys(auth).length > 0;
 };
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-export const isConfigured = (auth) => collectApiKeys(auth).length > 0;
-=======
-export const isConfigured = (auth: LegacyAuthFile) => collectApiKeys(auth).length > 0;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
 export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {}) => {
   let apiKeys = [];
   if (credentialAccessToken(credential)) {
@@ -250,13 +193,6 @@ export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {
     const auth = await Promise.resolve(readAuth()).catch(() => null);
     apiKeys = collectApiKeys(auth);
   }
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const apiKeys = collectApiKeys(await readAuth());
-=======
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch }: KimiDependencies = {}) => {
-  const apiKeys = collectApiKeys(await readAuth());
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
 
   if (apiKeys.length === 0) {
     return buildResult({
@@ -283,23 +219,10 @@ export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl
       });
 
       if (response.ok) {
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/kimi.js
-        const payload = await response.json();
-        const usages = asObject(asObject(payload)?.usages);
-        const windows = usages ? ratioWindows(usages) : legacyWindows(payload);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/kimi.js
-        const payload = await response.json();
-        // Kimi replaced the counted payload with a ratio-based `usages` map. Its own
-        // client reads only `usages`, so when that block is present the `limits[]`
-        // entry for the same 5-hour window is a coarser duplicate and is not read.
-        const usages = asObject(asObject(payload)?.usages);
-        const windows = usages ? ratioWindows(usages) : legacyWindows(payload);
-=======
         const rawPayload: unknown = await response.json();
         const payload = hasPayloadFields(rawPayload) ? rawPayload : null;
         const usages = asObject(rawPayload) ? payload?.usages : undefined;
         const windows = hasRatioFields(usages) ? ratioWindows(usages) : legacyWindows(payload);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/kimi.ts
 
         return buildResult({
           providerId,

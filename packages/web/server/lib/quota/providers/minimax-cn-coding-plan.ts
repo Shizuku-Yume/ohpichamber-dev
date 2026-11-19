@@ -9,11 +9,6 @@ const provider = createMiniMaxCodingPlanProvider({
 
 export const providerId = provider.providerId;
 export const providerName = provider.providerName;
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/minimax-cn-coding-plan.js
 
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/minimax-cn-coding-plan.js
-const aliases = provider.aliases;
-=======
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/minimax-cn-coding-plan.ts
 export const isConfigured = provider.isConfigured;
 export const fetchQuota = provider.fetchQuota;

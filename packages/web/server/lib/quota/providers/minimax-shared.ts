@@ -1,45 +1,9 @@
 import { miniMaxStatusError } from './minimax-status.js';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/minimax-shared.js
 import { credentialAccessToken } from './selected-credential.js';
 import { buildResult,
 toUsageWindow,
 toNumber,
 toTimestamp, } from '../utils/index.js'
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/minimax-shared.js
-=======
-import { lowerCaseLabel } from '../utils/labels.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { MiniMaxBaseResp } from './minimax-status.js';
-import type { ProviderUsage } from '../utils/contracts.js';
-
-type MiniMaxFields = {
-  readonly key?: unknown; readonly token?: unknown; readonly model_remains?: unknown; readonly base_resp?: unknown;
-  readonly model_name?: unknown; readonly current_interval_total_count?: unknown;
-  readonly current_interval_usage_count?: unknown; readonly current_interval_remaining_percent?: unknown;
-  readonly start_time?: unknown; readonly end_time?: unknown; readonly remains_time?: unknown;
-  readonly current_weekly_total_count?: unknown; readonly current_weekly_usage_count?: unknown;
-  readonly current_weekly_remaining_percent?: unknown; readonly weekly_start_time?: unknown;
-  readonly weekly_end_time?: unknown; readonly weekly_remains_time?: unknown; readonly current_weekly_status?: unknown;
-};
-type EndpointRead = { payload?: MiniMaxFields; statusError?: string };
-export type MiniMaxProviderOptions = {
-  providerId: string;
-  providerName: string;
-  aliases: string[];
-  tokenPlanUrl: string;
-  codingPlanUrl: string;
-};
-export type MiniMaxQuotaOptions = {
-  readAuth?: () => Promise<LegacyAuthFile>;
-  fetchImpl?: typeof fetch;
-};
-
-const hasFields = (value: unknown): value is MiniMaxFields => value !== null && value !== undefined;
-const fieldsOf = <Value>(value: Value) => (hasFields(value) ? value : undefined);
-const isNumberValue = (value: unknown): value is number => typeof value === 'number';
-const isBaseResp = (value: unknown): value is MiniMaxBaseResp => value !== null && value !== undefined;
-const positive = (value: number | null) => value !== null && value > 0;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/minimax-shared.ts
 
 const WINDOW_STATUS_INACTIVE = 3;
 
@@ -72,15 +36,7 @@ const hasModelRemains = <Payload>(payload: Payload) => {
   return Array.isArray(rems) && rems.length > 0;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/minimax-shared.js
 const fetchEndpoint = async (url, apiKey, fetchImpl = fetch) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/minimax-shared.js
-// `{ payload }` when usable, `{ statusError }` when MiniMax reports a business
-// failure, `{}` when the request or the body is unusable.
-const fetchEndpoint = async (url, apiKey, fetchImpl) => {
-=======
-const fetchEndpoint = async <Key>(url: string, apiKey: Key, fetchImpl: typeof fetch): Promise<EndpointRead> => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/minimax-shared.ts
   try {
     const response = await fetchImpl(url, {
       method: 'GET',
@@ -169,24 +125,9 @@ const calculateUsage = (model: MiniMaxFields, isTokenPlan: boolean) => {
   };
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/minimax-shared.js
 export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, tokenPlanUrl, codingPlanUrl }) => {
   const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/minimax-shared.js
-export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, aliases, tokenPlanUrl, codingPlanUrl }) => {
-  const isConfigured = (auth) => {
-    const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-    return Boolean(entry?.key || entry?.token);
-  };
-=======
-export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, aliases, tokenPlanUrl, codingPlanUrl }: MiniMaxProviderOptions) => {
-  const isConfigured = (auth: LegacyAuthFile) => {
-    const entry = fieldsOf(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-    return Boolean(entry?.key || entry?.token);
-  };
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/minimax-shared.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/minimax-shared.js
   const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {}) => {
     let apiKey = credentialAccessToken(credential);
     if (!apiKey && typeof readAuth === "function") {
@@ -194,17 +135,6 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, alia
       const entry = auth?.[providerId] || auth?.["minimax"] || (auth && typeof auth === "object" ? Object.values(auth)[0] : null);
       apiKey = entry?.key || entry?.token || (typeof entry === "string" ? entry : null);
     }
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/minimax-shared.js
-  const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-    const auth = await readAuth();
-    const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-    const apiKey = entry?.key ?? entry?.token;
-=======
-  const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch }: MiniMaxQuotaOptions = {}) => {
-    const auth = await readAuth();
-    const entry = fieldsOf(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-    const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/minimax-shared.ts
 
     if (!apiKey) {
       return buildResult({

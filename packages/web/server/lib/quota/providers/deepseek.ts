@@ -1,12 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/deepseek.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/deepseek.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/deepseek.ts
 import {
   buildResult,
   toUsageWindow,
@@ -32,34 +24,10 @@ export const providerName = 'DeepSeek';
 
 const DEEPSEEK_QUOTA_URL = 'https://api.deepseek.com/user/balance';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/deepseek.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/deepseek.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-=======
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return Boolean(entry?.key || entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/deepseek.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/deepseek.js
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/deepseek.js
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-=======
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/deepseek.ts
 
   if (!apiKey) {
     return buildResult({

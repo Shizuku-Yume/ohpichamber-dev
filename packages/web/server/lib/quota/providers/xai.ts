@@ -1,12 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/xai.js
 import { credentialAccessToken, credentialRefreshToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/xai.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthEntry, LegacyAuthFile } from '../../opencode/auth.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/xai.ts
 import { buildResult, toUsageWindow } from '../utils/index.js';
 import { asNonEmptyString as nonEmptyString } from '../../shared/guards.js';
 
@@ -21,55 +13,6 @@ const EMPTY_GRPC_WEB_BODY = new Uint8Array([0, 0, 0, 0, 0]);
 type XaiOAuthEntry = Extract<LegacyAuthEntry, { type: 'oauth' }>;
 type ReadXaiAuth = () => LegacyAuthFile | Promise<LegacyAuthFile>;
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/xai.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/xai.js
-const xaiEntryOf = (auth) => {
-  const entry = auth?.xai;
-  if (entry?.type !== 'oauth') return null;
-  if (!nonEmptyString(entry.access) && !nonEmptyString(entry.refresh)) return null;
-  return entry;
-};
-
-const readXaiAuth = async (readAuth) => {
-  try {
-    return { entry: xaiEntryOf(await readAuth()), error: null };
-  } catch {
-    return { entry: null, error: 'Failed to read xAI OAuth credentials' };
-  }
-};
-=======
-export interface XaiQuotaDependencies {
-  readAuth?: ReadXaiAuth;
-  fetchImpl?: typeof fetch;
-}
-
-interface ProtobufState {
-  index: number;
-  order: number;
-}
-
-interface ProtobufScan {
-  fixed32Fields: { path: number[]; value: number; order: number }[];
-  varintFields: { path: number[]; value: bigint }[];
-}
-
-const jwtClaims = z.looseObject({ exp: z.unknown() });
-
-const xaiEntryOf = (auth: LegacyAuthFile | null | undefined) => {
-  const entry = auth?.xai;
-  if (entry?.type !== 'oauth') return null;
-  if (!nonEmptyString(entry.access) && !nonEmptyString(entry.refresh)) return null;
-  return entry;
-};
-
-const readXaiAuth = async (readAuth: ReadXaiAuth) => {
-  try {
-    return { entry: xaiEntryOf(await readAuth()), error: null };
-  } catch {
-    return { entry: null, error: 'Failed to read xAI OAuth credentials' };
-  }
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/xai.ts
 
 const decodeJwtClaims = (token: string) => {
   try {
@@ -95,20 +38,7 @@ const accessTokenExpired = (entry: XaiOAuthEntry) => {
   return Number.isFinite(jwtExpiry) && jwtExpiry <= expiryDeadline;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/xai.js
-// Native AuthStorage owns OAuth refresh and refresh-token rotation. Quota reads
-// consume its exact selected access token without mutating the native credential.
-const requireFreshAccess = (entry) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/xai.js
-// xAI rotates (and rejects the previous) refresh token on every exchange, and
-// OpenCode 2.x owns the credential store without exposing a refresh route. A
-// quota read that refreshed here would burn the token OpenCode still holds and
-// sign the user out. Claude's provider makes the same call; wait for OpenCode
-// to refresh and surface the stale state instead.
-const requireFreshAccess = (entry) => {
-=======
 const requireFreshAccess = (entry: XaiOAuthEntry) => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/xai.ts
   const access = nonEmptyString(entry.access);
   if (!access || accessTokenExpired(entry)) {
     throw new Error('xAI access token expired — send a Grok message or re-authorize');
@@ -315,7 +245,7 @@ const fetchUsage = async (accessToken: string, fetchImpl: typeof fetch) => {
       'Content-Type': 'application/grpc-web+proto',
       'x-grpc-web': '1',
       'x-user-agent': 'connect-es/2.1.1',
-      'User-Agent': 'OpenChamber'
+      'User-Agent': 'OhPiChamber'
     },
     body: EMPTY_GRPC_WEB_BODY,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
@@ -332,42 +262,10 @@ const fetchUsage = async (accessToken: string, fetchImpl: typeof fetch) => {
   return parseUsage(new Uint8Array(await response.arrayBuffer()));
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/xai.js
 export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential) || credentialRefreshToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/xai.js
-export const isConfigured = (auth) => Boolean(xaiEntryOf(auth));
-=======
-export const isConfigured = (auth: LegacyAuthFile | null | undefined) => Boolean(xaiEntryOf(auth));
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/xai.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/xai.js
 export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   const entry = isConfigured(credential) ? credential : null;
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/xai.js
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const { entry, error: authError } = await readXaiAuth(readAuth);
-  if (authError) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: true,
-      error: authError
-    });
-  }
-=======
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch }: XaiQuotaDependencies = {}) => {
-  const { entry, error: authError } = await readXaiAuth(readAuth);
-  if (authError) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: true,
-      error: authError
-    });
-  }
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/xai.ts
   if (!entry) {
     return buildResult({
       providerId,

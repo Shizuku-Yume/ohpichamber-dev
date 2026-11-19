@@ -1,12 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/hyper.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/hyper.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/hyper.ts
 import {
   buildResult,
   toUsageWindow,
@@ -36,38 +28,12 @@ export const providerName = 'Charm Hyper';
 const HYPER_QUOTA_URL = 'https://hyper.charm.land/v1/credits';
 const CREDIT_TO_USD = 0.05;
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/hyper.js
 const getApiKey = (credential) => credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/hyper.js
-const getApiKey = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
-=======
-const getApiKey = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/hyper.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/hyper.js
 export const isConfigured = (credential) => Boolean(getApiKey(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/hyper.js
-export const isConfigured = (auth) => Boolean(getApiKey(auth));
-=======
-export const isConfigured = (auth: LegacyAuthFile) => Boolean(getApiKey(auth));
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/hyper.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/hyper.js
 export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   const apiKey = getApiKey(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/hyper.js
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const apiKey = getApiKey(await readAuth());
-=======
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch }: HyperDependencies = {}) => {
-  const apiKey = getApiKey(await readAuth());
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/hyper.ts
 
   if (!apiKey) {
     return buildResult({

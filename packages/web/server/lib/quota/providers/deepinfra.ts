@@ -1,12 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/deepinfra.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/deepinfra.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/deepinfra.ts
 import {
   buildResult,
   toUsageWindow,
@@ -33,34 +25,10 @@ export const providerName = 'DeepInfra';
 
 const DEEPINFRA_ME_URL = 'https://api.deepinfra.com/v1/me?checklist=true';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/deepinfra.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/deepinfra.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-=======
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return Boolean(entry?.key || entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/deepinfra.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/deepinfra.js
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/deepinfra.js
-export const fetchQuota = async ({ readCredentials = readOpenCodeCredentials } = {}) => {
-  const auth = await readCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-=======
-export const fetchQuota = async ({ readCredentials = readOpenCodeCredentials }: DeepInfraDependencies = {}) => {
-  const auth = await readCredentials();
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/deepinfra.ts
 
   if (!apiKey) {
     return buildResult({

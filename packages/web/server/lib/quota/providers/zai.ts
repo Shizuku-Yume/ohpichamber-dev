@@ -1,4 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zai.js
 import { credentialAccessToken } from './selected-credential.js';
 import { envelopeError } from './zhipuai-coding-plan.js';
 import { buildResult,
@@ -7,37 +6,6 @@ toNumber,
 resolveWindowSeconds,
 resolveWindowLabel,
 normalizeTimestamp } from '../utils/index.js'
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zai.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { asNonEmptyString } from '../../shared/guards.js';
-import { envelopeError } from './zhipuai-coding-plan.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  resolveWindowSeconds,
-  resolveWindowLabel,
-  normalizeTimestamp
-} from '../utils/index.js';
-=======
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
-import { asNonEmptyString } from '../../shared/guards.js';
-import { isString } from '../../shared/object-guards.js';
-import { envelopeError, formatCreditValueLabel, hasDataFields, hasPayloadFields, isCreditLimit, isLimitArray, isNumber, isTimeLimit } from './zhipuai-coding-plan.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  resolveWindowSeconds,
-  resolveWindowLabel,
-  normalizeTimestamp
-} from '../utils/index.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zai.ts
 
 export const providerId = 'zai-coding-plan';
 export const providerName = 'z.ai';
@@ -130,42 +98,13 @@ const attachZaiGiftResets = async (windows: Record<string, ZaiWindow>, { apiKey 
   }
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zai.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zai.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-=======
-const authEntry = (auth: LegacyAuthFile) => {
-  const entry: unknown = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return hasAuthFields(entry) ? entry : null;
-};
-
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = authEntry(auth);
-  return Boolean(entry?.key || entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zai.ts
 
 const ZAI_GIFT_RESET_USE_URL = 'https://api.z.ai/api/biz/customer-package-reset/use';
 export const giftResetTypes = ['FIVE_HOUR', 'WEEK'];
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zai.js
 export const useZaiGiftReset = async ({ recordId, resetType, credential }) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zai.js
-export const useZaiGiftReset = async ({ recordId, resetType, grantType }) => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-=======
-export const useZaiGiftReset = async ({ recordId, resetType, grantType }: GiftResetRequest) => {
-  const auth = await readOpenCodeCredentials();
-  const entry = authEntry(auth);
-  const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zai.ts
 
   if (!apiKey) {
     throw new Error('Not configured');
@@ -191,31 +130,13 @@ export const useZaiGiftReset = async ({ recordId, resetType, grantType }: GiftRe
   const rawPayload: unknown = await response.json().catch(() => null);
   const payload = hasPayloadFields(rawPayload) ? rawPayload : null;
   if (!response.ok || payload?.success !== true) {
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zai.js
     throw new Error(envelopeError(payload) ?? `API error: ${response.status}`);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zai.js
-    throw new Error(payload?.msg || `API error: ${response.status}`);
-=======
-    throw new Error(`${payload?.msg || `API error: ${response.status}`}`);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zai.ts
   }
   return true;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/zai.js
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/zai.js
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-=======
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = authEntry(auth);
-  const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/zai.ts
 
   if (!apiKey) {
     return buildResult({

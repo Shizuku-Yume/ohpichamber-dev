@@ -1,13 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/neuralwatt.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/neuralwatt.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/neuralwatt.ts
 import {
   buildResult,
   toUsageWindow,
@@ -53,33 +44,9 @@ const periodToWindowSeconds = (period: string) => {
   return null;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/neuralwatt.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/neuralwatt.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-
-=======
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return Boolean(entry?.key || entry?.token);
-};
-
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const apiKey = entry?.key ?? entry?.token;
-
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/neuralwatt.ts
   if (!apiKey) {
     return buildResult({
       providerId,

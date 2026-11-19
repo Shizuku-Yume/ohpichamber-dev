@@ -1,13 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/cline-pass.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/cline-pass.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/cline-pass.ts
 import {
   asObject,
   asNonEmptyString,
@@ -51,32 +42,12 @@ const WINDOW_KINDS = new Map<string | null, ClineWindowKind>([
   ['monthly', { key: 'monthly', windowSeconds: null }]
 ]);
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/cline-pass.js
 const getApiKey = (credential) => credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/cline-pass.js
-const getApiKey = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
-=======
-const getApiKey = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/cline-pass.ts
 
 export const isConfigured = (auth: LegacyAuthFile) => Boolean(getApiKey(auth));
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/cline-pass.js
 export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   const apiKey = getApiKey(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/cline-pass.js
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const apiKey = getApiKey(await readAuth());
-=======
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch }: ClineDependencies = {}) => {
-  const apiKey = getApiKey(await readAuth());
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/cline-pass.ts
 
   if (!apiKey) {
     return buildResult({

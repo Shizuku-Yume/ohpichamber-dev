@@ -1,11 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/exe-dev.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/exe-dev.js
-import { readManagedCredential } from '../credentials/providers.js';
-=======
-import { z } from 'zod';
-import { readManagedCredential } from '../credentials/providers.js';
-import type { ExeDevCredential } from '../credentials/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/exe-dev.ts
 import { asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
 
 interface ExeDevFields {
@@ -19,12 +11,7 @@ const asFields = z.custom<ExeDevFields | null>(isObject).catch(null).parse;
 
 export const providerId = 'exe-dev';
 export const providerName = 'exe.dev';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/exe-dev.js
 
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/exe-dev.js
-const aliases = ['exe-dev'];
-=======
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/exe-dev.ts
 const EXEC_URL = 'https://exe.dev/exec';
 const USAGE_COMMAND = 'billing credits usage --group=day --json';
 
@@ -61,7 +48,7 @@ export const fetchExeDevUsage = async (credential: ExeDevCredential, fetchImpl =
       Accept: 'application/json',
       Authorization: `Bearer ${credential.usageToken}`,
       'Content-Type': 'text/plain',
-      'User-Agent': 'OpenChamber quota provider',
+      'User-Agent': 'OhPiChamber quota provider',
     },
     body: USAGE_COMMAND,
     signal: AbortSignal.timeout(15_000),

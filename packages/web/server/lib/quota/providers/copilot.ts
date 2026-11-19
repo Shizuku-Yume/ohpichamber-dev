@@ -1,13 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
 import {
   buildResult,
   toUsageWindow,
@@ -16,123 +7,15 @@ import {
   formatCredits
 } from '../utils/index.js';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
 const buildCopilotWindows = (payload) => {
   const quota = payload?.quota_snapshots ?? {};
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-const resolveCopilotPlanLabel = (payload) => {
-  if (!payload) return null;
-  const sku = asNonEmptyString(payload.access_type_sku);
-  const plan = asNonEmptyString(payload.copilot_plan);
-  const canSignup = Boolean(payload.can_signup_for_limited);
-
-  if (sku === 'free_limited_copilot') return 'Copilot Free';
-  if (sku === 'free_educational_quota') return 'Copilot Student';
-  if (plan === 'individual_edu') return 'Copilot Student';
-  if (plan === 'individual') return 'Copilot Pro';
-  if (plan === 'individual_pro') return 'Copilot Pro+';
-  if (plan === 'individual_max') return 'Copilot Max';
-  if (plan === 'business') return 'Copilot Business';
-  if (plan === 'enterprise') return 'Copilot Enterprise';
-  if (canSignup) return 'Copilot Free';
-  return null;
-};
-
-const buildCopilotWindows = (payload) => {
-  const quota = payload?.quota_snapshots ?? {};
-=======
-interface CopilotPayload {
-  access_type_sku?: unknown;
-  copilot_plan?: unknown;
-  can_signup_for_limited?: unknown;
-  quota_snapshots?: unknown;
-  quota_reset_date?: unknown;
-}
-
-interface CopilotSnapshots {
-  premium_interactions?: unknown;
-}
-
-interface CopilotSnapshot {
-  unlimited?: unknown;
-  credits_used?: unknown;
-  has_quota?: unknown;
-  entitlement?: unknown;
-  quota_remaining?: unknown;
-  remaining?: unknown;
-  percent_remaining?: unknown;
-}
-
-interface CopilotAuthFields {
-  access?: unknown;
-  token?: unknown;
-  enterpriseUrl?: unknown;
-}
-
-const hasFields = (value: unknown): value is Record<string, unknown> => value !== null && value !== undefined;
-const asPayload = z.custom<CopilotPayload>(hasFields).nullish().parse;
-const asSnapshots = z.custom<CopilotSnapshots>(hasFields).nullish().parse;
-const asSnapshot = z.custom<CopilotSnapshot>(hasFields).nullish().parse;
-const asAuthFields = z.custom<CopilotAuthFields>(hasFields).nullish().parse;
-const isString = (value: unknown): value is string => typeof value === 'string';
-
-const resolveCopilotPlanLabel = (payload: CopilotPayload | null | undefined) => {
-  if (!payload) return null;
-  const sku = asNonEmptyString(payload.access_type_sku);
-  const plan = asNonEmptyString(payload.copilot_plan);
-  const canSignup = Boolean(payload.can_signup_for_limited);
-
-  if (sku === 'free_limited_copilot') return 'Copilot Free';
-  if (sku === 'free_educational_quota') return 'Copilot Student';
-  if (plan === 'individual_edu') return 'Copilot Student';
-  if (plan === 'individual') return 'Copilot Pro';
-  if (plan === 'individual_pro') return 'Copilot Pro+';
-  if (plan === 'individual_max') return 'Copilot Max';
-  if (plan === 'business') return 'Copilot Business';
-  if (plan === 'enterprise') return 'Copilot Enterprise';
-  if (canSignup) return 'Copilot Free';
-  return null;
-};
-
-const buildCopilotWindows = (payload: CopilotPayload | null | undefined) => {
-  const quota = asSnapshots(payload?.quota_snapshots) ?? {};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
   const resetAt = toTimestamp(payload?.quota_reset_date);
   const windows: Record<string, UsageWindow> = {};
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
-  // Mirrors the quota semantics of microsoft/vscode-copilot-chat
-  // (CopilotUserQuotaInfo): each snapshot carries entitlement, remaining,
-  // unlimited, and percent_remaining. Unlimited plans report no usable
-  // entitlement; percent_remaining is a server-computed fallback.
-  const addWindow = (label, snapshot) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-  // Mirrors the quota semantics of microsoft/vscode-copilot-chat
-  // (CopilotUserQuotaInfo): each snapshot carries entitlement, remaining,
-  // unlimited, and percent_remaining. Unlimited plans report no usable
-  // entitlement; percent_remaining is a server-computed fallback.
-  // `usedPercent` is computed from remaining/entitlement, and the value label
-  // derives its credits from the same `entitlement - quota_remaining` axis
-  // GitHub's own Copilot panel uses, so the percent and the label agree.
-  const addWindow = (label, snapshot) => {
-=======
   const addWindow = (label: string, snapshot: CopilotSnapshot | null | undefined) => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
     if (!snapshot) return;
 
     if (snapshot.unlimited === true) {
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-      const creditsUsed = toNumber(typeof snapshot.credits_used === 'string'
-        ? asNonEmptyString(snapshot.credits_used)
-        : snapshot.credits_used);
-      const showCreditsUsed = snapshot.has_quota !== false && creditsUsed !== null && creditsUsed >= 0;
-=======
-      const creditsUsed = toNumber(isString(snapshot.credits_used)
-        ? asNonEmptyString(snapshot.credits_used)
-        : snapshot.credits_used);
-      const showCreditsUsed = snapshot.has_quota !== false && creditsUsed !== null && creditsUsed >= 0;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
       windows[label] = toUsageWindow({
         usedPercent: null,
         windowSeconds: null,
@@ -177,16 +60,7 @@ const buildCopilotWindows = (payload: CopilotPayload | null | undefined) => {
 export const providerId = 'github-copilot';
 export const providerName = 'GitHub Copilot';
 const INVALID_COPILOT_ENTERPRISE_URL = 'Invalid GitHub Copilot Enterprise URL';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
 
-// A Copilot login on GitHub Enterprise Server carries `enterpriseUrl`, and that
-// server hosts its own quota endpoint. Only a bare origin with a plausible DNS
-// hostname is accepted, so a value that is not a usable host is refused here
-// rather than turned into a request that carries the credential.
-=======
-
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
 const COPILOT_ENTERPRISE_HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
 const copilotUserUrl = z.unknown().transform((enterpriseUrl) => {
@@ -206,34 +80,10 @@ const copilotUserUrl = z.unknown().transform((enterpriseUrl) => {
   return `https://api.${url.hostname}/copilot_internal/user`;
 }).parse;
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.access || entry?.token);
-};
-=======
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = asAuthFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return Boolean(entry?.access || entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
 export const fetchQuota = async ({ credential } = {}) => {
   const accessToken = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const accessToken = entry?.access ?? entry?.token;
-=======
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = asAuthFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const accessToken = entry?.access ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
 
   if (!accessToken) {
     return buildResult({
@@ -266,15 +116,7 @@ export const fetchQuota = async () => {
       });
     }
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
     const payload = await response.json();
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-    const payload = await response.json();
-    const planLabel = resolveCopilotPlanLabel(payload);
-=======
-    const payload = asPayload(await response.json());
-    const planLabel = resolveCopilotPlanLabel(payload);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
     return buildResult({
       providerId,
       providerName,
@@ -296,20 +138,8 @@ export const fetchQuota = async () => {
 export const providerIdAddon = 'github-copilot-addon';
 export const providerNameAddon = 'GitHub Copilot Add-on';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
 export const fetchQuotaAddon = async ({ credential } = {}) => {
   const accessToken = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-export const fetchQuotaAddon = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const accessToken = entry?.access ?? entry?.token;
-=======
-export const fetchQuotaAddon = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = asAuthFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const accessToken = entry?.access ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
 
   if (!accessToken) {
     return buildResult({
@@ -342,15 +172,7 @@ export const fetchQuotaAddon = async () => {
       });
     }
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/copilot.js
     const payload = await response.json();
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/copilot.js
-    const payload = await response.json();
-    const planLabel = resolveCopilotPlanLabel(payload);
-=======
-    const payload = asPayload(await response.json());
-    const planLabel = resolveCopilotPlanLabel(payload);
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/copilot.ts
     return buildResult({
       providerId: providerIdAddon,
       providerName: providerNameAddon,

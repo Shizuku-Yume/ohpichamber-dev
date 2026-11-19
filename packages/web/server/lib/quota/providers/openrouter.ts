@@ -1,16 +1,4 @@
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/openrouter.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/openrouter.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { readConfigLayers } from '../../opencode/shared.js';
-import { isRecord, toProviderEntity } from '../../opencode/config-v2.js';
-=======
-import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import { readConfigLayers } from '../../opencode/config-files.js';
-import { isRecord, toProviderEntity } from '../../opencode/config-v2.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/openrouter.ts
 import {
   buildResult,
   toUsageWindow,
@@ -43,44 +31,6 @@ const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 const PERIOD_SECONDS = { daily: 86400, weekly: 604800, monthly: 30 * 86400 };
 const isPeriodKey = (key: string): key is keyof typeof PERIOD_SECONDS => Object.hasOwn(PERIOD_SECONDS, key);
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/openrouter.js
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/openrouter.js
-// The stored key is valid for whichever gateway the configured baseURL points
-// at, so the usage lookup must ride the same base as chat. The endpoint shape
-// stays `<base>/key`; with nothing configured the base is OpenRouter itself.
-// OpenCode takes the address from `settings.baseURL`, legacy `options.baseURL`
-// or legacy `api`, and toProviderEntity folds all three. Each section is read
-// on its own so a v2 entry without an address cannot hide a v1 address that
-// another config file sets.
-const resolveQuotaBase = () => {
-  try {
-    const { mergedConfig } = readConfigLayers();
-    const readBaseURL = (sectionKey) => {
-      const section = mergedConfig?.[sectionKey];
-      return isRecord(section) ? asNonEmptyString(toProviderEntity(section.openrouter).settings?.baseURL) : null;
-    };
-    const base = readBaseURL('providers') ?? readBaseURL('provider');
-    return base?.replace(/\/+$/, '') || null;
-  } catch {
-    // A config read failure must not take the default-endpoint lookup down.
-    return null;
-  }
-};
-=======
-const resolveQuotaBase = () => {
-  try {
-    const { mergedConfig } = readConfigLayers();
-    const readBaseURL = (sectionKey: string) => {
-      const section = mergedConfig?.[sectionKey];
-      return isRecord(section) ? asNonEmptyString(toProviderEntity(section.openrouter).settings?.baseURL) : null;
-    };
-    const base = readBaseURL('providers') ?? readBaseURL('provider');
-    return base?.replace(/\/+$/, '') || null;
-  } catch {
-    return null;
-  }
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/openrouter.ts
 
 export const resolveResetAt = <Period>(limitReset: Period, nowMs: number) => {
   const now = new Date(nowMs);
@@ -97,34 +47,10 @@ export const resolveResetAt = <Period>(limitReset: Period, nowMs: number) => {
   return null;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/openrouter.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/openrouter.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-=======
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return Boolean(entry?.key || entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/openrouter.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/openrouter.js
 export const fetchQuota = async ({ credential } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/openrouter.js
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-=======
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = asFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/openrouter.ts
 
   if (!apiKey) {
     return buildResult({

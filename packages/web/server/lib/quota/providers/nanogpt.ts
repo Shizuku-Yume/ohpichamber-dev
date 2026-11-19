@@ -1,13 +1,5 @@
 import { z } from 'zod';
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/nanogpt.js
 import { credentialAccessToken } from './selected-credential.js';
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/nanogpt.js
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-=======
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import type { LegacyAuthFile } from '../../opencode/auth.js';
-import type { UsageWindow } from '../utils/contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/nanogpt.ts
 import {
   buildResult,
   toUsageWindow,
@@ -58,34 +50,10 @@ const NANO_GPT_DAILY_WINDOW_SECONDS = 86400;
 export const providerId = 'nano-gpt';
 export const providerName = 'NanoGPT';
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/nanogpt.js
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/nanogpt.js
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-=======
-export const isConfigured = (auth: LegacyAuthFile) => {
-  const entry = asAuthFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  return Boolean(entry?.key || entry?.token);
-};
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/nanogpt.ts
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/nanogpt.js
 export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   const apiKey = credentialAccessToken(credential);
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/nanogpt.js
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const auth = await readAuth();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-=======
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch }: NanoGptDependencies = {}) => {
-  const auth = await readAuth();
-  const entry = asAuthFields(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  const apiKey = entry?.key ?? entry?.token;
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/nanogpt.ts
 
   if (!apiKey) {
     return buildResult({
