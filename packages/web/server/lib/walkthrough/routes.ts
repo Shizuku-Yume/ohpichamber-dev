@@ -119,7 +119,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
     }
     const statusCode = Number(error?.statusCode ?? error?.status) || bindingStatus || 500;
     if (statusCode >= 500) {
-      console.error(`${fallback}:`, cause);
+      console.error(`${fallback}:`, error);
     }
     const body: WalkthroughErrorResponse = {
       error: error?.message || fallback,
