@@ -71,7 +71,7 @@ const isValidRelayUrl = (value: unknown): value is string => {
   }
 };
 
-const normalizeRelayUrl = (value) => {
+export const normalizeRelayUrl = (value) => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (!trimmed || !isValidRelayUrl(trimmed)) return null;

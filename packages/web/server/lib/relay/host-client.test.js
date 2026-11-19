@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'bun:te
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { startRelayHost } from './host-client.js';
@@ -510,6 +511,7 @@ describe('relay host-client data socket retry', () => {
         statuses.emit('status', status);
       },
       logger,
+      onShareState: (shareId) => markers.emit(shareId),
     });
     await connected;
   };
@@ -570,7 +572,8 @@ describe('relay host-client data socket retry', () => {
     dataSocket.send(JSON.stringify({ type: 'relay-retire', code: 1000, reason: 'x'.repeat(500) }));
     const closeCode = await Promise.race([closed, sleep(3000).then(() => 'timeout')]);
     expect(closeCode).not.toBe('timeout');
-    expect(await relay.waitForDials(2, 1500)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(relay.state.dials).toEqual(['conn-retire']);
   }, 10000);
 
   it('keeps peer close reasons to one sanitized log line and out of status line breaks', async () => {

@@ -54,15 +54,6 @@ const isNonemptyConnectionId = (value: unknown): value is string => typeof value
 
 const shareStateMessageSchema = z.object({ type: z.literal('share-state'), shareId: z.string().min(1) });
 
-// The relay asks a peer to close its own socket with this plaintext frame
-// rather than closing it from the relay side, where a close to a peer that is
-// gone holds the relay's handler, billed, until it times out. Mirrors
-// parseRelayRetire in packages/ui/src/lib/relay/protocol.ts.
-//
-// `ws` rejects close reasons over 123 UTF-8 bytes (and a rejected reason leaves
-// the socket open after its map entry is gone), so peer text is only ever
-// logged, bounded and single-line: it never reaches socket.close().
-const LOG_REASON_MAX_CHARS = 200;
 const relayRetireSchema = z.object({ type: z.literal('relay-retire'), code: z.number().int(), reason: z.string().catch('') });
 const parseRelayRetire = (raw: string) => {
   try {
@@ -73,6 +64,7 @@ const parseRelayRetire = (raw: string) => {
   }
 };
 
+const LOG_REASON_MAX_CHARS = 200;
 const sanitizeCloseReason = (raw) => Array.from(String(raw ?? ''), (char) => {
   const code = char.codePointAt(0) ?? 0;
   return code <= 0x1f || code === 0x7f ? ' ' : char;
@@ -258,9 +250,6 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
     const handleMessage = async (data: Buffer, isBinary: boolean) => {
       const retire = isBinary ? null : parseRelayRetire(data.toString('utf8'));
       if (retire) {
-        // Peer text never goes into a close frame: the code alone asks the
-        // relay to drop this connection, and a huge or malformed reason can no
-        // longer make close() throw and leak the socket.
         if (dataSockets.get(connectionId) === entry) teardownDataSocket(connectionId, 1000);
         else socket.close(1000);
         return;
@@ -369,11 +358,7 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
         });
     });
     socket.on('close', (code, reason) => {
-      // One line per device drop, so a host that keeps losing devices shows why
-      // in its log: the code says which side closed and the lifetime how often.
-      const closeReason = sanitizeCloseReason(reason?.toString?.('utf8') ?? '');
-      logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${closeReason ? ` reason=${closeReason}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
-      // A retry may already own this connectionId.
+      logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${reason?.length ? ` reason=${sanitizeCloseReason(reason.toString('utf8'))}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
       if (dataSockets.get(connectionId) === entry) teardownDataSocket(connectionId);
     });
     socket.on('error', (error) => {
