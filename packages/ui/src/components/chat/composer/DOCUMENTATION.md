@@ -17,6 +17,13 @@ animation. Do not restore separate draft and session composer branches:
 remounting the editor loses focus and interrupts the transition. Keep the
 existing mobile fixed-position rules unchanged.
 
+The compact new-session welcome owns a bounded vertical scroll area above
+the composer. Its title and starter chips share one non-shrinking group with
+automatic block margins: centered when it fits, top-aligned and fully
+scrollable when large text or a short viewport makes it taller than the space.
+Keep the composer outside that area and retain the `oc-draft-center` keyboard
+motion hook.
+
 `ComposerFloatingPanel` is the shared frame for `BtwPanel` and
 `QueuedMessageChips`. They mount inside the composer form, outside both the
 full editor and collapsed mobile pill, with one absolute `bottom-full`

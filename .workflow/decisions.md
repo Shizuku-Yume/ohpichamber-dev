@@ -1631,3 +1631,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Compact draft welcomes scroll before clipping large text
+
+- **Decided:** give the compact draft welcome a bounded vertical scroll area and center its non-shrinking title/starter group with automatic margins.
+- **Instead of:** unconditional flex centering, shrinking the text, or scrolling the composer out of view with the welcome.
+- **Because:** at large system font sizes or short viewport heights, centered overflow begins above the scroll origin. Automatic margins preserve the normal centered appearance but collapse when content needs to scroll from its top.
+- **Mine:** yes
+- **Revisit when:** upstream provides the same scroll-safe compact welcome layout.
