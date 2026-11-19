@@ -1585,3 +1585,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the tests pin native Host connection behavior retained by PRs #11 and #13: redirect refusal, closed browser fallback, signed passwordless bearer bootstrap, secure credential persistence, reconnect and password cancellation, header removal, and invalid pairing handling. Neither test carries a token recognized by the guard's content-based OMP boundary classification, but both protect the fork's deliberate authentication contract.
 - **Mine:** yes
 - **Revisit when:** upstream covers the same native Host authentication contract or the connection implementation retires that contract.
+
+## 2026-11-19 - Android status-bar icons follow the painted background owner
+
+- **Decided:** retain `packages/ui/src/apps/mobileNativeChrome.ts` with native-background contrast from `WindowLayoutPlugin` when Capacitor pads the Android decor view, app-theme contrast when the WebView paints behind the bar, and refreshes on app/system appearance changes and resume.
+- **Instead of:** choosing icons solely from the app's dark class, assuming unsupported Android 15 background writes succeed, or forcing native insets off on WebViews with broken CSS safe areas.
+- **Because:** the installed WebView 124 reaches Capacitor SystemBars' native-inset fallback. On Android 15 the native strip follows Android's theme while StatusBar background writes are ignored; app-dark icons therefore became white on the native light background. Newer edge-to-edge WebViews still need app-theme icons because their strip is web content.
+- **Mine:** yes
+- **Revisit when:** Capacitor exposes native background ownership directly or native-inset fallback is retired.
