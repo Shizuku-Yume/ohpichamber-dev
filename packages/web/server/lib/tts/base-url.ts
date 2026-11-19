@@ -1,13 +1,7 @@
 import { isEnterpriseMode } from '../enterprise-mode.js';
 
-<<<<<<< HEAD:packages/web/server/lib/tts/base-url.js
 const OFFICIAL_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
-||||||| bc50ba56aa:packages/web/server/lib/tts/base-url.js
-=======
-const isString = (value: unknown): value is string => typeof value === 'string';
-
->>>>>>> upstream/main:packages/web/server/lib/tts/base-url.ts
 const LOCAL_BASE_URL_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
@@ -34,16 +28,8 @@ const isAllowedLocalHost = (hostname: string) => {
   return LOCAL_BASE_URL_HOSTS.has(normalized);
 };
 
-<<<<<<< HEAD:packages/web/server/lib/tts/base-url.js
 const normalizeOpenAIBaseURL = (value, selected) => {
   if (typeof value !== 'string' || !value.trim()) {
-||||||| bc50ba56aa:packages/web/server/lib/tts/base-url.js
-export const normalizeCustomOpenAIBaseURL = (value) => {
-  if (typeof value !== 'string' || !value.trim()) {
-=======
-export const normalizeCustomOpenAIBaseURL = (value: Parameters<typeof isString>[0]) => {
-  if (!isString(value) || !value.trim()) {
->>>>>>> upstream/main:packages/web/server/lib/tts/base-url.ts
     return { value: undefined };
   }
 
@@ -62,7 +48,6 @@ export const normalizeCustomOpenAIBaseURL = (value: Parameters<typeof isString>[
     return { error: 'Custom server URL must not include credentials' };
   }
 
-<<<<<<< HEAD:packages/web/server/lib/tts/base-url.js
   parsed.hash = '';
   parsed.search = '';
   const pathname = parsed.pathname.replace(/\/+$/, '');
@@ -71,11 +56,6 @@ export const normalizeCustomOpenAIBaseURL = (value: Parameters<typeof isString>[
 
   // Speech and transcription carry conversation content, so enterprise mode
   // keeps them on this machine whatever else allows a remote host.
-||||||| bc50ba56aa:packages/web/server/lib/tts/base-url.js
-  // Speech and transcription carry conversation content, so enterprise mode
-  // keeps them on this machine whatever else allows a remote host.
-=======
->>>>>>> upstream/main:packages/web/server/lib/tts/base-url.ts
   if (isEnterpriseMode() && !isAllowedLocalHost(parsed.hostname)) {
     return { error: 'In enterprise mode a custom speech server has to run on this machine.' };
   }
