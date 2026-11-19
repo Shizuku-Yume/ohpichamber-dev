@@ -31,7 +31,7 @@ Recheck GitHub before picking up a PR; these states can change.
 | [#33](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/33) Terminal input lost before reattach | Open, conflicts with main. Desktop and mobile web passed on the earlier head; both review fixes are pushed at `c06d668ce`. Update against main, clear review, and rerun full type-check and browser tests on the final head. |
 | [#34](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/34) Removing a pasted image submits the draft | Open, conflicts with main. iOS simulator confirmed the draft stays and no send request fires on the earlier head; update against main and rerun the gates. |
 | [#35](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/35) Keep mobile workspace mounted while reconnecting | Open, conflicts with main. Android Host-stop/resume/recovery passed; finish iOS simulator retest with the Host down and confirm review and full type-check. |
-| [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37) Remove the session transcript on delete | Open. Focused Agent Service and Host tests passed; verify the final head and review before merging. The fix does not remove transcripts left by earlier deletions. |
+| [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37) Remove the session transcript on delete | Open, mergeable. Focused Agent Service and Host tests passed; verify the final head and review before merging. The fix does not remove transcripts left by earlier deletions. |
 | [#38](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/38) Record plugin layout verification | Open, conflicts with main. Docs-only follow-up to #29; full type-check and workflow validation were reported green on the earlier head. The Add plugin search placeholder still clips at 393 CSS px. |
 
 Recheck Android landscape terminal rows alongside the #35 reconnect banner.
@@ -40,6 +40,14 @@ Recheck Android landscape terminal rows alongside the #35 reconnect banner.
 - draw.io: undo restores the graph but still shows the unsaved prompt (the embed rewrites the XML).
 - A deleted session could leave its transcript on disk; see [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37).
 - Web Files search appeared stuck and then returned no results in a two-tab run. The active workspace root was not verified; reproduce with a file that is visible in the tree before treating this as a bug.
+
+## Late additions (iOS round 3)
+
+- [#34](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/34): Removing a composer image sent the draft. The fix was verified in the iOS simulator; the PR is open.
+- [#36](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/36): The Android New session welcome screen now scrolls at 200% font size. Verified in the Android emulator and merged.
+- Unfixed: A 9.3 MiB text file shows a blank preview on iOS.
+- Unfixed: Opening a pairing link from Safari does not pair because there is no `connect` deep-link route. A route should require confirmation before switching hosts.
+- Needs verification: Text in the iOS WebView may not scale with Dynamic Type.
 
 ## Tested clean
 - Android round 2: git ops, terminal scrollback, all 28 settings pages, session rename/search/relaunch.
