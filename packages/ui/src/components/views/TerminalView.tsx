@@ -418,7 +418,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         setIsReconnectPending(false);
         focusTerminalWhenWindowActive();
 
-        replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event));
+        replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event), event.sizes);
         scanTerminalPreviewOutput(directory, tabId, event.data ?? '');
         if (event.status === 'exited') {
          if (closesOnExit()) {
@@ -441,6 +441,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         setConnectionError(null);
         setIsFatalError(false);
         setIsReconnectPending(true);
+        break;
+       }
+       case 'resize': {
+        appendToBuffer(directory, tabId, '', event.sequence, undefined, terminalSnapshotSize(event));
         break;
        }
        case 'data': {
@@ -1314,7 +1318,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    />
    {directoryTerminalState ? (
     <ContextPanelHeaderToolbar>
-     <div className={cn('app-region-no-drag flex min-w-0 items-center gap-2 text-xs', inPanelHeader ? 'flex-1 pe-1' : cn('sticky top-0 z-20 shrink-0 bg-[var(--surface-background)]', isTouchTerminal ? 'px-4 py-1.5' : 'ps-4 pe-2.5 py-1'))}>
+     <div className={cn('app-region-no-drag flex min-w-0 items-center gap-2 text-xs', inPanelHeader ? 'flex-1 pe-1' : cn('oc-terminal-chrome sticky top-0 z-20 shrink-0 bg-[var(--surface-background)]', isTouchTerminal ? 'px-4 py-1.5' : 'ps-4 pe-2.5 py-1'))}>
       <div className={cn('min-w-0 flex-1', inPanelHeader ? 'self-stretch' : isTouchTerminal ? 'h-8' : 'h-7')}>
        <SortableTabsStrip
         items={terminalTabItems}
@@ -1416,7 +1420,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     className="relative flex-1 overflow-hidden"
     style={{ backgroundColor: xtermTheme.background }}
    >
-    <div className="h-full w-full box-border ps-4 pe-1.5 pt-3 pb-4">
+    <div className="oc-terminal-output h-full w-full box-border ps-4 pe-1.5 pt-3 pb-4">
      {shouldRenderViewport ? mountedTabIds.map((tabId) => (
       <TerminalTabViewport
        key={`${terminalDirectory}::${tabId}`}
@@ -1457,7 +1461,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     )}
    </div>
    {isTouchTerminal && showQuickKeys ? (
-    <div className="shrink-0 overflow-x-auto border-t border-border/40 bg-[var(--surface-background)] px-2 pt-1.5 pb-[max(0.375rem,calc(var(--oc-app-bottom-safe,0px)-var(--oc-keyboard-inset,0px)))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="oc-terminal-quick-keys shrink-0 overflow-x-auto border-t border-border/40 bg-[var(--surface-background)] px-2 pt-1.5 pb-[max(0.375rem,calc(var(--oc-app-bottom-safe,0px)-var(--oc-keyboard-inset,0px)))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
      {/* Keys are physical: arrows keep pointing where the key does. */}
      <div dir="ltr" className="flex min-w-max items-center gap-1.5">
       {quickKeysControls}

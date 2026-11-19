@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { toast } from 'sonner';
 
-import type { ClipboardAPI } from '@/lib/api/types';
+import type { ClipboardAPI, TerminalReplaySize } from '@/lib/api/types';
 import { I18nProvider } from '@/lib/i18n';
 import { useTerminalStore, type TerminalChunk } from '@/stores/useTerminalStore';
 
@@ -17,7 +17,7 @@ const { TerminalViewport } = await import('./TerminalViewport');
 
 type TerminalEvent =
   | { type: 'write'; data: string }
-  | { type: 'reset'; data: string; size?: { cols: number; rows: number } }
+  | { type: 'reset'; data: string; sizes?: readonly TerminalReplaySize[] }
   | { type: 'visible'; visible: boolean }
   | { type: 'paste'; data: string }
   | { type: 'dispose' };
@@ -31,9 +31,9 @@ class TerminalSurfaceDouble implements TerminalSurface {
   write(data: string) {
     terminalEvents.push({ type: 'write', data });
   }
-  resetAndWrite(data: string, drawnSize?: { readonly cols: number; readonly rows: number }) {
+  resetAndWrite(data: string, sizes?: readonly TerminalReplaySize[]) {
     const event: TerminalEvent = { type: 'reset', data };
-    if (drawnSize) event.size = { cols: drawnSize.cols, rows: drawnSize.rows };
+    if (sizes?.length) event.sizes = sizes;
     terminalEvents.push(event);
   }
   setTheme() {}
@@ -451,8 +451,7 @@ describe('TerminalViewport integration', () => {
     await flushSurfaceLoad();
 
     expect(terminalEvents.filter((event) => event.type === 'reset' || event.type === 'write')).toEqual([
-      { type: 'reset', data: 'replay-one\n' },
-      { type: 'write', data: 'replay-two\nlive-three\n' },
+      { type: 'reset', data: 'replay-one\nreplay-two\nlive-three\n' },
     ]);
 
     await act(async () => root.unmount());
@@ -495,8 +494,7 @@ describe('TerminalViewport integration', () => {
     terminalEvents.length = 0;
     await renderViewport(root, replacementChunks);
     expect(terminalEvents).toEqual([
-      { type: 'reset', data: 'history-replay-1\n' },
-      { type: 'write', data: 'history-replay-2\n' },
+      { type: 'reset', data: 'history-replay-1\nhistory-replay-2\n' },
     ]);
 
     terminalEvents.length = 0;
@@ -515,13 +513,29 @@ describe('TerminalViewport integration', () => {
     await flushSurfaceLoad();
 
     expect(terminalEvents.filter((event) => event.type === 'reset' || event.type === 'write')).toEqual([
-      { type: 'reset', data: history, size: { cols: 94, rows: 56 } },
-      { type: 'write', data: 'live\n' },
+      { type: 'reset', data: history + 'live\n', sizes: [{ offset: 0, cols: 94, rows: 56 }] },
     ]);
 
     terminalEvents.length = 0;
     await renderViewport(root, [...chunks, { id: 3, data: 'more\n', byteLength: 5 }]);
     expect(terminalEvents).toEqual([{ type: 'write', data: 'more\n' }]);
+  });
+
+  test('replays size transitions at offsets in filtered history, not raw output', async () => {
+    const chunks: TerminalChunk[] = [
+      { id: 1, data: '🙂first', byteLength: 9, sizes: [{ offset: 0, cols: 70, rows: 24 }, { offset: 2, cols: 103, rows: 24 }] },
+      { id: 2, data: '\x1b[6nnext', replayData: 'next', byteLength: 8 },
+      { id: 3, data: '', size: { cols: 42, rows: 22 }, byteLength: 0 },
+      { id: 4, data: 'last', byteLength: 4 },
+    ];
+
+    await renderViewport(root, chunks);
+    await flushSurfaceLoad();
+
+    expect(terminalEvents.filter((event) => event.type === 'reset' || event.type === 'write')).toEqual([{
+      type: 'reset', data: '🙂firstnextlast',
+      sizes: [{ offset: 0, cols: 70, rows: 24 }, { offset: 2, cols: 103, rows: 24 }, { offset: 11, cols: 42, rows: 22 }],
+    }]);
   });
 
   test('toggles surface visibility with the prop and disposes on unmount', async () => {

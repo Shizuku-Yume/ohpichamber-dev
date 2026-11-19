@@ -115,7 +115,7 @@ export class SessionRegistry {
     if (this.deleting.has(parsed.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted');
     const existing = this.entries.get(parsed.rootSessionId);
     const scope = existing?.state === 'unloaded' ? existing.reference : existing?.input;
-    if (scope && (scope.projectId !== parsed.projectId || scope.workspaceId !== parsed.workspaceId || scope.cwd !== parsed.cwd || scope.agentDirectory !== parsed.agentDirectory || (scope.agentDirectoryId !== undefined && scope.agentDirectoryId !== parsed.agentDirectoryId) || (parsed.mcpConfigPath !== undefined && scope.mcpConfigPath !== parsed.mcpConfigPath))) {
+    if (scope && (scope.projectId !== parsed.projectId || scope.workspaceId !== parsed.workspaceId || scope.cwd !== parsed.cwd || scope.agentDirectory !== parsed.agentDirectory || (scope.agentDirectoryId !== undefined && scope.agentDirectoryId !== parsed.agentDirectoryId) || (scope.mcpConfigPath !== undefined && parsed.mcpConfigPath !== undefined && scope.mcpConfigPath !== parsed.mcpConfigPath))) {
       throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Session scope cannot be changed');
     }
     const pending = this.openings.get(parsed.rootSessionId);
