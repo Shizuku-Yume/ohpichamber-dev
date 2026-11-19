@@ -565,31 +565,37 @@ export class SessionMessageLoader {
   }
 
   private knownSession(sessionId: string, store: ChildStore): Session | undefined {
-    return useGlobalSessionsStore.getState().entityById.get(sessionId)
-      ?? store.getState().session.find(session => session.sessionId === sessionId)
+    return store.getState().session.find(session => session.sessionId === sessionId)
+      ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
   }
   /**
-   * A child's transcript is readable through the history route; the root-only
-   * snapshot, metadata, queue and event routes answer 403/404 for it. A
-   * `vibe_spawn` child is often absent from the projected session rows, so the
-   * live subagent index is the remaining authoritative source. Its parent row
-   * supplies the workspace identity the projection needs.
+   * The row that tells a child apart from a root: the listed child row when the
+   * projection carries one, otherwise the identity a `vibe_spawn` child still
+   * has through the live subagent index. Its transcript is readable only through
+   * the history route; the root-only snapshot, metadata, queue and event routes
+   * answer 403/404 for it. The parent row supplies the workspace identity, and
+   * the subagent record supplies the child's own activity. A child has no event
+   * stream of its own: its epoch and head are its own identity, never the
+   * parent's cursor, which would describe events the child never received.
    */
   private knownChild(target: SessionMessageTarget, store: ChildStore): Session | undefined {
-    const session = this.knownSession(target.sessionId, store)
-    if (session && (session.parentSessionId || session.rootSessionId !== session.sessionId)) return session
+    const listed = this.knownSession(target.sessionId, store)
+    if (listed) return listed.parentSessionId || listed.rootSessionId !== listed.sessionId ? listed : undefined
     const subagents = useSubagentsStore.getState().byParent
     for (const parentId in subagents) {
       const found = subagents[parentId].find(child => child.subagentId === target.sessionId || child.childSessionId === target.sessionId)
       if (!found) continue
       const parent = this.knownSession(parentId, store)
       if (!parent) continue
+      const active = found.status === "running" && parent.activeRunId !== null
+      const runtimeStatus = parent.runtimeStatus === "unavailable" ? "unavailable" : active ? parent.runtimeStatus : "idle"
       return {
         sessionId: target.sessionId, parentSessionId: parentId, rootSessionId: parent.rootSessionId,
         projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
-        createdAt: parent.createdAt, updatedAt: parent.updatedAt,
-        epoch: parent.epoch, headSequence: parent.headSequence,
-        runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" },
+        createdAt: found.createdAt ?? parent.createdAt, updatedAt: found.updatedAt ?? parent.updatedAt,
+        epoch: target.sessionId, headSequence: "0",
+        runtimeStatus, activeRunId: runtimeStatus === "idle" || runtimeStatus === "unavailable" ? null : parent.activeRunId,
+        mode: { kind: "main" },
         metadata: null, metadataRevision: "0", archiveRevision: "0",
       }
     }
@@ -617,6 +623,10 @@ export class SessionMessageLoader {
       }
       const incoming = sortMessagesChronologically(page.messages)
       const messages = kind === "older" ? mergeMessages(current.message[target.sessionId] ?? [], incoming) : incoming
+      // History establishes the transcript, not session authority. `knownChild`
+      // reads the directory row first, so a child installed while this read was
+      // in flight keeps its own status and cursor; the pre-read identity is only
+      // used when no row exists yet to materialize the unlisted child.
       const next = installHostSession(current, this.knownChild(target, store) ?? child)
       store.setState({
         ...next, message: { ...next.message, [target.sessionId]: messages },

@@ -744,6 +744,47 @@ describe("subagent children known only through the live subagent index", () => {
     expect(store.getState().message[subagentChild.sessionId]).toBeUndefined()
     expect(loader.getSnapshot(subagentChild)).toMatchObject({ status: "error", error })
   })
+
+  test("a child history load keeps the child's own identity, never the parent's cursor", async () => {
+    const { loader, store } = setupSubagent({})
+    // A running subagent belongs to a live root: its own run is the root's run.
+    const runningParent = { ...nativeHostSession(nativeSnapshot("session-root")), sessionId: "session-root", parentSessionId: undefined, rootSessionId: "session-root", epoch: "root-epoch", headSequence: "41", runtimeStatus: "running" as const, activeRunId: "run-root" }
+    store.setState({ session: [runningParent] })
+    // The global cache still carries its own older copy of the parent. The
+    // directory store is the live authority for this directory, so the child's
+    // identity must come from the live row, not the cache copy.
+    useGlobalSessionsStore.getState().upsertSession({ ...runningParent, epoch: "stale-epoch", headSequence: "0", runtimeStatus: "idle", activeRunId: null })
+    useSubagentsStore.getState().applySubagentUpdate("session-root", {
+      subagentId: "subagent-a", parentSessionId: "session-root", childSessionId: subagentChild.sessionId,
+      role: "coder", status: "running", createdAt: 7, updatedAt: 8,
+    })
+    await loader.ensure(subagentChild)
+    const row = store.getState().session.find(candidate => candidate.sessionId === subagentChild.sessionId)
+    // The parent's epoch and head describe the parent's event stream. Copying
+    // them claims the child is replaying events it never received.
+    expect(row?.epoch).toBe(subagentChild.sessionId)
+    expect(row?.headSequence).toBe("0")
+    // The subagent record's own timestamps, not the parent's row age.
+    expect(row?.createdAt).toBe(7)
+    expect(row?.updatedAt).toBe(8)
+    // Running because the subagent says it runs, not forced idle.
+    expect(row).toMatchObject({ runtimeStatus: "running", activeRunId: "run-root" })
+  })
+
+  test("a live listed child keeps its own status instead of being clobbered by history", async () => {
+    const pending = deferred<HistoryPage>()
+    const { loader, store } = setupSubagent({ client: nativeClient({ getHistory: () => pending.promise }) })
+    // Discovery lists the child as running in its own epoch while the history
+    // read is in flight — the race a child spawning right now produces.
+    const liveChild = { ...nativeHostSession(nativeSnapshot(subagentChild.sessionId)), parentSessionId: "session-root", epoch: "child-epoch", headSequence: "12", runtimeStatus: "running" as const, activeRunId: "run-child" }
+    const loading = loader.ensure(subagentChild)
+    store.setState({ session: [...store.getState().session, liveChild] })
+    pending.resolve(nativeHistory([nativeMessage(subagentChild.sessionId)], null, nativeSnapshot(subagentChild.sessionId)))
+    await loading
+    expect(store.getState().message[subagentChild.sessionId]).toHaveLength(1)
+    // The committed page must not rewrite the session row the projection now owns.
+    expect(store.getState().session.find(candidate => candidate.sessionId === subagentChild.sessionId)).toBe(liveChild)
+  })
 })
 
 describe("a rekeyed session retires its pre-branch id", () => {
