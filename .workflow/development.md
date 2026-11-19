@@ -4,6 +4,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Windows Electron dev shutdown:** The dev launcher now terminates the Windows child tree before sending any single-process signal: Node's Windows `child.kill('SIGINT')` stops the wrapper immediately, so the previous conditional tree fallback was skipped and Vite survived. Native Windows headless verification started `bun run electron:dev` with isolated data, terminated only Electron main with code 75, and observed a new Electron PID with the same Vite PID and port 5173; terminating the replacement main with code 0 removed the launcher and dev-server tree, leaving no listener. Launcher regression tests passed 6/6; Electron type-check and lint passed. Menu/onboarding interactions, console-flash behavior and native macOS/Linux runs remain unverified; their relaunch dispatch and POSIX cleanup sequence are unchanged.
+
 **2026-11-19 Linux process cleanup:** The live pidfd test on Linux x64 with glibc 2.35 now rejects a stale birth identity and signals the matching controlled child. The kernel supports pidfds on this host even though glibc lacks the named wrappers. The arm64 fallback uses the same Linux syscall numbers and was not tested natively.
 
 **2026-11-19 Desktop runtime handoff:** A controlled Linux launch of the embedded Host with an OMP interpreter fixture that requires `BUN_BE_BUN=1` went from readiness HTTP 503 to 200 after forwarding the selected mode to the service, its readiness worker, and the Linux process cleanup helper. The fixture executes the real Bun Agent Service and SDK worker; it does not certify provider-backed turns or packaged release artifacts.
