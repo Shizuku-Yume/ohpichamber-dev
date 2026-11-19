@@ -90,6 +90,27 @@ test('a worker initialization failure is reported by code only', async () => {
 }, 15_000);
 
 
+test('a worker initialization refusal keeps the status the worker reported', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'worker-init-refusal-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd);
+  await mkdir(agentDirectory);
+  const source = [
+    "process.on('message', message => {",
+    "  if (message?.type === 'bootstrap') process.send({ type: 'error', workerGeneration: message.workerGeneration, code: 'MODEL_UNAVAILABLE', status: 422 });",
+    "});",
+  ].join('\n');
+  await writeFile(join(root, 'worker-fixture.mjs'), source);
+  const registry = new WorkerRegistry({ workerEntrypoint: join(root, 'worker-fixture.mjs'), workerRuntime: process.execPath, startupTimeoutMs: 5_000, stopTimeoutMs: 2_000 });
+  try {
+    await expect(registry.start({ rootSessionId: 'root-refused', projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory }))
+      .rejects.toMatchObject({ status: 422, code: 'MODEL_UNAVAILABLE' });
+  } finally {
+    try { await registry.close(); } finally { await rm(root, { recursive: true, force: true }); }
+  }
+}, 15_000);
+
 test('a huge no-newline worker stderr chunk is dropped without affecting readiness', async () => {
   const diagnostics = await runFixture(['x'.repeat(20_000)]);
   expect(diagnostics).toEqual([]);

@@ -1194,7 +1194,7 @@ export class WorkerRegistry {
         entry.info.state = 'ready';
         ready.resolve();
       } else if (reply.data.type === 'error') {
-        ready.reject(new WorkerOperationError(503, reply.data.code, reply.data.detail ?? 'The worker failed to initialize'));
+        ready.reject(new WorkerOperationError(reply.data.status ?? 503, reply.data.code, reply.data.detail ?? 'The worker failed to initialize'));
       } else if (reply.data.type === 'operation.error') {
         const pending = entry.pending.get(reply.data.commandId);
         if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code, reply.data.detail)); }
