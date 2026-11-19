@@ -1,4 +1,4 @@
-import type { CreateTerminalOptions, TerminalError, TerminalHandlers, TerminalInputOptions, TerminalServerSession, TerminalSession, TerminalSessionPurpose, TerminalShellOption, TerminalStreamEvent } from './api/types';
+import type { CreateTerminalOptions, TerminalError, TerminalHandlers, TerminalInputOptions, TerminalReplaySize, TerminalServerSession, TerminalSession, TerminalSessionPurpose, TerminalShellOption, TerminalStreamEvent } from './api/types';
 import type { TerminalChunkSize } from '@/stores/useTerminalStore';
 import { openRuntimeWebSocket } from './relay/runtime-socket';
 import type { RelayTunnelSocketMessageEvent, RelayTunnelWebSocket } from './relay/tunnel-client';
@@ -18,11 +18,12 @@ type ProjectionHistory = {
   parts: Array<{ bytes: Uint8Array; start: number; end: number }>;
   byteLength: number;
   malformed: string | null;
+  units: number;
+  sizes: TerminalReplaySize[];
 };
 type TerminalProjection = {
   sequence: number;
   history: ProjectionHistory;
-  /** Current PTY size: what the server reported at attach, updated by every accepted resize. */
   cols?: number;
   rows?: number;
   status: TerminalStreamEvent['status'];
@@ -35,6 +36,7 @@ type TerminalProjection = {
 };
 const TAG = 1;
 const MAX_PROJECTION_BYTES = 512 * 1024;
+const MAX_PROJECTION_RESIZES = 256;
 const PROJECTION_PART_BYTES = 8 * 1024;
 const SOCKET_CONNECTING = 0;
 const SOCKET_OPEN = 1;
@@ -88,6 +90,15 @@ const terminalMessageMetadata = {
   mode: terminalModeSchema.optional(),
   purpose: terminalSessionPurposeSchema.optional(),
 };
+const terminalSizeSchema = {
+  cols: z.number().int().min(1).max(1000),
+  rows: z.number().int().min(1).max(500),
+};
+const terminalResizeResponseSchema = z.object({ ...terminalSizeSchema, orderedResize: z.boolean().optional() });
+const terminalSnapshotSizeSchema = {
+  cols: terminalSizeSchema.cols.optional(),
+  rows: terminalSizeSchema.rows.optional(),
+};
 const terminalMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('hello') }),
   z.object({ t: z.literal('pong') }),
@@ -95,13 +106,15 @@ const terminalMessageSchema = z.discriminatedUnion('t', [
   z.object({
     t: z.literal('snapshot'), s: z.string(), q: z.number().int().nonnegative().default(0),
     history: z.string().default(''), status: terminalStatusSchema,
-    cols: z.number().int().positive().optional(), rows: z.number().int().positive().optional(),
+    ...terminalSnapshotSizeSchema,
+    sizes: z.array(z.object({ offset: z.number().int().nonnegative(), ...terminalSizeSchema })).max(MAX_PROJECTION_RESIZES).optional(),
     exitCode: z.number().nullish().transform(value => value ?? undefined), signal: z.number().nullable().optional(),
     runtime: terminalRuntimeSchema.optional(), ptyBackend: z.string().optional(), ...terminalMessageMetadata,
   }),
   z.object({ t: z.literal('output'), s: z.string(), q: z.number().int().nonnegative(), d: z.string(), r: z.string().optional() }),
+  z.object({ t: z.literal('resize'), s: z.string(), q: z.number().int().nonnegative(), ...terminalSizeSchema }),
   z.object({ t: z.literal('exit'), s: z.string(), q: z.number().int().nonnegative(), exitCode: z.number().nullish().transform(value => value ?? undefined), signal: z.number().nullable().optional() }),
-  z.object({ t: z.literal('restarted'), s: z.string(), q: z.number().int().nonnegative(), history: z.string().default(''), ...terminalMessageMetadata }),
+  z.object({ t: z.literal('restarted'), s: z.string(), q: z.number().int().nonnegative(), history: z.string().default(''), ...terminalSnapshotSizeSchema, ...terminalMessageMetadata }),
 ]);
 type TerminalMessage = z.infer<typeof terminalMessageSchema>;
 
@@ -136,7 +149,7 @@ export class TerminalRequestError extends Error {
   }
 }
 
-/** The PTY size a snapshot's history was drawn for, when the server reported one. */
+/** The PTY size carried by a snapshot or resize event, when the server reported one. */
 export const terminalSnapshotSize = (event: Pick<TerminalStreamEvent, 'cols' | 'rows'>): TerminalChunkSize | undefined =>
   event.cols !== undefined && event.rows !== undefined ? { cols: event.cols, rows: event.rows } : undefined;
 
@@ -223,6 +236,7 @@ const appendProjectionBytes = (history: ProjectionHistory, bytes: Uint8Array): v
 
 const appendProjection = (history: ProjectionHistory, value: string): void => {
   if (!value) return;
+  history.units += value.length;
   // Encoding separately would replace a surrogate split between PTY messages.
   // Keep the original string until concatenating the next message resolves it.
   if (history.malformed !== null || !isWellFormed(value)) {
@@ -240,11 +254,28 @@ const appendProjection = (history: ProjectionHistory, value: string): void => {
   appendProjectionBytes(history, encoder.encode(value));
 };
 
-const createProjectionHistory = (value: string): ProjectionHistory => {
-  const history: ProjectionHistory = { parts: [], byteLength: 0, malformed: null };
+const createProjectionHistory = (value: string, event: Pick<TerminalStreamEvent, 'cols' | 'rows' | 'sizes'>): ProjectionHistory => {
+  const size = terminalSnapshotSize(event);
+  const spans = event.sizes;
+  const validSpans = spans?.[0]?.offset === 0 && spans.every((span, index) =>
+    span.offset <= value.length && (index === 0 || span.offset > spans[index - 1]!.offset));
+  const sizes = validSpans ? [...spans] : size ? [{ offset: 0, ...size }] : [];
+  const history: ProjectionHistory = { parts: [], byteLength: 0, malformed: null, units: value.length, sizes };
   if (!isWellFormed(value)) history.malformed = value;
   else if (value) appendProjectionBytes(history, encoder.encode(value));
   return history;
+};
+
+const projectionSnapshot = ({ sequence, history, ...metadata }: TerminalProjection): TerminalStreamEvent => {
+  const text = projectionText(history);
+  const retainedStart = history.units - text.length;
+  const start = Math.max(retainedStart, history.sizes[0]?.offset ?? 0);
+  const nextSize = history.sizes.findIndex((size) => size.offset > start);
+  const sizes = history.sizes.slice(nextSize < 0 ? -1 : nextSize - 1)
+    .map((size) => ({ ...size, offset: Math.max(0, size.offset - start) }));
+  const event: TerminalStreamEvent = { type: 'snapshot', sequence, data: text.slice(start - retainedStart), ...metadata };
+  if (sizes.length > 1) event.sizes = sizes;
+  return event;
 };
 
 const terminalSessionListSchema = z.object({ sessions: z.array(z.unknown()) });
@@ -289,7 +320,7 @@ export class TerminalTransport {
     const projection = this.projections.get(sessionId);
     if (projection) {
       subscriber.lastSequence = projection.sequence;
-      handlers.onEvent({ type: 'snapshot', sequence: projection.sequence, data: projectionText(projection.history), cols: projection.cols, rows: projection.rows, status: projection.status, mode: projection.mode, purpose: projection.purpose, exitCode: projection.exitCode, signal: projection.signal, runtime: projection.runtime, ptyBackend: projection.ptyBackend });
+      handlers.onEvent(projectionSnapshot(projection));
     }
     const socketWasOpen = this.socket?.readyState === SOCKET_OPEN;
     this.ensureConnected().then(() => {
@@ -344,6 +375,17 @@ export class TerminalTransport {
     if (!this.send({ t: 'write', v: 3, s: sessionId, d: data })) throw new Error('Terminal connection is unavailable');
   }
 
+  async resize(sessionId: string, cols: number, rows: number, directory?: string | null): Promise<void> {
+    const response = await command(`/api/terminal/${sessionId}/resize`, 'POST', { cols, rows }, directory);
+    const result = terminalResizeResponseSchema.safeParse(await response.json().catch(() => null)).data;
+    if (!result || result.orderedResize) return;
+    const projection = this.projections.get(sessionId);
+    if (!projection) return;
+    // Old Hosts only acknowledge resize over HTTP; they cannot order it against output.
+    projection.history.sizes = [{ offset: 0, cols: result.cols, rows: result.rows }];
+    this.projections.set(sessionId, { ...projection, cols: result.cols, rows: result.rows });
+  }
+
   dispose(): void {
     this.disposed = true;
     this.generation += 1;
@@ -361,17 +403,6 @@ export class TerminalTransport {
   forget(sessionId: string): void {
     this.projections.delete(sessionId);
     this.attached.delete(sessionId);
-  }
-
-  /**
-   * Records a resize the server accepted, so a projection snapshot replayed to
-   * a later subscriber (tab switch, remount) still names the size the
-   * terminal's current screen is drawn for.
-   */
-  noteResize(sessionId: string, cols: number, rows: number): void {
-    const projection = this.projections.get(sessionId);
-    if (!projection) return;
-    this.projections.set(sessionId, { ...projection, cols, rows });
   }
 
   private async ensureConnected(): Promise<void> {
@@ -483,7 +514,7 @@ export class TerminalTransport {
       this.attached.add(message.s);
       const projection: TerminalProjection = {
         sequence: message.q ?? 0,
-        history: createProjectionHistory(message.history ?? ''),
+        history: createProjectionHistory(message.history, message),
         cols: message.cols,
         rows: message.rows,
         status: message.status,
@@ -495,10 +526,10 @@ export class TerminalTransport {
         ptyBackend: message.ptyBackend,
       };
       this.projections.set(message.s, projection);
-      const history = projectionText(projection.history);
+      const snapshot = projectionSnapshot(projection);
       for (const sub of subscribers) {
         sub.lastSequence = projection.sequence;
-        sub.handlers.onEvent({ type: 'snapshot', sequence: projection.sequence, data: history, cols: projection.cols, rows: projection.rows, status: projection.status, mode: projection.mode, purpose: projection.purpose, exitCode: projection.exitCode, signal: projection.signal, runtime: projection.runtime, ptyBackend: projection.ptyBackend });
+        sub.handlers.onEvent(snapshot);
       }
       return;
     }
@@ -508,15 +539,22 @@ export class TerminalTransport {
       if (message.t === 'output') {
         appendProjection(previous.history, message.r ?? message.d);
         this.projections.set(message.s, { ...previous, sequence: message.q });
+      } else if (message.t === 'resize') {
+        const { sizes, units } = previous.history;
+        if (sizes.at(-1)?.offset === units) sizes.pop();
+        sizes.push({ offset: sizes.length ? units : 0, cols: message.cols, rows: message.rows });
+        if (sizes.length > MAX_PROJECTION_RESIZES) sizes.shift();
+        this.projections.set(message.s, { ...previous, sequence: message.q, cols: message.cols, rows: message.rows });
       } else if (message.t === 'exit') this.projections.set(message.s, { ...previous, sequence: message.q, status: 'exited', exitCode: message.exitCode, signal: message.signal ?? null });
-      else if (message.t === 'restarted') this.projections.set(message.s, { ...previous, sequence: message.q, history: createProjectionHistory(message.history ?? ''), status: 'running', mode: message.mode ?? previous.mode, purpose: message.purpose ?? previous.purpose, exitCode: undefined, signal: null });
+      else if (message.t === 'restarted') this.projections.set(message.s, { ...previous, sequence: message.q, history: createProjectionHistory(message.history, message), cols: message.cols, rows: message.rows, status: 'running', mode: message.mode ?? previous.mode, purpose: message.purpose ?? previous.purpose, exitCode: undefined, signal: null });
     }
     for (const sub of subscribers) {
       if (message.q <= sub.lastSequence) continue;
       sub.lastSequence = message.q;
       if (message.t === 'output') sub.handlers.onEvent({ type: 'data', sequence: message.q, data: message.d, replayData: message.r });
+      else if (message.t === 'resize') sub.handlers.onEvent({ type: 'resize', sequence: message.q, cols: message.cols, rows: message.rows });
       else if (message.t === 'exit') sub.handlers.onEvent({ type: 'exit', sequence: message.q, exitCode: message.exitCode, signal: message.signal ?? null });
-      else if (message.t === 'restarted') sub.handlers.onEvent({ type: 'snapshot', sequence: message.q, data: message.history ?? '', status: 'running', mode: message.mode ?? previous?.mode, purpose: message.purpose ?? previous?.purpose });
+      else if (message.t === 'restarted') sub.handlers.onEvent({ type: 'snapshot', sequence: message.q, data: message.history, status: 'running', ...(terminalSnapshotSize(message) ?? {}), mode: message.mode ?? previous?.mode, purpose: message.purpose ?? previous?.purpose });
     }
   }
 
@@ -654,8 +692,7 @@ async function command(path: string, method: string, body?: unknown, directory?:
   return response;
 }
 export async function resizeTerminal(sessionId: string, cols: number, rows: number, directory?: string | null): Promise<void> {
-  await command(`/api/terminal/${sessionId}/resize`, 'POST', { cols, rows }, directory);
-  transportFor(directory).noteResize(sessionId, cols, rows);
+  await transportFor(directory).resize(sessionId, cols, rows, directory);
 }
 export async function updateTerminalAppearance(sessionId: string, appearance: Pick<CreateTerminalOptions, 'themeMode' | 'terminalBackground' | 'terminalForeground'>, directory?: string | null): Promise<void> { await command(`/api/terminal/${sessionId}/appearance`, 'POST', appearance, directory); }
 export async function closeTerminal(sessionId: string, directory?: string | null): Promise<void> { await command(`/api/terminal/${sessionId}`, 'DELETE', undefined, directory); transportFor(directory).forget(sessionId); }
