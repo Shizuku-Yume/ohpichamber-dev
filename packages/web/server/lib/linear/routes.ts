@@ -126,16 +126,8 @@ export function registerLinearRoutes(app: Application) {
         : 502;
       return finish(status, {
         title: 'Authorization Failed',
-<<<<<<< HEAD:packages/web/server/lib/linear/routes.js
         message: error instanceof Error ? error.message : 'Linear authorization failed. Return to OhPiChamber and click Connect again.',
-        desktopReturn: error?.origin === 'desktop',
-||||||| bc50ba56aa:packages/web/server/lib/linear/routes.js
-        message: error instanceof Error ? error.message : 'Linear authorization failed. Return to OpenChamber and click Connect again.',
-        desktopReturn: error?.origin === 'desktop',
-=======
-        message: error instanceof Error ? error.message : 'Linear authorization failed. Return to OpenChamber and click Connect again.',
         desktopReturn: canReadRouteError(error) && error.origin === 'desktop',
->>>>>>> upstream/main:packages/web/server/lib/linear/routes.ts
       });
     }
   });
@@ -168,7 +160,6 @@ export function registerLinearRoutes(app: Application) {
       const payload = await startAuthorization({ origin });
       return res.json(payload);
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/linear/routes.js
       // A user-fixable refusal (no client id, no broker) is 400 with the code that
       // names the setting; anything else is this server's own failure.
       const userFixable = error?.code === 'LINEAR_CLIENT_ID_MISSING' || error?.code === 'LINEAR_BROKER_NOT_CONFIGURED';
@@ -177,15 +168,6 @@ export function registerLinearRoutes(app: Application) {
         error: error.message || 'Failed to start Linear authorization',
         ...(userFixable ? { code: error.code } : {}),
       });
-||||||| bc50ba56aa:packages/web/server/lib/linear/routes.js
-      const status = error?.code === 'LINEAR_CLIENT_ID_MISSING' ? 400 : 500;
-      console.error('Failed to start Linear authorization:', error);
-      return res.status(status).json({ error: error.message || 'Failed to start Linear authorization' });
-=======
-      const status = canReadRouteError(error) && error.code === 'LINEAR_CLIENT_ID_MISSING' ? 400 : 500;
-      console.error('Failed to start Linear authorization:', error);
-      return res.status(status).json({ error: routeErrorMessage(error) || 'Failed to start Linear authorization' });
->>>>>>> upstream/main:packages/web/server/lib/linear/routes.ts
     }
   });
 

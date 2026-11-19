@@ -4,7 +4,7 @@ import { isPlainObject, readTrimmedString } from './parse.js';
 import type { TrackerDescriptor, TrackerStateCategory, TrackerPriority, TrackerItemSummary, TrackerItem, TrackerWorkflowState, TrackerAuthStatus, TrackerImplementation } from '../trackers/tracker-contract.js';
 import type { linearLibraries } from './index.js';
 import type { createLinearSessionStatusRuntime } from './status-runtime.js';
-import type { HOST_LINEAR_API_ORIGIN } from '@openchamber/sdk';
+import type { HOST_LINEAR_API_ORIGIN } from 'ohpichamber-sdk';
 import type { LinearIssue, LinearIssueSummary, LinearWorkflowState } from './issue-contracts.js';
 import type { LinearTeam } from './teams.js';
 import type { LinearAuth, getLinearAuthWorkspaces } from './auth.js';
@@ -182,7 +182,6 @@ export function toTrackerAuthStatus(status: Awaited<ReturnType<typeof readLinear
   return { connected: true, account: accounts.find((account) => account.current) ?? null, accounts };
 }
 
-<<<<<<< HEAD:packages/web/server/lib/linear/tracker.js
 /**
  * Why Linear's browser sign-in cannot start here, or undefined when it can.
  * It needs a broker URL (or an explicit redirect URI) the operator configured.
@@ -201,34 +200,11 @@ function linearSignInUnavailable(libraries) {
 }
 
 const linearAccountLabel = (auth) => (
-||||||| bc50ba56aa:packages/web/server/lib/linear/tracker.js
-const linearAccountLabel = (auth) => (
-=======
-const linearAccountLabel = (auth: LinearAuth | null) => (
->>>>>>> upstream/main:packages/web/server/lib/linear/tracker.ts
   readTrimmedString(auth?.user?.displayName)
   || readTrimmedString(auth?.user?.name)
   || readTrimmedString(auth?.organization?.name)
 );
 
-<<<<<<< HEAD:packages/web/server/lib/linear/tracker.js
-/**
- * The Linear tracker over Linear's libraries (`linearLibraries` from `./index.js` plus
- * the SDK's `HOST_LINEAR_API_ORIGIN`), injected so tests can pass fakes. Session
- * comments are posted through `sessionStatus.post`; the Host's canonical event
- * runtime owns posting them as events arrive (`../linear/status-runtime.js`).
- * @returns {TrackerImplementation}
- */
-export function createLinearTracker(libraries) {
-||||||| bc50ba56aa:packages/web/server/lib/linear/tracker.js
-/**
- * The Linear tracker over Linear's libraries (`linearLibraries` from `./index.js` plus
- * `createLinearSessionStatusRuntime` and the SDK's `HOST_LINEAR_API_ORIGIN`),
- * injected so tests can pass fakes.
- * @returns {TrackerImplementation}
- */
-export function createLinearTracker(libraries) {
-=======
 type TrackerLibraries = typeof linearLibraries & {
   createLinearSessionStatusRuntime: typeof createLinearSessionStatusRuntime;
   HOST_LINEAR_API_ORIGIN: typeof HOST_LINEAR_API_ORIGIN;
@@ -243,7 +219,6 @@ function canReadErrorCode(cause: unknown): cause is { code?: unknown } {
 }
 
 export function createLinearTracker(libraries: TrackerLibraries): TrackerImplementation {
->>>>>>> upstream/main:packages/web/server/lib/linear/tracker.ts
   const {
     activateLinearAuth,
     clearLinearAuth,
@@ -273,19 +248,10 @@ export function createLinearTracker(libraries: TrackerLibraries): TrackerImpleme
       const { authorizationUrl, expiresIn } = await startAuthorization({ origin: origin === 'desktop' ? 'desktop' : 'web' });
       return { authorizationUrl, expiresIn };
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/linear/tracker.js
       if (error?.code === 'LINEAR_CLIENT_ID_MISSING') throw userError(error.message);
       // No broker and no explicit redirect: the card shows the reason from the
       // status, and a direct start call answers as a user error naming the setting.
       if (error?.code === 'LINEAR_BROKER_NOT_CONFIGURED') throw userError(error.message);
-||||||| bc50ba56aa:packages/web/server/lib/linear/tracker.js
-      if (error?.code === 'LINEAR_CLIENT_ID_MISSING') throw userError(error.message);
-=======
-      if (isMissingClientError(error)) {
-        const message = error.message;
-        throw userError(message === undefined ? undefined : `${message}`);
-      }
->>>>>>> upstream/main:packages/web/server/lib/linear/tracker.ts
       throw error;
     }
   };

@@ -22,16 +22,8 @@ and session-status implementations have `.ts` source files.
 - `packages/web/server/lib/linear/teams.ts`: list Linear teams for mapping UI.
 - `packages/web/server/lib/linear/mapping.js`: persist default and per-team OpenChamber project paths. Separate from the auth file so disconnect does not wipe maps.
 - `packages/web/server/lib/linear/status.js`: persist per-session started/completed/failure flags and post the matching Linear comment with an open-session URL. Posts nothing unless the user opted in and the session origin is public; `isPublicSessionOrigin` rejects loopback, private LAN, carrier-grade NAT, link-local and single-label hosts. The dedupe file keeps the newest 500 sessions.
-<<<<<<< HEAD
 - `packages/web/server/lib/linear/status-runtime.js`: on the OpenCode event hub, first `session.status` idle after started posts completed once; `session.error` (except abort) posts failure once.
 - `packages/web/src/api/linear.ts`: web client wrapper. Electron and hosted/Capacitor mobile reuse it.
-||||||| bc50ba56aa
-- `packages/web/server/lib/linear/status-runtime.js`: on the OpenCode event hub, first `session.status` idle after started posts completed once; `session.error` (except abort) posts failure once.
-- `packages/web/src/api/trackers.ts`: the web client for `/api/tracker/:provider/*` (`RuntimeAPIs.trackers`). Electron and hosted/Capacitor mobile reuse it; VS Code omits it. A server that predates `/api/tracker` answers 404 on `providers`; the adapter then serves Linear's built-in descriptor and reads every call through these legacy routes, mapped to the neutral shapes (`trackers-legacy-linear.ts`).
-=======
-- `packages/web/server/lib/linear/status-runtime.ts`: on the OpenCode event hub, first `session.status` idle after started posts completed once; `session.error` (except abort) posts failure once.
-- `packages/web/src/api/trackers.ts`: the web client for `/api/tracker/:provider/*` (`RuntimeAPIs.trackers`). Electron and hosted/Capacitor mobile reuse it; VS Code omits it. A server that predates `/api/tracker` answers 404 on `providers`; the adapter then serves Linear's built-in descriptor and reads every call through these legacy routes, mapped to the neutral shapes (`trackers-legacy-linear.ts`).
->>>>>>> upstream/main
 
 ## Public routes
 
