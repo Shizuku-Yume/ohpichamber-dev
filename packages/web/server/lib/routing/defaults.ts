@@ -25,6 +25,9 @@ export const isAutoModel = (model) => autoModelSchema.safeParse(model).success
 /** The user's own TypeSafe key: their quota, their account, the `jev-latest` alias. */
 export const JEV_API_URL = 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = 'jev-latest';
+export const GEMINI_DECISIONS_API_URL = 'https://generativelanguage.googleapis.com/v1beta/decisions';
+export const GEMINI_DECISIONS_MODEL = 'gemini-decision-1';
+export const JEV_LINGER_MS = 5 * 60_000;
 
 /**
  * OpenCode Zen serves the same System One endpoint and answers without any

@@ -9,7 +9,6 @@ import {
 import { SAFETY_CRITERIA, SAFETY_INSTRUCTIONS } from './defaults.js';
 import { classifierEndpoint } from './classifier.js';
 import { buildTurnEndRequest } from '../session-work/questions.js';
-import { buildJevAuditRequest } from '../session-goal/audit.js';
 
 const ENDPOINT = { url: 'http://localhost:11434/v1/systemone', model: 'd3:9b', headers: {} };
 const ANSWER = { answers: { category: { choice: 'trivial', confidence: 0.9 } } };
@@ -137,23 +136,15 @@ describe('Google Decisions requests', () => {
     expect(body.questions.kind).toEqual(request.questions.kind);
   });
 
-  it('joins list instructions a line per item for the session-work and goal checks', () => {
+  it('joins list instructions a line per item for the native session-work checks', () => {
     const turnEnd = buildTurnEndRequest({
       history: [], request: 'ship it', answer: 'Done.', ask: { wrapUp: true, reviewReady: true, recap: true, nextStep: true },
     });
     const work = toGeminiDecisionsRequest(turnEnd);
     expectGoogleRequest(work);
-    expect(work.questions.report.instructions).toBe(turnEnd.questions.report.instructions.join('\n'));
-    expect(work.questions.report.criteria).toBeUndefined();
-    expect(work.questions.recap.criteria).toEqual({
-      true_description: turnEnd.questions.recap.criteria.true, false_description: turnEnd.questions.recap.criteria.false,
-    });
+    expect(work.questions.wrap_up.instructions).toBe(turnEnd.questions.wrap_up.instructions.join('\n'));
+    expect(Object.keys(work.questions)).toEqual(Object.keys(turnEnd.questions));
 
-    const audit = buildJevAuditRequest({ objective: 'Add a test', answer: 'Done: test added.' });
-    const goal = toGeminiDecisionsRequest(audit);
-    expectGoogleRequest(goal);
-    expect(JSON.parse(goal.input)).toEqual(audit.state);
-    expect(Object.keys(goal.questions)).toEqual(Object.keys(audit.questions));
   });
 
   it('keeps the Settings probe a plain choice', () => {

@@ -24,9 +24,10 @@ export interface JevRequest {
 export interface RoutingPermission {
   id?: JsonValue | undefined;
   sessionID?: JsonValue | undefined;
-  action?: JsonValue | undefined;
-  resources?: JsonValue | readonly JsonValue[] | undefined;
-  metadata?: JsonValue | undefined;
+  actionType?: JsonValue | undefined;
+  toolName?: JsonValue | undefined;
+  commandSummary?: JsonValue | undefined;
+  details?: JsonValue | undefined;
 }
 interface JevClientOptions {
   fetchImpl?: typeof fetch;
@@ -47,9 +48,10 @@ export const buildRoutingRequest = ({ categories, history, request }: { categori
 export const buildPermissionRequest = (permission: RoutingPermission): JevRequest => ({
   state: {
     permission: {
-      type: permission.action,
-      patterns: permission.resources,
-      metadata: permission.metadata,
+      type: permission.actionType,
+      toolName: permission.toolName,
+      commandSummary: permission.commandSummary,
+      details: permission.details,
     },
   },
   questions: {
