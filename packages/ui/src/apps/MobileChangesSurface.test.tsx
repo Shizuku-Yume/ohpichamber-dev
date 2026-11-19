@@ -78,6 +78,8 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const requests: URL[] = [];
   const originalFetch = globalThis.fetch;
   let failBranchDiff = true;
+  let statusFailure: 'host' | 'timeout' | null = null;
+  let refreshedStatus: GitStatus | null = null;
   let nestedIsRepository = true;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
@@ -85,6 +87,12 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     requests.push(url);
     switch (url.pathname) {
       case '/api/git/remotes': return Response.json([]);
+      case '/api/git/projects': return Response.json({ projects: [{ directory: '/repo', isGitRepository: true }] });
+      case '/api/git/status': return statusFailure
+        ? Response.json(statusFailure === 'timeout'
+          ? { error: 'Git did not answer within 30 seconds.', code: 'GIT_REPOSITORY_UNREADABLE' }
+          : { error: 'Host unavailable' }, { status: 500 })
+        : Response.json(refreshedStatus ?? status);
       case '/api/walkthrough': return Response.json({
         source: { kind: 'working-tree', scope: 'all' }, generatedAt: '2026-11-19T12:00:00Z',
         hunks: [], hunkCount: 0,
@@ -415,6 +423,42 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
     visible = true;
     await render();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    const knownStatus = useGitStore.getState().getDirectoryState('/repo')?.status;
+    if (!knownStatus) throw new Error('Missing working-tree status');
+    const refreshStatus = () => act(async () => {
+      await useGitStore.getState().fetchStatus('/repo', apis.git, { force: true, silent: true });
+    });
+    statusFailure = 'host';
+    await refreshStatus();
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(knownStatus);
+    expect(container.textContent).toContain('Review this change');
+    expect(backHandler).not.toBeNull();
+    statusFailure = 'timeout';
+    await refreshStatus();
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(knownStatus);
+    expect(container.textContent).toContain('Review this change');
+    await refreshStatus();
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBeNull();
+    expect(backHandler).toBeNull();
+    statusFailure = null;
+    refreshedStatus = knownStatus;
+    await refreshStatus();
+    expect(container.textContent).toContain('Review this change');
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    refreshedStatus = status;
+    await refreshStatus();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+    refreshedStatus = knownStatus;
+    await refreshStatus();
     expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
     expect(backHandler).toBeNull();
 

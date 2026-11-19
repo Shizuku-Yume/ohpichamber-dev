@@ -1642,9 +1642,9 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 ## 2026-11-19 - Git Back ownership follows the rendered screen
 
-- **Decided:** register workspace Back only while Git renders a diff or walkthrough, including its repository and source availability gates.
+- **Decided:** register workspace Back only while Git renders a diff or walkthrough, including its repository and source availability gates. Reset a walkthrough route only when a successful file-list read is empty.
 - **Instead of:** treating every retained non-list route as a visible detail screen.
-- **Because:** refresh can remove the last walkthrough target or change a comparison source while retaining its route. The resulting Changes list must let Back close the workspace immediately.
+- **Because:** refresh can remove the last walkthrough target or change a comparison source while retaining its route. The resulting Changes list must let Back close the workspace immediately. Two consecutive typed unreadable status errors clear the store's status to unknown, not an authoritative empty list; the walkthrough route must survive that failure and return on retry.
 - **Mine:** yes
 - **Revisit when:** Git navigation normalizes unavailable detail routes before rendering.
 
