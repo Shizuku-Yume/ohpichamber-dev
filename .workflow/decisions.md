@@ -1619,9 +1619,9 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 ## 2026-11-19 - Route native history to the focused editor
 
-- **Decided:** retain focus-scoped CodeMirror Undo/Redo, its regression tests, and the editor documentation in the fork.
+- **Decided:** retain active-element-scoped CodeMirror Undo/Redo, its regression tests, and the editor documentation in the fork. A native action targeted at a document uses its active editor even when the window is inactive; document focus is not an ownership requirement.
 - **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
-- **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
+- **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history. Chromium's context-menu editFlags describe native history, not CodeMirror history, so those flags cannot gate CodeMirror's Undo/Redo commands.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
 
 ## 2026-11-19 - Mobile Git detail Back belongs to the workspace navigation owner
