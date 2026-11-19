@@ -223,35 +223,6 @@ const isLocalHost = (host: string | null, req: Request) => {
   return isLocalHostname && isPrivateOrLoopbackIp(getSocketRemoteIp(req));
 };
 
-<<<<<<<< HEAD:packages/web/server/lib/host/tunnel-auth.js
-const getClientIp = (req) => {
-  // req.ip follows X-Forwarded-For only through trusted proxies (cloudflared
-  // connects from loopback), so a client cannot rotate its own bucket.
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/tunnel-auth.js
-const isLoopbackIp = (candidate) => {
-  const normalized = normalizeIpCandidate(candidate);
-  return normalized === '::1' || Boolean(normalized?.startsWith('127.'));
-};
-
-// A tunnel daemon connects from loopback and names the real client in
-// X-Forwarded-For. Tailscale routes by TLS SNI and passes the client's Host
-// through unchanged, so a remote client can send `Host: localhost`; the
-// forwarded address, which Tailscale overwrites, still shows it came from
-// elsewhere. A client can only add non-loopback entries, which never makes a
-// request more trusted.
-const isForwardedForRemoteClient = (req) => {
-  const header = req?.headers?.['x-forwarded-for'];
-  const value = Array.isArray(header) ? header.join(',') : header;
-  if (!value) {
-    return false;
-  }
-  return value.split(',').some((entry) => entry.trim() && !isLoopbackIp(entry));
-};
-
-const getClientIp = (req) => {
-  // req.ip follows X-Forwarded-For only through trusted proxies (cloudflared
-  // connects from loopback), so a client cannot rotate its own bucket.
-========
 const isLoopbackIp = (candidate: string) => {
   const normalized = normalizeIpCandidate(candidate);
   return normalized === '::1' || Boolean(normalized?.startsWith('127.'));
@@ -267,7 +238,6 @@ const isForwardedForRemoteClient = (req: Request) => {
 };
 
 const getClientIp = (req: Request) => {
->>>>>>>> upstream/main:packages/web/server/lib/tunnels/tunnel-auth.ts
   const ip = req.ip || req.socket?.remoteAddress;
   if (ip) {
     if (ip.startsWith('::ffff:')) {

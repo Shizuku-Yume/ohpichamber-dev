@@ -123,3 +123,69 @@ describe('tunnel doctor required fields', () => {
     expect(checks.find((check) => check.id === 'requirement_configPath').status).toBe('fail');
   });
 });
+
+describe('tunnel status managed token presence', () => {
+  const statusResponse = async ({ token, settings = {}, readSettingsError } = {}) => {
+    const routes = new Map();
+    const runtime = createTunnelRoutesRuntime({
+      readSettingsFromDiskMigrated: async () => {
+        if (readSettingsError) throw readSettingsError;
+        return settings;
+      },
+      readManagedRemoteTunnelConfigFromDisk: async () => ({ tunnels: [] }),
+      normalizeTunnelMode: () => 'quick',
+      normalizeManagedRemoteTunnelHostname: () => null,
+      normalizeTunnelBootstrapTtlMs: () => 60_000,
+      normalizeTunnelSessionTtlMs: () => 60_000,
+      normalizeTunnelProvider,
+      getRuntimeManagedRemoteTunnelToken: () => token,
+      getActivePort: () => 3000,
+      tunnelAuthController: {
+        listTunnelSessions: () => [],
+        getActiveTunnelMode: () => null,
+      },
+      tunnelService: {
+        resolveActiveProvider: () => null,
+        getPublicUrl: () => null,
+      },
+    });
+    runtime.registerRoutes({
+      get: (path, handler) => routes.set(`GET ${path}`, handler),
+      post: (path, handler) => routes.set(`POST ${path}`, handler),
+      put: (path, handler) => routes.set(`PUT ${path}`, handler),
+    });
+    let status = 200;
+    let body;
+    await routes.get('GET /api/openchamber/tunnel/status')({}, {
+      status(code) { status = code; return this; },
+      json(payload) { body = payload; return this; },
+    });
+    return { status, body };
+  };
+
+  it.each([undefined, null, ''])('accepts an empty runtime token (%s)', async (token) => {
+    const { status, body } = await statusResponse({ token });
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ active: false, hasManagedRemoteTunnelToken: false });
+  });
+
+  it('reports a configured runtime token without returning it', async () => {
+    const { status, body } = await statusResponse({ token: 'configured-runtime-token' });
+    expect(status).toBe(200);
+    expect(body.hasManagedRemoteTunnelToken).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('configured-runtime-token');
+  });
+
+  it('reports a stored token when the runtime has no token', async () => {
+    const { status, body } = await statusResponse({ settings: { managedRemoteTunnelToken: 'stored-token' } });
+    expect(status).toBe(200);
+    expect(body.hasManagedRemoteTunnelToken).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('stored-token');
+  });
+
+  it('does not turn a settings read failure into an empty status', async () => {
+    const { status, body } = await statusResponse({ readSettingsError: new Error('unreadable settings') });
+    expect(status).toBe(500);
+    expect(body).toEqual({ error: 'Failed to get tunnel status' });
+  });
+});

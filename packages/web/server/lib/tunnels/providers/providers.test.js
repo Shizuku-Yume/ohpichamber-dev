@@ -49,7 +49,7 @@ describe('tunnel provider contracts', () => {
 
   it.each([undefined, null, 3.5, NaN, Infinity])('refuses a noninteger local Tailscale port: %j', async (activePort) => {
     await expect(createTailscaleTunnelProvider().start({ mode: 'serve' }, { activePort }))
-      .rejects.toMatchObject({ code: 'startup_failed', message: 'OpenChamber has no local port to share yet' });
+      .rejects.toMatchObject({ code: 'startup_failed', message: 'OhPiChamber has no local port to share yet' });
   });
 
   it('refuses a missing Tailscale context before resolving an executable', async () => {

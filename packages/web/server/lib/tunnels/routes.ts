@@ -37,7 +37,7 @@ export interface TunnelRoutesDependencies {
   getActivePort: () => number;
   getRuntimeManagedRemoteTunnelHostname: () => string | undefined;
   setRuntimeManagedRemoteTunnelHostname: (value: string | undefined) => void;
-  getRuntimeManagedRemoteTunnelToken: () => string;
+  getRuntimeManagedRemoteTunnelToken: () => string | null | undefined;
   setRuntimeManagedRemoteTunnelToken: (value: string) => void;
   getActiveTunnelController: () => TunnelController | null;
   setActiveTunnelController: (value: TunnelController | null) => void;
@@ -432,16 +432,8 @@ export const createTunnelRoutesRuntime = (dependencies: TunnelRoutesDependencies
           name: entry.name,
           hostname: entry.hostname,
         }));
-<<<<<<< HEAD:packages/web/server/lib/tunnels/routes.js
-        const hasStoredManagedRemoteToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
-        const hasManagedRemoteTunnelToken = Boolean(getRuntimeManagedRemoteTunnelToken()?.length) || managedRemoteTunnelConfig.tunnels.length > 0 || hasStoredManagedRemoteToken;
-||||||| bc50ba56aa:packages/web/server/lib/tunnels/routes.js
-        const hasStoredManagedRemoteToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
-        const hasManagedRemoteTunnelToken = getRuntimeManagedRemoteTunnelToken().length > 0 || managedRemoteTunnelConfig.tunnels.length > 0 || hasStoredManagedRemoteToken;
-=======
         const hasStoredManagedRemoteToken = isText(settings?.managedRemoteTunnelToken) && settings.managedRemoteTunnelToken.trim().length > 0;
-        const hasManagedRemoteTunnelToken = getRuntimeManagedRemoteTunnelToken().length > 0 || managedRemoteTunnelConfig.tunnels.length > 0 || hasStoredManagedRemoteToken;
->>>>>>> upstream/main:packages/web/server/lib/tunnels/routes.ts
+        const hasManagedRemoteTunnelToken = Boolean(getRuntimeManagedRemoteTunnelToken()?.length) || managedRemoteTunnelConfig.tunnels.length > 0 || hasStoredManagedRemoteToken;
         const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
           ? null
           : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
