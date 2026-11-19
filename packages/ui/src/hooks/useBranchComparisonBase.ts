@@ -16,7 +16,6 @@ export interface BranchComparisonRepository {
   readContext: SourceControlReadContext | null;
 }
 
-<<<<<<< HEAD
 /** A caller that knows no remotes: no candidate is qualified by one. */
 const NO_REMOTE_NAMES: ReadonlySet<string> = new Set();
 
@@ -25,14 +24,6 @@ const NO_REMOTE_NAMES: ReadonlySet<string> = new Set();
  * current-branch walkthrough. The base is always a qualified ref, or null when
  * no candidate names one; `source` says which candidate it came from.
  */
-||||||| bc50ba56aa
-/**
- * Shared base and freshness identity for Changes, mobile Changes and the
- * current-branch walkthrough. The base is always a qualified ref, or null when
- * no candidate names one; `source` says which candidate it came from.
- */
-=======
->>>>>>> upstream/main
 export function useBranchComparisonBase(
   directory: string | null,
   branch: string | null,

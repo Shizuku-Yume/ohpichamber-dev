@@ -82,19 +82,8 @@ export const resolveEffectiveDirectory = (): string | undefined => {
     return pickEffectiveDirectory({
         currentSessionId,
         newSessionDraft: sessionUI.newSessionDraft,
-<<<<<<< HEAD
         // Same resolver as useSessionDirectory: derive the filesystem path from canonical identity.
         currentSessionDirectory: currentSession ? resolveGlobalSessionDirectory(currentSession) ?? undefined : undefined,
-||||||| bc50ba56aa
-        // Same source as useSessionDirectory: the session record's own directory.
-        currentSessionDirectory: currentSessionId
-            ? getAllSyncSessionMap().get(currentSessionId)?.directory
-            : undefined,
-=======
-        currentSessionDirectory: currentSessionId
-            ? getAllSyncSessionMap().get(currentSessionId)?.directory
-            : undefined,
->>>>>>> upstream/main
         worktreeAttachment: currentSessionId
             ? useSessionWorktreeStore.getState().getAttachment(currentSessionId)
             : undefined,

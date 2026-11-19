@@ -49,7 +49,6 @@ const writeHandled = (entries: string[]): void => {
   getSafeStorage().setItem(HANDLED_STORAGE_KEY, JSON.stringify(entries.slice(-HANDLED_LIMIT)));
 };
 
-<<<<<<< HEAD
 // Linked worktrees the sidebar already knows, whose branch PR is merged. The
 // PR status comes from what the sidebar keeps fresh; this asks GitHub nothing.
 const listCandidates = (): MergedWorktreeCandidate[] => {
@@ -57,34 +56,6 @@ const listCandidates = (): MergedWorktreeCandidate[] => {
   const prState = useGitHubPrStatusStore.getState();
   const candidates: MergedWorktreeCandidate[] = [];
   for (const [projectPath, worktrees] of useSessionUIStore.getState().availableWorktreesByProject) {
-||||||| bc50ba56aa
-// Delays before retrying a failed archive, the last one repeating.
-const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
-// Failed archives of this app run, by handled key. A reload tries them again at once.
-const failures = new Map<string, { attempts: number; retryAt: number }>();
-
-type LinkedWorktree = { worktree: WorktreeMetadata; project: { id: string; path: string }; directory: string; branch: string };
-
-// Linked worktrees the sidebar has discovered, in every project, collapsed ones included.
-const listLinkedWorktrees = (
-  projects = useProjectsStore.getState().projects,
-  worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject,
-): LinkedWorktree[] => {
-  const linked: LinkedWorktree[] = [];
-  for (const [projectPath, worktrees] of worktreesByProject) {
-=======
-const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
-const failures = new Map<string, { attempts: number; retryAt: number }>();
-
-type LinkedWorktree = { worktree: WorktreeMetadata; project: { id: string; path: string }; directory: string; branch: string };
-
-const listLinkedWorktrees = (
-  projects = useProjectsStore.getState().projects,
-  worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject,
-): LinkedWorktree[] => {
-  const linked: LinkedWorktree[] = [];
-  for (const [projectPath, worktrees] of worktreesByProject) {
->>>>>>> upstream/main
     const project = projects.find((entry) => normalizePath(entry.path) === projectPath);
     if (!project) continue;
     for (const worktree of worktrees) {
@@ -105,85 +76,7 @@ const listLinkedWorktrees = (
       });
     }
   }
-<<<<<<< HEAD
   return candidates;
-||||||| bc50ba56aa
-  return linked;
-};
-
-// Linked worktrees whose branch PR is merged, by the status the sidebar and
-// the background follow below keep fresh; this asks GitHub nothing itself.
-const listCandidates = (): MergedWorktreeCandidate[] => {
-  const prState = useGitHubPrStatusStore.getState();
-  return listLinkedWorktrees().flatMap(({ worktree, project, directory, branch }) => {
-    const status = getFreshestBranchStatusForDirectory(prState, directory, branch);
-    const pr = status?.changeRequest ?? status?.pr;
-    if (pr?.state !== 'merged') return [];
-    return [{
-      worktree,
-      project,
-      prNumber: pr.number,
-      provider: status?.changeRequest?.provider ?? status?.identity?.provider ?? null,
-      mergedHeadSha: pr.headSha ?? null,
-    }];
-  });
-};
-
-const NO_KEYS: string[] = [];
-
-/**
- * The open PRs of every linked worktree, followed by the server while cleanup
- * is on, so a merge is seen in a project collapsed in the sidebar too. Only a
- * PR the app already knows is followed; finding a branch's first PR stays
- * with the rows on screen.
- */
-const useFollowLinkedWorktreePulls = (active: boolean): void => {
-  const projects = useProjectsStore((state) => state.projects);
-  const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const targets = React.useMemo(
-    () => (active ? listLinkedWorktrees(projects, worktreesByProject) : []),
-    [active, projects, worktreesByProject],
-  );
-  const keysSignature = useGitHubPrStatusStore((state) => (
-    targets.length > 0 ? getBoundStatusKeysForBranches(state, targets).sort().join('\n') : ''
-  ));
-  const keys = React.useMemo(() => (keysSignature ? keysSignature.split('\n') : NO_KEYS), [keysSignature]);
-  useTrackedItems(useBranchTrackedPulls(keys), { background: true });
-=======
-  return linked;
-};
-
-const listCandidates = (): MergedWorktreeCandidate[] => {
-  const prState = useGitHubPrStatusStore.getState();
-  return listLinkedWorktrees().flatMap(({ worktree, project, directory, branch }) => {
-    const status = getFreshestBranchStatusForDirectory(prState, directory, branch);
-    const pr = status?.changeRequest ?? status?.pr;
-    if (pr?.state !== 'merged') return [];
-    return [{
-      worktree,
-      project,
-      prNumber: pr.number,
-      provider: status?.changeRequest?.provider ?? status?.identity?.provider ?? null,
-      mergedHeadSha: pr.headSha ?? null,
-    }];
-  });
-};
-
-const NO_KEYS: string[] = [];
-
-const useFollowLinkedWorktreePulls = (active: boolean): void => {
-  const projects = useProjectsStore((state) => state.projects);
-  const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const targets = React.useMemo(
-    () => (active ? listLinkedWorktrees(projects, worktreesByProject) : []),
-    [active, projects, worktreesByProject],
-  );
-  const keysSignature = useGitHubPrStatusStore((state) => (
-    targets.length > 0 ? getBoundStatusKeysForBranches(state, targets).sort().join('\n') : ''
-  ));
-  const keys = React.useMemo(() => (keysSignature ? keysSignature.split('\n') : NO_KEYS), [keysSignature]);
-  useTrackedItems(useBranchTrackedPulls(keys), { background: true });
->>>>>>> upstream/main
 };
 
 const report = (outcome: MergedWorktreeOutcome): void => {
@@ -192,7 +85,6 @@ const report = (outcome: MergedWorktreeOutcome): void => {
   const params = { name, number: outcome.candidate.prNumber };
   const term = readSourceControlProvider(outcome.candidate.provider).terminology.changeRequest;
   const key = (base: I18nKey) => changeRequestCopy(base, term);
-<<<<<<< HEAD
   if (outcome.kind === 'removed') {
     toast.success(formatMessage(dictionary, key('sessions.mergedCleanup.toast.removedTitle'), params), {
       description: formatMessage(dictionary, 'sessions.mergedCleanup.toast.removedDescription', params),
@@ -202,18 +94,6 @@ const report = (outcome: MergedWorktreeOutcome): void => {
       description: formatMessage(dictionary, key('sessions.mergedCleanup.toast.archivedDescription'), params),
     });
   } else {
-||||||| bc50ba56aa
-  if (outcome.kind === 'archived') {
-    failures.delete(handledKey(outcome.candidate));
-    toast.success(formatMessage(dictionary, key('sessions.mergedCleanup.toast.archivedTitle'), params), { description: name });
-  } else if (failures.get(handledKey(outcome.candidate))?.attempts === 1) {
-    // Retries stay quiet: one toast per failing worktree is enough.
-=======
-  if (outcome.kind === 'archived') {
-    failures.delete(handledKey(outcome.candidate));
-    toast.success(formatMessage(dictionary, key('sessions.mergedCleanup.toast.archivedTitle'), params), { description: name });
-  } else if (failures.get(handledKey(outcome.candidate))?.attempts === 1) {
->>>>>>> upstream/main
     toast.error(formatMessage(dictionary, key('sessions.mergedCleanup.toast.failedTitle'), params), {
       description: outcome.error.message,
     });
@@ -251,36 +131,12 @@ const createDeps = (): MergedWorktreeCleanupDeps => {
     archiveSessions: (sessionIds) => archiveSessions(sessionIds),
     removeWorktree: (candidate) => removeProjectWorktree(candidate.project, candidate.worktree, { deleteLocalBranch: true }),
     archiveWorktree: async (candidate, sessions) => {
-<<<<<<< HEAD
       await archiveWorktreeWork({ project: candidate.project, worktree: candidate.worktree, sessions });
-||||||| bc50ba56aa
-      // A background pass never opens the trust prompt.
-      await archiveWorktreeWork({ project: candidate.project, worktree: candidate.worktree, sessions, askForTrust: false });
-=======
-      await archiveWorktreeWork({ project: candidate.project, worktree: candidate.worktree, sessions, askForTrust: false });
->>>>>>> upstream/main
     },
     report,
   };
 };
 
-<<<<<<< HEAD
-/**
- * Archives a worktree's sessions once its PR is merged, and removes the
- * worktree with its local branch when nothing there can be lost. Opt-in
- * (`mergedWorktreeCleanupEnabled`). Runs on desktop and web only: a phone
- * would race the desktop it drives for the same worktree.
- */
-||||||| bc50ba56aa
-/**
- * Archives a worktree with its sessions once its PR is merged, when nobody
- * works there. Opt-in
- * (`mergedWorktreeCleanupEnabled`). Runs on desktop and web only: VS Code has
- * no worktrees, and a phone would race the desktop it drives for the same
- * worktree.
- */
-=======
->>>>>>> upstream/main
 export const useMergedWorktreeCleanup = ({ enabled }: { enabled: boolean }): void => {
   const settingEnabled = useUIStore((state) => state.mergedWorktreeCleanupEnabled);
   const active = enabled && settingEnabled && !isCapacitorApp() && !isMobileSurfaceRuntime();
@@ -324,18 +180,9 @@ export const useMergedWorktreeCleanup = ({ enabled }: { enabled: boolean }): voi
       if (state.currentSessionId !== previous.currentSessionId
         || state.availableWorktreesByProject !== previous.availableWorktreesByProject) schedule();
     });
-<<<<<<< HEAD
     // Kept worktrees change by hand (a pull, a cleanup), which no event reports.
     const interval = setInterval(() => void pass({ recheckKept: true }), PASS_INTERVAL_MS);
     void pass({ recheckKept: true });
-||||||| bc50ba56aa
-    // An agent going idle is no event here; a periodic pass catches it.
-    const interval = setInterval(() => void pass(), PASS_INTERVAL_MS);
-    void pass();
-=======
-    const interval = setInterval(() => void pass(), PASS_INTERVAL_MS);
-    void pass();
->>>>>>> upstream/main
 
     return () => {
       disposed = true;

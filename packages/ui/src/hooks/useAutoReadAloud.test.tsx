@@ -79,22 +79,10 @@ afterEach(() => {
 });
 
 describe('useAutoReadAloud', () => {
-<<<<<<< HEAD
-  const setVisible = (visible: boolean) => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: visible ? 'visible' : 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange'));
-  };
-||||||| bc50ba56aa
-    const setVisible = (visible: boolean) => {
-        Object.defineProperty(document, 'visibilityState', { configurable: true, value: visible ? 'visible' : 'hidden' });
-        document.dispatchEvent(new Event('visibilitychange'));
-    };
-=======
     const setVisible = (visible: boolean) => {
         Object.defineProperty(document, 'visibilityState', { configurable: true, value: visible ? 'visible' : 'hidden' });
         document.dispatchEvent(new window.Event('visibilitychange'));
     };
->>>>>>> upstream/main
 
   test('reads the answer to a turn this surface watched complete', async () => {
     const { calls, play } = recorder();

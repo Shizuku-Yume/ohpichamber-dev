@@ -373,22 +373,7 @@ export function useServerTTS(
       setIsAvailable(false);
       return false;
     }
-<<<<<<< HEAD
   }, [availabilityMode, enabled, openaiCompatibleUrl]);
-||||||| bc50ba56aa
-  }, [availabilityMode, enabled, hasStoredOpenaiKey, openaiCompatibleUrl]);
-
-  // Which keys the server holds, read again when this runtime's reader mounts.
-  useEffect(() => {
-    if (enabled) void refreshVoiceApiKeys();
-  }, [enabled, refreshVoiceApiKeys]);
-=======
-  }, [availabilityMode, enabled, hasStoredOpenaiKey, openaiCompatibleUrl]);
-
-  useEffect(() => {
-    if (enabled) void refreshVoiceApiKeys();
-  }, [enabled, refreshVoiceApiKeys]);
->>>>>>> upstream/main
 
   useEffect(() => {
     void checkAvailability();

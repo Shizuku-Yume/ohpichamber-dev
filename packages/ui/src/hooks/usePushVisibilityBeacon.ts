@@ -20,14 +20,6 @@ const sendVisibility = (visible: boolean) => {
     return;
   }
 
-<<<<<<< HEAD
-  // platform lets the server distinguish mobile (push recipients) from interactive surfaces
-  // (desktop/web) so it can suppress phone push only while an interactive client is visible.
-||||||| bc50ba56aa
-  // platform lets the server distinguish mobile (push recipients) from interactive surfaces
-  // (desktop/web/vscode) so it can suppress phone push only while an interactive client is visible.
-=======
->>>>>>> upstream/main
   void apis.push.setVisibility({ visible, platform: getClientPlatform() });
 };
 

@@ -62,22 +62,6 @@ export const mergePullRequestPage = (
   return { prs: [...merged.values()], incompleteProjectIds: result.incompleteProjectIds ?? [] };
 };
 
-<<<<<<< HEAD
-/**
- * Lists and remembers the pull request a comparison reviews. Every read goes
- * through the checkout's bound provider context, so the list and the branch's
- * own pull request come from the account and repository the binding grants,
- * never from whichever account happens to be active.
- */
-||||||| bc50ba56aa
-/**
- * Lists and remembers the pull request a comparison reviews. Every read goes
- * through the checkout's bound GitHub or GitLab context, so the list and the branch's
- * own pull request come from the account and repository the binding grants,
- * never from whichever account happens to be active.
- */
-=======
->>>>>>> upstream/main
 export function usePullRequestComparison(
   directory: string | null,
   branch: string | null,
@@ -88,25 +72,7 @@ export function usePullRequestComparison(
   const { sourceControl } = useRuntimeAPIs();
   const { t } = useI18n();
   const runtimeKey = useGitStore((state) => state.runtimeKey);
-<<<<<<< HEAD
   const latestContext = readContext;
-||||||| bc50ba56aa
-  // The server publishes change request diffs for the providers it serves.
-  // Until its provider list is held that is unknown: the picker waits as if
-  // loading instead of reading the host as not connected.
-  const serving = useSourceControlProviderServing(readContext?.provider);
-  const providersUnknown = readContext !== null && serving === 'unknown';
-  // A served host may list its change requests and still not serve their diff.
-  const diffServing = useChangeRequestDiffServing(readContext?.provider);
-  const diffUnavailable = serving === 'served' && diffServing === 'not-served';
-  const latestContext = serving === 'served' ? readContext : null;
-=======
-  const serving = useSourceControlProviderServing(readContext?.provider);
-  const providersUnknown = readContext !== null && serving === 'unknown';
-  const diffServing = useChangeRequestDiffServing(readContext?.provider);
-  const diffUnavailable = serving === 'served' && diffServing === 'not-served';
-  const latestContext = serving === 'served' ? readContext : null;
->>>>>>> upstream/main
   const contextKey = latestContext ? JSON.stringify(sourceControlReadContextParts(latestContext)) : '';
   const contextRef = useRef(latestContext);
   contextRef.current = latestContext;
@@ -114,18 +80,11 @@ export function usePullRequestComparison(
   const hostProvider = useRepositoryHost(directory)?.provider;
   const provider = context?.provider ?? hostProvider ?? null;
   const changeRequestTerm = useChangeRequestTerm(provider);
-<<<<<<< HEAD
   // A served host may list its change requests and still not serve their diff.
   const diffServing = useChangeRequestDiffServing(provider);
   const diffUnavailable = context !== null && diffServing === 'not-served';
   // A rebind to another repository must not carry a selection across.
   const selectionKey = JSON.stringify([runtimeKey, directory, branch, contextKey]);
-||||||| bc50ba56aa
-  // A rebind to another repository must not carry a selection across.
-  const selectionKey = JSON.stringify([runtimeKey, directory, branch, context?.repositoryId ?? null]);
-=======
-  const selectionKey = JSON.stringify([runtimeKey, directory, branch, context?.repositoryId ?? null]);
->>>>>>> upstream/main
   const selection = usePullRequestSelectionStore((state) => state.selections.get(selectionKey) ?? null);
   const selectedSource = selection?.source ?? null;
   const saveSelection = usePullRequestSelectionStore((state) => state.select);
@@ -231,14 +190,7 @@ export function usePullRequestComparison(
     readContext: context,
     provider,
     diffUnavailable,
-<<<<<<< HEAD
     selectedSource: pendingPreference ?? selectedSource,
-||||||| bc50ba56aa
-    // A chosen pull request waits too: nothing can read it before its provider is known to be served.
-    selectedSource: providersUnknown ? null : pendingPreference ?? selectedSource,
-=======
-    selectedSource: providersUnknown ? null : pendingPreference ?? selectedSource,
->>>>>>> upstream/main
     prs: current?.status === 'ready' ? current.prs : NO_PULL_REQUESTS,
     query, setQuery,
     loading: enabled && (!current || current.status === 'loading' || search !== query.trim()),

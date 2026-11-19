@@ -8,20 +8,10 @@ import { useSessions } from '@/sync/sync-context';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 export const useChatSearchDirectory = (): string | undefined => {
-<<<<<<< HEAD
   // Inside a chat the session is its column's, so a chat pinned in the side
   // panel searches its own session's project.
   const { sessionId: currentSessionId, directory: currentSessionDirectory } = useChatSessionSelection();
   const sessions = useSessions(currentSessionDirectory ?? undefined);
-||||||| bc50ba56aa
-  // Inside a chat the session is its column's, so a chat pinned in the side
-  // panel searches its own session's project.
-  const { sessionId: currentSessionId } = useChatSessionSelection();
-  const currentSessionOwnDirectory = useSessionDirectory(currentSessionId);
-=======
-  const { sessionId: currentSessionId } = useChatSessionSelection();
-  const currentSessionOwnDirectory = useSessionDirectory(currentSessionId);
->>>>>>> upstream/main
   const worktreeAttachment = useSessionWorktreeStore((state) =>
     currentSessionId ? state.getAttachment(currentSessionId) : undefined
   );
