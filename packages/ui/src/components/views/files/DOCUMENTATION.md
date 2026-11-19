@@ -746,6 +746,8 @@ unchanged; Save closes only after a successful write; Discard closes without
 writing. Closing clean or unrelated tabs does not prompt.
 Autosave pauses while the confirmation is open. If a write had already
 started, the confirmation waits for it and closes only if the draft is clean.
+An autosave failure leaves the draft open for an explicit retry; the next edit
+can schedule a new autosave, but the same failed write is not repeated.
 
 Visual draw.io edits update the same draft as source edits. The XML sent to
 the iframe stays stable while editing; loads, Discard, and switching from

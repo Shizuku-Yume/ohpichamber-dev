@@ -91,6 +91,7 @@ import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 import { DirectoryRequests } from './files/directoryRequests';
 import { useFileTreeUpload } from './files/useFileTreeUpload';
 import { useFileDraftConfirmation } from './files/useFileDraftConfirmation';
+import { useFileAutosave } from './files/useFileAutosave';
 import { moveWorkspacePath } from './files/moveWorkspacePath';
 import { areDirectoryNodesEqual, buildFileTreeStatusIndex } from './files/fileTreeStatus';
 import { BinaryArtifact } from './files/previews/BinaryArtifact';
@@ -1062,7 +1063,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const [isSaving, setIsSaving] = React.useState(false);
   const [loadedFileLineEnding, setLoadedFileLineEnding] = React.useState<FileLineEnding>('\n');
   const dialogInputRef = React.useRef<HTMLInputElement>(null);
-  const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCanvasPreviewFrameRef = React.useRef<number | null>(null);
   const canvasEditorRef = React.useRef<FileCanvasHandle | null>(null);
   const [canvasDirty, setCanvasDirty] = React.useState(false);
@@ -1090,9 +1090,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
   // The canvas has no CodeMirror wrapper; Cmd/Ctrl+S must reach it too.
   const canvasWrapperRef = React.useRef<HTMLDivElement | null>(null);
-  // Last drawing change, so autosave waits until the user stops drawing. A ref:
-  // strokes arrive every frame and must not re-render this view.
-  const canvasLastEditAtRef = React.useRef(0);
   const [editorViewReadyNonce, setEditorViewReadyNonce] = React.useState(0);
   const pendingNavigationRafRef = React.useRef<number | null>(null);
   const pendingNavigationCycleRef = React.useRef<{ key: string; attempts: number; targetShown: boolean }>({ key: '', attempts: 0, targetShown: false });
@@ -1964,87 +1961,43 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (cancelConfirmation()) setPendingFileNavigation(null);
   }, [cancelConfirmation, setPendingFileNavigation]);
 
-  React.useEffect(() => {
-    if (autoSaveEnabled) {
-      return;
-    }
-
-    setAutoSaveStatus('idle');
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
-  }, [autoSaveEnabled]);
-
-  // Auto-save: debounce 1.5s after user stops typing
-  const AUTO_SAVE_DELAY = 1500;
-
-  React.useEffect(() => {
-    const canWrite = Boolean(selectedFile && files.writeFile);
-    const selectedIsBinary = Boolean(selectedFile?.path && (isBinaryFile(selectedFile.path) || contentDetectedBinary)) && !binaryCanvasRef.current;
-    if (!shouldScheduleFileAutosave({
-      autoSaveEnabled: autoSaveEnabled && !confirmDiscardOpen,
+  const saveWithStatus = React.useCallback(() => {
+    void saveDraft().then((saved) => {
+      if (!saved) return;
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    });
+  }, [saveDraft]);
+  const { cancel: cancelAutosave, noteCanvasEdit } = useFileAutosave({
+    eligible: shouldScheduleFileAutosave({
+      autoSaveEnabled,
       isDirty,
-      canWrite,
+      canWrite: Boolean(files.writeFile),
       isSaving,
       fileLoading,
-      selectedFilePath: selectedFile?.path,
+      selectedFilePath,
       loadedFilePath,
-      isNonEditableBinary: selectedIsBinary,
+      isNonEditableBinary: (isBinaryFile(selectedFilePath) || contentDetectedBinary) && !binaryCanvasRef.current,
       wouldEmptyFile: draftContent === '' && fileContent !== '',
-    })) {
-      return;
-    }
+    }),
+    scope: JSON.stringify([fileScope, selectedFilePath]),
+    draft: draftContent,
+    baseline: fileContent,
+    canvasDirty,
+    isPaused: confirmDiscardOpen,
+    isPauseRequested: isDraftActionPending,
+    save: saveWithStatus,
+  });
 
-    // Drawing changes no dependency here (the draft stays put while the canvas
-    // is dirty), so the timer re-arms itself until the canvas has been quiet
-    // for the full delay, like typing does.
-    const schedule = (delay: number) => {
-      autoSaveTimerRef.current = setTimeout(() => {
-        autoSaveTimerRef.current = null;
-        if (isDraftActionPending()) return;
-        const quietFor = Date.now() - canvasLastEditAtRef.current;
-        if (quietFor < AUTO_SAVE_DELAY) {
-          schedule(AUTO_SAVE_DELAY - quietFor);
-          return;
-        }
-        void saveDraft().then((saved) => {
-          if (!saved) return;
-          setAutoSaveStatus('saved');
-          setTimeout(() => setAutoSaveStatus('idle'), 2000);
-        });
-      }, delay);
-    };
-    schedule(AUTO_SAVE_DELAY);
-
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = null;
-      }
-    };
-  }, [autoSaveEnabled, confirmDiscardOpen, contentDetectedBinary, draftContent, fileContent, fileLoading, isDirty, isDraftActionPending, loadedFilePath, selectedFile, files.writeFile, isSaving, saveDraft]);
-
-  // Reset auto-save status when switching files
   React.useEffect(() => {
     setAutoSaveStatus('idle');
-  }, [selectedFile?.path]);
+  }, [autoSaveEnabled, selectedFilePath]);
 
   const saveNow = React.useCallback(() => {
-    if (isDraftActionPending()) return;
-    // Cancel pending auto-save because the explicit save should run immediately.
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
-    if (!isSaving) {
-      void saveDraft().then((saved) => {
-        if (!saved) return;
-        setAutoSaveStatus('saved');
-        setTimeout(() => setAutoSaveStatus('idle'), 2000);
-      });
-    }
-  }, [isDraftActionPending, isSaving, saveDraft]);
+    if (isSaving || isDraftActionPending()) return;
+    cancelAutosave();
+    saveWithStatus();
+  }, [cancelAutosave, isDraftActionPending, isSaving, saveWithStatus]);
 
   useKeybinds({
     // An extension editor's frame never forwards key events here; it sends
@@ -4668,7 +4621,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         loadBytes={loadCanvasBytes}
         readOnly={!selectedFile || selectedFileIsOutsideWorkspace || !files.writeFile || (binaryCanvas && !files.uploadFile)}
         onDirtyChange={setCanvasDirty}
-        onEdit={() => { canvasLastEditAtRef.current = Date.now(); }}
+        onEdit={noteCanvasEdit}
         onSaveRequest={saveNow}
         onUnsupported={handleCanvasUnsupported}
         onTooLarge={() => handleCanvasLoadProblem(t('filesView.fileEditor.tooLarge', { editor: guestFileEditor.editor.title }))}

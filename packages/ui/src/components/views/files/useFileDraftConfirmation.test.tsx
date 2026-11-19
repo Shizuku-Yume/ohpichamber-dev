@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, expect, jest, mock, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
 import { useFileDraftConfirmation } from './useFileDraftConfirmation';
+import { useFileAutosave } from './useFileAutosave';
 
 type Props = Parameters<typeof useFileDraftConfirmation>[0];
 
@@ -99,4 +100,63 @@ test('a file or scope change clears the old close before a clean replacement can
   await render({ path: '/repo/b.txt', isDirty: false });
   expect(confirmation.open).toBe(false);
   expect(closeTabs).not.toHaveBeenCalled();
+});
+
+function AutosavingProbe({ eligible = true, draft = 'edit', save }: {
+  eligible?: boolean;
+  draft?: string;
+  save: () => void;
+}) {
+  confirmation = useFileDraftConfirmation({
+    scope: 'host', path: '/repo/a.txt', isDirty: true, isSaving: false,
+    saveDraft: async () => false, discardDraft: () => {},
+  });
+  useFileAutosave({
+    eligible, scope: 'host/a.txt', draft, baseline: 'on disk', canvasDirty: false,
+    isPaused: confirmation.open, isPauseRequested: confirmation.isPending, save,
+  });
+  return null;
+}
+
+const advance = (ms: number) => act(async () => { jest.advanceTimersByTime(ms); });
+
+test('an armed autosave stays paused through the dialog and resumes after Cancel without a new edit', async () => {
+  jest.useFakeTimers();
+  try {
+    const save = mock(() => {});
+    const close = mock(() => {});
+    await act(async () => root.render(<AutosavingProbe save={save} />));
+    await advance(1499);
+    await act(async () => {
+      confirmation.confirm(close);
+      jest.advanceTimersByTime(1);
+    });
+    await advance(3000);
+    expect(save).not.toHaveBeenCalled();
+    await act(async () => { confirmation.cancel(); });
+    await advance(1500);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('an unchanged dirty draft does not retry when the failed write finishes', async () => {
+  jest.useFakeTimers();
+  try {
+    const save = mock(() => {});
+    await act(async () => root.render(<AutosavingProbe save={save} />));
+    await advance(1500);
+    expect(save).toHaveBeenCalledTimes(1);
+    await act(async () => root.render(<AutosavingProbe eligible={false} save={save} />));
+    await act(async () => root.render(<AutosavingProbe save={save} />));
+    await advance(6000);
+    expect(save).toHaveBeenCalledTimes(1);
+    await act(async () => root.render(<AutosavingProbe draft="another edit" save={save} />));
+    await advance(1500);
+    expect(save).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.useRealTimers();
+  }
 });
