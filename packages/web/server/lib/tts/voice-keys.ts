@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
-
 /** Custom transcription keys only. Speech credentials remain SDK-owned. */
 const VOICE_KEY_KINDS = ['stt'];
 
@@ -14,6 +13,7 @@ const patchValue = z.union([z.literal(''), z.null(), storedKey]);
 const patchSchema = z.object({
   stt: patchValue.optional(),
 }).strict();
+export const voiceKeysPatchSchema = patchSchema;
 
 export type VoiceKeysPatch = z.input<typeof voiceKeysPatchSchema>;
 

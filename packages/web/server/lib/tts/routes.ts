@@ -5,6 +5,8 @@ import { summarizeText, sanitizeForTTS, sanitizeForNote } from '../text/summariz
 import { detectTextLanguage, languageOfLocale, pickVoiceForLanguage } from './language-detect.js';
 import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
 import { describeVoiceKeys, readVoiceKey, updateVoiceKeys, voiceKeysPatchSchema } from './voice-keys.js';
+import { z } from "zod";
+
 
 const optionalText = z.string().optional().catch(undefined);
 const optionalNumber = z.number().optional().catch(undefined);
