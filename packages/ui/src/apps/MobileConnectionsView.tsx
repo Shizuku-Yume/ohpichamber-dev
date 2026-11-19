@@ -62,6 +62,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
 
   const [formTarget, setFormTarget] = React.useState<FormTarget | null>(null);
   const [url, setUrl] = React.useState('');
+  const invalidPairingLink = mode === 'welcome' && /^ohpichamber:\/\//i.test(url.trim());
   const [label, setLabel] = React.useState('');
   const [clientToken, setClientToken] = React.useState('');
   const [headers, setHeaders] = React.useState<MobileHeaderDraft[]>([]);
@@ -130,6 +131,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
     if (mode === 'welcome') {
       const payload = parseConnectionPayload(value);
       if (payload && 'pairing' in payload) {
+        if (invalidPairingLink) setUrl('');
         void conn.redeemPairingConnection(payload.pairing);
         return;
       }
@@ -140,6 +142,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
   const submitForm = (event: React.FormEvent) => {
     event.preventDefault();
     if (mode === 'welcome' && formTarget?.kind === 'add') {
+      if (invalidPairingLink) return;
       void connect({
         url,
         clientToken,
@@ -493,6 +496,8 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
                 type="url"
                 inputMode="url"
                 autoCapitalize="none"
+                aria-invalid={invalidPairingLink || undefined}
+                aria-describedby={invalidPairingLink ? 'mobile-connection-pairing-error' : undefined}
                 className={mobileConnectionInputClass}
               />
             </label>
@@ -525,10 +530,14 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
             </label>
           )}
           {editingRelayOnly ? null : <MobileConnectionHeaders value={headers} onChange={setHeaders} disabled={isSaving || isBusy} />}
-          {error ? <p className="px-1 typography-meta text-[var(--status-error-text)]">{error}</p> : null}
+          {invalidPairingLink ? (
+            <p id="mobile-connection-pairing-error" role="alert" className="px-1 typography-meta text-[var(--status-error-text)]">
+              {t('desktopHostSwitcher.error.pairingRejected')}
+            </p>
+          ) : error ? <p className="px-1 typography-meta text-[var(--status-error-text)]">{error}</p> : null}
           <div className="flex justify-end">
             {mode === 'welcome' && formTarget?.kind === 'add' ? (
-              <Button type="submit" disabled={isBusy || isScanning || !url.trim()}>
+              <Button type="submit" disabled={isBusy || isScanning || invalidPairingLink || !url.trim()}>
                 {isBusy ? t('mobile.connect.connecting') : t('mobile.connect.connectButton')}
               </Button>
             ) : (
