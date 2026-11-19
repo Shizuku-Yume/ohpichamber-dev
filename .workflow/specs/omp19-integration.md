@@ -4,6 +4,8 @@
 **Priority:** high
 **Integration branch:** devin/1795118904-omp-19
 
+**Verification:** W1–W5 and W6's automated checks are complete. Fresh workflow/security review is unavailable in this environment and remains required at effort close; no integration merge is authorized by the Stage 2a local-commit request.
+
 ## What this is for
 
 Make the OMP 19 vendor pin usable by the Agent Service and its Canonical API consumers without retaining the removed OMP API model.
@@ -51,4 +53,4 @@ Keep startup failures visible. Investigate concrete worker stderr and initializa
 3. Command classification, settings/localization and internal URL policy, with focused regressions.
 4. Startup root causes, full verification, independent review, development status and logical local commits.
 
-The owner approved this plan. Execution follows tasks in `.workflow/tasks/omp19-integration/`.
+The owner approved this plan. Execution receipts are archived in `.workflow/done/omp19-integration/`; development.md records results and remaining verification limits.
