@@ -301,16 +301,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(currentTheme.metadata.variant);
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    // The splash script sets an inline color-scheme for the theme it starts
-    // with; it has to follow a switch, or native controls keep the old scheme
-    // and an extension frame whose scheme no longer matches the page paints
-    // an opaque canvas instead of letting the panel show through.
     root.style.setProperty('color-scheme', currentTheme.metadata.variant);
-=======
-    root.style.setProperty('color-scheme', currentTheme.metadata.variant);
->>>>>>> upstream/main
 
     return restoreTransitions;
   }, [cssGenerator, currentTheme, updateBrowserChrome]);

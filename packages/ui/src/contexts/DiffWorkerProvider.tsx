@@ -88,11 +88,10 @@ const loadPoolModules = (): Promise<PoolModules> => {
     import('@/lib/diff/workerFactory').then(({ workerFactory }) => workerFactory),
     import('@/lib/shiki/appThemeRegistry'),
     import('@/lib/shiki/diffsHighlighter'),
-<<<<<<< HEAD
   ])
-    .then(([workerModule, factoryModule, themeRegistryModule, highlighterModule]) => ({
+    .then(([workerModule, workerFactory, themeRegistryModule, highlighterModule]) => ({
       WorkerPoolManager: workerModule.WorkerPoolManager,
-      workerFactory: factoryModule.workerFactory,
+      workerFactory,
       ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
       highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
     }))
@@ -100,21 +99,6 @@ const loadPoolModules = (): Promise<PoolModules> => {
       poolModulesPromise = null;
       throw cause;
     });
-||||||| bc50ba56aa
-  ]).then(([workerModule, factoryModule, themeRegistryModule, highlighterModule]) => ({
-    WorkerPoolManager: workerModule.WorkerPoolManager,
-    workerFactory: factoryModule.workerFactory,
-    ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
-    highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
-  }));
-=======
-  ]).then(([workerModule, workerFactory, themeRegistryModule, highlighterModule]) => ({
-    WorkerPoolManager: workerModule.WorkerPoolManager,
-    workerFactory,
-    ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
-    highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
-  }));
->>>>>>> upstream/main
   return poolModulesPromise;
 };
 
@@ -199,7 +183,6 @@ const applyRenderOptions = (style: WorkerPoolStyle, pool: WorkerPoolManager): Pr
 const ensurePool = (style: WorkerPoolStyle): void => {
   if (globalThis.window === undefined || poolsRequested.has(style)) return;
   poolsRequested.add(style);
-<<<<<<< HEAD
   setPoolState(style, 'pending', undefined);
   const generation = poolLifecycleGeneration;
   void loadPoolModules()
@@ -219,40 +202,6 @@ const ensurePool = (style: WorkerPoolStyle): void => {
           onWorkerError: (event) => {
             event.preventDefault();
           },
-||||||| bc50ba56aa
-  void loadPoolModules().then((modules) => {
-    if (pools[style]) return;
-    const config = WORKER_POOL_CONFIG[style];
-    const pool = new modules.WorkerPoolManager(
-      {
-        workerFactory: modules.workerFactory,
-        poolSize: config.poolSize,
-        totalASTLRUCacheSize: config.totalASTLRUCacheSize,
-        // Highlights tokenizes this much in about a millisecond, less than a
-        // worker round trip, so small files and diffs paint highlighted in
-        // their first frame. Shiki is slower but the threshold stays small.
-        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
-      },
-      {
-        theme: {
-          light: 'pierre-light',
-          dark: 'pierre-dark',
-=======
-  void loadPoolModules().then((modules) => {
-    if (pools[style]) return;
-    const config = WORKER_POOL_CONFIG[style];
-    const pool = new modules.WorkerPoolManager(
-      {
-        workerFactory: modules.workerFactory,
-        poolSize: config.poolSize,
-        totalASTLRUCacheSize: config.totalASTLRUCacheSize,
-        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
-      },
-      {
-        theme: {
-          light: 'pierre-light',
-          dark: 'pierre-dark',
->>>>>>> upstream/main
         },
         {
           theme: {

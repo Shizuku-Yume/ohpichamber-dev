@@ -79,16 +79,8 @@ declare module "bun:test" {
   export function afterEach(fn: () => void | Promise<void>): void;
   export function afterAll(fn: () => void | Promise<void>): void;
   export function setDefaultTimeout(timeoutMs: number): void;
-<<<<<<< HEAD
   // Mock<T> matches the bun:test runtime mock: T (callable) plus spy methods.
   export interface Mock<T extends (...args: never[]) => unknown = (...args: never[]) => unknown> {
-||||||| bc50ba56aa
-  // Mock<T> matches the bun:test runtime mock: T (callable) plus spy methods.
-  // Tests that need to swap implementations at runtime cast through `Mock<T>`.
-  export interface Mock<T extends (...args: never[]) => unknown> {
-=======
-  export interface Mock<T extends (...args: never[]) => unknown> {
->>>>>>> upstream/main
     (...args: Parameters<T>): ReturnType<T>;
     mock: { calls: Parameters<T>[]; results: { type: string; value: unknown }[] };
     mockImplementation(fn: T): Mock<T>;

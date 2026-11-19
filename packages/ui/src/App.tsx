@@ -3,17 +3,7 @@ import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
 import { LegacyDataNotice } from '@/components/onboarding/LegacyDataNotice';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
-<<<<<<< HEAD
-import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
-||||||| bc50ba56aa
-import { SnippetQuickCreateDialog } from '@/components/snippets/SnippetQuickCreateDialog';
-import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
-import { OpenCodeTrustDialog } from '@/components/projects/OpenCodeTrustDialog';
-=======
-import { SnippetQuickCreateDialog } from '@/components/snippets/SnippetQuickCreateDialog';
 import { GlobalQuestionDialogs } from '@/components/layout/GlobalQuestionDialogs';
-import { OpenCodeTrustDialog } from '@/components/projects/OpenCodeTrustDialog';
->>>>>>> upstream/main
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from '@/components/ui';
@@ -31,15 +21,9 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
 import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
-<<<<<<< HEAD
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
-||||||| bc50ba56aa
-import { useLimitFailoverNotices } from '@/hooks/useLimitFailoverNotices';
-=======
 import { useGuestMarksSync } from '@/hooks/useGuestMarksSync';
-import { useLimitFailoverNotices } from '@/hooks/useLimitFailoverNotices';
->>>>>>> upstream/main
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
@@ -608,15 +592,9 @@ function App({ apis }: AppProps) {
   // change it, and the rail must not wait for a reload. Install links that
   // reached the shell before this page could listen are taken here too.
   useGuestCatalogSync();
-<<<<<<< HEAD
   useGuestInstallLinks();
   useBrowserProviderSync();
-||||||| bc50ba56aa
-  useLimitFailoverNotices();
-=======
   useGuestMarksSync();
-  useLimitFailoverNotices();
->>>>>>> upstream/main
   useRoutingSync();
   useEnterprisePolicySync();
   // Desktop windows on a relay host; the phone has its own handling in MobileApp.
@@ -812,65 +790,23 @@ function App({ apis }: AppProps) {
       <SyncProvider key={runtimeEndpointEpoch} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
-<<<<<<< HEAD
-            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-              <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                <SyncAppEffects backgroundWorkEnabled />
-                <MainLayout />
-                <LegacyDataNotice />
-                {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
-                <Toaster />
-                <AppLinkConfirmDialog />
-                <SharedTrustConfirmDialog />
-                <AboutDialogWrapper />
-                {showMemoryDebug && (
-                  <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
-                )}
-              </div>
-            </TooltipProvider>
-||||||| bc50ba56aa
               <TooltipProvider delayDuration={300} skipDelayDuration={150}>
                 <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
                   <SyncAppEffects backgroundWorkEnabled />
-                  <OpenCodeUpdateToast />
-                  <ProjectConfigErrorToast />
                   <MainLayout />
-                  {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
-                  <Toaster />
-                  <AppLinkConfirmDialog />
-                  <SnippetQuickCreateDialog />
-                  <SharedTrustConfirmDialog />
-                  <OpenCodeTrustDialog />
-                  <ConfigUpdateOverlay />
-                  <AboutDialogWrapper />
-                  {showMemoryDebug && (
-                    <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
-                  )}
-                </div>
-              </TooltipProvider>
-=======
-              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-                <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                  <SyncAppEffects backgroundWorkEnabled />
-                  <OpenCodeUpdateToast />
-                  <ProjectConfigErrorToast />
-                  <MainLayout />
+                  <LegacyDataNotice />
                   {/* Unmounted, not faded: the shell under it is ready, and a
                       fade only delays the moment it is seen. */}
                   {isDesktopRuntime && !(bootOutcomeKnown && bootViewIsMain) ? <AppStartupOverlay ready={false} /> : null}
                   <Toaster />
                   <AppLinkConfirmDialog />
-                  <SnippetQuickCreateDialog />
                   <GlobalQuestionDialogs />
-                  <OpenCodeTrustDialog />
-                  <ConfigUpdateOverlay />
                   <AboutDialogWrapper />
                   {showMemoryDebug && (
                     <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
                   )}
                 </div>
               </TooltipProvider>
->>>>>>> upstream/main
           </FireworksProvider>
         </RuntimeAPIProvider>
       </SyncProvider>
