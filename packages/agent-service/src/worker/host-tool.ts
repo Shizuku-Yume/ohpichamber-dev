@@ -32,7 +32,7 @@ const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Ob
 const HostToolEnablementInputSchema = z.record(z.string(), z.boolean().optional().catch(undefined)).optional();
 export type HostToolEnablementInput = z.infer<typeof HostToolEnablementInputSchema>;
 
-export function normalizeHostToolEnablement(input?: HostToolEnablementInput): Record<HostToolName, boolean> {
+export function normalizeHostToolEnablement(input?: HostToolEnablementInput) {
   const parsed = HostToolEnablementInputSchema.safeParse(input);
   const record = parsed.success ? parsed.data : undefined;
 

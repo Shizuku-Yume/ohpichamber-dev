@@ -190,7 +190,12 @@ process.on('message', raw => {
     // A projection refusal keeps its status so the Host can tell a refused
     // admission (no native session) from an uncertain one.
     const status = error instanceof ProjectionError ? error.status : undefined;
-    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code, ...(status ? { status } : {}), ...(detail ? { detail } : {}) });
+    if (!stopping) {
+      const reply: Extract<WorkerReply, { type: 'error' }> = { type: 'error', workerGeneration: command.workerGeneration, code };
+      if (status) reply.status = status;
+      if (detail) reply.detail = detail;
+      send(reply);
+    }
     void stop(1);
   });
 });

@@ -10,7 +10,6 @@ import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manage
 import { ProblemDetailsSchema } from '@openchamber/agent-contract';
 
 import { WorkerRegistry, WORKER_CAPACITY_POLICY } from './workers.ts';
-import { CatalogCoordinator } from './catalog.ts';
 import { AgentService } from './service.ts';
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
 
@@ -141,8 +140,7 @@ test('a deferred registration failure surfaces with its cause as a session error
     expect(wsResp.status).toBe(201);
 
     // Mock catalog.register to reject with the sentinel cause
-    // SAFETY: Accessing private `catalog` for test-only mocking purposes.
-    const coordinator = (service as unknown as { catalog: CatalogCoordinator }).catalog;
+    const coordinator = service['catalog'];
     coordinator.register = async () => {
       throw new Error(sentinelCause);
     };

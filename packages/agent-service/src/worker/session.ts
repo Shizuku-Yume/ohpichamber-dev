@@ -169,17 +169,6 @@ const SubagentEventObservationSchema = z.object({
   }),
 });
 type SubagentEventObservation = z.infer<typeof SubagentEventObservationSchema>;
-/**
- * OMP throws `ManualCompactionNoOpError` before a manual pass touches history
- * when the branch already ends in a compaction or holds too little to summarize.
- * The class is not exported from a public SDK path, so its name is the only
- * stable identity. That is a refusal the user can act on, not a runtime failure.
- */
-function isManualCompactionNoOp(error: unknown): error is Error {
-  return error instanceof Error && error.name === 'ManualCompactionNoOpError';
-}
-
-
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
   private projection: WorkerProjection;
@@ -2312,7 +2301,10 @@ export class WorkerSession {
           await this.binding;
           const previousCompaction = this.lastEmittedCompaction;
           const result = await this.session.compact(operation.instructions).catch(error => {
-            if (isManualCompactionNoOp(error)) throw new ProjectionError(422, 'SESSION_TOO_SMALL', 'Session is too small to compact');
+            // OMP does not export the refusal class; its name is the stable identity.
+            if (error instanceof Error && error.name === 'ManualCompactionNoOpError') {
+              throw new ProjectionError(422, 'SESSION_TOO_SMALL', 'Session is too small to compact');
+            }
             throw error;
           });
           if (this.lastEmittedCompaction && this.lastEmittedCompaction !== previousCompaction) {
@@ -2415,4 +2407,3 @@ export class WorkerSession {
     this._draftPresent = present;
   }
 }
-
