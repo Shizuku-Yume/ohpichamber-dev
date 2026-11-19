@@ -29,7 +29,20 @@ const createLegacyFile = ({ partial = false } = {}) => {
 };
 
 const seedSession = (store, id, { directory = `/repo/${id}`, archivedAt = null, lifecycleKnown = true } = {}) => {
-  store.upsertSession({ id, directory, title: id.toUpperCase(), archivedAt, lifecycleKnown });
+  const sessions = sessionFixtures.get(store) ?? new Map();
+  sessionFixtures.set(store, sessions);
+  const metadata = { id, directory, title: id.toUpperCase(), archivedAt, lifecycleKnown, createdAt: 0, updatedAt: 1, includeReasoning: true };
+  sessions.set(id, metadata);
+  store.beginSessionSync();
+  store.commitSessionSync(metadata);
+};
+const sessionFixtures = new WeakMap();
+const putMessages = (store, rows) => {
+  for (const id of new Set(rows.map((row) => row.sessionId))) {
+    store.beginSessionSync();
+    store.stageMessages(rows.filter((row) => row.sessionId === id));
+    store.commitSessionSync(sessionFixtures.get(store).get(id));
+  }
 };
 
 const groupedPage = (store, before = null, options = {}) => store.searchSessions({
@@ -44,18 +57,34 @@ afterEach(() => {
 });
 
 describe.skipIf(!open)('message search store', () => {
+  it('keeps the last committed selection through failed staging and commit, then accepts an empty selection', () => {
+    const store = openMessageSearchStore(open(':memory:'));
+    try {
+      seedSession(store, 'a');
+      putMessages(store, [{ id: 'old', sessionId: 'a', role: 'user', createdAt: 1, text: 'common answer' }]);
+      store.beginSessionSync();
+      expect(() => store.stageMessages([{ id: 'bad', sessionId: 'a', role: 'user', createdAt: 2, text: null }])).toThrow();
+      expect(groupedPage(store).hits[0].rowId).toBe('old');
+      store.beginSessionSync();
+      store.stageMessages([{ id: 'new', sessionId: 'a', role: 'user', createdAt: 2, text: 'common replacement' }]);
+      expect(() => store.commitSessionSync({ ...sessionFixtures.get(store).get('a'), directory: null })).toThrow();
+      expect(groupedPage(store).hits[0].rowId).toBe('old');
+      store.beginSessionSync();
+      store.commitSessionSync(sessionFixtures.get(store).get('a'));
+      expect(groupedPage(store).hits).toEqual([]);
+    } finally { store.close(); }
+  });
+
   it('returns unchecked SQLite column values and leaves snippet failure to the reader', () => {
     const connection = open(':memory:');
     const store = openMessageSearchStore(connection);
     try {
       seedSession(store, 'a');
-      store.putMessages([{ id: 'm', sessionId: 'a', role: 'user', createdAt: 1, text: 'common needle' }]);
-      const cursor = new Uint8Array([1, 2, 3]);
-      connection.run('UPDATE sessions SET user_cursor = ?, synced_updated_at = ? WHERE id = ?', [cursor, 'unchecked', 'a']);
+      putMessages(store, [{ id: 'm', sessionId: 'a', role: 'user', createdAt: 1, text: 'common needle' }]);
+      connection.run('UPDATE sessions SET synced_updated_at = ? WHERE id = ?', ['unchecked', 'a']);
       connection.run('UPDATE messages SET created_at = ? WHERE id = ?', ['unchecked', 'm']);
 
       const session = store.readSession('a');
-      expect(Array.from(session.user_cursor)).toEqual([1, 2, 3]);
       expect(session.synced_updated_at).toBe('unchecked');
       expect(store.search({ match: toMatchExpression('common'), limit: 1 })[0].createdAt).toBe('unchecked');
 
@@ -71,7 +100,7 @@ describe.skipIf(!open)('message search store', () => {
   it('pages globally newest session representatives without duplicates, including timestamp ties', () => {
     const store = openMessageSearchStore(open(':memory:'));
     for (const id of ['a', 'b', 'c', 'd', 'e']) seedSession(store, id);
-    store.putMessages([
+    putMessages(store, [
       { id: 'a100', sessionId: 'a', role: 'user', createdAt: 100, text: 'common term' },
       { id: 'b90', sessionId: 'b', role: 'user', createdAt: 90, text: 'common term' },
       { id: 'a70', sessionId: 'a', role: 'user', createdAt: 70, text: 'common term' },
@@ -97,7 +126,7 @@ describe.skipIf(!open)('message search store', () => {
     seedSession(store, 'archived', { directory: '/wanted', archivedAt: 123 });
     seedSession(store, 'unknown', { directory: '/wanted', lifecycleKnown: false });
     seedSession(store, 'elsewhere', { directory: '/other' });
-    store.putMessages([
+    putMessages(store, [
       { id: 'active-new-assistant', sessionId: 'active', role: 'assistant', createdAt: 100, text: 'common term' },
       { id: 'active-user', sessionId: 'active', role: 'user', createdAt: 50, text: 'common term' },
       { id: 'archived-user', sessionId: 'archived', role: 'user', createdAt: 90, text: 'common term' },
@@ -116,7 +145,7 @@ describe.skipIf(!open)('message search store', () => {
     for (const id of ['a', 'b', 'c', 'd']) seedSession(store, id, { directory: '/wanted' });
     seedSession(store, 'archived', { directory: '/wanted', archivedAt: 123 });
     seedSession(store, 'elsewhere', { directory: '/other' });
-    store.putMessages([
+    putMessages(store, [
       { id: 'a-assistant', sessionId: 'a', role: 'assistant', createdAt: 110, text: 'common term' },
       { id: 'a-user', sessionId: 'a', role: 'user', createdAt: 70, text: 'common term' },
       { id: 'b-user', sessionId: 'b', role: 'user', createdAt: 100, text: 'common term' },
@@ -138,7 +167,7 @@ describe.skipIf(!open)('message search store', () => {
   it('counts a reply and its reasoning as one distinct message match', () => {
     const store = openMessageSearchStore(open(':memory:'));
     seedSession(store, 'a');
-    store.putMessages([
+    putMessages(store, [
       { id: 'reply', messageId: 'reply', sessionId: 'a', role: 'assistant', createdAt: 2, text: 'common answer' },
       { id: 'reply:reasoning', messageId: 'reply', sessionId: 'a', role: 'reasoning', createdAt: 2, text: 'common thought' },
       { id: 'prompt', messageId: 'prompt', sessionId: 'a', role: 'user', createdAt: 1, text: 'common request' },
@@ -148,14 +177,14 @@ describe.skipIf(!open)('message search store', () => {
     store.close();
   });
 
-  it('rolls back an interrupted schema 3 migration and reopens with rows and cursors intact', () => {
+  it('rolls back an interrupted derived-schema rebuild without discarding the previous cache', () => {
     const file = createLegacyFile();
     const connection = open(file);
     const interrupted = {
       ...connection,
       exec: (sql) => {
         connection.exec(sql);
-        if (sql.includes('ADD COLUMN archived_at')) throw new Error('simulated interruption');
+        if (sql.includes('CREATE TABLE IF NOT EXISTS sessions')) throw new Error('simulated interruption');
       },
     };
 
@@ -169,17 +198,17 @@ describe.skipIf(!open)('message search store', () => {
     afterFailure.close();
 
     const migrated = openMessageSearchStore(open(file));
-    expect(migrated.readSession('a')).toMatchObject({ user_cursor: 'cursor', lifecycle_known: 0 });
-    expect(migrated.search({ match: toMatchExpression('searchable'), limit: 20 })).toHaveLength(1);
+    expect(migrated.readSession('a')).toBeNull();
+    expect(migrated.search({ match: toMatchExpression('searchable'), limit: 20 })).toHaveLength(0);
     migrated.close();
   });
 
-  it('recovers an already-partial schema 3 migration without losing rows or cursors', () => {
+  it('rebuilds an incompatible partial cursor cache for canonical branch snapshots', () => {
     const file = createLegacyFile({ partial: true });
     const migrated = openMessageSearchStore(open(file));
 
-    expect(migrated.readSession('a')).toMatchObject({ user_cursor: 'cursor', archived_at: null, lifecycle_known: 0 });
-    expect(migrated.search({ match: toMatchExpression('searchable'), limit: 20 })).toHaveLength(1);
+    expect(migrated.readSession('a')).toBeNull();
+    expect(migrated.search({ match: toMatchExpression('searchable'), limit: 20 })).toHaveLength(0);
     migrated.close();
   });
 });

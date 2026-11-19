@@ -2,10 +2,10 @@ import path from 'node:path';
 import fsPromises from 'node:fs/promises';
 
 import { createMessageSearchIndexer } from './indexer.js';
-import type { IndexerClient, IndexerOptions } from './indexer.js';
 import { loadSqliteOpener } from './sqlite.js';
 import type { SqliteOpener } from './sqlite.js';
 import { buildSnippet, openMessageSearchStore, toMatchExpression, toSearchTerms } from './store.js';
+import type { ArchiveSnapshot } from './store.js';
 import type { GlobalMessageStreamHub } from '../event-stream/global-hub.js';
 import type { SearchOptions, SessionSearchOptions } from './contracts.js';
 
@@ -15,10 +15,12 @@ const INDEX_FILE_SUFFIXES = ['', '-wal', '-shm'];
 const MAX_LIMIT = 200;
 
 
-interface MessageSearchRuntimeOptions extends Pick<IndexerOptions, 'getArchivedSessions' | 'applyOwnedArchiveState' | 'logger'> {
+interface MessageSearchRuntimeOptions {
   dataDir: string;
-  buildOpenCodeUrl: (path: string, prefixOverride: string) => string;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
+  sessionService: Parameters<typeof createMessageSearchIndexer>[0]['sessionService'];
+  resolveSessionScope: Parameters<typeof createMessageSearchIndexer>[0]['resolveSessionScope'];
+  readArchiveStates: () => Promise<ArchiveSnapshot>;
+  logger?: Pick<Console, 'warn'>;
   globalEventHub: Pick<GlobalMessageStreamHub, 'subscribeEvent' | 'subscribeStatus'> & Partial<Pick<GlobalMessageStreamHub, 'isConnected'>>;
   readSettings: () => Promise<{ enabled: boolean; reasoning: boolean }>;
 }
@@ -31,8 +33,7 @@ export const createMessageSearchRuntime = ({
   sessionService,
   resolveSessionScope,
   globalEventHub,
-  getArchivedSessions = async () => null,
-  applyOwnedArchiveState = (session) => session,
+  readArchiveStates,
   readSettings,
   logger = console,
 }: MessageSearchRuntimeOptions) => {
@@ -112,6 +113,12 @@ export const createMessageSearchRuntime = ({
     }
     return bytes;
   };
+  const refreshArchiveStates = async (active: NonNullable<typeof engine>) => {
+    const snapshot = await readArchiveStates();
+    if (active !== engine) return null;
+    active.store.applyArchiveSnapshot(snapshot);
+    return snapshot;
+  };
 
   if (open) {
     void enqueue(async () => {
@@ -147,12 +154,15 @@ export const createMessageSearchRuntime = ({
       await apply();
     }),
 
-    search: ({ query, sessionId, directories, role, includeReasoning, lifecycle = 'all', before, limit, order }: SearchOptions) => {
+    search: async ({ query, sessionId, directories, role, includeReasoning, lifecycle = 'all', before, limit, order }: SearchOptions) => {
       if (!engine) return null;
+      const active = engine;
       const match = toMatchExpression(query);
       if (!match) return { status: 'query-too-short' as const, hits: [] };
+      const archive = await refreshArchiveStates(active);
+      if (!archive) return null;
       const size = Math.min(Math.max(1, limit), MAX_LIMIT);
-      const hits = engine.store.search({
+      const hits = active.store.search({
         match,
         sessionId,
         directories,
@@ -180,15 +190,20 @@ export const createMessageSearchRuntime = ({
         })),
         next: hits.length > size && last ? { createdAt: last.createdAt, id: last.rowId } : null,
         index: engine.indexer.status(),
+        errors: archive.errors,
+        archiveError: archive.conversion?.code ?? null,
       };
     },
 
-    searchSessions: ({ query, directories, role, includeReasoning, lifecycle = 'all', before, limit, exclude = [] }: SessionSearchOptions) => {
+    searchSessions: async ({ query, directories, role, includeReasoning, lifecycle = 'all', before, limit, exclude = [] }: SessionSearchOptions) => {
       if (!engine) return null;
+      const active = engine;
       const match = toMatchExpression(query);
       if (!match) return { status: 'query-too-short' as const, hits: [] };
+      const archive = await refreshArchiveStates(active);
+      if (!archive) return null;
       const size = Math.min(Math.max(1, limit), 100);
-      const result = engine.store.searchSessions({ match, directories, role, includeReasoning: reasoning && includeReasoning !== false, lifecycle, before, limit: size + 1, exclude, withTotals: !before });
+      const result = active.store.searchSessions({ match, directories, role, includeReasoning: reasoning && includeReasoning !== false, lifecycle, before, limit: size + 1, exclude, withTotals: !before });
       const terms = toSearchTerms(query);
       const page = result.hits.slice(0, size);
       const last = page.at(-1);
@@ -206,8 +221,10 @@ export const createMessageSearchRuntime = ({
           matchCount: hit.matchCount,
         })),
         next: result.hits.length > size && last ? { createdAt: last.createdAt, sessionId: last.sessionId } : null,
-        totals: result.totals,
+        totals: Object.keys(archive.errors).length > 0 || archive.conversion?.code ? null : result.totals,
         index: engine.indexer.status(),
+        errors: archive.errors,
+        archiveError: archive.conversion?.code ?? null,
       };
     },
 

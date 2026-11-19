@@ -35,7 +35,7 @@ describe('canonical search indexing', () => {
     expect(f.search('needle').map((row) => row.role).sort()).toEqual(['assistant', 'reasoning', 'user']);
     expect(f.search('notindexed')).toEqual([]);
     expect(f.search('needle')[0].sessionTitle).toBe('Host title');
-    expect(f.search('needle')[0].directory).toBe('.');
+    expect(f.search('needle')[0].directory).toBe(scope.cwd);
   });
 
   it('does not publish staged rows or erase prior results when a later history page fails', async () => {

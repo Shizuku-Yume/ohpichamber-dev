@@ -2,8 +2,8 @@ import { z } from 'zod';
 import type { MessageSearchRouteRuntime } from './contracts.js';
 import type { Response } from '../shared/http-contracts.js';
 
-type MessageResult = NonNullable<ReturnType<MessageSearchRouteRuntime['search']>>;
-type SessionResult = NonNullable<ReturnType<MessageSearchRouteRuntime['searchSessions']>>;
+type MessageResult = NonNullable<Awaited<ReturnType<MessageSearchRouteRuntime['search']>>>;
+type SessionResult = NonNullable<Awaited<ReturnType<MessageSearchRouteRuntime['searchSessions']>>>;
 type RouteBody = Awaited<ReturnType<MessageSearchRouteRuntime['status']>>
   | SessionResult
   | (Omit<MessageResult, 'next'> & { next: string | null })
@@ -84,11 +84,11 @@ export const registerMessageSearchRoutes = (app: MessageSearchApp, { messageSear
     }
   });
 
-  app.get('/api/openchamber/message-search', (req, res) => {
+  app.get('/api/openchamber/message-search', async (req, res) => {
     const query = querySchema.parse({ role: null, ...req.query });
     const directories = directoriesFrom(query.directory);
     try {
-      const result = messageSearchRuntime.search({
+      const result = await messageSearchRuntime.search({
         query: query.q,
         sessionId: query.session || null,
         directories,
@@ -109,7 +109,7 @@ export const registerMessageSearchRoutes = (app: MessageSearchApp, { messageSear
     }
   });
 
-  app.get('/api/openchamber/message-search/sessions', (req, res) => {
+  app.get('/api/openchamber/message-search/sessions', async (req, res) => {
     const parsed = groupedQuerySchema.safeParse(req.query);
     if (!parsed.success || !Object.prototype.hasOwnProperty.call(req.query, 'q')) {
       return res.status(400).json({ error: 'Invalid message search parameters' });
@@ -120,7 +120,7 @@ export const registerMessageSearchRoutes = (app: MessageSearchApp, { messageSear
     const before = query.before ? parseSessionBefore(query.before) : null;
     if (query.before && !before) return res.status(400).json({ error: 'Invalid message search cursor' });
     try {
-      const result = messageSearchRuntime.searchSessions({
+      const result = await messageSearchRuntime.searchSessions({
         query: query.q,
         directories: directoriesFrom(query.directory),
         role: query.role ?? null,
