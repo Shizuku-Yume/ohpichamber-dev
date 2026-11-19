@@ -91,6 +91,7 @@ import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 import { DirectoryRequests } from './files/directoryRequests';
 import { useFileTreeUpload } from './files/useFileTreeUpload';
 import { useFileDraftConfirmation } from './files/useFileDraftConfirmation';
+import { guardFileTabSelection, type FileTabSelectionGuard } from './files/fileTabSelectionGuard';
 import { useFileAutosave } from './files/useFileAutosave';
 import { moveWorkspacePath } from './files/moveWorkspacePath';
 import { areDirectoryNodesEqual, buildFileTreeStatusIndex } from './files/fileTreeStatus';
@@ -700,6 +701,7 @@ interface FilesViewProps {
   visible?: boolean;
   mode?: 'full' | 'editor-only';
   fileTabCloseGuard?: React.RefObject<FileTabCloseGuard | null>;
+  fileTabSelectionGuard?: React.RefObject<FileTabSelectionGuard | null>;
   /**
    * For a host whose tab strip owns the open files (the context panel):
    * closing a file here, by Cmd/Ctrl+W or after the unsaved-changes prompt,
@@ -762,7 +764,7 @@ const FilePositionEditor = ({
   );
 };
 
-export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = true, onCloseFile, fileTabCloseGuard }) => {
+export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = true, onCloseFile, fileTabCloseGuard, fileTabSelectionGuard }) => {
   const { t } = useI18n();
   const { files, runtime, git } = useRuntimeAPIs();
   const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
@@ -2489,6 +2491,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       setShowMobilePageContent(false);
     }
   }, [isMobile, onCloseFile, removeOpenPath, root, selectFile, selectedFile?.path, setSelectedPath]);
+
+  React.useLayoutEffect(() => {
+    if (!fileTabSelectionGuard) return;
+    const guard: FileTabSelectionGuard = (directoryKey, targetPath, select) => guardFileTabSelection({
+      sameDirectory: directoryKey === normalizeContextPanelDirectoryKey(panelRoot),
+      currentPath: selectedFile ? toComparablePath(normalizePath(selectedFile.path)) : null,
+      targetPath: targetPath ? toComparablePath(normalizePath(targetPath)) : null,
+      isDirty,
+      confirm: confirmDraftAction,
+      select,
+    });
+    fileTabSelectionGuard.current = guard;
+    return () => {
+      if (fileTabSelectionGuard.current === guard) fileTabSelectionGuard.current = null;
+    };
+  }, [confirmDraftAction, fileTabSelectionGuard, isDirty, panelRoot, selectedFile]);
 
   React.useLayoutEffect(() => {
     if (!fileTabCloseGuard) return;
