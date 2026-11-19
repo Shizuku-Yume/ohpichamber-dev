@@ -54,16 +54,8 @@ const openGuestSurfaceOnPhone = (mode: ContextPanelMode): GuestOpenSurfaceResult
 };
 
 export const openGuestSurface = ({ mode, directory, supported }: OpenGuestSurfaceOptions): GuestOpenSurfaceResult => {
-<<<<<<< HEAD
   if (!supported) return { ok: false, code: 'UNSUPPORTED', message: 'This OhPiChamber surface has no side panel.' };
-  // While workflows are not shown it answers as for any surface it does not have.
-||||||| bc50ba56aa
-  if (!supported) return { ok: false, code: 'UNSUPPORTED', message: 'This OpenChamber surface has no side panel.' };
-  // While workflows are not shown it answers as for any surface it does not have.
-=======
-  if (!supported) return { ok: false, code: 'UNSUPPORTED', message: 'This OpenChamber surface has no side panel.' };
   if (isMobileSurfaceRuntime()) return openGuestSurfaceOnPhone(mode);
->>>>>>> upstream/main
   if (mode === 'workflows' && !selectWorkflowsShown(useUIStore.getState())) {
     return { ok: false, code: 'UNSUPPORTED', message: 'That surface cannot open here.' };
   }

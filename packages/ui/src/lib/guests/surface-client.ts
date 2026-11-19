@@ -1,42 +1,6 @@
-<<<<<<< HEAD
-/**
- * Viewer side of an extension's shared surface: one socket per open panel,
- * frames in, input out, control state mirrored.
- *
- * The host sends a `frame` text message followed by one binary message with
- * the image; the client pairs them, hands the bytes to the pane, and
- * acknowledges the sequence once the pane has drawn it. That ack is what
- * lets the host send the next frame, so a pane that draws slowly sees fewer
- * frames rather than a growing queue. The socket goes through the runtime
- * transport so it works over the relay too, and reconnects with backoff
- * while the pane is open.
- */
-
 import type { SurfaceHostMessage, SurfaceViewerMessage } from 'ohpichamber-sdk/schemas';
 import { surfaceHostMessageSchema } from 'ohpichamber-sdk/schemas';
 import type { SurfaceController, SurfaceInputEvent } from 'ohpichamber-sdk';
-||||||| bc50ba56aa
-/**
- * Viewer side of an extension's shared surface: one socket per open panel,
- * frames in, input out, control state mirrored.
- *
- * The host sends a `frame` text message followed by one binary message with
- * the image; the client pairs them, hands the bytes to the pane, and
- * acknowledges the sequence once the pane has drawn it. That ack is what
- * lets the host send the next frame, so a pane that draws slowly sees fewer
- * frames rather than a growing queue. The socket goes through the runtime
- * transport so it works over the relay too, and reconnects with backoff
- * while the pane is open.
- */
-
-import type { SurfaceHostMessage, SurfaceViewerMessage } from '@openchamber/sdk/schemas';
-import { surfaceHostMessageSchema } from '@openchamber/sdk/schemas';
-import type { SurfaceController, SurfaceInputEvent } from '@openchamber/sdk';
-=======
-import type { SurfaceHostMessage, SurfaceViewerMessage } from '@openchamber/sdk/schemas';
-import { surfaceHostMessageSchema } from '@openchamber/sdk/schemas';
-import type { SurfaceController, SurfaceInputEvent } from '@openchamber/sdk';
->>>>>>> upstream/main
 
 import { openRuntimeWebSocket } from '@/lib/relay/runtime-socket';
 import type { RelayTunnelWebSocket } from '@/lib/relay/tunnel-client';

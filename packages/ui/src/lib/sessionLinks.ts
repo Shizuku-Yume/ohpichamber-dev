@@ -1,23 +1,5 @@
 import { isLinkIdentifier } from '@/lib/router/messageFocus';
 
-<<<<<<< HEAD
-// Links to a session, optionally to one message in it. They extend the links
-// the app already understands: the web route (`?session=<id>`) and the native
-// deep link (`ohpichamber://session/<id>`), each with a `message` parameter.
-// A link is a place on this server, not a public share: it opens only for
-// someone who can reach the same OpenChamber instance.
-//
-// Pure on purpose: the markdown sanitizer, which may run in a worker, uses it.
-||||||| bc50ba56aa
-// Links to a session, optionally to one message in it. They extend the links
-// the app already understands: the web route (`?session=<id>`) and the native
-// deep link (`openchamber://session/<id>`), each with a `message` parameter.
-// A link is a place on this server, not a public share: it opens only for
-// someone who can reach the same OpenChamber instance.
-//
-// Pure on purpose: the markdown sanitizer, which may run in a worker, uses it.
-=======
->>>>>>> upstream/main
 
 export interface SessionLinkTarget {
     readonly sessionId: string;
@@ -71,15 +53,7 @@ export const parseSessionLink = (href: string, ownOrigins: readonly string[]): S
         return null;
     }
 
-<<<<<<< HEAD
-    if (url.protocol === 'ohpichamber:') {
-        // Old Android WebViews put the route in the path instead of the host.
-||||||| bc50ba56aa
     if (url.protocol === 'openchamber:') {
-        // Old Android WebViews put the route in the path instead of the host.
-=======
-    if (url.protocol === 'openchamber:') {
->>>>>>> upstream/main
         const segments = [url.host, ...url.pathname.split('/')].filter(Boolean);
         if (segments[0]?.toLowerCase() !== 'session' || segments.length !== 2) return null;
         return parseTarget(segments[1], url.searchParams.get('message'));
@@ -92,29 +66,11 @@ export const parseSessionLink = (href: string, ownOrigins: readonly string[]): S
     return null;
 };
 
-<<<<<<< HEAD
-/** True for `ohpichamber://session/...` links, the only native deep links chat content may carry. */
-||||||| bc50ba56aa
-/** True for `openchamber://session/...` links, the only native deep links chat content may carry. */
-=======
->>>>>>> upstream/main
 export const isSessionDeepLink = (href: string): boolean => (
     href.toLowerCase().startsWith(DEEP_LINK_PREFIX) && parseSessionLink(href, []) !== null
 );
 
-<<<<<<< HEAD
-// A link as it sits in text: the native deep link, or any web address, kept
-// only when it carries `session=`. One linear pass: a pattern that looked for
-// `session=` inside the address backtracked over every long unbroken run.
-const LINK_CANDIDATE = /ohpichamber:\/\/session\/[^\s<>()"'`]+|https?:\/\/[^\s<>()"'`]+/gi;
-||||||| bc50ba56aa
-// A link as it sits in text: the native deep link, or any web address, kept
-// only when it carries `session=`. One linear pass: a pattern that looked for
-// `session=` inside the address backtracked over every long unbroken run.
 const LINK_CANDIDATE = /openchamber:\/\/session\/[^\s<>()"'`]+|https?:\/\/[^\s<>()"'`]+/gi;
-=======
-const LINK_CANDIDATE = /openchamber:\/\/session\/[^\s<>()"'`]+|https?:\/\/[^\s<>()"'`]+/gi;
->>>>>>> upstream/main
 
 interface SessionLinkRange {
     readonly start: number;

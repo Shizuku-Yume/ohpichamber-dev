@@ -33,14 +33,8 @@ import {
   isGuestProviderLogoPath,
   isGuestRequestPath,
   isOpenCodeProviderId,
-<<<<<<< HEAD
 } from 'ohpichamber-sdk';
-||||||| bc50ba56aa
-} from '@openchamber/sdk';
-=======
-} from '@openchamber/sdk';
-import { guestToolCardSchema } from '@openchamber/sdk/schemas';
->>>>>>> upstream/main
+import { guestToolCardSchema } from 'ohpichamber-sdk/schemas';
 import { z } from 'zod';
 
 import type { GuestCatalog, InstalledGuest } from './types.ts';

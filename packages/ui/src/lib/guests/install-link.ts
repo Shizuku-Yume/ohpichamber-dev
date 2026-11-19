@@ -1,21 +1,3 @@
-<<<<<<< HEAD
-// `ohpichamber://extensions/install?url=…` installs from a repository, and
-// `?path=…` from a folder. A link can come from any page outside the app, so
-// the desktop shell passes on only `url`, and only chat content inside the app
-// may carry `path`.
-//
-// Pure on purpose: the markdown sanitizer, which may run in a worker, uses it.
-
-||||||| bc50ba56aa
-// `openchamber://extensions/install?url=…` installs from a repository, and
-// `?path=…` from a folder. A link can come from any page outside the app, so
-// the desktop shell passes on only `url`, and only chat content inside the app
-// may carry `path`.
-//
-// Pure on purpose: the markdown sanitizer, which may run in a worker, uses it.
-
-=======
->>>>>>> upstream/main
 type ExtensionInstallLink = { kind: 'url' | 'path'; source: string };
 
 const LINK_PREFIX = 'ohpichamber://extensions/install?';
