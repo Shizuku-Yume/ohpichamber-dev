@@ -1,170 +1,106 @@
-import { OpenCode } from '@opencode/client';
-import type { ModelInfo, OpenCodeClient } from '@opencode/client';
-import type { SmallModelClient } from './contracts.js';
-import { asNonEmptyString } from '../shared/guards.js';
+import { ModelCatalogSchema, CompletionRequestSchema, CompletionResultSchema, CompletionCancelResultSchema } from '@openchamber/agent-contract';
+import { z } from 'zod';
 
-export interface OpenCodeRuntimeProviders {
-  buildOpenCodeUrl: (requestPath: string, query: string) => string;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
-  getDefaultDirectory?: () => string | null;
+let service = null;
+let resolveWorkspaceScope = null;
+
+export function configureAgentService(next, options = {}) {
+  if (!next || !(next.request instanceof Function)) throw new TypeError('Agent service is required');
+  if (!(options.resolveWorkspaceScope instanceof Function)) throw new TypeError('Workspace scope resolver is required');
+  service = next;
+  resolveWorkspaceScope = options.resolveWorkspaceScope;
+  modelCache.clear();
 }
 
-export interface SmallModelRef {
-  providerID: string;
-  modelID: string;
-  variant?: string;
+export function resetAgentService() {
+  service = null;
+  resolveWorkspaceScope = null;
+  modelCache.clear();
 }
 
-interface TrustRefusal {
-  code: 'opencode_trust_required';
-  message?: unknown;
-  directory?: unknown;
-}
+export const getAgentService = () => service;
 
-const isTrustRefusal = (value: unknown): value is TrustRefusal =>
-  value !== null && (typeof value === 'object' || typeof value === 'function')
-  && 'code' in value && value.code === 'opencode_trust_required';
-
-const hasCause = (value: unknown): value is { cause?: unknown } =>
-  value !== null && (typeof value === 'object' || typeof value === 'function');
-
-const isDirectory = (value: unknown): value is string => typeof value === 'string';
-
-const hasModelId = <T>(value: T): value is T & { id: string } =>
-  Boolean(value) && typeof value === 'object' && value !== null
-  && 'id' in value && typeof value.id === 'string';
-
-const isTrustResponse = (value: unknown): value is { code?: unknown; directory?: unknown } =>
-  value !== null && (typeof value === 'object' || typeof value === 'function');
-
-let connection: OpenCodeRuntimeProviders | null = null;
-
-export function configureOpenCodeRuntimeProviders(next: OpenCodeRuntimeProviders | null) {
-  connection = next ?? null;
-}
-
-export function resetOpenCodeRuntimeProviders() {
-  modelCache = null;
-  modelCacheKey = '';
-  modelCacheAt = 0;
-}
-
-const stripTrailingSlash = (value: string) => value.replace(/\/+$/, '');
-
-export function getSmallModelClient(directory?: string | null): SmallModelClient | null {
-  if (!connection) return null;
-  let baseUrl;
-  try {
-    baseUrl = stripTrailingSlash(connection.buildOpenCodeUrl('', ''));
-  } catch {
-    return null;
-  }
-  const headers = { ...connection.getOpenCodeAuthHeaders() };
-  const requested = isDirectory(directory) ? directory.trim() : '';
-  const scope = requested || connection.getDefaultDirectory?.() || null;
-  if (scope) {
-    headers['x-opencode-directory'] = encodeURIComponent(scope);
-  }
-  return OpenCode.make({
-    baseUrl,
-    headers,
-    fetch: async (input, init) => {
-      const response = await globalThis.fetch(input, init);
-      if (response.status === 403) {
-        const body: unknown = await response.clone().json().catch(() => null);
-        const directory = asNonEmptyString(isTrustResponse(body) ? body.directory : undefined);
-        if (isTrustResponse(body) && body.code === 'opencode_trust_required' && directory) {
-          throw Object.assign(
-            new Error(`OpenCode is paused for ${directory}. Open the folder in OpenChamber and trust its configuration before trying again.`),
-            { statusCode: 403, code: body.code, directory },
-          );
-        }
-      }
-      return response;
-    },
-  });
-}
-
+const modelCache = new Map();
 const MODEL_CACHE_TTL_MS = 30_000;
-let modelCache: ModelInfo[] | null = null;
-let modelCacheKey = '';
-let modelCacheAt = 0;
+const workspaceIdSchema = z.string().refine(value => value.trim().length > 0);
 
-const unwrap = <T>(payload: { data: T[] }) => (Array.isArray(payload?.data) ? payload.data : []);
+const workspace = async (workspaceId) => {
+  if (!workspaceIdSchema.safeParse(workspaceId).success) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400, code: 'INVALID_REQUEST' });
+  if (!resolveWorkspaceScope) throw Object.assign(new Error('Workspace scope resolver is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const scope = await resolveWorkspaceScope(workspaceId);
+  if (!scope || scope.workspaceId !== workspaceId) throw Object.assign(new Error('Workspace scope is unavailable'), { statusCode: 404, code: 'SESSION_NOT_FOUND' });
+  return scope;
+};
 
-export function getTrustRefusal(cause: unknown) {
-  if (isTrustRefusal(cause)) return cause;
-  if (hasCause(cause) && isTrustRefusal(cause.cause)) return cause.cause;
-  return null;
+const request = async (pathname, init = {}) => {
+  if (!service) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(body?.detail || 'Agent service request failed');
+    error.statusCode = response.status;
+    error.code = body?.code;
+    throw error;
+  }
+  return body;
+};
+
+export async function listModelInfos(_service, workspaceId) {
+  await workspace(workspaceId);
+  const cached = modelCache.get(workspaceId);
+  if (cached && Date.now() - cached.at < MODEL_CACHE_TTL_MS) return cached.models;
+  const body = ModelCatalogSchema.parse(await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`));
+  modelCache.set(workspaceId, { models: body.models, at: Date.now() });
+  return body.models;
 }
 
-export async function listModelInfos(client: OpenCodeClient, directory?: string | null) {
-  const key = isDirectory(directory) ? directory : '';
-  if (modelCache && modelCacheKey === key && Date.now() - modelCacheAt < MODEL_CACHE_TTL_MS) {
-    return modelCache;
-  }
+export async function getModelRoles(_service, workspaceId) {
+  await workspace(workspaceId);
   try {
-    const models = unwrap(await client.model.list());
-    if (models.length === 0) return models;
-    modelCache = models;
-    modelCacheKey = key;
-    modelCacheAt = Date.now();
-    return models;
-  } catch (error) {
-    const refusal = getTrustRefusal(error);
-    if (refusal) throw refusal;
-    return modelCacheKey === key && modelCache ? modelCache : [];
+    const data = await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/settings`);
+    const setting = Array.isArray(data?.settings) ? data.settings.find((s) => s?.id === 'modelRoles') : null;
+    return setting && typeof setting.value === 'object' && setting.value !== null ? setting.value : {};
+  } catch {
+    return {};
   }
 }
 
-export async function listProviderInfos(client: OpenCodeClient) {
+export async function completeSmallModel(input, { signal } = {}) {
+  const parsed = CompletionRequestSchema.parse(input);
+  await workspace(parsed.workspaceId);
+  signal?.throwIfAborted();
+  const owner = service;
+  if (!owner) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const pathname = `/api/agent/v1/workspaces/${encodeURIComponent(parsed.workspaceId)}/completions`;
+  let cancellation;
+  const cancel = () => {
+    if (cancellation) return;
+    cancellation = owner.request(`${pathname}/${encodeURIComponent(parsed.completionId)}/cancel`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ completionId: parsed.completionId }),
+    }).then(async (response) => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.detail || 'Completion cancellation failed');
+      const result = CompletionCancelResultSchema.parse(body);
+      if (result.completionId !== parsed.completionId) throw new Error('Completion cancellation identity mismatch');
+    });
+    void cancellation.catch(() => { });
+  };
+  signal?.addEventListener('abort', cancel, { once: true });
   try {
-    return unwrap(await client.provider.list());
-  } catch (error) {
-    const refusal = getTrustRefusal(error);
-    if (refusal) throw refusal;
-    return [];
+    const response = await owner.request(pathname, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed),
+    });
+    const body = await response.json();
+    if (!response.ok) throw Object.assign(new Error(body?.detail || 'Completion failed'), { statusCode: response.status, code: body?.code });
+    const result = CompletionResultSchema.parse(body);
+    if (result.completionId !== parsed.completionId || result.selection.providerId !== parsed.selection.providerId || result.selection.modelId !== parsed.selection.modelId) throw new Error('Completion identity mismatch');
+    if (cancellation) await cancellation;
+    return result;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
   }
 }
 
-export async function getDefaultModelInfo(client: OpenCodeClient) {
-  try {
-    const payload = await client.model.default();
-    const info = payload?.data ?? payload;
-    return hasModelId(info) ? info : null;
-  } catch (error) {
-    const refusal = getTrustRefusal(error);
-    if (refusal) throw refusal;
-    return null;
-  }
-}
-
-export async function getConfiguredSmallModelRef(client: OpenCodeClient) {
-  try {
-    const { model } = (await client.agent.get({ agentID: 'title' })).data;
-    if (!model) return null;
-    const ref: SmallModelRef = { providerID: model.providerID, modelID: model.id };
-    const variant = asNonEmptyString(model.variant);
-    if (variant) ref.variant = variant;
-    return ref;
-  } catch (error) {
-    const refusal = getTrustRefusal(error);
-    if (refusal) throw refusal;
-    return null;
-  }
-}
-
-export function findModelInfo<ProviderID, ModelID>(models: ModelInfo[], providerID: ProviderID, modelID: ModelID) {
-  const ofProvider = models.filter((model) => model?.providerID === providerID);
-  return ofProvider.find((model) => model.id === modelID)
-    ?? ofProvider.find((model) => model.modelID === modelID)
-    ?? null;
-}
-
-export async function readOpenCodeCatalog(directory: string | null) {
-  const client = getSmallModelClient(directory);
-  if (!client) throw new Error('OpenCode on this computer is not running');
-  const [providers, models] = await Promise.all([client.provider.list(), client.model.list()]);
-  if (!Array.isArray(providers?.data) || !Array.isArray(models?.data)) throw new Error('OpenCode answered no provider list');
-  return { providers: providers.data, models: models.data };
+export function findModelInfo(models, providerID, modelID) {
+  return models.find((model) => model?.provider === providerID && model?.modelId === modelID) ?? null;
 }
