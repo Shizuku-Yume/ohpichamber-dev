@@ -1231,7 +1231,7 @@ interface UIStore {
  toggleContextEditorTree: () => void;
  toggleContextEditor: () => void;
  setContextEditorTreeWidth: (width: number) => void;
- openContextSurface: (directory: string, mode: ContextPanelMode) => void;
+ openContextSurface: (directory: string, mode: ContextPanelMode, options?: { toggle?: boolean }) => void;
  openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor, options?: { reveal?: boolean }) => void;
  /**
   * Opens an issue, pull or merge request or tracker item in the panel's
@@ -1771,10 +1771,9 @@ export const useUIStore = create<UIStore>()(
      set({ contextEditorTreeWidth: clampContextEditorTreeWidth(width) });
     },
 
-    // Rail entry point: activates the most recent tab of the requested
-    // mode, opens a fresh singleton tab when none exists, and toggles the
-    // panel closed when the requested mode is already active and visible.
-    openContextSurface: (directory, mode) => {
+    // Activates the most recent tab of the requested mode, or opens one.
+    // Rail presses also toggle an already visible surface closed.
+    openContextSurface: (directory, mode, options) => {
      const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
      if (!normalizedDirectory) {
       return;
@@ -1803,6 +1802,7 @@ export const useUIStore = create<UIStore>()(
      };
 
      if (zoneView?.isOpen && activeTab?.mode === mode) {
+      if (options?.toggle === false) return;
       clearTerminalTarget();
       state.closeContextZone(normalizedDirectory, zone);
       return;

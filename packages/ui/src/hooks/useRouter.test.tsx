@@ -169,6 +169,13 @@ test('a workspace tab deep link opens in the draft directory instead of the prev
     const panels = useUIStore.getState().contextPanelByDirectory;
     expect(panels[draftDirectory]?.tabs.map((tab) => tab.mode)).toEqual(['git']);
     expect(panels[DIRECTORY]).toBeUndefined();
+    expect(panels[draftDirectory]?.isOpen).toBe(true);
+
+    await act(async () => {
+      window.history.replaceState({}, '', '/?tab=git');
+      window.dispatchEvent(new window.PopStateEvent('popstate'));
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[draftDirectory]?.isOpen).toBe(true);
   } finally {
     useSessionUIStore.setState({ newSessionDraft });
   }
