@@ -78,6 +78,7 @@ import {
   forkAfterMessage as forkAfterMessageAction,
   fetchMessagesForSession,
   refetchSessionMessages,
+  retireRekeyedSession,
   revertToMessage as revertToMessageAction,
   clearStagedRevert,
   type ArchiveSessionsOptions,
@@ -2505,10 +2506,12 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       })
       registerSessionDirectory(sessionId, ownedDirectory)
     }
-    const loader = getImperativeSessionMessageLoader()
+    // Retire the pre-branch identity in one pass: its cached loads, child-store
+    // projection and live recovery stream all address an id both authorities
+    // now answer 404 for, so leaving the stream attached makes it retry forever.
     if (ownedDirectory) {
-      loader?.invalidateSession({ directory: ownedDirectory, sessionId: previousSessionId })
-      loader?.touchSessionCache({ directory: ownedDirectory, sessionId })
+      retireRekeyedSession(previousSessionId, [ownedDirectory])
+      getImperativeSessionMessageLoader()?.touchSessionCache({ directory: ownedDirectory, sessionId })
     }
     const previousDirectory = get().currentSessionDirectory
     if (get().currentSessionId === previousSessionId) {

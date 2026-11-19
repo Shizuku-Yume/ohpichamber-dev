@@ -286,6 +286,7 @@ let _getDirectory: () => string = () => ""
 // confirmed stale server-side (see recoverStaleBlockingRequest).
 let _enqueueSessionMaterialization: ((directory: string, sessionID: string, messageID: string) => void) | null = null
 let _ensureSessionStream: ((sessionId: string, directory?: string | null) => void) | null = null
+let _detachSessionStream: ((sessionId: string, directory: string) => void) | null = null
 export type OptimisticAddInput = { sessionId: string; directory?: string | null; message: CanonicalMessage }
 export type OptimisticRemoveInput = { sessionId: string; directory?: string | null; messageId: string }
 export type OptimisticConfirmInput = OptimisticRemoveInput
@@ -366,17 +367,31 @@ function invalidateSessionLoads(sessionId: string, directories: Iterable<string 
  invalidateSessionLoadBatch([sessionId], directories)
 }
 
+/**
+ * Retire a session identity the Agent Service rekeyed (`/btw` Promote to
+ * Branch). The pre-branch id is gone from both authorities, so its cached
+ * loads and its live recovery stream are dropped in one pass; otherwise the
+ * pipeline keeps refreshing a transcript the service now answers 404 for.
+ */
+export function retireRekeyedSession(previousSessionId: string, directories: Iterable<string | null | undefined>): void {
+ const owned = new Set(directories)
+ for (const directory of owned) if (directory) _detachSessionStream?.(previousSessionId, directory)
+ invalidateSessionLoadBatch([previousSessionId], owned, true)
+}
+
 
 export function setActionRefs(
  childStores: ChildStoreManager,
  getDirectory: () => string,
  enqueueSessionMaterialization?: (directory: string, sessionID: string, messageID: string) => void,
  ensureSessionStream?: (sessionId: string, directory?: string | null) => void,
+ detachSessionStream?: (sessionId: string, directory: string) => void,
 ) {
  _childStores = childStores
  _getDirectory = getDirectory
  _enqueueSessionMaterialization = enqueueSessionMaterialization ?? null
  _ensureSessionStream = ensureSessionStream ?? null
+ _detachSessionStream = detachSessionStream ?? null
 }
 
 export function setOptimisticRefs(

@@ -510,6 +510,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
           pipelineRef.current?.attach({ directory: dir, sessionId }, { cursor, session: { sessionId, runtimeStatus: session.runtimeStatus } })
         }
       },
+      (sessionId, targetDirectory) => {
+        if (!isCurrent()) return
+        pipelineRef.current?.detach({ directory: targetDirectory, sessionId })
+      },
     )
     setOptimisticRefs(
       (input) => { if (isCurrent()) messageLoader.optimisticAdd({ ...input, directory: input.directory || currentDirectoryRef.current }) },
