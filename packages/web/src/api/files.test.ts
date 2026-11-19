@@ -208,6 +208,19 @@ describe('createWebFilesAPI', () => {
     });
   });
 
+  it('forwards existing-file conditions and propagates save conflicts', async () => {
+    const { createWebFilesAPI } = await import('./files');
+    const api = createWebFilesAPI({ urls });
+    runtimeFetchMock.mockResolvedValueOnce(Response.json({ success: true, path: '/workspace/file.txt' }));
+    await api.writeFile?.('/workspace/file.txt', '', { mustExist: true });
+    expect(runtimeFetchMock).toHaveBeenLastCalledWith('/api/fs/write', expect.objectContaining({
+      body: JSON.stringify({ path: '/workspace/file.txt', content: '', mustExist: true }),
+    }));
+    const message = 'File no longer exists. It may have been renamed or deleted outside the app.';
+    runtimeFetchMock.mockResolvedValueOnce(Response.json({ error: message }, { status: 409 }));
+    await expect(api.writeFile?.('/workspace/file.txt', 'edited', { mustExist: true })).rejects.toThrow(message);
+  });
+
   it('scopes directory mutations with the query and never an engine header', async () => {
     const { createWebFilesAPI } = await import('./files');
     const api = createWebFilesAPI({ urls, getDirectory: () => '/workspace' });

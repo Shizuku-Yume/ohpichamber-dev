@@ -262,6 +262,9 @@ preferences. Binary, image and outside-workspace restrictions still apply.
 `fileEditorContent.ts` preserves the complete normalized text in both the loaded
 snapshot and draft, and restores the detected line ending on save. Preview
 limits must never truncate a writable draft or its dirty-comparison baseline.
+Text editor saves require the file to still exist. If it was renamed or deleted
+outside the app, the Host rejects the save and the editor shows its error while
+keeping the dirty draft. New-file creation and binary canvas uploads are separate.
 Large code previews render the current draft and hash its full content only
 while previewing, so same-length edits in the middle invalidate cached output.
 
