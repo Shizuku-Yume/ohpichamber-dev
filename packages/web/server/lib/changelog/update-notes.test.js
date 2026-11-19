@@ -54,7 +54,7 @@ describe('renderUpdateNotes', () => {
       title: 42,
       intro: false,
       app: { new: [null, 7, false, { text: 'entry' }, ['nested']], fixes: 'ignored' },
-    }], '1.2.2', '1.2.3', compare)).toBe(`## [1.2.3] - 2026-03-03
+    }], '1.2.2', '1.2.3', compareVersions)).toBe(`## [1.2.3] - 2026-03-03
 
 **42**
 
@@ -72,7 +72,7 @@ false
   it('ignores primitive entries and non-object groups without rejecting the release', () => {
     expect(renderUpdateNotes([null, false, 3, 'entry', [], {
       version: '1.2.3', date: '2026-03-03', app: 'ignored',
-    }], '1.2.2', '1.2.3', compare)).toBe('## [1.2.3] - 2026-03-03');
+    }], '1.2.2', '1.2.3', compareVersions)).toBe('## [1.2.3] - 2026-03-03');
   });
 });
 
