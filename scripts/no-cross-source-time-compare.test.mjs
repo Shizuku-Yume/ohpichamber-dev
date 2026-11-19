@@ -24,7 +24,7 @@ const lint = async (source) => {
     jsPlugins: [{ name: 'openchamber', specifier: pluginPath }],
     overrides: [{ files: ['**/*.ts'], rules: { 'openchamber/no-cross-source-time-compare': 'error' } }],
   }));
-  const result = spawnSync(oxlintBin, ['-c', 'oxlint.json', 'fixture.ts'], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync(oxlintBin, ['--format', 'unix', '-c', 'oxlint.json', 'fixture.ts'], { cwd: root, encoding: 'utf8' });
   return `${result.stdout}${result.stderr}`
     .split('\n')
     .filter((line) => line.includes('no-cross-source-time-compare'))
