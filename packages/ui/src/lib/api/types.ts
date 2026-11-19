@@ -156,6 +156,8 @@ export interface TerminalStreamEvent {
   sequence?: number;
   data?: string;
   replayData?: string;
+  /** False for a cached snapshot that does not confirm the current socket's attachment. */
+  attached?: false;
   /** Current PTY size. Snapshot sizes describe how the history reached it. */
   cols?: number;
   rows?: number;
@@ -228,6 +230,8 @@ export interface TerminalServerSession {
   purpose?: TerminalSessionPurpose;
 }
 
+export type TerminalInputOptions = { requireAttachment: boolean };
+
 export interface TerminalAPI {
   listShells?(): Promise<TerminalShellOption[]>;
   /** Server-side sessions for a working directory, or all directories when cwd is empty; absent on runtimes without a server terminal list. */
@@ -241,7 +245,7 @@ export interface TerminalAPI {
   createSession(options: CreateTerminalOptions): Promise<TerminalSession>;
   /** `directory` is the terminal's working directory; one inside an isolated space addresses that space's terminal socket. */
   connect(sessionId: string, handlers: TerminalHandlers, directory?: string | null): Subscription;
-  sendInput(sessionId: string, input: string, directory?: string | null): Promise<void>;
+  sendInput(sessionId: string, input: string, directory?: string | null, options?: TerminalInputOptions): Promise<void>;
   resize(payload: ResizeTerminalPayload): Promise<void>;
   updateAppearance?(sessionId: string, appearance: Pick<CreateTerminalOptions, 'themeMode' | 'terminalBackground' | 'terminalForeground'>, directory?: string | null): Promise<void>;
   close(sessionId: string, directory?: string | null): Promise<void>;

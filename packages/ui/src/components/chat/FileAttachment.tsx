@@ -180,6 +180,7 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
         loading="lazy"
       />
       <button
+        type="button"
         onClick={(event) => {
           event.stopPropagation();
           onRemove();
