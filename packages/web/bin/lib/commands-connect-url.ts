@@ -2,12 +2,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
-import type { CliOptions } from './cli-args.js';
-import type { createServeCommand } from './commands-serve.js';
-import type { PairingSession } from '../../server/lib/client-auth/contracts.js';
-import type { RelayPublicJwk } from '../../server/lib/relay/key-store.js';
-import type { JsonValue } from '../../server/lib/shared/json-values.js';
-import { isString } from '../../server/lib/shared/object-guards.js';
 import { EXIT_CODE, TunnelCliError } from './cli-errors.js';
 import {
   assertSafeBrowserPort,
@@ -17,7 +11,7 @@ import {
   formatHostForUrl,
 } from './cli-network.js';
 import { discoverRunningInstances } from './cli-lifecycle.js';
-import { getInstanceFilePath, hasInstanceFields, readInstanceOptions } from './cli-process.js';
+import { getInstanceFilePath, readInstanceOptions } from './cli-process.js';
 import { createRemoteClientAuthRuntime } from '../../server/lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from '../../server/lib/client-auth/pairing.js';
 import { createRelayIdentityRuntime } from '../../server/lib/relay/identity.js';
@@ -38,35 +32,7 @@ import {
 const REMOTE_CLIENTS_FILE_NAME = 'remote-clients.json';
 const PAIRING_SESSIONS_FILE_NAME = 'client-pairing-sessions.json';
 
-export type ConnectUrlOptions = Pick<Partial<CliOptions>, 'port' | 'host' | 'server' | 'name' | 'relay' | 'json' | 'quiet' | 'qr' | 'uiPassword' | 'apiOnly'>;
-export interface ConnectUrlDependencies {
-  serveCommand: ReturnType<typeof createServeCommand>;
-}
-type RelayCandidate = { type: 'relay'; relayUrl: string; serverId: string; hostEncPubJwk: { [Key in keyof RelayPublicJwk]: RelayPublicJwk[Key] }; priority: number };
-type ConnectCandidate = { type: 'lan' | 'tunnel'; url: string; priority: number } | RelayCandidate;
-type PairingPayloadInput = {
-  pairing: Pick<PairingSession, 'id' | 'fingerprint' | 'expiresAt'> & { secret: string };
-  label: string;
-  candidates: ConnectCandidate[];
-};
-type PairingPayloadFields = {
-  v: number;
-  pairingId: string;
-  secret: string;
-  label?: string;
-  fingerprint?: string;
-  expiresAt?: string;
-};
-
-function hasRelaySettings(value: JsonValue): value is JsonValue & { privateRelay?: JsonValue } {
-  return value !== null;
-}
-
-function hasRelayFields(value: JsonValue | undefined): value is JsonValue & { relayUrl?: JsonValue; enabled?: JsonValue } {
-  return value !== null && value !== undefined;
-}
-
-function isValidRelayUrl(value: JsonValue | undefined): value is string {
+function isValidRelayUrl(value) {
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value.trim());
@@ -76,29 +42,26 @@ function isValidRelayUrl(value: JsonValue | undefined): value is string {
   }
 }
 
-<<<<<<< HEAD:packages/web/bin/lib/commands-connect-url.js
 // Resolve the relay endpoint the same way the running host does (service.js):
 // the administrator's pinned relay (policy file, then OPENCHAMBER_RELAY_URL),
 // then the stored setting, or null when none is configured — so the pairing
 // link points at the same relay the host connects out to.
 function resolveRelayUrl(settings) {
-||||||| bc50ba56aa:packages/web/bin/lib/commands-connect-url.js
-// Resolve the relay endpoint the same way the running host does (service.js):
-// the administrator's pinned relay (policy file, then OPENCHAMBER_RELAY_URL),
-// then the stored setting, then the default — so the pairing link points at
-// the same relay the host connects out to.
-function resolveRelayUrl(settings) {
-=======
-function resolveRelayUrl(settings: JsonValue) {
->>>>>>> upstream/main:packages/web/bin/lib/commands-connect-url.ts
   const pinned = pinnedRelayUrl();
   if (pinned) return pinned;
-  const privateRelay = hasRelaySettings(settings) ? settings.privateRelay : undefined;
-  const stored = hasRelayFields(privateRelay) ? privateRelay.relayUrl : undefined;
+  const stored = settings?.privateRelay?.relayUrl;
   if (isValidRelayUrl(stored)) return stored.trim();
   return null;
 }
 
+// Minimal settings.json read/write for the relay identity runtime. It reads the
+// whole object and writes it back with the relay keys added, so other settings
+// are preserved. Enough for the CLI without wiring the full settings runtime.
+//
+// Mirrors the settings runtime's guarantees: atomic writes (tmp + rename) so
+// concurrent readers in the running app never observe a half-written file, and
+// a STRICT reader gating relay identity regeneration so a swallowed read
+// failure can never mint a new serverId and orphan paired devices.
 function createSettingsAccessors() {
   return createSettingsAccessorsModule({
     fsPromises: fs.promises,
@@ -108,7 +71,13 @@ function createSettingsAccessors() {
   });
 }
 
-async function buildRelayPairingCandidate(): Promise<{ enabled: boolean; relayUrl: string; serverId: string; candidate: RelayCandidate }> {
+// Resolves the instance's relay identity (serverId + encryption public key,
+// generating it if the relay was never enabled) into a pairing-v2 relay
+// candidate. Relay is a transport, not a separate link format: the candidate
+// carries no token — the client redeems the one-time pairing secret over the
+// E2EE tunnel like any other candidate. `enabled` reports whether the host relay
+// is actually on (a relay candidate only connects when the host is relaying).
+async function buildRelayPairingCandidate() {
   const accessors = createSettingsAccessors();
   const settings = await accessors.readSettingsFromDiskMigrated();
   const relayUrl = resolveRelayUrl(settings);
@@ -128,9 +97,8 @@ async function buildRelayPairingCandidate(): Promise<{ enabled: boolean; relayUr
   });
   const identityRuntime = createRelayIdentityRuntime({ crypto, relayKeyStore });
   const identity = await identityRuntime.getRelayIdentity();
-  const privateRelay = hasRelaySettings(settings) ? settings.privateRelay : undefined;
   return {
-    enabled: hasRelayFields(privateRelay) && privateRelay.enabled === true,
+    enabled: settings?.privateRelay?.enabled === true,
     relayUrl,
     serverId: identity.serverId,
     candidate: {
@@ -143,6 +111,9 @@ async function buildRelayPairingCandidate(): Promise<{ enabled: boolean; relayUr
   };
 }
 
+// Pairing runtime backed by the same on-disk store the running host reads, so a
+// session created here is redeemable by the live server. createPairingSession
+// only writes the store (no server needed to mint); redeem is served by the host.
 function createCliPairingRuntime() {
   const dataDir = getOpenChamberDataDir();
   const remoteClientAuthRuntime = createRemoteClientAuthRuntime({
@@ -160,34 +131,41 @@ function createCliPairingRuntime() {
   });
 }
 
-function encodePairingConnectUrl(payload: ReturnType<typeof buildPairingPayload>) {
+// Mirror of encodePairingConnectionPayload in @openchamber/ui (the bin cannot
+// import the UI package). Keep in sync: v2 payload → base64url(JSON) in the URL
+// query, so the one-time secret rides the link, never the network.
+function encodePairingConnectUrl(payload) {
   const encoded = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
   return `ohpichamber://connect?v=2&p=${encoded}`;
 }
 
-function buildPairingPayload({ pairing, label, candidates }: PairingPayloadInput) {
-  const payload: PairingPayloadFields = {
+function buildPairingPayload({ pairing, label, candidates }) {
+  return {
     v: 2,
     pairingId: pairing.id,
     secret: pairing.secret,
+    ...(label ? { label } : {}),
+    ...(pairing.fingerprint ? { fingerprint: pairing.fingerprint } : {}),
+    ...(pairing.expiresAt ? { expiresAt: pairing.expiresAt } : {}),
+    candidates,
   };
-  if (label) payload.label = label;
-  if (pairing.fingerprint) payload.fingerprint = pairing.fingerprint;
-  if (pairing.expiresAt) payload.expiresAt = pairing.expiresAt;
-  return { ...payload, candidates };
 }
 
-async function resolveConnectUrlServerUrl(options: ConnectUrlOptions) {
+async function resolveConnectUrlServerUrl(options) {
   let hostOverride = options.host;
-  if (!isString(hostOverride) && !process.env.OPENCHAMBER_HOST) {
+  if (typeof hostOverride !== 'string' && !process.env.OPENCHAMBER_HOST) {
     const storedOptions = readInstanceOptions(await getInstanceFilePath(options.port));
-    if (hasInstanceFields(storedOptions) && isString(storedOptions.host) && storedOptions.host.trim()) {
+    if (typeof storedOptions?.host === 'string' && storedOptions.host.trim()) {
       hostOverride = storedOptions.host.trim();
     }
   }
 
   const bindHost = resolveConfiguredBindHost(hostOverride);
 
+  // A host that's already a full http(s) URL is a public/server URL, not a bind
+  // address (e.g. `--host https://devchamber.example.com` for a remote deploy
+  // behind a reverse proxy). Use it directly instead of feeding it to
+  // buildLocalUrl, which would produce `http://https://...:port`.
   const hostAsServerUrl = normalizeServerUrlForConnection(bindHost);
   if (hostAsServerUrl) {
     return { serverUrl: hostAsServerUrl, source: 'configured-host' };
@@ -214,11 +192,11 @@ async function resolveConnectUrlServerUrl(options: ConnectUrlOptions) {
   };
 }
 
-function isWildcardBindHost(host: string) {
+function isWildcardBindHost(host) {
   return host === '0.0.0.0' || host === '::' || host === '[::]';
 }
 
-function isLoopbackServerUrl(serverUrl: string) {
+function isLoopbackServerUrl(serverUrl) {
   try {
     const hostname = new URL(serverUrl).hostname.replace(/^\[|\]$/g, '');
     return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
@@ -227,8 +205,8 @@ function isLoopbackServerUrl(serverUrl: string) {
   }
 }
 
-function normalizeServerUrlForConnection(value: string) {
-  const trimmed = isString(value) ? value.trim() : '';
+function normalizeServerUrlForConnection(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
   if (!trimmed) return null;
   try {
     const parsed = new URL(trimmed);
@@ -248,40 +226,20 @@ function getOpenChamberDataDir() {
     : path.join(os.homedir(), '.config', 'ohpichamber');
 }
 
-function assertQrFailure(error: unknown): asserts error is { message?: unknown } {
-  if (error === null || error === undefined) {
-    if ('Bun' in globalThis) {
-      throw new TypeError(`${error} is not an object (evaluating 'error.message')`);
-    }
-    throw new TypeError(`Cannot read properties of ${error} (reading 'message')`);
-  }
-}
-
-async function displayTunnelQrCode(url: string) {
+async function displayTunnelQrCode(url) {
   try {
     const qrcode = await import('qrcode-terminal');
     console.log('\n📱 Scan this QR code to access the tunnel:\n');
     qrcode.default.generate(url, { small: true });
     console.log('');
   } catch (error) {
-    assertQrFailure(error);
     console.warn(`Warning: Could not generate QR code: ${error.message}`);
   }
 }
 
-<<<<<<< HEAD:packages/web/bin/lib/commands-connect-url.js
 function createConnectUrlCommand({ serveCommand }) {
   return async function connectUrlCommand(options = {}) {
     assertSafeBrowserPort(options.port, { context: 'OhPiChamber connect-url' });
-||||||| bc50ba56aa:packages/web/bin/lib/commands-connect-url.js
-function createConnectUrlCommand({ serveCommand }) {
-  return async function connectUrlCommand(options = {}) {
-    assertSafeBrowserPort(options.port, { context: 'OpenChamber connect-url' });
-=======
-function createConnectUrlCommand({ serveCommand }: ConnectUrlDependencies) {
-  return async function connectUrlCommand(options: ConnectUrlOptions = {}) {
-    assertSafeBrowserPort(options.port, { context: 'OpenChamber connect-url' });
->>>>>>> upstream/main:packages/web/bin/lib/commands-connect-url.ts
     const explicitServerUrl = options.server ? normalizeServerUrlForConnection(options.server) : null;
     if (options.server && !explicitServerUrl) {
       throw new TunnelCliError('Invalid --server URL. Use an http:// or https:// URL.', EXIT_CODE.USAGE_ERROR);
@@ -318,7 +276,6 @@ function createConnectUrlCommand({ serveCommand }: ConnectUrlDependencies) {
     const serverUrl = resolvedServerUrl.serverUrl;
     const label = options.name || os.hostname();
 
-<<<<<<< HEAD:packages/web/bin/lib/commands-connect-url.js
     // Direct candidate for the reachable server URL, plus the relay transport as
     // a fallback candidate — one link that works both on the LAN and off-network.
     // Candidate priorities make the client prefer the direct route and try the
@@ -328,23 +285,10 @@ function createConnectUrlCommand({ serveCommand }: ConnectUrlDependencies) {
     const candidates = [{ type: serverUrl.startsWith('https://') ? 'tunnel' : 'lan', url: serverUrl, priority: 10 }];
     const includeRelay = Boolean(relay.candidate) && (options.relay || relay.enabled);
     if (includeRelay) candidates.push(relay.candidate);
-||||||| bc50ba56aa:packages/web/bin/lib/commands-connect-url.js
-    // Direct candidate for the reachable server URL, plus the relay transport as
-    // a fallback candidate — one link that works both on the LAN and off-network.
-    // Candidate priorities make the client prefer the direct route and try the
-    // relay last, mirroring the UI's "Anywhere" pairing. `--relay` opts in even
-    // when the host relay is not up yet (the demand-driven lifecycle starts it);
-    // otherwise the relay rides along only when it is already enabled.
-    const candidates = [{ type: serverUrl.startsWith('https://') ? 'tunnel' : 'lan', url: serverUrl, priority: 10 }];
-    const relay = await buildRelayPairingCandidate();
-    if (options.relay || relay.enabled) candidates.push(relay.candidate);
-=======
-    const candidates: ConnectCandidate[] = [{ type: serverUrl.startsWith('https://') ? 'tunnel' : 'lan', url: serverUrl, priority: 10 }];
-    const relay = await buildRelayPairingCandidate();
-    if (options.relay || relay.enabled) candidates.push(relay.candidate);
->>>>>>> upstream/main:packages/web/bin/lib/commands-connect-url.ts
 
     const pairingRuntime = createCliPairingRuntime();
+    // Mark relay-carrying sessions like the server route does, so the host's
+    // demand-driven relay lifecycle keeps the relay up while the link is pending.
     const usesRelay = candidates.some((candidate) => candidate.type === 'relay');
     const { pairing } = await pairingRuntime.createPairingSession({ label, usesRelay });
     const connectUrl = encodePairingConnectUrl(buildPairingPayload({ pairing, label, candidates }));
@@ -387,6 +331,8 @@ function createConnectUrlCommand({ serveCommand }: ConnectUrlDependencies) {
     } else if (resolvedServerUrl.source === 'loopback-fallback') {
       clackLog.warn('OhPiChamber is bound to all interfaces, but no LAN address was detected. Use --server to provide a reachable URL.');
     } else if (isLoopbackServerUrl(serverUrl)) {
+      // The advertised address does not establish how the server is bound.
+      // Localhost can also be intentional, including Windows-to-WSL forwarding.
       logStatus('info', '[LOOPBACK_URL]', 'This link uses localhost for direct connections. For another device, use --server with a reachable address or include --relay.');
     }
     clackLog.info('Scan or paste this link into another OhPiChamber client. It is single-use and expires.');

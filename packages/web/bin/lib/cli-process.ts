@@ -2,81 +2,16 @@ import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { getRunDir } from './cli-paths.js';
-import type { JsonValue } from '../../server/lib/shared/json-values.js';
 
-export interface CliNotice {
-  level?: string;
-  code?: string;
-  message: string;
-}
-
-export type InstanceFileFields = {
-  port?: JsonValue;
-  host?: JsonValue;
-  launchMode?: JsonValue;
-  uiPassword?: JsonValue;
-  hasUiPassword?: JsonValue;
-  apiOnly?: JsonValue;
-  startedAt?: JsonValue;
-  runtime?: JsonValue;
-};
-
-export interface InstanceWriteFields {
-  port?: unknown;
-  host?: unknown;
-  launchMode?: unknown;
-  uiPassword?: unknown;
-  apiOnly?: unknown;
-  startedAt?: unknown;
-}
-
-export interface ProcessStateOptions {
-  isProcessRunning?: (pid: number) => boolean;
-  readProcessCmdline?: (pid: number) => string | null;
-}
-
-export interface ProcessStopOptions {
-  gracefulTimeoutMs?: number;
-  forceTimeoutMs?: number;
-  shutdownWaitMs?: number;
-}
-
-export function hasInstanceFields(value: JsonValue | undefined): value is JsonValue & InstanceFileFields {
-  return value !== null && value !== undefined;
-}
-
-function hasRuntimeField(value: unknown): value is { runtime?: unknown } {
-  return Boolean(value);
-}
-
-function isProcessText(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
-function isFiniteProcessNumber(value: unknown): value is number {
-  return Number.isFinite(value);
-}
-
-function assertProcessFailure(value: unknown): asserts value is { message?: unknown } {
-  if (value === null || value === undefined) {
-    if (process.versions.bun) {
-      throw new TypeError(`${value} is not an object (evaluating 'error.message')`);
-    }
-    throw new TypeError(`Cannot read properties of ${value} (reading 'message')`);
-  }
-}
-
-export const SERVER_SHUTDOWN_GRACE_MS = 30_000;
-
-async function getPidFilePath(port: number) {
+async function getPidFilePath(port) {
   return path.join(getRunDir(), `openchamber-${port}.pid`);
 }
 
-async function getInstanceFilePath(port: number | undefined) {
+async function getInstanceFilePath(port) {
   return path.join(getRunDir(), `openchamber-${port}.json`);
 }
 
-function readPidFile(pidFilePath: string) {
+function readPidFile(pidFilePath) {
   try {
     const content = fs.readFileSync(pidFilePath, 'utf8').trim();
     const pid = parseInt(content, 10);
@@ -86,13 +21,12 @@ function readPidFile(pidFilePath: string) {
   }
 }
 
-function writePidFile(pidFilePath: string, pid: number | undefined, onNotice?: (notice: CliNotice) => void) {
+function writePidFile(pidFilePath, pid, onNotice) {
   try {
     fs.writeFileSync(pidFilePath, String(pid), { mode: 0o600 });
   } catch (error) {
-    assertProcessFailure(error);
     const message = `Could not write PID file: ${error.message}`;
-    if (onNotice !== undefined) {
+    if (typeof onNotice === 'function') {
       onNotice({ level: 'warning', code: 'PID_FILE_WRITE_FAILED', message });
     } else {
       console.warn(`Warning: ${message}`);
@@ -100,17 +34,16 @@ function writePidFile(pidFilePath: string, pid: number | undefined, onNotice?: (
   }
 }
 
-function removePidFile(pidFilePath: string) {
+function removePidFile(pidFilePath) {
   try {
     if (fs.existsSync(pidFilePath)) {
       fs.unlinkSync(pidFilePath);
     }
   } catch {
-    void 0;
   }
 }
 
-function readInstanceOptions(instanceFilePath: string): JsonValue {
+function readInstanceOptions(instanceFilePath) {
   try {
     return JSON.parse(fs.readFileSync(instanceFilePath, 'utf8'));
   } catch {
@@ -118,22 +51,21 @@ function readInstanceOptions(instanceFilePath: string): JsonValue {
   }
 }
 
-function writeInstanceOptions(instanceFilePath: string, options: InstanceWriteFields, onNotice?: (notice: CliNotice) => void) {
+function writeInstanceOptions(instanceFilePath, options, onNotice) {
   try {
     const toStore = {
       port: options.port,
-      host: isProcessText(options.host) && options.host.length > 0 ? options.host : undefined,
+      host: typeof options.host === 'string' && options.host.length > 0 ? options.host : undefined,
       launchMode: options.launchMode === 'foreground' ? 'foreground' : 'daemon',
-      uiPassword: isProcessText(options.uiPassword) ? options.uiPassword : undefined,
-      hasUiPassword: isProcessText(options.uiPassword),
+      uiPassword: typeof options.uiPassword === 'string' ? options.uiPassword : undefined,
+      hasUiPassword: typeof options.uiPassword === 'string',
       apiOnly: options.apiOnly === true,
       startedAt: Number.isFinite(options.startedAt) ? options.startedAt : Date.now(),
     };
     fs.writeFileSync(instanceFilePath, JSON.stringify(toStore, null, 2), { mode: 0o600 });
   } catch (error) {
-    assertProcessFailure(error);
     const message = `Could not write instance file: ${error.message}`;
-    if (onNotice !== undefined) {
+    if (typeof onNotice === 'function') {
       onNotice({ level: 'warning', code: 'INSTANCE_FILE_WRITE_FAILED', message });
     } else {
       console.warn(`Warning: ${message}`);
@@ -141,18 +73,21 @@ function writeInstanceOptions(instanceFilePath: string, options: InstanceWriteFi
   }
 }
 
-function removeInstanceFile(instanceFilePath: string) {
+function removeInstanceFile(instanceFilePath) {
   try {
     if (fs.existsSync(instanceFilePath)) {
       fs.unlinkSync(instanceFilePath);
     }
   } catch {
-    void 0;
   }
 }
 
-function isProcessRunning(pid: number | null | undefined) {
-  if (pid === null || pid === undefined) return false;
+// Liveness only — "is *some* process alive with this PID". Use this when the
+// PID is known to be ours (a child we just spawned, or a process we are
+// stopping). Do NOT use it to validate a PID read from a pid file: after an
+// ungraceful shutdown the pid file is stale and the kernel may have recycled
+// that PID to an unrelated process — see isOpenchamberProcessRunning.
+function isProcessRunning(pid) {
   try {
     process.kill(pid, 0);
     return true;
@@ -161,9 +96,14 @@ function isProcessRunning(pid: number | null | undefined) {
   }
 }
 
-function readProcessCmdline(pid: number) {
+// Best-effort command line for a live PID, used for identity verification.
+// Returns the cmdline string, '' when the process has no readable cmdline, or
+// null when identity can't be determined on this platform (caller falls back to
+// liveness — so behaviour is unchanged where we can't check).
+function readProcessCmdline(pid) {
   try {
     if (process.platform === 'linux') {
+      // /proc/<pid>/cmdline is a NUL-delimited argv list.
       return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ').trim();
     }
     if (process.platform === 'darwin') {
@@ -178,46 +118,45 @@ function readProcessCmdline(pid: number) {
   } catch {
     return null;
   }
+  // Windows / other: a process's full command line isn't cheaply available, so
+  // we can't verify identity — fall back to liveness-only.
   return null;
 }
 
-function isOpenchamberCmdline(cmdline: string | null) {
-  if (!isProcessText(cmdline) || cmdline.length === 0) {
+function isOpenchamberCmdline(cmdline) {
+  if (typeof cmdline !== 'string' || cmdline.length === 0) {
     return false;
   }
-<<<<<<< HEAD:packages/web/bin/lib/cli-process.js
   // Both the published package and a checkout of this repository live under an
   // `ohpichamber` path segment, for the foreground (bin/cli.js) and daemon
   // (server/index.js) entrypoints alike. Matching that segment (not a generic
   // "cli.js") keeps a recycled stranger such as "npm-cli.js" or "agentmemory"
   // from being mistaken for us.
   return cmdline.toLowerCase().includes('ohpichamber');
-||||||| bc50ba56aa:packages/web/bin/lib/cli-process.js
-  // Every install path contains the "openchamber" segment — the npm package
-  // (@openchamber/web) and the source checkout both do, for the foreground
-  // (bin/cli.js) and daemon (server/index.js) entrypoints alike. Matching the
-  // path segment (not a generic "cli.js") keeps a recycled stranger such as
-  // "npm-cli.js" or "agentmemory" from being mistaken for us.
-  return cmdline.toLowerCase().includes('openchamber');
-=======
-  return cmdline.toLowerCase().includes('openchamber');
->>>>>>> upstream/main:packages/web/bin/lib/cli-process.ts
 }
 
-function isOpenchamberProcessRunning(pid: number) {
+// Liveness + identity — "is the OpenChamber instance recorded in a pid file
+// still the process running under this PID". Use this (not isProcessRunning)
+// when validating a PID read from a pid file. After an ungraceful shutdown
+// removePidFile never runs, so the stale PID can be recycled to an unrelated
+// process; a liveness-only check then reports us as "already running" and aborts
+// startup, which loops forever under systemd Restart=always (issue #1721).
+// Where identity can't be determined (Windows, unreadable /proc or ps), we fall
+// back to liveness so there are no false negatives on those platforms.
+function isOpenchamberProcessRunning(pid) {
   const state = getOpenchamberProcessState(pid);
   return state === 'matched' || state === 'unknown';
 }
 
-function getOpenchamberProcessState(pid: number, options: ProcessStateOptions = {}) {
-  const checkProcessRunning = options.isProcessRunning !== undefined
+function getOpenchamberProcessState(pid, options = {}) {
+  const checkProcessRunning = typeof options.isProcessRunning === 'function'
     ? options.isProcessRunning
     : isProcessRunning;
   if (!Number.isFinite(pid) || pid <= 0 || !checkProcessRunning(pid)) {
     return 'dead';
   }
 
-  const readCmdline = options.readProcessCmdline !== undefined
+  const readCmdline = typeof options.readProcessCmdline === 'function'
     ? options.readProcessCmdline
     : readProcessCmdline;
   const cmdline = readCmdline(pid);
@@ -227,17 +166,17 @@ function getOpenchamberProcessState(pid: number, options: ProcessStateOptions = 
   return isOpenchamberCmdline(cmdline) ? 'matched' : 'mismatched';
 }
 
-function hasOpenchamberRuntimeInfo(info: unknown): info is { runtime: string } {
-  return hasRuntimeField(info) && isProcessText(info.runtime) && info.runtime.length > 0;
+function hasOpenchamberRuntimeInfo(info) {
+  return Boolean(info && typeof info.runtime === 'string' && info.runtime.length > 0);
 }
 
-function waitForProcessExit(pid: number | null | undefined, timeoutMs: number) {
-  if (!isFiniteProcessNumber(pid) || pid <= 0) {
+function waitForProcessExit(pid, timeoutMs) {
+  if (!Number.isFinite(pid) || pid <= 0) {
     return Promise.resolve(true);
   }
 
   const deadline = Date.now() + timeoutMs;
-  return new Promise<boolean>((resolve) => {
+  return new Promise((resolve) => {
     const check = () => {
       if (!isProcessRunning(pid)) {
         resolve(true);
@@ -253,15 +192,15 @@ function waitForProcessExit(pid: number | null | undefined, timeoutMs: number) {
   });
 }
 
-async function terminateProcessTree(pid: number | null | undefined, options: ProcessStopOptions = {}) {
-  if (!isFiniteProcessNumber(pid) || pid <= 0) {
+async function terminateProcessTree(pid, options = {}) {
+  if (!Number.isFinite(pid) || pid <= 0) {
     return true;
   }
 
-  const gracefulTimeoutMs = isFiniteProcessNumber(options.gracefulTimeoutMs) && options.gracefulTimeoutMs >= 0
+  const gracefulTimeoutMs = Number.isFinite(options.gracefulTimeoutMs) && options.gracefulTimeoutMs >= 0
     ? Math.trunc(options.gracefulTimeoutMs)
     : 2500;
-  const forceTimeoutMs = isFiniteProcessNumber(options.forceTimeoutMs) && options.forceTimeoutMs >= 0
+  const forceTimeoutMs = Number.isFinite(options.forceTimeoutMs) && options.forceTimeoutMs >= 0
     ? Math.trunc(options.forceTimeoutMs)
     : 3000;
 
@@ -269,7 +208,6 @@ async function terminateProcessTree(pid: number | null | undefined, options: Pro
     try {
       process.kill(pid);
     } catch {
-      void 0;
     }
 
     if (await waitForProcessExit(pid, 800)) {
@@ -283,7 +221,6 @@ async function terminateProcessTree(pid: number | null | undefined, options: Pro
         windowsHide: true,
       });
     } catch {
-      void 0;
     }
 
     if (await waitForProcessExit(pid, gracefulTimeoutMs)) {
@@ -297,7 +234,6 @@ async function terminateProcessTree(pid: number | null | undefined, options: Pro
         windowsHide: true,
       });
     } catch {
-      void 0;
     }
 
     return waitForProcessExit(pid, forceTimeoutMs);
@@ -306,7 +242,6 @@ async function terminateProcessTree(pid: number | null | undefined, options: Pro
   try {
     process.kill(pid, 'SIGTERM');
   } catch {
-    void 0;
   }
 
   if (await waitForProcessExit(pid, gracefulTimeoutMs)) {
@@ -316,20 +251,19 @@ async function terminateProcessTree(pid: number | null | undefined, options: Pro
   try {
     process.kill(pid, 'SIGKILL');
   } catch {
-    void 0;
   }
 
   return waitForProcessExit(pid, forceTimeoutMs);
 }
 
-async function stopInstanceProcess(pid: number | null | undefined, options: ProcessStopOptions = {}) {
-  if (!isFiniteProcessNumber(pid) || pid <= 0) {
+async function stopInstanceProcess(pid, options = {}) {
+  if (!Number.isFinite(pid) || pid <= 0) {
     return true;
   }
 
-  const shutdownWaitMs = isFiniteProcessNumber(options.shutdownWaitMs) && options.shutdownWaitMs >= 0
+  const shutdownWaitMs = Number.isFinite(options.shutdownWaitMs) && options.shutdownWaitMs >= 0
     ? Math.trunc(options.shutdownWaitMs)
-    : SERVER_SHUTDOWN_GRACE_MS;
+    : 5000;
 
   if (await waitForProcessExit(pid, shutdownWaitMs)) {
     return true;
