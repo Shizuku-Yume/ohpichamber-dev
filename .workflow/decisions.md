@@ -1768,3 +1768,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** waiting for staging to change the index or introducing another status poller.
 - **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
 - **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
+
+## 2026-11-19 - Bind native daemon callbacks to their session owner
+
+- **Decided:** retain Host session identity overrides for named services while binding session-change registration and launch-completion delivery to the native AgentSession instance.
+- **Instead of:** invoking inherited native private-field methods on an `Object.create(nativeSession)` wrapper or patching the OMP dependency.
+- **Because:** JavaScript private fields belong to the constructed instance, not objects inheriting from it. OMP's own ToolSession delegates these calls to the real session; our adapter must preserve the same receiver.
+- **Revisit when:** the worker no longer needs a separate Host-identity ToolSession for broker services.
