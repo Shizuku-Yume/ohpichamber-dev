@@ -243,7 +243,7 @@ test('a submit while a btw answer is displayed sends the main prompt, not a lost
     expect(askBtw).not.toHaveBeenCalled();
     expect(createRun).toHaveBeenCalledTimes(1);
     expect(createRun.mock.calls[0]?.[0]).toBe(SESSION_ID);
-    const request = createRun.mock.calls[0]?.[1] as { input?: { text?: string } } | undefined;
+    const request = createRun.mock.calls[0]?.[1];
     expect(request?.input?.text).toBe('next main question');
     expect(view.state.doc.length).toBe(0);
 

@@ -235,7 +235,7 @@ describe('DefaultsSettings', () => {
     const notice = host.querySelector('p[role="status"]');
     expect(notice).not.toBeNull();
     expect(notice?.textContent).toBeTruthy();
-    expect((notice?.parentElement as HTMLElement | null)?.dataset.settingsItem).toBeUndefined();
+    expect(notice?.parentElement?.getAttribute('data-settings-item') ?? undefined).toBeUndefined();
 
     // The plan row is still drawn; the read failure is what it reports.
     const planRow = host.querySelector('[data-settings-item="sessions.default-plan"]');

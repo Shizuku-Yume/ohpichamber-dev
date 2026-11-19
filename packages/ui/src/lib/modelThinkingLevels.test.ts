@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { getModelThinkingLevels, getReasoningEffortLevels, nextThinkingLevel, resolveThinkingLevel } from './modelThinkingLevels';
 
+const noVariants: { variant: string }[] = [];
+
 const reasoningModel = {
   reasoningEffortSupported: true,
   reasoningOptions: [
@@ -8,7 +10,7 @@ const reasoningModel = {
     { reasoningEffort: 'medium' },
     { reasoningEffort: 'high' },
   ],
-  variants: [] as { variant: string }[],
+  variants: noVariants,
 };
 
 describe('model thinking levels', () => {

@@ -186,13 +186,13 @@ test('a held tab link opens once the session publishes its directory', async () 
 });
 
 test('a held tab applies when the directory is already known at the subscription', () => {
-  const hold: { current: 'terminal' | null } = { current: 'terminal' };
+  const hold: Parameters<typeof takeHeldContextSurface>[0] = { current: 'terminal' };
   expect(takeHeldContextSurface(hold, DIRECTORY)).toBe('terminal');
   // The hold is cleared: a later directory change must not open it again.
   expect(hold.current).toBeNull();
   expect(takeHeldContextSurface(hold, DIRECTORY)).toBeNull();
   // An unknown directory keeps the request for the next publication.
-  const unknown: { current: 'terminal' | null } = { current: 'terminal' };
+  const unknown: Parameters<typeof takeHeldContextSurface>[0] = { current: 'terminal' };
   expect(takeHeldContextSurface(unknown, null)).toBeNull();
   expect(unknown.current).toBe('terminal');
 });
