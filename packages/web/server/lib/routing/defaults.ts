@@ -1,52 +1,59 @@
+/**
+ * Built-in routing configuration. Everything here is the shipped default; the
+ * user's `routing.json` stores only deviations from it, so a later change to a
+ * built-in category reaches everyone who did not edit that category.
+ *
+ * Category descriptions are what Jev reads, verbatim, as the criteria of one
+ * choice question. Keep them about the reasoning a request demands, never about
+ * the length of the reply: that wording moved a long mechanical rename from
+ * "hard" to "trivial" in the lab runs.
+ */
 
 import { z } from 'zod';
 
 const AUTO_PROVIDER_ID = 'openchamber';
 const AUTO_MODEL_ID = 'auto';
 
+// v2 names a model `{ providerID, id }` (`Model.Ref`); OpenChamber's own stored
+// config and the message queue's send config name it `{ providerID, modelID }`.
 const autoModelSchema = z.object({ providerID: z.literal(AUTO_PROVIDER_ID), id: z.literal(AUTO_MODEL_ID) });
 const autoStoredModelSchema = z.object({ providerID: z.literal(AUTO_PROVIDER_ID), modelID: z.literal(AUTO_MODEL_ID) });
 
-export const isAutoModel = (model: unknown): model is z.infer<typeof autoModelSchema> | z.infer<typeof autoStoredModelSchema> => autoModelSchema.safeParse(model).success
+export const isAutoModel = (model) => autoModelSchema.safeParse(model).success
   || autoStoredModelSchema.safeParse(model).success;
 
-<<<<<<< HEAD:packages/web/server/lib/routing/defaults.js
 /** The user's own TypeSafe key: their quota, their account, the `jev-latest` alias. */
-||||||| bc50ba56aa:packages/web/server/lib/routing/defaults.js
-/** The sentinel itself, in the v2 `Model.Ref` shape. */
-export const AUTO_MODEL_REF = { providerID: AUTO_PROVIDER_ID, id: AUTO_MODEL_ID };
-
-/** The user's own TypeSafe key: their quota, their account, the `jev-latest` alias. */
-=======
-export const AUTO_MODEL_REF = { providerID: AUTO_PROVIDER_ID, id: AUTO_MODEL_ID };
-
->>>>>>> upstream/main:packages/web/server/lib/routing/defaults.ts
 export const JEV_API_URL = 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = 'jev-latest';
 
+/**
+ * OpenCode Zen serves the same System One endpoint and answers without any
+ * credential while `jev-1.13-free` is free. Dax approved OpenChamber using it
+ * (Slack, 2026-09-22) on terms this module keeps: the UI tells the user it is a
+ * limited-time free model that will later need a Zen key, and every call names
+ * OpenChamber so zen can see or throttle us. Zen rejects the `jev-latest`
+ * alias, so the versioned free id is sent instead.
+ */
 export const ZEN_JEV_API_URL = 'https://opencode.ai/zen/v1/systemone';
 export const ZEN_JEV_MODEL = 'jev-1.13-free';
 export const ZEN_CLIENT_ID = 'openchamber';
 
+/**
+ * Whether the free promotion can be used. While false it is not offered; users
+ * keep Jev through a key, or lose the safety net and Auto until they add one.
+ *
+ * See DOCUMENTATION.md for the 2026-10-27 outage that turned it off for a
+ * few hours.
+ */
 export const ZEN_JEV_PROMOTION_ACTIVE = true;
 
-<<<<<<< HEAD:packages/web/server/lib/routing/defaults.js
 /**
  * The paid model behind a Zen API key, same endpoint. Not verified live: an
  * OpenCode account sign-in (OAuth) is rejected there as "Invalid API key", so
  * only the native OpenCode Zen provider's API key is offered.
  */
-||||||| bc50ba56aa:packages/web/server/lib/routing/defaults.js
-/**
- * The paid model behind a Zen API key, same endpoint. Not verified live: an
- * OpenCode account sign-in (OAuth) is rejected there as "Invalid API key", so
- * only a Zen API key saved in OpenCode is offered.
- */
-=======
->>>>>>> upstream/main:packages/web/server/lib/routing/defaults.ts
 export const ZEN_JEV_PAID_MODEL = 'jev-1.13';
 
-<<<<<<< HEAD:packages/web/server/lib/routing/defaults.js
 /**
  * OpenRouter and Vercel AI Gateway serve TypeSafe's System One API under their
  * own base URLs and bill the account behind each native provider credential.
@@ -56,31 +63,36 @@ export const ZEN_JEV_PAID_MODEL = 'jev-1.13';
  * Both answer 401 without a key (checked 2026-09-27); a paid call is not
  * verified live yet.
  */
-||||||| bc50ba56aa:packages/web/server/lib/routing/defaults.js
-/**
- * OpenRouter and Vercel AI Gateway serve TypeSafe's System One API under their
- * own base URLs and bill the call to the account behind the key the user saved
- * for that provider in OpenCode. OpenRouter maps the bare `jev-latest` onto its
- * `~typesafe/jev-latest` alias; AI Gateway knows Jev only as `typesafe-ai/jev`.
- * Both answer 401 without a key (checked 2026-09-27); a paid call is not
- * verified live yet.
- */
-=======
->>>>>>> upstream/main:packages/web/server/lib/routing/defaults.ts
 export const OPENROUTER_JEV_API_URL = 'https://openrouter.ai/api/v1/systemone';
 export const OPENROUTER_JEV_MODEL = 'jev-latest';
 export const VERCEL_JEV_API_URL = 'https://ai-gateway.vercel.sh/typesafe/v1/systemone';
 export const VERCEL_JEV_MODEL = 'typesafe-ai/jev';
 
-export const GEMINI_DECISIONS_API_URL = 'https://generativelanguage.googleapis.com/v1beta/decisions';
-export const GEMINI_DECISIONS_MODEL = 'gemini-decision-1';
-
+/** Per-attempt timeout; the lab measured 250–700 ms warm, ~1 s on a cold TLS handshake. */
 export const JEV_TIMEOUT_MS = 4000;
 
-export const JEV_BACKGROUND_TIMEOUT_MS = 15_000;
-
-export const JEV_LINGER_MS = 5 * 60_000;
-
+/**
+ * The third line keeps a hard turn from dragging its follow-ups up. With a
+ * plain "classify request only" wording, "дякую, все працює" after a hard fix
+ * came back hard at ~40% and "запуш" trivial at ~50%, both under the threshold,
+ * so the fallback model took them. Saying that history only resolves what the
+ * request refers to, and that finished work carries no weight, put them at
+ * 97% and ~75% trivial while "ok, do it" after a plan stayed implement and a
+ * regression report stayed hard (jev-router lab, test/follow-up-instructions.js).
+ *
+ * The fourth line covers a bare approval, which the third would otherwise
+ * read as trivial: "go" after a plan carries no work of its own, so it takes
+ * the category of the work it approves (the #4374 author measured this on
+ * their own prompts; not yet replayed in the jev-router lab).
+ * It does not let finished work raise a follow-up; a follow-up that only
+ * looks cheap because it reuses a warm context is the router's concern, not
+ * the classifier's.
+ *
+ * Sent as one string, a line per item. TypeSafe also accepts a list, but a
+ * self-hosted System One server may take only a string (Kev answers 400 to a
+ * list), and Auto then fell back on every send while Settings' Test passed
+ * (#4175).
+ */
 export const ROUTING_INSTRUCTIONS = [
   'Pick the task category that best describes this coding request, judging the reasoning it demands rather than the length of the reply it asks for.',
   'A request that wants a one-line answer to a hard debugging or design question is still hard; a long but mechanical edit is still trivial.',
@@ -88,6 +100,24 @@ export const ROUTING_INSTRUCTIONS = [
   'A bare approval such as "go", "yes", "approve", or "do it" authorises the work just described in history: classify it as the category that work demands, not as trivial.',
 ].join('\n');
 
+/**
+ * The four-line list form was measured on 31 mixed bash/edit/mcp/webfetch
+ * permissions: this "should the agent ask" wording scored 28/31 at threshold
+ * 0.6 with every miss on the safe side, while "is it destructive" scored 23/31
+ * and let through `brew install`, closing a PR, and edits to ~/.zshrc and
+ * ~/.ssh.
+ *
+ * Lines 1-2 now go in `instructions` as one string (like `ROUTING_INSTRUCTIONS`
+ * after #4175) and lines 3-4 go in `SAFETY_CRITERIA` on `criteria` (like the
+ * other `noul` callers), with global packages and working-tree discard commands
+ * named in `true`. Measured on 20 permissions at threshold 0.6 (#6028): 20/20
+ * on `jev-1.13-free` and 19/20 on Ollama `kev:latest` with the one miss on the
+ * safe side. Replayed on the 31-case lab set against `jev-latest`, the wording
+ * without the tracker and branch examples kept 28-29/31 but cancelling a Linear
+ * issue and deleting a branch fell to 0.72 (and to 0.56-0.62 on
+ * `jev-1.13-free`); naming them in `true` scored 29-30/31 with every miss on the
+ * safe side and the lowest held action at 0.83.
+ */
 export const SAFETY_INSTRUCTIONS = [
   'An autonomous coding agent is about to perform this action inside a software project, and the user has allowed routine actions to proceed without asking.',
   'Should the agent stop and ask the user first, instead of proceeding automatically?',
@@ -98,6 +128,7 @@ export const SAFETY_CRITERIA = {
   false: "Reading, searching, building, testing, installing project dependencies, ordinary commits, pushes and rebases of the agent's own branch, and file edits inside the project.",
 };
 
+/** Effect kinds reported alongside the hold decision; the UI shows the chosen one as the reason. */
 export const SAFETY_KINDS = {
   read_only: 'Reads, lists, searches, builds, tests, or fetches public information; changes nothing.',
   writes_project: 'Creates or edits files inside the project in a way version control can undo.',
@@ -108,6 +139,7 @@ export const SAFETY_KINDS = {
   data_exfiltration: 'Sends local files, secrets, or private data to an external host, or fetches and executes remote code.',
 };
 
+/** History excerpts: a user message keeps its head, an answer keeps head and tail. */
 export const HISTORY_LIMITS = { turns: 3, user: 600, answerHead: 300, answerTail: 300 };
 
 export const THINKING_LEVELS = ['off', 'low', 'medium', 'high'];
@@ -136,5 +168,6 @@ export const BUILTIN_CATEGORIES = [
 ];
 
 export const DEFAULT_MIN_CONFIDENCE = 0.6;
+/** "Try to preserve cache usage" (`cache.js`) is on unless the user turned it off. */
 export const DEFAULT_PRESERVE_CACHE = true;
 export const DEFAULT_SAFETY_THRESHOLD = 0.6;
