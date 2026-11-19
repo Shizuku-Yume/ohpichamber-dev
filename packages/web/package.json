@@ -1,39 +1,12 @@
 {
-<<<<<<< HEAD
   "name": "ohpichamber",
   "version": "1.0.0",
-||||||| bc50ba56aa
-  "name": "@openchamber/web",
-  "version": "2.7.0",
-=======
-  "name": "@openchamber/web",
-  "version": "2.7.2",
->>>>>>> upstream/main
   "private": false,
   "type": "module",
-<<<<<<< HEAD
-  "main": "./server/index.js",
-  "types": "./server/index.d.ts",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Shizuku-Yume/ohpichamber.git",
-    "directory": "packages/web"
-  },
-  "homepage": "https://github.com/Shizuku-Yume/ohpichamber",
-||||||| bc50ba56aa
-  "main": "./server/index.js",
-  "types": "./server/index.d.ts",
-=======
   "main": "./build/server/index.js",
   "types": "./build/server/index.d.ts",
->>>>>>> upstream/main
   "bin": {
-<<<<<<< HEAD
-    "ohpichamber": "./bin/cli.js"
-||||||| bc50ba56aa
-    "openchamber": "./bin/cli.js"
-=======
-    "openchamber": "./build/bin/cli.js"
+    "ohpichamber": "./build/bin/cli.js"
   },
   "exports": {
     ".": {
@@ -46,7 +19,6 @@
       "default": "./build/server/*"
     },
     "./package.json": "./package.json"
->>>>>>> upstream/main
   },
   "publishConfig": {
     "access": "public"
@@ -58,61 +30,30 @@
     "dev": "bun run build:watch",
     "dev:server": "bun ../../scripts/build-builtin-extensions.mjs && OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
     "dev:server:watch": "bun ../../scripts/build-builtin-extensions.mjs && node ./scripts/dev-server-watch.mjs",
-<<<<<<< HEAD
-    "build": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build && node ./scripts/stage-changelog.mjs",
+    "build": "bun run build:server && NODE_OPTIONS=--max-old-space-size=6144 vite build && node ./scripts/stage-changelog.mjs",
     "stage:changelog": "node ./scripts/stage-changelog.mjs",
-||||||| bc50ba56aa
-    "build": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build",
-=======
-    "build": "bun run build:server && NODE_OPTIONS=--max-old-space-size=6144 vite build",
-    "build:server": "bun ../../scripts/build-builtin-extensions.mjs && node scripts/build-server.mjs",
->>>>>>> upstream/main
     "build:diag": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build --config vite.diag.config.ts",
     "build:watch": "bun ../../scripts/build-builtin-extensions.mjs && vite build --watch",
-<<<<<<< HEAD
-    "prepack": "node ./scripts/prepack.mjs",
-    "type-check": "bun check -b",
-    "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src",
-||||||| bc50ba56aa
-    "prepack": "bun ../../scripts/build-builtin-extensions.mjs",
-    "type-check": "bun check -b",
-    "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src",
-=======
-    "prepack": "bun run build:server",
+    "prepack": "bun run build:server && node ./scripts/prepack.mjs",
     "type-check": "bun check -b && bun run type-check:server",
-    "type-check:server": "node scripts/check-server-types.mjs",
     "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src && bun run lint:server",
-    "lint:server": "node scripts/check-server-types.mjs --lint",
-    "smoke:server-build": "node scripts/smoke-server-build.mjs",
->>>>>>> upstream/main
     "test": "vitest run",
-<<<<<<< HEAD
     "start": "node bin/cli.js serve",
     "postpack": "node ./scripts/postpack.mjs",
     "pack:standalone": "node ./scripts/pack-standalone.mjs",
-    "stage:runtime": "node ./scripts/prepare-agent-runtime.mjs"
-||||||| bc50ba56aa
-    "start": "node bin/cli.js serve"
-=======
-    "start": "bun bin/cli.js serve"
->>>>>>> upstream/main
+    "stage:runtime": "node ./scripts/prepare-agent-runtime.mjs",
+    "build:server": "bun ../../scripts/build-builtin-extensions.mjs && node scripts/build-server.mjs",
+    "type-check:server": "node scripts/check-server-types.mjs",
+    "lint:server": "node scripts/check-server-types.mjs --lint",
+    "smoke:server-build": "node scripts/smoke-server-build.mjs"
   },
   "dependencies": {
     "7zip-bin": "5.2.0",
     "@clack/prompts": "^1.1.0",
     "@gitbeaker/rest": "43.8.0",
     "@octokit/rest": "^22.0.1",
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    "@openchamber/sdk": "workspace:*",
-    "@opencode/client": "2.2.6",
-    "@opencode/schema": "2.2.6",
-=======
-    "@openchamber/sdk": "workspace:*",
-    "@opencode/client": "2.3.2",
-    "@opencode/schema": "2.3.2",
->>>>>>> upstream/main
     "@simplewebauthn/server": "13.3.3",
+    "@vscode/ripgrep": "^1.18.0",
     "bun-pty": "0.6.0",
     "compression": "^1.8.1",
     "cron-parser": "^5.10.1",
@@ -187,11 +128,17 @@
     "dist",
     "build",
     "public",
+    "package.json",
+    "README.md",
     "resources/agent-runtime",
     "resources/changelog",
     "scripts/standalone-loader.mjs",
-    "package.json",
-    "README.md",
     "resources/standalone-sdk"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shizuku-Yume/ohpichamber.git",
+    "directory": "packages/web"
+  },
+  "homepage": "https://github.com/Shizuku-Yume/ohpichamber"
 }
