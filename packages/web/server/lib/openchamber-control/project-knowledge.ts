@@ -4,20 +4,6 @@ import { asNonEmptyString } from '../shared/guards.js';
 import { parsePlanMarkdown } from '../project-context/runtime.js';
 import { parsePlanProgress } from '../project-context/plan-progress.js';
 import { OpenChamberControlError } from './error.js';
-import type { createProjectContextRuntime } from '../project-context/runtime.js';
-import type { PublicPlan, ProjectTodo, NoteInput, TodoInput } from '../project-context/contracts.js';
-import type { ControlInput } from './contracts.js';
-
-type KnowledgeRuntime = ReturnType<typeof createProjectContextRuntime>;
-type KnowledgeKind = 'note' | 'todo' | 'plan';
-export type PlanEntry = Pick<PublicPlan, 'id' | 'title' | 'source' | 'createdAt' | 'progress' | 'session'> & { path: string };
-export interface KnowledgeDependencies {
-  projectContextRuntime: KnowledgeRuntime | null;
-  resolveProjectContextId: ((directory: string) => Promise<string | null>) | null;
-  isEnabled: () => Promise<boolean>;
-  resolveDirectory: (input: { projectId: string }) => Promise<string>;
-  showPlan: ((input: { projectId: string; planId: string; title: string; directory: string; sessionId: string | null }) => number) | null;
-}
 
 const stringInput = z.string();
 const booleanInput = z.boolean();
@@ -27,7 +13,7 @@ const NOTE_MAX_LENGTH = 3000;
 const TODO_MAX_LENGTH = 1000;
 const PLAN_MAX_LENGTH = 200_000;
 
-const requiredString = (input: ControlInput, field: keyof ControlInput, maxLength?: number, allowEmpty = false) => {
+const requiredString = (input, field, maxLength, allowEmpty = false) => {
   const parsed = stringInput.safeParse(input[field]);
   if (!parsed.success || (!allowEmpty && !parsed.data.trim())) {
     throw new OpenChamberControlError(`${field} must be ${allowEmpty ? 'a string' : 'a non-empty string'}`, 400);
@@ -39,7 +25,7 @@ const requiredString = (input: ControlInput, field: keyof ControlInput, maxLengt
   return value;
 };
 
-const kindOf = (input: ControlInput, allowed: KnowledgeKind[]) => {
+const kindOf = (input, allowed) => {
   const parsed = kindInput.safeParse(input.kind);
   if (!parsed.success || !allowed.includes(parsed.data)) {
     throw new OpenChamberControlError(`kind must be ${allowed.join(', ')}`, 400);
@@ -47,39 +33,54 @@ const kindOf = (input: ControlInput, allowed: KnowledgeKind[]) => {
   return parsed.data;
 };
 
-const idOf = (input: ControlInput) => requiredString(input, 'id').trim();
+const idOf = (input) => requiredString(input, 'id').trim();
 
-const found = <T>(value: T | null | undefined, kind: string, id: string): NonNullable<T> => {
+const found = (value, kind, id) => {
   if (!value) throw new OpenChamberControlError(`${kind} not found: ${id}`, 404);
   return value;
 };
 
-const optionalBoolean = (input: ControlInput, field: keyof ControlInput) => {
+const optionalBoolean = (input, field) => {
   if (input[field] === undefined) return undefined;
   const parsed = booleanInput.safeParse(input[field]);
   if (!parsed.success) throw new OpenChamberControlError(`${field} must be a boolean`, 400);
   return parsed.data;
 };
 
-const rejectFieldsOf = (input: ControlInput, kind: KnowledgeKind, fields: (keyof ControlInput)[]) => {
+/**
+ * The tool declares every field for every kind. One that means nothing for
+ * this kind is refused, so the agent never believes a link or a session was
+ * set when it was dropped.
+ */
+const rejectFieldsOf = (input, kind, fields) => {
   const field = fields.find((name) => input[name] !== undefined);
   if (field) throw new OpenChamberControlError(`${field} does not apply to a ${kind}`, 400);
 };
 
-const readyTodos = (todos: ProjectTodo[]) => {
+/**
+ * A ready todo is unfinished and every todo it depends on is completed. It is
+ * read from the whole stored list before any filter applies, and a dependency
+ * that no longer exists never counts as completed.
+ */
+const readyTodos = (todos) => {
   const completed = new Set(todos.filter((todo) => todo.completed).map((todo) => todo.id));
   return todos.filter((todo) => !todo.completed && (todo.dependsOn ?? []).every((id) => completed.has(id)));
 };
 
-const expectedOf = (input: ControlInput) => (input.expected === undefined ? undefined : requiredString(input, 'expected', undefined, true));
+/** `expected` guards notes and plans only: a todo write names its one field. */
+const expectedOf = (input) => (input.expected === undefined ? undefined : requiredString(input, 'expected', undefined, true));
 
-const rejectExpectedOnCreate = (input: ControlInput) => {
+/**
+ * `expected` compares a replacement against the text the caller read. A create
+ * has nothing to compare against, and silently ignoring it would let an agent
+ * believe a conflict check ran, so it is refused before anything is written.
+ */
+const rejectExpectedOnCreate = (input) => {
   if (input.expected !== undefined && input.id === undefined) {
     throw new OpenChamberControlError('expected requires an id: pass the id of the note or plan you are replacing, or leave expected out to create', 400);
   }
 };
 
-<<<<<<< HEAD:packages/web/server/lib/openchamber-control/project-knowledge.js
 /**
  * The `openchamber_knowledge` actions over the server-owned knowledge store.
  * Four verbs, with `kind` naming notes, todos or plans. Reading and small
@@ -99,28 +100,6 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     if (contextSessionId && (input.projectId !== undefined || input.directory !== undefined)) {
       throw new OpenChamberControlError('Project knowledge actions are scoped to the calling session; drop projectId and directory', 400);
     }
-||||||| bc50ba56aa:packages/web/server/lib/openchamber-control/project-knowledge.js
-/**
- * The `openchamber_knowledge` actions over the server-owned knowledge store.
- * Four verbs, with `kind` naming notes, todos or plans. Reading and small
- * edits of a plan go through the agent's file tools on the path list gives.
- */
-export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, resolveProjectContextId, isEnabled, resolveDirectory, showPlan }) => {
-  const ownerOf = async (input, contextDirectory) => {
-    for (const field of ['projectId', 'directory']) {
-      if (input[field] !== undefined) requiredString(input, field);
-    }
-=======
-function assertScope(input: ControlInput): asserts input is ControlInput & { projectId?: string; directory?: string } {
-  for (const field of ['projectId', 'directory'] as const) {
-    if (input[field] !== undefined) requiredString(input, field);
-  }
-}
-
-export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, resolveProjectContextId, isEnabled, resolveDirectory, showPlan }: KnowledgeDependencies) => {
-  const ownerOf = async (input: ControlInput, contextDirectory: ControlInput['directory'], resolveOwner: NonNullable<KnowledgeDependencies['resolveProjectContextId']>) => {
-    assertScope(input);
->>>>>>> upstream/main:packages/web/server/lib/openchamber-control/project-knowledge.ts
     if (input.projectId !== undefined && input.directory !== undefined) {
       throw new OpenChamberControlError('Provide only one of projectId or directory', 400);
     }
@@ -130,28 +109,36 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     if (!directory || !path.isAbsolute(directory)) {
       throw new OpenChamberControlError('An absolute project or calling-session directory is required', 400);
     }
-    const projectId = asNonEmptyString(await resolveOwner(directory));
+    const projectId = asNonEmptyString(await resolveProjectContextId(directory));
     if (!projectId) throw new OpenChamberControlError('Project context owner not found', 404);
     return { projectId, directory };
   };
 
-  const planEntry = ({ id, title, source, createdAt, progress, session }: Pick<PublicPlan, 'id' | 'title' | 'source' | 'createdAt' | 'progress' | 'session'>, filePath: string) => {
-    const entry: PlanEntry = { id, title, source, createdAt, path: filePath };
+  // A plan is a markdown file: the agent reads and edits it with its own file
+  // tools, so the knowledge tool hands out where it lives, never its text.
+  const planEntry = ({ id, title, source, createdAt, progress, session }, filePath) => {
+    const entry = { id, title, source, createdAt, path: filePath };
     if (progress) entry.progress = progress;
     if (session) entry.session = session;
     return entry;
   };
 
-  const withStepsCheck = <T extends object>(result: T, body: string) => (parsePlanProgress(body)
+  /**
+   * The panel shows a plan's progress from its `## Steps` checklist, so a plan
+   * saved without one is answered with a warning the agent can act on in the
+   * same turn rather than a plan whose progress nobody can see.
+   */
+  const withStepsCheck = (result, body) => (parsePlanProgress(body)
     ? result
     : { ...result, warning: 'This plan has no "## Steps" checklist ("- [ ] step" lines under a "## Steps" heading), so its progress cannot be shown. Add one with the plan\'s coarse steps.' });
 
-  const list = async (runtime: KnowledgeRuntime, projectId: string, input: ControlInput) => {
+  /** `planId` narrows notes, todos and plans to that plan; `ready` narrows todos only. */
+  const list = async (projectId, input) => {
     const planId = input.planId === undefined ? undefined : requiredString(input, 'planId').trim();
     const ready = optionalBoolean(input, 'ready') === true;
     const context = await runtime.readContext(projectId);
     const personalDir = runtime.plansDirFor(projectId);
-    const inPlan = (entry: { planId?: string }) => planId === undefined || entry.planId === planId;
+    const inPlan = (entry) => planId === undefined || entry.planId === planId;
     return {
       projectId,
       notes: context.notes.filter(inPlan),
@@ -166,7 +153,9 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     };
   };
 
-  const saveNote = async (runtime: KnowledgeRuntime, projectId: string, input: ControlInput, contextSessionId: string | null | undefined) => {
+  // The storage runtime validates plan links and dependencies; an omitted
+  // planId or dependsOn reaches it as undefined and keeps the stored value.
+  const saveNote = async (projectId, input, contextSessionId) => {
     rejectFieldsOf(input, 'note', ['dependsOn', 'sessionId']);
     rejectExpectedOnCreate(input);
     if (input.id === undefined) {
@@ -178,7 +167,7 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     }
     const id = idOf(input);
     const expected = expectedOf(input);
-    const patch: NoteInput = { planId: input.planId };
+    const patch = { planId: input.planId };
     if (input.body !== undefined) patch.body = requiredString(input, 'body', NOTE_MAX_LENGTH);
     if (patch.body === undefined && patch.planId === undefined) {
       throw new OpenChamberControlError('body or planId is required to change a note', 400);
@@ -187,7 +176,7 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     return { projectId, note: saved.note };
   };
 
-  const saveTodo = async (runtime: KnowledgeRuntime, projectId: string, input: ControlInput) => {
+  const saveTodo = async (projectId, input) => {
     if (input.expected !== undefined) {
       throw new OpenChamberControlError('expected applies to notes and plans; a todo save changes only the fields it names', 400);
     }
@@ -199,7 +188,7 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
       return { projectId, todo: (await runtime.createTodo(projectId, { text, completed: completed === true, ...links })).todo };
     }
     const id = idOf(input);
-    const patch: TodoInput = { ...links };
+    const patch = { ...links };
     if (input.body !== undefined) patch.text = requiredString(input, 'body', TODO_MAX_LENGTH);
     if (completed !== undefined) patch.completed = completed;
     if (Object.values(patch).every((value) => value === undefined)) {
@@ -209,7 +198,13 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     return { projectId, todo: todos.find((entry) => entry.id === id) };
   };
 
-  const savePlanSession = async (runtime: KnowledgeRuntime, projectId: string, input: ControlInput) => {
+  /**
+   * Sets (a session id), replaces or clears (null) the session an existing
+   * plan is linked to. Markdown is saved by a separate call: a request that
+   * carries both is refused before anything is written, so neither half can
+   * land without the other.
+   */
+  const savePlanSession = async (projectId, input) => {
     if (input.id === undefined) {
       throw new OpenChamberControlError('sessionId links an existing plan: save the plan first, then pass its id', 400);
     }
@@ -223,15 +218,16 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     return { projectId, plan: planEntry(saved, stored.path) };
   };
 
-  const savePlan = async (runtime: KnowledgeRuntime, projectId: string, input: ControlInput) => {
+  const savePlan = async (projectId, input) => {
     rejectFieldsOf(input, 'plan', ['planId', 'dependsOn']);
-    if (input.sessionId !== undefined) return savePlanSession(runtime, projectId, input);
+    if (input.sessionId !== undefined) return savePlanSession(projectId, input);
     rejectExpectedOnCreate(input);
     const body = requiredString(input, 'body', PLAN_MAX_LENGTH);
     if (input.id === undefined) {
       if (!/^\s*#\s+\S/.test(body)) {
         throw new OpenChamberControlError('A plan starts with a # title line', 400);
       }
+      // The first heading is the title, as it is when the user edits a plan.
       const { plan } = await runtime.createPlan(projectId, parsePlanMarkdown(body));
       const stored = found(await runtime.readPlan(projectId, plan.id), 'Plan', plan.id);
       return withStepsCheck({ projectId, plan: planEntry(plan, stored.path) }, body);
@@ -243,7 +239,7 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     return withStepsCheck({ projectId, plan: planEntry(saved.plan, stored.path) }, body);
   };
 
-  const remove = async (runtime: KnowledgeRuntime, projectId: string, input: ControlInput) => {
+  const remove = async (projectId, input) => {
     const kind = kindOf(input, ['note', 'todo', 'plan']);
     const id = idOf(input);
     if (kind === 'todo') {
@@ -255,7 +251,7 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     return { projectId, deleted: true };
   };
 
-  const show = async (runtime: KnowledgeRuntime, projectId: string, directory: string, input: ControlInput, contextSessionId: string | null | undefined) => {
+  const show = async (projectId, directory, input, contextSessionId) => {
     kindOf(input, ['plan']);
     const id = idOf(input);
     if (!showPlan) throw new OpenChamberControlError('Showing a plan is not available on this server', 503);
@@ -271,30 +267,24 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     return { projectId, planId: plan.id, shown: true };
   };
 
-  const execute = async (action: string, input: ControlInput, contextDirectory?: ControlInput['directory'], contextSessionId?: string | null) => {
+  const execute = async (action, input, contextDirectory, contextSessionId) => {
     if (!runtime || !resolveProjectContextId) {
       throw new OpenChamberControlError('Project knowledge is not available on this server', 503);
     }
     if (!await isEnabled()) {
       throw new OpenChamberControlError('The project knowledge tool is turned off in OhPiChamber settings', 403);
     }
-<<<<<<< HEAD:packages/web/server/lib/openchamber-control/project-knowledge.js
     const { projectId, directory } = await ownerOf(input, contextDirectory, contextSessionId);
-||||||| bc50ba56aa:packages/web/server/lib/openchamber-control/project-knowledge.js
-    const { projectId, directory } = await ownerOf(input, contextDirectory);
-=======
-    const { projectId, directory } = await ownerOf(input, contextDirectory, resolveProjectContextId);
->>>>>>> upstream/main:packages/web/server/lib/openchamber-control/project-knowledge.ts
     switch (action) {
-      case 'knowledge.list': return list(runtime, projectId, input);
+      case 'knowledge.list': return list(projectId, input);
       case 'knowledge.save': {
         const kind = kindOf(input, ['note', 'todo', 'plan']);
-        if (kind === 'note') return saveNote(runtime, projectId, input, contextSessionId);
-        if (kind === 'todo') return saveTodo(runtime, projectId, input);
-        return savePlan(runtime, projectId, input);
+        if (kind === 'note') return saveNote(projectId, input, contextSessionId);
+        if (kind === 'todo') return saveTodo(projectId, input);
+        return savePlan(projectId, input);
       }
-      case 'knowledge.delete': return remove(runtime, projectId, input);
-      case 'knowledge.show': return show(runtime, projectId, directory, input, contextSessionId);
+      case 'knowledge.delete': return remove(projectId, input);
+      case 'knowledge.show': return show(projectId, directory, input, contextSessionId);
       default: throw new OpenChamberControlError(`Unsupported project knowledge action: ${action}`, 400);
     }
   };
