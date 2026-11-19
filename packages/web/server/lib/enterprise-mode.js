@@ -87,11 +87,11 @@ const WINDOWS_PROGRAM_DATA = 'C:\\ProgramData';
  * redirecting it cannot hide a policy the administrator placed there.
  */
 export const policyFilePaths = ({ platform = process.platform, env = process.env } = {}) => {
- if (platform === 'darwin') return ['/Library/Application Support/OpenChamber/policy.json'];
+ if (platform === 'darwin') return ['/Library/Application Support/OhPiChamber/policy.json'];
  if (platform === 'win32') {
-  const fixed = path.win32.join(WINDOWS_PROGRAM_DATA, 'OpenChamber', 'policy.json');
+  const fixed = path.win32.join(WINDOWS_PROGRAM_DATA, 'OhPiChamber', 'policy.json');
   const programData = (env.ProgramData ?? '').trim();
-  const fromEnv = programData ? path.win32.join(programData, 'OpenChamber', 'policy.json') : null;
+  const fromEnv = programData ? path.win32.join(programData, 'OhPiChamber', 'policy.json') : null;
   return fromEnv && fromEnv.toLowerCase() !== fixed.toLowerCase() ? [fixed, fromEnv] : [fixed];
  }
  return ['/etc/openchamber/policy.json'];
