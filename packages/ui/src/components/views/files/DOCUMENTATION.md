@@ -745,6 +745,10 @@ including through a bulk tab-close command. Cancel leaves the tabs and draft
 unchanged; Save closes only after a successful write; Discard closes without
 writing. Closing clean or unrelated tabs does not prompt.
 
+Visual draw.io edits update the same draft as source edits. The XML sent to
+the iframe stays stable while editing; loads, Discard, and switching from
+source to preview supply a new starting document.
+
 `isDirty` (draft differs from file) is not proof of a user edit. The context
 panel keeps one FilesView that follows the selected path, so during a file
 switch the draft and the file briefly belong to different files. React to real
