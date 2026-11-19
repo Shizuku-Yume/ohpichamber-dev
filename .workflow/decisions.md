@@ -1593,3 +1593,17 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the installed WebView 124 reaches Capacitor SystemBars' native-inset fallback. On Android 15 the native strip follows Android's theme while StatusBar background writes are ignored; app-dark icons therefore became white on the native light background. Newer edge-to-edge WebViews still need app-theme icons because their strip is web content.
 - **Mine:** yes
 - **Revisit when:** Capacitor exposes native background ownership directly or native-inset fallback is retired.
+
+## 2026-11-19 - Identify malformed mobile pairing links in the welcome form
+
+- **Decided:** Show the translated pairing rejection message when pasted `ohpichamber://` text cannot be parsed, and prevent address submission until it is corrected.
+- **Instead of:** Treating malformed pairing links as server addresses.
+- **Because:** A network error does not tell the user to generate a new pairing link.
+- **Revisit when:** Mobile onboarding no longer accepts both pairing links and server addresses in the same field.
+
+## 2026-11-19 - Route native history to the focused editor
+
+- **Decided:** retain focus-scoped CodeMirror Undo/Redo, its regression tests, and the editor documentation in the fork.
+- **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
+- **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
+- **Revisit when:** upstream ports the same focused-editor history routing and tests.

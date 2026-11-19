@@ -144,6 +144,17 @@ test('manual reconnect preserves secure headers through success and password can
 
     await act(async () => root.render(<I18nProvider><MobileConnectionWelcome onConnected={onConnected} /></I18nProvider>));
     await clickText('Connect by address');
+    const requestsBeforeMalformedLink = received.length;
+    await input('input[type="url"]', 'ohpichamber://connect?v=2&p=malformed');
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe('Pairing link is invalid or expired. Generate a new one.');
+    expect(document.querySelector<HTMLButtonElement>('form button[type="submit"]')?.disabled).toBe(true);
+    await act(async () => document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    expect(received).toHaveLength(requestsBeforeMalformedLink);
+    expect(pairingRequests).toEqual([]);
+    await input('input[type="url"]', url);
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('form button[type="submit"]')?.disabled).toBe(false);
+    await input('input[type="url"]', 'ohpichamber://connect?v=2&p=malformed');
     const pairingLink = encodePairingConnectionPayload(buildPairingConnectionPayload({
       pairingId: 'pair_fixture',
       secret: 'synthetic-fixture',

@@ -22,6 +22,7 @@ beforeEach(() => {
     Element: browser.Element,
     HTMLElement: browser.HTMLElement,
     InputEvent: browser.InputEvent,
+    MouseEvent: browser.MouseEvent,
     KeyboardEvent: browser.KeyboardEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
   })) {
@@ -53,6 +54,66 @@ async function renderControls() {
 }
 
 describe('TitlebarLeftControls', () => {
+  for (const platform of ['win32', 'linux']) {
+    test(`${platform} app menu preserves input focus on mouse press`, async () => {
+      const commands: string[] = [];
+      const focusedAtOpen: Array<Element | null> = [];
+      Object.assign(window, {
+        __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
+        __OPENCHAMBER_PLATFORM__: platform,
+        __OPENCHAMBER_DESKTOP__: {
+          invoke: async (command: string) => {
+            commands.push(command);
+            focusedAtOpen.push(document.activeElement);
+            return null;
+          },
+        },
+      });
+      await renderControls();
+      const button = document.querySelector<HTMLButtonElement>('button[aria-label="Open OhPiChamber menu"]')!;
+      expect(button).not.toBeNull();
+      const input = document.createElement('textarea');
+      document.body.append(input);
+      input.focus();
+
+      const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+      await act(async () => {
+        button.dispatchEvent(press);
+        button.click();
+      });
+
+      expect(press.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(input);
+      expect(commands).toContain('desktop_show_app_menu');
+      expect(focusedAtOpen[commands.indexOf('desktop_show_app_menu')]).toBe(input);
+    });
+
+    test(`${platform} app menu remains focusable and accepts keyboard activation`, async () => {
+      const commands: string[] = [];
+      Object.assign(window, {
+        __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
+        __OPENCHAMBER_PLATFORM__: platform,
+        __OPENCHAMBER_DESKTOP__: {
+          invoke: async (command: string) => { commands.push(command); return null; },
+        },
+      });
+      await renderControls();
+      const button = document.querySelector<HTMLButtonElement>('button[aria-label="Open OhPiChamber menu"]')!;
+      expect(button).not.toBeNull();
+      expect(button.tabIndex).toBe(0);
+      await act(async () => {
+        button.focus();
+        for (const key of ['Enter', ' ']) {
+          const keydown = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+          expect(button.dispatchEvent(keydown)).toBe(true);
+          button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+        }
+      });
+      expect(document.activeElement).toBe(button);
+      expect(commands.filter((command) => command === 'desktop_show_app_menu')).toHaveLength(2);
+    });
+  }
+
   test('caps the overlay to the sidebar width when the sidebar is open', async () => {
     useUIStore.getState().setSidebarOpen(true);
     await renderControls();
