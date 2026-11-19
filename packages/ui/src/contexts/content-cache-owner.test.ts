@@ -9,6 +9,19 @@ const deferred = <T>() => {
 }
 
 describe("content cache owner", () => {
+  test("forwards existing-file write conditions", async () => {
+    let received: unknown[] = []
+    const owner = createContentCachedFiles({
+      writeFile: async (...args: unknown[]) => {
+        received = args
+        return { success: true, path: "file.ts" }
+      },
+    } as unknown as FilesAPI)
+    await owner.files.writeFile!("file.ts", "", { mustExist: true })
+    expect(received).toEqual(["file.ts", "", { mustExist: true }])
+    owner.dispose()
+  })
+
   test("reuses only strongly validated content", async () => {
     let reads = 0
     const files = {
