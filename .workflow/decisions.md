@@ -1585,3 +1585,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the tests pin native Host connection behavior retained by PRs #11 and #13: redirect refusal, closed browser fallback, signed passwordless bearer bootstrap, secure credential persistence, reconnect and password cancellation, header removal, and invalid pairing handling. Neither test carries a token recognized by the guard's content-based OMP boundary classification, but both protect the fork's deliberate authentication contract.
 - **Mine:** yes
 - **Revisit when:** upstream covers the same native Host authentication contract or the connection implementation retires that contract.
+
+## 2026-11-19 - Route native history to the focused editor
+
+- **Decided:** retain focus-scoped CodeMirror Undo/Redo, its regression tests, and the editor documentation in the fork.
+- **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
+- **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
+- **Revisit when:** upstream ports the same focused-editor history routing and tests.

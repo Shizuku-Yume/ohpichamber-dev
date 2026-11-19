@@ -34,6 +34,7 @@ import { refreshWorktreeTopologyForChange } from '@/lib/worktrees/worktreeTopolo
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
+import { handleNativeHistoryMenu } from '@/lib/codemirror/focusedHistory';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -328,6 +329,10 @@ export function ElectronMiniChatApp({ apis }: ElectronMiniChatAppProps) {
   const config = React.useMemo(() => readMiniChatConfig(), []);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
+  React.useEffect(() => {
+    window.addEventListener('openchamber:history-action', handleNativeHistoryMenu);
+    return () => window.removeEventListener('openchamber:history-action', handleNativeHistoryMenu);
+  }, []);
 
   React.useEffect(() => {
     registerRuntimeAPIs(apis);

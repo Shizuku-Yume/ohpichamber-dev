@@ -209,6 +209,13 @@ and the open chat stay; a crash they cause still stops at the fourth crash.
 
 ## Main Files
 
+Edit > Undo/Redo explicitly query the focused app document's CodeMirror history
+through a cancelable `openchamber:history-action` DOM event. Cancellation means
+the focused CodeMirror owns the command, even with empty history. Otherwise the
+focused webContents uses native history; DevTools and browser guests bypass the
+app query. Failed renderer queries never fall back to an unrelated native undo
+stack. Menu labels and platform accelerators match the Electron roles.
+
 | File | Purpose |
 |------|---------|
 | `entry.mjs` | What Electron loads: pre-`ready` configuration, single-instance lock, the first window, then a dynamic import of `main.mjs` |
