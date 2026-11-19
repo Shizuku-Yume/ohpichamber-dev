@@ -1,19 +1,5 @@
 # Decisions
 
-## 2026-11-19 - Stack settings headers and bound installed plugin cards on narrow panes
-
-- **Decided:** shared settings section headers stack their actions below the heading below `@xl`. Plugins Installed and Marketplace action groups wrap. Shared cards constrain their grid item's intrinsic width and reserve a non-shrinking narrow-pane footer area for sibling menu and toggle controls.
-- **Instead of:** forcing headings and controls into one narrow line or letting a long installed title size its card beyond the pane.
-- **Because:** Android portrait verification showed heading/action collisions in Installed and Marketplace and an overflowing installed plugin title under its controls. Capabilities uses the same header primitive and needs the same stacking. Wide-pane direction and control placement remain unchanged. Existing fork section/disclosure and card-chip contracts are retained.
-- **Revisit when:** upstream adopts equivalent narrow-pane section and card layout constraints.
-
-## 2026-11-19 - Bound plugin marketplace metadata and actions on narrow panes
-
-- **Decided:** bound and truncate marketplace names, versions and source labels; wrap long description text and keep install/status actions in their own compact, width-bounded container in the Plugins page and Add plugin dialog.
-- **Instead of:** letting non-shrinking metadata overflow a phone pane or stretching the install action across the narrow row.
-- **Because:** Capacitor shares these components with web and desktop. The existing container-query stacking remains intact, and ordinary wide-pane rows keep their layout.
-- **Revisit when:** upstream adopts equivalent narrow-pane marketplace bounds.
-
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here
@@ -1645,3 +1631,19 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Bound plugin marketplace metadata and actions on narrow panes
+
+- **Decided:** bound and truncate marketplace names, versions and source labels; wrap long description text and keep install/status actions in their own compact, width-bounded container in the Plugins page and Add plugin dialog.
+- **Instead of:** letting non-shrinking metadata overflow a phone pane or stretching the install action across the narrow row.
+- **Because:** Capacitor shares these components with web and desktop. The existing container-query stacking remains intact, and ordinary wide-pane rows keep their layout.
+- **Mine:** yes
+- **Revisit when:** upstream adopts equivalent narrow-pane marketplace bounds.
+
+## 2026-11-19 - Stack settings headers and bound installed plugin cards on narrow panes
+
+- **Decided:** shared settings section headers stack their actions below the heading below `@xl`. Plugins Installed and Marketplace action groups wrap. Shared cards constrain their grid item's intrinsic width and reserve a non-shrinking narrow-pane footer area for sibling menu and toggle controls.
+- **Instead of:** forcing headings and controls into one narrow line or letting a long installed title size its card beyond the pane.
+- **Because:** Android portrait verification showed heading/action collisions in Installed and Marketplace and an overflowing installed plugin title under its controls. Capabilities uses the same header primitive and needs the same stacking. Wide-pane direction and control placement remain unchanged. Existing fork section/disclosure and card-chip contracts are retained.
+- **Mine:** yes
+- **Revisit when:** upstream adopts equivalent narrow-pane section and card layout constraints.
