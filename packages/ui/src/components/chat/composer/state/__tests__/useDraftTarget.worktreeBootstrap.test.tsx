@@ -30,7 +30,7 @@ describe('useDraftTarget while a new worktree attaches', () => {
     dom.close();
   });
 
-  test('refreshes the dirty warning after a commit changes the directory index revision', async () => {
+  test.each(['staged', 'unstaged'])('refreshes a clean draft warning after a %s edit and clears it after commit', async (change) => {
     const { createRoot } = await import('react-dom/client');
     const { I18nProvider } = await import('@/lib/i18n');
     const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
@@ -40,13 +40,17 @@ describe('useDraftTarget while a new worktree attaches', () => {
     const { useGitStore } = await import('@/stores/useGitStore');
     const { notifyGitStatusInvalidated } = await import('@/lib/gitStatusInvalidation');
     const { useDraftTarget } = await import('../useDraftTarget');
-    let dirty = true;
+    let dirty = false;
     let failStatus = false;
+    let lightStatusReads = 0;
     const status = () => ({ current: 'main', tracking: null, ahead: 0, behind: 0,
-      files: dirty ? [{ path: 'file.txt', index: 'M', working_dir: ' ' }] : [], isClean: !dirty });
+      files: dirty ? [{ path: 'file.txt', index: change === 'staged' ? 'M' : ' ', working_dir: change === 'unstaged' ? 'M' : ' ' }] : [], isClean: !dirty });
     globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
       const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
-      if (url.pathname === '/api/git/status') return failStatus ? new Response(null, { status: 503 }) : Response.json(status());
+      if (url.pathname === '/api/git/status') {
+        if (url.searchParams.get('mode') === 'light') lightStatusReads += 1;
+        return failStatus ? new Response(null, { status: 503 }) : Response.json(status());
+      }
       if (url.pathname === '/api/git/branches') return Response.json({ all: ['main'], current: 'main', branches: {} });
       if (url.pathname === '/api/fs/home') return Response.json({ home: '/sandbox' });
       return new Response(null, { status: 503 });
@@ -70,10 +74,27 @@ describe('useDraftTarget while a new worktree attaches', () => {
     const root = createRoot(container);
     try {
       await act(async () => root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}><Probe /></RuntimeAPIContext.Provider></I18nProvider>));
+      expect(hasChanges).toBe(false);
+      const indexRevision = useGitStore.getState().directories.get(PROJECT.path)?.indexRevision;
+      dirty = true;
+      await act(async () => {
+        notifyGitStatusInvalidated(PROJECT.path);
+        await useGitStore.getState().fetchStatus(PROJECT.path, apis.git, { silent: true, force: true });
+      });
+      if (change === 'unstaged') {
+        expect(useGitStore.getState().directories.get(PROJECT.path)?.indexRevision).toBe(indexRevision);
+      }
       for (let attempt = 0; attempt < 20 && !hasChanges; attempt += 1) {
         await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
       }
       expect(hasChanges).toBe(true);
+      const readsBeforeOtherDirectory = lightStatusReads;
+      await act(async () => {
+        await useGitStore.getState().fetchStatus(WORKTREE, {
+          ...apis.git, checkIsGitRepository: async () => true, getGitStatus: async () => status(),
+        }, { silent: true, force: true });
+      });
+      expect(lightStatusReads).toBe(readsBeforeOtherDirectory);
       failStatus = true;
       await act(async () => {
         notifyGitStatusInvalidated(PROJECT.path);
