@@ -1545,7 +1545,7 @@ export const registerFsRoutes = (app, dependencies) => {
  });
 
  app.post('/api/fs/write', async (req, res) => {
-  const { path: filePath, content } = req.body || {};
+  const { path: filePath, content, mustExist } = req.body || {};
   if (!filePath || typeof filePath !== 'string') {
    return res.status(400).json({ error: 'Path is required' });
   }
@@ -1569,12 +1569,17 @@ export const registerFsRoutes = (app, dependencies) => {
     return res.status(400).json({ error: resolved.error });
    }
 
+   const missingMessage = `File no longer exists at ${filePath}. It may have been renamed or deleted outside the app.`;
    const writePath = await fsPromises.realpath(resolved.resolved).catch((error) => {
     if (error && typeof error === 'object' && error.code === 'ENOENT') {
+     if (mustExist === true) return null;
      return resolved.resolved;
     }
     throw error;
    });
+   if (writePath === null) {
+    return res.status(409).json({ error: missingMessage });
+   }
    const canonicalBase = await fsPromises.realpath(resolved.base).catch(() => path.resolve(resolved.base));
    if (!isPathWithinRoot(writePath, canonicalBase, path, os)) {
     return res.status(403).json({ error: 'Access denied' });
@@ -1592,6 +1597,17 @@ export const registerFsRoutes = (app, dependencies) => {
    const tmp = `${writePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
    try {
     await fsPromises.writeFile(tmp, content, 'utf8');
+    if (mustExist === true) {
+     try {
+      await fsPromises.lstat(writePath);
+     } catch (error) {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') {
+       await fsPromises.unlink(tmp);
+       return res.status(409).json({ error: missingMessage });
+      }
+      throw error;
+     }
+    }
     await fsPromises.rename(tmp, writePath);
    } catch (error) {
     await fsPromises.unlink(tmp).catch(() => { });

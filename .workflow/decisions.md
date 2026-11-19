@@ -1631,3 +1631,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** The notice explains the disconnect while retaining saved-instance taps, resume, and online events as recovery paths.
 - **Mine:** no
 - **Revisit when:** Upstream provides equivalent native resume feedback.
+
+## 2026-11-19 - Refuse editor saves to externally missing paths
+
+- **Decided:** text editor saves send an optional `mustExist` condition through the shared Files API and content cache to the Host. Missing paths return `409`; the editor displays the error and retains its dirty draft. New-file writes and binary canvas uploads keep their existing behavior.
+- **Instead of:** silently recreating an externally renamed or deleted file, or replacing atomic writes with direct writes through an open handle.
+- **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
+- **Mine:** yes
+- **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.

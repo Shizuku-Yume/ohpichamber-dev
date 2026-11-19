@@ -195,14 +195,14 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     return { content, path: target };
   },
 
-  async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
+  async writeFile(path: string, content: string, options?: { mustExist?: boolean }): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path);
     const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/write', {
       method: 'POST',
       query: directory ? { directory } : undefined,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: target, content }),
+      body: JSON.stringify({ path: target, content, ...(options?.mustExist ? { mustExist: true } : {}) }),
     });
 
     if (!response.ok) {

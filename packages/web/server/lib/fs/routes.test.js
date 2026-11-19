@@ -133,7 +133,7 @@ const registerExec = ({ spawn }) => {
   return getRoute('POST', '/api/fs/exec');
 };
 
-const registerWrite = (fsPromises) => {
+const registerWrite = (fsPromises, directory = '/repo') => {
   const { app, getRoute } = createRouteRegistry();
   registerFsRoutes(app, {
     os: { homedir: () => '/home/user' },
@@ -145,7 +145,7 @@ const registerWrite = (fsPromises) => {
     spawn: vi.fn(),
     crypto: { randomUUID: () => 'job-0' },
     normalizeDirectoryPath: (p) => p,
-    resolveProjectDirectory: async () => ({ directory: '/repo' }),
+    resolveProjectDirectory: async () => ({ directory }),
     buildAugmentedPath: () => '/usr/bin',
     resolveGitBinaryForSpawn: () => 'git',
     openchamberUserConfigRoot: '/home/user/.config',
@@ -551,6 +551,58 @@ describe('fs clone', () => {
 });
 
 describe('fs write', () => {
+  it.each(['new', ''])('conditionally saves an existing file with content %j', async (content) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'conditional-write-'));
+    try {
+      const file = path.join(directory, 'file.txt');
+      await nativeFs.writeFile(file, 'old');
+      const handler = registerWrite(nativeFs, directory);
+      const res = await callWrite(handler, { path: file, content, mustExist: true });
+      expect(res.statusCode).toBe(200);
+      expect(await nativeFs.readFile(file, 'utf8')).toBe(content);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([false, true])('refuses a file renamed externally (during write: %s)', async (duringWrite) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'conditional-rename-'));
+    try {
+      const file = path.join(directory, 'file.txt');
+      const moved = path.join(directory, 'renamed.txt');
+      await nativeFs.writeFile(file, 'original');
+      if (!duringWrite) await nativeFs.rename(file, moved);
+      const handler = registerWrite({
+        ...nativeFs,
+        writeFile: async (...args) => {
+          await nativeFs.writeFile(...args);
+          if (duringWrite) await nativeFs.rename(file, moved);
+        },
+      }, directory);
+      const res = await callWrite(handler, { path: file, content: 'edited', mustExist: true });
+      expect(res.statusCode).toBe(409);
+      expect(res.body.error).toBe(`File no longer exists at ${file}. It may have been renamed or deleted outside the app.`);
+      await expect(nativeFs.lstat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await nativeFs.readFile(moved, 'utf8')).toBe('original');
+      expect(await nativeFs.readdir(directory)).toEqual(['renamed.txt']);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('creates a missing file when no condition is supplied', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ordinary-write-'));
+    try {
+      const file = path.join(directory, 'new.txt');
+      const handler = registerWrite(nativeFs, directory);
+      const res = await callWrite(handler, { path: file, content: 'created' });
+      expect(res.statusCode).toBe(200);
+      expect(await nativeFs.readFile(file, 'utf8')).toBe('created');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('does not rewrite a file when content is unchanged', async () => {
     const fsPromises = {
       readFile: vi.fn(async () => 'same'),
