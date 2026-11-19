@@ -1725,6 +1725,8 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** Pierre no longer requires stable descriptor identity across virtualized renders.
 
+Small-file acceptance also exposed `No valid theme loader registered for "openchamber-dark"`: FilesView requested raw theme IDs even though the registry returns content-hashed render names. Resolve and register the light/dark pair synchronously before rendering, and memoize by theme objects so custom-theme edits under the same ID are respected. Both inline and fullscreen previews share these descriptors and theme names.
+
 ## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
 
 - **Decided:** the desktop strip consults a file-editor selection guard before selecting a different file path. Reuse Save/Discard/Cancel and pause autosave through the existing confirmation hook; failed saves and Cancel leave the active tab and dirty draft unchanged. Clean drafts, the same path, and non-file surfaces select immediately.

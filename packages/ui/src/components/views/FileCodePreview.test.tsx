@@ -2,6 +2,8 @@ import { afterAll, afterEach, expect, mock, test } from 'bun:test';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
 import type { FileContents } from '@pierre/diffs';
+import { getDefaultTheme } from '@/lib/theme/themes';
+import { getThemeRenderName } from '@/lib/shiki/appThemeRegistry';
 
 const browser = new Window();
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -17,7 +19,7 @@ mock.module('@pierre/diffs/react', () => ({
   },
 }));
 const { createRoot } = await import('react-dom/client');
-const { FileCodePreview } = await import('./FileCodePreview');
+const { FileCodePreview, getFilePreviewTheme } = await import('./FileCodePreview');
 const host = document.createElement('div');
 document.body.append(host);
 const root = createRoot(host);
@@ -67,4 +69,16 @@ test('content, file and highlighting changes invalidate the preview descriptor',
     expect(files.at(-1)).not.toBe(previous);
     expect(files.at(-1)).toEqual(file);
   }
+});
+
+test('preview requests the registered theme names, including edits under the same theme ID', () => {
+  const light = getDefaultTheme(false);
+  const dark = getDefaultTheme(true);
+  const theme = getFilePreviewTheme(light, dark);
+  expect(theme).toEqual({ light: getThemeRenderName(light), dark: getThemeRenderName(dark) });
+  expect(theme.light).not.toBe(light.metadata.id);
+  expect(theme.dark).not.toBe(dark.metadata.id);
+  const edited = { ...light, colors: { ...light.colors, syntax: { ...light.colors.syntax, base: { ...light.colors.syntax.base, background: '#123456' } } } };
+  expect(getFilePreviewTheme(edited, dark)).toEqual({ light: getThemeRenderName(edited), dark: theme.dark });
+  expect(getFilePreviewTheme(edited, dark).light).not.toBe(theme.light);
 });
