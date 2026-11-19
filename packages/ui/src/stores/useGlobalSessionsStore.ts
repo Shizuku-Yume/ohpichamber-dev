@@ -18,6 +18,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { ensureChatsRootDirectory, getChatsRoot, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
+import { retry, STARTUP_RETRY } from '@/sync/retry';
 import {
   applyGlobalSessionStructureMutations,
   buildGlobalSessionStructure,
@@ -817,7 +818,12 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         rootsReady = true;
         get().rehydrateManagedChatSessions();
-        const [result, binding] = await Promise.all([canonicalClient.listSessions(), bindKnownWorkspaceDirectories(generation)]);
+        const result = await retry(() => {
+          if (generation !== loadGeneration) throw new Error('Runtime changed before session discovery');
+          return canonicalClient.listSessions();
+        }, STARTUP_RETRY);
+        if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
+        const binding = await bindKnownWorkspaceDirectories(generation);
 
         if (generation !== loadGeneration) {
           // Runtime switched mid-load: this snapshot belongs to the previous

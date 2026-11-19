@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 import type { Session, Subagent } from '@openchamber/agent-contract';
-import { canonicalClient } from '@/api/canonicalClient';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -49,6 +49,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   list.mockRestore();
   resolveWorkspace.mockRestore();
   listWorkspaces.mockRestore();
@@ -57,6 +58,66 @@ afterEach(() => {
 });
 
 describe('native global mutation reconciliation', () => {
+  const advanceStartup = async () => {
+    for (let second = 0; second < 45; second += 1) {
+      for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+      jest.advanceTimersByTime(1000);
+    }
+  };
+  const warmup = () => new CanonicalApiError({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true });
+
+  test.each([false, true])('startup discovery recovers after delayed readiness (empty=%s)', async (empty) => {
+    jest.useFakeTimers();
+    const readyAt = Date.now() + 25000;
+    list.mockImplementation(async () => {
+      if (Date.now() < readyAt) throw warmup();
+      return { items: empty ? [] : [session('ses_ready')], errors: {} };
+    });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(false);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(empty ? [] : ['ses_ready']);
+    expect(listWorkspaces).toHaveBeenCalledTimes(1);
+  });
+
+  test('a real failure after warmup stays an error and retains the previous snapshot', async () => {
+    jest.useFakeTimers();
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_saved')], []);
+    list.mockRejectedValueOnce(warmup()).mockRejectedValue(new CanonicalApiError({ type: 'urn:test:failed', title: 'Failed', status: 500, detail: 'Discovery failed', code: 'INTERNAL_ERROR', retryable: false }));
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(useGlobalSessionsStore.getState().status).toBe('error');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(true);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_saved']);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  test('startup retries are bounded when the service stays unavailable', async () => {
+    jest.useFakeTimers();
+    list.mockRejectedValue(warmup());
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(useGlobalSessionsStore.getState().status).toBe('error');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(true);
+    expect(list).toHaveBeenCalledTimes(8);
+  });
+
+  test('runtime reset cancels delayed startup retries', async () => {
+    jest.useFakeTimers();
+    list.mockRejectedValue(warmup());
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(useGlobalSessionsStore.getState().status).toBe('idle');
+  });
+
   test('keeps a create after discovery starts', async () => {
     const loading = useGlobalSessionsStore.getState().loadSessions();
     useGlobalSessionsStore.getState().upsertSession(session('ses_created'));

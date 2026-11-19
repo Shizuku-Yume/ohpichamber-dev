@@ -1732,3 +1732,7 @@ Treat electron-updater's `No published versions on GitHub` like a missing platfo
 ## 2026-11-19 - Refresh desktop login items only when enabled
 
 The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup re-registers an enabled login item so its path and background-start args stay current after updates or moves, and skips the write when the item is disabled, unregistered, or unreadable (macOS can reject that no-op write with `Operation not permitted`). Explicit settings-change IPC remains authoritative and unchanged.
+
+## 2026-11-19 - Retry native session and command discovery during Agent Service startup
+
+Global sessions and native command catalogs use the existing bounded `STARTUP_RETRY` policy in their owning stores, including command workspace resolution. A successful native read establishes authority; readiness does not manufacture an empty snapshot. Session workspace binding follows successful discovery so it cannot exhaust its own retry window before the service is ready. Non-retryable or exhausted failures retain the existing error and cached-data behavior. Runtime generation changes retire retries before another request. This shared behavior applies to Web/PWA, Electron, hosted mobile, and Capacitor; the Guest SDK contract is unchanged.
