@@ -8,40 +8,20 @@ import { createHostSessionState } from '../host/session-state.js';
 import { runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
 
 import { trackedItemKey } from '../tracked-items/items.js';
-import { changesBetween, createPrWatchRuntime, parsePullRequestUrl, PR_WATCH_SOURCE, registerPrWatchRoutes } from './runtime.js';
+import { changesBetween, createPrWatchRuntime, parsePullRequestUrl, PR_WATCH_SOURCE } from './runtime.js';
 
 const SESSION = 'ses_agent';
 const DIRECTORY = '/repo';
 const URL_7 = 'https://github.com/acme/app/pull/7';
-const URL_8 = 'https://github.com/acme/app/pull/8';
 
 const temporaryDirectories = [];
 const runtimes = [];
-
-const createSignal = () => {
-  const listeners = new Set();
-  return {
-    notify() { for (const listener of listeners) listener(); },
-    until(check) {
-      if (check()) return Promise.resolve(true);
-      return new Promise((resolve) => {
-        const listener = () => {
-          if (!check()) return;
-          listeners.delete(listener);
-          resolve(true);
-        };
-        listeners.add(listener);
-      });
-    },
-  };
-};
 
 afterEach(async () => {
   const stopping = runtimes.splice(0);
   for (const runtime of stopping) runtime.stop();
   await Promise.all(stopping.map((runtime) => runtime.flush()));
   await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
-  vi.useRealTimers();
 });
 
 const makeDataDir = async () => {
@@ -91,7 +71,7 @@ const createTracked = (read = async () => ({ status: 'ok', pulls: [pull()] })) =
     tracked,
     readers: { sourceControl: vi.fn(read) },
     // A tracked-items answer; `requestedAt` is when the read behind it began.
-    move: (state, requestedAt = Date.now() + 1, url = URL_7) => listener([{ key: trackedItemKey(parsePullRequestUrl(url)), state, requestedAt }]),
+    move: (state, requestedAt = Date.now() + 1) => listener([{ key: trackedItemKey(parsePullRequestUrl(URL_7)), state, requestedAt }]),
   };
 };
 
@@ -124,7 +104,6 @@ const createHub = () => {
 const createRuntime = async ({ dataDir, sessionService = createMockSessionService(), cleanupOnMerge = false, archived = false } = {}) => {
   const hub = createHub();
   const broadcasts = [];
-  const signal = createSignal();
   const runtime = createPrWatchRuntime({
     sessionService,
     broadcastUiEvent: (event) => broadcasts.push(event),
@@ -133,6 +112,7 @@ const createRuntime = async ({ dataDir, sessionService = createMockSessionServic
     isSessionArchived: async () => archived,
     quietMs: 0,
     retryDelayMs: () => 5,
+    subagentRecheckMs: 5,
   });
   runtimes.push(runtime);
   runtime.start(hub);
@@ -170,42 +150,6 @@ describe('changesBetween', () => {
     expect(changesBetween({ ...base, checks: 'success' }, { ...base, headSha: 'b2', checks: 'success' })).toEqual(['checks-passed']);
     expect(changesBetween(base, { ...base, merge: 'dirty', activity: 3 })).toEqual(['conflict', 'activity']);
     expect(changesBetween(base, { ...base, state: 'merged' })).toEqual(['merged']);
-  });
-});
-
-describe('registerPrWatchRoutes', () => {
-  const request = { params: { sessionID: SESSION }, query: {} };
-  const createRoutes = (runtime) => {
-    const handlers = new Map();
-    registerPrWatchRoutes({
-      get(route, handler) { handlers.set(`GET ${route}`, handler); },
-      delete(route, handler) { handlers.set(`DELETE ${route}`, handler); },
-    }, runtime);
-    const response = { status: vi.fn(() => response), json: vi.fn() };
-    return { handlers, response };
-  };
-
-  it.each([
-    [Object.assign(new Error('unreadable'), { status: 503 }), 503, 'unreadable'],
-    [{ status: 400, message: 7 }, 400, 7],
-    [Object.assign(() => {}, { status: 409, message: 'conflict' }), 409, 'conflict'],
-    [{ status: '404', message: 'failed' }, 500, 'failed'],
-    [{ status: 400.5 }, 500, 'Failed to load pull request watches'],
-    ['unavailable', 500, 'Failed to load pull request watches'],
-  ])('preserves error status and message for %j', async (error, status, message) => {
-    const { handlers, response } = createRoutes({ load: async () => { throw error; } });
-    await handlers.get('GET /api/pr-watch')(request, response);
-    expect(response.status).toHaveBeenCalledWith(status);
-    expect(response.json).toHaveBeenCalledWith({ error: message });
-  });
-
-  it('passes the supplied query value through to unwatch', async () => {
-    const result = { watching: [], stopped: true };
-    const unwatch = vi.fn(async () => result);
-    const { handlers, response } = createRoutes({ unwatch });
-    await handlers.get('DELETE /api/pr-watch/sessions/:sessionID')({ ...request, query: { url: ['invalid'] } }, response);
-    expect(unwatch).toHaveBeenCalledWith(SESSION, ['invalid']);
-    expect(response.json).toHaveBeenCalledWith(result);
   });
 });
 
@@ -251,12 +195,9 @@ describe('createPrWatchRuntime', () => {
   });
 
   it('holds the wake while its details are read, whatever idle event arrives', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const detailsStarted = Promise.withResolvers();
-    let releaseDetails = () => {};
+    let releaseDetails = () => { };
     const { tracked, readers, move } = createTracked(async ({ details }) => {
       if (!details) return { status: 'ok', pulls: [pull()] };
-      detailsStarted.resolve();
       await new Promise((resolve) => { releaseDetails = resolve; });
       return { status: 'ok', pulls: [pull({ failedChecks: ['lint'], recentActivity: [] })] };
     });
@@ -271,7 +212,6 @@ describe('createPrWatchRuntime', () => {
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(sessionService.sends).toEqual([]);
 
-    vi.useRealTimers();
     releaseDetails();
     expect(await until(() => sessionService.sends.length === 1)).toBe(true);
     expect(sessionService.sends[0].payload.input.context[0].text).toContain('Pull request #7: a check failed (lint)');
@@ -344,7 +284,7 @@ describe('createPrWatchRuntime', () => {
     one.runtime.attach({ trackedItems: first.tracked, readers: first.readers });
     await one.runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
     first.move(pull({ checks: { state: 'failure' } }));
-    expect(await one.until(() => one.runtime.snapshot().watches[0]?.status === 'waking')).toBe(true);
+    expect(await until(() => one.runtime.snapshot().watches[0]?.status === 'waking')).toBe(true);
     one.runtime.stop();
     await one.runtime.flush();
 
@@ -380,7 +320,6 @@ describe('createPrWatchRuntime', () => {
   });
 
   it('does not wake after a stop that lands while the wake is checking the session', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { tracked, readers, move } = createTracked();
     const sessionService = createMockSessionService();
     let release = () => { };
@@ -403,7 +342,6 @@ describe('createPrWatchRuntime', () => {
   });
 
   it('keeps an idle event that arrives while a wake is in flight, and wakes once the session is free', async () => {
-    const probeStarted = Promise.withResolvers();
     const { tracked, readers, move } = createTracked();
     const sessionService = createMockSessionService();
     let release = () => { };
@@ -430,10 +368,10 @@ describe('createPrWatchRuntime', () => {
 
   it('stops on request, and when the session is deleted', async () => {
     const { tracked, readers } = createTracked();
-    const { runtime, emit, until } = await createRuntime();
+    const { runtime, emit } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
-    await expect(runtime.unwatch(SESSION)).resolves.toEqual({ watching: [], stopped: true });
+    await expect(runtime.unwatch(SESSION)).resolves.toEqual({ watching: false, stopped: true });
     expect(tracked.interest.size).toBe(0);
 
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });

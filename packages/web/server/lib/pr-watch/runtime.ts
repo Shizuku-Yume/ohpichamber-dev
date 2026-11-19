@@ -1,3 +1,19 @@
+// An agent waiting on its pull request.
+//
+// The agent opens a pull request (or a merge request), asks to watch it with
+// the `openchamber` tool's `pr.watch`, and goes on with whatever it does,
+// ending its turn when it has nothing else. From then on this runtime follows
+// the pull request through the tracked-items service, whether or not any
+// window is open, and wakes the session with one synthetic message
+// when something the agent has to act on happens: a check failed, every check
+// passed, someone commented or reviewed, it conflicts with or fell behind its
+// base, it was merged or closed. A wake ends the watch; the agent watches
+// again when it needs to wait once more.
+//
+// Delivery follows `../dispatch-results`: the message waits until the session is
+// not running, and its command key is minted and saved before the first attempt,
+// so a retry repeats the same command and the Host never admits it twice.
+
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
@@ -10,11 +26,15 @@ const FILE_NAME = 'pr-watch.json';
 const FILE_VERSION = 1;
 const INTEREST_OWNER = 'pr-watch';
 const MAX_WATCHES = 200;
+// Idle events arrive in bursts around a turn boundary.
 const QUIET_MS = 500;
+const SUBAGENT_RECHECK_MS = 5_000;
 const RETRY_BASE_DELAY_MS = 2_000;
 const RETRY_MAX_DELAY_MS = 60_000;
+// A wake that keeps failing is given up, so a broken session does not retry forever.
 const MAX_DELIVERY_FAILURES = 8;
 
+/** What the agent is told, in the order it reads best. */
 const EVENT_TEXT = {
   merged: 'it was merged',
   closed: 'it was closed without merging',
@@ -24,8 +44,7 @@ const EVENT_TEXT = {
   behind: 'its branch is behind the base branch',
   activity: 'someone commented or reviewed',
 };
-export type PrWatchEvent = keyof typeof EVENT_TEXT;
-const EVENTS: PrWatchEvent[] = ['merged', 'closed', 'checks-failed', 'checks-passed', 'conflict', 'behind', 'activity'];
+const EVENTS = Object.keys(EVENT_TEXT);
 
 const sessionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{4,128}$/);
 const snapshotSchema = z.object({
@@ -42,6 +61,8 @@ const watchSchema = z.object({
   url: z.string().min(1),
   item: z.unknown(),
   startedAt: z.number().finite().nonnegative(),
+  // When the watch's own read began: a tracked-items answer to a read that
+  // began earlier is older than the baseline and is dropped.
   baselineAt: z.number().finite().nonnegative().catch(0),
   last: snapshotSchema.nullable(),
   wake: z.object({
@@ -58,12 +79,6 @@ const detailsSchema = z.object({
 });
 const storedFileSchema = z.object({ revision: z.number().int().nonnegative().optional(), watches: z.array(z.unknown()) });
 const errorCodeSchema = z.object({ code: z.string() });
-const isFailureObject = (value: unknown): value is object => value !== null
-  && (typeof value === 'object' || typeof value === 'function');
-const hasFailureMessage = (value: unknown): value is { message: unknown } => isFailureObject(value) && 'message' in value;
-const hasHttpStatus = (value: unknown): value is { status: number } => isFailureObject(value)
-  && 'status' in value && Number.isInteger(value.status);
-const failureMessage = (cause: unknown) => hasFailureMessage(cause) ? cause.message : undefined;
 const pullStateSchema = z.object({
   state: z.enum(['open', 'closed', 'merged']),
   title: z.string().optional(),
@@ -73,106 +88,29 @@ const pullStateSchema = z.object({
   activity: z.number().int().nonnegative().optional(),
 });
 
-const httpError = (message: string, status: number) => Object.assign(new Error(message), { status });
+const parse = (schema, value) => {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
 
 const httpStatusOf = (error) => error?.statusCode ?? error?.status;
 // A wake sends no model: the session keeps its own selection, or its Auto routing.
 const KEEP_SESSION_MODEL = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
 
-export type PrWatchSnapshot = z.infer<typeof snapshotSchema>;
-type Wake = NonNullable<z.infer<typeof watchSchema>['wake']>;
-type ThreadItem = Extract<NonNullable<ReturnType<typeof parseTrackedItem>>, { number: number }>;
-type Watch = Omit<z.infer<typeof watchSchema>, 'item'> & { item: ThreadItem };
-type WakingWatch = Watch & { wake: Wake };
-type Readers = Pick<ReturnType<typeof createTrackedItemReaders>, 'sourceControl'>;
-type PullSummaryReference = { number: number };
-type OpenCodeRequestHeaders = { Accept: string; 'Content-Type'?: string };
+const httpError = (message, status) => Object.assign(new Error(message), { status });
 
-export interface PrWatchEventHub {
-  subscribeEvent: (listener: (event: { translated?: () => unknown[] } | null) => void) => () => void;
-  subscribeStatus: (listener: (status: { type: string } | null) => void) => () => void;
-}
-
-const isPullItem = (item: ReturnType<typeof parseTrackedItem>): item is ThreadItem => item?.kind === 'pull';
-
-export interface PrWatchInput {
-  sessionID: unknown;
-  directory: string | null;
-  url: unknown;
-}
-
-export interface TrackedWatchState {
-  key: string;
-  state: unknown;
-  requestedAt?: number;
-}
-
-export interface PrWatchTrackedItems {
-  setServerInterest: (owner: string, items: Map<string, ThreadItem>) => void;
-  subscribe: (listener: (states: TrackedWatchState[]) => void) => () => void;
-}
-
-export interface PrWatchOptions {
-  buildOpenCodeUrl: (route: string, query: string) => string | URL;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
-  broadcastUiEvent?: (event: {
-    type: 'openchamber:pr-watch.updated';
-    properties: { revision: number; sessionID: string; watches: PublicPrWatch[]; watch: PublicPrWatch | null };
-  }) => void;
-  dataDir: string;
-  readCleanupOnMerge?: () => Promise<boolean>;
-  isSessionArchived?: (sessionID: string) => boolean | Promise<boolean>;
-  insideSpace?: boolean;
-  fetchImpl?: typeof fetch;
-  now?: () => number;
-  quietMs?: number;
-  retryDelayMs?: (failures: number) => number;
-}
-
-export interface PublicPrWatch {
-  sessionID: string;
-  directory: string;
-  url: string;
-  number: number;
-  title: string;
-  status: 'waking' | 'unknown' | 'pending' | 'passed' | 'failed' | 'open';
-  startedAt: number;
-}
-
-export interface PublicPrWatchSnapshot {
-  revision: number;
-  watches: PublicPrWatch[];
-}
-
-export interface PublicPrWait {
-  waitId: string;
-  sessionID: string;
-  directory: string;
-  source: 'pr';
-  extension: string;
-  title: string;
-  label: PublicPrWatch['status'];
-  args: { url: string };
-  startedAt: number;
-  status: 'waking' | 'waiting';
-}
-
-export interface PrWatchStartResult {
-  watching: PublicPrWatch;
-  next: string;
-}
-
-export interface PrWatchStopResult {
-  watching: PublicPrWatch[];
-  stopped: boolean;
-}
+const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
 
 const GITHUB_PULL = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/;
 const GITLAB_MERGE_REQUEST = /^\/(.+)\/([^/]+)\/-\/merge_requests\/(\d+)(?:\/|$)/;
 
-export const parsePullRequestUrl = (value: PrWatchInput['url']) => {
-  const parsed = z.string().trim().min(1).safeParse(value);
-  const address = parsed.success ? parsed.data : null;
+/**
+ * The tracked item a pull or merge request address names, or null. A GitHub
+ * address on another host is GitHub Enterprise; a GitLab address is read on
+ * its own origin. Other providers are not followed.
+ */
+export const parsePullRequestUrl = (value) => {
+  const address = parse(z.string().trim().min(1), value);
   if (!address || !URL.canParse(address)) return null;
   const url = new URL(address);
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
@@ -180,21 +118,19 @@ export const parsePullRequestUrl = (value: PrWatchInput['url']) => {
   const github = GITHUB_PULL.exec(url.pathname);
   if (github) {
     const [, owner, repo, number] = github;
-    const item = parseTrackedItem({ provider: 'github', instance: host === 'github.com' ? undefined : host, kind: 'pull', owner, repo, number: Number(number) });
-    return isPullItem(item) ? item : null;
+    return parseTrackedItem({ provider: 'github', instance: host === 'github.com' ? undefined : host, kind: 'pull', owner, repo, number: Number(number) });
   }
   const gitlab = GITLAB_MERGE_REQUEST.exec(url.pathname);
   if (gitlab) {
     const [, owner, repo, number] = gitlab;
-    const item = parseTrackedItem({ provider: 'gitlab', instance: url.origin, kind: 'pull', owner, repo, number: Number(number) });
-    return isPullItem(item) ? item : null;
+    return parseTrackedItem({ provider: 'gitlab', instance: url.origin, kind: 'pull', owner, repo, number: Number(number) });
   }
   return null;
 };
 
-const snapshotOf = (value: TrackedWatchState['state']) => {
-  const parsed = pullStateSchema.safeParse(value);
-  const state = parsed.success ? parsed.data : null;
+/** The parts of a pull request's live state a wake depends on, or null while it is unknown. */
+const snapshotOf = (value) => {
+  const state = parse(pullStateSchema, value);
   if (!state) return null;
   return {
     state: state.state,
@@ -206,12 +142,18 @@ const snapshotOf = (value: TrackedWatchState['state']) => {
   };
 };
 
-export const changesBetween = (previous: PrWatchSnapshot | null, next: PrWatchSnapshot | null): PrWatchEvent[] => {
+/**
+ * What happened between two states, in `EVENTS` terms. The first known state
+ * is only a baseline. Checks count again after a push: the same outcome on a
+ * new head is news.
+ */
+export const changesBetween = (previous, next) => {
   if (!next) return [];
+  // An end is news even with no baseline: nothing reads a merged pull request again.
   if (next.state === 'merged') return ['merged'];
   if (next.state === 'closed') return ['closed'];
   if (!previous) return [];
-  const events: PrWatchEvent[] = [];
+  const events = [];
   const newHead = Boolean(previous.headSha && next.headSha && previous.headSha !== next.headSha);
   if (next.checks === 'failure' && (previous.checks !== 'failure' || newHead)) events.push('checks-failed');
   if (next.checks === 'success' && (previous.checks !== 'success' || newHead)) events.push('checks-passed');
@@ -221,25 +163,30 @@ export const changesBetween = (previous: PrWatchSnapshot | null, next: PrWatchSn
   return events;
 };
 
-const numberOf = (watch: Watch) => z.object({ number: z.number().int().positive() }).safeParse(watch.item).data?.number ?? 0;
+const numberOf = (watch) => parse(z.object({ number: z.number().int().positive() }), watch.item)?.number ?? 0;
 
 const MAX_NAMES = 8;
 
-const cleanNames = (names: string[]) => Array.from(new Set(names.map((name) => name.replace(/[<>\s]+/g, ' ').trim().slice(0, 80)).filter(Boolean)));
+/**
+ * Names for the message: check names come from whoever wrote the workflow,
+ * so nothing in them may close the message's tag or break its line.
+ */
+const cleanNames = (names) => Array.from(new Set(names.map((name) => name.replace(/[<>\s]+/g, ' ').trim().slice(0, 80)).filter(Boolean)));
 
-const nameList = (names: string[]) => {
+const nameList = (names) => {
   const clean = cleanNames(names);
   if (clean.length === 0) return '';
   const shown = clean.slice(0, MAX_NAMES).join(', ');
   return clean.length > MAX_NAMES ? `${shown} and ${clean.length - MAX_NAMES} more` : shown;
 };
 
-const describeEvent = (event: PrWatchEvent, wake: Wake) => {
+const describeEvent = (event, wake) => {
   const names = event === 'checks-failed' ? nameList(wake.failedChecks) : event === 'activity' ? nameList(wake.authors) : '';
   return names ? `${EVENT_TEXT[event]} (${names})` : EVENT_TEXT[event];
 };
 
-const buildWakeMessage = (watch: WakingWatch) => {
+/** The synthetic message that wakes the agent. */
+const buildWakeMessage = (watch) => {
   const number = numberOf(watch);
   const changes = watch.wake.events.map((event) => describeEvent(event, watch.wake));
   const finished = watch.wake.events.some((event) => event === 'merged' || event === 'closed');
@@ -249,7 +196,8 @@ const buildWakeMessage = (watch: WakingWatch) => {
   return `<openchamber-pull-request url="${escapeAttribute(watch.url)}" number="${number}">\nPull request #${number}: ${changes.join('; ')}.\n${next}\n</openchamber-pull-request>`;
 };
 
-const statusOf = (watch: Watch): PublicPrWatch['status'] => {
+/** What the composer row shows while the agent waits. */
+const statusOf = (watch) => {
   if (watch.wake) return 'waking';
   if (!watch.last) return 'unknown';
   if (watch.last.checks === 'pending') return 'pending';
@@ -258,7 +206,7 @@ const statusOf = (watch: Watch): PublicPrWatch['status'] => {
   return 'open';
 };
 
-const toPublicWatch = (watch: Watch): PublicPrWatch => ({
+const toPublicWatch = (watch) => ({
   sessionID: watch.sessionID,
   directory: watch.directory,
   url: watch.url,
@@ -268,70 +216,52 @@ const toPublicWatch = (watch: Watch): PublicPrWatch => ({
   startedAt: watch.startedAt,
 });
 
-const PR_WAIT_SOURCE = 'pr';
-const PR_WAIT = {
-  source: PR_WAIT_SOURCE,
-  extension: 'OpenChamber',
-  title: 'Pull request',
-  description: 'Wakes the session when a check fails or every check passes, someone comments or reviews, the branch conflicts or falls behind, or it is merged or closed. Each pull request is its own wait; starting one again starts it over',
-  params: { url: { type: 'string', description: 'Address of a GitHub pull request or GitLab merge request', required: true } },
-};
-
-const toPublicWait = (watch: Watch): PublicPrWait => ({
-  waitId: watch.url,
-  sessionID: watch.sessionID,
-  directory: watch.directory,
-  source: PR_WAIT_SOURCE,
-  extension: PR_WAIT.extension,
-  title: [`#${numberOf(watch)}`, watch.last?.title].filter(Boolean).join(' '),
-  label: statusOf(watch),
-  args: { url: watch.url },
-  startedAt: watch.startedAt,
-  status: watch.wake ? 'waking' : 'waiting',
-});
-
-const keyOf = (watch: Watch) => `${watch.sessionID} ${trackedItemKey(watch.item)}`;
-
 export function createPrWatchRuntime({
   sessionService,
   broadcastUiEvent,
   dataDir,
+  // Whether "Archive a worktree after its PR is merged" is on: then a merge
+  // ends the watch without waking a session that is about to be archived.
   readCleanupOnMerge = async () => false,
   isSessionArchived = () => false,
+  // The server inside an isolated space has no accounts to read a pull request with.
   insideSpace = false,
   now = Date.now,
   quietMs = QUIET_MS,
   retryDelayMs = retryDelay,
-}: PrWatchOptions) {
+  subagentRecheckMs = SUBAGENT_RECHECK_MS,
+}) {
   const filePath = path.join(dataDir, FILE_NAME);
-  const watches = new Map<string, Watch>();
+  /** sessionID → watch */
+  const watches = new Map();
   let revision = 0;
-  let loadPromise: Promise<void> | null = null;
+  let loadPromise = null;
   let writePromise = Promise.resolve();
   let stopped = false;
-  let trackedItems: PrWatchTrackedItems | null = null;
-  let readers: Readers;
-  let unsubscribeTracked: (() => void) | null = null;
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  const delivering = new Set<string>();
-  const deferred = new Set<string>();
-  const failures = new Map<string, number>();
-  const enriching = new Set<Watch>();
+  let trackedItems = null;
+  let readers = null;
+  let unsubscribeTracked = null;
+  const timers = new Map();
+  const failures = new Map();
+  const delivering = new Set();
+  // An attempt asked for while another one for the session was in flight.
+  const deferred = new Set();
+  // sessionID → the watch whose wake is still reading its details; it is armed once they are in.
+  const enriching = new Map();
 
-  const watchesOf = (sessionID: string) => Array.from(watches.values()).filter((watch) => watch.sessionID === sessionID);
-  const hasWake = (sessionID: string) => watchesOf(sessionID).some((watch) => watch.wake);
+  // --- persistence ---------------------------------------------------------
 
   const readFile = async () => {
     let raw;
     try {
       raw = await fs.promises.readFile(filePath, 'utf8');
     } catch (error) {
-      if (errorCodeSchema.safeParse(error).data?.code === 'ENOENT') return { watches: [], revision: 0 };
+      if (parse(errorCodeSchema, error)?.code === 'ENOENT') return { watches: [], revision: 0 };
       throw error;
     }
     let stored = null;
     try {
-      stored = storedFileSchema.safeParse(JSON.parse(raw)).data ?? null;
+      stored = parse(storedFileSchema, JSON.parse(raw));
     } catch {
       stored = null;
     }
@@ -341,11 +271,12 @@ export function createPrWatchRuntime({
       console.warn(`[pr-watch] file was unreadable and moved to ${backup}`);
       return { watches: [], revision: 0 };
     }
-    const restored: Watch[] = [];
+    // One unreadable watch is dropped alone.
+    const restored = [];
     for (const value of stored.watches) {
-      const watch = watchSchema.safeParse(value).data ?? null;
-      const item = watch && isTrackedItemInput(watch.item) ? parseTrackedItem(watch.item) : null;
-      if (watch && isPullItem(item)) restored.push({ ...watch, item });
+      const watch = parse(watchSchema, value);
+      const item = watch ? parseTrackedItem(watch.item) : null;
+      if (watch && item?.kind === 'pull') restored.push({ ...watch, item });
     }
     return { watches: restored, revision: stored.revision ?? 0 };
   };
@@ -354,10 +285,11 @@ export function createPrWatchRuntime({
     if (!loadPromise) {
       loadPromise = readFile()
         .then((stored) => {
-          for (const watch of stored.watches) if (!watches.has(keyOf(watch))) watches.set(keyOf(watch), watch);
+          for (const watch of stored.watches) if (!watches.has(watch.sessionID)) watches.set(watch.sessionID, watch);
           revision = Math.max(revision, stored.revision);
         })
         .catch((error) => {
+          // A failed read must not pass for "no watches": writes wait for a load that succeeds.
           loadPromise = null;
           throw error;
         });
@@ -374,26 +306,28 @@ export function createPrWatchRuntime({
       await fs.promises.rename(tmpPath, filePath);
     });
     writePromise = write.catch((error) => {
-      console.warn('[pr-watch] failed to persist watches:', failureMessage(error) ?? error);
+      console.warn('[pr-watch] failed to persist watches:', error?.message ?? error);
     });
     return write;
   };
 
-  const commit = (sessionID: string) => {
+  /** Every change a client can see: bump, persist, broadcast. */
+  const commit = (sessionID) => {
     revision += 1;
-    const current = watchesOf(sessionID).map(toPublicWatch);
+    const watch = watches.get(sessionID) ?? null;
     broadcastUiEvent?.({
       type: 'openchamber:pr-watch.updated',
-      properties: { revision, sessionID, watches: current, watch: current.at(-1) ?? null },
+      properties: { revision, sessionID, watch: watch ? toPublicWatch(watch) : null },
     });
     return persist();
   };
 
-  const snapshot = (): PublicPrWatchSnapshot => ({ revision, watches: Array.from(watches.values(), toPublicWatch) });
+  const snapshot = () => ({ revision, watches: Array.from(watches.values(), toPublicWatch) });
 
+  /** The pull requests still waited on, handed to the tracked-items service. */
   const syncInterest = () => {
     if (!trackedItems) return;
-    const items = new Map<string, ThreadItem>();
+    const items = new Map();
     for (const watch of watches.values()) {
       if (!watch.wake) items.set(trackedItemKey(watch.item), watch.item);
     }
@@ -436,24 +370,27 @@ export function createPrWatchRuntime({
     return release?.();
   };
 
-  const clearTimer = (sessionID: string) => {
+  // --- wake ----------------------------------------------------------------
+
+  const clearTimer = (sessionID) => {
     const timer = timers.get(sessionID);
     if (timer) clearTimeout(timer);
     timers.delete(sessionID);
   };
 
-  const arm = (sessionID: string, delayMs = quietMs) => {
-    if (stopped || !hasWake(sessionID)) return;
+  const arm = (sessionID, delayMs = quietMs) => {
+    if (stopped || !watches.get(sessionID)?.wake) return;
     clearTimer(sessionID);
     const timer = setTimeout(() => {
       timers.delete(sessionID);
-      deliver(sessionID).catch((error) => console.warn('[pr-watch] wake failed:', failureMessage(error) ?? error));
+      deliver(sessionID).catch((error) => console.warn('[pr-watch] wake failed:', error?.message ?? error));
     }, Math.max(0, delayMs));
     timer.unref?.();
     timers.set(sessionID, timer);
   };
 
-  const isCurrent = (watch: Watch) => !stopped && watches.get(keyOf(watch)) === watch;
+  /** Whether `watch` is still the session's watch: a stop or a new watch replaces it mid-await. */
+  const isCurrent = (watch) => !stopped && watches.get(watch.sessionID) === watch;
 
   /** Ends `watch`, and only it: a newer watch of the same session stays. */
   const drop = async (watch) => {
@@ -463,38 +400,40 @@ export function createPrWatchRuntime({
     void unobserve(watch.sessionID);
     failures.delete(watch.sessionID);
     syncInterest();
-    await commit(sessionID);
+    await commit(watch.sessionID);
   };
 
-  const retry = (watch: Watch, cause: unknown) => {
+  const retry = (watch, reason) => {
     if (!isCurrent(watch)) return undefined;
-    const count = (failures.get(keyOf(watch)) ?? 0) + 1;
-    failures.set(keyOf(watch), count);
+    const count = (failures.get(watch.sessionID) ?? 0) + 1;
+    failures.set(watch.sessionID, count);
     if (count >= MAX_DELIVERY_FAILURES) {
-      console.warn(`[pr-watch] giving up waking ${watch.sessionID}: ${cause}`);
+      console.warn(`[pr-watch] giving up waking ${watch.sessionID}: ${reason}`);
       return drop(watch);
     }
     arm(watch.sessionID, retryDelayMs(count));
     return undefined;
   };
 
-  async function deliver(sessionID: string) {
+  async function deliver(sessionID) {
     if (delivering.has(sessionID)) {
+      // An idle event or a new watch's wake while an attempt is in flight:
+      // tried again once that attempt is over, never lost.
       deferred.add(sessionID);
       return;
     }
-    const watch = watchesOf(sessionID).find((entry): entry is WakingWatch => Boolean(entry.wake && !enriching.has(entry)));
-    if (stopped || !watch) return;
+    const watch = watches.get(sessionID);
+    if (stopped || !watch?.wake || enriching.get(sessionID) === watch) return;
     delivering.add(sessionID);
     try {
       await attemptWake(watch);
     } finally {
       delivering.delete(sessionID);
-      if (deferred.delete(sessionID)) arm(sessionID);
+      if (deferred.delete(sessionID)) arm(sessionID, 0);
     }
   }
 
-  async function attemptWake(watch: WakingWatch) {
+  async function attemptWake(watch) {
     const { sessionID } = watch;
     observe(sessionID);
     // Never into a running turn: the user may be talking to the agent.
@@ -524,7 +463,13 @@ export function createPrWatchRuntime({
     return drop(watch);
   }
 
-  async function addDetails(watch: Watch, newActivity: number) {
+  /**
+   * Which checks failed and who wrote, so the agent knows where to start
+   * without a read of its own. One read when the wake is decided; a failed
+   * read sends the wake without them. `newActivity` is how many comments and
+   * reviews are new: the authors are theirs, newest first.
+   */
+  async function addDetails(watch, newActivity) {
     const { item } = watch;
     const result = await readers.sourceControl({
       provider: item.provider,
@@ -541,16 +486,20 @@ export function createPrWatchRuntime({
     if (watch.wake.events.includes('activity')) {
       watch.wake.authors = details.recentActivity.slice(0, Math.max(1, newActivity)).map((entry) => entry.author);
     }
+    // In memory either way; a failed write only loses the names on a restart.
     await persist().catch(() => undefined);
   }
 
-  const onStatesChanged = (states: TrackedWatchState[]) => {
+  /** Tracked-items changes: a moved pull request may wake its sessions. */
+  const onStatesChanged = (states) => {
     void (async () => {
       for (const { key, state, requestedAt = 0 } of states) {
         const next = snapshotOf(state);
         if (!next) continue;
         for (const watch of Array.from(watches.values())) {
           if (watch.wake || trackedItemKey(watch.item) !== key || !isCurrent(watch)) continue;
+          // A read that began before the watch's own is older than its
+          // baseline: an earlier head's checks must not end the wait.
           if (requestedAt < watch.baselineAt) continue;
           const events = changesBetween(watch.last, next);
           const newActivity = (next.activity ?? 0) - (watch.last?.activity ?? 0);
@@ -559,6 +508,8 @@ export function createPrWatchRuntime({
             await commit(watch.sessionID);
             continue;
           }
+          // The worktree is about to be archived with its sessions: waking
+          // one now would start a turn in a session on its way out.
           if (events.includes('merged')) {
             const cleanup = await readCleanupOnMerge().catch(() => false) === true;
             if (!isCurrent(watch)) continue;
@@ -571,24 +522,30 @@ export function createPrWatchRuntime({
           // Held from here on: an idle event during the write below must not
           // deliver the wake before its details are in.
           const withDetails = events.includes('checks-failed') || events.includes('activity');
-          if (withDetails) enriching.add(watch);
+          if (withDetails) enriching.set(watch.sessionID, watch);
           try {
             syncInterest();
             await commit(watch.sessionID);
             if (withDetails) await addDetails(watch, newActivity);
           } finally {
-            enriching.delete(watch);
+            if (enriching.get(watch.sessionID) === watch) enriching.delete(watch.sessionID);
           }
           arm(watch.sessionID, 0);
         }
       }
-    })().catch((error) => console.warn('[pr-watch] could not apply a change:', failureMessage(error) ?? error));
+    })().catch((error) => console.warn('[pr-watch] could not apply a change:', error?.message ?? error));
   };
 
-  const watch = async ({ sessionID: rawSessionID, directory, url }: PrWatchInput): Promise<PrWatchStartResult> => {
+  // --- public --------------------------------------------------------------
+
+  /**
+   * Starts waiting on the pull request at `url` for `sessionID`, replacing
+   * what the session waited on before. Reads it first, so an address the
+   * server cannot follow fails now instead of never waking.
+   */
+  const watch = async ({ sessionID: rawSessionID, directory, url }) => {
     if (insideSpace) throw httpError('Watching a pull request is not available inside an isolated space', 400);
-    const parsedSessionID = sessionIdSchema.safeParse(rawSessionID);
-    const sessionID = parsedSessionID.success ? parsedSessionID.data : null;
+    const sessionID = parse(sessionIdSchema, rawSessionID);
     if (!sessionID) throw httpError('pr.watch must be called from a session', 400);
     if (!directory) throw httpError('The session\'s directory is unknown', 400);
     const item = parsePullRequestUrl(url);
@@ -596,7 +553,7 @@ export function createPrWatchRuntime({
     if (!trackedItems || !readers) throw httpError('Pull request status is not available on this server yet', 503);
     await load();
 
-    let last: PrWatchSnapshot | null = null;
+    let last = null;
     const baselineAt = now();
     try {
       const result = await readers.sourceControl({
@@ -610,25 +567,26 @@ export function createPrWatchRuntime({
         throw httpError(`OhPiChamber has no ${item.provider === 'gitlab' ? 'GitLab' : 'GitHub'} account connected for ${threadInstance(item)}, so it cannot follow this pull request`, 400);
       }
       if (result?.status === 'ok') {
-        const summary = (result.pulls ?? []).find((pull: PullSummaryReference | null) => pull?.number === item.number);
+        const summary = (result.pulls ?? []).find((pull) => pull?.number === item.number);
         if (!summary) throw httpError('The pull request could not be read: it does not exist, or the connected account cannot see it', 404);
         last = snapshotOf(summary);
       }
     } catch (error) {
-      if (hasHttpStatus(error)) throw error;
+      if (Number.isInteger(error?.status)) throw error;
+      // Unavailable for now (a rate limit, an outage): the watch reads it later.
     }
     if (last?.state === 'merged' || last?.state === 'closed') {
       throw httpError(`The pull request is already ${last.state}: there is nothing to wait for`, 409);
     }
 
-    const record: Watch = { sessionID, directory, url: String(url).trim(), item, startedAt: now(), baselineAt, last, wake: null };
-    watches.delete(keyOf(record));
-    failures.delete(keyOf(record));
-    watches.set(keyOf(record), record);
-    if (!hasWake(sessionID)) clearTimer(sessionID);
+    const record = { sessionID, directory, url: String(url).trim(), item, startedAt: now(), baselineAt, last, wake: null };
+    watches.delete(sessionID);
+    clearTimer(sessionID);
+    failures.delete(sessionID);
+    watches.set(sessionID, record);
     if (watches.size > MAX_WATCHES) {
       const oldest = Array.from(watches.values()).sort((left, right) => left.startedAt - right.startedAt)[0];
-      if (oldest && oldest !== record) watches.delete(keyOf(oldest));
+      if (oldest && oldest !== record) watches.delete(oldest.sessionID);
     }
     syncInterest();
     await commit(sessionID);
@@ -639,17 +597,14 @@ export function createPrWatchRuntime({
     };
   };
 
-  const unwatch = async (rawSessionID: PrWatchInput['sessionID'], url?: PrWatchInput['url']): Promise<PrWatchStopResult> => {
-    const parsedSessionID = sessionIdSchema.safeParse(rawSessionID);
-    const sessionID = parsedSessionID.success ? parsedSessionID.data : null;
+  /** Stops waiting; the session is not woken. */
+  const unwatch = async (rawSessionID) => {
+    const sessionID = parse(sessionIdSchema, rawSessionID);
     if (!sessionID) throw httpError('sessionID is invalid', 400);
-    const every = url === undefined;
-    const item = every ? null : parsePullRequestUrl(url);
-    if (!every && !item) throw httpError('url must be the address of a GitHub pull request or a GitLab merge request', 400);
     await load();
-    const ending = watchesOf(sessionID).filter((watch) => every || (item !== null && trackedItemKey(watch.item) === trackedItemKey(item)));
-    await drop(...ending);
-    return { watching: watchesOf(sessionID).map(toPublicWatch), stopped: ending.length > 0 };
+    const current = watches.get(sessionID);
+    if (current) await drop(current);
+    return { watching: false, stopped: Boolean(current) };
   };
 
   /**
@@ -671,7 +626,8 @@ export function createPrWatchRuntime({
     if (watches.get(event.sessionId)?.wake) arm(event.sessionId);
   };
 
-  const attach = ({ trackedItems: service, readers: itemReaders }: { trackedItems: PrWatchTrackedItems; readers: Readers }) => {
+  /** Connects to the tracked-items service once the routes created it. */
+  const attach = ({ trackedItems: service, readers: itemReaders }) => {
     trackedItems = service;
     readers = itemReaders;
     unsubscribeTracked?.();
@@ -702,7 +658,7 @@ export function createPrWatchRuntime({
           if (entry.wake) arm(sessionID);
         }
       })
-      .catch((error) => console.warn('[pr-watch] failed to load watches:', failureMessage(error) ?? error));
+      .catch((error) => console.warn('[pr-watch] failed to load watches:', error?.message ?? error));
     return () => {
       unsubscribeEvent?.();
       unsubscribeStatus?.();
@@ -737,8 +693,6 @@ export function createPrWatchRuntime({
     snapshot,
     watch,
     unwatch,
-    waitSource,
-    listWaits,
     attach,
     processCanonicalEvent,
     start,
@@ -747,22 +701,9 @@ export function createPrWatchRuntime({
   };
 }
 
-type PrWatchRuntime = ReturnType<typeof createPrWatchRuntime>;
-type PrWatchRouteBody = PublicPrWatchSnapshot | PrWatchStopResult | { error: unknown };
-
-export interface PrWatchRouteResponse {
-  status: (status: number) => PrWatchRouteResponse;
-  json: (body: PrWatchRouteBody) => void;
-}
-
-export interface PrWatchRouteApp {
-  get: (route: string, handler: (req: { params: { sessionID?: string }; query: { url?: unknown } }, res: PrWatchRouteResponse) => Promise<void>) => void;
-  delete: PrWatchRouteApp['get'];
-}
-
-export function registerPrWatchRoutes(app: PrWatchRouteApp, runtime: PrWatchRuntime) {
-  const respondError = (res: PrWatchRouteResponse, cause: unknown, fallback: string) => {
-    res.status(hasHttpStatus(cause) ? cause.status : 500).json({ error: failureMessage(cause) ?? fallback });
+export function registerPrWatchRoutes(app, runtime) {
+  const respondError = (res, error, fallback) => {
+    res.status(Number.isInteger(error?.status) ? error.status : 500).json({ error: error?.message ?? fallback });
   };
 
   app.get('/api/pr-watch', async (_req, res) => {
@@ -776,7 +717,7 @@ export function registerPrWatchRoutes(app: PrWatchRouteApp, runtime: PrWatchRunt
 
   app.delete('/api/pr-watch/sessions/:sessionID', async (req, res) => {
     try {
-      res.json(await runtime.unwatch(req.params.sessionID, req.query.url));
+      res.json(await runtime.unwatch(req.params.sessionID));
     } catch (error) {
       respondError(res, error, 'Failed to stop watching the pull request');
     }
