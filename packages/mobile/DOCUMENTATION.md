@@ -8,6 +8,8 @@ Within that shell, the app-local `RuntimeWebSocket` plugins own header-bearing d
 
 ## Invariants
 
+- Passwordless native connections explicitly bootstrap a signed Host session bearer through `POST /auth/session`, persist it in per-instance secure storage before switching runtimes, and reuse the existing header-bearing fetch/SSE transport. The packaged WebView cannot use the Host's SameSite=Strict cookie cross-site. The Host owns expiry and rejects that credential if password or client-only authentication is enabled; canonical anonymous access stays forbidden.
+
 - Only Capacitor connections with custom headers use the native adapter. Private relay selection happens first. The target must match the active runtime origin and base path before headers cross the bridge.
 - Native clients refuse redirects, use platform TLS verification and send their packaged-client Origin. Proxy headers never enter query parameters. OhPiChamber authentication continues to use the resolver's short-lived URL token.
 - A listener is installed before opening. Text stays text; binary frames cross the JSON bridge as base64 and reach consumers as ArrayBuffer. Sends are ordered and queued payloads are bounded at 16 MiB. Close follows accepted sends; cancellation during open cannot leave an active socket behind.

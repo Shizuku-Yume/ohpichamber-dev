@@ -61,6 +61,7 @@ function createApp() {
   const composed = express();
   registerCommonRequestMiddleware(composed, { express });
   composed.get('/auth/session', auth.handleSessionStatus);
+  composed.post('/auth/session', auth.handleSessionCreate);
   const service = {
     getState: () => ({ phase: servicePhase, pid: 123, port: 456 }),
     request: async (url, init = {}) => { requests.push({ url, init }); return requestService(url, init); },
@@ -407,6 +408,23 @@ describe('canonical Host authenticated real-service boundary', () => {
     auth = createUiAuth({ password: 'canonical-route-test', clientAuthController: clients });
     app = createApp();
     assertProblem(await request(app).get('/api/agent/v1/capabilities').set('Host', 'localhost:3000').set('Cookie', cookie), 401, 'UNAUTHORIZED');
+  });
+  it('accepts signed passwordless bearer sessions without cookies and preserves canonical origin checks', async () => {
+    auth.dispose();
+    auth = createUiAuth({ clientAuthController: clients });
+    app = createApp();
+    const bootstrap = await request(app).post('/auth/session').send({ issueSessionToken: true });
+    expect(bootstrap.status).toBe(200);
+    const bearer = `Bearer ${bootstrap.body.sessionToken}`;
+    const canonical = () => request(app).get('/api/agent/v1/projects').set('Authorization', bearer);
+    expect((await canonical().set('Origin', 'https://localhost')).status).toBe(200);
+    assertProblem(await canonical().set('Origin', 'https://untrusted.example'), 403, 'INVALID_ORIGIN');
+    assertProblem(await request(app).post('/api/agent/v1/credentials/preflight').set('Authorization', bearer).send(intent()), 403, 'INVALID_ORIGIN');
+    assertProblem(await request(app).get('/api/agent/v1/projects'), 401, 'UNAUTHORIZED');
+    auth.dispose();
+    auth = createUiAuth({ password: 'canonical-route-test', clientAuthController: clients });
+    app = createApp();
+    assertProblem(await canonical().set('Origin', 'https://localhost'), 401, 'UNAUTHORIZED');
   });
   it('requires cookie/tunnel mutation Origins and allows only verified bearer clients to omit Origin', async () => {
     const cookie = await loginCookie();

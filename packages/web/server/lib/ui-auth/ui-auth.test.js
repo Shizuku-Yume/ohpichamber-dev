@@ -45,6 +45,50 @@ const createResponse = () => {
 };
 
 describe('ui auth client credential seam', () => {
+  it('bootstraps signed passwordless bearer sessions with the same policy and lifetime as cookies', async () => {
+    const createUiAuth = await loadCreateUiAuth();
+    const auth = createUiAuth({ sessionTtlMs: 60_000, trustedSessionTtlMs: 3_600_000 });
+    const req = { method: 'POST', headers: {}, body: { issueSessionToken: true, trustDevice: true } };
+    const res = createResponse();
+    await auth.handleSessionCreate(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.getHeader('Cache-Control')).toBe('no-store');
+    const token = res.body.sessionToken;
+    expect(res.getHeader('Set-Cookie')).toContain(encodeURIComponent(token));
+    expect(JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).exp).toBeGreaterThan(Date.now() / 1000 + 3500);
+    const bearer = { method: 'GET', headers: { authorization: `Bearer ${token}` } };
+    const strict = { allowAnonymousSession: false, allowUrlToken: false };
+    expect(await auth.resolveAuthContext(bearer, createResponse(), strict)).toEqual({ type: 'session', token });
+    expect(await auth.ensureSessionToken(bearer, createResponse())).toBe(token);
+    const status = createResponse();
+    await auth.handleSessionStatus(bearer, status);
+    expect(status.body).toMatchObject({ authenticated: true, disabled: true });
+    for (const invalid of ['unsigned', `${token.slice(0, -5)}xxxxx`]) {
+      const invalidReq = { method: 'GET', headers: { authorization: `Bearer ${invalid}`, cookie: String(res.getHeader('Set-Cookie')).split(';', 1)[0] } };
+      expect(await auth.resolveAuthContext(invalidReq, createResponse(), strict)).toBeNull();
+      const rejected = createResponse();
+      await auth.handleSessionStatus(invalidReq, rejected);
+      expect(rejected.statusCode).toBe(401);
+    }
+    for (const options of [{ password: 'now-protected' }, { requireClientAuth: true }]) {
+      const protectedAuth = createUiAuth(options);
+      expect(await protectedAuth.resolveAuthContext(bearer, createResponse(), strict)).toBeNull();
+      const denied = createResponse();
+      await protectedAuth.handleSessionCreate(req, denied);
+      expect(denied.statusCode).not.toBe(200);
+      protectedAuth.dispose();
+    }
+    const empty = createResponse();
+    await auth.handleSessionCreate({ ...req, body: {} }, empty);
+    expect(empty.statusCode).toBe(400);
+    auth.dispose();
+    const expiredAuth = createUiAuth({ sessionTtlMs: -1000 });
+    const expired = createResponse();
+    await expiredAuth.handleSessionCreate({ ...req, body: { issueSessionToken: true } }, expired);
+    expect(await expiredAuth.resolveAuthContext({ headers: { authorization: `Bearer ${expired.body.sessionToken}` } }, createResponse(), strict)).toBeNull();
+    expiredAuth.dispose();
+  });
+
   it('accepts bearer client credentials when UI password auth is enabled', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth({
