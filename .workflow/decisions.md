@@ -1623,3 +1623,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
+
+## 2026-11-19 - Replay terminal history at its recorded PTY sizes
+
+- **Decided:** retain PTY resize boundaries in bounded terminal history and replay them in output order before fitting the viewport.
+- **Instead of:** replaying the entire snapshot at the latest dimensions.
+- **Because:** shell cursor movements and wrapping depend on the grid where they were produced. Resizing and reloading otherwise leaves scrambled command echoes.
+- **Revisit when:** upstream records ordered resize boundaries or snapshots terminal emulator state directly.
