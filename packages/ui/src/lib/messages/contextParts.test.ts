@@ -99,41 +99,11 @@ describe('model-facing text', () => {
         });
 
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        test('a diff comment names the diff its lines come from', () => {
-            expect(formatContextText(contextPayloadFromDraft(draft({
-                origin: { kind: 'change-request', provider: 'gitlab', number: 7, repository: 'octo/repo', revision: '3993a59228fd79670f97' },
-            })))).toBe('Comment on `src/app.ts` lines 3-5 (modified) in GitLab merge request !7 in octo/repo at commit 3993a59228:\n```ts\nconst x = 1;\n```\n\nfix this');
-            expect(formatContextText(contextPayloadFromDraft(draft({ origin: { kind: 'commit', hash: 'e1d7e1022bb5a0' } }))))
-                .toBe('Comment on `src/app.ts` lines 3-5 (modified) in commit e1d7e1022b:\n```ts\nconst x = 1;\n```\n\nfix this');
-            expect(formatContextText(contextPayloadFromDraft(draft({ origin: { kind: 'branch', baseRef: 'origin/main', headRef: 'feature' } }))))
-                .toBe('Comment on `src/app.ts` lines 3-5 (modified) in the changes of branch `feature` compared with `origin/main`:\n```ts\nconst x = 1;\n```\n\nfix this');
-        });
-=======
-        test('a diff comment names the diff its lines come from', () => {
-            expect(formatContextText(contextPayloadFromDraft(draft({
-                origin: { kind: 'change-request', provider: 'gitlab', number: 7, repository: 'octo/repo', revision: '3993a59228fd79670f97' },
-            })))).toBe('The user selected `src/app.ts` lines 3-5 (modified) in GitLab merge request !7 in octo/repo at commit 3993a59228:\n```ts\nconst x = 1;\n```\n\nThe user wrote this to you about these lines:\nfix this');
-            expect(formatContextText(contextPayloadFromDraft(draft({ origin: { kind: 'commit', hash: 'e1d7e1022bb5a0' } }))))
-                .toBe('The user selected `src/app.ts` lines 3-5 (modified) in commit e1d7e1022b:\n```ts\nconst x = 1;\n```\n\nThe user wrote this to you about these lines:\nfix this');
-            expect(formatContextText(contextPayloadFromDraft(draft({ origin: { kind: 'branch', baseRef: 'origin/main', headRef: 'feature' } }))))
-                .toBe('The user selected `src/app.ts` lines 3-5 (modified) in the changes of branch `feature` compared with `origin/main`:\n```ts\nconst x = 1;\n```\n\nThe user wrote this to you about these lines:\nfix this');
-        });
->>>>>>> upstream/main
 
         test('a whole-file comment names the file and quotes no lines', () => {
             expect(formatContextText(contextPayloadFromDraft(draft({
                 startLine: 0, endLine: 0, side: undefined, code: '',
-<<<<<<< HEAD
             })))).toBe('Comment on `src/app.ts` (the whole file):\n\nfix this');
-||||||| bc50ba56aa
-                origin: { kind: 'change-request', provider: 'github', number: 5543 },
-            })))).toBe('Comment on `src/app.ts` (the whole file) in GitHub pull request #5543:\n\nfix this');
-=======
-                origin: { kind: 'change-request', provider: 'github', number: 5543 },
-            })))).toBe('The user wrote this to you about `src/app.ts` (the whole file) in GitHub pull request #5543:\n\nfix this');
->>>>>>> upstream/main
             const part = createContextPart(contextPayloadFromDraft(draft({ startLine: 0, endLine: 0, side: undefined, code: '' })));
             expect(part.metadata.opencodeComment?.selection).toBeUndefined();
         });
@@ -174,30 +144,6 @@ describe('round-trip through part metadata', () => {
         }
     });
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    test('a reverted diff comment goes back to the composer with the diff it was written on', () => {
-        const origin = { kind: 'commit', hash: 'e1d7e1022bb5a0' } as const;
-        expect(draftFromContextPayload(contextPayloadFromDraft(draft({ origin })))).toMatchObject({ source: 'diff', origin });
-    });
-=======
-    test('a reverted diff comment goes back to the composer with the diff it was written on', () => {
-        const origin = { kind: 'commit', hash: 'e1d7e1022bb5a0' } as const;
-        expect(draftFromContextPayload(contextPayloadFromDraft(draft({ origin })))).toMatchObject({ source: 'diff', origin });
-        // A reverted message puts the mark back with the comment, also when nothing is left at its lines.
-        expect(draftFromContextPayload(contextPayloadFromDraft(draft({ changedCode: 'const x = 2;' })))).toMatchObject({ changedCode: 'const x = 2;' });
-        expect(draftFromContextPayload(contextPayloadFromDraft(draft({ changedCode: '' })))).toMatchObject({ changedCode: '' });
-    });
-
-    test('a shared page carries its wrapped text and the page it names, opened or not', () => {
-        const opened: ContextPartPayload = { kind: 'shared-page', receivedId: 'rp_1', host: 'share.openchamber.dev', title: 'Pick', opened: true };
-        const part = asPart(opened, '<openchamber-shared-page from-link="true">…</openchamber-shared-page>');
-        expect(readContextPart(part)).toEqual(opened);
-        expect(draftFromContextPayload(opened)).toBeNull();
-        const unread: ContextPartPayload = { kind: 'shared-page', receivedId: null, host: 'share.openchamber.dev', title: '', opened: false };
-        expect(readContextPart(asPart(unread, 'x'))).toEqual(unread);
-    });
->>>>>>> upstream/main
 
     test('repository references carry picker-built text and structured identity', () => {
         const payload: ContextPartPayload = { kind: 'repository-issue', number: 3, title: 'Bug', url: 'https://x/issues/3' };

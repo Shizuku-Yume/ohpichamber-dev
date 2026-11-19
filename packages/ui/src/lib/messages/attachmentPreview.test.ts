@@ -1,13 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
 type FilePart = { id: string; sessionID?: string; messageID?: string; type?: string; mime?: string; filename?: string; url: string };
-||||||| bc50ba56aa
-import type { FilePart } from '@/lib/opencode/model';
-=======
-import type { FilePart } from '@/lib/opencode/model';
-import type { RuntimeAPIs } from '@/lib/api/types';
-import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
->>>>>>> upstream/main
 import {
     collectOpenableAttachmentNames,
     decodeDataUrlText,

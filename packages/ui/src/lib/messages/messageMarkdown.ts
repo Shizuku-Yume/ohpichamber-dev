@@ -22,85 +22,7 @@ function quoteContext(source: string, body: string, comment: string, fieldLimit?
   return `${source}\n\n${quote}${comment.trim() ? `\n\n**User comment:**\n\n${excerpt(comment)}` : ''}`;
 }
 
-<<<<<<< HEAD
 /** Model-facing text from canonical transcript parts. */
-||||||| bc50ba56aa
-function formatContext(payload: ContextPartPayload, originalText: string, fieldLimit?: number): string {
-  switch (payload.kind) {
-    case 'code-comment':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`, lines ${payload.startLine}-${payload.endLine}${payload.side ? `, ${payload.side}` : ''}:`,
-        payload.code, payload.text, fieldLimit, payload.language,
-      );
-    case 'file-quote':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`${payload.startLine != null ? `, lines ${payload.startLine}-${payload.endLine ?? payload.startLine}` : ''}:`,
-        payload.quote, payload.text, fieldLimit,
-      );
-    case 'chat-quote':
-      return quoteContext('Quoted from an earlier message:', payload.quote, payload.text, fieldLimit);
-    case 'browser-annotation':
-      return quoteContext(`Browser annotation on ${payload.pageUrl}:`, payload.prompt, payload.text, fieldLimit);
-    case 'pr-comment':
-      return quoteContext(`${changeRequestCommentSource(payload.provider)}, ${payload.label}:`, payload.body, payload.text, fieldLimit);
-    case 'pr-check':
-      return quoteContext(`${changeRequestCheckSource(payload.provider)}, ${payload.label}:`, payload.output, payload.text, fieldLimit, '');
-    case 'terminal':
-      return quoteContext(`Terminal ${payload.terminalLabel}, lines ${payload.startLine}-${payload.endLine}:`, payload.output, '', fieldLimit, '');
-    case 'repository-issue':
-    case 'repository-discussion':
-    case 'change-request':
-    case 'tracker-item':
-    case 'guest-issue':
-    case 'guest-pr':
-    case 'session':
-    case 'session-message':
-      return fieldLimit ? excerptMarkdown(originalText, fieldLimit) : originalText;
-  }
-}
-
-/**
- * The model-facing text of a message's own parts. Attached context is no
- * longer a part — it arrives as its own synthetic message — so render it with
- * `formatContextMessage`.
- */
-=======
-function formatContext(payload: ContextPartPayload, originalText: string, fieldLimit?: number): string {
-  switch (payload.kind) {
-    case 'code-comment':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`, lines ${payload.startLine}-${payload.endLine}${payload.side ? `, ${payload.side}` : ''}:`,
-        payload.code, payload.text, fieldLimit, payload.language,
-      );
-    case 'file-quote':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`${payload.startLine != null ? `, lines ${payload.startLine}-${payload.endLine ?? payload.startLine}` : ''}:`,
-        payload.quote, payload.text, fieldLimit,
-      );
-    case 'chat-quote':
-      return quoteContext('Quoted from an earlier message:', payload.quote, payload.text, fieldLimit);
-    case 'browser-annotation':
-      return quoteContext(`Browser annotation on ${payload.pageUrl}:`, payload.prompt, payload.text, fieldLimit);
-    case 'pr-comment':
-      return quoteContext(`${changeRequestCommentSource(payload.provider)}, ${payload.label}:`, payload.body, payload.text, fieldLimit);
-    case 'pr-check':
-      return quoteContext(`${changeRequestCheckSource(payload.provider)}, ${payload.label}:`, payload.output, payload.text, fieldLimit, '');
-    case 'terminal':
-      return quoteContext(`Terminal ${payload.terminalLabel}, lines ${payload.startLine}-${payload.endLine}:`, payload.output, '', fieldLimit, '');
-    case 'repository-issue':
-    case 'repository-discussion':
-    case 'change-request':
-    case 'tracker-item':
-    case 'guest-issue':
-    case 'guest-pr':
-    case 'session':
-    case 'session-message':
-    case 'shared-page':
-      return fieldLimit ? excerptMarkdown(originalText, fieldLimit) : originalText;
-  }
-}
-
->>>>>>> upstream/main
 export function formatMessageText(
   parts: readonly Part[],
   options: { user?: boolean; fieldLimit?: number } = {},
@@ -118,30 +40,5 @@ export function formatMessageText(
       blocks.push(quoteContext(`Terminal ${item.terminalLabel}, lines ${item.startLine}-${item.endLine}:`, item.text, '', options.fieldLimit, ''));
     }
   }
-<<<<<<< HEAD
   return blocks.map((block) => block?.trim() ?? '').filter(Boolean).join('\n\n');
-||||||| bc50ba56aa
-  return blocks.map((block) => block.trim()).filter(Boolean).join('\n\n');
-}
-
-/** One attached context item (a synthetic message) as model-facing Markdown. */
-export function formatContextMessage(
-  message: { text: string; metadata?: Metadata },
-  fieldLimit?: number,
-): string {
-  const payload = readContextPart(message);
-  if (payload) return formatContext(payload, message.text, fieldLimit);
-  return fieldLimit ? excerptMarkdown(message.text, fieldLimit) : message.text;
-=======
-  return blocks.map((block) => block.trim()).filter(Boolean).join('\n\n');
-}
-
-export function formatContextMessage(
-  message: { text: string; metadata?: Metadata },
-  fieldLimit?: number,
-): string {
-  const payload = readContextPart(message);
-  if (payload) return formatContext(payload, message.text, fieldLimit);
-  return fieldLimit ? excerptMarkdown(message.text, fieldLimit) : message.text;
->>>>>>> upstream/main
 }

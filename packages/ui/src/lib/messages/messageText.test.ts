@@ -38,23 +38,10 @@ describe('flattenAssistantTextParts', () => {
   test('single part without blank lines is returned unchanged', () => {
     expect(flattenAssistantTextParts(makeParts(['only line\nsecond line']))).toBe('only line\nsecond line');
   });
-<<<<<<< HEAD
   test('non-text parts are ignored', () => {
     const partsWithReasoning: Part[] = [...makeParts(['before']), { type: 'reasoning', partId: 'r1', content: 'ignored' }, ...makeParts(['after'])];
     expect(flattenAssistantTextParts(partsWithReasoning)).toBe('before\n\nafter');
   });
-||||||| bc50ba56aa
-
-  test('non-text parts are ignored', () => {
-    const partsWithTool: Part[] = [
-      ...makeParts(['before']),
-      { id: 't1', sessionID: 's', messageID: 'm', type: 'tool', tool: 'bash' } as Part,
-      ...makeParts(['after']),
-    ];
-    expect(flattenAssistantTextParts(partsWithTool)).toBe('before\n\nafter');
-  });
-=======
->>>>>>> upstream/main
 });
 
 describe('assistantTextSegments', () => {

@@ -1,31 +1,3 @@
-<<<<<<< HEAD
-/**
- * Structured context attached to an outgoing message.
- *
- * Every user-attached context item — an inline code comment, a terminal
- * selection, a browser annotation, a GitHub PR comment or failed check, a
- * linked issue or PR — is built as local composer text plus structured
- * metadata, then captured in the canonical prompt. Transcript text parts expose typed session mention identities;
- * the local metadata helpers here remain for composer and queued context.
- */
-||||||| bc50ba56aa
-/**
- * Structured context attached to an outgoing message.
- *
- * Every user-attached context item — an inline code comment, a terminal
- * selection, a browser annotation, a change request comment or failed check, a
- * linked issue or PR — is sent as its own synthetic text part. The part's
- * `text` is what the model reads; the part's `metadata[CONTEXT_METADATA_KEY]`
- * carries the same information structured, so the timeline can render the
- * context as a dedicated block after the message round-trips through the
- * OpenCode server (which persists part metadata verbatim).
- *
- * This module owns both directions: building the part at send time and
- * parsing the metadata back at render time. Keeping them together is what
- * guarantees they cannot drift apart.
- */
-=======
->>>>>>> upstream/main
 
 import { z } from 'zod';
 import type { SourceControlProvider } from '@/lib/source-control/types';
@@ -207,20 +179,6 @@ export type ContextPartMetadata = {
     [OPENCODE_COMMENT_METADATA_KEY]?: OpenCodeCommentMetadata;
 };
 
-<<<<<<< HEAD
-/**
- * One local composer context item. The send boundary formats its text and
- * metadata into canonical prompt context; transcript parts do not expose
- * these local fields.
- */
-||||||| bc50ba56aa
-/**
- * One context item as it goes on the wire: a synthetic message whose `text` is
- * what the model reads and whose metadata carries the same information
- * structured, so the timeline can render it as a dedicated block.
- */
-=======
->>>>>>> upstream/main
 export type ContextPart = {
     text: string;
     metadata: ContextPartMetadata;
@@ -231,32 +189,14 @@ function changeRequestNoun(provider: SourceControlProvider | undefined): string 
     return provider === 'gitlab' ? 'GitLab merge request' : 'GitHub pull request';
 }
 
-<<<<<<< HEAD
 /** The model-facing name of a review comment's source. */
 function changeRequestCommentSource(provider: SourceControlProvider | undefined): string {
-||||||| bc50ba56aa
-/** The model-facing name of a review comment's source. */
-export function changeRequestCommentSource(provider: SourceControlProvider | undefined): string {
-=======
-export function changeRequestCommentSource(provider: SourceControlProvider | undefined): string {
->>>>>>> upstream/main
     return `${changeRequestNoun(provider)} comment`;
 }
 
-<<<<<<< HEAD
 /** The model-facing name of a failed check's source: a pipeline job or a check, by the provider's CI term. */
 function changeRequestCheckSource(provider: SourceControlProvider | undefined): string {
     return `${changeRequestNoun(provider)} ${provider === 'gitlab' ? 'pipeline job' : 'check'}`;
-||||||| bc50ba56aa
-/** The model-facing name of a failed check's source: a pipeline job or a check, by the provider's CI term. */
-export function changeRequestCheckSource(provider: SourceControlProvider | undefined): string {
-    const ci = provider ? readSourceControlProvider(provider).terminology.ci : 'checks';
-    return `${changeRequestNoun(provider)} ${ci === 'pipeline' ? 'pipeline job' : 'check'}`;
-=======
-export function changeRequestCheckSource(provider: SourceControlProvider | undefined): string {
-    const ci = provider ? readSourceControlProvider(provider).terminology.ci : 'checks';
-    return `${changeRequestNoun(provider)} ${ci === 'pipeline' ? 'pipeline job' : 'check'}`;
->>>>>>> upstream/main
 }
 
 // Selections read as the user's own words to the agent: a bare "Comment on <file>" header
@@ -268,38 +208,13 @@ const userWords = (text: string | undefined, subject: string) => (
 export function formatContextText(payload: ContextPartPayload): string {
     switch (payload.kind) {
         case 'code-comment': {
-<<<<<<< HEAD
             // A whole-file comment has no lines to quote: the model reads the file itself.
-||||||| bc50ba56aa
-            const originNote = payload.origin ? ` ${describeDiffCommentOrigin(payload.origin)}` : '';
-            // A whole-file comment has no lines to quote: the model reads the file itself.
-=======
-            const originNote = payload.origin ? ` ${describeDiffCommentOrigin(payload.origin)}` : '';
->>>>>>> upstream/main
             if (payload.startLine === 0 && payload.endLine === 0) {
-<<<<<<< HEAD
                 return `Comment on \`${payload.fileLabel}\` (the whole file):\n\n${payload.text}`;
-||||||| bc50ba56aa
-                return `Comment on \`${payload.fileLabel}\` (the whole file)${originNote}:\n\n${payload.text}`;
-=======
-                return `The user wrote this to you about \`${payload.fileLabel}\` (the whole file)${originNote}:\n\n${payload.text}`;
->>>>>>> upstream/main
             }
             const range = `lines ${payload.startLine}-${payload.endLine}`;
             const sideNote = payload.source === 'diff' && payload.side ? ` (${payload.side})` : '';
-<<<<<<< HEAD
             return `Comment on \`${payload.fileLabel}\` ${range}${sideNote}:\n\`\`\`${payload.language}\n${payload.code}\n\`\`\`\n\n${payload.text}`;
-||||||| bc50ba56aa
-            return `Comment on \`${payload.fileLabel}\` ${range}${sideNote}${originNote}:\n\`\`\`${payload.language}\n${payload.code}\n\`\`\`\n\n${payload.text}`;
-=======
-            const quoted = `The user selected \`${payload.fileLabel}\` ${range}${sideNote}${originNote}:\n\`\`\`${payload.language}\n${payload.code}\n\`\`\``;
-            const now = payload.changedCode === undefined
-                ? ''
-                : payload.changedCode
-                    ? `\n\nThe file changed after the user selected these lines, and the quoted code is no longer there. These lines now hold:\n\`\`\`${payload.language}\n${payload.changedCode}\n\`\`\``
-                    : '\n\nThe file changed after the user selected these lines, and the quoted code is no longer there.';
-            return `${quoted}${now}${userWords(payload.text, 'these lines')}`;
->>>>>>> upstream/main
         }
         case 'terminal':
             return appendTerminalContexts('', [{
@@ -580,36 +495,12 @@ export const contextPartMetadataSchema = z.object({
     [OPENCODE_COMMENT_METADATA_KEY]: openCodeCommentSchema.optional(),
 });
 
-<<<<<<< HEAD
 /**
  * Local composer context metadata, before canonical prompt capture. This is
  * not a transcript Part contract.
  */
 export type ContextCarrierPart = { type?: string; metadata?: JsonObject };
-||||||| bc50ba56aa
-/**
- * The subset of a record that context read-back inspects. Context now travels
- * as synthetic messages, which carry no `type`; the optional field keeps the
- * reader usable for anything else that carries the same metadata.
- */
-export type ContextCarrierPart = { type?: string; metadata?: Metadata };
-=======
-export type ContextCarrierPart = { type?: string; metadata?: Metadata };
->>>>>>> upstream/main
 
-<<<<<<< HEAD
-/**
- * Read structured context from local composer or queued metadata. Payloads
- * are schema-validated before being used to restore drafts or format prompts.
- */
-||||||| bc50ba56aa
-/**
- * Read the structured context payload from a message part, if it carries one.
- * The part comes from the server or an optimistic insert, so the payload is
- * schema-validated before it is trusted.
- */
-=======
->>>>>>> upstream/main
 export function readContextPart(part: ContextCarrierPart): ContextPartPayload | null {
     if (part.type !== undefined && part.type !== 'text') return null;
     const contextValue = part.metadata?.[CONTEXT_METADATA_KEY];
