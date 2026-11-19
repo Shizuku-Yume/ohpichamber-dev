@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNotificationTriggerRuntime } from './runtime.js';
+import { event, scope, snapshot } from '../event-stream/canonical-test-fixtures.js';
+
+const sessionScope = (sessionId) => ({ ...scope, cwd: '/repo', rootSessionId: sessionId });
+let runSequence = 0;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -12,16 +16,20 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const harness = (settings = {}, { visible = false } = {}) => {
+const harness = (settings = {}, { visible = false, readSession } = {}) => {
   const native = vi.fn(() => true);
   const ui = vi.fn(); const push = vi.fn(); const apns = vi.fn(); const channels = vi.fn(); const clearApns = vi.fn(async () => {});
   const runtime = createNotificationTriggerRuntime({
+    sessionService: {
+      open: readSession ?? (async (sessionId) => snapshot([], [], { sessionId, rootSessionId: sessionId, title: 'Schema work' })),
+      list: async () => ({ items: [], errors: {} }),
+    },
+    resolveSessionScope: async (sessionId) => sessionScope(sessionId),
     readSettingsFromDisk: async () => ({ nativeNotificationsEnabled: true, notificationMode: 'hidden-only', locale: 'en', ...settings }),
     emitDesktopNotification: native, broadcastUiNotification: ui, sendPushToAllUiSessions: push,
     sendApnsToAllUiSessions: apns, clearApnsNotifications: clearApns,
     isAnyInteractiveClientVisible: () => visible, isAnyUiVisible: () => visible,
     deliverToExtensionChannels: channels,
-    buildOpenCodeUrl: (value) => `http://localhost${value}`, getOpenCodeAuthHeaders: () => ({}),
   });
   return { runtime, native, ui, push, apns, channels, clearApns };
 };
@@ -32,6 +40,20 @@ const settle = async () => {
 };
 
 describe('shared page answer notifications', () => {
+  it.each(['unavailable', 'foreign workspace'])('does not fan out an answer with a %s canonical snapshot', async (state) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = harness({}, { readSession: async () => {
+      if (state === 'unavailable') throw new Error('Snapshot unavailable');
+      return snapshot([], [], { sessionId: 'ses_1', rootSessionId: 'ses_1', workspaceId: 'other-workspace' });
+    } });
+    try {
+      h.runtime.notifyShareAnswer(answer('Yulia'));
+      await settle();
+      for (const sink of [h.native, h.ui, h.push, h.apns, h.channels]) expect(sink).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith('[Notification] shared page answer notification failed');
+    } finally { h.runtime.stop(); warn.mockRestore(); }
+  });
+
   it('announces one delivered answer everywhere, with the toast for open windows', async () => {
     const h = harness();
     h.runtime.notifyShareAnswer(answer('Yulia'));
@@ -91,8 +113,12 @@ describe('shared page answer notifications', () => {
     expect(JSON.stringify(h.channels.mock.calls[0][0].notification)).not.toMatch(/Yulia|Migration|Schema work/);
   });
 
-  // Clock-free: OpenCode's turnStartedAt may come from another machine's clock.
-  const busy = (h, sessionId = 'ses_1', turnStartedAt = 1) => h.runtime.maybeSendPushForTrigger({ type: 'session.status', properties: { sessionID: sessionId, status: { type: 'busy' }, turnStartedAt } });
+  const busy = (h, sessionId = 'ses_1', createdAt = 1) => {
+    runSequence += 1;
+    return h.runtime.processCanonicalEvent(event(runSequence, {
+      type: 'run.started', sessionId, runId: `run-${runSequence}`, createdAt,
+    }), sessionScope(sessionId));
+  };
 
   it('survives the turn its own delivery woke after the notification and clears when the next one starts', async () => {
     const h = harness();

@@ -1,7 +1,7 @@
 import { hasErrorMessage, isJsonObject, isString } from './inputs.js';
 import type { JsonValue, PushSettings, SseWriter } from './contracts.js';
 import type { createPushRuntime } from './push-runtime.js';
-import type { createSessionRuntime } from '../opencode/session-runtime.js';
+import type { createSessionRuntime } from '../host/session-runtime.js';
 import type { IncomingHttpHeaders } from 'node:http';
 
 interface NotificationRequest {
@@ -44,7 +44,7 @@ interface NotificationRouteDependencies extends Pick<PushRuntime,
   getPendingBlockingRequestsSnapshot?: SessionRuntime['getPendingBlockingRequestsSnapshot'];
   getSessionContextSnapshot?: SessionRuntime['getSessionContextSnapshot'];
   setAutoAcceptSession?: (sessionId: string, enabled: boolean) => void;
-  isLocalOnlyPushRequest: (req: NotificationRequest, uiToken: string) => Promise<boolean>;
+  isLocalOnlyPushRequest?: (req: NotificationRequest, uiToken: string) => boolean | Promise<boolean>;
 }
 
 const parsePushSubscribeBody = (body: JsonValue | undefined) => {
@@ -103,6 +103,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
     getSessionState,
     setPushInitialized,
     resolveApnsStatus,
+    isLocalOnlyPushRequest = () => false,
   } = dependencies;
 
   const ensureSessionWatcher = async () => {

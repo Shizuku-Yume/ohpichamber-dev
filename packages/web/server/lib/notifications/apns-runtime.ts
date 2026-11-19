@@ -154,6 +154,7 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
   let cachedJwt = null; // { token, issuedAtMs, keyId }
   let cachedRelayKey = null; // { generation, keypair: { privateKey, publicJwk } }
   let warnedUnavailable = false;
+  let warnedUnconfigured = false;
 
   // Why remote push cannot be delivered here, in the words the settings page
   // shows. There is no built-in relay: without OPENCHAMBER_PUSH_RELAY_URL (and
@@ -550,7 +551,18 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
     return { available: false, reason: resolveUnavailableReason() };
   };
 
-  const sendViaDirectApns = async (tokenGroups, payload, config) => {
+  const sendViaDirectApns = async (tokenGroups: Map<ApnsEnvironment, string[]>, { body, tag, pushType }: DirectRequest) => {
+    const config = await resolveApnsConfig();
+    if (!config) {
+      if (!warnedUnconfigured) {
+        warnedUnconfigured = true;
+        console.warn(
+          '[APNs] Relay disabled and no direct config; set OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
+        );
+      }
+      return;
+    }
+
     const jwt = getJwt(config);
     const sendConfig = { ...config, tag, pushType };
 
@@ -645,9 +657,9 @@ export const createApnsRuntime = (deps: ApnsDependencies) => {
       warnUnavailableOnce(resolveUnavailableReason());
       return;
     }
-    await sendViaDirectApns(tokensByEnvironment, payload, directConfig);
+    await sendViaDirectApns(tokensByEnvironment, directAlertRequest(payload));
     for (const entry of sealedDevices) {
-      await sendViaDirectApns(new Map([[entry.environment, [entry.deviceToken]]]), sealedPayloadFor(payload, sealedContent, entry.pushKey), directConfig);
+      await sendViaDirectApns(new Map([[entry.environment, [entry.deviceToken]]]), directAlertRequest(sealedPayloadFor(payload, sealedContent, entry.pushKey)));
     }
   };
 
