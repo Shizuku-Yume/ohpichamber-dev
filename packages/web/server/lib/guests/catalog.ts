@@ -1,21 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-<<<<<<< HEAD:packages/web/server/lib/guests/catalog.js
-import {
-  GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
-  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum
-} from 'ohpichamber-sdk';
-import { parseManifestJson } from 'ohpichamber-sdk/schemas';
-||||||| bc50ba56aa:packages/web/server/lib/guests/catalog.js
-import { GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
-  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
-import { parseManifestJson } from '@openchamber/sdk/schemas';
-=======
 import { GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolvePageMobile, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
-  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, toPublicWaits, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
-import { parseManifestJson } from '@openchamber/sdk/schemas';
->>>>>>> upstream/main:packages/web/server/lib/guests/catalog.ts
+  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, toPublicWaits, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from 'ohpichamber-sdk';
+import { parseManifestJson } from 'ohpichamber-sdk/schemas';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
 import { effectiveGrants, guestGrantScope } from './grant-scope.js';
@@ -26,7 +14,7 @@ import { buildPublicSocketBindings } from './sockets.js';
 import { isReservedBuiltInId, readBuiltInRegistry } from './builtins.js';
 import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
 import { toPublicLinks } from './links.js';
-import type { GuestCapability } from '@openchamber/sdk';
+import type { GuestCapability } from 'ohpichamber-sdk';
 import type { GuestPackage, GuestRecord } from './contracts.js';
 import { hasErrorMessage, isString } from './input-guards.js';
 
@@ -401,7 +389,6 @@ export const inspectGuestPackage = async (packageRoot: string, { openchamberVers
     }
     guest.skills = parsed.manifest.contributes.skills;
   }
-<<<<<<< HEAD:packages/web/server/lib/guests/catalog.js
   // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
   // The SDK's manifest schema no longer carries this role, so the raw manifest is read too; a package that declares it still has to ship the folder.
   let rawParsed;
@@ -410,14 +397,6 @@ export const inspectGuestPackage = async (packageRoot: string, { openchamberVers
     ?? (rawParsed?.openchamber?.contributes?.opencodePlugin ?? rawParsed?.contributes?.opencodePlugin);
   if (rawPlugin) {
     if (!await resolveOpenCodePluginFolder(fs, packageRoot, rawPlugin)) {
-||||||| bc50ba56aa:packages/web/server/lib/guests/catalog.js
-  // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
-  if (parsed.manifest.contributes.opencodePlugin) {
-    if (!await resolveOpenCodePluginFolder(fs, packageRoot, parsed.manifest.contributes.opencodePlugin)) {
-=======
-  if (parsed.manifest.contributes.opencodePlugin) {
-    if (!await resolveOpenCodePluginFolder(fs, packageRoot, parsed.manifest.contributes.opencodePlugin)) {
->>>>>>> upstream/main:packages/web/server/lib/guests/catalog.ts
       return { ok: false, code: 'invalid-opencode-plugin' };
     }
     guest.opencodePlugin = rawPlugin;
@@ -436,84 +415,17 @@ const withSource = (guest: GuestPackage, source: string, displayPath: string | n
   path: displayPath,
 });
 
-<<<<<<< HEAD:packages/web/server/lib/guests/catalog.js
-/** Whether the package has any page the host loads: panel, background, status section, or file editor. */
-export const hasGuestFrame = (guest) => Boolean(
-  guest.entry || guest.backgroundEntry || guest.statusEntry
-  || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0)
-  || (Array.isArray(guest.blocks) && guest.blocks.length > 0),
-||||||| bc50ba56aa:packages/web/server/lib/guests/catalog.js
-/** Whether the package has any page the host loads: panel, background, status section, or file editor. */
-export const hasGuestFrame = (guest) => Boolean(
-  guest.entry || guest.backgroundEntry || guest.statusEntry
-    || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0)
-    || (Array.isArray(guest.blocks) && guest.blocks.length > 0),
-=======
 export const hasGuestFrame = (guest: GuestPackage) => Boolean(
   guest.entry || guest.backgroundEntry || guest.pageEntry || guest.statusEntry
     || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0)
     || (Array.isArray(guest.blocks) && guest.blocks.length > 0),
->>>>>>> upstream/main:packages/web/server/lib/guests/catalog.ts
 );
 
 const configurationNotes = new Map<string, string>();
 
-<<<<<<< HEAD:packages/web/server/lib/guests/catalog.js
 /** Catalog JSON. Drops packageRoot. Keeps attach only when true. `entry` is absent for a page-less guest. */
 export const toPublicGuest = (guest) => {
   const row = {
-||||||| bc50ba56aa:packages/web/server/lib/guests/catalog.js
-/**
- * @param {string} guestId
- * @param {string | null} message `null` clears it
- * @returns {boolean} whether the card changed
- */
-export const setGuestConfigurationNote = (guestId, message) => {
-  const previous = configurationNotes.get(guestId) ?? null;
-  if (previous === message) return false;
-  if (message === null) configurationNotes.delete(guestId);
-  else configurationNotes.set(guestId, message);
-  return true;
-};
-
-/** Catalog JSON. Drops packageRoot. Keeps attach only when true. `entry` is absent for a page-less guest. */
-export const toPublicGuest = (guest) => {
-  const row = {
-=======
-export const setGuestConfigurationNote = (guestId: string, message: string | null) => {
-  const previous = configurationNotes.get(guestId) ?? null;
-  if (previous === message) return false;
-  if (message === null) configurationNotes.delete(guestId);
-  else configurationNotes.set(guestId, message);
-  return true;
-};
-
-export type PublicGuest = Omit<GuestRecord, 'source' | 'packageRoot' | 'service' | 'sourceControl' | 'sessionEvents' | 'waits' | 'notifications' | 'tracker' | 'quota' | 'integration' | 'links' | 'skills' | 'opencodePlugin' | 'capabilities' | 'sessionControl' | 'mentions'> & {
-  source: string | undefined;
-  path: string | null;
-  enabled: boolean;
-  service?: NonNullable<ReturnType<typeof toPublicService>>;
-  sourceControl?: ReturnType<typeof toPublicSourceControl>;
-  sessionEvents?: ReturnType<typeof toPublicSessionEvents>;
-  waits?: ReturnType<typeof toPublicWaits>;
-  notifications?: ReturnType<typeof toPublicNotifications>;
-  tracker?: ReturnType<typeof toPublicTracker>;
-  quota?: ReturnType<typeof toPublicQuota>;
-  integration?: ReturnType<typeof toPublicIntegration>;
-  links?: ReturnType<typeof toPublicLinks>;
-  capabilities?: { requested: GuestCapability[]; granted: GuestCapability[] };
-  skills?: true;
-  opencodePlugin?: true;
-  sessionControl?: { content: boolean };
-  mentions?: { label: string };
-  toolLinkSettings?: Record<string, string>;
-  origin?: { url: string; ref?: string };
-  needsConfiguration?: string;
-};
-
-export const toPublicGuest = (guest: GuestRecord, toolLinkSettings: Record<string, string> | null = null) => {
-  const row: PublicGuest = {
->>>>>>> upstream/main:packages/web/server/lib/guests/catalog.ts
     id: guest.id,
     name: guest.name,
     icon: guest.icon,

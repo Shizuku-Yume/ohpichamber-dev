@@ -43,18 +43,7 @@ const windowsProcessSchema = z.object({
   executablePath: z.string().nullable(),
 });
 
-<<<<<<< HEAD:packages/web/server/lib/guests/service-registry.js
 const digestToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-registry.js
-/** `{openchamberDataDir}/guest-services`. */
-export const guestServiceRegistryDir = (dataDir) => path.join(dataDir, 'guest-services');
-
-const digestToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
-=======
-export const guestServiceRegistryDir = (dataDir: string) => path.join(dataDir, 'guest-services');
-
-const digestToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
->>>>>>> upstream/main:packages/web/server/lib/guests/service-registry.ts
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
@@ -91,39 +80,13 @@ export const createGuestServiceRegistry = ({
       await fs.writeFile(tmp, JSON.stringify(record), { mode: 0o600 });
       await fs.rename(tmp, filePath);
     } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/guests/service-registry.js
-      await fs.rm(tmp, { force: true }).catch(() => { });
-      console.warn(`[guests] could not record guest service pid ${pid} for crash recovery: ${error?.code ?? error?.message ?? error}`);
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-registry.js
-      await fs.rm(tmp, { force: true }).catch(() => {});
-      console.warn(`[guests] could not record guest service pid ${pid} for crash recovery: ${error?.code ?? error?.message ?? error}`);
-=======
       await fs.rm(tmp, { force: true }).catch(() => {});
       console.warn(`[guests] could not record guest service pid ${pid} for crash recovery: ${(hasErrorCode(error) ? error.code : undefined) ?? (hasErrorMessage(error) ? error.message : undefined) ?? error}`);
->>>>>>> upstream/main:packages/web/server/lib/guests/service-registry.ts
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/guests/service-registry.js
-  /**
-   * Drops a service's record once its process has exited.
-   * @param {string} dir
-   * @param {number} pid
-   */
-  const releaseGuestService = async (dir, pid) => {
-    await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => { });
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-registry.js
-  /**
-   * Drops a service's record once its process has exited.
-   * @param {string} dir
-   * @param {number} pid
-   */
-  const releaseGuestService = async (dir, pid) => {
-    await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => {});
-=======
   const releaseGuestService = async (dir: string, pid: number) => {
     await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => {});
->>>>>>> upstream/main:packages/web/server/lib/guests/service-registry.ts
   };
 
   const readLinuxProcess = async (pid: number) => {
@@ -215,16 +178,8 @@ export const createGuestServiceRegistry = ({
     }
     await Promise.all(entries.map(async (name) => {
       const writer = name.match(/\.json\.tmp-(\d+)-[0-9a-f]+$/);
-<<<<<<< HEAD:packages/web/server/lib/guests/service-registry.js
-      if (writer && !isPidAlive(Number.parseInt(writer[1], 10))) {
-        await fs.rm(path.join(dir, name), { force: true }).catch(() => { });
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-registry.js
-      if (writer && !isPidAlive(Number.parseInt(writer[1], 10))) {
-        await fs.rm(path.join(dir, name), { force: true }).catch(() => {});
-=======
       if (writer && !isPidAlive(Number.parseInt(writer[1] ?? '', 10))) {
         await fs.rm(path.join(dir, name), { force: true }).catch(() => {});
->>>>>>> upstream/main:packages/web/server/lib/guests/service-registry.ts
       }
     }));
     const names = entries.filter((name) => name.endsWith('.json'));
@@ -247,15 +202,7 @@ export const createGuestServiceRegistry = ({
         await fs.rm(filePath, { force: true });
         return state === 'orphaned';
       } catch (error) {
-<<<<<<< HEAD:packages/web/server/lib/guests/service-registry.js
-        // A corrupt record, or one that vanished: drop it and move on.
-        if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => { });
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-registry.js
-        // A corrupt record, or one that vanished: drop it and move on.
         if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => {});
-=======
-        if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => {});
->>>>>>> upstream/main:packages/web/server/lib/guests/service-registry.ts
         return false;
       }
     }));

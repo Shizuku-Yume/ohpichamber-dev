@@ -20,8 +20,7 @@ import { readBoundedResponseText } from './response-body.js';
 import { resolveServiceSocketEnv } from './sockets.js';
 import { guestDataDir } from './storage.js';
 import type { ChildProcess } from 'node:child_process';
-import type { ServiceContribution } from '@openchamber/sdk';
-import type { createGuestOpenCodeProvider } from './opencode-provider/index.js';
+import type { ServiceContribution } from 'ohpichamber-sdk';
 import { hasErrorMessage, isString } from './input-guards.js';
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
@@ -31,30 +30,6 @@ const SERVICE_HEALTH_PATH = '/health';
 const OPENCHAMBER_SERVICE_AUTH_HEADER = 'authorization';
 type ServiceHeaders = { Accept: string; authorization: string; 'Content-Type'?: string };
 
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-/**
- * @typedef {{
- *   child: import('node:child_process').ChildProcess,
- *   port: number,
- *   token: string,
- *   status: 'starting' | 'ready' | 'failed' | 'stopped',
- *   packageRoot: string,
- *   entry: string,
- * }} ServiceRuntime
- */
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-/**
- * @typedef {{
- *   child: import('node:child_process').ChildProcess,
- *   port: number,
- *   token: string,
- *   status: 'starting' | 'ready' | 'failed' | 'stopped',
- *   packageRoot: string,
- *   entry: string,
- *   released: Promise<void>,
- * }} ServiceRuntime
- */
-=======
 type ServiceRuntime = {
   child: ChildProcess;
   port: number;
@@ -66,8 +41,6 @@ type ServiceRuntime = {
 };
 type HostLifecycle = {
   accepting: boolean;
-  registryDir: string | null;
-  orphansReaped: Promise<void | Awaited<ReturnType<typeof reapOrphanedGuestServices>>>;
 };
 type ServiceStart = {
   guestId: string;
@@ -76,7 +49,6 @@ type ServiceStart = {
   socketBindings?: NonNullable<NonNullable<ServiceContribution['permissions']>['sockets']>;
   socketOverrides?: Record<string, string>;
   dataDir: string;
-  openCode?: boolean;
   epoch: number;
   lifecycle: HostLifecycle;
 };
@@ -100,57 +72,12 @@ export type GuestServiceRequest = {
 const runtimes = new Map<string, ServiceRuntime>();
 const startingByGuest = new Map<string, Promise<ServiceRuntime>>();
 const stoppingByGuest = new Map<string, Promise<void>>();
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
-
-let hostLifecycle: HostLifecycle = { accepting: true, registryDir: null, orphansReaped: Promise.resolve() };
-let openCodeProvider: ReturnType<typeof createGuestOpenCodeProvider> | null = null;
-
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-/** @type {Map<string, Promise<ServiceRuntime>>} */
-const startingByGuest = new Map();
-
-/** @type {Map<string, Promise<void>>} */
-const stoppingByGuest = new Map();
 
 // Requests retain their lifecycle object across awaits. A later host start
 // cannot reopen admission for work that belonged to the previous host.
-let hostLifecycle = { accepting: true };
+let hostLifecycle: HostLifecycle = { accepting: true };
 
 export const beginGuestServiceHost = () => {
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-/** @type {Map<string, Promise<ServiceRuntime>>} */
-const startingByGuest = new Map();
-
-/** @type {Map<string, Promise<void>>} */
-const stoppingByGuest = new Map();
-
-// Requests retain their lifecycle object across awaits. A later host start
-// cannot reopen admission for work that belonged to the previous host.
-let hostLifecycle = { accepting: true, registryDir: null, orphansReaped: Promise.resolve() };
-
-let openCodeProvider = null;
-
-/** One host-owned OpenCode transport for approved local services. */
-export const configureGuestOpenCodeProvider = (provider) => {
-  if (openCodeProvider) throw new Error('Stop the previous OpenCode provider before replacing it.');
-  openCodeProvider = provider;
-};
-
-/**
- * Opens service admission for a new host. With `registryDir` every spawn is
- * recorded there (`service-registry.js`), and the services a host that died
- * without stopping them left running are stopped before this host spawns one.
- * @param {{ registryDir?: string | null }} [options]
- */
-export const beginGuestServiceHost = ({ registryDir = null } = {}) => {
-=======
-export const configureGuestOpenCodeProvider = (provider: ReturnType<typeof createGuestOpenCodeProvider>) => {
-  if (openCodeProvider) throw new Error('Stop the previous OpenCode provider before replacing it.');
-  openCodeProvider = provider;
-};
-
-export const beginGuestServiceHost = ({ registryDir = null }: { registryDir?: string | null } = {}) => {
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
   if (runtimes.size || startingByGuest.size || stoppingByGuest.size) {
     throw new Error('Guest services must finish stopping before a new host starts.');
   }
@@ -261,26 +188,7 @@ export const setServiceSocketOverride = async (guestId: string, socketId: string
   await stopGuestService(guestId);
 };
 
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-/**
- * Why a service last stopped working, for the extension's card: the end of its
- * output, in memory only. A service that starts cleanly clears it.
- * @type {Map<string, { at: number, output: string }>}
- */
-const lastFailures = new Map();
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-/**
- * @param {string} guestId
- */
-/**
- * Why a service last stopped working, for the extension's card: the end of its
- * output, in memory only. A service that starts cleanly clears it.
- * @type {Map<string, { at: number, output: string }>}
- */
-const lastFailures = new Map();
-=======
 const lastFailures = new Map<string, { at: number; output: string }>();
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
 
 export const getServiceFailure = (guestId: string) => lastFailures.get(guestId) ?? null;
 
@@ -384,13 +292,6 @@ const discardRuntime = async (guestId: string) => {
   stoppingByGuest.set(guestId, stopped);
   try {
     await stopped;
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-    // A child that outlived SIGKILL keeps its record for the next host's reaper.
-    if (child.exitCode !== null || child.signalCode) await runtime.released;
-=======
-    if (child.exitCode !== null || child.signalCode) await runtime.released;
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
   } finally {
     stoppingByGuest.delete(guestId);
   }
@@ -429,44 +330,6 @@ export const stopAllGuestServices = async () => {
   const ids = new Set([...runtimes.keys(), ...startingByGuest.keys(), ...stoppingByGuest.keys()]);
   const stops = [...ids].map((id) => stopGuestService(id));
   await Promise.allSettled([...starts, ...stops]);
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-  const provider = openCodeProvider;
-  openCodeProvider = null;
-  await provider?.stop();
-};
-
-/**
- * Records the child for a later host's reaper and drops the record once the
- * child exits. Resolves after the drop.
- * @param {string | null} registryDir
- * @param {import('node:child_process').ChildProcess} child
- * @param {{ guestId: string, token: string, entry: string }} service
- */
-const recordServiceProcess = (registryDir, child, service) => {
-  const { pid } = child;
-  // A spawn that failed has no pid and never emits `exit`.
-  if (!registryDir || !Number.isInteger(pid)) return Promise.resolve();
-  const recorded = recordGuestService(registryDir, { pid, ...service });
-  const exited = new Promise((resolve) => {
-    child.once('exit', resolve);
-  });
-  return Promise.all([recorded, exited]).then(() => releaseGuestService(registryDir, pid));
-=======
-  const provider = openCodeProvider;
-  openCodeProvider = null;
-  await provider?.stop();
-};
-
-const recordServiceProcess = (registryDir: string | null, child: ChildProcess, service: { guestId: string; token: string; entry: string }) => {
-  const { pid } = child;
-  if (!registryDir || pid === undefined || !Number.isInteger(pid)) return Promise.resolve();
-  const recorded = recordGuestService(registryDir, { pid, ...service });
-  const exited = new Promise<number | null>((resolve) => {
-    child.once('exit', resolve);
-  });
-  return Promise.all([recorded, exited]).then(() => releaseGuestService(registryDir, pid));
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
 };
 
 const collectProcessOutput = (child: ChildProcess, maxChars = 2_000) => {
@@ -503,20 +366,8 @@ const startGuestService = async ({
   lifecycle,
 }: ServiceStart) => {
   assertGuestHostActive(lifecycle);
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
   // A replacement must not occupy the same guest slot while its previous
   // child is still stopping; host shutdown must be able to drain both.
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-  // A service a dead host left running may still hold what this one needs (a
-  // socket, a profile lock), so it is gone before anything spawns.
-  await lifecycle.orphansReaped;
-  assertGuestHostActive(lifecycle);
-  // A replacement must not occupy the same guest slot while its previous
-  // child is still stopping; host shutdown must be able to drain both.
-=======
-  await lifecycle.orphansReaped;
-  assertGuestHostActive(lifecycle);
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
   const previousStop = stoppingByGuest.get(guestId);
   if (previousStop) await previousStop;
   assertGuestHostActive(lifecycle);
@@ -576,13 +427,6 @@ const startGuestService = async ({
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-  // Ownership starts at spawn, including a child that never becomes ready.
-  const released = recordServiceProcess(lifecycle.registryDir, child, { guestId, token, entry: absoluteEntry });
-=======
-  const released = recordServiceProcess(lifecycle.registryDir, child, { guestId, token, entry: absoluteEntry });
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
   const output = collectProcessOutput(child);
 
   const runtime: ServiceRuntime = {
@@ -603,13 +447,6 @@ const startGuestService = async ({
         lastFailures.set(guestId, { at: Date.now(), output: detail });
       }
       runtime.status = runtime.status === 'starting' ? 'failed' : 'stopped';
-<<<<<<< HEAD:packages/web/server/lib/guests/service.js
-||||||| bc50ba56aa:packages/web/server/lib/guests/service.js
-      openCodeProvider?.revokeGuest(guestId);
-=======
-      openCodeProvider?.revokeGuest(guestId);
-      announceServiceEnded(guestId);
->>>>>>> upstream/main:packages/web/server/lib/guests/service.ts
     }
   });
 

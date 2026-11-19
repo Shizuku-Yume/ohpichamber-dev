@@ -44,20 +44,12 @@ import { runGuestFileOperation } from './files.js';
 import { createGuestFrameGrants } from './frame-grants.js';
 import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
 import { injectGuestDocumentStyles } from './html-styles.js';
-import { injectSvgRootColor } from '../host/project-icon-routes.js';
+import { injectSvgRootColor } from '../appearance/project-icon-routes.js';
 
 // The background colours a provider logo is drawn on; `theme=light|dark` names one.
 const SVG_THEME_COLORS = new Map([['light', '#111111'], ['dark', '#f5f5f5']]);
 import { installGuest, installGuestFromZipBuffer, parseInstallRequest, uninstallGuest } from './install.js';
 import { enterpriseBlockedCapabilities } from './enterprise.js';
-<<<<<<< HEAD:packages/web/server/lib/guests/routes.js
-||||||| bc50ba56aa:packages/web/server/lib/guests/routes.js
-import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
-import { themedLogoSvg } from '../opencode/provider-logo-routes.js';
-=======
-import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
-import { themedLogoSvg } from '../appearance/provider-logo-routes.js';
->>>>>>> upstream/main:packages/web/server/lib/guests/routes.ts
 import { guestUploadMaxBytes, readGuestUploadBody } from './upload.js';
 import { checkAllGuestUpdates, updateGuest, withGuestUpdate } from './updates.js';
 import { extensionsPersistPath, readExtensionStore, setCapabilityGrants } from './persist.js';
@@ -294,15 +286,8 @@ export const registerGuestRoutes = (app: Application, {
     readGlobalEntries: () => ({ path: '', targets: [] }),
     addGlobalEntry: () => { throw new Error('No global OpenCode config here.'); },
   },
-<<<<<<< HEAD:packages/web/server/lib/guests/routes.js
 }) => {
   if (typeof resolveWorkspaceScope !== 'function') throw new TypeError('Guest workspace scope resolver is required');
-||||||| bc50ba56aa:packages/web/server/lib/guests/routes.js
-}) => {
-=======
-  marks = guestMarks,
-}: GuestRoutesOptions) => {
->>>>>>> upstream/main:packages/web/server/lib/guests/routes.ts
   const persistPath = extensionsPersistPath(openchamberDataDir);
   const authPath = guestAuthPersistPath(openchamberDataDir);
   const frameGrants = createGuestFrameGrants();
@@ -469,95 +454,8 @@ export const registerGuestRoutes = (app: Application, {
     return null;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/guests/routes.js
   app.post('/api/guests/:id/opencode-plugin/global-config', async (_req, res) => {
     return res.status(501).json({ error: 'unsupported' });
-||||||| bc50ba56aa:packages/web/server/lib/guests/routes.js
-  app.post('/api/guests/:id/opencode-plugin/global-config', async (req, res) => {
-    try {
-      const guest = await loadGuest(req.params.id);
-      const refused = pluginRefusal(guest);
-      if (refused) {
-        return res.status(refused.status).json(refused.body);
-      }
-      const delivery = opencodePlugins.delivery();
-      if (delivery !== 'restart' && delivery !== 'none') {
-        return res.status(409).json({ error: 'not-needed', delivery });
-      }
-      const directory = await resolveOpenCodePluginFolder(fs, guest.packageRoot, guest.opencodePlugin);
-      if (!directory) {
-        return res.status(409).json({ error: 'plugin-missing' });
-      }
-      // The row and the policy are read again right before the write: a Pause,
-      // a withdrawn approval or a policy change meanwhile must not reach the
-      // user's file, which outlives the extension.
-      const current = await loadGuest(guest.id);
-      const refusedNow = pluginRefusal(current);
-      if (refusedNow) {
-        return res.status(refusedNow.status).json(refusedNow.body);
-      }
-      if (enterpriseBlockedCapabilities(current, { source: current.source, gitUrl: current.gitOrigin?.url }).includes('opencodePlugin')) {
-        return res.status(403).json({ error: 'enterprise-mode' });
-      }
-      let written;
-      try {
-        written = opencodePlugins.addGlobalEntry(directory);
-      } catch (error) {
-        if (error?.code === 'CONFIG_INVALID') {
-          return res.status(409).json({ error: 'config-invalid', message: error.message });
-        }
-        throw error;
-      }
-      if (written.added) announce();
-      res.json({ path: written.path });
-    } catch (error) {
-      console.error('Failed to add an extension plugin to the global OpenCode config:', error);
-      res.status(500).json({ error: 'write-failed', message: error?.message ?? 'Failed to write the OpenCode config.' });
-    }
-=======
-  app.post('/api/guests/:id/opencode-plugin/global-config', async (req, res) => {
-    try {
-      const guest = await loadGuest(req.params.id);
-      if (!guest) return res.status(404).json({ error: 'not-found' });
-      if (!guest.opencodePlugin) return res.status(404).json({ error: 'no-plugin' });
-      const refused = pluginRefusal(guest);
-      if (refused) {
-        return res.status(refused.status).json(refused.body);
-      }
-      const delivery = opencodePlugins.delivery();
-      if (delivery !== 'restart' && delivery !== 'none') {
-        return res.status(409).json({ error: 'not-needed', delivery });
-      }
-      const directory = await resolveOpenCodePluginFolder(fs, guest.packageRoot, guest.opencodePlugin);
-      if (!directory) {
-        return res.status(409).json({ error: 'plugin-missing' });
-      }
-      const current = await loadGuest(guest.id);
-      if (!current) return res.status(404).json({ error: 'not-found' });
-      if (!current.opencodePlugin) return res.status(404).json({ error: 'no-plugin' });
-      const refusedNow = pluginRefusal(current);
-      if (refusedNow) {
-        return res.status(refusedNow.status).json(refusedNow.body);
-      }
-      if (enterpriseBlockedCapabilities(current, { source: current.source, gitUrl: current.gitOrigin?.url }).includes('opencodePlugin')) {
-        return res.status(403).json({ error: 'enterprise-mode' });
-      }
-      let written;
-      try {
-        written = opencodePlugins.addGlobalEntry(directory);
-      } catch (error) {
-        if (hasErrorCode(error) && error.code === 'CONFIG_INVALID') {
-          return res.status(409).json({ error: 'config-invalid', message: hasErrorMessage(error) ? error.message : undefined });
-        }
-        throw error;
-      }
-      if (written.added) announce();
-      res.json({ path: written.path });
-    } catch (error) {
-      console.error('Failed to add an extension plugin to the global OpenCode config:', error);
-      res.status(500).json({ error: 'write-failed', message: (hasErrorMessage(error) ? error.message : undefined) ?? 'Failed to write the OpenCode config.' });
-    }
->>>>>>> upstream/main:packages/web/server/lib/guests/routes.ts
   });
 
   app.post<JsonValue | undefined>('/api/guests', json16, async (req, res) => {
@@ -991,20 +889,12 @@ export const registerGuestRoutes = (app: Application, {
       if (!parsed.success) {
         return res.status(400).json({ error: 'invalid-request' });
       }
-<<<<<<< HEAD:packages/web/server/lib/guests/routes.js
       const workspace = await resolveWorkspaceScope(parsed.data.workspaceId);
       if (!workspace || workspace.workspaceId !== parsed.data.workspaceId) {
         return res.status(404).json({ error: 'WORKSPACE_NOT_FOUND' });
       }
       const directory = workspace.cwd;
       // The host names provider/model preferences; workspace scope authorizes the completion.
-||||||| bc50ba56aa:packages/web/server/lib/guests/routes.js
-      const { directory } = await resolveOptionalProjectDirectory(req);
-      // The host names the composer's provider, which the model stays on, and
-      // its model, used when that provider has no small one.
-=======
-      const { directory } = await resolveOptionalProjectDirectory(req);
->>>>>>> upstream/main:packages/web/server/lib/guests/routes.ts
       const provider = providerHeaderSchema.safeParse(req.get('x-openchamber-provider'));
       const composerModel = providerHeaderSchema.safeParse(req.get('x-openchamber-model'));
       const { generateSmallModelText } = await getSmallModelService();
@@ -1168,23 +1058,7 @@ export const registerGuestRoutes = (app: Application, {
     }
   });
 
-<<<<<<< HEAD:packages/web/server/lib/guests/routes.js
-  // One extension file, as a frame loads it. `token` is the legacy query
-  // credential copied onto the page's relative URLs; `connectSource` is the
-  // one path the page may fetch from.
-  // A `theme` query colours a provider logo's SVG, whose `currentColor` an
- // <img> cannot set from outside. Any other value, and every file type but
- // SVG, is sent as the package shipped it.
- const sendGuestFile = async (res, guest, rawPath, { token = '', connectSource, theme }) => {
-||||||| bc50ba56aa:packages/web/server/lib/guests/routes.js
-  // One extension file, as a frame loads it. `token` is the legacy query
-  // credential copied onto the page's relative URLs; `connectSource` is the
-  // one path the page may fetch from; `theme` colours an SVG drawn as a
-  // provider logo, which an <img> cannot do from outside.
-  const sendGuestFile = async (res, guest, rawPath, { token = '', connectSource, theme }) => {
-=======
   const sendGuestFile = async (res: Response, guest: InstalledGuest, rawPath: string | string[] | undefined, { token = '', connectSource, theme }: { token?: string; connectSource: string | null; theme?: QueryValue | undefined }) => {
->>>>>>> upstream/main:packages/web/server/lib/guests/routes.ts
     let relativePath;
     try {
       relativePath = decodeURIComponent(Array.isArray(rawPath) ? rawPath.join('/') : (rawPath || ''));

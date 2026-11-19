@@ -4,14 +4,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-<<<<<<< HEAD:packages/web/server/lib/guests/persist.js
 import { GUEST_CAPABILITIES } from 'ohpichamber-sdk';
-||||||| bc50ba56aa:packages/web/server/lib/guests/persist.js
-import { GUEST_CAPABILITIES } from '@openchamber/sdk';
-=======
-import { GUEST_CAPABILITIES } from '@openchamber/sdk';
-import type { GuestCapability } from '@openchamber/sdk';
->>>>>>> upstream/main:packages/web/server/lib/guests/persist.ts
+import type { GuestCapability } from 'ohpichamber-sdk';
 
 const GUEST_SOURCES = ['path', 'zip', 'git'] as const;
 
@@ -65,12 +59,6 @@ const capabilityScopeSchema = z.object({
       oauth: z.object({ authorizeUrl: z.string().min(1), tokenUrl: z.string().min(1) }).nullable(),
       urls: z.array(z.string().min(1)),
     }).optional(),
-<<<<<<< HEAD:packages/web/server/lib/guests/persist.js
-    // The OMP providers a usage provider reads the credentials of (`grant-scope.js`); absent for other services.
-||||||| bc50ba56aa:packages/web/server/lib/guests/persist.js
-    // The OpenCode providers a usage provider reads the credentials of (`grant-scope.js`); absent for other services.
-=======
->>>>>>> upstream/main:packages/web/server/lib/guests/persist.ts
     quota: z.object({
       providers: z.array(z.string().min(1)),
     }).optional(),
