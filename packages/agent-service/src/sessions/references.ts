@@ -128,7 +128,10 @@ export class SessionReferences {
       delete references[previousSessionId];
       references[parsed.rootSessionId] = referenceJson(parsed);
       const subagents = { ...this.subagentValues };
-      const moved = (subagents[previousSessionId] ?? []).map(row => ChildReferenceSchema.parse({ ...row, rootSessionId: parsed.rootSessionId }));
+      const moved = (subagents[previousSessionId] ?? []).map(row => ChildReferenceSchema.parse({
+        ...row, rootSessionId: parsed.rootSessionId,
+        parentSessionId: row.parentSessionId === previousSessionId ? parsed.rootSessionId : row.parentSessionId,
+      }));
       delete subagents[previousSessionId];
       if (moved.length > 0) subagents[parsed.rootSessionId] = moved;
       await this.persist(references, this.relocations, subagents);

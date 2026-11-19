@@ -7,6 +7,30 @@ import { SessionReferenceError, SessionReferences } from './references.ts';
 const reference = (file: string) => ({ rootSessionId: 'sess_1', projectId: 'proj_1', workspaceId: 'ws_1', cwd: '/tmp/project', agentDirectory: '/tmp/project/.agent', sessionFile: file, displayPath: 'src/main.ts', createdAt: 1, updatedAt: 2 });
 
 describe('SessionReferences', () => {
+  test('rekey persists direct child parent links without changing nested links', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'session-reference-rekey-'));
+    const store = new SessionReferences(dir);
+    const reopened = new SessionReferences(dir);
+    try {
+      await store.initialize();
+      await store.put(reference('/tmp/original.jsonl'));
+      const child = {
+        rootSessionId: 'sess_1', parentSessionId: 'sess_1', childSessionId: 'child', subagentId: 'sub_1',
+        role: 'worker', status: 'completed' as const, sessionFile: '/tmp/child.jsonl', projectId: 'proj_1', workspaceId: 'ws_1',
+      };
+      await store.putSubagent(child);
+      await store.putSubagent({ ...child, parentSessionId: 'child', childSessionId: 'grandchild', subagentId: 'sub_2' });
+      await store.rekey('sess_1', { ...reference('/tmp/promoted.jsonl'), rootSessionId: 'promoted' });
+      await store.close();
+      await reopened.initialize();
+      expect(reopened.listSubagents('sess_1')).toEqual([]);
+      expect(reopened.listSubagents('promoted')).toMatchObject([
+        { childSessionId: 'child', rootSessionId: 'promoted', parentSessionId: 'promoted' },
+        { childSessionId: 'grandchild', rootSessionId: 'promoted', parentSessionId: 'child' },
+      ]);
+    } finally { await reopened.close(); await store.close(); await rm(dir, { recursive: true, force: true }); }
+  });
+
   test('persists through close and reopen', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'session-references-'));
     try {
