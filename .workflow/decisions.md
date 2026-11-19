@@ -1623,3 +1623,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
+
+## 2026-11-19 - Explain an unreachable Host after native resume
+
+- **Decided:** Show the existing unreachable notice on the connection screen when the Capacitor resume retry window expires without a reachable Host.
+- **Instead of:** Silently returning to the connection screen or continuing to poll in the foreground.
+- **Because:** The notice explains the disconnect while retaining saved-instance taps, resume, and online events as recovery paths.
+- **Mine:** no
+- **Revisit when:** Upstream provides equivalent native resume feedback.

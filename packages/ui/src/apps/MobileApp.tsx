@@ -81,6 +81,7 @@ import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
 import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
 import { isCapacitorMobileApp, useMobileWebBackButton, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
+import { retryNativeResumeConnection } from './mobileResumeRetry';
 import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
@@ -811,7 +812,10 @@ function MobileAppContent({ apis }: MobileAppProps) {
       if (!providersLoaded) void loadProviders({ source: 'mobileApp:nativeResume' });
       void loadAgents(useDirectoryStore.getState().currentDirectory);
     };
-    const disconnect = (reason: string) => {
+    const disconnect = (reason: string, noticeKind?: MobileConnectionNotice['kind']) => {
+      if (noticeKind) {
+        setAutoConnectNotice({ kind: noticeKind, label: getAutoConnectTargetLabel() ?? '' });
+      }
       logMobileConnectEvent('resume:disconnect', { reason });
       switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: MOBILE_DISCONNECTED_RUNTIME_KEY });
       setConnectionEpoch((value) => value + 1);
@@ -847,37 +851,12 @@ function MobileAppContent({ apis }: MobileAppProps) {
         // the network coming up. Retry on a widening grace ladder before
         // tearing the connection down — the last attempt runs with the full
         // connect budget so slow-but-alive transports get a real chance.
-        const retryDelaysMs = [4000, 10000];
-        const retryAt = (attempt: number) => {
-          window.setTimeout(() => {
-            if (nativeResumeValidationSeqRef.current !== validationSeq) return;
-            const lastAttempt = attempt === retryDelaysMs.length - 1;
-            void reprobeActiveConnection({ fast: !lastAttempt }).then((retry) => {
-              if (nativeResumeValidationSeqRef.current !== validationSeq) return;
-              if (retry === 'switched') return;
-              if (retry === 'unchanged') {
-                refreshInPlace();
-                return;
-              }
-              if (retry === 'needs-login') {
-                setAutoConnectNotice({ kind: 'auth-expired', label: getAutoConnectTargetLabel() ?? '' });
-                disconnect('retry-needs-login');
-                return;
-              }
-              if (retry === 'relay-limit') {
-                setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
-                disconnect('retry-relay-limit');
-                return;
-              }
-              if (!lastAttempt) {
-                retryAt(attempt + 1);
-                return;
-              }
-              disconnect(`retry-${retry}`);
-            });
-          }, retryDelaysMs[attempt]);
-        };
-        retryAt(0);
+        void retryNativeResumeConnection({
+          reprobe: reprobeActiveConnection,
+          isCurrent: () => nativeResumeValidationSeqRef.current === validationSeq,
+          refreshInPlace,
+          disconnect,
+        });
         return;
       }
       if (outcome === 'switched') return;
