@@ -7,11 +7,8 @@
  * is served stale-while-revalidate so a cached list appears instantly and
  * refreshes behind it.
  *
- * The awkward part this hook contains is that the draft can point at a
- * directory that does not exist yet — a worktree being created. Such a
- * directory must survive not appearing in the list, or the selector would snap
- * back to the project root mid-creation and the session would be started in
- * the wrong place.
+ * The options are for display, not validation of the selected destination.
+ * A restored or bootstrapping worktree can be absent from the list.
  */
 
 import React from 'react';
@@ -56,10 +53,8 @@ export interface DraftTargetProject {
 }
 
 /**
- * A pinned directory (`preserveDirectoryOverride`) stops the app from moving
- * the draft while the directory is unconfirmed; it never overrides the user's
- * own pick. The pin only clears by itself once the directory shows up as a
- * known branch, which a project without git never does.
+ * A pinned directory (`preserveDirectoryOverride`) opts out of missing-directory
+ * recovery until the target is ready; it never overrides the user's own pick.
  */
 function releaseDraftDirectoryPin() {
     const store = useSessionUIStore.getState();
@@ -503,8 +498,7 @@ export function useDraftTarget(enabled: boolean) {
         if (!selectedDraftProject) {
             return;
         }
-        // Without its pin an unlisted directory leaves the list and the draft
-        // snaps to the project root, so re-picking it changes nothing.
+        // Re-picking the pending target must not remove its pin.
         if (draft?.preserveDirectoryOverride && normalizePath(directory) === selectedDraftDirectory) {
             return;
         }

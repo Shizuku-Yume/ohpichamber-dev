@@ -415,8 +415,6 @@ export function useServerTTS(
   // Get current model and API settings from config store.
   const currentProviderId = useConfigStore((state) => state.currentProviderId);
   const currentModelId = useConfigStore((state) => state.currentModelId);
-  const hasStoredOpenaiKey = useConfigStore((state) => state.voiceApiKeys.openai);
-  const refreshVoiceApiKeys = useConfigStore((state) => state.refreshVoiceApiKeys);
   const openaiCompatibleUrl = useConfigStore(
     (state) => state.openaiCompatibleUrl,
   );
@@ -429,18 +427,12 @@ export function useServerTTS(
       return false;
     }
 
-    const hasClientKey = hasStoredOpenaiKey;
     const hasCustomUrl = Boolean(
       openaiCompatibleUrl && openaiCompatibleUrl.trim().length > 0,
     );
     if (availabilityMode === 'openai-compatible') {
       setIsAvailable(hasCustomUrl);
       return hasCustomUrl;
-    }
-
-    if (hasClientKey) {
-      setIsAvailable(true);
-      return true;
     }
 
     if (availabilityMode === 'auto' && hasCustomUrl) {
@@ -456,12 +448,7 @@ export function useServerTTS(
       setIsAvailable(false);
       return false;
     }
-  }, [availabilityMode, enabled, hasStoredOpenaiKey, openaiCompatibleUrl]);
-
-  // Which keys the server holds, read again when this runtime's reader mounts.
-  useEffect(() => {
-    if (enabled) void refreshVoiceApiKeys();
-  }, [enabled, refreshVoiceApiKeys]);
+  }, [availabilityMode, enabled, openaiCompatibleUrl]);
 
   // Check availability on mount and when API key changes
   useEffect(() => {
