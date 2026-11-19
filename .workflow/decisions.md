@@ -1586,6 +1586,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream covers the same native Host authentication contract or the connection implementation retires that contract.
 
+## 2026-11-19 - Identify malformed mobile pairing links in the welcome form
+
+- **Decided:** Show the translated pairing rejection message when pasted `ohpichamber://` text cannot be parsed, and prevent address submission until it is corrected.
+- **Instead of:** Treating malformed pairing links as server addresses.
+- **Because:** A network error does not tell the user to generate a new pairing link.
+- **Revisit when:** Mobile onboarding no longer accepts both pairing links and server addresses in the same field.
+
 ## 2026-11-19 - Route native history to the focused editor
 
 - **Decided:** retain focus-scoped CodeMirror Undo/Redo, its regression tests, and the editor documentation in the fork.
