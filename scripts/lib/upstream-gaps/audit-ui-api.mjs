@@ -128,7 +128,7 @@ const FILE_PREFIX_MAP = new Map([
 ]);
 
 for (const file of activeServerFiles.filter(isMountedFile)) {
-  const rel = path.relative(REPO_ROOT, file);
+  const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
   const src = fs.readFileSync(file, 'utf8');
   const filePrefix = FILE_PREFIX_MAP.get(rel) ?? '';
 
