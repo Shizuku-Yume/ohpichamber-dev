@@ -51,6 +51,29 @@ test('rejects a copied link pointing at a genuinely wrong in-payload target', t 
   assert.throws(() => prepareWindowsAgentLinks(root), /link mismatch/);
 });
 
+test('prepares and restores dependencies through a junction root', t => {
+  const { directory, root } = fixture(t);
+  const alias = path.join(directory, 'redirected-profile');
+  fs.symlinkSync(root, alias, 'junction');
+  prepareWindowsAgentLinks(alias);
+  const manifest = JSON.parse(fs.readFileSync(path.join(alias, 'manifest.json')));
+  verifyWindowsAgentLinks(alias, manifest, { create: true });
+  verifyWindowsAgentLinks(root, manifest);
+  if (process.platform === 'win32') verifyWindowsAgentLinks(alias.toUpperCase(), manifest);
+  assert.equal(fs.realpathSync(path.join(alias, 'service/node_modules/dep')), fs.realpathSync(path.join(root, 'packages/1')));
+});
+
+test('rejects targets redirected outside the real payload root', t => {
+  const { directory, root } = fixture(t);
+  prepareWindowsAgentLinks(root);
+  const outside = path.join(directory, 'outside');
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, path.join(root, 'redirect'), 'junction');
+  const manifest = { junctions: [{ path: 'service/node_modules/dep', target: 'redirect' }] };
+  assert.throws(() => verifyWindowsAgentLinks(root, manifest, { create: true }), /escapes resource directory/);
+  assert.equal(fs.existsSync(path.join(root, 'service/node_modules/dep')), false);
+});
+
 test('rejects incorrect existing junctions, escaping paths and missing targets', t => {
   const { root } = fixture(t);
   prepareWindowsAgentLinks(root);

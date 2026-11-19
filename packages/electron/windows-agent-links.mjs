@@ -2,11 +2,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
+const comparable = value => process.platform === 'win32' ? value.toLowerCase() : value;
+
 const within = (root, relative) => {
   const resolved = path.resolve(root, relative);
-  if (!resolved.startsWith(`${path.resolve(root)}${path.sep}`)) {
+  if (!comparable(resolved).startsWith(comparable(`${path.resolve(root)}${path.sep}`))) {
     throw new Error(`Agent dependency escapes resource directory: ${relative}`);
   }
+  return resolved;
+};
+
+const realTarget = (root, target) => {
+  const resolved = fs.realpathSync(target);
+  const resolvedRoot = fs.realpathSync(root);
+  within(resolvedRoot, path.relative(resolvedRoot, resolved));
   return resolved;
 };
 
@@ -14,7 +23,8 @@ export function verifyWindowsAgentLinks(root, manifest, { create = false } = {})
   for (const item of manifest.junctions ?? []) {
     const link = within(root, item.path);
     const target = within(root, item.target);
-    if (fs.realpathSync(target) !== target || !fs.statSync(target).isDirectory()) {
+    const resolvedTarget = realTarget(root, target);
+    if (!fs.statSync(target).isDirectory()) {
       throw new Error(`Agent dependency target mismatch: ${item.path}`);
     }
     let existing;
@@ -22,7 +32,7 @@ export function verifyWindowsAgentLinks(root, manifest, { create = false } = {})
       if (error.code !== 'ENOENT') throw error;
     }
     if (existing) {
-      if (!existing.isSymbolicLink() || fs.realpathSync(link) !== target) {
+      if (!existing.isSymbolicLink() || comparable(fs.realpathSync(link)) !== comparable(resolvedTarget)) {
         throw new Error(`Agent dependency link mismatch: ${item.path}`);
       }
     } else if (create) {
@@ -46,10 +56,10 @@ export function prepareWindowsAgentLinks(root) {
     }
     const link = within(root, item.path);
     const target = within(root, path.relative(root, path.resolve(path.dirname(link), item.link)));
-    if (!fs.lstatSync(link).isSymbolicLink() || path.resolve(path.dirname(link), fs.readlinkSync(link)) !== target) {
+    const resolvedTarget = realTarget(root, target);
+    if (!fs.lstatSync(link).isSymbolicLink() || comparable(fs.realpathSync(path.resolve(path.dirname(link), fs.readlinkSync(link)))) !== comparable(resolvedTarget)) {
       throw new Error(`Agent dependency link mismatch: ${item.path}`);
     }
-    if (fs.realpathSync(target) !== target) throw new Error(`Agent dependency target mismatch: ${item.path}`);
     const directory = fs.statSync(target).isDirectory();
     fs.unlinkSync(link);
     if (directory) {
