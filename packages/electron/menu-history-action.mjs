@@ -1,8 +1,8 @@
 import { menuLabel } from './menu-locales.mjs';
 
-export const createHistoryMenuAction = ({ getFocusedWebContents, getAppWindows }) => async (action) => {
-  const focused = getFocusedWebContents();
-  if (!focused) return;
+export const createHistoryMenuAction = ({ getFocusedWebContents, getAppWindows }) => async (action, targetWebContents) => {
+  const focused = targetWebContents ?? getFocusedWebContents();
+  if (!focused || focused.isDestroyed()) return;
   const appWindow = getAppWindows().find((window) => window.webContents === focused);
   if (appWindow) {
     try {
@@ -15,7 +15,7 @@ export const createHistoryMenuAction = ({ getFocusedWebContents, getAppWindows }
       // A failed renderer handoff must not undo a different native history.
       return;
     }
-    if (focused.isDestroyed() || getFocusedWebContents() !== focused) return;
+    if (focused.isDestroyed() || (!targetWebContents && getFocusedWebContents() !== focused)) return;
   }
   focused[action]();
 };

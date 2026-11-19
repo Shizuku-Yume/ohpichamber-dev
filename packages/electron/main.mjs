@@ -5619,10 +5619,13 @@ const prependCopyLinkMenuItems = createCopyLinkMenuHook({
 
 contextMenu({
   labels: contextMenuLabels,
-  prepend: (defaultActions, properties) => [
-    ...prependCopyLinkMenuItems(defaultActions, properties),
-    ...createHistoryContextMenuItems(properties, contextMenuLocale, process.platform, handleHistoryAction),
-  ],
+  prepend: (defaultActions, properties, browserWindow) => {
+    const target = browserWindow.webContents;
+    return [
+      ...prependCopyLinkMenuItems(defaultActions, properties),
+      ...createHistoryContextMenuItems(properties, contextMenuLocale, process.platform, action => handleHistoryAction(action, target)),
+    ];
+  },
   showInspectElement: isDev,
   showSaveImageAs: true,
   showCopyImage: true,

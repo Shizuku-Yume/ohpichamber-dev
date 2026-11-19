@@ -156,3 +156,30 @@ test('ordinary settings inputs keep native history through the shared context me
   await Promise.all(pending);
   assert.deepEqual(focused.calls, ['undo', 'redo']);
 });
+
+for (const native of [false, true]) {
+  test(`context history targets the clicked inactive Mini Chat, not the focused main window (${native ? 'native input' : 'composer'})`, async () => {
+    const main = { webContents: pageContents() };
+    const mini = { webContents: pageContents() };
+    const received = [];
+    const renderer = new EventTarget();
+    renderer.addEventListener('openchamber:history-action', event => {
+      received.push(event.detail);
+      if (!native) event.preventDefault();
+    });
+    main.webContents.executeJavaScript = () => assert.fail('must not change the focused main editor');
+    mini.webContents.executeJavaScript = script => Promise.resolve(runInNewContext(script, { window: renderer, CustomEvent }));
+    const handle = createHistoryMenuAction({ getFocusedWebContents: () => main.webContents, getAppWindows: () => [main, mini] });
+    const pending = [];
+    const items = createHistoryContextMenuItems({ isEditable: true }, 'en', 'darwin', action => pending.push(handle(action, mini.webContents)));
+    items[0].click();
+    items[1].click();
+    await Promise.all(pending);
+    assert.deepEqual(received, ['undo', 'redo']);
+    assert.deepEqual(main.webContents.calls, []);
+    assert.deepEqual(mini.webContents.calls, native ? ['undo', 'redo'] : []);
+    mini.webContents.isDestroyed = () => true;
+    await handle('undo', mini.webContents);
+    assert.deepEqual(received, ['undo', 'redo']);
+  });
+}
