@@ -549,7 +549,40 @@ describe('terminal transport', () => {
     transport.dispose();
   });
 
-  test('single-flights auth and socket opening for an immediate first write', async () => {
+  test('does not forward writes from a subscribed terminal until its current socket attaches', async () => {
+    const first = new FakeSocket();
+    const second = new FakeSocket();
+    let attempts = 0;
+    const transport = new TerminalTransport({
+      refreshAuth: async () => undefined,
+      openSocket: () => attempts++ === 0 ? first : second,
+    });
+    const snapshot = { t: 'snapshot', s: 'term-1', q: 1, history: '$ ', status: 'running' } satisfies WireMessage;
+    const writes = (socket: FakeSocket) => socket.sent.filter((message) => message.t === 'write').map((message) => message.d);
+    try {
+      transport.subscribe('term-1', { onEvent: () => undefined });
+      await tick();
+      first.open();
+      await expect(transport.write('term-1', 'before attach', true)).rejects.toThrow('Terminal is not attached');
+      first.emit(snapshot);
+      await transport.write('term-1', 'first', true);
+      first.close();
+      await expect(transport.write('term-1', 'while offline', true)).rejects.toThrow('Terminal is not attached');
+      await new Promise(resolve => setTimeout(resolve, 550));
+      second.open();
+      expect(second.sent.some(message => message.t === 'attach')).toBe(true);
+      first.emit(snapshot);
+      await expect(transport.write('term-1', 'waiting for snapshot', true)).rejects.toThrow('Terminal is not attached');
+      second.emit(snapshot);
+      await transport.write('term-1', 'second', true);
+      expect(writes(first)).toEqual(['first']);
+      expect(writes(second)).toEqual(['second']);
+    } finally {
+      transport.dispose();
+    }
+  });
+
+  test('single-flights auth and socket opening for writes to a background terminal', async () => {
     const sockets: FakeSocket[] = [];
     let authCalls = 0;
     const transport = new TerminalTransport({
@@ -562,11 +595,12 @@ describe('terminal transport', () => {
       },
     });
     transport.subscribe('term-1', { onEvent: () => {} });
-    await transport.write('term-1', 'bun run dev\r');
+    await Promise.all([transport.write('term-1', '\x03'), transport.write('term-2', '\x03')]);
     expect(authCalls).toBe(1);
     expect(sockets).toHaveLength(1);
     expect(sockets[0].sent.filter((message) => message.t === 'write')).toEqual([
-      { t: 'write', v: 3, s: 'term-1', d: 'bun run dev\r' },
+      { t: 'write', v: 3, s: 'term-1', d: '\x03' },
+      { t: 'write', v: 3, s: 'term-2', d: '\x03' },
     ]);
     transport.dispose();
   });

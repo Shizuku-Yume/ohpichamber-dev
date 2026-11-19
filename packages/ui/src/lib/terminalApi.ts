@@ -1,4 +1,4 @@
-import type { CreateTerminalOptions, TerminalError, TerminalHandlers, TerminalServerSession, TerminalSession, TerminalSessionPurpose, TerminalShellOption, TerminalStreamEvent } from './api/types';
+import type { CreateTerminalOptions, TerminalError, TerminalHandlers, TerminalInputOptions, TerminalServerSession, TerminalSession, TerminalSessionPurpose, TerminalShellOption, TerminalStreamEvent } from './api/types';
 import type { TerminalChunkSize } from '@/stores/useTerminalStore';
 import { openRuntimeWebSocket } from './relay/runtime-socket';
 import type { RelayTunnelSocketMessageEvent, RelayTunnelWebSocket } from './relay/tunnel-client';
@@ -268,6 +268,7 @@ export class TerminalTransport {
   private opening: Promise<void> | null = null;
   private subscribers = new Map<string, Set<Subscriber>>();
   private projections = new Map<string, TerminalProjection>();
+  private attached = new Set<string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private idleCloseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -307,6 +308,7 @@ export class TerminalTransport {
       if (current?.size === 0) {
         this.subscribers.delete(sessionId);
         this.projections.delete(sessionId);
+        this.attached.delete(sessionId);
         this.send({ t: 'detach', v: 3, s: sessionId });
       }
       if (this.subscribers.size === 0) {
@@ -325,8 +327,16 @@ export class TerminalTransport {
     };
   }
 
-  async write(sessionId: string, data: string): Promise<void> {
+  async write(sessionId: string, data: string, requireAttachment = false): Promise<void> {
     if (!data) return;
+    if (requireAttachment) {
+      if (!this.attached.has(sessionId)) throw new Error('Terminal is not attached');
+      if (this.send({ t: 'write', v: 3, s: sessionId, d: data })) return;
+      this.closeSocket();
+      this.scheduleReconnect();
+      throw new Error('Terminal connection is unavailable');
+    }
+    // A project-action stop can send Ctrl+C without an open terminal view.
     await this.ensureConnected();
     if (this.send({ t: 'write', v: 3, s: sessionId, d: data })) return;
     this.closeSocket();
@@ -350,6 +360,7 @@ export class TerminalTransport {
 
   forget(sessionId: string): void {
     this.projections.delete(sessionId);
+    this.attached.delete(sessionId);
   }
 
   /**
@@ -417,7 +428,7 @@ export class TerminalTransport {
             this.startKeepalive();
             finish();
           };
-          socket.onmessage = (event) => void this.handleMessage(event.data);
+          socket.onmessage = (event) => { if (isCurrentSocket()) this.handleMessage(event.data); };
           socket.onerror = () => {
             const current = isCurrentSocket();
             if (current) invalidatePreOpenAuth();
@@ -428,6 +439,7 @@ export class TerminalTransport {
             const current = isCurrentSocket();
             if (current) {
               this.stopKeepalive();
+              this.attached.clear();
               // An upgrade rejected before `open` commonly means the cached
               // URL-scoped auth token is stale. Retrying it reaches the 8s
               // backoff cap instead of minting a fresh token.
@@ -460,6 +472,7 @@ export class TerminalTransport {
       const error: TerminalError = new Error(message.message ?? 'Terminal error');
       error.code = message.code;
       const targets = message.s ? [message.s] : [...this.subscribers.keys()];
+      if (message.fatal) for (const id of targets) this.attached.delete(id);
       for (const id of targets) for (const sub of this.subscribers.get(id) ?? []) sub.handlers.onError?.(error, message.fatal === true);
       return;
     }
@@ -467,6 +480,7 @@ export class TerminalTransport {
     const subscribers = this.subscribers.get(message.s);
     if (!subscribers) return;
     if (message.t === 'snapshot') {
+      this.attached.add(message.s);
       const projection: TerminalProjection = {
         sequence: message.q ?? 0,
         history: createProjectionHistory(message.history ?? ''),
@@ -554,7 +568,7 @@ export class TerminalTransport {
   private startKeepalive(): void { this.stopKeepalive(); this.keepaliveTimer = setInterval(() => this.send({ t: 'ping', v: 3 }), 45_000); }
   private stopKeepalive(): void { if (this.keepaliveTimer) clearInterval(this.keepaliveTimer); this.keepaliveTimer = null; }
   private cancelReconnect(): void { if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.wakeCleanup?.(); this.wakeCleanup = null; }
-  private closeSocket(): void { this.stopKeepalive(); const socket = this.socket; this.socket = null; if (socket && (socket.readyState === SOCKET_CONNECTING || socket.readyState === SOCKET_OPEN)) socket.close(); }
+  private closeSocket(): void { this.stopKeepalive(); this.attached.clear(); const socket = this.socket; this.socket = null; if (socket && (socket.readyState === SOCKET_CONNECTING || socket.readyState === SOCKET_OPEN)) socket.close(); }
 }
 
 /**
@@ -625,7 +639,9 @@ export async function listTerminalShells(): Promise<TerminalShellOption[]> {
     : [];
 }
 export function connectTerminalStream(sessionId: string, onEvent: TerminalHandlers['onEvent'], onError?: TerminalHandlers['onError'], directory?: string | null): () => void { return transportFor(directory).subscribe(sessionId, { onEvent, onError }); }
-export async function sendTerminalInput(sessionId: string, data: string, directory?: string | null): Promise<void> { await transportFor(directory).write(sessionId, data); }
+export async function sendTerminalInput(sessionId: string, data: string, directory?: string | null, options?: TerminalInputOptions): Promise<void> {
+  await transportFor(directory).write(sessionId, data, options?.requireAttachment);
+}
 
 async function command(path: string, method: string, body?: unknown, directory?: string | null): Promise<Response> {
   const options: RuntimeFetchOptions = { method, directory };

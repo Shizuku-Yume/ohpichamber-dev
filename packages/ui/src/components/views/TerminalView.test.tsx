@@ -13,6 +13,7 @@ let effectiveDirectory = '/repo';
 const openContextPreviewCalls: Array<[string, string]> = [];
 const createSessionCalls: Array<{ cwd: string }> = [];
 const connectCalls: string[] = [];
+const inputCalls: string[] = [];
 const ensureDirectoryCalls: string[] = [];
 const openContextPreview = (directory: string, url: string) => {
   openContextPreviewCalls.push([directory, url]);
@@ -24,7 +25,7 @@ const createSession = async ({ cwd }: { cwd: string }) => {
 let connectBehavior: (sessionId: string, handlers: TerminalHandlers) => { close: () => void } = () => ({ close: () => undefined });
 const terminalRuntime = {
   createSession,
-  sendInput: async () => undefined,
+  sendInput: async (_sessionId: string, data: string) => { inputCalls.push(data); },
   resize: async () => undefined,
   close: async () => undefined,
   updateAppearance: async () => undefined,
@@ -112,7 +113,7 @@ mock.module('@/stores/useUIStore', () => ({ useUIStore: useUiStoreMock }));
 mock.module('@/stores/useInlineCommentDraftStore', () => ({ useInlineCommentDraftStore: () => ({ addDraft: () => undefined }) }));
 mock.module('@/components/terminal/TerminalViewport', () => ({
   TerminalViewport: React.forwardRef(function TerminalViewportMock(
-    { sessionKey, chunks, isVisible, onResize }: { sessionKey: string; chunks: unknown[]; isVisible: boolean; onResize: (cols: number, rows: number) => void },
+    { sessionKey, chunks, isVisible, onInput, onResize }: { sessionKey: string; chunks: unknown[]; isVisible: boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void },
     ref: React.ForwardedRef<{ focus: () => void; fit: () => void; getSelection: () => null; pasteClipboard: () => Promise<void> }>,
   ) {
     React.useImperativeHandle(ref, () => ({
@@ -132,6 +133,7 @@ mock.module('@/components/terminal/TerminalViewport', () => ({
       'data-session-key': sessionKey,
       'data-visible': String(isVisible),
       'data-chunk-count': String(chunks.length),
+      onKeyDown: (event: React.KeyboardEvent) => onInput(event.key),
     });
   }),
 }));
@@ -200,6 +202,7 @@ describe('TerminalView project action tab indicator', () => {
     openContextPreviewCalls.length = 0;
     createSessionCalls.length = 0;
     connectCalls.length = 0;
+    inputCalls.length = 0;
     ensureDirectoryCalls.length = 0;
     connectBehavior = () => ({ close: () => undefined });
     deviceInfo = { isMobile: false, isTablet: false, hasTouchOnlyPointer: false };
@@ -448,6 +451,44 @@ describe('TerminalView project action tab indicator', () => {
     expect(contextKey).not.toBe(targetKey);
     expect(contextKey).toContain('/repo-worktree');
     expect(targetKey).toContain('/repo');
+  });
+
+  test('keeps typing paused after reattach until the user resumes', async () => {
+    const store = useTerminalStore.getState();
+    const tab = store.getActiveTab('/repo')!;
+    store.setTabSessionId('/repo', tab.id, 'srv-interactive');
+    store.setTabLifecycle('/repo', tab.id, 'running');
+    let stream: TerminalHandlers | undefined;
+    connectBehavior = (_sessionId, handlers) => {
+      stream = handlers;
+      return { close: () => undefined };
+    };
+    await act(async () => root.render(React.createElement(TerminalView, { visible: true })));
+    const attachedStream = stream;
+    if (!attachedStream) throw new Error('terminal did not attach');
+    const viewport = host.querySelector('[data-terminal-viewport][data-visible="true"]')!;
+    const type = (key: string) => viewport.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key }));
+    const reconnect = (attempt: number) => attachedStream.onEvent({ type: 'reconnecting', attempt, maxAttempts: Infinity });
+    const snapshot = () => attachedStream.onEvent({ type: 'snapshot', status: 'running', sequence: 1, data: '$ ' });
+
+    await act(async () => {
+      snapshot();
+      type('a');
+      reconnect(1);
+      type('b');
+      reconnect(2);
+      snapshot();
+      type('c');
+    });
+    expect(inputCalls).toEqual(['a']);
+    expect(host.textContent).toContain('terminalView.status.inputPaused');
+
+    const resume = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'terminalView.actions.resumeInput');
+    if (!resume) throw new Error('resume button not shown');
+    await act(async () => resume.click());
+    await act(async () => { type('d'); });
+    expect(inputCalls).toEqual(['a', 'd']);
+    expect(host.textContent).not.toContain('terminalView.status.inputPaused');
   });
 
   test('replacing an exited action does not show a connection failure', async () => {
