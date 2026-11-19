@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { resolveAgentRuntime } from '../agent-runtime.mjs';
+import { readBundledAgentRuntime } from '../agent-runtime.mjs';
 import { verifyWindowsAgentLinks } from '../windows-agent-links.mjs';
 
 const electronRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,7 +45,7 @@ async function main() {
   const resources = process.argv[2] ? path.resolve(process.argv[2]) : path.join(electronRoot, 'resources');
   const payload = path.join(resources, 'agent-runtime');
   const result = verifyAgentPayload(payload);
-  const runtime = resolveAgentRuntime(resources);
+  const runtime = readBundledAgentRuntime(resources);
   // Native ONNX packages can ship different SONAME versions. Probe each declared
   // package in a fresh Bun process so one import cannot mask another's loader.
   for (const specifier of ['@oh-my-pi/pi-coding-agent', '@oh-my-pi/pi-natives', 'onnxruntime-node', 'fastembed']) {

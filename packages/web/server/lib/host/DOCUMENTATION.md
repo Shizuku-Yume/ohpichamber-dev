@@ -53,7 +53,7 @@ The production startup pipeline starts only the canonical Agent Service after pu
 
 `createHostAgentRuntime` exposes `start()` and `stop()` for supervisor lifecycle and `close()` for final Host teardown. Stopping the service preserves the approval policy store for a later start; final close stops the service and closes that store, and prevents another start.
 
-An OMP executable selected as the Bun interpreter travels with `BUN_BE_BUN=1` from the runtime selector through the desktop launcher and Host to the service and its workers. A plain Bun override does not require the flag.
+The embedded desktop supplies the selected Bun interpreter and service entrypoint before Host import; the Host does not repeat auto-detection for that explicit pair. An OMP executable selected as the Bun interpreter travels with `BUN_BE_BUN=1` from the selector through the Host to the service and its workers. A plain Bun override does not require the flag.
 
 `createAgentServiceSupervisor` exposes refcounted `holdRestarts()`/`resumeRestarts()`. While a hold is active, `scheduleRestart` returns without consuming a restart attempt and `start(true)` spawns nothing; any pending restart timer is cleared. `resumeRestarts` drops one hold; when the count reaches zero without an active child process, it reuses the existing `start(true)`. An explicit stop clears all active holds. Host composition installs one hold around a worktree archive: it acquires the Agent Service lease using a Host-generated ID, then releases the ID and resumes restarts in the matching `finally` block. If the service crashes during an archive operation, no replacement generation spawns until removal finishes and the lease is released; the supervisor then starts a single restart generation.
 

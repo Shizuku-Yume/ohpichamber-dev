@@ -42,11 +42,55 @@ function createMockRuntimeFixture() {
 test('resolveAgentRuntime validates platform manifest and required files', () => {
   const fixture = createMockRuntimeFixture();
   try {
-    const resolved = resolveAgentRuntime(fixture.root);
+    const resolved = resolveAgentRuntime(fixture.root, { env: { OHPICHAMBER_PREFER_BUNDLED_RUNTIME: '1' } });
     assert.equal(typeof resolved.bunPath, 'string');
     assert.equal(typeof resolved.entrypoint, 'string');
     assert.equal(resolved.root, fixture.runtimeDir);
-    assert.ok(resolved.source === 'bundled' || resolved.source === 'system' || resolved.source === 'operator');
+    assert.equal(resolved.source, 'bundled');
+    assert.equal(resolved.reason, 'PREFER_BUNDLED');
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('desktop resolves an installed OMP SDK only when it matches the shipped SDK', { skip: process.platform === 'win32' }, () => {
+  const fixture = createMockRuntimeFixture();
+  const sdk = '@oh-my-pi/pi-coding-agent';
+  const writeSdk = (root, version) => {
+    fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
+    const cli = path.join(root, 'dist', 'cli.js');
+    fs.writeFileSync(cli, '#!/bin/sh\necho omp/' + version + '\n', { mode: 0o755 });
+    return cli;
+  };
+  try {
+    const manifestPath = path.join(fixture.runtimeDir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.packages = [{ name: sdk, version: '19.0.0' }];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeSdk(path.join(fixture.runtimeDir, 'service', 'node_modules', sdk), '19.0.0');
+    const localSdk = path.join(fixture.root, 'global', 'node_modules', sdk);
+    const bin = path.join(fixture.root, 'bin');
+    const localServiceDir = path.join(fixture.root, 'overlay');
+    fs.mkdirSync(bin);
+    fs.symlinkSync(writeSdk(localSdk, '19.0.0'), path.join(bin, 'omp'));
+    const options = { localServiceDir, home: fixture.root, env: { PATH: bin } };
+    const selected = resolveAgentRuntime(fixture.root, options);
+    assert.equal(selected.source, 'system');
+    assert.equal(selected.ompVersion, '19.0.0');
+    assert.equal(selected.entrypoint, path.join(localServiceDir, 'dist', 'index.js'));
+    assert.equal(fs.realpathSync(path.join(localServiceDir, 'node_modules', sdk)), fs.realpathSync(localSdk));
+
+    writeSdk(localSdk, '20.0.0');
+    const fallback = resolveAgentRuntime(fixture.root, options);
+    assert.equal(fallback.source, 'bundled');
+    assert.equal(fallback.ompVersion, '19.0.0');
+    assert.equal(fallback.entrypoint, fixture.entrypoint);
+
+    writeSdk(localSdk, '19.0.0');
+    fs.writeFileSync(fixture.bunPath, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    assert.equal(resolveAgentRuntime(fixture.root, options).entrypoint, fixture.entrypoint);
+    assert.equal(fs.existsSync(localServiceDir), false);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
