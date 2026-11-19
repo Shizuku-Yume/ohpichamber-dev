@@ -1643,9 +1643,17 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 - **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.
 - **Instead of:** treating a reachable network or a successful startup probe as proof the Host is still live, or clearing the runtime when a resume probe times out.
-- **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and a new stream-ready event confirms recovery without a separate poll. Native direct connections use the same header-aware stream reader as relay because EventSource cannot send saved proxy headers.
+- **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and its ready event confirms recovery and lets stalled startup retry without a separate poll. Native direct connections use the header-aware stream reader because EventSource cannot send saved proxy headers; they reject redirects to keep those headers on the selected endpoint.
 - **Mine:** yes
 - **Revisit when:** upstream provides a native, authenticated Host connectivity signal independent of its session streams.
+
+## 2026-11-19 - Compact draft welcomes scroll before clipping large text
+
+- **Decided:** give the compact draft welcome a bounded vertical scroll area and center its non-shrinking title/starter group with automatic margins.
+- **Instead of:** unconditional flex centering, shrinking the text, or scrolling the composer out of view with the welcome.
+- **Because:** at large system font sizes or short viewport heights, centered overflow begins above the scroll origin. Automatic margins preserve the normal centered appearance but collapse when content needs to scroll from its top.
+- **Mine:** yes
+- **Revisit when:** upstream provides the same scroll-safe compact welcome layout.
 
 ## 2026-11-19 - Give terminal rows priority above the Android keyboard
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { plugin } from 'bun';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -62,6 +62,23 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   const path = new URL(input instanceof Request ? input.url : input.toString(), 'http://localhost/').pathname;
   if (path.endsWith('/location')) return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
   if (path.endsWith('/session')) return Response.json({ data: [] });
+  if (path === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace-a', projectId: PROJECT_ID, name: 'Workspace' });
+  if (path.endsWith('/commands')) return Response.json({ workspaceId: 'workspace-a', revision: '0', commands: [], builtinCommands: [] });
+  if (path.endsWith('/skills/catalog')) return Response.json({ workspaceId: 'workspace-a', skills: [] });
+  if (path.endsWith('/skills/files')) return Response.json({ workspaceId: 'workspace-a', sources: { workspace: '0', agent: '0' }, skills: [] });
+  if (path.startsWith('/api/projects/') && path.endsWith('/config')) return Response.json({
+    trust: { hash: null, trusted: true }, setupWorktree: [], setupWorktreeWait: false,
+    teardownWorktree: [], projectActions: [], projectActionsPrimaryId: null, draftStarters: [],
+    shared: {
+      status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null,
+      teardownWorktree: [], projectActions: [], draftStarters: [], plansDir: null,
+    },
+    personal: {
+      setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null,
+      teardownWorktree: [], projectActions: [], projectActionsPrimaryId: null, draftStarters: [],
+      hiddenSharedActionIds: [], sharedTrust: null,
+    },
+  });
   if (path.endsWith('/config')) return Response.json([]);
   // The settings document owns the project list; an answer without it would
   // empty the list the column's admission check reads.
@@ -95,6 +112,7 @@ const { ChatContainer } = await import('../ChatContainer');
 const { SyncProvider, useDirectoryStore } = await import('@/sync/sync-context');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
+const { useUIStore } = await import('@/stores/useUIStore');
 const { nativeClient, nativeHistory, nativeSnapshot } = await import('@/sync/session-message-loader-test-fixtures');
 // The store derives a project's id from its path; a seeded list or a settings
 // sync that names the same folder must agree on that id.
@@ -145,6 +163,7 @@ const Seed = () => {
 
 describe('chat status live region on an accepted new-session run', () => {
   beforeEach(() => {
+    useUIStore.setState({ isMobile: false });
     // The column is shown for a session whose folder is an admitted project.
     useProjectsStore.setState({ projects: [{ id: PROJECT_ID, path: DIRECTORY, label: 'Workspace' }], activeProjectId: PROJECT_ID });
     container = document.createElement('div');
@@ -160,8 +179,12 @@ describe('chat status live region on an accepted new-session run', () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     seedStore = null;
-    await browser.happyDOM.close();
+    container.remove();
+    window.history.replaceState(null, '', '/');
+    await browser.happyDOM.abort();
   });
+
+  afterAll(async () => { await browser.happyDOM.close(); });
 
   test('renders a named polite status node while working with no timeline messages', async () => {
     await act(async () => {
@@ -199,5 +222,44 @@ describe('chat status live region on an accepted new-session run', () => {
     expect(node).not.toBeNull();
     expect((node?.getAttribute('aria-label') ?? '').trim().length).toBeGreaterThan(0);
     expect(container.querySelector('[aria-label="Stop generating"]')).not.toBeNull();
+  });
+
+  test.each(['project', 'chat'] as const)('keeps the %s draft welcome in a scrollable, safely centered region', async (target) => {
+    window.history.replaceState(null, '', '/?surface=mobile');
+    useUIStore.setState({ isMobile: true });
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: {
+        ...useSessionUIStore.getState().newSessionDraft,
+        open: true, target, selectedProjectId: PROJECT_ID, directoryOverride: DIRECTORY,
+      },
+    });
+    await act(async () => {
+      root.render(
+        <RuntimeAPIContext.Provider value={runtimeAPIs}>
+          <ThemeSystemProvider>
+            <I18nProvider>
+              <SyncProvider directory={DIRECTORY} client={client}>
+                <ChatContainer autoOpenDraft={false} />
+              </SyncProvider>
+            </I18nProvider>
+          </ThemeSystemProvider>
+        </RuntimeAPIContext.Provider>,
+      );
+    });
+    const welcome = container.querySelector('.oc-draft-center');
+    const heading = welcome?.querySelector('h1');
+    expect(container.querySelectorAll('h1').length).toBe(1);
+    expect(heading?.textContent).toContain(target === 'project' ? 'What are we working on in ' : 'What are we working on?');
+    expect(welcome?.classList.contains('overflow-y-auto')).toBe(true);
+    expect(welcome?.classList.contains('min-h-0')).toBe(true);
+    expect(welcome?.classList.contains('flex-1')).toBe(true);
+    expect(welcome?.classList.contains('justify-center')).toBe(false);
+    expect(heading?.parentElement?.parentElement).toBe(welcome);
+    expect(heading?.parentElement?.classList.contains('my-auto')).toBe(true);
+    expect(heading?.parentElement?.classList.contains('shrink-0')).toBe(true);
+    expect(heading?.parentElement?.contains(welcome?.querySelector('.oc-draft-starters') ?? null)).toBe(true);
+    expect(welcome?.contains(container.querySelector('[data-composer-slot]'))).toBe(false);
   });
 });
