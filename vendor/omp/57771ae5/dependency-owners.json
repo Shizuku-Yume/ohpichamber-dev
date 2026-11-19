@@ -1,6 +1,6 @@
 {
   "sourceRevision": "57771ae562b9345e0579bceb2d68d585e3e6927e",
-  "sourceConsumerLockSha256": "c8954b4a1c4de79c887c517c4b24420cf19a7d2a66202df93f55d3068bad091d",
+  "sourceConsumerLockSha256": "ca56c6126ba3a684c70902e585ac5b349317ae6c878644018db38810506b8b63",
   "overrides": {
     "@oh-my-pi/omp-stats@19.0.0>lucide-react": "1.47.0",
     "@oh-my-pi/omp-stats@19.0.0>react": "19.2.7",
@@ -22,5 +22,13 @@
     "@oh-my-pi/pi-coding-agent@19.0.0>puppeteer-core": "25.3.0",
     "@oh-my-pi/pi-mnemopi@19.0.0>fastembed": "3.0.0",
     "@oh-my-pi/pi-mnemopi@19.0.0>onnxruntime-node": "1.26.0"
+  },
+  "registryOverrides": {
+    "@oh-my-pi/pi-natives-darwin-arm64": "19.0.0",
+    "@oh-my-pi/pi-natives-darwin-x64": "19.0.0",
+    "@oh-my-pi/pi-natives-linux-arm64": "19.0.0",
+    "@oh-my-pi/pi-natives-linux-x64": "19.0.0",
+    "@oh-my-pi/pi-natives-win32-arm64": "19.0.0",
+    "@oh-my-pi/pi-natives-win32-x64": "19.0.0"
   }
 }

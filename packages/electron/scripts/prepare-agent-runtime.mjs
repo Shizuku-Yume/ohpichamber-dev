@@ -93,13 +93,9 @@ export function stageDependencyClosure(source, destination, { platform = process
 export function assertNativeRuntimePackageAvailable(rootManifest, { platform = process.platform, architecture = process.arch } = {}) {
   const packageName = `@oh-my-pi/pi-natives-${platform}-${architecture}`;
   const override = rootManifest.overrides?.[packageName];
-  const localPath = typeof override === 'string' && override.trim().startsWith('file:')
-    ? override.trim().slice('file:'.length).trim()
-    : '';
-  if (!localPath) {
+  if (typeof override !== 'string' || !/^\d+\.\d+\.\d+$/.test(override)) {
     throw new Error(
-      `Agent Runtime staging for ${platform}-${architecture} requires a source-built ${packageName} package; `
-      + `this target is not pinned yet. Complete post-m3-hardening/29-vendor-native-leaves before building it.`,
+      `Agent Runtime staging for ${platform}-${architecture} requires an exact registry version for ${packageName}`,
     );
   }
 }
@@ -126,7 +122,7 @@ export function prepareAgentRuntime({ bunPath = process.execPath, output = path.
   try {
     const packages = stageDependencyClosure(path.join(workspaceRoot, 'packages', 'agent-service'), temporary);
     const native = packages.find(item => item.name === `@oh-my-pi/pi-natives-${process.platform}-${process.arch}`);
-    if (!native) throw new Error('Install the pinned platform pi-natives package before staging');
+    if (!native || native.version !== rootManifest.overrides[native.name]) throw new Error('Install the pinned platform pi-natives package before staging');
     // The SDK closure can hold several onnxruntime-node copies (fastembed pins an older
     // napi-v3 build); the staged runtime needs the napi-v6 addon the SDK loads.
     const onnxAddon = packages
