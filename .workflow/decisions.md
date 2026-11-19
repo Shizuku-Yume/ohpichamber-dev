@@ -1751,3 +1751,10 @@ The global sessions store owns bounded startup recovery for successful HTTP 200 
 Keep the Host's explicit partial `items`/`errors` contract, including all-unavailable pages, rather than replacing it with a top-level 503 that loses scoped information. Discovery errors carry codes, not retryable flags; only `SERVICE_UNAVAILABLE` is classified transient here. Web/PWA, Electron, hosted mobile and Capacitor share this store; Guest SDK and session admission are unchanged.
 
 Later successful listings also retire stale failures: global head polls replace the discovery error map, and successful workspace lists clear only that workspace and its known session errors through the global store owner. This applies even when no session record changes; an unrelated workspace's failure is not cleared by a scoped success.
+
+## 2026-11-19 - Recover startup snapshots and cold-send streams without opening cold workers
+
+- **Decided:** SessionMessageLoader retries retryable snapshot/workspace failures within `STARTUP_RETRY`, preserving authoritative state and stopping retired loads. After accepted native delivery, sends starting from a cold or absent snapshot request a queued recovery snapshot; only that recovery waits for an available worker within the bounded budget. Successful snapshots attach the existing event pipeline from the returned cursor.
+- **Because:** A startup snapshot failure was terminal. Manual retry could read a worker-free cold snapshot, which correctly skipped SSE; the pre-send stream request still saw that cold snapshot and never retried after the worker opened.
+- **Instead of:** Removing the cold-session stream guard, retaining cold journals in the service, opening workers just to read history, or replaying accepted prompts. Recovery failure stays a loader error, never a failed-send rollback.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor use the shared loader/actions/provider. Guest SDK, Host admission and transport/auth behavior are unchanged. Earlier scoped discovery-error clearing remains in the same SyncProvider paths.

@@ -491,11 +491,15 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       (targetDirectory, sessionId) => {
         if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
       },
-      (sessionId, targetDirectory) => {
+      (sessionId, targetDirectory, options) => {
         if (!isCurrent()) return
         const dir = targetDirectory || currentDirectoryRef.current
         if (isKnownChildSession(dir, sessionId)) {
           pipelineRef.current?.detach({ directory: dir, sessionId })
+          return
+        }
+        if (options?.refreshSnapshot) {
+          void messageLoader.refresh({ directory: dir, sessionId }, undefined, { recovered: true, requireAvailable: true })
           return
         }
         const store = childStores.getChild(dir)

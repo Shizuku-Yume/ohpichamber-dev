@@ -174,6 +174,8 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
   return null
  } else {
   const directory = input.directory ?? getSessionDirectory(input.sessionId)
+  const snapshot = directory ? _childStores?.getChild(directory)?.getState().snapshot[input.sessionId] : undefined
+  const refreshAfterAcceptance = !snapshot || snapshot.session.runtimeStatus === "unavailable"
   _ensureSessionStream?.(input.sessionId, directory)
 
   const isOptimistic = Boolean(input.optimistic && _optimisticAdd && _optimisticRemove)
@@ -218,6 +220,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
    if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
    publishRuntimeRun(result.run, baselines)
+   if (refreshAfterAcceptance) _ensureSessionStream?.(input.sessionId, directory, { refreshSnapshot: true })
 
    if (isOptimistic && pendingMessage && knownMessageIds) {
     reconcileAcceptedSend({
@@ -286,7 +289,7 @@ let _getDirectory: () => string = () => ""
 // to reconcile a trailing running tool part after a blocking request is
 // confirmed stale server-side (see recoverStaleBlockingRequest).
 let _enqueueSessionMaterialization: ((directory: string, sessionID: string, messageID: string) => void) | null = null
-let _ensureSessionStream: ((sessionId: string, directory?: string | null) => void) | null = null
+let _ensureSessionStream: ((sessionId: string, directory?: string | null, options?: { refreshSnapshot: boolean }) => void) | null = null
 let _detachSessionStream: ((sessionId: string, directory: string) => void) | null = null
 export type OptimisticAddInput = { sessionId: string; directory?: string | null; message: CanonicalMessage }
 export type OptimisticRemoveInput = { sessionId: string; directory?: string | null; messageId: string }
@@ -386,7 +389,7 @@ export function setActionRefs(
  childStores: ChildStoreManager,
  getDirectory: () => string,
  enqueueSessionMaterialization?: (directory: string, sessionID: string, messageID: string) => void,
- ensureSessionStream?: (sessionId: string, directory?: string | null) => void,
+ ensureSessionStream?: (sessionId: string, directory?: string | null, options?: { refreshSnapshot: boolean }) => void,
  detachSessionStream?: (sessionId: string, directory: string) => void,
 ) {
  _childStores = childStores

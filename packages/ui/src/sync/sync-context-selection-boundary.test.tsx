@@ -1,8 +1,8 @@
 import { describe, expect, spyOn, test } from "bun:test"
 import React, { act } from "react"
 import { createRoot } from "react-dom/client"
-import type { CanonicalClient } from "@/api/canonicalClient"
-import type { Message, Session, SessionSnapshot, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
+import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
+import type { CanonicalEvent, Message, Session, SessionSnapshot, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
 import { SyncProvider, useChildStoreManager, useSyncDirectory, useSyncRuntime, handleEvents } from "./sync-context"
 import { useGlobalSessionStatusStore, applyGlobalSessionStatusEvents } from "./global-session-status"
 import { installSessionSnapshot } from "./event-reducer"
@@ -15,6 +15,8 @@ import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
 import { fileTreeChanges, subscribeFileTreeChanges } from "@/lib/fileTreeChanges"
+import { sendMessage } from "./session-actions"
+import { useConfigStore } from "@/stores/useConfigStore"
 
 const workspace = (directory: string): Workspace => ({ workspaceId: `workspace-${directory.slice(1).replaceAll('/', '-')}`, projectId: 'project-1', name: 'Workspace', displayPath: '.' })
 const shellSnapshot = (workspaceId: string): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId }, epoch: 'shell-epoch', revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } })
@@ -37,6 +39,75 @@ const session = (sessionId: string, workspaceId: string): Session => ({
 })
 
 describe("SyncProvider native scope and selection boundaries", () => {
+  test.each([false, true])("a cold session opens its worker stream after send, including manual snapshot retry (manual=%s)", async manual => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/cold-send"
+    const target = { directory, sessionId: "cold-send-session" }
+    const client = createNativeClient()
+    const resolved = workspace(directory)
+    const config = useConfigStore.getState()
+    useConfigStore.setState({ isConnected: true, hasEverConnected: true })
+    let opened = false
+    let reads = 0
+    let subscriptions = 0
+    let event: ((value: CanonicalEvent) => void) | undefined
+    client.getSnapshot = async () => {
+      if (++reads === 1 && manual) throw new Error("Initial snapshot refused")
+      const snapshot = nativeSnapshot(target.sessionId, [])
+      return { ...snapshot, session: { ...snapshot.session, workspaceId: resolved.workspaceId, runtimeStatus: opened ? "idle" : "unavailable" } }
+    }
+    client.subscribeSessionEvents = (id, cursor, callback) => {
+      expect(id).toBe(target.sessionId)
+      expect(cursor).toBe("epoch-a:4")
+      subscriptions += 1
+      event = callback
+      return () => { event = undefined }
+    }
+    const create = spyOn(canonicalClient, "createRun").mockImplementation(async () => {
+      opened = true
+      return { run: { runId: "cold-run", sessionId: target.sessionId, status: "running", origin: "host", createdAt: 1 } }
+    })
+    let runtime: ReturnType<typeof useSyncRuntime> | undefined
+    const Probe = () => { runtime = useSyncRuntime(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!runtime) throw new Error("Sync runtime was not mounted")
+      const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
+      store.setState({ workspace: resolved, project: resolved.projectId })
+      await act(async () => { await runtime!.messageLoader.ensure(target) })
+      if (manual) {
+        expect(runtime.messageLoader.getSnapshot(target).status).toBe("error")
+        await act(async () => { await runtime!.messageLoader.refresh(target) })
+      }
+      expect(store.getState().snapshot[target.sessionId]?.session.runtimeStatus).toBe("unavailable")
+      expect(subscriptions).toBe(0)
+      await act(async () => {
+        await sendMessage({ ...target, request: { input: { text: "Hello", attachments: [], context: [] }, options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null } } })
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(subscriptions).toBe(1)
+      expect(runtime.messageLoader.getSnapshot(target).status).toBe("ready")
+      await act(async () => {
+        const envelope = { sessionId: target.sessionId, epoch: "epoch-a", timestamp: 5 }
+        event!({ ...envelope, sequence: "5", type: "run.started", runId: "cold-run", origin: "host", createdAt: 5 })
+        event!({ ...envelope, sequence: "6", type: "turn.started", turnId: "turn-live", runId: "cold-run", userMessageId: "user-live" })
+        event!({ ...envelope, sequence: "7", type: "message.created", messageId: "assistant-live", turnId: "turn-live", role: "assistant" })
+        event!({ ...envelope, sequence: "8", type: "part.started", messageId: "assistant-live", part: { type: "text", partId: "text-live", content: "" } })
+        event!({ ...envelope, sequence: "9", type: "part.delta", partId: "text-live", delta: "Live reply" })
+        await new Promise(resolve => setTimeout(resolve, 40))
+      })
+      expect(store.getState().message[target.sessionId]?.find(message => message.messageId === "assistant-live")?.parts).toEqual([{ type: "text", partId: "text-live", content: "Live reply" }])
+    } finally {
+      create.mockRestore()
+      useConfigStore.setState(config, true)
+      useSessionUIStore.getState().setCurrentSession(null)
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+
   test("keeps a selected native transcript whole after directory adoption", async () => {
     const dom = installHookTestDom()
     const root = createRoot(dom.container)
