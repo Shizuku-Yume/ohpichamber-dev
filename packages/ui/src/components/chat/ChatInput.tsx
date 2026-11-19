@@ -542,7 +542,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const draftPermissionMode = useSessionUIStore((s) => (
         s.newSessionDraft?.open ? s.newSessionDraft.permissionMode : undefined
     ));
-    const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const setDraftPermissionMode = useSessionUIStore((s) => s.setDraftPermissionMode);
     const prepareChatDraftDirectory = useSessionUIStore((s) => s.prepareChatDraftDirectory);
     const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId);
@@ -3642,8 +3641,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const handleCustomWorktreeCreated = React.useCallback((worktreePath: string) => {
         const project = newWorktreeProject;
         if (!project) return;
-        // Pin the draft to the new directory: until the worktree list refreshes,
-        // the draft's validity check would otherwise reset it to the project root.
+        // Pin the new directory while the worktree finishes bootstrapping.
         const sessionStore = useSessionUIStore.getState();
         if (sessionStore.newSessionDraft.open) {
             sessionStore.overrideNewSessionDraftTarget({
@@ -3674,24 +3672,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         'transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
         draftPresentationExiting && 'pointer-events-none opacity-0',
     );
-
-    React.useEffect(() => {
-        if (!showDraftTargetSelectors || !selectedDraftProject || selectedDraftProject.kind === 'chat' || !selectedDraftDirectory) {
-            return;
-        }
-        if (newSessionDraft?.pendingWorktreeRequestId || newSessionDraft?.bootstrapPendingDirectory || newSessionDraft?.preserveDirectoryOverride) {
-            return;
-        }
-        const valid = draftBranchItems.some((option) => option.value === selectedDraftDirectory);
-        if (valid) {
-            return;
-        }
-        setNewSessionDraftTarget({
-            projectId: selectedDraftProject.id,
-            directoryOverride: selectedDraftProject.path,
-        });
-    }, [draftBranchItems, newSessionDraft?.bootstrapPendingDirectory, newSessionDraft?.pendingWorktreeRequestId, newSessionDraft?.preserveDirectoryOverride, selectedDraftDirectory, selectedDraftProject, setNewSessionDraftTarget, showDraftTargetSelectors]);
-
 
     // The record-and-send overlay holds the composer open until its submit
     // settles; the hold is released here (both handlers cover every exit).

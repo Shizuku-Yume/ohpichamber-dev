@@ -308,11 +308,11 @@ and the send path reading the same grammar.
   origin is no longer the rendered draft is appended to the origin's draft
   through `restoreDraft`. It is not inserted or sent in the visible session,
   including for **Insert and send**, and a toast says where it went.
-- `state/useDraftTarget.ts` — the draft can target a directory that does not
-  exist yet (a worktree being created). It must survive not appearing in the
-  branch list, or the selector snaps back to the project root mid-creation. It
-  also owns the advisory dirty state for the selected directory, clearing it as
-  soon as the target changes so a warning never names a previous branch.
+- `state/useDraftTarget.ts` presents project and worktree choices. The list can
+  omit a restored or bootstrapping worktree, so it must not reset the draft
+  destination. The session UI store owns recovery when the host confirms a
+  directory is missing. The hook owns advisory dirty state and clears it
+  when the target changes so a warning never names a previous branch.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
   state and registers its application shortcuts locally. The desktop project
   picker is a searchable popup: it ranks the current projects with
