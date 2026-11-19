@@ -829,6 +829,11 @@ export const VoiceSettings: React.FC = () => {
             });
     }, [browserVoices]);
 
+    const hasVoicePicker = (voiceProvider === 'local' && localTtsVoiceOptions.length > 0)
+        || (voiceProvider === 'openai' && isOpenAIAvailable)
+        || (voiceProvider === 'say' && isSayAvailable && sayVoices.length > 0)
+        || (voiceProvider === 'browser' && filteredBrowserVoices.length > 0);
+
     const previewBrowserVoice = useCallback(async () => {
         if (isBrowserPreviewPlaying) {
             previewRef.current?.stop();
@@ -1177,7 +1182,7 @@ export const VoiceSettings: React.FC = () => {
                         {voiceProvider === 'local' && <LocalTtsModelStatus {...localTtsModels} />}
 
                         <div>
-                            {voiceProvider === 'openai-compatible' ? null : (
+                            {hasVoicePicker && (
                                 <SettingsFieldRow label={t('settings.voice.page.field.voice')}>
                                     {voiceProvider === 'local' && (
                                         <>

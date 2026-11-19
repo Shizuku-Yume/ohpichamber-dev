@@ -4,6 +4,14 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+Voice playback renders its voice-picker row only when the selected provider
+can render a picker: local voice options exist, OpenAI speech is available,
+system speech has voices, or Browser has voices with a language. The label and
+preview disappear with the picker, including while unavailable or after the
+browser voice list empties. The compatible-server voice text field and existing
+provider status remain separate. This shared behavior applies to web, Electron,
+hosted mobile and Capacitor.
+
 ## The OMP page
 
 `openchamber/OmpSettingsPage.tsx` draws the agent settings whose placement is
