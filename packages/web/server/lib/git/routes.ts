@@ -1,15 +1,7 @@
 import { z } from 'zod';
 import { registerGitStatusBatchRoute } from './status-batch.js';
 import { isPlainObject, isString } from '../shared/guards.js';
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
 import { createGitRedactor, redactGitText } from './redaction.js';
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-import { OpenCode } from '@opencode/client';
-import { createGitRedactor, redactGitText } from './redaction.js';
-=======
-import { OpenCode } from '@opencode/client';
-import { createGitRedactor } from './redaction.js';
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
 import { runAsUserAction } from '../environment/refresh-scope.js';
 import { isDiskPathRemoteUrl, redactRemoteUrl } from '../source-control/url-redaction.js';
 import { parsePublicGitIdentityProfile, toPublicGitIdentityProfile } from './identity-storage.js';
@@ -39,13 +31,13 @@ export interface GitRouteDependencies {
   errorRedactionSecrets?: NonNullable<Parameters<typeof createGitRedactor>[0]>['secrets'];
   worktreeBootstrapStore?: ReturnType<typeof createWorktreeBootstrapStore>;
   emitWorktreeChanged?: Parameters<typeof subscribeWorktreeTopologyChanges>[0];
-  buildOpenCodeUrl?: (path: string, prefix?: string | null) => string;
-  getOpenCodeAuthHeaders?: () => Record<string, string>;
+
+
   onBranchRewritten?: BindingRoutes['invalidateBranchStatus'];
 }
 type InstanceDisposerDependencies = {
-  buildOpenCodeUrl: (path: string, prefix: string) => string;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
+
+
 };
 type GitLibraries = typeof import('./index.js');
 type WorktreeCreationErrorBody = { error: unknown; code: unknown; remoteName?: unknown };
@@ -120,147 +112,13 @@ const toGitRemoteSummary = (remote: { name?: unknown; fetchUrl?: string | null; 
   pushUrl: redactRemoteUrl(remote?.pushUrl),
 });
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-/**
- * Builds the best-effort disposal hook handed to `removeWorktree`, also run
- * when a repair completes a failed checkout so OpenCode opens the repaired
- * folder afresh. The URL and auth headers are route dependencies, so this
- * module never resolves the OpenCode runtime itself, and both are read at
- * call time. OpenCode 2 has no
- * instance route; evicting the location drops its cached services (file
- * watchers, LSP, MCP), which is what held the worktree folder.
- *
- * A session of a project opened on a folder of its repository runs in that
- * folder of the worktree (`<worktree>/ai`), which is a location of its own, so
- * every running location inside the worktree is evicted along with its root.
- * When the location list cannot be read, the root is still evicted and the
- * list error is rethrown for the removal wrapper to log.
- */
-const toLocationKey = (directory) => String(directory || '').replace(/\\/g, '/').replace(/\/+$/, '');
-const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5000;
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-// A removal should not hang on an unresponsive OpenCode server: disposal is
-// best-effort and `removeWorktree` swallows its failure.
-const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5_000;
 
-/**
- * Builds the best-effort disposal hook handed to `removeWorktree`, also run
- * when a repair completes a failed checkout so OpenCode opens the repaired
- * folder afresh. The URL and auth headers are route dependencies, so this
- * module never resolves the OpenCode runtime itself, and both are read at
- * call time. OpenCode 2 has no
- * instance route; evicting the location drops its cached services (file
- * watchers, LSP, MCP), which is what held the worktree folder.
- *
- * A session of a project opened on a folder of its repository runs in that
- * folder of the worktree (`<worktree>/ai`), which is a location of its own, so
- * every running location inside the worktree is evicted along with its root.
- * When the location list cannot be read, the root is still evicted and the
- * list error is rethrown for the removal wrapper to log.
- */
-const toLocationKey = (directory) => String(directory || '').replace(/\\/g, '/').replace(/\/+$/, '');
-=======
-const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5_000;
 
-const toLocationKey = (directory: string) => String(directory || '').replace(/\\/g, '/').replace(/\/+$/, '');
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
-  return async (worktreeDirectory) => {
-    if (!buildOpenCodeUrl || !getOpenCodeAuthHeaders) return;
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
-  return async (worktreeDirectory) => {
-    const client = OpenCode.make({
-      baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
-      headers: getOpenCodeAuthHeaders(),
-      fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS) }),
-    });
-=======
-export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }: InstanceDisposerDependencies) => {
-  return async (worktreeDirectory: string) => {
-    const client = OpenCode.make({
-      baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
-      headers: getOpenCodeAuthHeaders(),
-      fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS) }),
-    });
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
-    const root = toLocationKey(worktreeDirectory);
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-    const headers = getOpenCodeAuthHeaders();
-    const listUrl = buildOpenCodeUrl("/api/debug/location", "");
-    const errors = [];
-    let inside = [];
-    try {
-      const res = await fetch(listUrl, { headers, signal: AbortSignal.timeout(WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS) });
-      if (res.ok) {
-        const locations = await res.json().catch(() => []);
-        inside = (Array.isArray(locations) ? locations : [])
-          .map((loc) => typeof loc === "string" ? loc : loc?.directory)
-          .filter((dir) => typeof dir === "string" && toLocationKey(dir).startsWith(`${root}/`));
-      } else {
-        const text = await res.text().catch(() => "");
-        errors.push(new Error(text || `Failed to list locations (${res.status})`));
-      }
-    } catch (err) {
-      errors.push(err);
-    }
-    const evictions = await Promise.allSettled([worktreeDirectory, ...inside].map(async (dir) => {
-      const evictUrl = `${buildOpenCodeUrl("/api/debug/location", "")}?location%5Bdirectory%5D=${encodeURIComponent(dir)}`;
-      const res = await fetch(evictUrl, { method: "DELETE", headers, signal: AbortSignal.timeout(WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS) });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `Eviction failed (${res.status})`);
-      }
-      return res;
-    }));
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-    const errors = [];
-    const inside = await client.debug.location.list().then(
-      (locations) => locations.map((location) => location.directory)
-        .filter((directory) => toLocationKey(directory).startsWith(`${root}/`)),
-      (error) => {
-        errors.push(error);
-        return [];
-      },
-    );
-    const evictions = await Promise.allSettled([worktreeDirectory, ...inside].map((directory) => (
-      client.debug.location.evict({ location: { directory } })
-    )));
-=======
-    const errors: unknown[] = [];
-    const inside = await client.debug.location.list().then(
-      (locations) => locations.map((location) => location.directory)
-        .filter((directory) => toLocationKey(directory).startsWith(`${root}/`)),
-      (error) => {
-        errors.push(error);
-        return [];
-      },
-    );
-    const evictions = await Promise.allSettled([worktreeDirectory, ...inside].map((directory) => (
-      client.debug.location.evict({ location: { directory } })
-    )));
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
-    for (const eviction of evictions) {
-      if (eviction.status === "rejected") errors.push(eviction.reason);
-    }
-    if (errors.length > 0) throw errors[0];
-  };
-};
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-// Actions the user starts here may run a project's environment command, so
-// hooks find the project's tools; reads the UI repeats on its own may not
-// (lib/environment/refresh-scope.js).
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
 
-// Actions the user starts here may run a project's environment command, so
-// hooks find the project's tools; reads the UI repeats on its own may not
-// (lib/environment/refresh-scope.js).
-=======
 
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
+
 const worktreeTitleBodySchema = z.object({ title: z.string(), by: z.enum(['user', 'agent']).default('user') });
 const worktreePinBodySchema = z.object({ pinned: z.boolean(), list: z.string().nullable().optional() });
 
@@ -269,21 +127,11 @@ export function registerGitRoutes(app: Application, {
   networkOperations, managedSshInventory, getSourceControlBinding, contributorProvenance, resolveChangeRequestSource,
   backfillIdentities,
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
   worktreeLeaseControl, worktreeArchiveSessionService,
   emitWorktreeChanged, onBranchRewritten,
-  buildOpenCodeUrl, getOpenCodeAuthHeaders,
+
 } = {}) {
   let gitLibraries = null;
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  emitWorktreeChanged, buildOpenCodeUrl, getOpenCodeAuthHeaders, onBranchRewritten,
-} = {}) {
-  let gitLibraries = null;
-=======
-  emitWorktreeChanged, buildOpenCodeUrl, getOpenCodeAuthHeaders, onBranchRewritten,
-}: GitRouteDependencies = {}) {
-  let gitLibraries: GitLibraries | null = null;
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
   const getGitLibraries = async () => {
     if (!gitLibraries) {
       gitLibraries = await import('./index.js');
@@ -328,17 +176,8 @@ export function registerGitRoutes(app: Application, {
   const isUnreadableRepositoryError = <Cause>(error: Cause) => errorFields(error)?.code === 'GIT_REPOSITORY_UNREADABLE';
   const unreadableRepositoryBody = <Cause>(error: Cause) => ({ error: messageOf(error), code: errorFields(error)?.code });
   const probeOptions = { failOnGitError: true };
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-  const canDisposeWorktreeInstance = Boolean(buildOpenCodeUrl && getOpenCodeAuthHeaders);
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
 
-  const canDisposeWorktreeInstance = Boolean(buildOpenCodeUrl && getOpenCodeAuthHeaders);
-=======
 
-  const instanceDisposer = () => (buildOpenCodeUrl && getOpenCodeAuthHeaders
-    ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
-    : undefined);
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
 
   const nonRepoStatusPayload = () => ({
     isGitRepository: false,
@@ -348,32 +187,6 @@ export function registerGitRoutes(app: Application, {
     behind: 0,
   });
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-  const enrichWorktreeProvenance = async (worktrees) => {
-    if (!(contributorProvenance?.readMany instanceof Function)) return worktrees;
-    const records = await contributorProvenance.readMany(worktrees.map((worktree) => worktree.path));
-    for (let index = 0; index < worktrees.length; index += 1) {
-      const worktree = worktrees[index];
-      const record = records[index];
-      if (record.provenance?.kind === 'contributor-fork') {
-        worktree.provenance = {
-          kind: 'contributor-fork', revision: record.revision,
-          trust: 'untrusted', push: 'destination-selection-required',
-        };
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  const enrichWorktreeProvenance = async (worktrees) => {
-    if (contributorProvenance?.readMany instanceof Function) {
-      const records = await contributorProvenance.readMany(worktrees.map((worktree) => worktree.path));
-      for (let index = 0; index < worktrees.length; index += 1) {
-        const worktree = worktrees[index];
-        const record = records[index];
-        if (record.provenance?.kind === 'contributor-fork') {
-          worktree.provenance = {
-            kind: 'contributor-fork', revision: record.revision,
-            trust: 'untrusted', push: 'destination-selection-required',
-          };
-        }
-=======
   type ListedWorktree = { path: string; provenance?: { kind: 'contributor-fork'; revision: number; trust: 'untrusted'; push: 'destination-selection-required' } };
   const enrichWorktreeProvenance = async <Worktree extends ListedWorktree>(worktrees: Worktree[]) => {
     if (contributorProvenance?.readMany instanceof Function) {
@@ -387,7 +200,6 @@ export function registerGitRoutes(app: Application, {
             trust: 'untrusted', push: 'destination-selection-required',
           };
         }
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
       }
     }
     return worktrees;
@@ -405,14 +217,6 @@ export function registerGitRoutes(app: Application, {
   };
   const worktreeTeardownCodeOf = <Cause>(error: Cause) => (errorFields(error)?.code === 'WORKTREE_TEARDOWN_FAILED' ? 'WORKTREE_TEARDOWN_FAILED' : undefined);
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-
-  const sendNetworkOperationError = (req, res, error) => {
-    const code = isString(error?.code) ? error.code : 'UNKNOWN';
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  const sendNetworkOperationError = (req, res, error) => {
-    const code = isString(error?.code) ? error.code : 'UNKNOWN';
-=======
   const NETWORK_ERROR_MESSAGES = {
     NOT_FOUND: 'Git network operation was not found',
     INVALID_REQUEST: 'Invalid Git network operation request',
@@ -437,7 +241,6 @@ export function registerGitRoutes(app: Application, {
   const sendNetworkOperationError = <Cause>(req: Request, res: Response, error: Cause) => {
     const fields = errorFields(error);
     const code = isString(fields?.code) ? fields.code : 'UNKNOWN';
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     const storageFailure = code === 'GIT_NETWORK_OPERATION_STORAGE_INVALID';
     let status = 500;
     const errorStatus = fields?.status;
@@ -829,18 +632,7 @@ export function registerGitRoutes(app: Application, {
     return directories;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-  // Read one directory per worker and answer `projects` in input order. A
-  // directory that fails is that entry's own error, never the batch's.
-  const readProjectBatch = async (req, res, readDirectory) => {
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  // Read one directory per worker and answer `projects` in input order. Failures
-  // are the directory's own: `readDirectory` returns an error entry instead of
-  // throwing, so one bad project never blanks the rest.
-  const readProjectBatch = async (req, res, readDirectory) => {
-=======
   const readProjectBatch = async <Entry>(req: Request, res: Response, readDirectory: (directory: string) => Promise<Entry>) => {
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     const directories = resolveBatchDirectories(req.body);
     if (!directories || directories.length === 0) {
       return res.status(400).json({ error: 'directories array is required' });
@@ -864,24 +656,6 @@ export function registerGitRoutes(app: Application, {
     return res.json({ projects });
   };
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-  /**
-   * One read for many project directories. Every entry answers the repository
-   * check; `fields` adds `status` and `root` only when the caller asks for them.
-   * A status read runs many Git processes, so a cheap repository check never
-   * pays for one. The route stays proxyable into a space because each question
-   * is answerable there on its own.
-   */
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  /**
-   * One read for many project directories. Every entry answers the repository
-   * check; `fields` adds `status` and `root` (primary worktree root) only when
-   * the caller asks for them. A status read runs a dozen Git processes, so a
-   * caller that only needs the cheap answers never pays for one. It stays
-   * proxyable into a space because each question is answerable there on its own.
-   */
-=======
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
   app.post('/api/git/projects', async (req, res) => {
     const { isGitRepository, getStatus, resolvePrimaryWorktreeRoot, observeWorktreeTopology } = await getGitLibraries();
     const requestedFields = fieldsOf(req.body)?.fields;
@@ -904,14 +678,6 @@ export function registerGitRoutes(app: Application, {
         const failures: string[] = [];
         const reads: Promise<void>[] = [];
         if (wantsStatus) {
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-          // Mirror GET /api/git/status: a status read notices externally
-          // added or removed worktrees.
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-          // Mirror `GET /api/git/status`: a status read is where an externally
-          // added or removed worktree gets noticed.
-=======
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
           void observeWorktreeTopology(directory);
           reads.push((async () => {
             try {
@@ -950,40 +716,14 @@ export function registerGitRoutes(app: Application, {
     });
   });
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-  /**
-   * Worktree lists for many projects. It stays on its own route so the space
-   * boundary can refuse it exactly like `/api/git/worktrees`.
-   */
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  /**
-   * The worktree list for many project directories, kept on its own route so it
-   * can stay refused across the space boundary exactly like
-   * `/api/git/worktrees`.
-   */
-=======
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
   app.post('/api/git/project-worktrees', async (req, res) => {
     const { getWorktrees, observeWorktreeTopology } = await getGitLibraries();
     return readProjectBatch(req, res, async (directory) => {
       try {
         const worktrees = await enrichWorktreeProvenance(await getWorktrees(directory));
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
         // A non-empty listing is one of the two ways the server notices a
         // worktree added outside the app.
         if (worktrees.length > 0) void observeWorktreeTopology(directory);
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-        // Mirror `GET /api/git/worktrees`: a non-empty listing is one of the two
-        // ways the server notices a worktree added outside the app (terminal or
-        // agent), and the client now reads worktrees through this route.
-        if (worktrees.length > 0) {
-          void observeWorktreeTopology(directory);
-        }
-=======
-        if (worktrees.length > 0) {
-          void observeWorktreeTopology(directory);
-        }
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
         return { directory, worktrees };
       } catch (error) {
         console.error('Git project worktree batch failed:', error);
@@ -1658,27 +1398,6 @@ export function registerGitRoutes(app: Application, {
     }
   });
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  // A review host's preflight: gives the checked-out commit the Change-Id
-  // trailer its commit-msg hook would have added, computed locally.
-  app.post('/api/git/change-id', userAction(async (req, res) => {
-    const directory = resolveDirectoryQuery(req.query?.directory);
-    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
-    try {
-      const { addChangeIdToHead } = await import('../source-control/change-id.js');
-      const { sha, changeId, branch } = await addChangeIdToHead(directory, req.body?.expectedHead);
-      // The cached status of that branch was read for the old tip.
-      onBranchRewritten?.({ directory, branch });
-      return res.json({ sha, changeId });
-    } catch (error) {
-      if (Number.isInteger(error?.status) && error.status < 500) return res.status(error.status).json({ error: error.message, code: error.code });
-      console.error('Failed to add a Change-Id:', error?.message);
-      return res.status(500).json({ error: 'Failed to add a Change-Id', code: error?.code ?? 'CHANGE_ID_FAILED' });
-    }
-  }));
-
-=======
   app.post('/api/git/change-id', userAction(async (req, res) => {
     const directory = resolveDirectoryQuery(req.query?.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
@@ -1695,7 +1414,6 @@ export function registerGitRoutes(app: Application, {
     }
   }));
 
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
   app.post('/api/git/rebase', userAction(async (req, res) => {
     const { rebase } = await getGitLibraries();
     try {
@@ -1841,16 +1559,8 @@ export function registerGitRoutes(app: Application, {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
       const { message, addAll, files, stageFiles, changeId, notes } = req.body;
       if (!message) {
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-      const { message, addAll, files, stageFiles } = req.body;
-      if (!message) {
-=======
-      const { message, addAll, files, stageFiles } = requiredFields(req.body);
-      if (!message || !isString(message)) {
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
         return res.status(400).json({ error: 'message is required' });
       }
       if ((changeId !== undefined && typeof changeId !== 'boolean') || (notes !== undefined && typeof notes !== 'boolean')) {
@@ -2251,7 +1961,7 @@ export function registerGitRoutes(app: Application, {
         deleteLocalBranch: fieldsOf(req.body)?.deleteLocalBranch === true,
         teardownCommand: z.string().safeParse(fieldsOf(req.body)?.teardownCommand).data,
         isContributorCheckout,
-        disposeInstance: instanceDisposer(),
+
       }, {
         bootstrapStore: worktreeBootstrapStore,
       });
@@ -2302,28 +2012,10 @@ export function registerGitRoutes(app: Application, {
     ['WORKTREE_ARCHIVE_PARTIAL', 409],
     ['WORKTREE_BOOTSTRAP_FAILED', 409],
   ]);
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-  const sendArchiveError = (res, error, fallback) => {
-    const status = ARCHIVE_ERROR_STATUS.get(error?.code)
-      ?? (Number.isInteger(error?.status) ? error.status : Number.isInteger(error?.statusCode) ? error.statusCode : 500);
-    // Only an unexpected local failure is this server's fault to report.
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-  const sendArchiveError = (res, error, fallback) => {
-    const status = ARCHIVE_ERROR_STATUS.get(error?.code) ?? 500;
-=======
   const sendArchiveError = <Cause>(res: Response, error: Cause, fallback: string) => {
     const status = ARCHIVE_ERROR_STATUS.get(errorFields(error)?.code) ?? 500;
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     if (status === 500) console.error(`${fallback}:`, error);
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-    const body = { error: error?.message || fallback, code: error?.code };
-    if (error?.details && typeof error.details === 'object') body.details = error.details;
-    res.status(status).json(body);
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-    res.status(status).json({ error: error?.message || fallback, code: error?.code });
-=======
     res.status(status).json({ error: messageOf(error) || fallback, code: errorFields(error)?.code });
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
   };
 
   app.get('/api/git/worktrees/archives', async (req, res) => {
@@ -2357,13 +2049,7 @@ export function registerGitRoutes(app: Application, {
   app.post('/api/git/worktrees/archives', userAction(async (req, res) => {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
-    const worktreeDirectory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-    const worktreeDirectory = z.string().min(1).safeParse(req.body?.directory).data;
-=======
     const worktreeDirectory = z.string().min(1).safeParse(fieldsOf(req.body)?.directory).data;
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     if (!worktreeDirectory) return res.status(400).json({ error: 'worktree directory is required' });
     if (!(worktreeBootstrapStore?.remove instanceof Function)) {
       return res.status(501).json({ error: 'Worktree bootstrap storage is not available' });
@@ -2373,32 +2059,14 @@ export function registerGitRoutes(app: Application, {
     }
     const { archiveWorktree } = await getGitLibraries();
     try {
-      const disposeInstance = canDisposeWorktreeInstance
-        ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
-        : undefined;
+
       res.json(await archiveWorktree(directory, {
         directory: worktreeDirectory,
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
         id: req.body?.id,
         title: req.body?.title,
         sessionIds: Array.isArray(req.body?.sessionIds) ? req.body.sessionIds : undefined,
-        disposeInstance,
+
       }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl, archiveSessions: worktreeArchiveSessionService }));
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-        id: req.body.id,
-        sessionIds: req.body.sessionIds,
-        title: req.body.title,
-        disposeInstance: canDisposeWorktreeInstance
-          ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
-          : undefined,
-      }, { bootstrapStore: worktreeBootstrapStore }));
-=======
-        id: fieldsOf(req.body)?.id,
-        sessionIds: fieldsOf(req.body)?.sessionIds,
-        title: fieldsOf(req.body)?.title,
-        disposeInstance: instanceDisposer(),
-      }, { bootstrapStore: worktreeBootstrapStore }));
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     } catch (error) {
       sendArchiveError(res, error, 'Failed to archive worktree');
     }
@@ -2409,13 +2077,7 @@ export function registerGitRoutes(app: Application, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
       res.json(await restoreWorktreeArchive(directory, { id: req.body?.id, recovery: req.body?.recovery }, { archiveSessions: worktreeArchiveSessionService }));
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-      res.json(await restoreWorktreeArchive(directory, { id: req.body?.id }));
-=======
-      res.json(await restoreWorktreeArchive(directory, { id: fieldsOf(req.body)?.id }));
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     } catch (error) {
       sendArchiveError(res, error, 'Failed to restore worktree archive');
     }
@@ -2426,13 +2088,7 @@ export function registerGitRoutes(app: Application, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-<<<<<<< HEAD:packages/web/server/lib/git/routes.js
       res.json(await deleteWorktreeArchive(directory, { id: req.body?.id, deleteBranch: req.body?.deleteBranch === true }, { archiveSessions: worktreeArchiveSessionService }));
-||||||| bc50ba56aa:packages/web/server/lib/git/routes.js
-      res.json(await deleteWorktreeArchive(directory, { id: req.body?.id, deleteBranch: req.body?.deleteBranch === true }));
-=======
-      res.json(await deleteWorktreeArchive(directory, { id: fieldsOf(req.body)?.id, deleteBranch: fieldsOf(req.body)?.deleteBranch === true }));
->>>>>>> upstream/main:packages/web/server/lib/git/routes.ts
     } catch (error) {
       sendArchiveError(res, error, 'Failed to delete worktree archive');
     }

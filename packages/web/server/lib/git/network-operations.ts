@@ -1,29 +1,55 @@
 import { isGitString as isString } from './input-guards.js';
+
 import fs from 'node:fs/promises';
+
 import path from 'node:path';
+
 import { spawn } from 'node:child_process';
+
 import { constants as fsConstants } from 'node:fs';
+
 import { fileURLToPath } from 'node:url';
+
 import crypto from 'node:crypto';
+
 import os from 'node:os';
+
 import { createGitCredentialBroker, GIT_CREDENTIAL_NONCE_ENV } from './credential-broker.js';
+
 import { helperShellCommand } from './helper-launch.js';
+
 import { gitLfsCredentialEndpointAliases, normalizeGitRemoteEndpoint, parseGitCredentialReference } from './credential-resolver.js';
+
 import { createNetworkOperationPlanner } from './network-operation-plan.js';
+
 import { createNetworkOperationRegistry } from './network-operation-registry.js';
+
 import { createGitRedactor, redactGitText } from './redaction.js';
+
 import { parseSubmoduleManifest, SUBMODULE_DISCOVERY_LIMITS } from './submodule-discovery.js';
-import { createLfsFileScanner, discoverLfs, scanLfsPushObjects, resolveLfsPushConfig, LFS_DISCOVERY_LIMITS, SAFE_FILTERS } from './lfs-discovery.js';
+
+import { createLfsFileScanner, discoverLfs, scanLfsPushObjects, resolveLfsPushConfig, LFS_DISCOVERY_LIMITS, SAFE_FILTERS, parseTreeObjects, scanLfsFiles } from './lfs-discovery.js';
+
 import { resolveGitRelativeEndpoint } from './discovery-endpoint.js';
+
 import { fingerprintRemoteUrl, redactRemoteUrl } from '../source-control/url-redaction.js';
+
 import { birthtimeHoldsStill } from './directory-birthtime.js';
+
 import type { ChildProcess } from 'node:child_process';
+
 import type { Stats } from 'node:fs';
+
 import type { BinaryLike } from 'node:crypto';
+
 import type { LfsEndpoint, LfsObjectEntry } from './lfs-discovery.js';
+
 import type { JsonValue } from '../shared/json-values.js';
+
 import type { AuditPlan, AuditResultInput } from '../source-control/audit-storage.js';
+
 import type { EndpointDisplay, HydrationRequirement, HydrationTransfer } from './network-plan-contracts.js';
+
 import type {
   AuditPlans, AuxiliaryAuthority, CheckoutActionsPlan, CheckoutHydration, CheckoutTrustInput, ClonePlan,
   Completion, ContributorPlan, ContributorTransferSource, CopiedCheckoutEntry,
@@ -39,104 +65,141 @@ const occupied = <Value>(value: Value | undefined): Value => {
   if (value === undefined) throw new TypeError('Git execution invariant value is missing');
   return value;
 };
+
 type ErrorFields = {
   code?: unknown; message?: unknown; reason?: unknown; status?: unknown;
   cancelled?: unknown; timedOut?: unknown; stderr?: unknown; stdout?: unknown;
   hydrationHandled?: unknown;
 };
+
 const hasErrorFields = (value: unknown): value is ErrorFields => value !== null && value !== undefined;
+
 const errorFields = <Value>(value: Value): ErrorFields => hasErrorFields(value) ? value : {};
+
 const requiredErrorFields = <Value>(value: Value): ErrorFields => {
   if (!hasErrorFields(value)) throw new TypeError('Git error fields are missing');
   return value;
 };
+
 const isClonePlan = (plan: ExecutionPlan): plan is ClonePlan => plan.target.operation === 'clone';
+
 const isSyncPlan = (plan: ExecutionPlan): plan is SyncPlan => plan.target.operation === 'sync';
+
 const isHydrationPlan = (plan: ExecutionPlan): plan is HydrationPlan => plan.target.operation === 'checkout-hydration';
+
 const isContributorPlan = (plan: ExecutionPlan): plan is ContributorPlan => plan.target.operation === 'contributor-fetch';
+
 const isActionsPlan = (plan: ExecutionPlan): plan is CheckoutActionsPlan => plan.target.operation === 'checkout-actions';
+
 const isExistingPlan = (plan: ExecutionPlan): plan is ExistingPlan => !isClonePlan(plan)
   && !isSyncPlan(plan) && !isHydrationPlan(plan) && !isContributorPlan(plan) && !isActionsPlan(plan);
+
 const existingPlan = (plan: ExecutionPlan) => {
   if (!isExistingPlan(plan)) throw new TypeError('Existing Git execution plan is missing');
   return plan;
 };
+
 const resolvedLfsEndpoint = (endpoint: LfsEndpoint) => {
   if (endpoint.status !== 'resolved') throw new TypeError('Required LFS endpoint is missing');
   return endpoint;
 };
+
 const knownErrorCode = <Code>(code: Code) => {
   if (!isString(code)) throw new TypeError('Validated Git error code is missing');
   return code;
 };
+
 const isHydrationTransport = (plan: ExecutionPlan | TransportPlan): plan is HydrationPlan => plan.target.operation === 'checkout-hydration';
+
 const isSyncTransport = (plan: ExecutionPlan | TransportPlan): plan is SyncPlan => plan.target.operation === 'sync';
+
 const stringInvariant = (value: JsonValue | undefined) => {
   if (!isString(value)) throw new TypeError('Validated Git reference is missing');
   return value;
 };
+
 const hasNetworkRemote = (value: unknown): value is { name: string; endpoint: EndpointDisplay } => value !== null
   && typeof value === 'object' && 'name' in value && isString(value.name)
   && 'endpoint' in value && value.endpoint !== null && typeof value.endpoint === 'object'
   && 'displayUrl' in value.endpoint && isString(value.endpoint.displayUrl)
   && 'fingerprint' in value.endpoint && isString(value.endpoint.fingerprint);
+
 const syncRemote = (value: JsonValue | undefined) => {
   if (!hasNetworkRemote(value)) throw new TypeError('Validated Git remote is missing');
   return value;
 };
+
 type ContributorFields = {
   context?: unknown; sourceProject?: unknown; repositoryId?: unknown; bindingRevision?: unknown;
   accountId?: unknown; instance?: unknown; primaryRemote?: unknown; id?: unknown;
   headSha?: unknown; headRef?: unknown; endpoint?: unknown;
 };
+
 const hasContributorFields = (value: unknown): value is ContributorFields => value !== null && value !== undefined;
+
 const contributorFields = <Value>(value: Value): ContributorFields => {
   if (!hasContributorFields(value)) throw new TypeError('Contributor source fields are missing');
   return value;
 };
+
 type ResolvedCredential = Awaited<ReturnType<NonNullable<NetworkOperationsOptions['credentialResolver']>['resolve']>>;
+
 const managedCredential = (credential: ResolvedCredential) => {
   if (!('transport' in credential)) throw new TypeError('Managed Git credential is missing');
   return credential;
 };
+
 const requireHttpsCredential = (credential: ResolvedCredential | undefined) => {
   const managed = managedCredential(occupied(credential));
   if (managed.transport !== 'https') throw new TypeError('HTTPS Git credential is missing');
   return managed;
 };
+
 const requireSshCredential = (credential: ResolvedCredential | undefined) => {
   const managed = managedCredential(occupied(credential));
   if (managed.transport !== 'ssh') throw new TypeError('SSH Git credential is missing');
   return managed;
 };
+
 const isContributorTransport = (plan: TransportPlan): plan is TransportPlan & ContributorPlan => plan.target.operation === 'contributor-fetch';
+
 const hasExistingTransport = (plan: TransportPlan): plan is TransportPlan & ExistingPlan => plan.target.operation !== 'clone';
+
 const existingTransport = (plan: TransportPlan) => {
   if (!hasExistingTransport(plan)) throw new TypeError('Existing Git transport is missing');
   return plan;
 };
+
 const hasHydrationExistingPlan = (plan: HydrationPlan): plan is HydrationPlan & ExistingPlan => Boolean(plan.target.repositoryId);
+
 const hydrationExistingPlan = (plan: HydrationPlan) => {
   if (!hasHydrationExistingPlan(plan)) throw new TypeError('Bound checkout hydration plan is missing');
   return plan;
 };
+
 const rethrow = (error: Error): never => { throw error; };
+
 const commandAction = (action: Awaited<ReturnType<CheckoutTrustInput['inspect']>>['actions'][number]) => {
   if (action.kind === 'post-checkout-hook') throw new TypeError('Checkout command is missing');
   return action;
 };
+
 const hookAction = (action: Awaited<ReturnType<CheckoutTrustInput['inspect']>>['actions'][number]) => {
   if (action.kind !== 'post-checkout-hook') throw new TypeError('Checkout hook is missing');
   return action;
 };
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+
 const CLEANUP_TIMEOUT_MS = 5_000;
+
 const DEFAULT_OUTPUT_BYTES = 64 * 1024;
+
 const SSH_WRAPPER_PATH = fileURLToPath(new URL('./ssh-wrapper.js', import.meta.url));
 
 export const managedSshCommand = (privateKeyPath: string) =>
   `OPENCHAMBER_GIT_SSH_KEY=${shellQuote(privateKeyPath)} ${helperShellCommand(SSH_WRAPPER_PATH)}`;
+
 const MANAGED_ENV_NAMES = new Set([
   'GIT_ASKPASS', 'SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'GIT_CONFIG_COUNT',
   'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM',
@@ -149,96 +212,23 @@ const MANAGED_ENV_NAMES = new Set([
   'SSL_CERT_DIR', 'SSLKEYLOGFILE', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY',
   'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'NETRC',
 ]);
+
 const SHA_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i;
+
 const GITLINK_PATTERN = /^160000 commit ([0-9a-f]{40}(?:[0-9a-f]{24})?)(?: +-\t|\t)([^]+)$/;
+
 const INDEX_FILE_MODES = new Set(['100644', '100755', '120000', '160000']);
+
 const LINE_ENDING_CONFIG_PATTERN = 'core\\.(autocrlf|eol|safecrlf|attributesfile)';
 
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-// The details are often a Git process result, whose `code` is the exit
-// status; the operation's own code and status are applied over them.
-const operationError = (code, message, status = 500, details = {}) => Object.assign(new Error(message), details, { code, status });
-const publicError = (code, message) => ({ code, message });
-// `ls-tree -l` adds each object's size before the tab; the submodule parser
-// reads gitlinks in the short form, so their size column (always `-`) goes.
-const readTreeListing = (treeOutput) => ({
-  gitlinks: treeOutput.split('\0').filter((record) => record.startsWith('160000 '))
-    .map((record) => `${record.replace(/^(160000 commit [0-9a-f]+) +-\t/, '$1\t')}\0`).join(''),
-  treeObjects: parseTreeObjects(treeOutput),
-});
-const terminal = (state, code, message) => ({ state, error: publicError(code, message) });
-const fileIdentity = (stats) => `${stats.dev}:${stats.ino}`;
-// Linux reuses an inode number when a directory is removed and recreated in the
-// same parent, so device and inode alone cannot tell a replaced directory from
-// the one we made. Creation time can, but only where the filesystem keeps one:
-// without it Node fills the field from the change time, which moves whenever
-// entries are written into the directory, and every clone would then look
-// replaced the moment it filled its own checkout. So change the directory once
-// on purpose and see whether the reported creation time sits still. A
-// filesystem that fails this, or answers too coarsely to tell, falls back to
-// device and inode rather than to a false conflict.
-const birthtimeHoldsStill = async (fsImpl, pathImpl, directory) => {
-  const probe = pathImpl.join(directory, '.openchamber-clone-probe');
-  try {
-    const before = await fsImpl.stat(directory);
-    await fsImpl.mkdir(probe);
-    await fsImpl.rm(probe, { recursive: true });
-    const after = await fsImpl.stat(directory);
-    return after.ctimeMs !== before.ctimeMs && after.birthtimeMs === before.birthtimeMs;
-  } catch {
-    await fsImpl.rm(probe, { recursive: true, force: true }).catch(() => {});
-    return false;
-  }
-};
-const directoryIdentity = (stats, birthtimeHolds) => (birthtimeHolds
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-// The details are often a Git process result, whose `code` is the exit
-// status; the operation's own code and status are applied over them.
-const operationError = (code, message, status = 500, details = {}) => Object.assign(new Error(message), details, { code, status });
-const publicError = (code, message) => ({ code, message });
-// `ls-tree -l` adds each object's size before the tab; the submodule parser
-// reads gitlinks in the short form, so their size column (always `-`) goes.
-const readTreeListing = (treeOutput) => ({
-  gitlinks: treeOutput.split('\0').filter((record) => record.startsWith('160000 '))
-    .map((record) => `${record.replace(/^(160000 commit [0-9a-f]+) +-\t/, '$1\t')}\0`).join(''),
-  treeObjects: parseTreeObjects(treeOutput),
-});
-const terminal = (state, code, message) => ({ state, error: publicError(code, message) });
-// A remote-tracking ref mirrors the remote, so it follows a force-pushed
-// branch the way `git fetch` with the default refspec does. A local branch
-// destination is never moved backwards.
-const singleRefFetchRefspec = (sourceRef, destinationRef) => (
-  `${destinationRef.startsWith('refs/remotes/') ? '+' : ''}${sourceRef}:${destinationRef}`
-);
-const fileIdentity = (stats) => `${stats.dev}:${stats.ino}`;
-// Linux reuses an inode number when a directory is removed and recreated in the
-// same parent, so device and inode alone cannot tell a replaced directory from
-// the one we made. Creation time can, but only where the filesystem keeps one:
-// without it Node fills the field from the change time, which moves whenever
-// entries are written into the directory, and every clone would then look
-// replaced the moment it filled its own checkout. So change the directory once
-// on purpose and see whether the reported creation time sits still. A
-// filesystem that fails this, or answers too coarsely to tell, falls back to
-// device and inode rather than to a false conflict.
-const birthtimeHoldsStill = async (fsImpl, pathImpl, directory) => {
-  const probe = pathImpl.join(directory, '.openchamber-clone-probe');
-  try {
-    const before = await fsImpl.stat(directory);
-    await fsImpl.mkdir(probe);
-    await fsImpl.rm(probe, { recursive: true });
-    const after = await fsImpl.stat(directory);
-    return after.ctimeMs !== before.ctimeMs && after.birthtimeMs === before.birthtimeMs;
-  } catch {
-    await fsImpl.rm(probe, { recursive: true, force: true }).catch(() => {});
-    return false;
-  }
-};
-const directoryIdentity = (stats, birthtimeHolds) => (birthtimeHolds
-=======
 const operationError = <Details extends object, Status = number>(code: string, message: string, status: Status | number = 500, details: Details | Record<never, never> = {}) => Object.assign(new Error(message), details, { code, status });
+
 const publicError = <Code, Message>(code: Code, message: Message) => ({ code, message });
+
 const terminal = <Code, Message>(state: string, code: Code, message: Message): Completion => ({ state, error: publicError(code, message) });
+
 const INDEX_ENTRY_PATTERN = /^([0-7]{6}) ([0-9a-f]{40}(?:[0-9a-f]{24})?) ([0-3])\t([^]+)$/;
+
 const createIndexFilesStream = (scanner: ReturnType<typeof createLfsFileScanner>) => {
   let remainder: Buffer = Buffer.alloc(0);
   let batch: string[] = [];
@@ -298,6 +288,7 @@ const createIndexFilesStream = (scanner: ReturnType<typeof createLfsFileScanner>
     },
   });
 };
+
 const createGitlinksStream = () => {
   let remainder: Buffer = Buffer.alloc(0);
   let output = '';
@@ -327,13 +318,16 @@ const createGitlinksStream = () => {
     },
   });
 };
+
 const singleRefFetchRefspec = (sourceRef: string, destinationRef: string) => (
   `${destinationRef.startsWith('refs/remotes/') ? '+' : ''}${sourceRef}:${destinationRef}`
 );
+
 const fileIdentity = (stats: Stats) => `${stats.dev}:${stats.ino}`;
+
 const directoryIdentity = (stats: Stats, birthtimeHolds: boolean) => (birthtimeHolds
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
   ? `${fileIdentity(stats)}:${stats.birthtimeMs}` : fileIdentity(stats));
+
 const lstatSnapshot = (stats: Stats) => ({
   identity: fileIdentity(stats),
   mode: stats.mode,
@@ -341,14 +335,18 @@ const lstatSnapshot = (stats: Stats) => ({
   mtimeMs: stats.mtimeMs,
   ctimeMs: stats.ctimeMs,
 });
+
 const sameLstat = (stats: Stats, snapshot: LstatSnapshot) => stats
   && fileIdentity(stats) === snapshot.identity
   && stats.mode === snapshot.mode
   && stats.size === snapshot.size
   && stats.mtimeMs === snapshot.mtimeMs
   && stats.ctimeMs === snapshot.ctimeMs;
+
 const shellQuote = (value: string) => `'${String(value).replace(/'/g, `'\\''`)}'`;
+
 const contentDigest = (value: BinaryLike) => crypto.createHash('sha256').update(value).digest('base64url');
+
 const publicTransportForContributor = () => ({
   mode: 'managed', verification: { status: 'verified', method: 'credential' },
 });
@@ -371,6 +369,7 @@ const managedEnvironment = (source: NodeJS.ProcessEnv, platform: NodeJS.Platform
 };
 
 const TRUSTED_DIRECTORIES_READ_TIMEOUT_MS = 5_000;
+
 const gitConfigValue = (value: string) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 export const createTrustedDirectoriesConfig = ({
@@ -446,6 +445,7 @@ const HTTP_CONFIG_RESETS = new Map([
   ['delegation', 'none'],
   ['sslautoclientcert', 'false'],
 ]);
+
 const CREDENTIAL_CONFIG_RESETS = new Map([
   ['helper', ''],
   ['askpass', ''],
@@ -453,6 +453,7 @@ const CREDENTIAL_CONFIG_RESETS = new Map([
   ['interactive', 'false'],
   ['usehttppath', 'false'],
 ]);
+
 const configResetValue = (key: string) => {
   const normalized = key.toLowerCase();
   const suffix = normalized.slice(normalized.lastIndexOf('.') + 1);
@@ -512,8 +513,10 @@ const authorityCode = (cause: unknown) => {
   if (error?.code === 'INVALID_GIT_TRANSPORT_CONTEXT') return 'INVALID_REQUEST';
   return 'REMOTE_CHANGED';
 };
+
 const transportFailureCode = (text: string) => /authentication failed|permission denied|could not read username/i.test(text)
   ? 'AUTHENTICATION_FAILED' : 'TRANSPORT_FAILED';
+
 const isLeaseConflict = (text: string) => /stale info|force-with-lease|rejected.*stale/i.test(text);
 
 const phaseError = (controls: PhaseControls | undefined, deadline: number) => {
@@ -561,42 +564,24 @@ const awaitMutation = async <Value>(work: () => Promise<Value>, controls: PhaseC
   return value;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-// What a remote said when it refused a push: Git's `! [remote rejected]` /
-// `! [rejected]` lines and the host's own `remote: error` lines.
 const REJECTED_LINE_RE = /^!\s*\[(?:remote )?rejected\]/;
-const REMOTE_ERROR_LINE_RE = /^remote:\s*(?:error|fatal)\b/i;
-/**
- * A refused push's message: the rejection lines first, then the remote's
- * error lines, each once, without the progress and hints around them. Null
- * when the output names no rejection, so other failures read as before.
- */
-const remoteRejection = (detail) => {
-  const lines = [...new Set(detail.split('\n').map((line) => line.trim()).filter(Boolean))];
-  const rejected = lines.filter((line) => REJECTED_LINE_RE.test(line));
-  const errors = lines.filter((line) => REMOTE_ERROR_LINE_RE.test(line));
-  return rejected.length || errors.length ? [...rejected, ...errors].slice(0, 12).join('\n') : null;
-};
-/** A redacted failure text, led by the remote's rejection when it refused a push. */
-const leadWithRejection = (text) => remoteRejection(text) ?? text;
 
-=======
-const REJECTED_LINE_RE = /^!\s*\[(?:remote )?rejected\]/;
 const REMOTE_ERROR_LINE_RE = /^remote:\s*(?:error|fatal)\b/i;
+
 const remoteRejection = (detail: string) => {
   const lines = [...new Set(detail.split('\n').map((line) => line.trim()).filter(Boolean))];
   const rejected = lines.filter((line) => REJECTED_LINE_RE.test(line));
   const errors = lines.filter((line) => REMOTE_ERROR_LINE_RE.test(line));
   return rejected.length || errors.length ? [...rejected, ...errors].slice(0, 12).join('\n') : null;
 };
+
 const leadWithRejection = (text: string) => remoteRejection(text) ?? text;
 
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
 export function createNetworkOperations({
   validateGitTransportContext,
   validateManagedSshCredential,
   resolveSourceControlAccount,
+  sourceControlProviders,
   contributorProvenance,
   resolveRef,
   resolveSymbolicRef,
@@ -628,10 +613,11 @@ export function createNetworkOperations({
   onCheckoutHydrated,
   trustedDirectoriesConfig,
 }: NetworkOperationsOptions = {}) {
-  if (!(validateGitTransportContext instanceof Function) || !(credentialResolver?.resolve instanceof Function)) {
+if (!(validateGitTransportContext instanceof Function) || !(credentialResolver?.resolve instanceof Function)) {
     throw new TypeError('Git network operation dependencies are invalid');
   }
-  const managedGitEnvironment = async () => {
+
+const managedGitEnvironment = async () => {
     const env = managedEnvironment(inheritedEnv, platform);
     const trusted = trustedDirectoriesConfig instanceof Function
       ? await trustedDirectoriesConfig().catch(() => null)
@@ -640,15 +626,20 @@ export function createNetworkOperations({
     return env;
   };
 
-  const cancelChild = (child: ChildProcess) => terminateProcessTree(child, { platform, spawnImpl, escalationMs });
-  const registryOptions = { cancelChild, store: operationStore };
-  const operationRegistry = registry ?? createNetworkOperationRegistry(registryOptions);
-  if (auditStore && (!(auditStore.plan instanceof Function)
+const cancelChild = (child: ChildProcess) => terminateProcessTree(child, { platform, spawnImpl, escalationMs });
+
+const registryOptions = { cancelChild, store: operationStore };
+
+const operationRegistry = registry ?? createNetworkOperationRegistry(registryOptions);
+
+if (auditStore && (!(auditStore.plan instanceof Function)
     || !(auditStore.start instanceof Function) || !(auditStore.finish instanceof Function))) {
     throw new TypeError('Git network operation audit store is invalid');
   }
-  let brokerStart: Promise<void> | null = null;
-  const startBroker = () => {
+
+let brokerStart: Promise<void> | null = null;
+
+const startBroker = () => {
     credentialBroker ??= createGitCredentialBroker();
     brokerStart ??= credentialBroker.start().catch((error) => {
       brokerStart = null;
@@ -657,10 +648,13 @@ export function createNetworkOperations({
     return brokerStart;
   };
 
-  async function run(options: RunOptions & { rawOutput: true }): Promise<RunResult<Buffer>>;
-  async function run(options: RunOptions & { rawOutput?: false }): Promise<RunResult>;
-  async function run(options: RunOptions): Promise<RunResult<string | Buffer>>;
-  async function run({
+async function run(options: RunOptions & { rawOutput: true }): Promise<RunResult<Buffer>>;
+
+async function run(options: RunOptions & { rawOutput?: false }): Promise<RunResult>;
+
+async function run(options: RunOptions): Promise<RunResult<string | Buffer>>;
+
+async function run({
     binary = gitBinary,
     cwd,
     args,
@@ -778,7 +772,7 @@ export function createNetworkOperations({
     });
   }
 
-  const queryGit = async (directory: string, args: string[], { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
+const queryGit = async (directory: string, args: string[], { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
     const result = await run({
       cwd: directory,
       args,
@@ -792,17 +786,20 @@ export function createNetworkOperations({
     }
     return result.stdout.trim();
   };
-  const resolveRefImpl = resolveRef ?? ((directory, ref, options) => queryGit(
+
+const resolveRefImpl = resolveRef ?? ((directory, ref, options) => queryGit(
     directory,
     ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
     options,
   ));
-  const resolveSymbolicRefImpl = resolveSymbolicRef ?? ((directory, options) => queryGit(
+
+const resolveSymbolicRefImpl = resolveSymbolicRef ?? ((directory, options) => queryGit(
     directory,
     ['symbolic-ref', '-q', 'HEAD'],
     options,
   ));
-  const enumerateManagedConfigKeysImpl = enumerateManagedConfigKeys ?? (async (plan: TransportPlan, controls: ExecutionControls, deadline: number, env: NodeJS.ProcessEnv) => {
+
+const enumerateManagedConfigKeysImpl = enumerateManagedConfigKeys ?? (async (plan: TransportPlan, controls: ExecutionControls, deadline: number, env: NodeJS.ProcessEnv) => {
     const result = await run({
       cwd: plan.directory ?? pathImpl.dirname(occupied(plan.destination)),
       args: ['config', '--includes', '--name-only', '--get-regexp', plan.transportMode === 'anonymous' ? '^(http|credential|url)\\.' : '^(http|credential)\\.'],
@@ -816,7 +813,8 @@ export function createNetworkOperations({
     }
     return result.stdout.split(/\r?\n/).filter(Boolean);
   });
-  const resolveRemoteFetchMappingImpl = resolveRemoteFetchMapping ?? (async (directory: string, remoteName: string, { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
+
+const resolveRemoteFetchMappingImpl = resolveRemoteFetchMapping ?? (async (directory: string, remoteName: string, { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
     let result;
     try {
       result = await run({
@@ -834,10 +832,8 @@ export function createNetworkOperations({
     }
     return result.stdout;
   });
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-  // Git's own branch-name rule for a review push's target; null when Git refuses the name.
-  const checkBranchNameImpl = async (directory, name) => {
+
+const checkBranchNameImpl = async (directory: string, name: string) => {
     const result = await run({
       cwd: directory,
       args: ['check-ref-format', '--branch', name],
@@ -846,18 +842,8 @@ export function createNetworkOperations({
     });
     return result.code === 0 && !result.timedOut && !result.cancelled ? result.stdout.trim() : null;
   };
-=======
-  const checkBranchNameImpl = async (directory: string, name: string) => {
-    const result = await run({
-      cwd: directory,
-      args: ['check-ref-format', '--branch', name],
-      env: { ...inheritedEnv, GIT_ALLOW_PROTOCOL: '', GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1' },
-      deadline: Date.now() + timeoutMs,
-    });
-    return result.code === 0 && !result.timedOut && !result.cancelled ? result.stdout.trim() : null;
-  };
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
-  const planner = createNetworkOperationPlanner({
+
+const planner = createNetworkOperationPlanner({
     validateGitTransportContext,
     validateManagedSshCredential,
     resolveSourceControlAccount,
@@ -872,7 +858,7 @@ export function createNetworkOperations({
     pathImpl,
   });
 
-  const mergedTransportRevision = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+const mergedTransportRevision = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
     let authority;
     try {
       authority = await awaitPhase(() => validateGitTransportContext({
@@ -891,8 +877,8 @@ export function createNetworkOperations({
     return authority.transportRevision;
   };
 
-  const revalidate = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
-    if (plan.contributorAuthority) {
+const revalidate = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+if (plan.contributorAuthority) {
       const record = await awaitPhase(() => occupied(contributorProvenance).read(plan.directory), controls, deadline);
       if (record.worktreeId !== plan.contributorAuthority.worktreeId
         || record.revision !== plan.contributorAuthority.revision
@@ -900,8 +886,10 @@ export function createNetworkOperations({
         throw operationError('STALE_CONFIG', 'Contributor worktree provenance changed', 409);
       }
     }
-    let authority;
-    try {
+
+let authority;
+
+try {
       authority = await awaitPhase(() => validateGitTransportContext({
         directory: plan.directory,
         repositoryId: plan.target.repositoryId,
@@ -915,26 +903,20 @@ export function createNetworkOperations({
       if (error?.cancelled || error?.timedOut) throw cause;
       throw operationError(authorityCode(error), 'Git network operation authority changed', error?.status ?? 409);
     }
-    if (authority.endpoint !== plan.rawEndpoint
+
+if (authority.endpoint !== plan.rawEndpoint
       || authority.endpointFingerprint !== plan.target.remote.endpoint.fingerprint
       || authority.transportMode !== plan.transportMode
       || authority.transportRevision !== plan.transportRevision
       || (authority.credentialId ?? null) !== (plan.credentialId ?? null)) {
       throw operationError('REMOTE_CHANGED', 'Git remote or transport binding changed', 409);
     }
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-    // Review refs stay behind the gate they were planned under: the remote is
-    // still the primary remote of a ready change-host association.
-    if (plan.changeReviewRemote && !isChangeReviewRemote(authority, sourceControlProviders)) {
+
+if (plan.changeReviewRemote && !isChangeReviewRemote(authority, sourceControlProviders)) {
       throw operationError('REMOTE_CHANGED', 'The remote is no longer a change host\'s primary remote', 409);
     }
-=======
-    if (plan.changeReviewRemote && !isChangeReviewRemote(authority, sourceControlProviders)) {
-      throw operationError('REMOTE_CHANGED', 'The remote is no longer a change host\'s primary remote', 409);
-    }
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
-    if (plan.sourceSha) {
+
+if (plan.sourceSha) {
       const sourceSha = String(await awaitPhase(
         () => resolveRefImpl(plan.directory, occupied(plan.target.sourceRef), { controls, deadline }), controls, deadline,
       )).toLowerCase();
@@ -942,7 +924,8 @@ export function createNetworkOperations({
         throw operationError('STALE_CONFIG', 'Git source ref changed after planning', 409);
       }
     }
-    if (plan.target.operation === 'fetch' && plan.target.fetchScope === 'remote') {
+
+if (plan.target.operation === 'fetch' && plan.target.fetchScope === 'remote') {
       const output = await awaitPhase(
         () => resolveRemoteFetchMappingImpl(plan.directory, plan.target.remote.name, { controls, deadline }), controls, deadline,
       );
@@ -950,8 +933,9 @@ export function createNetworkOperations({
         throw operationError('STALE_CONFIG', 'Remote Fetch mapping changed after planning', 409);
       }
     }
-  };
-  const revalidateContributorSource = async (plan: ContributorPlan, controls: ExecutionControls, deadline: number) => {
+};
+
+const revalidateContributorSource = async (plan: ContributorPlan, controls: ExecutionControls, deadline: number) => {
     if (!(resolveChangeRequestSource instanceof Function)) {
       throw operationError('RUNTIME_UNSUPPORTED', 'Contributor source resolution is unavailable', 501);
     }
@@ -981,14 +965,15 @@ export function createNetworkOperations({
     }
   };
 
-  const revalidatePullHead = async (plan: { directory: string; destinationSha?: string; target: { destinationRef?: string } }, controls: ExecutionControls, deadline: number) => {
+const revalidatePullHead = async (plan: { directory: string; destinationSha?: string; target: { destinationRef?: string } }, controls: ExecutionControls, deadline: number) => {
     const headRef = await awaitPhase(() => resolveSymbolicRefImpl(plan.directory, { controls, deadline }), controls, deadline);
     const headSha = await awaitPhase(() => resolveRefImpl(plan.directory, occupied(plan.target.destinationRef), { controls, deadline }), controls, deadline);
     if (headRef !== plan.target.destinationRef || String(headSha).toLowerCase() !== plan.destinationSha) {
       throw operationError('STALE_CONFIG', 'Checked out branch changed after pull planning', 409);
     }
   };
-  const hasMergeState = inspectMergeState ?? (async (directory: string) => {
+
+const hasMergeState = inspectMergeState ?? (async (directory: string) => {
     const dotGit = pathImpl.join(directory, '.git');
     let gitDirectory = dotGit;
     const stats = await fsImpl.stat(dotGit);
@@ -1009,7 +994,7 @@ export function createNetworkOperations({
     return false;
   });
 
-  const transport = async (plan: TransportPlan, controls: ExecutionControls, deadline: number): Promise<LeasedTransportContext> => {
+const transport = async (plan: TransportPlan, controls: ExecutionControls, deadline: number): Promise<LeasedTransportContext> => {
     const anonymous = plan.transportMode === 'anonymous';
     if (anonymous && (plan.credentialId !== undefined || !['fetch', 'pull', 'clone'].includes(plan.target.operation))) {
       throw operationError('INVALID_REQUEST', 'Anonymous Git transport is read-only and credential-free', 400);
@@ -1128,91 +1113,34 @@ export function createNetworkOperations({
     };
   };
 
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-  /**
-   * What the transfer just established about a remote branch, recorded where
-   * Git keeps it. Push and pull address the endpoint URL rather than the
-   * remote by name, so Git itself never touches `refs/remotes/<remote>/...`;
-   * without this the panel would keep reporting commits as unpushed after a
-   * successful push, and as unpulled after a pull. A branch that was deleted
-   * on the remote loses its tracking ref the same way.
-   */
-  const recordRemoteTrackingRef = async (plan, controls, context, deadline, sha, remoteRef = plan.target.destinationRef) => {
-    if (!remoteRef.startsWith('refs/heads/')) return;
-    const trackingRef = `refs/remotes/${plan.target.remote.name}/${remoteRef.slice('refs/heads/'.length)}`;
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-  /**
-   * What the transfer just established about a remote branch, recorded where
-   * Git keeps it. Push and pull address the endpoint URL rather than the
-   * remote by name, so Git itself never touches `refs/remotes/<remote>/...`;
-   * without this the panel would keep reporting commits as unpushed after a
-   * successful push, and as unpulled after a pull. A branch that was deleted
-   * on the remote loses its tracking ref the same way.
-   */
-  const trackingRefOf = (plan, remoteRef) => (remoteRef.startsWith('refs/heads/')
+const trackingRefOf = (plan: ExistingPlan, remoteRef: string) => (remoteRef.startsWith('refs/heads/')
     ? `refs/remotes/${plan.target.remote.name}/${remoteRef.slice('refs/heads/'.length)}`
     : null);
-  /** The tracking ref it wrote, or null when there is none or it could not be written. */
-  const recordRemoteTrackingRef = async (plan, controls, context, deadline, sha, remoteRef = plan.target.destinationRef) => {
-    const trackingRef = trackingRefOf(plan, remoteRef);
-    if (!trackingRef) return null;
-=======
-  const trackingRefOf = (plan: ExistingPlan, remoteRef: string) => (remoteRef.startsWith('refs/heads/')
-    ? `refs/remotes/${plan.target.remote.name}/${remoteRef.slice('refs/heads/'.length)}`
-    : null);
-  const recordRemoteTrackingRef = async (plan: ExistingPlan, controls: ExecutionControls, context: TransportContext | undefined, deadline: number, sha: string | null | undefined, remoteRef = plan.target.destinationRef) => {
-    const trackingRef = trackingRefOf(plan, occupied(remoteRef));
-    if (!trackingRef) return null;
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
-    try {
+
+const recordRemoteTrackingRef = async (plan: ExistingPlan, controls: ExecutionControls, context: TransportContext | undefined, deadline: number, sha: string | null | undefined, remoteRef = plan.target.destinationRef) => {
+if (!remoteRef.startsWith('refs/heads/')) return;
+
+const trackingRef = trackingRefOf(plan, occupied(remoteRef));
+
+if (!trackingRef) return null;
+
+try {
       await commandResult(plan, controls, sha ? ['update-ref', trackingRef, sha] : ['update-ref', '-d', trackingRef], context, deadline);
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-    } catch (error) {
-      // The transfer itself is done; a bookkeeping ref that could not be
-      // written costs one stale badge until the next fetch, not the result.
-      if (error?.cancelled || error?.timedOut || error?.code === 'CANCELLED' || error?.code === 'TIMEOUT') throw error;
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-      return sha ? trackingRef : null;
-    } catch (error) {
-      // The transfer itself is done; a bookkeeping ref that could not be
-      // written costs one stale badge until the next fetch, not the result.
-      if (error?.cancelled || error?.timedOut || error?.code === 'CANCELLED' || error?.code === 'TIMEOUT') throw error;
-      return null;
-=======
       return sha ? trackingRef : null;
     } catch (cause) {
       const error = errorFields(cause);
       if (error?.cancelled || error?.timedOut || error?.code === 'CANCELLED' || error?.code === 'TIMEOUT') throw cause;
       return null;
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
     }
-  };
+};
 
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-  const commandResult = async (plan, controls, args, context, deadline, options = {}) => {
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-  /**
-   * Pull replays only the commits made here since the remote copy was last
-   * seen, found as the fork point in the tracking ref's reflog, the way
-   * `git pull --rebase` does. A remote branch rewritten by its host (GitHub
-   * rebasing a stacked branch after the layer below it merged) then brings
-   * its new commits in, and its old ones are not replayed on top of their
-   * rewritten selves. Without a tracking ref, the fetched commit is the base.
-   */
-  const pullRebaseArgs = (fetchedSha, trackingRef) => (trackingRef
+const pullRebaseArgs = (fetchedSha: string, trackingRef: string | null) => (trackingRef
     ? ['rebase', '--no-verify', '--no-autostash', '--fork-point', '--onto', fetchedSha, trackingRef]
     : ['rebase', '--no-verify', '--no-autostash', fetchedSha]);
 
-  const commandResult = async (plan, controls, args, context, deadline, options = {}) => {
-=======
-  const pullRebaseArgs = (fetchedSha: string, trackingRef: string | null) => (trackingRef
-    ? ['rebase', '--no-verify', '--no-autostash', '--fork-point', '--onto', fetchedSha, trackingRef]
-    : ['rebase', '--no-verify', '--no-autostash', fetchedSha]);
-
-  const commandResult = async (plan: Pick<TransportPlan, 'operationId' | 'directory' | 'destination' | 'temporaryDirectory'>, controls: ExecutionControls, args: string[], context: TransportContext | undefined, deadline: number, options: {
+const commandResult = async (plan: Pick<TransportPlan, 'operationId' | 'directory' | 'destination' | 'temporaryDirectory'>, controls: ExecutionControls, args: string[], context: TransportContext | undefined, deadline: number, options: {
     localRefCleanup?: boolean; cwd?: string; transfer?: boolean; transferRole?: string;
   } = {}) => {
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
     const localRefCleanup = options.localRefCleanup === true
       && args.length === 3
       && args[0] === 'update-ref'
@@ -1236,7 +1164,7 @@ export function createNetworkOperations({
     throw operationError(transportFailureCode(detail), detail, 500, result);
   };
 
-  const refuseRemoteDefaultBranch = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+const refuseRemoteDefaultBranch = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
     const probe = await transport(plan, controls, deadline);
     let output;
     try {
@@ -1250,7 +1178,7 @@ export function createNetworkOperations({
     }
   };
 
-  const localIntegrationContext = async (directory: string, controls: ExecutionControls, deadline: number) => {
+const localIntegrationContext = async (directory: string, controls: ExecutionControls, deadline: number) => {
     const env = {
       ...await managedGitEnvironment(),
       GIT_ALLOW_PROTOCOL: '', GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_LFS_SKIP_SMUDGE: '1',
@@ -1304,7 +1232,7 @@ export function createNetworkOperations({
     return { env, configArgs, secrets: [] };
   };
 
-  const hydrationStatus = (submodules: HydrationPart[], lfs: HydrationPart[]) => {
+const hydrationStatus = (submodules: HydrationPart[], lfs: HydrationPart[]) => {
     const statuses = [...submodules, ...lfs].map((entry) => entry.status);
     if (!statuses.length || statuses.every((status) => status === 'not-needed')) return 'not-needed';
     for (const status of ['cancelled', 'invalid', 'client-missing', 'authorization-required', 'failed']) {
@@ -1312,7 +1240,8 @@ export function createNetworkOperations({
     }
     return 'succeeded';
   };
-  const hydrationError = (cause: unknown): HydrationFailure => {
+
+const hydrationError = (cause: unknown): HydrationFailure => {
     const error = errorFields(cause);
     if (error?.code === 'RUNTIME_UNSUPPORTED') {
       return { status: 'failed', error: publicError('RUNTIME_UNSUPPORTED', 'Checkout hydration transport is unavailable') };
@@ -1333,9 +1262,12 @@ export function createNetworkOperations({
     }
     return { status: 'failed', error: publicError('TRANSPORT_FAILED', 'Checkout hydration failed') };
   };
-  function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options: LocalGitOptions & { rawOutput: true }): Promise<Buffer>;
-  function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options?: LocalGitOptions & { rawOutput?: false }): Promise<string>;
-  async function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, {
+
+function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options: LocalGitOptions & { rawOutput: true }): Promise<Buffer>;
+
+function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options?: LocalGitOptions & { rawOutput?: false }): Promise<string>;
+
+async function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, {
     input, allowedCodes = [0], disableLfsFilters = false,
     maxOutputBytes = outputLimitBytes, rawOutput = false,
     onStdout,
@@ -1362,7 +1294,8 @@ export function createNetworkOperations({
     }
     return result.stdout;
   }
-  const currentAuxiliaryAuthority = async (hydrationPlan: Pick<HydrationPlan, 'auxiliaryGrants' | 'repositoryAuthority' | 'directory' | 'authorityDirectory' | 'parentRemoteName'>, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls | undefined, deadline: number): Promise<AuxiliaryAuthority> => {
+
+const currentAuxiliaryAuthority = async (hydrationPlan: Pick<HydrationPlan, 'auxiliaryGrants' | 'repositoryAuthority' | 'directory' | 'authorityDirectory' | 'parentRemoteName'>, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls | undefined, deadline: number): Promise<AuxiliaryAuthority> => {
     const fingerprint = fingerprintRemoteUrl(rawEndpoint);
     const displayUrl = redactRemoteUrl(rawEndpoint);
     if (hydrationPlan.auxiliaryGrants) {
@@ -1383,12 +1316,14 @@ export function createNetworkOperations({
     if (hydrationPlan.parentRemoteName) input.parentRemote = hydrationPlan.parentRemoteName;
     return await awaitPhase(() => validateGitAuxiliaryContext(input), controls, deadline);
   };
-  const sameAuxiliaryAuthority = (left: AuxiliaryAuthority, right: AuxiliaryAuthority) => (left.endpoint ?? left.rawEndpoint) === (right.endpoint ?? right.rawEndpoint)
+
+const sameAuxiliaryAuthority = (left: AuxiliaryAuthority, right: AuxiliaryAuthority) => (left.endpoint ?? left.rawEndpoint) === (right.endpoint ?? right.rawEndpoint)
     && left.endpointFingerprint === right.endpointFingerprint
     && left.transportMode === right.transportMode
     && (left.credentialId ?? null) === (right.credentialId ?? null)
     && (left.transportRevision ?? null) === (right.transportRevision ?? null);
-  const auxiliaryTransport = async (hydrationPlan: HydrationPlan, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls, deadline: number, foundAfterPlanning = false) => {
+
+const auxiliaryTransport = async (hydrationPlan: HydrationPlan, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls, deadline: number, foundAfterPlanning = false) => {
     const pinned = hydrationPlan.plannedAuxiliaryAuthorities?.find((candidate) => candidate.kind === kind
       && candidate.rawEndpoint === rawEndpoint);
     if (hydrationPlan.plannedAuxiliaryAuthorities && !pinned && !foundAfterPlanning) {
@@ -1419,7 +1354,7 @@ export function createNetworkOperations({
     return { authority, auxiliaryPlan, context, foundAfterPlanning };
   };
 
-  const auxiliaryTransfer = async (transfer: Awaited<ReturnType<typeof auxiliaryTransport>>, hydrationPlan: HydrationPlan, controls: ExecutionControls, args: string[], context: TransportContext, deadline: number) => {
+const auxiliaryTransfer = async (transfer: Awaited<ReturnType<typeof auxiliaryTransport>>, hydrationPlan: HydrationPlan, controls: ExecutionControls, args: string[], context: TransportContext, deadline: number) => {
     const execute = () => commandResult(transfer.auxiliaryPlan, controls, args, context, deadline, { transfer: true });
     if (!auditStore || !transfer.foundAfterPlanning) return execute();
     const { authority, auxiliaryPlan } = transfer;
@@ -1455,7 +1390,7 @@ export function createNetworkOperations({
     }
   };
 
-  const prepareHydrationPlans = async (plans: AuditPlans, deadline: number): Promise<AuditPlans> => {
+const prepareHydrationPlans = async (plans: AuditPlans, deadline: number): Promise<AuditPlans> => {
     if (plans.internalPlan.target?.operation !== 'checkout-hydration') return plans;
     const authorities = [];
     const seen = new Set();
@@ -1498,13 +1433,15 @@ export function createNetworkOperations({
       internalPlan: { ...plans.internalPlan, plannedAuxiliaryAuthorities: authorities },
     };
   };
-  const nullConfigRecords = (output: string, pattern: RegExp) => output ? output.split('\0').filter(Boolean).flatMap((record) => {
+
+const nullConfigRecords = (output: string, pattern: RegExp) => output ? output.split('\0').filter(Boolean).flatMap((record) => {
     const separator = record.indexOf('\n');
     if (separator < 1) return [];
     const key = record.slice(0, separator);
     return pattern.test(key) ? [{ key, value: record.slice(separator + 1) }] : [];
   }) : [];
-  const inspectSubmoduleDirectory = async (directory: string, relativePath: string) => {
+
+const inspectSubmoduleDirectory = async (directory: string, relativePath: string) => {
     const parts = relativePath.split('/');
     let current = directory;
     for (let index = 0; index < parts.length; index += 1) {
@@ -1530,7 +1467,8 @@ export function createNetworkOperations({
     }
     return { path: current, exists: true, ownsRepository: true };
   };
-  const ensureSubmoduleParentDirectories = async (directory: string, relativePath: string, controls: ExecutionControls, deadline: number) => {
+
+const ensureSubmoduleParentDirectories = async (directory: string, relativePath: string, controls: ExecutionControls, deadline: number) => {
     const parts = relativePath.split('/');
     let current = directory;
     for (const part of parts.slice(0, -1)) {
@@ -1549,7 +1487,7 @@ export function createNetworkOperations({
     }
   };
 
-  const inspectSingleCheckoutHydration = async ({ directory, parentEndpoint, parentRemoteName, controls, deadline = Date.now() + timeoutMs }: HydrationInspectionInput) => {
+const inspectSingleCheckoutHydration = async ({ directory, parentEndpoint, parentRemoteName, controls, deadline = Date.now() + timeoutMs }: HydrationInspectionInput) => {
     const headSha = (await localGit(directory, ['rev-parse', '--verify', 'HEAD'], controls, deadline)).trim().toLowerCase();
     if (!SHA_PATTERN.test(headSha)) throw operationError('STALE_CONFIG', 'Checkout HEAD is invalid', 409);
     const configOutput = await localGit(directory, [
@@ -1611,7 +1549,7 @@ export function createNetworkOperations({
     return Object.freeze({ headSha, requirements, children, sourceRequired });
   };
 
-  const inspectCheckoutHydration = async (input: HydrationInspectionInput) => {
+const inspectCheckoutHydration = async (input: HydrationInspectionInput) => {
     const requirements: HydrationRequirement[] = [];
     const transfers: HydrationTransfer[] = [];
     let requirementCount = 0;
@@ -1681,7 +1619,7 @@ export function createNetworkOperations({
     return Object.freeze({ headSha, requirements, transfers, sourceRequired });
   };
 
-  const hydrateCheckout = async (hydrationPlan: HydrationPlan, controls: ExecutionControls, deadline: number): Promise<CheckoutHydration> => {
+const hydrateCheckout = async (hydrationPlan: HydrationPlan, controls: ExecutionControls, deadline: number): Promise<CheckoutHydration> => {
     const submodules: HydrationPart[] = [];
     const lfs: HydrationPart[] = [];
     let moduleCount = 0;
@@ -1861,7 +1799,7 @@ export function createNetworkOperations({
     return Object.freeze({ status: hydrationStatus(submodules, lfs), submodules, lfs });
   };
 
-  const cancellationResult = (plan: { target: { operation: string } }, controls: ExecutionControls, cause: unknown) => {
+const cancellationResult = (plan: { target: { operation: string } }, controls: ExecutionControls, cause: unknown) => {
     const error = errorFields(cause);
     if ((plan.target.operation === 'push' || plan.target.operation === 'delete-remote-branch')
       && controls.hasTransferStarted()) {
@@ -1872,7 +1810,7 @@ export function createNetworkOperations({
       : 'Git network operation was cancelled');
   };
 
-  const safeRevoke = async (context: LeasedTransportContext | undefined, operationId: string) => {
+const safeRevoke = async (context: LeasedTransportContext | undefined, operationId: string) => {
     let cleanupFailed = false;
     try {
       if (context && await context.revoke() === false) cleanupFailed = true;
@@ -1883,7 +1821,7 @@ export function createNetworkOperations({
     return cleanupFailed;
   };
 
-  const prepareLfsPublication = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+const prepareLfsPublication = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
     if (plan.transportMode !== 'managed' || plan.target.operation !== 'push') return false;
     let root: string | undefined;
     let context: LeasedTransportContext | undefined;
@@ -2022,15 +1960,22 @@ export function createNetworkOperations({
     return uploaded;
   };
 
-  const executeExisting = async (plan: ExistingPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
-    let context: LeasedTransportContext | undefined;
-    let result: Completion | undefined;
-    let temporaryRef: string | undefined;
-    let integrationContext: TransportContext | undefined;
-    let mergeStarted = false;
-    let pushTransferred = false;
-    let lfsUploaded = false;
-    try {
+const executeExisting = async (plan: ExistingPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
+let context: LeasedTransportContext | undefined;
+
+let result: Completion | undefined;
+
+let temporaryRef: string | undefined;
+
+let integrationContext: TransportContext | undefined;
+
+let mergeStarted = false;
+
+let pushTransferred = false;
+
+let lfsUploaded = false;
+
+try {
       await revalidate(plan, controls, deadline);
       if (plan.target.operation === 'pull') await revalidatePullHead(plan, controls, deadline);
       await controls.markStepCompleted('validated');
@@ -2053,14 +1998,7 @@ export function createNetworkOperations({
             'push', ...lease, '--', occupied(plan.rawEndpoint),
             plan.target.operation === 'delete-remote-branch'
               ? `:${plan.target.destinationRef}`
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-              : `${plan.sourceSha}:${plan.target.destinationRef}`,
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-              // A push for review carries the options the planner composed.
               : plan.pushRefspec ?? `${plan.sourceSha}:${plan.target.destinationRef}`,
-=======
-              : plan.pushRefspec ?? `${plan.sourceSha}:${plan.target.destinationRef}`,
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
           ], context, deadline, { transfer: true });
           pushTransferred = true;
           await controls.markStepCompleted('transferred');
@@ -2089,13 +2027,7 @@ export function createNetworkOperations({
           temporaryRef = plan.target.operation === 'pull' ? `refs/openchamber/network/${plan.operationId}` : plan.target.destinationRef;
           await commandResult(plan, controls, [
             'fetch', '--no-tags', ...(plan.target.operation === 'pull' ? ['--no-recurse-submodules'] : []),
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-            '--', plan.rawEndpoint, `${plan.target.sourceRef}:${temporaryRef}`,
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-            '--', plan.rawEndpoint, singleRefFetchRefspec(plan.target.sourceRef, temporaryRef),
-=======
             '--', occupied(plan.rawEndpoint), singleRefFetchRefspec(occupied(plan.target.sourceRef), occupied(temporaryRef)),
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
           ], context, deadline, { transfer: true });
           await controls.markStepCompleted('transferred');
           if (plan.target.operation === 'fetch') result = { state: 'succeeded' };
@@ -2113,28 +2045,10 @@ export function createNetworkOperations({
               () => resolveRefImpl(plan.directory, occupied(temporaryRef), { controls, deadline }), controls, deadline,
             )).trim();
             if (!SHA_PATTERN.test(fetchedSha)) throw operationError('STALE_CONFIG', 'Fetched ref is invalid', 409);
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-            // The managed credential context is already revoked here; the
-            // tracking ref is local bookkeeping and uses the credential-free one.
-            await recordRemoteTrackingRef(plan, controls, integrationContext, deadline, fetchedSha, plan.target.sourceRef);
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-            // The managed credential context is already revoked here; the
-            // tracking ref is local bookkeeping and uses the credential-free one.
             const trackingRef = await recordRemoteTrackingRef(plan, controls, integrationContext, deadline, fetchedSha, plan.target.sourceRef);
-=======
-            const trackingRef = await recordRemoteTrackingRef(plan, controls, integrationContext, deadline, fetchedSha, plan.target.sourceRef);
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
             mergeStarted = true;
             await controls.markIntegrationStarted();
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-            // Local commits are replayed on top of the fetched ones, as pull always did here.
-            await commandResult(plan, controls, ['rebase', '--no-verify', '--no-autostash', fetchedSha], integrationContext, deadline);
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-            // Local commits are replayed on top of the fetched ones, as pull always did here.
             await commandResult(plan, controls, pullRebaseArgs(fetchedSha, trackingRef), integrationContext, deadline);
-=======
-            await commandResult(plan, controls, pullRebaseArgs(fetchedSha, trackingRef), integrationContext, deadline);
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
             mergeStarted = false;
             await controls.markStepCompleted('updated-local-repository');
             result = { state: 'succeeded' };
@@ -2168,18 +2082,13 @@ export function createNetworkOperations({
           'AUTHENTICATION_REQUIRED', 'AUTHENTICATION_FAILED', 'GIT_LFS_CLIENT_MISSING', 'INVALID_REQUEST', 'RUNTIME_UNSUPPORTED', 'UNKNOWN',
         ].some((code) => code === error.code) ? knownErrorCode(error.code) : 'TRANSPORT_FAILED';
         result = terminal(code.startsWith('STALE_') || code === 'REMOTE_CHANGED' ? 'conflicted' : 'failed', code,
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-          `${lfsUploaded ? 'LFS objects were uploaded, but Git ref publication failed. ' : ''}${createGitRedactor({ secrets: [...(context?.secrets ?? []), plan.directory] }).error(error)}`);
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-          `${lfsUploaded ? 'LFS objects were uploaded, but Git ref publication failed. ' : ''}${leadWithRejection(createGitRedactor({ secrets: [...(context?.secrets ?? []), plan.directory] }).error(error))}`);
-=======
           `${lfsUploaded ? 'LFS objects were uploaded, but Git ref publication failed. ' : ''}${leadWithRejection(createGitRedactor({ secrets: [...(context?.secrets ?? []), plan.directory] }).error(cause))}`);
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
       }
     }
 
-    let cleanupFailed = false;
-    if (temporaryRef && plan.target.operation === 'pull') {
+let cleanupFailed = false;
+
+if (temporaryRef && plan.target.operation === 'pull') {
       try {
         const cleanupContext = integrationContext ?? context ?? {
           env: { ...await managedGitEnvironment(), GIT_ALLOW_PROTOCOL: '', GIT_NO_LAZY_FETCH: '1' },
@@ -2191,26 +2100,36 @@ export function createNetworkOperations({
         cleanupFailed = true;
       }
     }
-    cleanupFailed = await safeRevoke(context, plan.operationId) || cleanupFailed;
-    if (cleanupFailed && result?.state === 'succeeded') {
+
+cleanupFailed = await safeRevoke(context, plan.operationId) || cleanupFailed;
+
+if (cleanupFailed && result?.state === 'succeeded') {
       return terminal('failed', 'UNKNOWN', 'Git network operation cleanup failed');
     }
-    return result ?? terminal('failed', 'UNKNOWN', 'Git network operation failed');
-  };
 
-  const executeSync = async (plan: SyncPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
-    const results = new Map<string, { step: string; status: string; error?: PublicFailure }>();
-    let activeStep = 'fetch';
-    let context: LeasedTransportContext | undefined;
-    let mergeStarted = false;
-    let hydration: CheckoutHydration | undefined;
-    let lfsUploaded = false;
-    const step = (name: string, status: string, error?: PublicFailure) => {
+return result ?? terminal('failed', 'UNKNOWN', 'Git network operation failed');
+};
+
+const executeSync = async (plan: SyncPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
+const results = new Map<string, { step: string; status: string; error?: PublicFailure }>();
+
+let activeStep = 'fetch';
+
+let context: LeasedTransportContext | undefined;
+
+let mergeStarted = false;
+
+let hydration: CheckoutHydration | undefined;
+
+let lfsUploaded = false;
+
+const step = (name: string, status: string, error?: PublicFailure) => {
       const value: NonNullable<Completion['stepResults']>[number] = { step: name, status };
       if (error) value.error = error;
       results.set(name, value);
     };
-    const completion = (state: string, error?: PublicFailure) => {
+
+const completion = (state: string, error?: PublicFailure) => {
       const value: Completion = {
         state,
         stepResults: ['fetch', 'pull', 'push'].map((name) => results.get(name) ?? { step: name, status: 'skipped' }),
@@ -2219,21 +2138,26 @@ export function createNetworkOperations({
       if (hydration) value.hydration = hydration;
       return value;
     };
-    const syncPlan = (role: 'fetch' | 'push') => ({
+
+const syncPlan = (role: 'fetch' | 'push') => ({
       ...plan[role],
       operationId: plan.operationId,
       transportRole: role,
       target: { ...plan[role].target, remote: syncRemote(plan[role].target.remote),
         sourceRef: stringInvariant(plan[role].target.sourceRef), destinationRef: stringInvariant(plan[role].target.destinationRef) },
     });
-    const fetchPlan = syncPlan('fetch');
-    let pushPlan = syncPlan('push');
-    const headPlan = {
+
+const fetchPlan = syncPlan('fetch');
+
+let pushPlan = syncPlan('push');
+
+const headPlan = {
       directory: plan.directory,
       destinationSha: plan.destinationSha,
       target: { destinationRef: plan.target.pull.destinationRef },
     };
-    try {
+
+try {
       await revalidate(fetchPlan, controls, deadline);
       await revalidatePullHead(headPlan, controls, deadline);
       await controls.markStepCompleted('validated');
@@ -2243,7 +2167,7 @@ export function createNetworkOperations({
       await revalidatePullHead(headPlan, controls, deadline);
       await commandResult(fetchPlan, controls, [
         'fetch', '--no-tags', '--no-recurse-submodules', '--', fetchPlan.rawEndpoint,
-        `${fetchPlan.target.sourceRef}:${fetchPlan.target.destinationRef}`,
+        singleRefFetchRefspec(fetchPlan.target.sourceRef, fetchPlan.target.destinationRef),
       ], context, deadline, { transfer: true, transferRole: 'fetch' });
       await controls.markStepCompleted('transferred');
       if (await safeRevoke(context, plan.operationId)) {
@@ -2267,7 +2191,8 @@ export function createNetworkOperations({
       )).trim().toLowerCase();
       mergeStarted = true;
       await controls.markIntegrationStarted();
-      await commandResult(fetchPlan, controls, ['rebase', '--no-verify', '--no-autostash', fetchedSha], integrationContext, deadline);
+      const fetchedTrackingRef = fetchPlan.target.destinationRef.startsWith('refs/remotes/') ? fetchPlan.target.destinationRef : null;
+      await commandResult(fetchPlan, controls, pullRebaseArgs(fetchedSha, fetchedTrackingRef), integrationContext, deadline);
       mergeStarted = false;
       await controls.markStepCompleted('updated-local-repository');
       const hydrated = await hydrateIntegration(fetchPlan, controls, deadline);
@@ -2319,15 +2244,9 @@ export function createNetworkOperations({
       const cleanupFailed = await safeRevoke(context, plan.operationId);
       const error = requiredErrorFields(cause);
       const output = `${error.stderr ?? ''}\n${error.stdout ?? ''}`;
-      const redacted = createGitRedactor({
+      const redacted = leadWithRejection(createGitRedactor({
         secrets: [...(context?.secrets ?? []), plan.directory],
-<<<<<<< HEAD:packages/web/server/lib/git/network-operations.js
-      }).error(error);
-||||||| bc50ba56aa:packages/web/server/lib/git/network-operations.js
-      }).error(error));
-=======
       }).error(cause));
->>>>>>> upstream/main:packages/web/server/lib/git/network-operations.ts
       if (activeStep === 'pull' && /\bCONFLICT\b|automatic merge failed|unmerged files|could not apply/i.test(output)) {
         const publicFailure = publicError('CONFLICT', 'Sync pull left conflicts in the local repository; resolve them and continue the rebase');
         step('pull', 'conflicted', publicFailure);
@@ -2373,9 +2292,9 @@ export function createNetworkOperations({
       return completion(partial ? 'partial' : 'failed', partial && ['GIT_LFS_CLIENT_MISSING', 'INVALID_REQUEST'].includes(code)
         ? publicError('TRANSPORT_FAILED', publicFailure.message) : publicFailure);
     }
-  };
+};
 
-  const copyCheckout = async (source: string, destination: string, copiedEntries: CopiedCheckoutEntry[], controls: ExecutionControls, deadline: number, birthtimeHolds: boolean): Promise<void> => {
+const copyCheckout = async (source: string, destination: string, copiedEntries: CopiedCheckoutEntry[], controls: ExecutionControls, deadline: number, birthtimeHolds: boolean): Promise<void> => {
     const entries = await awaitPhase(() => fsImpl.readdir(source), controls, deadline);
     for (const entry of entries) {
       const sourcePath = pathImpl.join(source, entry);
@@ -2406,7 +2325,7 @@ export function createNetworkOperations({
     }
   };
 
-  const checkoutMatches = async (quarantined: string, destination: string, destinationIdentity: string | undefined, copiedEntries: CopiedCheckoutEntry[], birthtimeHolds: boolean) => {
+const checkoutMatches = async (quarantined: string, destination: string, destinationIdentity: string | undefined, copiedEntries: CopiedCheckoutEntry[], birthtimeHolds: boolean) => {
     const rootStats = await fsImpl.lstat(quarantined);
     if (!rootStats.isDirectory() || directoryIdentity(rootStats, birthtimeHolds) !== destinationIdentity) return false;
     const expected = new Map(copiedEntries.map((entry) => [pathImpl.relative(destination, entry.path), entry]));
@@ -2434,7 +2353,7 @@ export function createNetworkOperations({
     return await inspect(quarantined) && expected.size === 0;
   };
 
-  const quarantineAndClean = async (target: string, operationId: string, matches: (moved: string) => Promise<boolean>) => {
+const quarantineAndClean = async (target: string, operationId: string, matches: (moved: string) => Promise<boolean>) => {
     const quarantine = await fsImpl.mkdtemp(pathImpl.join(
       pathImpl.dirname(target), `.openchamber-quarantine-${operationId}-`,
     ));
@@ -2472,7 +2391,7 @@ export function createNetworkOperations({
     }
   };
 
-  const executeClone = async (plan: ClonePlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
+const executeClone = async (plan: ClonePlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
     let temporaryIdentity: string | undefined;
     let destinationIdentity: string | undefined;
     let birthtimeHolds = false;
@@ -2621,7 +2540,7 @@ export function createNetworkOperations({
     return result ?? terminal('failed', 'UNKNOWN', 'Clone failed');
   };
 
-  const executeHydration = async (plan: HydrationPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
+const executeHydration = async (plan: HydrationPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
     const plannedHydration = Array.isArray(plan.plannedTransfers);
     if (plan.preparedHydrationFailure) {
       const hydration = Object.freeze({
@@ -2694,7 +2613,7 @@ export function createNetworkOperations({
     return { state: 'failed', error: unsupported?.error ?? publicError('TRANSPORT_FAILED', 'Checkout hydration failed'), hydration };
   };
 
-  const hydrateIntegration = (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => executeHydration({
+const hydrateIntegration = (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => executeHydration({
     operationId: plan.operationId,
     directory: plan.directory,
     target: plan.target,
@@ -2709,16 +2628,17 @@ export function createNetworkOperations({
     },
   }, { ...controls, updateTransportMetadata: () => {} }, deadline);
 
-  const executeContributorFetch = async (plan: ContributorPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
-    let context;
-    try {
+const executeContributorFetch = async (plan: ContributorPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
+let context;
+
+try {
       await revalidateContributorSource(plan, controls, deadline);
       await controls.markStepCompleted('validated');
       context = await transport(plan, controls, deadline);
       await controls.markStepCompleted('authenticated');
       await revalidateContributorSource(plan, controls, deadline);
       await commandResult(plan, controls, [
-        'fetch', '--no-tags', '--', plan.rawEndpoint, `${plan.target.sourceRef}:${plan.target.destinationRef}`,
+        'fetch', '--no-tags', '--', plan.rawEndpoint, singleRefFetchRefspec(plan.target.sourceRef, plan.target.destinationRef),
       ], context, deadline, { transfer: true });
       await controls.markStepCompleted('transferred');
       const fetchedSha = String(await awaitPhase(
@@ -2738,9 +2658,9 @@ export function createNetworkOperations({
     } finally {
       await safeRevoke(context, plan.operationId);
     }
-  };
+};
 
-  const snapshotCheckoutHook = async (action: PostCheckoutHookAction, operationId: string, controls: ExecutionControls, deadline: number) => {
+const snapshotCheckoutHook = async (action: PostCheckoutHookAction, operationId: string, controls: ExecutionControls, deadline: number) => {
     const root = await awaitPhase(
       () => fsImpl.mkdtemp(pathImpl.join(os.tmpdir(), `openchamber-checkout-hook-${operationId}-`)),
       controls,
@@ -2777,7 +2697,7 @@ export function createNetworkOperations({
     }
   };
 
-  const execute = (plan: ExecutionPlan, controls: ExecutionControls, deadline: number | undefined): Promise<Completion> => {
+const execute = (plan: ExecutionPlan, controls: ExecutionControls, deadline: number | undefined): Promise<Completion> => {
     if (isHydrationPlan(plan)) return executeHydration(plan, controls, deadline);
     if (isActionsPlan(plan)) return (async () => {
       const checkoutDeadline = Number(deadline);
@@ -2832,8 +2752,10 @@ export function createNetworkOperations({
     if (isSyncPlan(plan)) return executeSync(plan, controls, deadline);
     return executeExisting(existingPlan(plan), controls, deadline);
   };
-  const auditId = (operationId: string) => `git:${operationId}`;
-  const auditTarget = (plans: AuditPlans): Extract<AuditPlan['target'], { kind: 'git-network' }> => {
+
+const auditId = (operationId: string) => `git:${operationId}`;
+
+const auditTarget = (plans: AuditPlans): Extract<AuditPlan['target'], { kind: 'git-network' }> => {
     const { target } = plans.publicPlan;
     const remote = (value: AuditPlans['publicPlan']['target']['remote'], role: 'operation' | 'fetch' | 'push') => {
       if (!value) return null;
@@ -2868,10 +2790,12 @@ export function createNetworkOperations({
     if (target.destination) value.destination = target.destination;
     return value;
   };
-  const auditTransportPart = (plan: Pick<TransportPlan, 'transportMode' | 'credentialId'>, systemMarker: 'system-credentials' | 'local-checkout-actions' = 'system-credentials'): Extract<AuditPlan['transportReference'], { kind: 'managed' | 'anonymous' | 'system' }> => plan.transportMode === 'managed'
+
+const auditTransportPart = (plan: Pick<TransportPlan, 'transportMode' | 'credentialId'>, systemMarker: 'system-credentials' | 'local-checkout-actions' = 'system-credentials'): Extract<AuditPlan['transportReference'], { kind: 'managed' | 'anonymous' | 'system' }> => plan.transportMode === 'managed'
     ? { kind: 'managed', credentialId: occupied(plan.credentialId) }
     : plan.transportMode === 'anonymous' ? { kind: 'anonymous' } : { kind: 'system', marker: systemMarker };
-  const auditTransportReference = (plans: AuditPlans): AuditPlan['transportReference'] => {
+
+const auditTransportReference = (plans: AuditPlans): AuditPlan['transportReference'] => {
     if (isHydrationPlan(plans.internalPlan)) {
       const entries = (plans.internalPlan.plannedAuxiliaryAuthorities ?? []).map((authority) => ({
         kind: occupied(authority.kind),
@@ -2892,7 +2816,8 @@ export function createNetworkOperations({
     }
     return auditTransportPart(plans.internalPlan);
   };
-  const authoritativeProviderAccountId = (internalPlan: ExecutionPlan | TransportPlan) => {
+
+const authoritativeProviderAccountId = (internalPlan: ExecutionPlan | TransportPlan) => {
     if (isHydrationTransport(internalPlan)) return null;
     const managed = isSyncTransport(internalPlan)
       ? [internalPlan.fetch, internalPlan.push].filter((part) => part.transportMode === 'managed')
@@ -2909,7 +2834,8 @@ export function createNetworkOperations({
     });
     return identities.every(Boolean) && new Set(identities).size === 1 ? identities[0] : null;
   };
-  const planAudit = (plans: AuditPlans) => auditStore?.plan({
+
+const planAudit = (plans: AuditPlans) => auditStore?.plan({
     id: auditId(plans.publicPlan.operationId),
     initiator: 'user',
     executorKind: 'openchamber-server-git',
@@ -2923,7 +2849,8 @@ export function createNetworkOperations({
     transportReference: auditTransportReference(plans),
     target: auditTarget(plans),
   });
-  const auditResult = (snapshot: { state: string; error?: { code: string }; completedSteps?: string[]; stepResults?: { step: string; status: string }[] | undefined }): AuditResultInput => ({
+
+const auditResult = (snapshot: { state: string; error?: { code: string }; completedSteps?: string[]; stepResults?: { step: string; status: string }[] | undefined }): AuditResultInput => ({
     state: snapshot.state,
     errorCode: snapshot.error?.code ?? null,
     steps: [
@@ -2931,7 +2858,8 @@ export function createNetworkOperations({
       ...(snapshot.stepResults ?? []).map((step) => `${step.step}:${step.status}`),
     ],
   });
-  const registerWithAudit = async (plans: AuditPlans) => {
+
+const registerWithAudit = async (plans: AuditPlans) => {
     const registered = await operationRegistry.register(plans);
     try {
       const auditClaim = await planAudit(plans);
@@ -2946,7 +2874,8 @@ export function createNetworkOperations({
       throw error;
     }
   };
-  const planWithDeadline = async (request: JsonValue, deadline: number) => {
+
+const planWithDeadline = async (request: JsonValue, deadline: number) => {
     let plans: AuditPlans = await awaitPhase(() => planner.planNetworkOperation(request), undefined, deadline);
     plans = await prepareHydrationPlans(plans, deadline);
     if (isClonePlan(plans.internalPlan) && plans.internalPlan.gitIdentityId) {
@@ -2961,10 +2890,14 @@ export function createNetworkOperations({
     }
     return registerWithAudit(plans);
   };
-  const plan = (request: JsonValue) => planWithDeadline(request, Date.now() + timeoutMs);
-  const auditedStarts = new Map();
-  const auditedExecutions = new Map();
-  const executeOperation = (operationId: string, deadline?: number) => {
+
+const plan = (request: JsonValue) => planWithDeadline(request, Date.now() + timeoutMs);
+
+const auditedStarts = new Map();
+
+const auditedExecutions = new Map();
+
+const executeOperation = (operationId: string, deadline?: number) => {
     const startRegistry = () => operationRegistry.start(
       operationId, (operationPlan: ExecutionPlan, controls: ExecutionControls) => execute(operationPlan, controls, deadline),
     );
@@ -2989,7 +2922,8 @@ export function createNetworkOperations({
     }).catch(() => {});
     return operation;
   };
-  const runHydrationOperation = async ({ directory, parentRemoteName, parentEndpoint, repositoryAuthority }: HydrationInput) => {
+
+const runHydrationOperation = async ({ directory, parentRemoteName, parentEndpoint, repositoryAuthority }: HydrationInput) => {
     const deadline = Date.now() + timeoutMs;
     const operationId = `git_${crypto.randomUUID()}`;
     let inspection;
@@ -3029,7 +2963,7 @@ export function createNetworkOperations({
     return result.hydration;
   };
 
-  return Object.freeze({
+return Object.freeze({
     plan,
     issueContributorDestination: planner.issueContributorDestination,
     async transferContributorHead({ directory, sourceRequest, source, credentialId, destinationRef }: {
