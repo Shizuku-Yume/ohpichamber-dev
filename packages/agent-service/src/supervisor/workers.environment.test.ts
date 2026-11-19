@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { WorkerRegistry } from './workers.ts';
+import { WorkerBootstrapMessageSchema } from '../protocol.ts';
 
 const sentinels = {
   OPENCHAMBER_UI_PASSWORD: 'ui-password-sentinel-1f3a',
@@ -11,6 +12,40 @@ const sentinels = {
   OHPICHAMBER_INTERNAL_SECRET: 'internal-secret-sentinel-4d7e',
   OPENAI_API_KEY: 'provider-key-sentinel-8a1c',
 };
+
+test('replacement worker bootstraps retain repeated promotion lineage without foreign roots', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'worker-promotion-'));
+  const workerEntrypoint = join(root, 'worker.mjs');
+  const report = join(root, 'bootstrap.json');
+  await writeFile(workerEntrypoint, [
+    "import { writeFileSync } from 'node:fs';",
+    "process.on('message', message => {",
+    "  if (message.type === 'bootstrap') {",
+    "    writeFileSync(process.env.BOOTSTRAP_REPORT, JSON.stringify(message));",
+    "    process.send({ type: 'ready', workerGeneration: message.workerGeneration });",
+    "  } else if (message.type === 'stop') process.exit(0);",
+    "});",
+    "process.on('disconnect', () => process.exit(0));",
+  ].join('\n'));
+  const registry = new WorkerRegistry({ workerEntrypoint, startupTimeoutMs: 10_000, stopTimeoutMs: 2_000 });
+  const input = { rootSessionId: 'a', workspaceId: 'workspace', projectId: 'project', cwd: root, agentDirectory: root, env: { BOOTSTRAP_REPORT: report } };
+  const observed = async () => WorkerBootstrapMessageSchema.parse(JSON.parse(await readFile(report, 'utf8')));
+  try {
+    await registry.start(input);
+    expect((await observed()).retiredSessionIds).toBeUndefined();
+    registry.rekey('a', 'b');
+    registry.rekey('b', 'c');
+    await registry.stop('c');
+    await registry.start({ ...input, rootSessionId: 'c' });
+    expect((await observed()).retiredSessionIds).toEqual(['a', 'b']);
+    await registry.stop('c');
+    await registry.start({ ...input, rootSessionId: 'foreign' });
+    expect((await observed()).retiredSessionIds).toBeUndefined();
+  } finally {
+    await registry.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 // A real worker process runs `env` through a shell-equivalent lookup and writes
 // what a model-invoked shell would see. The test observes that output, not the

@@ -742,7 +742,6 @@ export const VoiceSettings: React.FC = () => {
     const setBrowserVoice = useConfigStore((state) => state.setBrowserVoice);
     const openaiVoice = useConfigStore((state) => state.openaiVoice);
     const setOpenaiVoice = useConfigStore((state) => state.setOpenaiVoice);
-    const hasOpenaiApiKey = useConfigStore((state) => state.voiceApiKeys.openai);
     const refreshVoiceApiKeys = useConfigStore((state) => state.refreshVoiceApiKeys);
     const openaiCompatibleUrl = useConfigStore((state) => state.openaiCompatibleUrl);
     const setOpenaiCompatibleUrl = useConfigStore((state) => state.setOpenaiCompatibleUrl);
@@ -868,7 +867,7 @@ export const VoiceSettings: React.FC = () => {
 
     useEffect(() => {
         if (!voicePlaybackEnabled || (voiceProvider !== 'openai' && voiceProvider !== 'openai-compatible')) {
-            setIsOpenAIAvailable(hasOpenaiApiKey);
+            setIsOpenAIAvailable(false);
             return;
         }
 
@@ -877,17 +876,16 @@ export const VoiceSettings: React.FC = () => {
                 const response = await runtimeFetch('/api/tts/status');
                 const data = await response.json();
                 const hasServerKey = data.available;
-                const hasSettingsKey = hasOpenaiApiKey;
                 const enterpriseMode = data.enterpriseMode === true;
                 setVoiceEnterpriseMode(enterpriseMode);
-                setIsOpenAIAvailable(!enterpriseMode && (hasServerKey || hasSettingsKey));
+                setIsOpenAIAvailable(!enterpriseMode && hasServerKey);
             } catch {
-                setIsOpenAIAvailable(hasOpenaiApiKey);
+                setIsOpenAIAvailable(false);
             }
         };
 
         checkOpenAIAvailability();
-    }, [hasOpenaiApiKey, voicePlaybackEnabled, voiceProvider]);
+    }, [voicePlaybackEnabled, voiceProvider]);
 
     useEffect(() => {
         if (!voicePlaybackEnabled) {
@@ -1079,23 +1077,6 @@ export const VoiceSettings: React.FC = () => {
                             <p className={SETTINGS_HELPER_CLASS}>{t('settings.voice.page.enterpriseMode')}</p>
                         )}
 
-                        {voiceProvider === 'openai' && (
-                            <SettingsFieldRow
-                                label={(
-                                    <span className={cn(!isOpenAIAvailable && 'text-[var(--status-error)]')}>
-                                        {t('settings.voice.page.field.apiKey')}
-                                    </span>
-                                )}
-                                description={isOpenAIAvailable && !hasOpenaiApiKey
-                                    ? t('settings.voice.page.field.apiKeyHintUsingConfig')
-                                    : !isOpenAIAvailable
-                                        ? t('settings.voice.page.field.apiKeyHintRequired')
-                                        : t('settings.voice.page.field.apiKeyHintProvide')}
-                            >
-                                <VoiceApiKeyField kind="openai" />
-                            </SettingsFieldRow>
-                        )}
-
                         {voiceProvider === 'openai-compatible' && (
                             <div className={SETTINGS_SPACE_ROW_CLASS}>
                                 <SettingsFieldRow
@@ -1124,12 +1105,6 @@ export const VoiceSettings: React.FC = () => {
                                             </button>
                                         )}
                                     </div>
-                                </SettingsFieldRow>
-                                <SettingsFieldRow
-                                    label={t('settings.voice.page.field.apiKey')}
-                                    info={t('settings.voice.page.field.apiKeyOptional')}
-                                >
-                                    <VoiceApiKeyField kind="openaiCompatible" />
                                 </SettingsFieldRow>
                                 <SettingsFieldRow label={t('settings.voice.page.field.model')}>
                                     <input
