@@ -30,14 +30,11 @@ export function retireSessionIdentity(previousSessionId: string | null | undefin
   runtimeEntries(runtimeKey).set(previousSessionId, sessionId)
 }
 
-/** The id that replaced a retired session, or null when the id is still addressable. */
-export function replacementForRetiredSession(sessionId: string | null | undefined, runtimeKey?: string): string | null {
-  if (!sessionId) return null
-  return runtimeEntries(runtimeKey).get(sessionId) ?? null
-}
-
+/**
+ * Whether `sessionId` was retired by a rekey and must not be read.
+ */
 export function isRetiredSessionId(sessionId: string | null | undefined, runtimeKey?: string): boolean {
-  return replacementForRetiredSession(sessionId, runtimeKey) !== null
+  return sessionId ? runtimeEntries(runtimeKey).has(sessionId) : false
 }
 
 /** Forget a runtime's retirement map when its transport is replaced. */
