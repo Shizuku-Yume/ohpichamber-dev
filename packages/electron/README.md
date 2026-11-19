@@ -468,7 +468,9 @@ when the fetch lands. No quota timer runs for the tray.
 
 ## Bundled Agent Runtime
 
-Packaged Desktop builds carry their own Bun runtime and agent service. `prepare:agent-runtime` stages them into `resources/agent-runtime` with a `manifest.json` naming the platform, architecture, staged Bun version and every file digest; `agent-runtime.mjs` resolves the Bun binary and the agent-service entrypoint from there for the Host. The payload has to stay outside the ASAR archive because Bun reads physical files. `verify:agent-runtime` re-checks the manifest, the digests and the platform/architecture match before packaging.
+Packaged desktop builds carry Bun, the Agent Service and its matching OMP SDK. The installer places the fallback in `resources/agent-runtime` outside ASAR, so it works offline without a second download. `verify:agent-runtime` checks that payload in isolation, including its manifest, native imports and readiness.
+
+The desktop Host prefers an importable local OMP SDK discovered through the installed `omp` executable. It requires the app's SDK package versions and its patched model-discovery and shell-observation sources, then probes the service and worker imports. An unpatched SDK of the same version is not a compatible replacement. A compiled `omp` binary cannot supply SDK modules; if its embedded Bun passes the compatibility probe, the app can use it with the shipped SDK. Missing or incompatible local installs fall back to the shipped runtime. Set `OHPICHAMBER_PREFER_BUNDLED_RUNTIME=1` to skip local discovery. The desktop never installs over or upgrades a system OMP installation.
 
 The verified Desktop startup path does not require an OpenCode binary. The Host starts the staged Bun agent service and reaches it through the authenticated `/api/agent/v1` namespace.
 
@@ -609,9 +611,9 @@ The desktop app has one update channel: the latest full release of this fork on 
 
 `applyUpdaterFeed` (`main.mjs`) sets the feed URL before every check. Windows ARM64 builds set electron-updater's `channel` to `latest-arm64`, because the release publishes that architecture's manifest beside `latest.yml`; every other platform reads the default `latest`. `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself, keeps a downloaded payload across checks, and treats a missing manifest before the first release as "no update". Electron is the only updater: the web and CLI update checks are gone.
 
-Settings → About shows the installed version with the release notes bundled into the app. Nothing is fetched to render them, and there is no update-check control there. The update flow is the one the app has always used: a background check, an in-app download with progress, then `desktop_restart` hands the downloaded payload to the platform installer.
+The shipped OMP SDK upgrades with the app, not via a separate OMP feed. On Windows, writable Linux AppImages and macOS apps in Applications, the app checks for and downloads updates in the background by default. A staged update installs when the user quits or restarts, without interrupting a running session. Uncheck **Automatic Updates** in the app menu to opt out; **Check for Updates** still works. Settings → About shows the installed version and bundled release notes.
 
-On Linux the payload installs through the system package manager for a `.deb` or `.rpm` install (`linux-package-install.mjs`, one elevated call so the password prompt does not freeze the window) and through AppImage replacement otherwise. `updater-capability.mjs` refuses an update when the running copy is neither an AppImage nor an installed package.
+Linux `.deb` and `.rpm` installs keep manual updates through the system package manager (`linux-package-install.mjs`), since installing requires elevation. `updater-capability.mjs` refuses an update when the running copy is neither an AppImage nor an installed package.
 
 ### Testing the update path without publishing
 

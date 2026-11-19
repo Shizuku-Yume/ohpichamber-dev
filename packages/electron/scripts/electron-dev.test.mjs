@@ -69,7 +69,7 @@ test('relaunch keeps the same HMR server and ports; final exit stops it', async 
     preferredHmrUiPort: 5173,
     ensureElectronInstalled() {},
     async runProcess() {},
-    resolveAgentRuntime: () => ({ env: {} }),
+    readBundledAgentRuntime: () => ({ bunPath: '/runtime/bun', entrypoint: '/runtime/dist/index.js' }),
     findAvailablePort: async (port) => port,
     spawnProcess(command, args, options) {
       const child = new EventEmitter();
@@ -80,6 +80,10 @@ test('relaunch keeps the same HMR server and ports; final exit stops it', async 
   });
   await main();
   assert.equal(children.length, 2);
+  for (const { options } of children) {
+    assert.equal(options.env.OHPICHAMBER_BUN, '/runtime/bun');
+    assert.equal(options.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT, '/runtime/dist/index.js');
+  }
   children[1].child.emit('exit', 75, null);
   assert.equal(children.length, 3);
   assert.deepEqual(stopped, []);

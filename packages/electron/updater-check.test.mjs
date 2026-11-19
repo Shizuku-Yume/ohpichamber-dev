@@ -1,7 +1,52 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { checkForDesktopUpdate, describeCheckFailure, downloadPendingDesktopUpdate, markDesktopUpdateDownloaded } from './updater-check.mjs';
+import {
+  checkForDesktopUpdate, describeCheckFailure, downloadPendingDesktopUpdate,
+  markDesktopUpdateDownloaded, refreshPendingDesktopUpdate, stageAutomaticDesktopUpdate,
+} from './updater-check.mjs';
+
+test('auto-update stages only available updates and honors opt-out during a check', async () => {
+  let enabled = false;
+  let available = true;
+  let checks = 0;
+  let downloads = 0;
+  let disableOnCheck = false;
+  const stage = () => stageAutomaticDesktopUpdate({
+    enabled: () => enabled,
+    check: async () => {
+      checks++;
+      if (disableOnCheck) enabled = false;
+      return { available };
+    },
+    download: async () => { downloads++; },
+  });
+  await stage();
+  assert.equal(checks, 0);
+  enabled = true;
+  await stage();
+  available = false;
+  await stage();
+  available = true;
+  disableOnCheck = true;
+  await stage();
+  assert.equal(checks, 3);
+  assert.equal(downloads, 1);
+});
+
+test('automatic and manual checks share in-flight metadata and the staged payload', async () => {
+  let complete;
+  const autoUpdater = { checkForUpdates: () => new Promise((resolve) => { complete = resolve; }) };
+  const state = { pendingUpdate: { version: '2.0.0' } };
+  const params = { autoUpdater, state, currentVersion: '1.0.0' };
+  const checking = refreshPendingDesktopUpdate(params);
+  assert.equal(refreshPendingDesktopUpdate(params), checking);
+  markDesktopUpdateDownloaded(state.pendingUpdate, { version: '2.0.0', downloadedFile: 'new-package' });
+  complete({ isUpdateAvailable: true, updateInfo: { version: '2.0.0' } });
+  assert.equal((await checking).pendingUpdate, state.pendingUpdate);
+  assert.equal(state.pendingUpdate.downloadedFile, 'new-package');
+  assert.equal(state.updateCheckPromise, null);
+});
 
 test('signals failed checks without replacing an existing pending update', async () => {
   const pendingUpdate = { version: '2.0.0', electronUpdate: { id: 'existing' } };
