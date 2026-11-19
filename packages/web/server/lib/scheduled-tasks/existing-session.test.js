@@ -53,7 +53,6 @@ describe('canonical existing-session scheduling', () => {
     expect(h.appended[0].request.request.options).toEqual({ providerId: 'provider', modelId: 'model', agentId: null, variant: 'high', reasoningEffort: null });
   });
 
-<<<<<<< HEAD
   it('captures worker expansion once before queue persistence while keeping raw task display', async () => {
     const h = setup({ service: { request: vi.fn(async () => Response.json({ kind: 'command', content: '# Native\n\n  raw body\n',
       modelSelection: { providerId: 'bound-provider', modelId: 'bound-model' }, agentId: 'bound-agent' })) } });
@@ -70,75 +69,6 @@ describe('canonical existing-session scheduling', () => {
     await h.runtime.beforeSend(scope, { request: queued.request });
     expect(h.dependencies.service.request).toHaveBeenCalledTimes(1);
     expect(scheduled.execution.prompt).toBe(prompt);
-||||||| bc50ba56aa
-  it.each(['manual', 'scheduled'])('records a %s attempt that overlaps an admission before the final queued write', async (reason) => {
-    let releaseTarget;
-    const target = new Promise((resolve) => { releaseTarget = resolve; });
-    const { runtime, projectConfigRuntime, stored, messageQueueRuntime } = setup({
-      createClient: () => ({ session: { get: () => target } }),
-    });
-    const claim = vi.spyOn(projectConfigRuntime, 'updateScheduledTaskStateIf');
-    const first = runtime.run('project-1', task, 'manual');
-    expect(await runtime.run('project-1', task, reason, Date.now())).toMatchObject({ ok: false, queued: true });
-    expect(stored().state).toMatchObject({ lastStatus: 'skipped', lastError: 'task is already queued' });
-    expect(claim).not.toHaveBeenCalled();
-    releaseTarget({ id: 'ses_target', location: { directory: '/repo' } });
-    expect(await first).toMatchObject({ ok: true });
-    expect(stored().state).toMatchObject({ lastStatus: 'queued', lastSessionId: 'ses_target' });
-    expect(messageQueueRuntime.enqueue).toHaveBeenCalledOnce();
-=======
-  it.each([
-    { message: 42, statusCode: '409' },
-    { message: { detail: 'queue unavailable' }, status: 503 },
-    Object.create({ message: 'inherited refusal', statusCode: 409 }),
-  ])('preserves unchecked admission error fields %#', async (cause) => {
-    const { runtime, messageQueueRuntime, stored } = setup();
-    messageQueueRuntime.enqueue.mockRejectedValue(cause);
-    const result = await runtime.run('project-1', task, 'manual');
-    expect(result.error).toBe(cause.message);
-    expect(result.statusCode).toBe(cause.statusCode ?? cause.status);
-    expect(stored().state.lastError).toBe(cause.message);
-    expect(result.queued).toBe(false);
-  });
-
-  it.each([null, undefined])('preserves the nullish admission error rejection for %s', async (cause) => {
-    const { runtime, messageQueueRuntime } = setup();
-    messageQueueRuntime.enqueue.mockRejectedValue(cause);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(runtime.run('project-1', task, 'manual')).rejects.toThrow(
-        `Cannot read properties of ${cause} (reading 'message')`,
-      );
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('recognizes a plain-object target-not-found error', async () => {
-    const { runtime } = setup({
-      createClient: () => ({ session: { get: async () => { throw { name: 'NotFoundError' }; } } }),
-    });
-    await expect(runtime.validateTarget('project-1', 'ses_target')).rejects.toMatchObject({
-      statusCode: 404, message: 'Scheduled target not found',
-    });
-  });
-
-  it.each(['manual', 'scheduled'])('records a %s attempt that overlaps an admission before the final queued write', async (reason) => {
-    let releaseTarget;
-    const target = new Promise((resolve) => { releaseTarget = resolve; });
-    const { runtime, projectConfigRuntime, stored, messageQueueRuntime } = setup({
-      createClient: () => ({ session: { get: () => target } }),
-    });
-    const claim = vi.spyOn(projectConfigRuntime, 'updateScheduledTaskStateIf');
-    const first = runtime.run('project-1', task, 'manual');
-    expect(await runtime.run('project-1', task, reason, Date.now())).toMatchObject({ ok: false, queued: true });
-    expect(stored().state).toMatchObject({ lastStatus: 'skipped', lastError: 'task is already queued' });
-    expect(claim).not.toHaveBeenCalled();
-    releaseTarget({ id: 'ses_target', location: { directory: '/repo' } });
-    expect(await first).toMatchObject({ ok: true });
-    expect(stored().state).toMatchObject({ lastStatus: 'queued', lastSessionId: 'ses_target' });
-    expect(messageQueueRuntime.enqueue).toHaveBeenCalledOnce();
->>>>>>> upstream/main
   });
 
   it('fails admission when worker expansion fails without queueing unexpanded text', async () => {
