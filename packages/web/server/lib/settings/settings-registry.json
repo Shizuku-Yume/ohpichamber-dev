@@ -951,9 +951,6 @@
       "scope": "profile",
       "perSurface": true
     },
-    "messageStreamTransport": {
-      "scope": "profile"
-    },
     "fileEditorWrapLines": {
       "scope": "profile"
     },
@@ -1011,6 +1008,9 @@
     "questionsInChat": {
       "scope": "device",
       "local": true
+    },
+    "accountSwitchProviders": {
+      "scope": "profile"
     }
   }
 }

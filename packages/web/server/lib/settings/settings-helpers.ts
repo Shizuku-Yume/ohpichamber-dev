@@ -200,6 +200,8 @@ import {
   isInputHistoryScope,
 } from './input-history-scope.js';
 
+
+
 const AGENT_TOOL_BOOLEAN_KEYS = [
   'agentControlToolEnabled', 'agentScheduleToolEnabled', 'agentMemoryToolEnabled', 'agentMemoryDreamingEnabled',
   'agentKnowledgeToolEnabled', 'agentWorkflowToolEnabled', 'agentWorkflowAutoApprove', 'agentNotifyToolEnabled',
@@ -467,8 +469,6 @@ const record = shortcutOverridesRecordSchema.safeParse(value);
 
 if (!record.success) return null;
 
-const sanitized = {};
-
 if (!hasSettingsFields(value) || Array.isArray(value)) {
       return null;
     }
@@ -482,7 +482,7 @@ for (const [rawKey, rawValue] of Object.entries(value)) {
       result[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
     }
 
-return sanitized;
+return result;
 };
 
 const sanitizeRecentEfforts = (value: SettingsDocument[string]) => {
@@ -651,10 +651,7 @@ if (isString(candidate.homeDirectory) && candidate.homeDirectory.length > 0) {
       }
     }
 
-if (isString(candidate.opencodeBinary)) {
-      const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
-      result.opencodeBinary = normalized;
-    }
+
 
 if (isBoolean(candidate.workStatusPanelEnabled)) {
       result.workStatusPanelEnabled = candidate.workStatusPanelEnabled;
@@ -1438,6 +1435,9 @@ if (isString(candidate.browserProvider) && candidate.browserProvider.trim()) {
 for (const key of AGENT_TOOL_BOOLEAN_KEYS) {
       if (isBoolean(candidate[key])) result[key] = candidate[key];
     }
+for (const key of REGISTRY_BOOLEAN_SETTINGS) {
+      if (isBoolean(candidate[key])) result[key] = candidate[key];
+    }
 
 const dreamingModel = dreamingModelSchema.safeParse(candidate.agentMemoryDreamingModel);
 
@@ -1461,9 +1461,9 @@ if (hasIdleStopSetting(candidate.isolatedSpacesIdleStop)) {
       result.isolatedSpacesIdleStop = { ...candidate.isolatedSpacesIdleStop };
     }
 
-const sshHost = sshHostSchema.safeParse(candidate.isolatedSpacesSshHost);
 
-if (sshHost.success) result.isolatedSpacesSshHost = sshHost.data;
+
+
 
 if (isString(candidate.openCodeUpdateToastDismissedVersion)) {
       const version = candidate.openCodeUpdateToastDismissedVersion.trim();

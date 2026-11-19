@@ -820,6 +820,14 @@ describe('settings registry gate', () => {
   // stops accepting a key the registry still lists — that is the drift the
   // registry exists to end.
   const validValues = {
+    securityScopedBookmarks: ['/home/testuser/project'], managedRemoteTunnelSelectedPresetId: 'a',
+    sidebarViewMode: 'projects', sidebarKeepPinnedInPlace: true, sidebarSessionBatchSize: 20,
+    sidebarWorktreeNameByBranch: true, workStatusSectionOrderExplicit: true, chatWidth: 'wider',
+    fileEditorWrapLines: true, agentBrowserSharesLogins: true, terminalOpenOnProjectAction: true,
+    savePastedImagesAsFiles: true, cornerRadius: 8, collapsedModelProviders: ['anthropic'],
+    recentAgents: ['agent_1'], recentEfforts: { 'anthropic/claude': ['high'] },
+    usageCollapsedFamilies: { anthropic: ['claude'] },
+    usageModelGroups: { anthropic: { modelAssignments: { claude: 'group_1' } } }, accountSwitchProviders: ['anthropic'],
     themeId: 'openchamber-dark', locale: 'zh-CN', useSystemTheme: true, themeVariant: 'dark', lightThemeId: 'openchamber-light', darkThemeId: 'openchamber-dark',
     splashBgLight: '#fff', splashFgLight: '#000', splashBgDark: '#000', splashFgDark: '#fff',
     lastDirectory: '/home/testuser/project', homeDirectory: '/home/testuser',
