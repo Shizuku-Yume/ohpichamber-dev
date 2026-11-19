@@ -147,6 +147,7 @@ type MobileChangesSurfaceProps = {
  initialDiff?: { path: string; staged: boolean } | null;
  /** The workspace drawer keeps visited panes mounted while hidden. */
  visible?: boolean;
+ registerBackHandler?: (handler: (() => boolean) | null) => void;
  /** The drawer closes here so a conflict handed to chat lands on the chat. */
  onNavigatedToChat?: () => void;
 };
@@ -163,7 +164,7 @@ interface MobileChangesPaneProps extends MobileChangesSurfaceProps {
 }
 
 /** Repository-scoped navigation and actions, separate from session directory resolution. */
-export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, visible = true, onNavigatedToChat }) => {
+export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, visible = true, onNavigatedToChat, registerBackHandler }) => {
  const { t } = useI18n();
  const { git, sourceControl } = useRuntimeAPIs();
  // When the root is not itself a repository, changes come from the resolved
@@ -270,6 +271,17 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  const setRoute = React.useCallback((nextRoute: ChangesRoute) => {
   setNavigation((current) => ({ ownerKey, mode: current.ownerKey === ownerKey ? current.mode : 'working', route: nextRoute }));
  }, [ownerKey]);
+ const returnToList = React.useCallback(() => {
+  if (route.type === 'list') return false;
+  setRoute(LIST_ROUTE);
+  return true;
+ }, [route.type, setRoute]);
+
+ React.useEffect(() => {
+  if (!visible || route.type === 'list' || !registerBackHandler) return;
+  registerBackHandler(returnToList);
+  return () => registerBackHandler(null);
+ }, [visible, route.type, registerBackHandler, returnToList]);
 
  React.useEffect(() => {
   setNavigation((current) => current.ownerKey === ownerKey ? current : { ownerKey, mode: 'working', route: LIST_ROUTE });
@@ -1051,7 +1063,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     diff={turnDiffData.get(route.path) ?? null}
     fileExists={turnFiles.some((file) => file.path === route.path)}
     error={null}
-    onBack={() => setRoute({ type: 'list' })}
+    onBack={returnToList}
     onRetry={() => setRoute({ type: 'list' })}
    />
   );
@@ -1066,7 +1078,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     fileExists={Boolean(selectedFileEntry)}
     unavailableReason={unavailablePath?.key === `${currentDirectory}\u0000${route.path}` ? unavailablePath.reason : null}
     error={diffLoadError}
-    onBack={() => setRoute({ type: 'list' })}
+    onBack={returnToList}
     onRetry={() => setDiffRetryNonce((value) => value + 1)}
    />
   );
@@ -1084,7 +1096,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     subtitle={[modeLabel, sourceLabel].filter(Boolean).join(' · ')}
     revision={JSON.stringify([comparisonRevision, mode === 'pr' ? comparison.revision : 0])}
     visible={visible}
-    onBack={() => setRoute(LIST_ROUTE)}
+    onBack={returnToList}
    />
   );
  }
@@ -1097,7 +1109,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     diff={activeFullComparisonDiff ?? (activeComparisonDiff.status === 'ready' ? activeComparisonDiff.diff : null)}
     fileExists={!comparison.files || comparison.files.some((file) => file.path === activeComparisonPath)}
     error={comparison.error ?? (activeComparisonDiff.status === 'error' ? activeComparisonDiff.message : null)}
-    onBack={() => setRoute(LIST_ROUTE)}
+    onBack={returnToList}
     onRetry={() => {
      if (comparison.error) void comparison.refresh();
      setComparisonRetry((value) => value + 1);

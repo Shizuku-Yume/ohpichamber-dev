@@ -1623,3 +1623,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
+
+## 2026-11-19 - Mobile Git detail Back belongs to the workspace navigation owner
+
+- **Decided:** register visible Git detail routes through the workspace Back callback already used by Files, and reuse the header's return-to-list action. Keep the drawer's existing terminal lifecycle and the fork health/sync test harness.
+- **Instead of:** closing the workspace while retaining a hidden diff, registering Git in the higher-priority global overlay stack, or leaving hidden tabs in charge of Back.
+- **Because:** the Git pane owns its list/detail route and visited panes remain mounted. Only that pane can consume one Back to clear the detail, while the shell keeps popups, plans and fullscreen surfaces ahead of workspace navigation. Visibility and owner-key cleanup prevent stale handlers during tab, repository and runtime changes.
+- **Mine:** yes
+- **Revisit when:** upstream wires Git detail navigation into the same workspace Back contract.

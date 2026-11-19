@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import type { GitLogEntry, GitStatus } from '@/lib/api/types';
 import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-switch';
 import type { SourceControlAuthStatus, SourceControlUser } from '@/lib/source-control/types';
+import { closeTopmostBackLayer, registerBackLayer } from '@/lib/mobileBackLayers';
 
 // These cases cover the repository panes, not the transcript: the turn scope's
 // sync read is answered empty rather than standing up a provider for it.
@@ -172,6 +173,8 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   let directory = '/repo';
   let visible = true;
   let initialDiff: { path: string; staged: boolean } | null = null;
+  let backHandler: (() => boolean) | null = null;
+  const registerBackHandler = (handler: (() => boolean) | null) => { backHandler = handler; };
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -179,7 +182,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
       <MobileChangesPane rootDirectory={directory}
         repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true, unreadable: null }}
-        visible={visible} initialDiff={initialDiff} />
+        visible={visible} initialDiff={initialDiff} registerBackHandler={registerBackHandler} />
     </RuntimeAPIContext.Provider></I18nProvider>);
   });
   const click = async (selector: string) => {
@@ -203,6 +206,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
 
   try {
     await render();
+    expect(backHandler).toBeNull();
     const modeTrigger = container.querySelector('[aria-label="Select change mode"]');
     const syncButton = container.querySelector('[aria-label="Publish"]');
     if (!modeTrigger || !syncButton) throw new Error('Missing Changes controls');
@@ -221,6 +225,11 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[title="branch.png"]')).not.toBeNull();
     await openFile('branch.png');
     expect(container.textContent).toContain('Branch diff failed');
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.querySelector('h2')).toBeNull();
+    expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Branch');
+    expect(backHandler).toBeNull();
+    await openFile('branch.png');
     expect(requests.filter((url) => url.pathname === '/api/git/file-diff')).toHaveLength(0);
     failBranchDiff = false;
     const retry = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Retry');
@@ -232,12 +241,15 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     const beforeHide = comparisonRequests().length;
     visible = false;
     await render();
+    expect(backHandler).toBeNull();
     await act(async () => { seed('/repo'); });
     expect(comparisonRequests()).toHaveLength(beforeHide);
     visible = true;
     await render();
     expect(container.querySelector('h2')?.textContent).toBe('branch.png');
+    expect(backHandler).not.toBeNull();
     await click('[aria-label="Back"]');
+    expect(backHandler).toBeNull();
     await click('[aria-label="Base branch"]');
     await click('[data-value="refs/heads/parent"]');
     expect(container.querySelector('[title="branch.png"]')).toBeNull();
@@ -321,7 +333,34 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('h2')?.textContent).toBe('working.png');
     const workingRequest = [...requests].reverse().find((url) => url.pathname === '/api/git/file-diff');
     expect(workingRequest?.searchParams.get('staged')).toBe('true');
-    await click('[aria-label="Back"]');
+    let workspaceOpen = true;
+    const back = () => {
+      if (closeTopmostBackLayer()) return;
+      if (backHandler?.()) return;
+      workspaceOpen = false;
+    };
+    let overlayOpen = true;
+    const releaseOverlay = registerBackLayer(() => { overlayOpen = false; releaseOverlay(); });
+    try {
+      await act(async () => back());
+      expect(overlayOpen).toBe(false);
+      expect(workspaceOpen).toBe(true);
+      expect(container.querySelector('h2')?.textContent).toBe('working.png');
+    } finally {
+      releaseOverlay();
+    }
+    await act(async () => back());
+    expect(workspaceOpen).toBe(true);
+    expect(backHandler).toBeNull();
+    expect(container.querySelector('h2')).toBeNull();
+    back();
+    expect(workspaceOpen).toBe(false);
+    visible = false;
+    await render();
+    visible = true;
+    await render();
+    expect(container.querySelector('h2')).toBeNull();
+    expect(backHandler).toBeNull();
     expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Changes');
     expect(container.querySelector('[aria-label="Publish"]')).not.toBeNull();
     expect(checkoutControl()).toBeDefined();
@@ -352,8 +391,18 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Changes');
     expect(container.querySelector('h2')).toBeNull();
     expect(requests.some((url) => url.pathname === '/api/git/file-diff' && url.searchParams.get('directory') === '/repo-two')).toBe(false);
+    expect(backHandler).toBeNull();
+    initialDiff = { path: 'missing.png', staged: false };
+    await render();
+    expect(backHandler).not.toBeNull();
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(backHandler).toBeNull();
+    initialDiff = { path: 'missing.png', staged: false };
+    await render();
+    expect(backHandler).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
+    expect(backHandler).toBeNull();
     globalThis.fetch = originalFetch;
     await dom.happyDOM.abort();
     for (const [name, descriptor] of originals) {

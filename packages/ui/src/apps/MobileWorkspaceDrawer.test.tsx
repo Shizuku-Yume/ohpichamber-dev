@@ -32,6 +32,9 @@ let filesSurfaceProps: {
   visible?: boolean;
   registerBackHandler?: (handler: (() => boolean) | null) => void;
 } | undefined;
+let changesSurfaceProps: typeof filesSurfaceProps;
+const filesBackHandler = () => true;
+const changesBackHandler = () => true;
 
 mock.module('@/components/views/TerminalView', () => ({
   TerminalView: ({ onLastTabClosed, visible }: { onLastTabClosed?: () => void; visible?: boolean }) => {
@@ -61,6 +64,25 @@ mock.module('@/components/sections/status/MobileStatusPane', () => ({
 mock.module('./MobileFilesSurface', () => ({
   MobileFilesSurface: (props: NonNullable<typeof filesSurfaceProps>) => {
     filesSurfaceProps = props;
+    React.useEffect(() => {
+      const register = props.registerBackHandler;
+      if (!props.visible || !register) return;
+      register(filesBackHandler);
+      return () => register(null);
+    }, [props.visible, props.registerBackHandler]);
+    return <div />;
+  },
+}));
+
+mock.module('./MobileChangesSurface', () => ({
+  MobileChangesSurface: (props: NonNullable<typeof changesSurfaceProps>) => {
+    changesSurfaceProps = props;
+    React.useEffect(() => {
+      const register = props.registerBackHandler;
+      if (!props.visible || !register) return;
+      register(changesBackHandler);
+      return () => register(null);
+    }, [props.visible, props.registerBackHandler]);
     return <div />;
   },
 }));
@@ -79,6 +101,7 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
     lastTabClosedHandler = undefined;
     terminalViewMounted = false;
     filesSurfaceProps = undefined;
+    changesSurfaceProps = undefined;
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container as unknown as Element);
@@ -110,6 +133,38 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
     expect(filesSurfaceProps?.visible).toBe(true);
     await renderDrawer(false);
     expect(filesSurfaceProps?.visible).toBe(false);
+  });
+
+  test('Git and Files hand off Back without stale handlers across tabs, close and unmount', async () => {
+    let handler: (() => boolean) | null = null;
+    const registerBackHandler = (next: (() => boolean) | null) => { handler = next; };
+    const renderDrawer = async (tab: 'changes' | 'files' | 'notes', open = true) => act(async () => root.render(
+      <I18nProvider>
+        <MobileWorkspaceDrawer open={open} tab={tab} onClose={() => undefined}
+          onTabChange={() => undefined} pendingChangesDiff={null} onOpenPlan={() => undefined}
+          registerBackHandler={registerBackHandler} variant="panel" />
+      </I18nProvider>,
+    ));
+    await renderDrawer('changes');
+    expect(changesSurfaceProps?.registerBackHandler).toBe(registerBackHandler);
+    expect(changesSurfaceProps?.visible).toBe(true);
+    expect(handler).toBe(changesBackHandler);
+    await renderDrawer('files');
+    expect(changesSurfaceProps?.visible).toBe(false);
+    expect(handler).toBe(filesBackHandler);
+    await renderDrawer('changes');
+    expect(filesSurfaceProps?.visible).toBe(false);
+    expect(handler).toBe(changesBackHandler);
+    await renderDrawer('notes');
+    expect(handler).toBeNull();
+    await renderDrawer('changes');
+    expect(handler).toBe(changesBackHandler);
+    await renderDrawer('changes', false);
+    expect(handler).toBeNull();
+    await renderDrawer('changes');
+    expect(handler).toBe(changesBackHandler);
+    await act(async () => root.render(null));
+    expect(handler).toBeNull();
   });
 
   test('closing the last terminal tab unmounts the terminal pane and calls onClose', async () => {
