@@ -4747,7 +4747,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       const target = typeof args.url === 'string' ? args.url.trim() : '';
       if (!target) throw new Error('URL is required');
 
-      const parsed = parseExternalUrl(target);
+      const parsed = tryParseExternalUrl(target);
+      if (!parsed) throw new Error('URL scheme cannot be opened externally');
 
       // A saved instance opens in the app, like the window.open path above.
       const host = findConfiguredHostForUrl(parsed.toString());

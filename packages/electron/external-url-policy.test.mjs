@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseExternalUrl, tryParseExternalUrl } from './external-url-policy.mjs';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+test('the native external URL command opens a confirmed application link', async () => {
+  const main = readFileSync(new URL('./main.mjs', import.meta.url), 'utf8');
+  const start = main.indexOf('const handleInvoke = async ');
+  const end = main.indexOf('\n};', start);
+  const opened = [];
+  const invoke = vm.runInNewContext(`${main.slice(start, end + 3)}\nhandleInvoke;`, {
+    tryParseExternalUrl,
+    findConfiguredHostForUrl: () => null,
+    shell: { openExternal: async (url) => { opened.push(url); } },
+  });
+  const url = 'vscode://file/tmp/project/index.ts:10';
+  await invoke(null, 'desktop_open_external_url', { url });
+  assert.deepEqual(opened, [url]);
+  await assert.rejects(invoke(null, 'desktop_open_external_url', { url: 'file:///tmp/project/index.ts' }), /scheme/);
+  assert.deepEqual(opened, [url]);
+});
 
 test('preserves editor file paths, lines and columns for the OS handler', () => {
   for (const url of [
