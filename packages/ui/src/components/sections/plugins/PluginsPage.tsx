@@ -838,7 +838,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           divider={false}
           settingsItem="plugins.installed"
           headerAction={(
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setAddOpen(true)}>
                 <Icon name="add" className="size-3.5" />
                 {t('settings.plugins.sidebar.actions.addTitle')}
@@ -928,7 +928,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           title={t('settings.plugins.marketplace.title')}
           settingsItem="plugins.marketplace"
           headerAction={(
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void refreshMarketplace()}>
                 <Icon name="refresh" className={cn('size-3.5', marketplaceRefreshing && 'animate-spin')} />
                 {t('settings.plugins.action.refresh')}
@@ -1013,13 +1013,13 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               const installed = installedMarketplaceKeys.has(`${entry.name}@${entry.marketplace}@${marketplaceScope}`);
               return (
                 <div key={`${entry.marketplace}:${entry.name}`} className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 break-words">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <p className="truncate typography-ui-label text-foreground">{entry.name}</p>
-                      <span className="shrink-0 font-mono typography-micro text-muted-foreground">{entry.version ?? '—'}</span>
-                      <SettingsCardChip>{entry.marketplace}</SettingsCardChip>
+                      <p className="max-w-full truncate typography-ui-label text-foreground" title={entry.name}>{entry.name}</p>
+                      <span className="max-w-full shrink-0 truncate font-mono typography-micro text-muted-foreground" title={entry.version ?? undefined}>{entry.version ?? '—'}</span>
+                      <SettingsCardChip className="max-w-full truncate" title={entry.marketplace}>{entry.marketplace}</SettingsCardChip>
                       {installed ? (
-                        <SettingsCardPill tone="success">{t('settings.plugins.marketplace.installed')}</SettingsCardPill>
+                        <span className="max-w-full truncate"><SettingsCardPill tone="success">{t('settings.plugins.marketplace.installed')}</SettingsCardPill></span>
                       ) : null}
                     </div>
                     {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}
@@ -1030,7 +1030,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                   <Button
                     variant={installed ? 'ghost' : 'outline'}
                     size="sm"
-                    className="shrink-0"
+                    className="max-w-full shrink-0 self-start whitespace-normal break-words"
                     disabled={disabled || installed}
                     onClick={() => installFromMarketplace(entry)}
                   >

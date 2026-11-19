@@ -51,11 +51,11 @@ const MarketplaceRow: React.FC<{
 
  return (
   <div className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
-   <div className="min-w-0 flex-1">
+   <div className="min-w-0 flex-1 break-words">
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-     <span className="truncate typography-ui-label text-foreground">{entry.name}</span>
-     <span className="shrink-0 font-mono typography-micro text-muted-foreground">{entry.version ?? '—'}</span>
-     <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">{entry.marketplace}</span>
+     <span className="max-w-full truncate typography-ui-label text-foreground" title={entry.name}>{entry.name}</span>
+     <span className="max-w-full shrink-0 truncate font-mono typography-micro text-muted-foreground" title={entry.version ?? undefined}>{entry.version ?? '—'}</span>
+     <span className="oc-tile-inset max-w-full shrink-0 truncate rounded-full px-2 py-px text-[0.625rem] font-medium" title={entry.marketplace}>{entry.marketplace}</span>
     </div>
     {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}
     {details?.author ? (
@@ -68,7 +68,7 @@ const MarketplaceRow: React.FC<{
     {badges.length > 0 ? (
      <div className="mt-1 flex flex-wrap gap-1">
       {badges.slice(0, 6).map(badge => (
-       <span key={badge} className="oc-tile-inset rounded-full px-2 py-px text-[0.625rem] text-muted-foreground">{badge}</span>
+       <span key={badge} className="oc-tile-inset max-w-full truncate rounded-full px-2 py-px text-[0.625rem] text-muted-foreground">{badge}</span>
       ))}
      </div>
     ) : null}
@@ -92,7 +92,7 @@ const MarketplaceRow: React.FC<{
    <Button
     variant={installed ? 'ghost' : 'outline'}
     size="sm"
-    className="shrink-0"
+    className="max-w-full shrink-0 self-start whitespace-normal break-words"
     disabled={disabled || installed}
     onClick={onInstall}
    >
