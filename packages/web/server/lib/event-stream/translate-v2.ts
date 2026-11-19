@@ -1,4 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/event-stream/translate-v2.js
 /**
  * Translate isolated-space OpenCode 2.x event payloads for retained Host consumers.
  *
@@ -6,56 +5,26 @@
  * translation is limited to the separate isolated-space runtime.
  */
 import { isRecord } from '../shared/guards.js';
-||||||| bc50ba56aa:packages/web/server/lib/event-stream/translate-v2.js
-/**
- * OpenCode v2 wire events -> the vocabulary the server's own consumers speak.
- *
- * The browser gets raw wire payloads (the UI translates them itself in
- * `packages/ui/src/lib/opencode/events.ts`). Everything that reacts on the
- * server — notifications, the message queue, session activity, goal mode,
- * permission auto-accept, Linear status — was written against OpenCode v1
- * event names, so this module is the single place that maps v2 onto them.
- * Keeping one translator means a consumer never has to know which OpenCode
- * shape produced its event.
- *
- * Two differences from v1 are load-bearing and cannot be papered over:
- *
- * - v2 emits no `session.status` and no `session.idle` of its own. Live status
- *   comes from `session.execution.started|succeeded|interrupted|failed`, so
- *   those are what synthesize the status vocabulary here, together with
- *   `session.retry.scheduled` (status `retry` while a provider error waits for
- *   the next attempt) and `session.step.started` (back to `busy` once that
- *   attempt begins).
- * - a v2 turn is a sequence of steps. Each `session.step.ended` becomes an
- *   assistant `message.updated`; only the last one carries `finish: "stop"`,
- *   which is the same signal v1 gave once per turn.
- */
-import { isRecord } from '../shared/guards.js';
-=======
-import { sessionParentId } from '../session-lineage.js';
-import { isJsonObject as isRecord, isString, isNumber } from './guards.js';
-import type { JsonObject, JsonValue } from './contracts.js';
->>>>>>> upstream/main:packages/web/server/lib/event-stream/translate-v2.ts
 
-const trimmed = (value: JsonValue | undefined) => (isString(value) ? value.trim() : '');
+const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 
-const compact = <T extends JsonObject>(value: T) => {
-  const result: Partial<T> = {};
-  for (const key in value) {
-    if (!Object.hasOwn(value, key)) continue;
-    const entry = value[key];
+const compact = (value) => {
+  const result = {};
+  for (const [key, entry] of Object.entries(value)) {
     if (entry !== undefined) result[key] = entry;
   }
   return result;
 };
 
-export const wireEventDirectory = (payload: JsonValue) => {
+/** Directory an event belongs to. Execution events carry no location. */
+export const wireEventDirectory = (payload) => {
   if (!isRecord(payload)) return '';
-  return trimmed(isRecord(payload.location) ? payload.location.directory : undefined);
+  return trimmed(payload.location?.directory);
 };
 
-const toServerError = (error: JsonValue | undefined) => {
-  if (!isRecord(error)) return { name: 'Error', type: 'Error', message: isString(error) ? error : '' };
+/** Structured errors travel as `{ type, message }`; consumers still read `name`. */
+const toServerError = (error) => {
+  if (!isRecord(error)) return { name: 'Error', type: 'Error', message: typeof error === 'string' ? error : '' };
   const type = trimmed(error.type) || 'Error';
   return compact({ name: type, type, message: trimmed(error.message), status: error.status });
 };
@@ -66,24 +35,31 @@ const ABORTED_ERROR = {
   message: 'The running turn was interrupted.',
 };
 
-export function translateWireEvent(payload: JsonValue) {
+/**
+ * Translates one v2 wire payload into zero or more server-vocabulary events.
+ *
+ * Every returned event carries the source event id and the directory, because
+ * consumers deduplicate on the id and route their own OpenCode calls by
+ * directory.
+ */
+export function translateWireEvent(payload) {
   if (!isRecord(payload)) return [];
   const type = trimmed(payload.type);
   if (!type) return [];
-  const data: JsonObject = isRecord(payload.data) ? payload.data : {};
+  const data = isRecord(payload.data) ? payload.data : {};
   const directory = wireEventDirectory(payload);
-  const created = isNumber(payload.created) && Number.isFinite(payload.created) ? payload.created : Date.now();
+  const created = Number.isFinite(payload.created) ? payload.created : Date.now();
 
-  const event = <T extends string, P extends JsonObject>(outType: T, properties: P) => ({
+  const event = (outType, properties) => ({
     type: outType,
-    id: isString(payload.id) ? payload.id : '',
+    id: typeof payload.id === 'string' ? payload.id : '',
     created,
     properties: compact({ ...properties, directory: directory || undefined }),
   });
 
   const sessionID = trimmed(data.sessionID);
 
-  const status = (statusValue: JsonObject, extra: { turnStartedAt?: number } = {}) => event('session.status', { sessionID, status: statusValue, ...extra });
+  const status = (statusValue, extra = {}) => event('session.status', { sessionID, status: statusValue, ...extra });
 
   switch (type) {
     case 'server.connected':
@@ -92,18 +68,19 @@ export function translateWireEvent(payload: JsonValue) {
     case 'installation.update-available':
       return [event('installation.update-available', { version: trimmed(data.version) })];
 
+    // --- session lifecycle --------------------------------------------------
+
     case 'session.created': {
       if (!sessionID) return [];
-      const location: JsonObject = isRecord(data.location) ? data.location : {};
-      const parentID: string | null = sessionParentId(data);
+      const location = isRecord(data.location) ? data.location : {};
       return [event('session.created', {
         sessionID,
         info: compact({
           id: sessionID,
-          parentID: parentID || undefined,
+          parentID: trimmed(data.parentID) || undefined,
           projectID: trimmed(data.projectID) || undefined,
           directory: trimmed(location.directory) || directory || undefined,
-          title: isString(data.title) ? data.title : undefined,
+          title: typeof data.title === 'string' ? data.title : undefined,
           agent: trimmed(data.agent) || undefined,
           model: data.model,
           metadata: data.metadata,
@@ -123,12 +100,12 @@ export function translateWireEvent(payload: JsonValue) {
       if (!sessionID) return [];
       return [event('session.updated', {
         sessionID,
-        info: compact({ id: sessionID, title: isString(data.title) ? data.title : undefined, directory: directory || undefined, time: { updated: created } }),
+        info: compact({ id: sessionID, title: typeof data.title === 'string' ? data.title : undefined, directory: directory || undefined, time: { updated: created } }),
       })];
 
     case 'session.moved': {
       if (!sessionID) return [];
-      const location: JsonObject = isRecord(data.location) ? data.location : {};
+      const location = isRecord(data.location) ? data.location : {};
       return [event('session.updated', {
         sessionID,
         info: compact({ id: sessionID, directory: trimmed(location.directory) || undefined, projectID: trimmed(data.projectID) || undefined, time: { updated: created } }),
@@ -146,6 +123,9 @@ export function translateWireEvent(payload: JsonValue) {
       if (!sessionID) return [];
       return [event('session.deleted', { sessionID, info: { id: sessionID } })];
 
+    // Their own events, never a `session.updated`: the consumers of that one
+    // (goal mode, lineage, notifications) would take an archive or a restore
+    // for an edit.
     case 'session.archived':
       if (!sessionID) return [];
       return [event('session.archived', { sessionID })];
@@ -154,6 +134,12 @@ export function translateWireEvent(payload: JsonValue) {
       if (!sessionID) return [];
       return [event('session.unarchived', { sessionID })];
 
+    // --- live status --------------------------------------------------------
+
+    // v2 still declares `session.status` and `session.idle`; a 2.0.2 server was
+    // observed never to emit them, so the execution events below are what
+    // actually drive status. Both paths are translated so a server that does
+    // emit them stays correct.
     case 'session.status':
       if (!sessionID || !isRecord(data.status)) return [];
       return [status(data.status)];
@@ -162,18 +148,25 @@ export function translateWireEvent(payload: JsonValue) {
       if (!sessionID) return [];
       return [status({ type: 'idle' }), event('session.idle', { sessionID })];
 
+    // The one event that marks where a turn begins; every later busy only
+    // says the turn is still running. Its time is the turn's start.
     case 'session.execution.started':
       if (!sessionID) return [];
       return [status({ type: 'busy' }, { turnStartedAt: created })];
 
+    // v1 surfaced retries as `session.status {type:'retry'}` and the UI still
+    // renders that status (attempt + next-at countdown in the status chip).
+    // v2 replaced it with `session.retry.scheduled`, emitted between execution
+    // events while the turn is still running, so translate it back onto the
+    // status vocabulary instead of leaving the retry state invisible.
     case 'session.retry.scheduled': {
       if (!sessionID) return [];
-      const error: JsonObject = isRecord(data.error) ? data.error : {};
+      const error = isRecord(data.error) ? data.error : {};
       return [status(compact({
         type: 'retry',
-        attempt: isNumber(data.attempt) ? data.attempt : undefined,
-        message: isString(error.message) ? error.message : undefined,
-        next: isNumber(data.at) ? data.at : undefined,
+        attempt: typeof data.attempt === 'number' ? data.attempt : undefined,
+        message: typeof error.message === 'string' ? error.message : undefined,
+        next: typeof data.at === 'number' ? data.at : undefined,
       }))];
     }
 
@@ -184,7 +177,18 @@ export function translateWireEvent(payload: JsonValue) {
     case 'session.execution.interrupted': {
       if (!sessionID) return [];
       const reason = trimmed(data.reason) || 'user';
+      // A shutdown is not the end of the turn: OpenCode keeps the execution
+      // claim and the resumed drain continues the same turn after restart
+      // (v2.0.14 `session/execution.ts` settled(), `projector.ts` projectIdle,
+      // `message-updater.ts`), and none of its own projections mark the
+      // session idle. Reporting it as an abort would make the goal runtime
+      // pause the goal as a user stop and the queue hold the next prompt, so
+      // it produces nothing: the session stays busy until OpenCode resumes it
+      // and reports the real terminal outcome.
       if (reason === 'shutdown') return [];
+      // Every other interruption ends the turn without failing it: consumers
+      // that treat `session.error` as a failure must not fire, but the queue
+      // and goal runtimes still have to know the turn was aborted.
       return [
         status({ type: 'idle' }),
         event('session.idle', { sessionID, aborted: true, reason, error: ABORTED_ERROR }),
@@ -195,13 +199,15 @@ export function translateWireEvent(payload: JsonValue) {
       if (!sessionID) return [];
       return [status({ type: 'idle' }), event('session.error', { sessionID, error: toServerError(data.error) })];
 
+    // --- messages -----------------------------------------------------------
+
     case 'session.inbox.enqueued': {
-      const item: JsonObject = isRecord(data.item) ? data.item : {};
+      const item = isRecord(data.item) ? data.item : {};
       const messageID = trimmed(data.inboxID);
       if (!sessionID || !messageID) return [];
-      const itemPayload: JsonObject = isRecord(item.payload) ? item.payload : {};
+      const itemPayload = isRecord(item.payload) ? item.payload : {};
       if (item.type === 'user') {
-        const text = isString(itemPayload.text) ? itemPayload.text : '';
+        const text = typeof itemPayload.text === 'string' ? itemPayload.text : '';
         return [event('message.updated', {
           sessionID,
           info: compact({
@@ -219,6 +225,8 @@ export function translateWireEvent(payload: JsonValue) {
       return [];
     }
 
+    // A shell command the user ran from the composer. It is no user message,
+    // so it passes under its own name.
     case 'session.shell.started':
       if (!sessionID) return [];
       return [event('session.shell.started', { sessionID })];
@@ -226,7 +234,7 @@ export function translateWireEvent(payload: JsonValue) {
     case 'session.step.started': {
       const messageID = trimmed(data.assistantMessageID);
       if (!sessionID || !messageID) return [];
-      const model: JsonObject = isRecord(data.model) ? data.model : {};
+      const model = isRecord(data.model) ? data.model : {};
       return [
         event('message.updated', {
           sessionID,
@@ -240,6 +248,11 @@ export function translateWireEvent(payload: JsonValue) {
             time: { created },
           }),
         }),
+        // A retry re-runs its step inside the same execution, so no execution
+        // event marks the wait ending. The step start is that signal: it clears
+        // the synthesized retry status back to busy while the attempt runs.
+        // session-runtime's 5s same-status dedup absorbs the repeats for
+        // ordinary multi-step turns.
         status({ type: 'busy' }),
       ];
     }
@@ -279,9 +292,13 @@ export function translateWireEvent(payload: JsonValue) {
       })];
     }
 
+    // v2's own `session.compacted` is declared but never published; a finished
+    // compaction is announced only by `session.compaction.ended`.
     case 'session.compaction.ended':
       if (!sessionID) return [];
       return [event('session.compacted', { sessionID })];
+
+    // --- requests to the user -------------------------------------------------
 
     case 'permission.asked': {
       const requestID = trimmed(data.id);
@@ -294,7 +311,7 @@ export function translateWireEvent(payload: JsonValue) {
         save: Array.isArray(data.save) ? data.save : undefined,
         metadata: data.metadata,
         source: data.source,
-        message: isString(data.message) ? data.message : undefined,
+        message: typeof data.message === 'string' ? data.message : undefined,
       }))];
     }
 
@@ -313,8 +330,10 @@ export function translateWireEvent(payload: JsonValue) {
       if (!sessionID) return [];
       return [event('form.settled', { sessionID, formID: trimmed(data.id) })];
 
+    // --- location-level notices ------------------------------------------------
+
     case 'vcs.branch.updated':
-      return [event('vcs.branch.updated', { branch: isString(data.branch) ? data.branch : undefined })];
+      return [event('vcs.branch.updated', { branch: typeof data.branch === 'string' ? data.branch : undefined })];
 
     case 'mcp.status.changed':
       return [event('mcp.status.changed', { server: trimmed(data.server) })];
@@ -324,9 +343,11 @@ export function translateWireEvent(payload: JsonValue) {
   }
 }
 
-export type TranslatedEvent = ReturnType<typeof translateWireEvent>[number];
-
-export function forwardTranslatedWireEvent(payload: JsonValue, handle: ((event: TranslatedEvent) => void) | null | undefined) {
-  if (!handle) return;
+/**
+ * Convenience for consumers that hand one payload to one handler: translates
+ * and forwards every resulting event in order.
+ */
+export function forwardTranslatedWireEvent(payload, handle) {
+  if (typeof handle !== 'function') return;
   for (const translated of translateWireEvent(payload)) handle(translated);
 }
