@@ -11,7 +11,8 @@ test('manual reconnect preserves secure headers through success and password can
   const server = await serveTestHttp((request, response) => {
     received.push(String(request.headers['x-proxy'] || ''));
     response.setHeader('Content-Type', 'application/json');
-    response.end(JSON.stringify(request.url === '/health' ? { status: 'ok' } : { authenticated, disabled: authenticated }));
+    response.end(JSON.stringify(request.url === '/health' ? { status: 'ok' } : request.method === 'POST'
+      ? { sessionToken: 'signed-passwordless-session' } : { authenticated, disabled: authenticated }));
   });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [name, value] of Object.entries({
@@ -25,13 +26,13 @@ test('manual reconnect preserves secure headers through success and password can
         { name: 'SecureStorage', methods: ['internalGetItem', 'internalSetItem', 'internalRemoveItem'].map((name) => ({ name, rtype: 'promise' })) },
         { name: 'CapacitorHttp', methods: [{ name: 'request', rtype: 'promise' }] },
       ],
-      nativePromise: async (plugin: string, method: string, options: { prefixedKey: string; data?: string; url: string; headers: Record<string, string> }) => {
+      nativePromise: async (plugin: string, method: string, options: { prefixedKey: string; data?: unknown; url: string; method: string; headers: Record<string, string> }) => {
         if (plugin === 'CapacitorHttp') {
-          const response = await fetch(options.url, { headers: options.headers, redirect: 'manual' });
+          const response = await fetch(options.url, { method: options.method, body: options.data === undefined ? undefined : JSON.stringify(options.data), headers: options.headers, redirect: 'manual' });
           return { status: response.status, data: await response.text(), headers: {}, url: response.url };
         }
         if (method === 'internalGetItem') return { data: secrets.get(options.prefixedKey) ?? null };
-        if (method === 'internalSetItem') { secrets.set(options.prefixedKey, options.data || ''); return; }
+        if (method === 'internalSetItem') { secrets.set(options.prefixedKey, String(options.data || '')); return; }
         secrets.delete(options.prefixedKey);
         return { success: true };
       },
@@ -81,7 +82,6 @@ test('manual reconnect preserves secure headers through success and password can
   try {
     const config = { url, values: { 'x-proxy': 'synthetic-secret' } };
     const saved = (await upsertMobileConnection({ label: 'Protected', candidates: [{ kind: 'direct', url }], requestHeaders: config }))[0];
-    const secretSnapshot = [...secrets.entries()];
     await act(async () => root.render(<I18nProvider><MobileConnectionWelcome onConnected={onConnected} /></I18nProvider>));
     await clickText('Connect by address');
     await input('input[type="url"]', url);
@@ -90,7 +90,8 @@ test('manual reconnect preserves secure headers through success and password can
     expect(received.length).toBeGreaterThan(0);
     expect(received.every((header) => header === 'synthetic-secret')).toBe(true);
     expect(await loadMobileConnectionHeaders(saved.id)).toEqual(config);
-    expect([...secrets.entries()]).toEqual(secretSnapshot);
+    expect([...secrets.values()]).toContain('signed-passwordless-session');
+    const secretSnapshot = [...secrets.entries()];
 
     authenticated = false;
     received.length = 0;
@@ -114,7 +115,7 @@ test('manual reconnect preserves secure headers through success and password can
     await settle(() => !document.querySelector('form'));
     expect(await loadMobileConnectionHeaders(saved.id)).toBeUndefined();
     expect((await loadMobileConnections())[0].requestHeadersKey).toBeUndefined();
-    expect(secrets.size).toBe(0);
+    expect([...secrets.values()]).toEqual(['signed-passwordless-session']);
 
     const relay = { relayUrl: 'wss://relay.example/tunnel', serverId: 'relay-only', hostEncPubJwk: { kty: 'EC', crv: 'P-256', x: 'eHhY', y: 'eVlZ' } };
     const relaySaved = (await upsertMobileConnection({ label: 'Relay only', candidates: [{ kind: 'relay', relay }] }))[0];

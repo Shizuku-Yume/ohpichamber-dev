@@ -593,11 +593,11 @@ export const createUiAuth = ({
   };
 
   if (!normalizedPassword) {
+    const passwordlessSessionToken = (req) => getBearerTokenFromRequest(req) || getTokenFromRequest(req);
     const ensureSessionToken = async (req, res) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const name = sessionCookieNameForRequest(req, cookieName);
-      if (await isSessionValid(cookies[name])) {
-        return cookies[name];
+      const token = passwordlessSessionToken(req);
+      if (!requireClientAuth && await isSessionValid(token)) {
+        return token;
       }
       return issueSession(req, res);
     };
@@ -627,10 +627,9 @@ export const createUiAuth = ({
     };
 
     const resolveAuthContext = async (req, res, { allowClientAuth = true, allowUrlToken = true, allowAnonymousSession = true } = {}) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const name = sessionCookieNameForRequest(req, cookieName);
-      if (!requireClientAuth && await isSessionValid(cookies[name])) {
-        return { type: 'session', token: cookies[name] };
+      const token = passwordlessSessionToken(req);
+      if (!requireClientAuth && await isSessionValid(token)) {
+        return { type: 'session', token };
       }
       if (allowClientAuth) {
         const clientAuth = await authenticateClientRequest(req, { allowUrlToken });
@@ -649,18 +648,26 @@ export const createUiAuth = ({
       requireSessionAuth,
       resolveAuthContext,
       handleSessionStatus: async (req, res) => {
-        if (requireClientAuth) {
-          const clientAuth = await authenticateClientRequest(req);
+        if (requireClientAuth || getBearerTokenFromRequest(req)) {
+          if (!requireClientAuth && await isSessionValid(passwordlessSessionToken(req))) {
+            return res.json({ authenticated: true, disabled: true });
+          }
+          const clientAuth = await authenticateClientRequest(req, { allowUrlToken: false });
           if (clientAuth) {
             return res.json({ authenticated: true, disabled: true, scope: 'client' });
           }
-          return res.status(401).json({ authenticated: false, locked: true, clientAuthRequired: true });
+          return res.status(401).json({ authenticated: false, locked: true, ...(requireClientAuth ? { clientAuthRequired: true } : { disabled: true }) });
         }
         await ensureSessionToken(req, res);
         res.json({ authenticated: true, disabled: true });
       },
-      handleSessionCreate: (_req, res) => {
-        res.status(400).json({ error: 'UI password not configured' });
+      handleSessionCreate: async (req, res) => {
+        if (requireClientAuth || req.body?.issueSessionToken !== true) {
+          return res.status(400).json({ error: 'UI password not configured' });
+        }
+        const sessionToken = await issueSession(req, res, { trustDevice: isTrustedDeviceRequest(req.body?.trustDevice) });
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ authenticated: true, disabled: true, sessionToken });
       },
       handleUrlAuthToken: async (req, res) => {
         const scope = readRequestedUrlAuthScope(req);
