@@ -1,4 +1,4 @@
-import type { SourceControlJson, SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { BindingDraft } from './binding-contract.js';
 import type { createBindingStore } from './binding-storage.js';
 import type { SourceControlProviderBinding, SourceControlRepositoryContext, SourceControlRepositoryEndpoint } from './binding-types.js';

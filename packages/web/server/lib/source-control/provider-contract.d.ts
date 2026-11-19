@@ -1,6 +1,6 @@
 
 import type { ProviderId } from './provider-id.js';
-import type { SourceControlChangeRequestSource, SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlChangeRequestSource, SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { MutationCompletionInput, MutationRecord } from './mutation-storage.js';
 import type { BindingMutationTarget } from './binding-service-contracts.js';
 import type { LiveSummariesResult, ThreadRef } from '../tracked-items/contracts.js';

@@ -1,6 +1,6 @@
 import { isPlainObject } from '../shared/guards.js';
 import { isSourceControlInteger, isSourceControlString as isString } from './input-guards.js';
-import type { SourceControlJson, SourceControlJsonObject } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlJsonObject } from 'ohpichamber-sdk';
 
 export interface ReviewDraftContext {
   target: { number?: number; headSha?: string };

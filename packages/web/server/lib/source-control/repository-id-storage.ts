@@ -34,7 +34,7 @@ export async function resolveRepositoryFilesystemId(commonDirectory: string, { f
   const stats = await fsImpl.stat(commonDirectory);
   const dataDir = process.env.OPENCHAMBER_DATA_DIR
     ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-    : path.join(os.homedir(), '.config', 'openchamber');
+    : path.join(os.homedir(), '.config', 'ohpichamber');
   const filePath = path.join(dataDir, 'repository-identities', `${digest(commonDirectory)}.json`);
   const read = async () => {
     let encoded;

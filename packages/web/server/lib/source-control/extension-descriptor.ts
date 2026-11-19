@@ -2,7 +2,7 @@ import { isSourceControlString as isString } from './input-guards.js';
 import { normalizeOriginInstance } from './origin-instance.js';
 import { builtInDefaultHosts } from './provider-descriptors.js';
 import { extensionProviderId } from './provider-id.js';
-import type { SourceControlContribution } from '@openchamber/sdk';
+import type { SourceControlContribution } from 'ohpichamber-sdk';
 import type { ProviderCapabilities, ProviderDescriptor } from './provider-contract.js';
 
 const SEGMENT = '[^/]{1,256}';

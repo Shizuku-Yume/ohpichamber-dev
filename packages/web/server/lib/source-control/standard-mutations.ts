@@ -1,7 +1,7 @@
 import { isSourceControlObject as isPlainObject, isSourceControlString as isString, isSourceControlInteger } from './input-guards.js';
 import { digestMutationInput } from './mutation-executor.js';
 import { reviewDraftEntries } from './review-position.js';
-import type { SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { AccountIdentity, ProviderDescriptor } from './provider-contract.js';
 import type { MutationContextInput } from './binding-service-contracts.js';
 

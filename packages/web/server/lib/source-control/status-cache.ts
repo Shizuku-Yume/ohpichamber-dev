@@ -1,5 +1,5 @@
 import { isSourceControlFiniteNumber } from './input-guards.js';
-import type { SourceControlJsonObject } from '@openchamber/sdk';
+import type { SourceControlJsonObject } from 'ohpichamber-sdk';
 
 export interface StatusCacheContext {
   instance: string;

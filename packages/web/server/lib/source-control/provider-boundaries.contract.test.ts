@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createProviderDescriptors } from './provider-descriptors.js';
 import type { ProviderDescriptor, ProviderImplementation, ProviderMutationContext, ProviderMutations, ProviderReadContext, ProviderSession } from './provider-contract.js';
 import type { createExtensionProvider } from './extension-provider.js';
-import type { sourceControlProviderSchemasV1 } from '@openchamber/sdk/schemas';
+import type { sourceControlProviderSchemasV1 } from 'ohpichamber-sdk/schemas';
 import type { z } from 'zod';
 
 type IsUntyped<Value> = 0 extends 1 & Value ? true : false;

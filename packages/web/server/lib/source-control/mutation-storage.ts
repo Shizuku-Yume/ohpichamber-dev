@@ -6,7 +6,7 @@ import { withSourceControlFileLock } from './file-lock.js';
 import { allowsTopLevelProjects } from './project-path.js';
 import { sourceControlProviderDescriptors } from './provider-descriptors.js';
 import { hasSourceControlErrorCode } from './input-guards.js';
-import type { SourceControlMutationTarget, SourceControlProjectRef } from '@openchamber/sdk';
+import type { SourceControlMutationTarget, SourceControlProjectRef } from 'ohpichamber-sdk';
 import type { AccountIdentity, ResolvedMutationTarget } from './provider-contract.js';
 
 export interface MutationResult {
