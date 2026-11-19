@@ -22,6 +22,7 @@ vi.hoisted(() => {
 
 const initialGlobalSessions = useGlobalSessionsStore.getState();
 const loadSessions = vi.fn<typeof initialGlobalSessions.loadSessions>();
+type Snapshot = Awaited<ReturnType<typeof loadSessions>>;
 const emptySnapshot = { activeSessions: [], archivedSessions: [] };
 const otherSession: Session = {
   sessionId: 'ses_B', projectId: 'other-project', workspaceId: 'other-workspace', displayPath: '.',
@@ -68,10 +69,10 @@ test('notification navigation opens B through the session-link owner and keeps t
   const documentBefore = window.document;
   const assign = vi.spyOn(window.location, 'assign');
   const pushState = vi.spyOn(window.history, 'pushState');
-  const loading = Promise.withResolvers<Awaited<ReturnType<typeof loadSessions>>>();
+  let finishLoad!: (snapshot: Snapshot) => void;
   loadSessions.mockImplementationOnce(() => {
     expect(window.location.search).toBe('?session=ses_B');
-    return loading.promise;
+    return new Promise((resolve) => { finishLoad = resolve; });
   });
 
   expect(navigateFromNotification('/?session=ses_B')).toBe(true);
@@ -80,7 +81,7 @@ test('notification navigation opens B through the session-link owner and keeps t
   expect(navigateFromNotification('/?session=ses_C')).toBe(false);
   expect(window.location.search).toBe('?session=ses_B');
 
-  await act(async () => loading.resolve({
+  await act(async () => finishLoad({
     activeSessions: [otherSession], archivedSessions: [],
   }));
   expect(useSessionUIStore.getState().currentSessionDirectory).toBe('/other-project');
@@ -95,13 +96,13 @@ test('notification navigation opens B through the session-link owner and keeps t
 });
 
 test('startup declines notification navigation until the initial route finishes', async () => {
-  const loading = Promise.withResolvers<Awaited<ReturnType<typeof loadSessions>>>();
-  loadSessions.mockReturnValueOnce(loading.promise);
+  let finishLoad!: (snapshot: Snapshot) => void;
+  loadSessions.mockImplementationOnce(() => new Promise((resolve) => { finishLoad = resolve; }));
   await act(async () => root.render(<Router />));
   expect(navigateFromNotification('/?session=ses_B')).toBe(false);
   expect(window.location.search).toBe('?session=ses_A');
   expect(useSessionUIStore.getState().currentSessionId).toBe('ses_A');
-  await act(async () => loading.resolve(emptySnapshot));
+  await act(async () => finishLoad(emptySnapshot));
   expect(navigateFromNotification('/?session=ses_B')).toBe(true);
   await act(async () => {});
   expect(useSessionUIStore.getState().currentSessionId).toBe('ses_B');
