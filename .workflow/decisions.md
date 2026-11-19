@@ -1577,3 +1577,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream gates its binding reads on a repository probe itself, or its router already keeps `general` distinct from the settings root.
 - **Effort:** final-main-audit
+
+## 2026-11-19 - Preserve mobile Host authentication regression coverage
+
+- **Decided:** retain the fork versions of `packages/ui/src/apps/mobileNativeHttp.test.ts` and `packages/ui/src/apps/mobileReconnectForm.test.tsx` and classify their upstream differences with explicit decision rows in the drift ledger.
+- **Instead of:** reverting their native passwordless-session and secure-header assertions to upstream, adding artificial boundary tokens to the tests, or expanding the guard's automatic exclusions.
+- **Because:** the tests pin native Host connection behavior retained by PRs #11 and #13: redirect refusal, closed browser fallback, signed passwordless bearer bootstrap, secure credential persistence, reconnect and password cancellation, header removal, and invalid pairing handling. Neither test carries a token recognized by the guard's content-based OMP boundary classification, but both protect the fork's deliberate authentication contract.
+- **Mine:** yes
+- **Revisit when:** upstream covers the same native Host authentication contract or the connection implementation retires that contract.
