@@ -1,68 +1,7 @@
-<<<<<<<< HEAD:packages/web/server/lib/host/startup-pipeline-runtime.js
-import { recordStartupPerformance } from './startup-performance.js';
-import { isExecutable } from './executable.js';
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/startup-pipeline-runtime.js
-import { recordStartupPerformance } from './startup-performance.js';
-========
 import { recordStartupPerformance } from '../diagnostics/startup-performance.js';
-import type { DictationRuntimeDependencies, createDictationRuntime } from '../dictation/runtime.js';
-import type { MessageStreamWsRuntimeOptions, createMessageStreamWsRuntime } from '../event-stream/runtime.js';
-import type { createOpenCodeEnvRuntime } from '../opencode/env-runtime.js';
-import type { createTerminalRuntime } from '../terminal/runtime.js';
-import type { createEnvironmentRuntime } from '../environment/runtime.js';
-import type { createServerStartupRuntime, ListenOptions, ServerStartupDependencies } from './server-startup-runtime.js';
-import type { createStaticRoutesRuntime } from './static-routes-runtime.js';
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/startup-pipeline-runtime.ts
+import { isExecutable } from '../host/executable.js';
 
-type TerminalOptions =
-  & Required<Pick<DictationRuntimeDependencies, 'app' | 'express' | 'uiAuthController' | 'isRequestOriginAllowed'>>
-  & Pick<MessageStreamWsRuntimeOptions, 'rejectWebSocketUpgrade'>
-  & Pick<ReturnType<typeof createOpenCodeEnvRuntime>, 'searchPathFor' | 'isExecutable'>
-  & {
-    server: ServerStartupDependencies['server'];
-    fs: typeof import('node:fs');
-    path: typeof import('node:path');
-    buildAugmentedPath: () => string;
-    TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS: number;
-    TERMINAL_INPUT_WS_REBIND_WINDOW_MS: number;
-    TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: number;
-    environmentRuntime: ReturnType<typeof createEnvironmentRuntime> | null;
-    broadcastUiEvent: (event: { type: string; properties: object }) => void;
-  };
-
-interface StartupPipelineDependencies {
-  createTerminalRuntime: (options: TerminalOptions) => ReturnType<typeof createTerminalRuntime>;
-  createDictationRuntime: typeof createDictationRuntime;
-  createMessageStreamWsRuntime: typeof createMessageStreamWsRuntime;
-  createServerStartupRuntime: typeof createServerStartupRuntime;
-}
-
-type PipelineOptions =
-  & ServerStartupDependencies
-  & Pick<ListenOptions, 'port' | 'startupTunnelRequest' | 'onTunnelReady'>
-  & Pick<TerminalOptions, 'fs' | 'path' | 'buildAugmentedPath' | 'searchPathFor' | 'isExecutable' | 'broadcastUiEvent'>
-  & Pick<TerminalOptions, 'app' | 'express' | 'uiAuthController' | 'isRequestOriginAllowed' | 'rejectWebSocketUpgrade'>
-  & Required<Pick<MessageStreamWsRuntimeOptions, 'buildOpenCodeUrl' | 'getOpenCodeAuthHeaders' | 'globalEventHub' |
-    'processForwardedEventPayload' | 'triggerHealthCheck' | 'upstreamStallTimeoutMs'>>
-  & {
-    host: string | undefined;
-    messageStreamWsClients: MessageStreamWsRuntimeOptions['wsClients'];
-    terminalHeartbeatIntervalMs: number;
-    terminalRebindWindowMs: number;
-    terminalMaxRebindsPerWindow: number;
-    environmentRuntime?: TerminalOptions['environmentRuntime'];
-    setupProxy: (app: TerminalOptions['app']) => void;
-    scheduleOpenCodeApiDetection: () => void;
-    bootstrapOpenCodeAtStartup: () => Promise<void>;
-    onListenerReady?: (() => Promise<void>) | null;
-    staticRoutesRuntime: ReturnType<typeof createStaticRoutesRuntime>;
-    tunnelRuntimeContext: { setActivePort: (port: number) => void };
-    attachSignals: boolean;
-    apiOnly: boolean;
-    dictationModelsDir: string;
-  };
-
-export const createStartupPipelineRuntime = (dependencies: StartupPipelineDependencies) => {
+export const createStartupPipelineRuntime = (dependencies) => {
   const {
     createTerminalRuntime,
     createDictationRuntime,
@@ -70,7 +9,7 @@ export const createStartupPipelineRuntime = (dependencies: StartupPipelineDepend
     createServerStartupRuntime,
   } = dependencies;
 
-  const run = async (options: PipelineOptions) => {
+  const run = async (options) => {
     const pipelineStartedAt = performance.now();
     recordStartupPerformance('web.pipeline.start');
     const {

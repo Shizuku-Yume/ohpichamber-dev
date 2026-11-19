@@ -177,18 +177,6 @@ export const createServerStartupRuntime = (dependencies: ServerStartupDependenci
       const handleSignal = async () => {
         await gracefulShutdown();
       };
-<<<<<<<< HEAD:packages/web/server/lib/host/server-startup-runtime.js
-      // Cover every signal a shell or dev harness may use to stop/restart us, so
-      // the Host process is always torn down gracefully instead of leaving
-      // child processes orphaned: SIGINT/SIGQUIT (Ctrl+C/Ctrl+\), SIGTERM (kill/default), SIGHUP
-      // (terminal close), SIGUSR2 (nodemon restart outside Windows).
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/server-startup-runtime.js
-      // Cover every signal a shell or dev harness may use to stop/restart us, so
-      // the managed OpenCode child is always torn down gracefully instead of
-      // orphaned: SIGINT/SIGQUIT (Ctrl+C/Ctrl+\), SIGTERM (kill/default), SIGHUP
-      // (terminal close), SIGUSR2 (nodemon restart outside Windows).
-========
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/server-startup-runtime.ts
       process.on('SIGTERM', handleSignal);
       process.on('SIGINT', handleSignal);
       process.on('SIGQUIT', handleSignal);

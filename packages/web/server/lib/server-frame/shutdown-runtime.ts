@@ -1,74 +1,4 @@
-import type { Server } from 'node:http';
-import type { Socket } from 'node:net';
-import { isBoolean } from '../shared/object-guards.js';
-
-type Cleanup = () => void | Promise<void | object>;
-type Stop = { stop: Cleanup };
-type OptionalStop = Partial<Stop> | null;
-type Close = { close: Cleanup };
-type Timer = ReturnType<typeof setInterval>;
-
-export interface ShutdownOptions {
-  exitProcess?: boolean;
-}
-
-interface ShutdownDependencies {
-  process: Pick<NodeJS.Process, 'exit'>;
-  shutdownTimeoutMs: number;
-  getExitOnShutdown: () => boolean;
-  getIsShuttingDown: () => boolean;
-  setIsShuttingDown: (value: boolean) => void;
-  syncToHmrState: Cleanup;
-  openCodeWatcherRuntime: Stop;
-  chatDirectoryCleanupRuntime?: Stop | null;
-  sessionRuntime: { dispose: Cleanup };
-  sessionAssistRuntime?: OptionalStop;
-  sessionWorkRuntime?: OptionalStop;
-  sessionGoalRuntime?: OptionalStop;
-  contextObligatoryRuntime?: OptionalStop;
-  sessionWarmingRuntime?: OptionalStop;
-  sessionTodosRuntime?: OptionalStop;
-  autoReviewRuntime?: OptionalStop;
-  prWatchRuntime?: OptionalStop;
-  extensionWaitsRuntime?: OptionalStop;
-  mergeFollowRuntime?: OptionalStop;
-  messageQueueRuntime?: OptionalStop;
-  dispatchResultsRuntime?: OptionalStop;
-  workflowRuntime?: { shutdown: Cleanup } | null;
-  messageSearchRuntime?: OptionalStop;
-  scheduledTasksRuntime?: OptionalStop;
-  getHealthCheckInterval: () => Timer | null;
-  clearHealthCheckInterval: (value: Timer) => void;
-  getTerminalRuntime: () => { shutdown: Cleanup } | null;
-  setTerminalRuntime: (value: null) => void;
-  getMessageStreamRuntime: () => Close | null;
-  setMessageStreamRuntime: (value: null) => void;
-  shouldSkipOpenCodeStop: () => boolean;
-  getOpenCodePort: () => number | null;
-  getOpenCodeProcess: () => Close | null;
-  setOpenCodeProcess: (value: null) => void;
-  killProcessOnPort: (port: number | null) => void;
-  waitForPortRelease: (port: number | null, timeoutMs: number) => Promise<boolean>;
-  getServer: () => Server | null;
-  getUiAuthController: () => { dispose: Cleanup } | null;
-  setUiAuthController: (value: null) => void;
-  getActiveTunnelController: () => Stop | null;
-  setActiveTunnelController: (value: null) => void;
-  tunnelAuthController: { clearActiveTunnel: Cleanup };
-  beginGuestServiceShutdown: Cleanup;
-  stopAllGuestServices: Cleanup;
-  extensionServiceLifetime?: OptionalStop;
-  extensionSessionEvents?: OptionalStop;
-  getGuestSurfaceRuntime: () => Stop | null;
-  getRealtimeProxyRuntime: () => Stop | null;
-  getDictationRuntime: () => Stop | null;
-  getRelayService: () => Stop | null;
-  getRelayReconcileTimer: () => Timer | null;
-  getSpacesHost?: () => Close | null;
-  stopFolderWatches?: Cleanup;
-}
-
-export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies) => {
+export const createGracefulShutdownRuntime = (dependencies) => {
   const {
     process,
     shutdownTimeoutMs,
@@ -76,36 +6,15 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
     getIsShuttingDown,
     setIsShuttingDown,
     syncToHmrState,
-<<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
     globalMessageStreamHub,
     hostAgentRuntime,
     openChamberSessionService,
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/shutdown-runtime.js
-    openCodeWatcherRuntime,
-========
-    openCodeWatcherRuntime,
-    chatDirectoryCleanupRuntime,
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/shutdown-runtime.ts
     sessionRuntime,
     sessionAssistRuntime,
     sessionWorkRuntime,
     contextObligatoryRuntime,
-<<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/shutdown-runtime.js
-    sessionWarmingRuntime,
-========
-    sessionWarmingRuntime,
-    sessionTodosRuntime,
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/shutdown-runtime.ts
     autoReviewRuntime,
     prWatchRuntime,
-<<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/shutdown-runtime.js
-    mergeFollowRuntime,
-========
-    extensionWaitsRuntime = null,
-    mergeFollowRuntime,
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/shutdown-runtime.ts
     messageQueueRuntime,
     dispatchResultsRuntime,
     messageSearchRuntime,
@@ -131,12 +40,14 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
     getSpacesHost = () => null,
   } = dependencies;
 
-  let shutdownPromise: Promise<void> | null = null;
-  const serverConnections = new Set<Socket>();
+  let shutdownPromise = null;
+  const serverConnections = new Set();
   let closingHttpServer = false;
 
-  const trackServerConnections = (server: Server) => {
-    const onConnection = (socket: Socket) => {
+  // Track TCP sockets before listen(): HTTP stops tracking them on upgrade,
+  // even when no WebSocket handler completes the handshake.
+  const trackServerConnections = (server) => {
+    const onConnection = (socket) => {
       if (closingHttpServer) {
         socket.destroy();
         return;
@@ -148,57 +59,32 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
     server.once('close', () => server.off('connection', onConnection));
   };
 
-  const runShutdown = async (options: ShutdownOptions = {}) => {
+  const runShutdown = async (options = {}) => {
     if (getIsShuttingDown()) return;
 
     setIsShuttingDown(true);
     beginGuestServiceShutdown();
-<<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/shutdown-runtime.js
-    // Admission to guest services closed above; stop the session-event
-    // subscriber in the same tick, so no event reaches a service's refusal
-    // ("the host is shutting down") and reads as a broken service entry.
-    extensionSessionEvents?.stop?.();
-    extensionServiceLifetime?.stop?.();
-========
-    extensionSessionEvents?.stop?.();
-    extensionServiceLifetime?.stop?.();
-    extensionWaitsRuntime?.stop?.();
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/shutdown-runtime.ts
     syncToHmrState();
     console.log('Starting graceful shutdown...');
-    const exitProcess = isBoolean(options.exitProcess) ? options.exitProcess : getExitOnShutdown();
+    const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : getExitOnShutdown();
 
+    // Both embedded stop() and daemon exits use this sequence. Close admission
+    // synchronously above, then stop viewers before draining their services.
     const cleanupOperations = [
-      () => clearInterval(getRelayReconcileTimer() ?? undefined),
+      () => clearInterval(getRelayReconcileTimer()),
       () => getGuestSurfaceRuntime()?.stop(),
       () => getRealtimeProxyRuntime()?.stop(),
+      // The isolated-spaces host, when the switch is on: its connections into spaces end here.
       () => getSpacesHost()?.close(),
       () => getRelayService()?.stop(),
       () => getDictationRuntime()?.stop(),
-<<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
       // Discard prepared-but-unused sessions before their workers are stopped, so a
       // speculative prepare never outlives the Host.
       () => openChamberSessionService?.close?.(),
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/shutdown-runtime.js
-      stopFolderWatches,
-      () => openCodeWatcherRuntime.stop(),
-========
-      stopFolderWatches,
-      () => chatDirectoryCleanupRuntime?.stop(),
-      () => openCodeWatcherRuntime.stop(),
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/shutdown-runtime.ts
       () => sessionRuntime.dispose(),
       () => sessionAssistRuntime?.stop?.(),
       () => sessionWorkRuntime?.stop?.(),
       () => contextObligatoryRuntime?.stop?.(),
-<<<<<<<< HEAD:packages/web/server/lib/host/shutdown-runtime.js
-|||||||| bc50ba56aa:packages/web/server/lib/opencode/shutdown-runtime.js
-      () => sessionWarmingRuntime?.stop?.(),
-========
-      () => sessionWarmingRuntime?.stop?.(),
-      () => sessionTodosRuntime?.stop?.(),
->>>>>>>> upstream/main:packages/web/server/lib/server-frame/shutdown-runtime.ts
       () => autoReviewRuntime?.stop?.(),
       () => prWatchRuntime?.stop?.(),
       () => messageQueueRuntime?.stop?.(),
@@ -212,7 +98,7 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
       try {
         await cleanup();
       } catch {
-        continue;
+        // One failed runtime must not skip the rest of host teardown.
       }
     }
 
@@ -221,7 +107,6 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
       try {
         await terminalRuntime.shutdown();
       } catch {
-        void 0;
       } finally {
         setTerminalRuntime(null);
       }
@@ -232,7 +117,6 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
       try {
         await messageStreamRuntime.close();
       } catch {
-        void 0;
       } finally {
         setMessageStreamRuntime(null);
       }
@@ -243,18 +127,22 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
     const server = getServer();
     if (server) {
       closingHttpServer = true;
-      let closeTimeout: ReturnType<typeof setTimeout> | null = null;
+      let closeTimeout = null;
       try {
         await Promise.race([
-          new Promise<void>((resolve) => {
+          new Promise((resolve) => {
             server.close(() => {
               console.log('HTTP server closed');
               resolve();
             });
+            // The backend has stopped. Active SSE/HTTP clients must not keep
+            // Desktop waiting for the outer shutdown deadline.
             server.closeAllConnections?.();
+            // Includes upgraded sockets and reconnects accepted while the
+            // services above were draining. No child-process grace is cut short.
             for (const socket of serverConnections) socket.destroy();
           }),
-          new Promise<void>((resolve) => {
+          new Promise((resolve) => {
             closeTimeout = setTimeout(() => {
               console.warn('Server close timeout reached, forcing shutdown');
               resolve();
@@ -295,7 +183,7 @@ export const createGracefulShutdownRuntime = (dependencies: ShutdownDependencies
     }
   };
 
-  const gracefulShutdown = (options: ShutdownOptions = {}) => {
+  const gracefulShutdown = (options = {}) => {
     if (shutdownPromise) return shutdownPromise;
     shutdownPromise = runShutdown(options);
     return shutdownPromise;
