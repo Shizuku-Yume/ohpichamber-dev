@@ -740,6 +740,11 @@ one instance is mounted, in the docked chain or in the fullscreen overlay;
 entering or leaving fullscreen moves unsaved edits through the text draft, as
 the source toggle does, and the other slot remounts from it.
 
+The desktop tab strip asks the mounted editor before closing its dirty file,
+including through a bulk tab-close command. Cancel leaves the tabs and draft
+unchanged; Save closes only after a successful write; Discard closes without
+writing. Closing clean or unrelated tabs does not prompt.
+
 `isDirty` (draft differs from file) is not proof of a user edit. The context
 panel keeps one FilesView that follows the selected path, so during a file
 switch the draft and the file briefly belong to different files. React to real

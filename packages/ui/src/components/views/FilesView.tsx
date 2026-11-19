@@ -692,9 +692,12 @@ const Dialogs: React.FC<DialogsProps> = ({
     );
 };
 
+export type FileTabCloseGuard = (directoryKey: string, paths: readonly string[], close: () => void) => void;
+
 interface FilesViewProps {
   visible?: boolean;
   mode?: 'full' | 'editor-only';
+  fileTabCloseGuard?: React.RefObject<FileTabCloseGuard | null>;
   /**
    * For a host whose tab strip owns the open files (the context panel):
    * closing a file here, by Cmd/Ctrl+W or after the unsaved-changes prompt,
@@ -757,7 +760,7 @@ const FilePositionEditor = ({
   );
 };
 
-export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = true, onCloseFile }) => {
+export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = true, onCloseFile, fileTabCloseGuard }) => {
   const { t } = useI18n();
   const { files, runtime, git } = useRuntimeAPIs();
   const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
@@ -1087,9 +1090,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const setAutoSaveEnabled = useUIStore((state) => state.setAutoSaveEnabled);
 
   const [confirmDiscardOpen, setConfirmDiscardOpen] = React.useState(false);
-  const pendingSelectFileRef = React.useRef<FileNode | null>(null);
-  const pendingClosePathRef = React.useRef<string | null>(null);
-  const skipDirtyOnceRef = React.useRef(false);
+  const pendingDraftActionRef = React.useRef<(() => void) | null>(null);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
@@ -2247,15 +2248,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     return filesList[index + 1] ?? filesList[index - 1] ?? null;
   }, []);
 
-  const handleSelectFile = React.useCallback(async (node: FileNode) => {
-    if (skipDirtyOnceRef.current) {
-      skipDirtyOnceRef.current = false;
-    } else if (isDirty) {
-      setConfirmDiscardOpen(true);
-      pendingSelectFileRef.current = node;
-      return;
-    }
-
+  const selectFile = React.useCallback((node: FileNode) => {
     if (root) {
       setSelectedPath(root, node.path);
       void ensurePathVisible(node.path, false);
@@ -2272,7 +2265,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (isMobile) {
       setShowMobilePageContent(true);
     }
-  }, [ensurePathVisible, isDirty, isMobile, root, setSelectedPath]);
+  }, [ensurePathVisible, isMobile, root, setSelectedPath]);
+
+  const confirmDraftAction = React.useCallback((action: () => void) => {
+    if (pendingDraftActionRef.current) return;
+    pendingDraftActionRef.current = action;
+    setConfirmDiscardOpen(true);
+  }, []);
+
+  const handleSelectFile = React.useCallback((node: FileNode) => {
+    if (isDirty) {
+      confirmDraftAction(() => selectFile(node));
+    } else {
+      selectFile(node);
+    }
+  }, [confirmDraftAction, isDirty, selectFile]);
 
   React.useEffect(() => {
     if (!selectedFile?.path) {
@@ -2508,7 +2515,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     }
 
     if (nextFile) {
-      void handleSelectFile(nextFile);
+      selectFile(nextFile);
       return;
     }
 
@@ -2522,80 +2529,65 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (isMobile) {
       setShowMobilePageContent(false);
     }
-  }, [handleSelectFile, isMobile, onCloseFile, removeOpenPath, root, selectedFile?.path, setSelectedPath]);
+  }, [isMobile, onCloseFile, removeOpenPath, root, selectFile, selectedFile?.path, setSelectedPath]);
+
+  const clearDraftAction = React.useCallback(() => {
+    pendingDraftActionRef.current = null;
+    setConfirmDiscardOpen(false);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (pendingDraftActionRef.current) clearDraftAction();
+  }, [clearDraftAction, fileScope, selectedFilePath]);
+
+  const cancelDraftAction = React.useCallback(() => {
+    if (isSaving) return;
+    clearDraftAction();
+    setPendingFileNavigation(null);
+  }, [clearDraftAction, isSaving, setPendingFileNavigation]);
 
   const discardAndContinue = React.useCallback(() => {
-    const nextFile = pendingSelectFileRef.current;
-    const closePath = pendingClosePathRef.current;
-
-    pendingSelectFileRef.current = null;
-    pendingClosePathRef.current = null;
-
-    // Allow one guarded navigation (tab/file) without re-opening dialog.
-    skipDirtyOnceRef.current = true;
-
-    setConfirmDiscardOpen(false);
-
-    // Discard draft by reverting back to last loaded content
+    const action = pendingDraftActionRef.current;
+    if (!action || isSaving) return;
+    clearDraftAction();
     setCanvasDirty(false);
     setCanvasRemountNonce((nonce) => nonce + 1);
     setDraftContent(fileContent);
-
-    if (closePath) {
-      closeOpenFile(closePath, nextFile);
-      return;
-    }
-
-    if (nextFile) {
-      void handleSelectFile(nextFile);
-      return;
-    }
-
-  }, [closeOpenFile, fileContent, handleSelectFile]);
+    action();
+  }, [clearDraftAction, fileContent, isSaving]);
 
   const saveAndContinue = React.useCallback(async () => {
-    const nextFile = pendingSelectFileRef.current;
-    const closePath = pendingClosePathRef.current;
+    const action = pendingDraftActionRef.current;
+    if (!action || isSaving) return;
+    if (!await saveDraft() || pendingDraftActionRef.current !== action) return;
+    clearDraftAction();
+    action();
+  }, [clearDraftAction, isSaving, saveDraft]);
 
-    const saved = await saveDraft();
-    if (!saved) {
-      skipDirtyOnceRef.current = false;
-      return;
-    }
-
-    pendingSelectFileRef.current = null;
-    pendingClosePathRef.current = null;
-
-    // We'll proceed after saving; suppress guard reopening.
-    skipDirtyOnceRef.current = true;
-
-    setConfirmDiscardOpen(false);
-
-    if (closePath) {
-      closeOpenFile(closePath, nextFile);
-      return;
-    }
-
-    if (nextFile) {
-      await handleSelectFile(nextFile);
-      return;
-    }
-
-  }, [closeOpenFile, handleSelectFile, saveDraft]);
+  React.useLayoutEffect(() => {
+    if (!fileTabCloseGuard) return;
+    const guard: FileTabCloseGuard = (directoryKey, paths, close) => {
+      if (directoryKey === normalizeContextPanelDirectoryKey(panelRoot)
+        && selectedFile && isDirty && paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path))) {
+        confirmDraftAction(close);
+      } else {
+        close();
+      }
+    };
+    fileTabCloseGuard.current = guard;
+    return () => {
+      if (fileTabCloseGuard.current === guard) fileTabCloseGuard.current = null;
+    };
+  }, [confirmDraftAction, fileTabCloseGuard, isDirty, panelRoot, selectedFile]);
 
   const handleCloseFile = React.useCallback((path: string) => {
-    const isActive = selectedFile?.path === path;
-    const nextFile = getNextOpenFile(path, openFiles);
-
-    if (isActive && isDirty) {
-      setConfirmDiscardOpen(true);
-      pendingSelectFileRef.current = nextFile;
-      pendingClosePathRef.current = path;
-      return;
+    const close = () => closeOpenFile(path, getNextOpenFile(path, openFiles));
+    if (selectedFile?.path === path && isDirty) {
+      confirmDraftAction(close);
+    } else {
+      close();
     }
-
-    closeOpenFile(path, nextFile);
-  }, [closeOpenFile, getNextOpenFile, isDirty, openFiles, selectedFile?.path]);
+  }, [closeOpenFile, confirmDraftAction, getNextOpenFile, isDirty, openFiles, selectedFile?.path]);
 
   // While a file is open here, Cmd/Ctrl+W closes its tab (asking first when
   // it has unsaved edits) instead of the whole window.
@@ -4819,10 +4811,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
     >
       <Dialog open={confirmDiscardOpen} onOpenChange={(open) => {
-        // Intentionally no "cancel" action. Keep dialog modal.
-        if (!open) {
-          setConfirmDiscardOpen(true);
-        }
+        if (!open) cancelDraftAction();
       }}>
         <DialogContent showCloseButton={false} className="max-w-md">
           <DialogHeader>
@@ -4832,6 +4821,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            <Button variant="outline" onClick={cancelDraftAction} disabled={isSaving}>{t('filesView.dialog.cancel')}</Button>
             <Button
               variant="outline"
               onClick={() => void saveAndContinue()}
@@ -4840,7 +4830,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             >
               {t('filesView.unsaved.saveChanges')}
             </Button>
-            <Button variant="destructive" onClick={discardAndContinue}>{t('filesView.unsaved.discard')}</Button>
+            <Button variant="destructive" onClick={discardAndContinue} disabled={isSaving}>{t('filesView.unsaved.discard')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
