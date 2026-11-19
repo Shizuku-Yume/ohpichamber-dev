@@ -746,6 +746,7 @@ export class WorkerSession {
       shell = new WorkerShell({
         manager: nativeSession.asyncJobManager, nativeOwner: { agentId: nativeOwnerId, registry: AgentRegistry.global() },
         workspaceId: input.workspaceId, projectId: input.projectId, sessionId: input.rootSessionId,
+        retiredSessionIds: input.retiredSessionIds,
         workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd,
         widgets,
         listServices: async () => {
@@ -753,7 +754,7 @@ export class WorkerSession {
           if (res.error) {
             throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Daemon broker list failed: ${res.error}`);
           }
-          return res.services.filter(d => d.owner === input.rootSessionId);
+          return res.services;
         },
         serviceLogs: async (name: string) => {
           return serviceLogs(toolSession, name);

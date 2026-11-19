@@ -40,6 +40,7 @@ export interface WorkerShellContext {
   workspaceId: string;
   projectId: string;
   sessionId: string;
+  retiredSessionIds?: string[];
   workerGeneration: string;
   epoch: string;
   cwd: string;
@@ -88,9 +89,11 @@ export class WorkerShell {
    * the Host's root check refuse every shell read with 503.
    */
   private sessionId: string;
+  private readonly serviceOwnerIds: Set<string>;
 
   constructor(private readonly context: WorkerShellContext) {
     this.sessionId = context.sessionId;
+    this.serviceOwnerIds = new Set([context.sessionId, ...(context.retiredSessionIds ?? [])]);
     this.unsubscribe = context.manager.observeBashJobs?.(event => {
       try { this.observeNative(event); }
       catch (error) {
@@ -121,6 +124,7 @@ export class WorkerShell {
     for (const record of this.authorizedServices.values()) record.identity.sessionId = sessionId;
     for (const record of this.endedServices.values()) record.sessionId = sessionId;
     this.sessionId = sessionId;
+    this.serviceOwnerIds.add(sessionId);
     this.revision++;
   }
 
@@ -294,7 +298,7 @@ export class WorkerShell {
     }
     const currentIds = new Set<string>();
     for (const daemon of daemons) {
-      if (daemon.owner !== this.context.sessionId) continue;
+      if (!daemon.owner || !this.serviceOwnerIds.has(daemon.owner)) continue;
       const jobId = `service:${daemon.id}`;
       currentIds.add(jobId);
       const isEnded = (daemon.state as string) === 'stopped' || daemon.state === 'exited' || daemon.state === 'failed';

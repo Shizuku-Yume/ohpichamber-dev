@@ -81,6 +81,10 @@ Scope mismatches keep the existing refusals: the service compares the request wi
 
 Native JSONL storage appends timestamped `custom` records when a runtime opens or disposes (`ohpichamber.private-roots.v1`, `session_exit`), so whole-file byte equality is not a stable transcript invariant. Session tests compare the parsed `message` records and the journal/history projection instead; a live reopen must preserve them exactly.
 
+## Named daemon ownership after promotion
+
+Named daemon services remain owned by their broker session id after `/btw` promotion. `WorkerRegistry` retains the retired ids across worker retirement for the lifetime of the supervisor and passes that lineage through private worker bootstrap. `WorkerShell` authorizes listing, logs, stdin and stop against the current id and those retired ids only, while projecting every service under the current session and worker generation. Catalog aliases are generation-scoped and are not the service ownership authority. Supervisor restart does not restore this in-memory lineage.
+
 ## Worker capacity and idle eviction
 
 `WorkerRegistry` counts only `kind: 'session'` roots against the measured Task17 cap (`WORKER_CAPACITY_POLICY`: 5 active root workers, 600000 ms idle timeout, 30000 ms reap interval). Stateless catalog and usage workers are workspace overhead and never consume a root slot. A new or replaced root reserves its slot synchronously before the asynchronous bootstrap, so concurrent opens cannot oversubscribe; a root beyond the cap receives HTTP 503 `SERVICE_UNAVAILABLE` with `details.reason: "worker_capacity"` and the current/maximum counts, while existing workers stay untouched. An existing root at the cap may still reopen, restart or receive work.
