@@ -1638,3 +1638,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Keep interactive terminal input bound to its attachment
+
+- **Decided:** interactive input requires the current socket's terminal snapshot and an explicit resume after reconnect. Project-action interrupts can still use a socket without attaching a viewport.
+- **Instead of:** automatically accepting input as soon as the next socket opens or replaying keys typed during a disconnect.
+- **Because:** forwarding an arbitrary suffix of a command can change what the shell executes. After reattachment, the user can inspect the recovered command line before typing again.
+- **Revisit when:** interactive terminal transport can acknowledge command input across a connection change without ambiguity.
