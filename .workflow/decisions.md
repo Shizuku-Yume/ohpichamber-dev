@@ -1,9 +1,5 @@
 # Decisions
 
-## 2026-11-19 - Empty GitHub release feeds mean no desktop update
-
-Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
-
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here
@@ -1689,3 +1685,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
 - **Mine:** yes
 - **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
+
+## 2026-11-19 - Empty GitHub release feeds mean no desktop update
+
+Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
+
+## 2026-11-19 - Reconcile desktop login items only when their enabled state differs
+
+The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup compares the captured preference with a fresh OS read and writes only on a difference; unreadable settings never trigger a write. Explicit settings-change IPC remains authoritative and unchanged. Avoid re-registering disabled or already-matching items on every launch.
