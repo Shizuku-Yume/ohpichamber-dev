@@ -77,11 +77,17 @@ const WorkbookView: React.FC<{
   bytes: Uint8Array<ArrayBuffer>;
   sizeBytes: number | null;
   readBytes: () => Promise<Uint8Array<ArrayBuffer>>;
-  /** Absent where the file cannot be written. */
   onSave?: (bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
   onChangedOnDisk: () => void;
+<<<<<<< HEAD
   /** Stays with the owner, who closes the book only once this has drained. */
   queue: WorkQueue;
+||||||| bc50ba56aa
+  /** Stays with the owner, who closes the book only once this has drained. */
+  queue: React.RefObject<Promise<void>>;
+=======
+  queue: React.RefObject<Promise<void>>;
+>>>>>>> upstream/main
 }> = ({ path, book, bytes, sizeBytes, readBytes, onSave, onChangedOnDisk, queue }) => {
   const { t } = useI18n();
   const { sheets } = book.opened;
@@ -99,7 +105,6 @@ const WorkbookView: React.FC<{
 
   const sheet = sheets[selected] ?? sheets[0];
   const editable = Boolean(onSave) && !sheet.protected;
-  // Changes arrive between renders, and the cells they name must meet the view of now.
   const viewRef = React.useRef<SheetView | null>(null);
   const showView = (next: SheetView) => {
     viewRef.current = next;
@@ -120,7 +125,6 @@ const WorkbookView: React.FC<{
 
   const reloadView = () => setLayoutRevision((value) => value + 1);
 
-  // A pasted block can run past the last row on screen.
   const rowNumberOf = (row: number) => (view
     ? view.rowNumbers[row] ?? (view.rowNumbers.at(-1) ?? 0) + row - view.rowNumbers.length + 1
     : 0);
@@ -146,11 +150,16 @@ const WorkbookView: React.FC<{
     }
   };
 
-  // Everything that reads or changes the workbook, its history or the file
-  // runs here in order, so a retry or an undo never overtakes an edit.
   const enqueue = (task: () => Promise<void>) => {
+<<<<<<< HEAD
     queue.enqueue(task, () => {
       // The session is back on the last good file, so the view must follow it.
+||||||| bc50ba56aa
+    queue.current = queue.current.then(task).catch(() => {
+      // The session is back on the last good file, so the view must follow it.
+=======
+    queue.current = queue.current.then(task).catch(() => {
+>>>>>>> upstream/main
       setSaveStatus('failed');
       reloadView();
     });
@@ -168,7 +177,6 @@ const WorkbookView: React.FC<{
   const finishEdit = async (outcome: BookEdit, record: (previous: CellRestore[]) => void) => {
     if (outcome.status === 'invalid-formula') toast.error(t('filesView.artifact.office.invalidFormula'));
     if (outcome.status !== 'changed') {
-      // What was typed already shows, so the sheet has to say what it holds.
       reloadView();
       return;
     }
@@ -208,7 +216,6 @@ const WorkbookView: React.FC<{
     commit: (cells) => {
       const sheetIndex = selected;
       const inputs = cells.map(({ row, column, input }) => ({ row: rowNumberOf(row), column, input }));
-      // Proving a write reads the whole file back, so what was typed shows first.
       const typed = patchSheetView(view, inputs.map(({ row, column, input }) => ({
         sheet: sheetIndex,
         row,
@@ -328,21 +335,13 @@ const WorkbookView: React.FC<{
   );
 };
 
-/**
- * A Word, Excel or PowerPoint document, or its OpenDocument counterpart, as a
- * read-only preview. The bytes are read through the runtime's transport, so it
- * works wherever the file can be read, relay and phones included, and a file
- * that cannot be drawn says so and keeps its download.
- */
 export const OfficeArtifact: React.FC<{
   name: string;
   path: string;
   sizeBytes: number | null;
   loadBytes: (path: string, signal: AbortSignal) => Promise<Uint8Array<ArrayBuffer>>;
   actions?: React.ReactNode;
-  /** Writes an edited workbook; absent where the file cannot be written. */
   onSave?: (path: string, bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
-  /** Replaced in tests; loads the renderers on first use. */
   readPreview?: ReadPreview;
 }> = ({ name, path, sizeBytes, loadBytes, actions, onSave, readPreview = readWithRenderers }) => {
   const { t } = useI18n();
@@ -353,7 +352,6 @@ export const OfficeArtifact: React.FC<{
   const [selection, setSelection] = React.useState<{ quote: string; x: number; y: number } | null>(null);
   const closeSelection = React.useCallback(() => setSelection(null), []);
 
-  // The frame has no way out, so its links arrive here, from that frame only.
   React.useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>) => {
       const frame = frameRef.current;
@@ -397,8 +395,15 @@ export const OfficeArtifact: React.FC<{
     })();
     return () => {
       controller.abort();
+<<<<<<< HEAD
       // An edit may still be on its way to the file.
       work.afterIdle(() => book?.close());
+||||||| bc50ba56aa
+      // An edit may still be on its way to the file.
+      void work.current.finally(() => book?.close());
+=======
+      void work.current.finally(() => book?.close());
+>>>>>>> upstream/main
     };
   }, [name, path, loadBytes, readPreview, attempt, work]);
 
@@ -458,7 +463,6 @@ export const OfficeArtifact: React.FC<{
     <div className="flex h-full min-h-0 flex-col">
       <ArtifactMetaBar items={[slides, formatArtifactSize(sizeBytes)]} />
       <div className="min-h-0 flex-1 bg-[var(--surface-background)]">
-        {/* `color-scheme: normal` keeps the frame see-through under a dark theme. */}
         <iframe
           ref={frameRef}
           srcDoc={preview.html}

@@ -8,6 +8,7 @@ import {
     getOrderedListContinuationEdit,
     shouldWrapSelectionAsLink,
     withInlineInsertionBoundaries,
+    withLeadingSlashCommand,
 } from '../text';
 
 describe('appendWithLineBreaks', () => {
@@ -51,6 +52,28 @@ describe('appendInlineText', () => {
 
     test('the addition is trimmed before joining', () => {
         expect(appendInlineText('hello', '  world  ')).toBe('hello world ');
+    });
+});
+
+describe('withLeadingSlashCommand', () => {
+    test('the draft becomes the argument', () => {
+        expect(withLeadingSlashCommand('DEMO-2', 'task')).toBe('/task DEMO-2');
+        expect(withLeadingSlashCommand('  DEMO-2', 'task')).toBe('/task DEMO-2');
+    });
+
+    test('an empty draft leaves room for the argument', () => {
+        expect(withLeadingSlashCommand('', 'task')).toBe('/task ');
+        expect(withLeadingSlashCommand('/task', 'task')).toBe('/task ');
+    });
+
+    test('a draft that already starts with the command keeps its text', () => {
+        expect(withLeadingSlashCommand('/task DEMO-2', 'task')).toBe('/task DEMO-2');
+        expect(withLeadingSlashCommand('/task\nnotes', 'task')).toBe('/task\nnotes');
+    });
+
+    test('another command or a longer name is part of the argument', () => {
+        expect(withLeadingSlashCommand('/tasks x', 'task')).toBe('/task /tasks x');
+        expect(withLeadingSlashCommand('/pr 12', 'task')).toBe('/task /pr 12');
     });
 });
 
@@ -174,9 +197,25 @@ describe('getOrderedListContinuationEdit', () => {
         expect(getOrderedListContinuationEdit('3. item', 7, 7)?.insert).toBe('\n4. ');
     });
 
-    test('a bare marker continues too', () => {
-        expect(getOrderedListContinuationEdit('1.', 2, 2)?.insert).toBe('\n2. ');
-        expect(getOrderedListContinuationEdit('1. ', 3, 3)?.insert).toBe('\n2. ');
+    test('an item with no text ends the list by clearing its line', () => {
+        expect(getOrderedListContinuationEdit('1.', 2, 2)).toEqual({
+            from: 0,
+            to: 2,
+            insert: '',
+            selectionStart: 0,
+            selectionEnd: 0,
+        });
+        expect(getOrderedListContinuationEdit('1. ', 3, 3)?.to).toBe(3);
+        expect(getOrderedListContinuationEdit('  3) ', 5, 5)).toMatchObject({ from: 0, to: 5, insert: '' });
+
+        const value = '1. a\n2. b\n3. ';
+        expect(getOrderedListContinuationEdit(value, value.length, value.length)).toEqual({
+            from: 10,
+            to: 13,
+            insert: '',
+            selectionStart: 10,
+            selectionEnd: 10,
+        });
     });
 
     test('continues when the item has trailing text after its marker', () => {
@@ -219,6 +258,10 @@ describe('getOrderedListContinuationEdit', () => {
             expect(atEnd('```\n~~~\n1. item')).toBeNull();
             expect(atEnd('~~~\n```\n1. item')).toBeNull();
             expect(atEnd('````\n```\n1. item')).toBeNull();
+        });
+
+        test('an empty item inside a fence stays a plain newline', () => {
+            expect(atEnd('```\n1. ')).toBeNull();
         });
 
         test('a real list after a closed fence continues', () => {

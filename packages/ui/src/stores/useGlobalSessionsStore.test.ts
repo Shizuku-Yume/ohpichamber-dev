@@ -3,12 +3,26 @@ import type { Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from './globalSessions';
 import { isGlobalSessionRecencyOnlyUpdate, resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
 
+<<<<<<< HEAD
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_project', workspaceId: 'wsp_repo', displayPath: 'repo',
   rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
   runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, title: sessionId, metadata: {},
   metadataRevision: '1', archiveRevision: '0', ...extra,
 });
+||||||| bc50ba56aa
+import {
+  isGlobalSessionRecencyOnlyUpdate,
+  resolveGlobalSessionDirectory,
+  useGlobalSessionsStore,
+} from './useGlobalSessionsStore';
+=======
+import {
+  isGlobalSessionDeferrableUpdate,
+  resolveGlobalSessionDirectory,
+  useGlobalSessionsStore,
+} from './useGlobalSessionsStore';
+>>>>>>> upstream/main
 
 beforeEach(() => {
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
@@ -136,6 +150,7 @@ describe('native global session mutations', () => {
   });
 });
 
+<<<<<<< HEAD
 describe('native recency-only detection', () => {
   test('accepts only an updated timestamp change', () => {
     const record = session('ses_one');
@@ -143,5 +158,95 @@ describe('native recency-only detection', () => {
     expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, title: 'New', metadata: {} })).toBe(false);
     expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, archivedAt: 4 })).toBe(false);
     expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, parentSessionId: 'ses_parent' })).toBe(false);
+||||||| bc50ba56aa
+describe('isGlobalSessionRecencyOnlyUpdate', () => {
+  test('accepts an updated timestamp while preserving omitted directory metadata', () => {
+    const existing = buildSession('Session', {
+      directory: '/repo/app',
+      time: { created: 1, updated: 2 },
+    });
+    const incoming = buildSession('Session', {
+      time: { created: 1, updated: 3 },
+    });
+
+    expect(isGlobalSessionRecencyOnlyUpdate(existing, incoming)).toBe(true);
+  });
+
+  test('rejects title and archive changes as structural updates', () => {
+    const existing = buildSession('Session', { time: { created: 1, updated: 2 } });
+    const renamed = buildSession('Session', {
+      title: 'Renamed',
+      time: { created: 1, updated: 3 },
+    });
+    const archived = buildSession('Session', {
+      time: { created: 1, updated: 3, archived: 4 },
+    });
+
+    expect(isGlobalSessionRecencyOnlyUpdate(existing, renamed)).toBe(false);
+    expect(isGlobalSessionRecencyOnlyUpdate(existing, archived)).toBe(false);
+  });
+
+  test('rejects a parent change as a structural update', () => {
+    const existing = buildSession('Session', { parentID: 'parent-a', time: { created: 1, updated: 2 } });
+    const reparented = buildSession('Session', { parentID: 'parent-b', time: { created: 1, updated: 3 } });
+
+    expect(isGlobalSessionRecencyOnlyUpdate(existing, reparented)).toBe(false);
+=======
+describe('isGlobalSessionDeferrableUpdate', () => {
+  test('accepts an updated timestamp while preserving omitted directory metadata', () => {
+    const existing = buildSession('Session', {
+      directory: '/repo/app',
+      time: { created: 1, updated: 2 },
+    });
+    const incoming = buildSession('Session', {
+      time: { created: 1, updated: 3 },
+    });
+
+    expect(isGlobalSessionDeferrableUpdate(existing, incoming)).toBe(true);
+  });
+
+  test('rejects title and archive changes as structural updates', () => {
+    const existing = buildSession('Session', { time: { created: 1, updated: 2 } });
+    const renamed = buildSession('Session', {
+      title: 'Renamed',
+      time: { created: 1, updated: 3 },
+    });
+    const archived = buildSession('Session', {
+      time: { created: 1, updated: 3, archived: 4 },
+    });
+
+    expect(isGlobalSessionDeferrableUpdate(existing, renamed)).toBe(false);
+    expect(isGlobalSessionDeferrableUpdate(existing, archived)).toBe(false);
+  });
+
+  test('rejects a parent change as a structural update', () => {
+    const existing = buildSession('Session', { parentID: 'parent-a', time: { created: 1, updated: 2 } });
+    const reparented = buildSession('Session', { parentID: 'parent-b', time: { created: 1, updated: 3 } });
+
+    expect(isGlobalSessionDeferrableUpdate(existing, reparented)).toBe(false);
+  });
+
+  test('defers spend, which every step of a turn changes, even without a new updated time', () => {
+    const existing = buildSession('Session', { time: { created: 1, updated: 2 } });
+    const respent = buildSession('Session', { cost: 5, time: { created: 1, updated: 3 } });
+    const retokened = buildSession('Session', {
+      tokens: { input: 1, output: 2, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1, updated: 2 },
+    });
+
+    expect(isGlobalSessionDeferrableUpdate(existing, respent)).toBe(true);
+    expect(isGlobalSessionDeferrableUpdate(existing, retokened)).toBe(true);
+  });
+
+  test('rejects a selection change and an unchanged record', () => {
+    const existing = buildSession('Session', { time: { created: 1, updated: 2 } });
+    const reselected = buildSession('Session', {
+      model: { providerID: 'p', id: 'm' },
+      time: { created: 1, updated: 3 },
+    });
+
+    expect(isGlobalSessionDeferrableUpdate(existing, reselected)).toBe(false);
+    expect(isGlobalSessionDeferrableUpdate(existing, buildSession('Session', { time: { created: 1, updated: 2 } }))).toBe(false);
+>>>>>>> upstream/main
   });
 });

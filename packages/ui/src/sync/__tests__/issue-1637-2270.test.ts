@@ -36,12 +36,169 @@ const session = (sessionId: string, workspaceId: string): Session => ({
   archiveRevision: "0",
 })
 
+<<<<<<< HEAD
 const originalRuntime = getRuntimeKey()
 const originalBase = getRuntimeApiBaseUrl()
 let manager: ChildStoreManager
 let currentDirectory: string | null
 const selected: Array<{ id: string | null; directory: string | null | undefined }> = []
 const resolvedDirectories: string[] = []
+||||||| bc50ba56aa
+// Configurable current directory (used as fallback when no directoryOverride is set)
+let currentDirectory: string | null = null
+// Stands in for the runtime's raw client; createSession only compares identity.
+const runtimeSdkClient = {}
+
+let idCounter = 0
+mock.module("@/lib/opencode/client", () => ({
+  isOpencodeNotFound: () => false,
+  ascendingId: (prefix: string) => `${prefix}_${(idCounter += 1).toString(16).padStart(12, "0")}`,
+  opencodeClient: {
+    getSdkClient: () => runtimeSdkClient,
+    captureSessionCleanup: async () => async () => undefined,
+    getDirectory: () => currentDirectory,
+    setDirectory: mock(() => undefined),
+    createSession: mock(async (params: unknown, directory?: string | null) => {
+      nextCreateSessionCalls.push({ params, directory })
+      return nextCreateSessionResponse
+    }),
+  },
+}))
+
+mock.module("../session-ui-store", () => ({
+  useSessionUIStore: {
+    getState: () => ({
+      setCurrentSession: (id: string | null, directoryHint?: string | null) => {
+        setCurrentSessionCalls.push({ id, directoryHint })
+      },
+      markSessionAsOpenChamberCreated: (sessionId: string) => {
+        markSessionAsOpenChamberCreatedCalls.push(sessionId)
+      },
+    }),
+  },
+}))
+
+mock.module("../sync-refs", () => ({
+  getDirectoryState: () => null,
+  getAllSyncSessions: () => [],
+  getSyncSessionDirectory: () => null,
+  registerSessionDirectory: (sessionID: string, directory: string) => {
+    registerSessionDirectoryCalls.push({ sessionID, directory })
+  },
+}))
+
+mock.module("@/stores/useGlobalSessionsStore", () => ({
+  useGlobalSessionsStore: {
+    getState: () => ({
+      upsertSession: (session: Session) => {
+        upsertSessionCalls.push(session)
+      },
+    }),
+  },
+  mergeSessionDirectoryMetadata: (incoming: Session) => incoming,
+  resolveGlobalSessionDirectory: () => null,
+}))
+
+mock.module("@/stores/useConfigStore", () => ({
+  useConfigStore: {
+    getState: () => ({
+      isConnected: true,
+      hasEverConnected: true,
+    }),
+  },
+  selectCatalogLoadedForDirectory: () => false,
+  selectConfigAgentsForDirectory: () => [],
+}))
+
+mock.module("../input-store", () => ({
+  useInputStore: {
+    getState: () => ({
+      clearAttachedFiles: () => undefined,
+      addRestoredAttachment: () => undefined,
+    }),
+  },
+}))
+
+const { createSession, setActionRefs } = await import("../session-actions")
+=======
+// Configurable current directory (used as fallback when no directoryOverride is set)
+let currentDirectory: string | null = null
+// Stands in for the runtime's raw client; createSession only compares identity.
+const runtimeSdkClient = {}
+
+let idCounter = 0
+mock.module("@/lib/opencode/client", () => ({
+  isOpencodeNotFound: () => false,
+  ascendingId: (prefix: string) => `${prefix}_${(idCounter += 1).toString(16).padStart(12, "0")}`,
+  opencodeClient: {
+    getSdkClient: () => runtimeSdkClient,
+    captureSessionCleanup: async () => async () => undefined,
+    getDirectory: () => currentDirectory,
+    setDirectory: mock(() => undefined),
+    createSession: mock(async (params: unknown, directory?: string | null) => {
+      nextCreateSessionCalls.push({ params, directory })
+      return nextCreateSessionResponse
+    }),
+  },
+}))
+
+mock.module("../session-ui-store", () => ({
+  useSessionUIStore: {
+    getState: () => ({
+      setCurrentSession: (id: string | null, directoryHint?: string | null) => {
+        setCurrentSessionCalls.push({ id, directoryHint })
+      },
+      markSessionAsOpenChamberCreated: (sessionId: string) => {
+        markSessionAsOpenChamberCreatedCalls.push(sessionId)
+      },
+    }),
+  },
+}))
+
+mock.module("../sync-refs", () => ({
+  getDirectoryState: () => null,
+  getAllSyncSessions: () => [],
+  getAllSyncSessionMap: () => new Map(),
+  getSyncSessionDirectory: () => null,
+  registerSessionDirectory: (sessionID: string, directory: string) => {
+    registerSessionDirectoryCalls.push({ sessionID, directory })
+  },
+}))
+
+mock.module("@/stores/useGlobalSessionsStore", () => ({
+  useGlobalSessionsStore: {
+    getState: () => ({
+      upsertSession: (session: Session) => {
+        upsertSessionCalls.push(session)
+      },
+    }),
+  },
+  mergeSessionDirectoryMetadata: (incoming: Session) => incoming,
+  resolveGlobalSessionDirectory: () => null,
+}))
+
+mock.module("@/stores/useConfigStore", () => ({
+  useConfigStore: {
+    getState: () => ({
+      isConnected: true,
+      hasEverConnected: true,
+    }),
+  },
+  selectCatalogLoadedForDirectory: () => false,
+  selectConfigAgentsForDirectory: () => [],
+}))
+
+mock.module("../input-store", () => ({
+  useInputStore: {
+    getState: () => ({
+      clearAttachedFiles: () => undefined,
+      addRestoredAttachment: () => undefined,
+    }),
+  },
+}))
+
+const { createSession, setActionRefs } = await import("../session-actions")
+>>>>>>> upstream/main
 
 beforeEach(() => {
   switchRuntimeEndpoint({ apiBaseUrl: "https://issue-1637.test", runtimeKey: "issue-1637" })

@@ -29,6 +29,33 @@ After a successful send, the runtime merge-writes
 replayed compaction event from reinjecting the same summary. The runtime is
 owned by the OpenChamber web backend and therefore is not available to clients without the server.
 
+<<<<<<< HEAD
 ### Why a fork starts without inherited pins
+||||||| bc50ba56aa
+### Why root sessions keep inherited pins
+=======
+## Invariants
+
+- The runtime stays inert without both metadata read and cursor persistence
+  dependencies. Cursor writes merge only their fields into the OpenChamber
+  namespace, preserving concurrent goal and assist changes.
+- Metadata pins are checked for a string id, numeric creation time and user or
+  assistant role. Other metadata fields remain unchecked. The compaction cursor
+  preserves the upstream id after its existing truthiness check, so its type
+  remains unknown.
+- OpenCode JSON responses are read as records with unchecked optional fields.
+  Non-record responses have no usable session, page or message fields and are
+  treated as absent. Text parts require a text type and string text.
+
+## OpenCode response contract
+
+The [`@opencode/client` 2.3.0 contract](https://www.npmjs.com/package/@opencode/client/v/2.3.0)
+uses newest-first message pages with data and cursor fields. Completed compaction
+messages have their own role, completed status and `time.created`. User messages
+carry text, while assistant messages carry content arrays. Synthetic context is
+a separate message; model and agent selection belongs to the session.
+
+### Why root sessions keep inherited pins
+>>>>>>> upstream/main
 
 The Canonical API creates a fork with its own session id and its own metadata record, and the copied messages receive new ids. Remapping inherited pins would need the source's message ids on the fork, which the contract does not carry, so the fork starts with no obligatory pins and restores only what the user marks in it.

@@ -28,16 +28,23 @@ const getRuntimeGit = () => {
   return getRegisteredRuntimeAPIs()?.git ?? null;
 };
 
-// A registered runtime that omits an operation does not have it. Falling back
-// to the HTTP adapter would call a server that runtime does not run.
 const unsupportedByRuntime = (operation: string): Promise<never> =>
   Promise.reject(new GitNetworkOperationRequestError('RUNTIME_UNSUPPORTED', `${operation} is not supported in this runtime`, 501));
 
+<<<<<<< HEAD
 // Runtime git adapters do not necessarily go through the HTTP
 // adapter's cache, so the invalidation signal `useGitStore` relies on has to be
 // emitted here, at the dispatch layer, once a runtime mutation succeeds. The
 // HTTP adapter keeps emitting it itself when it clears its own cache, so a
 // mutation is announced exactly once on either path.
+||||||| bc50ba56aa
+// Runtime git adapters (the VS Code bridge today) do not go through the HTTP
+// adapter's cache, so the invalidation signal `useGitStore` relies on has to be
+// emitted here, at the dispatch layer, once a runtime mutation succeeds. The
+// HTTP adapter keeps emitting it itself when it clears its own cache, so a
+// mutation is announced exactly once on either path.
+=======
+>>>>>>> upstream/main
 const runtimeStatusMutation = async <T>(directory: string, mutation: Promise<T>): Promise<T> => {
   const result = await mutation;
   notifyGitStatusInvalidated(directory);
@@ -79,7 +86,6 @@ export async function resolveGitPrimaryRoot(directory: string): Promise<string> 
   return result.root;
 }
 
-/** Where `directory` sits inside its repository's checkout; `''` at the root. Rejects when unknown. */
 export async function resolveGitRepositoryPrefix(directory: string): Promise<string> {
   const runtime = getRuntimeGit();
   if (runtime?.resolveRepositoryPrefix) return runtime.resolveRepositoryPrefix(directory);
@@ -169,9 +175,6 @@ export async function getGitUnpushedBranchCounts(directory: string, branches: st
 
 const COMMIT_DIFF_FILE_LIMIT = 30;
 const COMMIT_DIFF_TOTAL_CHAR_LIMIT = 120_000;
-// Each in-flight file issues a staged + unstaged pair, so the peak request
-// count here is twice this value. Two matches the store's diff-prefetch
-// concurrency and keeps the browser connection pool able to serve the UI.
 const COMMIT_DIFF_CONCURRENCY = 2;
 
 const collectSelectedFileDiffs = async (directory: string, files: string[], assertCurrent: () => void): Promise<string> => {
@@ -212,9 +215,6 @@ const collectSelectedFileDiffs = async (directory: string, files: string[], asse
 const COMMIT_STYLE_SAMPLE_COUNT = 10;
 const COMMIT_STYLE_SUBJECT_CHAR_LIMIT = 200;
 
-// Recent commit subjects give the model the repository's own commit style —
-// language, prefixes, capitalization — instead of a hardcoded English default.
-// A repository with no history yet is normal, so an empty sample is not an error.
 const collectRecentCommitSubjects = async (directory: string): Promise<string> => {
   try {
     const log = await getGitLog(directory, { maxCount: COMMIT_STYLE_SAMPLE_COUNT });
@@ -234,6 +234,44 @@ const collectRecentCommitSubjects = async (directory: string): Promise<string> =
 };
 
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+// Legacy transport: run the structured generation inside the active chat
+// session. Kept as the fallback for setups with no direct provider login
+// (vanilla installs on OpenCode's free models), where the small-model
+// endpoint has nothing to call but the session itself still works.
+async function generateCommitMessageViaSession(
+  directory: string,
+  visiblePrompt: string,
+  hiddenPrompt: string,
+): Promise<{ message: import('./api/types').GeneratedCommitMessage }> {
+  const generationSession = await resolveGenerationSessionContext();
+  const structured = await runStructuredGenerationInActiveSession({
+    directory,
+    visiblePrompt,
+    hiddenPrompt,
+    generationSession,
+    kind: 'commit',
+  });
+  return { message: parseCommitStructured(structured) };
+}
+=======
+async function generateCommitMessageViaSession(
+  directory: string,
+  visiblePrompt: string,
+  hiddenPrompt: string,
+): Promise<{ message: import('./api/types').GeneratedCommitMessage }> {
+  const generationSession = await resolveGenerationSessionContext();
+  const structured = await runStructuredGenerationInActiveSession({
+    directory,
+    visiblePrompt,
+    hiddenPrompt,
+    generationSession,
+    kind: 'commit',
+  });
+  return { message: parseCommitStructured(structured) };
+}
+>>>>>>> upstream/main
 
 export async function generateCommitMessage(
   directory: string,
@@ -270,6 +308,7 @@ export async function generateCommitMessage(
       system: visiblePrompt,
       prompt: `${hiddenPrompt}\n\nDiffs of the selected files:\n${diffs}`,
       directory,
+<<<<<<< HEAD
       format: { kind: 'json', schema: { type: 'object', properties: { subject: { type: 'string' }, highlights: { type: 'array', items: { type: 'string' } } }, required: ['subject', 'highlights'], additionalProperties: false } },
       role: 'commit',
       reasoning: options?.reasoning === true,
@@ -279,6 +318,55 @@ export async function generateCommitMessage(
     const response = await requestSmallModel(request, { notifyOnError: false });
     const message: CommitCompletion = structuredCompletion(response, commitCompletionSchema);
     const result = { message };
+||||||| bc50ba56aa
+    }, { notifyOnError: false });
+
+    if (response.status === 404) {
+      // No authenticated provider has a small model — fall back to the
+      // session transport so free-model-only setups keep a working button.
+      console.info('[git-generation][browser] small model unavailable, falling back to session transport');
+      const result = await generateCommitMessageViaSession(directory, visiblePrompt, hiddenPrompt);
+      console.info('[git-generation][browser] success', {
+        transport: 'session-fallback',
+        kind: 'commit',
+        elapsedMs: Date.now() - startedAt,
+        subjectLength: result.message.subject.length,
+        highlightsCount: result.message.highlights.length,
+      });
+      return result;
+    }
+
+    const payload = await response.json().catch(() => null) as { text?: unknown; error?: unknown } | null;
+    if (!response.ok || typeof payload?.text !== 'string') {
+      const message = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const result = { message: parseCommitStructured(extractJsonObject(payload.text)) };
+=======
+    }, { notifyOnError: false });
+
+    if (response.status === 404) {
+      console.info('[git-generation][browser] small model unavailable, falling back to session transport');
+      const result = await generateCommitMessageViaSession(directory, visiblePrompt, hiddenPrompt);
+      console.info('[git-generation][browser] success', {
+        transport: 'session-fallback',
+        kind: 'commit',
+        elapsedMs: Date.now() - startedAt,
+        subjectLength: result.message.subject.length,
+        highlightsCount: result.message.highlights.length,
+      });
+      return result;
+    }
+
+    const payload = await response.json().catch(() => null) as { text?: unknown; error?: unknown } | null;
+    if (!response.ok || typeof payload?.text !== 'string') {
+      const message = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const result = { message: parseCommitStructured(extractJsonObject(payload.text)) };
+>>>>>>> upstream/main
     console.info('[git-generation][browser] success', {
       transport: 'small-model',
       kind: 'commit',
@@ -299,11 +387,6 @@ export async function generateCommitMessage(
   }
 }
 
-// Conventional pull request template locations. GitHub resolves `.github/`
-// first, then the repository root, then `docs/`; both casings are probed
-// because case-sensitive filesystems treat them as different files. GitLab
-// keeps its merge request templates in `.gitlab/merge_request_templates/`,
-// where `Default.md` is the one applied without an explicit choice.
 const PULL_REQUEST_TEMPLATE_PATHS = [
   '.github/pull_request_template.md',
   '.github/PULL_REQUEST_TEMPLATE.md',
@@ -337,12 +420,24 @@ const readOptionalRepoTextFile = async (directory: string, relativePath: string)
   }
 };
 
+<<<<<<< HEAD
 // A repository that ships a PR template expects descriptions in its shape, so
 // the template wins over the built-in section layout. Missing template is the
 // normal case, not a failure: probing stops at the first file that has content.
 const collectPullRequestTemplate = async (directory: string, provider: ChangeRequestProviderWords | undefined, assertCurrent: () => void): Promise<string> => {
   // A provider's own templates (GitLab's merge request template) come before any GitHub-style one the project may also carry.
   const own = provider?.features?.changeRequestTemplates ?? [];
+||||||| bc50ba56aa
+// A repository that ships a PR template expects descriptions in its shape, so
+// the template wins over the built-in section layout. Missing template is the
+// normal case, not a failure: probing stops at the first file that has content.
+const collectPullRequestTemplate = async (directory: string, provider: ChangeRequestProviderWords | undefined): Promise<string> => {
+  // A provider's own templates (GitLab's merge request template) come before any GitHub-style one the project may also carry.
+  const own = provider?.features.changeRequestTemplates ?? [];
+=======
+const collectPullRequestTemplate = async (directory: string, provider: ChangeRequestProviderWords | undefined): Promise<string> => {
+  const own = provider?.features.changeRequestTemplates ?? [];
+>>>>>>> upstream/main
   const paths = [...own, ...PULL_REQUEST_TEMPLATE_PATHS.filter((candidate) => !own.includes(candidate))];
   const noun = provider?.terminology.promptNoun ?? 'pull request';
   for (const relativePath of paths) {
@@ -357,7 +452,6 @@ const collectPullRequestTemplate = async (directory: string, provider: ChangeReq
       length: trimmed.length,
     });
     const body = trimmed.slice(0, PULL_REQUEST_TEMPLATE_CHAR_LIMIT);
-    // Leading blank line keeps the block visually separate from the file list.
     return [
       '',
       '',
@@ -371,7 +465,14 @@ const collectPullRequestTemplate = async (directory: string, provider: ChangeReq
   return '';
 };
 
+<<<<<<< HEAD
 
+||||||| bc50ba56aa
+/** What a generation prompt says of the project's provider: its name, its English noun, its template paths. */
+type ChangeRequestProviderWords = Pick<SourceControlProviderDescriptor, 'label' | 'terminology' | 'features'>;
+=======
+type ChangeRequestProviderWords = Pick<SourceControlProviderDescriptor, 'label' | 'terminology' | 'features'>;
+>>>>>>> upstream/main
 
 export async function generatePullRequestDescription(
   directory: string,
@@ -461,6 +562,7 @@ export async function generatePullRequestDescription(
       system: visiblePrompt,
       prompt: hiddenPrompt,
       directory,
+<<<<<<< HEAD
       format: { kind: 'json', schema: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' } }, required: ['title', 'body'], additionalProperties: false } },
       role: 'commit',
     };
@@ -468,6 +570,71 @@ export async function generatePullRequestDescription(
     else if (currentProviderId && currentModelId) request.preferred = { providerId: currentProviderId, modelId: currentModelId };
     const response = await requestSmallModel(request, { notifyOnError: false });
     const result: PullRequestCompletion = structuredCompletion(response, pullRequestCompletionSchema);
+||||||| bc50ba56aa
+    }, { notifyOnError: false });
+
+    if (response.status === 404) {
+      // No authenticated provider has a small model — fall back to the
+      // session transport so free-model-only setups keep working.
+      console.info('[git-generation][browser] small model unavailable, falling back to session transport');
+      const generationSession = await resolveGenerationSessionContext();
+      const structured = await runStructuredGenerationInActiveSession({
+        directory,
+        visiblePrompt,
+        hiddenPrompt,
+        generationSession,
+        kind: 'pr',
+      });
+      const result = parsePrStructured(structured);
+      console.info('[git-generation][browser] success', {
+        transport: 'session-fallback',
+        kind: 'pr',
+        elapsedMs: Date.now() - startedAt,
+        titleLength: result.title.length,
+        bodyLength: result.body.length,
+      });
+      return result;
+    }
+
+    const payload = await response.json().catch(() => null) as { text?: unknown; error?: unknown } | null;
+    if (!response.ok || typeof payload?.text !== 'string') {
+      const message = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const result = parsePrStructured(extractJsonObject(payload.text));
+=======
+    }, { notifyOnError: false });
+
+    if (response.status === 404) {
+      console.info('[git-generation][browser] small model unavailable, falling back to session transport');
+      const generationSession = await resolveGenerationSessionContext();
+      const structured = await runStructuredGenerationInActiveSession({
+        directory,
+        visiblePrompt,
+        hiddenPrompt,
+        generationSession,
+        kind: 'pr',
+      });
+      const result = parsePrStructured(structured);
+      console.info('[git-generation][browser] success', {
+        transport: 'session-fallback',
+        kind: 'pr',
+        elapsedMs: Date.now() - startedAt,
+        titleLength: result.title.length,
+        bodyLength: result.body.length,
+      });
+      return result;
+    }
+
+    const payload = await response.json().catch(() => null) as { text?: unknown; error?: unknown } | null;
+    if (!response.ok || typeof payload?.text !== 'string') {
+      const message = typeof payload?.error === 'string' ? payload.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const result = parsePrStructured(extractJsonObject(payload.text));
+>>>>>>> upstream/main
     console.info('[git-generation][browser] success', {
       transport: 'small-model',
       kind: 'pr',
@@ -488,6 +655,308 @@ export async function generatePullRequestDescription(
   }
 }
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+type SessionGenerationContext = {
+  sessionId: string;
+  providerID: string;
+  modelID: string;
+  agent?: string;
+  variant?: string;
+};
+
+const GENERATION_CONFIG_ERROR = 'No default provider or model configured. Please select a provider and model in settings first.';
+
+async function resolveGenerationSessionContext(): Promise<SessionGenerationContext> {
+  const activeSession = resolveSessionGenerationContext();
+  if (activeSession) {
+    return activeSession;
+  }
+
+  const draft = useSessionUIStore.getState().newSessionDraft;
+  if (!draft?.open) {
+    throw new Error('Select existing session for generation');
+  }
+
+  const config = useConfigStore.getState();
+  if (!config.currentProviderId || !config.currentModelId) {
+    throw new Error(GENERATION_CONFIG_ERROR);
+  }
+
+  const createdDraftSession = await materializeOpenDraftSession({
+    providerID: config.currentProviderId,
+    modelID: config.currentModelId,
+    agent: config.currentAgentName || undefined,
+    variant: config.currentVariant || undefined,
+  });
+
+  if (!createdDraftSession) {
+    const retry = resolveSessionGenerationContext();
+    if (retry) {
+      return retry;
+    }
+    throw new Error('Failed to create session for generation');
+  }
+
+  return {
+    sessionId: createdDraftSession.sessionId,
+    providerID: config.currentProviderId,
+    modelID: config.currentModelId,
+    agent: createdDraftSession.agent,
+    variant: config.currentVariant || undefined,
+  };
+}
+
+const resolveSessionGenerationContext = (): SessionGenerationContext | null => {
+  const sessionId = useSessionUIStore.getState().currentSessionId;
+  if (!sessionId) {
+    return null;
+  }
+
+  const selection = useSelectionStore.getState();
+  const config = useConfigStore.getState();
+  const lastChoice = useSessionUIStore.getState().getLastUserChoice(sessionId);
+
+  const agent = selection.getSessionAgentSelection(sessionId) || lastChoice?.agent || config.currentAgentName || undefined;
+  const sessionModel = selection.getSessionModelSelection(sessionId);
+  const agentModel = agent ? selection.getAgentModelForSession(sessionId, agent) : null;
+  const lastChoiceModel = lastChoice?.providerID && lastChoice.modelID
+    ? { providerId: lastChoice.providerID, modelId: lastChoice.modelID }
+    : null;
+  const selectedModel = agentModel || sessionModel || lastChoiceModel || (config.currentProviderId && config.currentModelId
+    ? { providerId: config.currentProviderId, modelId: config.currentModelId }
+    : null);
+
+  if (!selectedModel?.providerId || !selectedModel?.modelId) {
+    return null;
+  }
+
+  const selectionVariant = agent
+    ? selection.getAgentModelVariantForSession(sessionId, agent, selectedModel.providerId, selectedModel.modelId)
+    : undefined;
+  const lastChoiceVariant = lastChoiceModel
+    && lastChoiceModel.providerId === selectedModel.providerId
+    && lastChoiceModel.modelId === selectedModel.modelId
+      ? lastChoice?.variant
+      : undefined;
+  const configVariant = config.currentProviderId === selectedModel.providerId && config.currentModelId === selectedModel.modelId
+    ? config.currentVariant
+    : undefined;
+  const variant = selectionVariant || lastChoiceVariant || configVariant || undefined;
+
+  return {
+    sessionId,
+    providerID: selectedModel.providerId,
+    modelID: selectedModel.modelId,
+    agent,
+    variant,
+  };
+};
+
+const runStructuredGenerationInActiveSession = async ({
+  directory,
+  visiblePrompt,
+  hiddenPrompt,
+  generationSession,
+  kind,
+}: {
+  directory: string;
+  visiblePrompt: string;
+  hiddenPrompt?: string;
+  generationSession: SessionGenerationContext;
+  kind: 'commit' | 'pr';
+}): Promise<Record<string, unknown>> => {
+  const requestStartedAt = Date.now();
+  console.info('[git-generation][browser] runStructuredGenerationInActiveSession start', {
+    kind,
+    directory,
+    sessionId: generationSession.sessionId,
+    providerID: generationSession.providerID,
+    modelID: generationSession.modelID,
+    agent: generationSession.agent,
+    variant: generationSession.variant,
+  });
+  const trimmedDirectory = typeof directory === 'string' ? directory.trim() : '';
+  const visiblePromptText = typeof visiblePrompt === 'string' ? visiblePrompt.trim() : '';
+  const hiddenPromptText = typeof hiddenPrompt === 'string' ? hiddenPrompt.trim() : '';
+  const prompt = [visiblePromptText, hiddenPromptText].filter(Boolean).join('\n\n');
+  if (!prompt) {
+    throw new Error('Generation prompts are empty');
+  }
+
+  requestChatForceScrollBottom(generationSession.sessionId);
+
+  // v2 generates in the session's own context and answers with the text, so
+  // the generation no longer lands in the transcript as a prompt/reply pair.
+  const assistantText = await opencodeClient.generateSessionText(
+    generationSession.sessionId,
+    prompt,
+    trimmedDirectory.length > 0 ? trimmedDirectory : undefined,
+  );
+
+  const parsedOutput = extractJsonObject(assistantText);
+  if (!parsedOutput) {
+    console.error('[git-generation][browser] invalid JSON output', {
+      kind,
+      sessionId: generationSession.sessionId,
+      elapsedMs: Date.now() - requestStartedAt,
+      assistantText,
+    });
+    throw new Error('No JSON output returned by session');
+  }
+
+  return parsedOutput;
+};
+=======
+type SessionGenerationContext = {
+  sessionId: string;
+  providerID: string;
+  modelID: string;
+  agent?: string;
+  variant?: string;
+};
+
+const GENERATION_CONFIG_ERROR = 'No default provider or model configured. Please select a provider and model in settings first.';
+
+async function resolveGenerationSessionContext(): Promise<SessionGenerationContext> {
+  const activeSession = resolveSessionGenerationContext();
+  if (activeSession) {
+    return activeSession;
+  }
+
+  const draft = useSessionUIStore.getState().newSessionDraft;
+  if (!draft?.open) {
+    throw new Error('Select existing session for generation');
+  }
+
+  const config = useConfigStore.getState();
+  if (!config.currentProviderId || !config.currentModelId) {
+    throw new Error(GENERATION_CONFIG_ERROR);
+  }
+
+  const createdDraftSession = await materializeOpenDraftSession({
+    providerID: config.currentProviderId,
+    modelID: config.currentModelId,
+    agent: config.currentAgentName || undefined,
+    variant: config.currentVariant || undefined,
+  });
+
+  if (!createdDraftSession) {
+    const retry = resolveSessionGenerationContext();
+    if (retry) {
+      return retry;
+    }
+    throw new Error('Failed to create session for generation');
+  }
+
+  return {
+    sessionId: createdDraftSession.sessionId,
+    providerID: config.currentProviderId,
+    modelID: config.currentModelId,
+    agent: createdDraftSession.agent,
+    variant: config.currentVariant || undefined,
+  };
+}
+
+const resolveSessionGenerationContext = (): SessionGenerationContext | null => {
+  const sessionId = useSessionUIStore.getState().currentSessionId;
+  if (!sessionId) {
+    return null;
+  }
+
+  const selection = useSelectionStore.getState();
+  const config = useConfigStore.getState();
+  const lastChoice = useSessionUIStore.getState().getLastUserChoice(sessionId);
+
+  const agent = selection.getSessionAgentSelection(sessionId) || lastChoice?.agent || config.currentAgentName || undefined;
+  const sessionModel = selection.getSessionModelSelection(sessionId);
+  const agentModel = agent ? selection.getAgentModelForSession(sessionId, agent) : null;
+  const lastChoiceModel = lastChoice?.providerID && lastChoice.modelID
+    ? { providerId: lastChoice.providerID, modelId: lastChoice.modelID }
+    : null;
+  const selectedModel = agentModel || sessionModel || lastChoiceModel || (config.currentProviderId && config.currentModelId
+    ? { providerId: config.currentProviderId, modelId: config.currentModelId }
+    : null);
+
+  if (!selectedModel?.providerId || !selectedModel?.modelId) {
+    return null;
+  }
+
+  const selectionVariant = agent
+    ? selection.getAgentModelVariantForSession(sessionId, agent, selectedModel.providerId, selectedModel.modelId)
+    : undefined;
+  const lastChoiceVariant = lastChoiceModel
+    && lastChoiceModel.providerId === selectedModel.providerId
+    && lastChoiceModel.modelId === selectedModel.modelId
+      ? lastChoice?.variant
+      : undefined;
+  const configVariant = config.currentProviderId === selectedModel.providerId && config.currentModelId === selectedModel.modelId
+    ? config.currentVariant
+    : undefined;
+  const variant = selectionVariant || lastChoiceVariant || configVariant || undefined;
+
+  return {
+    sessionId,
+    providerID: selectedModel.providerId,
+    modelID: selectedModel.modelId,
+    agent,
+    variant,
+  };
+};
+
+const runStructuredGenerationInActiveSession = async ({
+  directory,
+  visiblePrompt,
+  hiddenPrompt,
+  generationSession,
+  kind,
+}: {
+  directory: string;
+  visiblePrompt: string;
+  hiddenPrompt?: string;
+  generationSession: SessionGenerationContext;
+  kind: 'commit' | 'pr';
+}): Promise<Record<string, unknown>> => {
+  const requestStartedAt = Date.now();
+  console.info('[git-generation][browser] runStructuredGenerationInActiveSession start', {
+    kind,
+    directory,
+    sessionId: generationSession.sessionId,
+    providerID: generationSession.providerID,
+    modelID: generationSession.modelID,
+    agent: generationSession.agent,
+    variant: generationSession.variant,
+  });
+  const trimmedDirectory = typeof directory === 'string' ? directory.trim() : '';
+  const visiblePromptText = typeof visiblePrompt === 'string' ? visiblePrompt.trim() : '';
+  const hiddenPromptText = typeof hiddenPrompt === 'string' ? hiddenPrompt.trim() : '';
+  const prompt = [visiblePromptText, hiddenPromptText].filter(Boolean).join('\n\n');
+  if (!prompt) {
+    throw new Error('Generation prompts are empty');
+  }
+
+  requestChatForceScrollBottom(generationSession.sessionId);
+
+  const assistantText = await opencodeClient.generateSessionText(
+    generationSession.sessionId,
+    prompt,
+    trimmedDirectory.length > 0 ? trimmedDirectory : undefined,
+  );
+
+  const parsedOutput = extractJsonObject(assistantText);
+  if (!parsedOutput) {
+    console.error('[git-generation][browser] invalid JSON output', {
+      kind,
+      sessionId: generationSession.sessionId,
+      elapsedMs: Date.now() - requestStartedAt,
+      assistantText,
+    });
+    throw new Error('No JSON output returned by session');
+  }
+
+  return parsedOutput;
+};
+>>>>>>> upstream/main
 
 async function listGitWorktrees(directory: string): Promise<import('./api/types').GitWorktreeInfo[]> {
   const runtime = getRuntimeGit();
@@ -567,7 +1036,6 @@ async function teardownGitWorktree(
   return gitHttp.teardownGitWorktree(directory, payload);
 }
 
-/** Renames the task of the worktree at `directory`; the user's name stays over the agent's. */
 export async function setGitWorktreeTitle(
   directory: string,
   title: string,
@@ -577,7 +1045,43 @@ export async function setGitWorktreeTitle(
     return runtime.worktree.setTitle(directory, title);
   }
   if (runtime) throw new Error('Renaming a worktree task is not available here');
+<<<<<<< HEAD
   return gitHttp.setGitWorktreeTitle(directory, title);
+||||||| bc50ba56aa
+  return gitHttp.setGitWorktreeTitle(directory, title, by);
+}
+
+/**
+ * Pins the task of the worktree at `directory` to the top of the sidebar, or
+ * unpins it. `list` files the pin in one of the user's pin lists; null is Pinned.
+ */
+export async function setGitWorktreePinned(
+  directory: string,
+  pinned: boolean,
+  list: string | null = null,
+): Promise<import('./api/types').GitWorktreePinResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.setPinned) {
+    return runtime.worktree.setPinned(directory, pinned, list);
+  }
+  if (runtime) throw new Error('Pinning a worktree task is not available here');
+  return gitHttp.setGitWorktreePinned(directory, pinned, list);
+=======
+  return gitHttp.setGitWorktreeTitle(directory, title, by);
+}
+
+export async function setGitWorktreePinned(
+  directory: string,
+  pinned: boolean,
+  list: string | null = null,
+): Promise<import('./api/types').GitWorktreePinResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.setPinned) {
+    return runtime.worktree.setPinned(directory, pinned, list);
+  }
+  if (runtime) throw new Error('Pinning a worktree task is not available here');
+  return gitHttp.setGitWorktreePinned(directory, pinned, list);
+>>>>>>> upstream/main
 }
 
 export async function snapshotGitWorktree(
@@ -591,10 +1095,6 @@ export async function snapshotGitWorktree(
   return gitHttp.snapshotGitWorktree(directory, payload);
 }
 
-/**
- * Worktree archives exist where the runtime's git offers them: web and the
- * desktop app, through the server. VS Code keeps its own list without them.
- */
 export const canArchiveWorktrees = (): boolean => {
   const runtime = getRuntimeGit();
   return runtime ? Boolean(runtime.worktree?.archive && runtime.worktree.listArchives && runtime.worktree.restoreArchive && runtime.worktree.deleteArchive) : true;
@@ -703,6 +1203,15 @@ export async function getGitCommitDiff(directory: string, options: import('./api
   return gitHttp.getGitCommitDiff(directory, options);
 }
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/** Goes straight to the server: only OpenChamber's own git routes hand out both versions of a file. */
+export const getGitRangeFileVersions = gitHttp.getGitRangeFileVersions;
+
+=======
+export const getGitRangeFileVersions = gitHttp.getGitRangeFileVersions;
+
+>>>>>>> upstream/main
 export async function getCommitFileDiff(
   directory: string,
   hash: string,
@@ -801,6 +1310,7 @@ export async function resetToCommit(
   return gitHttp.resetToCommit(directory, hash, mode, force);
 }
 
+<<<<<<< HEAD
 /**
  * Adds the host-computed Change-Id trailer to HEAD, after checking the tip is
  * still `expectedHead`. The HTTP adapter clears its own cache; a runtime's
@@ -819,6 +1329,13 @@ export async function addChangeIdToHead(
  * Whether `directory` exists inside the checkout at `worktreeRoot` once both
  * are canonicalized, so a symlink out of the checkout reports `insideWorktreeRoot: false`.
  */
+||||||| bc50ba56aa
+/**
+ * Whether `directory` exists inside the checkout at `worktreeRoot` once both
+ * are canonicalized, so a symlink out of the checkout reports `insideWorktreeRoot: false`.
+ */
+=======
+>>>>>>> upstream/main
 export async function validateWorktreeDirectory(directory: string, worktreeRoot: string): Promise<{
   valid: boolean;
   insideWorktreeRoot: boolean;

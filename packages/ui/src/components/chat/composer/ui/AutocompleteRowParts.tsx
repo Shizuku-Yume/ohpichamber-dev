@@ -4,8 +4,15 @@ import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
+<<<<<<< HEAD
 /** Where an autocomplete item comes from; `omp` and `openchamber` are the apps' own items. */
 export type AutocompleteScope = 'user' | 'project' | 'omp' | 'openchamber';
+||||||| bc50ba56aa
+/** Where an autocomplete item comes from; `opencode` and `openchamber` are the apps' own items. */
+export type AutocompleteScope = 'user' | 'project' | 'opencode' | 'openchamber';
+=======
+export type AutocompleteScope = 'user' | 'project' | 'opencode' | 'openchamber';
+>>>>>>> upstream/main
 
 const SCOPE_TONE = {
   project: 'bg-[color-mix(in_srgb,var(--status-info)_12%,transparent)] text-[color-mix(in_srgb,var(--status-info)_70%,transparent)] border-[color-mix(in_srgb,var(--status-info)_24%,transparent)]',
@@ -20,10 +27,6 @@ const SCOPE_LABEL = {
   openchamber: 'chat.autocomplete.scope.openchamber',
 } as const;
 
-/**
- * A list's one row while its items load, as tall as the "no matches" row that
- * often follows it, so the popup does not move between the two.
- */
 export function AutocompleteLoadingRow() {
   const { t } = useI18n();
   return (
@@ -35,14 +38,8 @@ export function AutocompleteLoadingRow() {
   );
 }
 
-/**
- * The rest of an autocomplete row after its name: the description, muted on
- * one line and cut where it runs out of room, then the item's scope at the
- * end edge. Nothing pops up: the row says what it is at a glance.
- */
 export function AutocompleteRowDetail({ scope, extension, description }: {
   scope?: AutocompleteScope | null;
-  /** An extension's item names the extension in place of a scope. */
   extension?: string;
   description?: string | null;
 }) {

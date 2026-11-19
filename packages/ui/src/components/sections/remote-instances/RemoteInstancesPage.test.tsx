@@ -7,8 +7,14 @@ import type { DesktopHost, HostProbeResult } from '@/lib/desktopHosts';
 const dom = (globalThis.window as unknown as Window | undefined) ?? new Window({ url: 'http://localhost/' });
 (dom as unknown as { __OPENCHAMBER_ELECTRON__: unknown }).__OPENCHAMBER_ELECTRON__ = { runtime: 'electron' };
 Object.assign(globalThis, {
+<<<<<<< HEAD
   __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
   window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
+||||||| bc50ba56aa
+  window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
+=======
+  window: dom, document: dom.document, CustomEvent: dom.CustomEvent, navigator: dom.navigator, localStorage: dom.localStorage,
+>>>>>>> upstream/main
   Node: dom.Node, Element: dom.Element, HTMLElement: dom.HTMLElement,
   Event: dom.Event, MouseEvent: dom.MouseEvent, MutationObserver: dom.MutationObserver,
   requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
@@ -21,6 +27,7 @@ const sshState = {
   load: async () => { }, loadImports: async () => { }, refreshStatuses: async () => { },
 };
 mock.module('@/stores/useDesktopSshStore', () => ({ useDesktopSshStore: (select: (state: unknown) => unknown) => select(sshState) }));
+<<<<<<< HEAD
 mock.module('@/stores/useUIStore', () => ({ useUIStore: (select: (state: unknown) => unknown) => select({ settingsRemoteInstancesSelectedId: null }) }));
 let mockClientAuth: {
   listClients: () => Promise<Array<{ id: string; label: string; clientKind: string; lastUsedAt?: string; revokedAt?: string | null }>>;
@@ -29,6 +36,19 @@ let mockClientAuth: {
 } | null = null;
 mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ clientAuth: mockClientAuth }) }));
 mock.module('@/components/ui', () => ({ toast: { error() { } } }));
+||||||| bc50ba56aa
+mock.module('@/stores/useUIStore', () => ({ useUIStore: (select: (state: unknown) => unknown) => select({ settingsRemoteInstancesSelectedId: null }) }));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({}) }));
+mock.module('@/components/ui', () => ({ toast: { error() {} } }));
+=======
+const uiState = { settingsRemoteInstancesSelectedId: null };
+// useConfigStore subscribes to the UI store when it loads, through the Settings search index.
+mock.module('@/stores/useUIStore', () => ({
+  useUIStore: Object.assign((select: (state: unknown) => unknown) => select(uiState), { getState: () => uiState, subscribe: () => () => {} }),
+}));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({}) }));
+mock.module('@/components/ui', () => ({ toast: { error() {} } }));
+>>>>>>> upstream/main
 
 const desktop = await import('@/lib/desktop');
 mock.module('@/lib/desktop', () => ({ ...desktop, isDesktopShell: () => true, isElectronShell: () => true }));

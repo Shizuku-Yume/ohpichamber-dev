@@ -5,9 +5,20 @@ import { renderTerminalOutput } from './toolOutput';
 import { nativeToolResultContent, parseDiffToUnified, tryParseJsonOutput } from '../toolRenderers';
 import { getStreamingThrottleText } from '../../hooks/useStreamingTextThrottle';
 
+<<<<<<< HEAD
 describe('canonical native result content', () => {
     const result = (output: ToolResultPart['output']): ToolResultPart => ({
         type: 'tool_result' as const, partId: 'result', toolCallId: 'call', toolName: 'read', isError: false, output,
+||||||| bc50ba56aa
+describe('getToolOutput', () => {
+    test('prefers state.output for completed tools', () => {
+        expect(getToolOutput('shell', 'final output', 'partial output', 'completed')).toBe('final output');
+=======
+describe('getToolOutput', () => {
+    test('prefers state.output for completed tools', () => {
+        expect(getToolOutput('shell', 'final output', 'partial output', 'completed')).toBe('final output');
+        expect(getToolOutput('shell', '', 'partial output', 'completed')).toBe('');
+>>>>>>> upstream/main
     });
 
     test('decodes SDK text and preserves structured details', () => {

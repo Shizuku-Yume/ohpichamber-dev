@@ -18,12 +18,23 @@ type Props = {
   directory: string | null;
 };
 
+<<<<<<< HEAD
 /**
  * The row's text: the message's first text part on one line, without the
  * markdown marks (fences, quotes, emphasis) that read as noise when the row
  * shows it as plain text.
  */
 const firstText = (parts: readonly Part[] | undefined): string | null => {
+||||||| bc50ba56aa
+/**
+ * The row's text: the message's first text part on one line, without the
+ * markdown marks (fences, quotes, emphasis) that read as noise when the row
+ * shows it as plain text.
+ */
+const firstText = (parts: readonly Part[] | undefined, sessionID?: string, messageID?: string): string | null => {
+=======
+const firstText = (parts: readonly Part[] | undefined, sessionID?: string, messageID?: string): string | null => {
+>>>>>>> upstream/main
   const text = (parts ?? []).find(
     (part): part is Extract<Part, { type: 'text' }> => part.type === 'text',
   )?.content;
@@ -38,30 +49,42 @@ const firstText = (parts: readonly Part[] | undefined): string | null => {
   return plain || null;
 };
 
-/**
- * Messages pinned into the context.
- *
- * The row carries two destinations, so the pin is its own button: pressing the
- * pin unpins, pressing the text takes you to the message.
- */
 export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
   const session = useSession(sessionId ?? '', directory ?? undefined);
   const { client, runtimeKey } = useSyncRuntime();
   const entries = React.useMemo(() => getContextObligatoryMessages(session), [session]);
+<<<<<<< HEAD
   // Select only the pinned texts. Selecting the whole part map would re-render
   // on every streamed part and, through this render's closures, keep every
   // evicted transcript's parts alive for as long as the section is mounted.
   const loadedTexts = useDirectorySync(useShallow((state: State) => entries.map((entry) =>
     firstText((sessionId ? state.message[sessionId] : undefined)?.find((message) => message.messageId === entry.id)?.parts),
   )), directory ?? undefined);
+||||||| bc50ba56aa
+  // Select only the pinned texts. Selecting the whole part map would re-render
+  // on every streamed part and, through this render's closures, keep every
+  // evicted transcript's parts alive for as long as the section is mounted.
+  const loadedTexts = useDirectorySync(useShallow((state: State) => entries.map((entry) => firstText(state.part[entry.id], sessionId ?? undefined, entry.id))), directory ?? undefined);
+=======
+  const loadedTexts = useDirectorySync(useShallow((state: State) => entries.map((entry) => firstText(state.part[entry.id], sessionId ?? undefined, entry.id))), directory ?? undefined);
+>>>>>>> upstream/main
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
+<<<<<<< HEAD
   // Pins are most useful on a long session, which is exactly when the pinned
   // message sits before the loaded part of the transcript. Such a pin reads
   // its message from canonical history instead: no session is materialised
   // for it, and a pin that is loaded costs nothing. A failed read leaves the
   // placeholder and is not retried until the section mounts again.
+||||||| bc50ba56aa
+  // Pins are most useful on a long session, which is exactly when the pinned
+  // message sits before the loaded part of the transcript. Such a pin reads
+  // its one message from OpenCode instead: no session is materialised for it,
+  // and a pin that is loaded costs nothing. A failed read leaves the
+  // placeholder and is not retried until the section mounts again.
+=======
+>>>>>>> upstream/main
   const [fetched, setFetched] = React.useState<{ key: string; texts: ReadonlyMap<string, string | null> }>(
     () => ({ key: '', texts: new Map() }),
   );
@@ -114,8 +137,6 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
     if (!sessionId || busyId) return;
     setBusyId(messageId);
     try {
-      // Only the id matters when unpinning — `withContextObligatoryMessage`
-      // filters by it and discards the rest of the payload.
       await setContextObligatoryMessage(
         sessionId,
         directory,
@@ -129,14 +150,22 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
     }
   }, [busyId, directory, sessionId, t]);
 
+<<<<<<< HEAD
   // The message-link request: the timeline loads older history until the
   // message is there, opens a collapsed turn around it and shows it where
   // links land. A repeated press is a new request.
+||||||| bc50ba56aa
+  // The message-link request: the timeline loads older history until the
+  // message is there, opens a collapsed turn around it and shows it where
+  // links land. A repeated press is a new request.
+  const leaveWorkStatus = useLeaveWorkStatus();
+=======
+  const leaveWorkStatus = useLeaveWorkStatus();
+>>>>>>> upstream/main
   const handleReveal = React.useCallback((messageId: string) => {
     if (sessionId) requestMessageFocus(sessionId, messageId);
   }, [sessionId]);
 
-  // While the timeline loads older history to reach a pin, its row spins.
   const inFlightId = React.useSyncExternalStore(
     subscribeMessageFocusStatus,
     () => readMessageFocusInFlight(sessionId),
@@ -148,11 +177,12 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
   if (pinned.length === 0) return null;
 
   return (
-    <WorkStatusSection title={t('chat.workStatus.section.pinned')}>
+    <WorkStatusSection title={t('chat.workStatus.section.pinned')} icon="pushpin">
       {pinned.map((entry) => (
         <WorkStatusRow
           key={entry.id}
           leading={(
+<<<<<<< HEAD
             <button
               type="button"
               disabled={busyId === entry.id}
@@ -165,11 +195,53 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
             >
               <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
             </button>
+||||||| bc50ba56aa
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* A row turns off pointer events on all but buttons; the span keeps the tooltip on a disabled one. */}
+                <span className="pointer-events-auto inline-flex shrink-0">
+                  <button
+                    type="button"
+                    disabled={busyId === entry.id}
+                    aria-label={t('chat.workStatus.pinned.unpin')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleUnpin(entry.id);
+                    }}
+                    className="-m-0.5 shrink-0 rounded p-0.5 opacity-70 transition-opacity hover:opacity-100 disabled:opacity-40"
+                  >
+                    <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>{t('chat.workStatus.pinned.unpin')}</TooltipContent>
+            </Tooltip>
+=======
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="pointer-events-auto inline-flex shrink-0">
+                  <button
+                    type="button"
+                    disabled={busyId === entry.id}
+                    aria-label={t('chat.workStatus.pinned.unpin')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleUnpin(entry.id);
+                    }}
+                    className="-m-0.5 shrink-0 rounded p-0.5 opacity-70 transition-opacity hover:opacity-100 disabled:opacity-40"
+                  >
+                    <Icon name="pushpin-2-fill" className="size-[13px]" style={{ color: 'var(--primary)' }} />
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>{t('chat.workStatus.pinned.unpin')}</TooltipContent>
+            </Tooltip>
+>>>>>>> upstream/main
           )}
           muted
           label={entry.text ?? t('chat.workStatus.pinned.unavailable')}
           value={inFlightId === entry.id
-            ? <Icon name="loader-4" className="size-3.5 animate-spin text-muted-foreground" aria-hidden />
+            ? <Icon name="loader-4" className="size-[13px] animate-spin text-muted-foreground" aria-hidden />
             : undefined}
           onClick={() => handleReveal(entry.id)}
           ariaLabel={t('chat.workStatus.pinned.reveal')}

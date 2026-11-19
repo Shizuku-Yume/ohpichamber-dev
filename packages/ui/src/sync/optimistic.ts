@@ -35,9 +35,20 @@ export function mergeOptimisticPage(page: MessagePage, items: readonly Optimisti
   }
 }
 
+<<<<<<< HEAD
 /** Merge chronologically sorted message arrays by native message identity. */
 export function mergeMessages<T extends Message>(existingMessages: readonly T[], incomingMessages: readonly T[]): T[] {
   const messagesById = new Map(existingMessages.map((item) => [item.messageId, item] as const))
+||||||| bc50ba56aa
+/** Merge two chronologically sorted message arrays by identity, deduplicating.
+ *  Preserves existing references for items that already exist — avoids
+ *  unnecessary React re-renders when prepending older history. */
+export function mergeMessages<T extends Message>(existingMessages: readonly T[], incomingMessages: readonly T[]) {
+  const messagesByID = new Map(existingMessages.map((item) => [item.id, item] as const))
+=======
+export function mergeMessages<T extends Message>(existingMessages: readonly T[], incomingMessages: readonly T[]) {
+  const messagesByID = new Map(existingMessages.map((item) => [item.id, item] as const))
+>>>>>>> upstream/main
   let changed = false
   for (const item of incomingMessages) {
     if (!messagesById.has(item.messageId)) {

@@ -18,10 +18,19 @@ import {
   SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
+<<<<<<< HEAD
   SettingsBadge,
   SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
+||||||| bc50ba56aa
+  SettingsBadge,
+  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+=======
+  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+>>>>>>> upstream/main
 } from '@/components/sections/shared/SettingsSection';
 import { LIVE_BROWSER_TABS_MAX, LIVE_BROWSER_TABS_MIN } from '@/lib/browser/liveTabs';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -38,10 +47,8 @@ import { isTerminalShell } from '@/lib/terminalShell';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MobileWorkspaceTabsSettings } from './MobileWorkspaceTabsSettings';
-import { isNewSetting } from '@/lib/settings/newSettings';
 
 
-/** Files and the editor: keymap, tree side, saving, hidden files, preview. */
 const FilesAndEditorSection: React.FC = () => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
@@ -78,9 +85,6 @@ const FilesAndEditorSection: React.FC = () => {
         <SettingsFieldRow
           label={t('settings.openchamber.visual.field.fileEditorKeymap')}
           settingsItem="appearance.file-editor-keymap"
-          labelAccessory={isNewSetting('appearance.file-editor-keymap') ? (
-            <SettingsBadge>{t('settings.view.badge.new')}</SettingsBadge>
-          ) : undefined}
         >
           <SettingsChipGroup
             value={fileEditorKeymap}
@@ -141,9 +145,6 @@ const FilesAndEditorSection: React.FC = () => {
           ariaLabel={t('settings.openchamber.visual.field.autoSaveEnabledAria')}
           info={t('settings.openchamber.visual.field.autoSaveEnabledInfo')}
           settingsItem="appearance.auto-save-enabled"
-          labelAccessory={isNewSetting('appearance.auto-save-enabled') ? (
-            <SettingsBadge>{t('settings.view.badge.new')}</SettingsBadge>
-          ) : undefined}
         />
         {showTreeControls ? (
           <SettingsCheckboxRow
@@ -175,7 +176,6 @@ const FilesAndEditorSection: React.FC = () => {
   );
 };
 
-/** The built-in terminal: which shell, login mode, quick keys. Not in VS Code. */
 const TerminalSection: React.FC = () => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
@@ -188,6 +188,8 @@ const TerminalSection: React.FC = () => {
   const setShowTerminalQuickKeysOnDesktop = useUIStore((state) => state.setShowTerminalQuickKeysOnDesktop);
   const terminalCloseOnExit = useUIStore((state) => state.terminalCloseOnExit);
   const setTerminalCloseOnExit = useUIStore((state) => state.setTerminalCloseOnExit);
+  const terminalOpenOnProjectAction = useUIStore((state) => state.terminalOpenOnProjectAction);
+  const setTerminalOpenOnProjectAction = useUIStore((state) => state.setTerminalOpenOnProjectAction);
   const [availableTerminalShells, setAvailableTerminalShells] = React.useState<TerminalShellOption[]>([]);
   const [terminalShellRuntimeEpoch, setTerminalShellRuntimeEpoch] = React.useState(0);
 
@@ -269,6 +271,16 @@ const TerminalSection: React.FC = () => {
         />
         {!isMobile ? (
           <SettingsCheckboxRow
+            checked={terminalOpenOnProjectAction}
+            onChange={setTerminalOpenOnProjectAction}
+            label={t('settings.openchamber.visual.field.terminalOpenOnProjectAction')}
+            ariaLabel={t('settings.openchamber.visual.field.terminalOpenOnProjectAction')}
+            info={t('settings.openchamber.visual.field.terminalOpenOnProjectActionInfo')}
+            settingsItem="appearance.terminal-open-on-project-action"
+          />
+        ) : null}
+        {!isMobile ? (
+          <SettingsCheckboxRow
             checked={showTerminalQuickKeysOnDesktop}
             onChange={setShowTerminalQuickKeysOnDesktop}
             label={t('settings.openchamber.visual.field.terminalQuickKeys')}
@@ -285,7 +297,6 @@ const TerminalSection: React.FC = () => {
   );
 };
 
-/** How the window behaves: header tabs, panel motion, scrollbars, where links open. */
 const PanelsAndLinksSection: React.FC = () => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
@@ -388,7 +399,6 @@ const PanelsAndLinksSection: React.FC = () => {
   );
 };
 
-/** How the window behaves, and the phone's workspace tabs. Not in VS Code. */
 export const GeneralInterfaceSettings: React.FC = () => {
   const { isMobile } = useDeviceInfo();
   if (isVSCodeRuntime()) return null;
@@ -400,7 +410,6 @@ export const GeneralInterfaceSettings: React.FC = () => {
   );
 };
 
-/** Files and the editor, then the terminal. VS Code keeps only the editor settings it applies. */
 export const GeneralFilesAndTerminalSettings: React.FC = () => (
   <>
     <FilesAndEditorSection />
@@ -408,3 +417,111 @@ export const GeneralFilesAndTerminalSettings: React.FC = () => (
   </>
 );
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/** The last sections of General: how messages stream in, and usage reports. */
+export const GeneralConnectionAndPrivacySettings: React.FC = () => {
+  const { t } = useI18n();
+  const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
+  const setMessageStreamTransport = useConfigStore((state) => state.setSettingsMessageStreamTransport);
+  const reportUsage = useUIStore((state) => state.reportUsage);
+  const setReportUsage = useUIStore((state) => state.setReportUsage);
+  const selectedTransport = MESSAGE_STREAM_TRANSPORT_OPTIONS.find((option) => option.id === messageStreamTransport);
+
+  const handleMessageStreamTransportChange = React.useCallback((mode: 'auto' | 'ws' | 'sse') => {
+    setMessageStreamTransport(mode);
+    void updateDesktopSettings({ messageStreamTransport: mode });
+  }, [setMessageStreamTransport]);
+
+  // Sync reportUsage changes to server settings
+  const handleReportUsageChange = React.useCallback((enabled: boolean) => {
+    setReportUsage(enabled);
+    void updateDesktopSettings({ reportUsage: enabled });
+  }, [setReportUsage]);
+
+  return (
+    <>
+      <SettingsSection
+        title={t('settings.openchamber.visual.section.messageStreamTransport')}
+        settingsItem="chat.message-transport"
+        contentClassName="space-y-2"
+      >
+        <SettingsChipGroup
+          value={messageStreamTransport}
+          options={MESSAGE_STREAM_TRANSPORT_OPTIONS.map((option) => ({
+            value: option.id,
+            label: t(option.labelKey),
+          }))}
+          onChange={handleMessageStreamTransportChange}
+          aria-label={t('settings.openchamber.visual.section.messageStreamTransport')}
+        />
+        {selectedTransport ? (
+          <p className="typography-meta text-muted-foreground">{t(selectedTransport.descriptionKey)}</p>
+        ) : null}
+      </SettingsSection>
+      <SettingsSection title={t('settings.openchamber.visual.section.privacy')}>
+        <SettingsCheckboxRow
+          checked={reportUsage}
+          onChange={handleReportUsageChange}
+          label={t('settings.openchamber.visual.field.sendAnonymousUsageReports')}
+          info={t('settings.openchamber.visual.field.sendAnonymousUsageReportsHint')}
+          ariaLabel={t('settings.openchamber.visual.field.sendAnonymousUsageReportsAria')}
+          settingsItem="appearance.usage-reports"
+        />
+      </SettingsSection>
+    </>
+  );
+};
+=======
+export const GeneralConnectionAndPrivacySettings: React.FC = () => {
+  const { t } = useI18n();
+  const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
+  const setMessageStreamTransport = useConfigStore((state) => state.setSettingsMessageStreamTransport);
+  const reportUsage = useUIStore((state) => state.reportUsage);
+  const setReportUsage = useUIStore((state) => state.setReportUsage);
+  const selectedTransport = MESSAGE_STREAM_TRANSPORT_OPTIONS.find((option) => option.id === messageStreamTransport);
+
+  const handleMessageStreamTransportChange = React.useCallback((mode: 'auto' | 'ws' | 'sse') => {
+    setMessageStreamTransport(mode);
+    void updateDesktopSettings({ messageStreamTransport: mode });
+  }, [setMessageStreamTransport]);
+
+  const handleReportUsageChange = React.useCallback((enabled: boolean) => {
+    setReportUsage(enabled);
+    void updateDesktopSettings({ reportUsage: enabled });
+  }, [setReportUsage]);
+
+  return (
+    <>
+      <SettingsSection
+        title={t('settings.openchamber.visual.section.messageStreamTransport')}
+        settingsItem="chat.message-transport"
+        contentClassName="space-y-2"
+      >
+        <SettingsChipGroup
+          value={messageStreamTransport}
+          options={MESSAGE_STREAM_TRANSPORT_OPTIONS.map((option) => ({
+            value: option.id,
+            label: t(option.labelKey),
+          }))}
+          onChange={handleMessageStreamTransportChange}
+          aria-label={t('settings.openchamber.visual.section.messageStreamTransport')}
+        />
+        {selectedTransport ? (
+          <p className="typography-meta text-muted-foreground">{t(selectedTransport.descriptionKey)}</p>
+        ) : null}
+      </SettingsSection>
+      <SettingsSection title={t('settings.openchamber.visual.section.privacy')}>
+        <SettingsCheckboxRow
+          checked={reportUsage}
+          onChange={handleReportUsageChange}
+          label={t('settings.openchamber.visual.field.sendAnonymousUsageReports')}
+          info={t('settings.openchamber.visual.field.sendAnonymousUsageReportsHint')}
+          ariaLabel={t('settings.openchamber.visual.field.sendAnonymousUsageReportsAria')}
+          settingsItem="appearance.usage-reports"
+        />
+      </SettingsSection>
+    </>
+  );
+};
+>>>>>>> upstream/main

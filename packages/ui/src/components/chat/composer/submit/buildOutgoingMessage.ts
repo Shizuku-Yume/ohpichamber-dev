@@ -1,31 +1,16 @@
-/**
- * Assembling what the composer actually sends.
- *
- * A single send can carry more than what the user just typed: messages queued
- * while the previous turn ran, inline review comments, `@file` references
- * resolved to attachments, linked issues and PRs, synthetic parts from
- * conflict resolution, and the skills mentioned inline.
- *
- * OpenCode takes one primary message plus additional parts, so all of that has
- * to be flattened into that shape — and the flattening has rules that are easy
- * to get wrong and impossible to see when they are spread through a 400-line
- * handler. They are stated here, as a pure function over injected resolvers,
- * so the ordering can be tested rather than trusted.
- */
 
 import type { JsonValue } from 'ohpichamber-sdk';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import type { SourceControlProvider } from '@/lib/api/types';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { QueuedContextPart, QueuedMessage } from '@/stores/messageQueueStore';
+import { withoutShareLinkKeys } from '@/lib/received-pages/link';
 import { contextPayloadFromDraft, createContextPart, type ContextPartMetadata, type ContextPartPayload } from '@/lib/messages/contextParts';
 
 export interface OutgoingPart {
     text: string;
     attachments?: AttachedFile[];
-    /** Synthetic parts are context for the model, not shown as user content. */
     synthetic?: boolean;
-    /** Structured context (see contextParts.ts), persisted with the part. */
     metadata?: ContextPartMetadata;
     /** This queued text already passed through native expansion at capture time. */
     fileResourcesExpanded?: boolean;
@@ -36,21 +21,41 @@ export interface OutgoingMessage {
     primaryFileResourcesExpanded: boolean;
     primaryAttachments: AttachedFile[];
     additionalParts: OutgoingPart[];
+<<<<<<< HEAD
     /**
      * Skills the composer text names inline, deduped in order of appearance.
      * The send attaches them to the prompt (see `SkillMentions`); queued
      * messages already carry the instruction they were queued with.
      */
+||||||| bc50ba56aa
+    /** The agent the first `@agent` mention routed to, if any. */
+    agentMentionName?: string;
+    /**
+     * Skills the composer text names inline, deduped in order of appearance.
+     * The send attaches them to the prompt (see `SkillMentions`); queued
+     * messages already carry the instruction they were queued with.
+     */
+=======
+    agentMentionName?: string;
+>>>>>>> upstream/main
     skillNames: string[];
-    /** True when there is nothing worth sending. */
     isEmpty: boolean;
 }
 
+<<<<<<< HEAD
 /**
  * A queued message is already resolved: its file mentions became attachments,
  * and the context the composer had attached travels with it.
  * Assembly only places it.
  */
+||||||| bc50ba56aa
+/**
+ * A queued message is already resolved: its agent mention was stripped, its
+ * file mentions became attachments, and the context the composer had attached
+ * travels with it. Assembly only places it.
+ */
+=======
+>>>>>>> upstream/main
 export interface QueuedInput {
     text: string;
     attachments?: AttachedFile[];
@@ -62,7 +67,12 @@ export const selectComposerQueue = (messages: readonly QueuedMessage[]): readonl
         ? messages.filter((message) => !message.scheduledTask)
         : messages;
 
+<<<<<<< HEAD
 /** An issue, PR or tracker item attached to the composer, as it is sent. */
+||||||| bc50ba56aa
+/** An issue, discussion, PR or tracker item attached to the composer, as it is sent. */
+=======
+>>>>>>> upstream/main
 export type ComposerContextReference =
     | { kind: 'repository-issue'; provider?: SourceControlProvider; number: number; title: string; url: string; contextText: string }
     | { kind: 'change-request'; provider: SourceControlProvider; number: number; title: string; url: string; context: string }
@@ -79,38 +89,45 @@ export type ComposerContextReference =
         url: string;
         contextText: string;
         thread?: 'issue' | 'pull';
-        /** Opaque guest payload; rides the context part metadata, not its text. */
         data?: JsonValue;
+<<<<<<< HEAD
     };
+||||||| bc50ba56aa
+    }
+    /** `messageId`: the message link that named this session, when the message had no text of its own. */
+    | { kind: 'session'; sessionId: string; title: string; contextText: string; messageId?: string }
+    | { kind: 'session-message'; sessionId: string; messageId: string; sessionTitle: string; excerpt: string; contextText: string };
+=======
+    }
+    | { kind: 'session'; sessionId: string; title: string; contextText: string; messageId?: string }
+    | { kind: 'session-message'; sessionId: string; messageId: string; sessionTitle: string; excerpt: string; contextText: string }
+    | { kind: 'shared-page'; receivedId: string | null; host: string; title: string; opened: boolean; contextText: string };
+>>>>>>> upstream/main
 
-/** What the composer has attached besides text and files. */
 export interface ComposerContextInput {
-    /** Context drafts (code comments, terminal selections, annotations, PR context). */
     inlineComments: readonly InlineCommentDraft[];
-    /** Synthetic context produced elsewhere (conflict resolution, and such). */
     syntheticTexts: readonly string[];
-    /** Attached issues, PRs and tracker items, in the order they were attached. */
     references: readonly ComposerContextReference[];
 }
 
 export interface OutgoingMessageInput extends ComposerContextInput {
-    /** Messages queued while a turn was running, oldest first. */
     queued: readonly QueuedInput[];
-    /** The composer's own text, or null when this send skips it. */
     composerText: string | null;
     composerAttachments: readonly AttachedFile[];
 }
 
-/**
- * The parts of assembly that depend on stores or async config, injected so the
- * assembly itself stays pure.
- */
 export interface OutgoingMessageDeps {
+<<<<<<< HEAD
     /** Resolve `@path` references into server-side attachments. */
+||||||| bc50ba56aa
+    /** Strip a leading `@agent` mention and report which agent it named. */
+    parseAgentMention: (text: string) => { text: string; agentName?: string };
+    /** Resolve `@path` references into server-side attachments. */
+=======
+    parseAgentMention: (text: string) => { text: string; agentName?: string };
+>>>>>>> upstream/main
     extractFileMentions: (text: string) => { text: string; attachments: AttachedFile[] };
-    /** Normalize attachments for transport (server paths become file URLs). */
     sanitizeAttachments: (files: readonly AttachedFile[] | undefined) => AttachedFile[];
-    /** Skills named with `$name`. */
     collectSkillNames: (text: string) => string[];
 }
 
@@ -118,9 +135,33 @@ export function buildOutgoingMessage(
     input: OutgoingMessageInput,
     deps: OutgoingMessageDeps,
 ): OutgoingMessage {
+<<<<<<< HEAD
     let primaryText = '';
     let primaryAttachments: AttachedFile[] = [];
+||||||| bc50ba56aa
+    // Everything the user typed shares the one visible message. OpenCode 2.x
+    // takes a single prompt text and delivers every additional part as a
+    // synthetic message the timeline does not show (#4746).
+    const texts: string[] = [];
+    const primaryAttachments: AttachedFile[] = [];
+    let agentMentionName: string | undefined;
+=======
+    // external: #4746 OpenCode delivers additional text parts as synthetic messages hidden by the timeline.
+    const texts: string[] = [];
+    const primaryAttachments: AttachedFile[] = [];
+    let agentMentionName: string | undefined;
+>>>>>>> upstream/main
     const additionalParts: OutgoingPart[] = [];
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    const addText = (text: string) => {
+        if (text.trim()) texts.push(text);
+    };
+=======
+    const addText = (text: string) => {
+        if (text.trim()) texts.push(withoutShareLinkKeys(text));
+    };
+>>>>>>> upstream/main
 
     const skillNames: string[] = [];
     const noteSkills = (text: string) => {
@@ -129,19 +170,52 @@ export function buildOutgoingMessage(
         }
     };
 
+<<<<<<< HEAD
     /** Run a body through mention parsing, collecting its side effects. */
+||||||| bc50ba56aa
+    /** The first agent mention encountered wins; later ones are ignored. */
+    const noteAgent = (name?: string) => {
+        if (!agentMentionName && name) agentMentionName = name;
+    };
+
+    /** Run a body through mention parsing, collecting its side effects. */
+=======
+    const noteAgent = (name?: string) => {
+        if (!agentMentionName && name) agentMentionName = name;
+    };
+
+>>>>>>> upstream/main
     const resolve = (raw: string) => {
         const mentions = deps.extractFileMentions(raw);
         noteSkills(mentions.text);
         return mentions;
     };
 
+<<<<<<< HEAD
     // Queued messages come first, in the order they were queued: the oldest
     // becomes the primary message so the turn reads chronologically. Each one
     // is followed by the context it was queued with.
     input.queued.forEach((queued, index) => {
         const attachments = deps.sanitizeAttachments(queued.attachments);
+||||||| bc50ba56aa
+    // Queued messages come first, in the order they were queued, so the turn
+    // reads chronologically. The context each was queued with follows it.
+    for (const queued of input.queued) {
+        noteAgent(queued.agentMention);
+        addText(queued.text);
+        primaryAttachments.push(...deps.sanitizeAttachments(queued.attachments));
+        additionalParts.push(...queuedContextToParts(queued.context ?? []));
+    }
+=======
+    for (const queued of input.queued) {
+        noteAgent(queued.agentMention);
+        addText(queued.text);
+        primaryAttachments.push(...deps.sanitizeAttachments(queued.attachments));
+        additionalParts.push(...queuedContextToParts(queued.context ?? []));
+    }
+>>>>>>> upstream/main
 
+<<<<<<< HEAD
         if (index === 0) {
             primaryText = queued.text;
             primaryAttachments = attachments;
@@ -153,6 +227,10 @@ export function buildOutgoingMessage(
 
     // The composer's own text follows, becoming primary only when nothing was
     // queued ahead of it.
+||||||| bc50ba56aa
+    // The composer's own text follows everything queued.
+=======
+>>>>>>> upstream/main
     if (input.composerText !== null) {
         const resolved = resolve(input.composerText.replace(/^\n+|\n+$/g, ''));
         const attachments = [
@@ -168,7 +246,6 @@ export function buildOutgoingMessage(
         }
     }
 
-    // Everything the composer had attached follows its text.
     additionalParts.push(...queuedContextToParts(
         buildComposerContext(input, null),
     ));
@@ -183,21 +260,11 @@ export function buildOutgoingMessage(
     };
 }
 
-/**
- * Everything the composer has attached besides text and files, in send
- * order. Each attached context item becomes its own synthetic part carrying
- * structured metadata, so the timeline can render it as a context block after
- * the server echoes the message back. Used both when sending and when queueing:
- * a queued message takes this context with it, so whoever delivers it later
- * sends exactly what the composer would have.
- */
 export function buildComposerContext(
     input: ComposerContextInput,
     skillInstruction: string | null,
 ): QueuedContextPart[] {
     const context: QueuedContextPart[] = [];
-    // An attached item is context only: no instructions guess what the user
-    // wants from it; their message says that.
     const attach = (part: { text: string; metadata: ContextPartMetadata }) => {
         context.push({ kind: 'context', text: part.text, metadata: part.metadata });
     };
@@ -264,6 +331,39 @@ export function buildComposerContext(
                 attach(createContextPart(payload, contextText));
                 break;
             }
+<<<<<<< HEAD
+||||||| bc50ba56aa
+            case 'session': {
+                const { sessionId, title, contextText, messageId } = reference;
+                const payload: Extract<ContextPartPayload, { kind: 'session' }> = { kind: 'session', sessionId, title };
+                if (messageId) payload.messageId = messageId;
+                attach(createContextPart(payload, contextText));
+                break;
+            }
+            case 'session-message': {
+                const { sessionId, messageId, sessionTitle, excerpt, contextText } = reference;
+                attach(createContextPart({ kind: 'session-message', sessionId, messageId, sessionTitle, excerpt }, contextText));
+                break;
+            }
+=======
+            case 'session': {
+                const { sessionId, title, contextText, messageId } = reference;
+                const payload: Extract<ContextPartPayload, { kind: 'session' }> = { kind: 'session', sessionId, title };
+                if (messageId) payload.messageId = messageId;
+                attach(createContextPart(payload, contextText));
+                break;
+            }
+            case 'session-message': {
+                const { sessionId, messageId, sessionTitle, excerpt, contextText } = reference;
+                attach(createContextPart({ kind: 'session-message', sessionId, messageId, sessionTitle, excerpt }, contextText));
+                break;
+            }
+            case 'shared-page': {
+                const { receivedId, host, title, opened, contextText } = reference;
+                attach(createContextPart({ kind: 'shared-page', receivedId, host, title, opened }, contextText));
+                break;
+            }
+>>>>>>> upstream/main
         }
     }
 
@@ -274,7 +374,6 @@ export function buildComposerContext(
     return context;
 }
 
-/** The synthetic parts a captured context is delivered as, in order. */
 export function queuedContextToParts(context: readonly QueuedContextPart[]): OutgoingPart[] {
     const parts: OutgoingPart[] = [];
     for (const part of context) {
@@ -288,11 +387,21 @@ export function queuedContextToParts(context: readonly QueuedContextPart[]): Out
     return parts;
 }
 
+<<<<<<< HEAD
 /**
  * Expand native `/template` invocations in the words of each attached comment,
  * before comments become synthetic context. Quoted code stays verbatim.
  * Worker failures reject the submission so the composer can restore its input.
  */
+||||||| bc50ba56aa
+/**
+ * Expand `#snippet` references in the words of each attached comment, before
+ * the comments become synthetic context. Only `text` expands: the quoted code
+ * or message the comment points at is the user's evidence and stays verbatim.
+ * A comment whose expansion fails is sent as written.
+ */
+=======
+>>>>>>> upstream/main
 export async function expandCommentSnippets(
     drafts: readonly InlineCommentDraft[],
     expandText: (text: string) => Promise<string>,

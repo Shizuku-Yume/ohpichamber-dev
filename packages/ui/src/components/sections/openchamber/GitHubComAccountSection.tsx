@@ -13,14 +13,6 @@ import { SourceControlAccountList } from './SourceControlAccountList';
 import { DeviceFlowCode } from './DeviceFlowCode';
 import { problemMessage } from '@/lib/problemMessage';
 
-/**
- * The github.com account section of a source-control provider card, shown when
- * the descriptor names the github.com device flow (`instances.legacyFlow`).
- * The card row already names the provider and shows the connection pill, so
- * this renders only the accounts, the device flow, and the gh CLI fallback.
- * It is the one settings surface that keeps its own GitHub wire identity
- * (`GITHUB_SOURCE_CONTROL_IDENTITY`) and `settings.github.page.*` copy.
- */
 export const GitHubComAccountSection: React.FC = () => {
   const { t } = useI18n();
   const sourceControl = getRegisteredRuntimeAPIs()?.sourceControl;
@@ -281,7 +273,6 @@ export const GitHubComAccountSection: React.FC = () => {
                   {t('settings.sourceControl.actions.reauthenticate')}
                 </Button>
               ) : null}
-              {/* The gh login is used only after a switch to it; the header switcher is not there while nothing is connected. */}
               {account.source === 'cli' && !account.current ? (
                 <Button size="sm" variant="outline" onClick={() => void switchToAccount(account.id)} disabled={isBusy}>
                   {t('settings.sourceControl.actions.use')}

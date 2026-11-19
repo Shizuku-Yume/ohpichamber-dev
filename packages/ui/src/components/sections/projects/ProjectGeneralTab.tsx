@@ -5,6 +5,7 @@ import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+  SettingsCheckboxRow,
   SettingsFieldRow,
   SettingsSection,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
@@ -12,9 +13,23 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+<<<<<<< HEAD
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 
 import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
+||||||| bc50ba56aa
+import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { modelVariantNames } from '@/lib/modelVariants';
+import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
+import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
+=======
+import { selectIsModelMissingFromCatalog, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { modelVariantNames } from '@/lib/modelVariants';
+import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
+import { updateProjectSetup, updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
+import { isVSCodeRuntime } from '@/lib/desktop';
+>>>>>>> upstream/main
 import { ensureSharedSetupTrusted, resetSharedSetupTrust } from '@/lib/sharedTrustConfirmation';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -33,6 +48,16 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
   const { t } = useI18n();
   const providers = useConfigStore((state) => selectProvidersForDirectory(state, form.project?.path));
   const { parsedDefaultModel, defaultVariant } = form;
+  const modelUnavailableNote = useConfigStore((state) => {
+    const directory = form.project?.path;
+    if (!selectIsModelMissingFromCatalog(state, directory, parsedDefaultModel.providerId, parsedDefaultModel.modelId)) return null;
+    const global = parseModelIdentifier(state.settingsDefaultModel);
+    const globalRuns = global !== null
+      && !selectIsModelMissingFromCatalog(state, directory, global.providerId, global.modelId);
+    return globalRuns
+      ? 'settings.projects.page.field.projectModelUnavailableUsesGlobal' as const
+      : 'settings.projects.page.field.projectModelUnavailable' as const;
+  });
 
   const availableVariants = React.useMemo(() => {
     const { providerId, modelId } = parsedDefaultModel;
@@ -49,10 +74,41 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
     <SettingsSection
       title={t('settings.projects.page.section.chatDefaults')}
       info={t('settings.projects.page.section.chatDefaultsDescription')}
-      divider={false}
       contentClassName="space-y-0"
     >
+<<<<<<< HEAD
       <SettingsFieldRow settingsItem="projects.default-model" label={t('settings.projects.page.field.projectModel')}>
+||||||| bc50ba56aa
+      <SettingsFieldRow settingsItem="projects.default-agent" label={t('settings.projects.page.field.projectAgent')}>
+        <AgentSelector
+          directory={form.project.path}
+          agentName={form.defaultAgent || ''}
+          onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
+          filter={(agent) => isPrimaryMode(agent.mode)}
+          className={SETTINGS_CUSTOM_TRIGGER_CLASS}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow settingsItem="projects.default-model" label={t('settings.projects.page.field.projectModel')}>
+=======
+      <SettingsFieldRow settingsItem="projects.default-agent" label={t('settings.projects.page.field.projectAgent')}>
+        <AgentSelector
+          directory={form.project.path}
+          agentName={form.defaultAgent || ''}
+          onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
+          filter={(agent) => isPrimaryMode(agent.mode)}
+          className={SETTINGS_CUSTOM_TRIGGER_CLASS}
+        />
+      </SettingsFieldRow>
+
+      <SettingsFieldRow
+        settingsItem="projects.default-model"
+        label={t('settings.projects.page.field.projectModel')}
+        description={modelUnavailableNote
+          ? <span className="text-[var(--status-warning)]">{t(modelUnavailableNote)}</span>
+          : undefined}
+      >
+>>>>>>> upstream/main
         <ModelSelector
           directory={form.project.path}
           providerId={parsedDefaultModel.providerId}
@@ -86,11 +142,6 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
   );
 };
 
-/**
- * The team's file in the repo: whether it is there and readable, whether
- * its commands may run on this machine, and the plans folder it names.
- * Actions and setup commands are shared from their own tabs.
- */
 const TeamFileSection: React.FC<{ projectRef: ProjectRef; setupState: ProjectSetupState }> = ({ projectRef, setupState }) => {
   const { t } = useI18n();
   const { load, reload } = setupState;
@@ -150,7 +201,6 @@ const TeamFileSection: React.FC<{ projectRef: ProjectRef; setupState: ProjectSet
         <ProjectSetupUnavailable setupState={setupState} />
       ) : (
         <>
-          {/* What the file is and what it holds, said once in a sentence. */}
           <p className={cn('max-w-[40rem]', setup.shared.status === 'invalid' ? 'typography-meta text-[var(--status-warning)]' : SETTINGS_HELPER_CLASS)}>
             {setup.shared.status === 'invalid'
               ? t('settings.projects.shared.invalid', { path: setup.shared.path, reason: setup.shared.reason ?? '' })
@@ -212,6 +262,38 @@ const TeamFileSection: React.FC<{ projectRef: ProjectRef; setupState: ProjectSet
   );
 };
 
+const NotesTodosSection: React.FC<{ projectRef: ProjectRef; setupState: ProjectSetupState }> = ({ projectRef, setupState }) => {
+  const { t } = useI18n();
+  const { load, reload } = setupState;
+  const [busy, setBusy] = React.useState(false);
+  if (load.state !== 'ready') return null;
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    try {
+      if (!(await updateProjectSetup(projectRef, { notesTodosInRepository: next }))) {
+        toast.error(t('settings.projects.notesTodos.toast.saveFailed'));
+      }
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingsSection title={t('settings.projects.notesTodos.title')}>
+      <SettingsCheckboxRow
+        settingsItem="projects.notes-todos.repository"
+        checked={load.setup.personal.notesTodosInRepository}
+        disabled={busy}
+        onChange={(next) => void toggle(next)}
+        label={t('settings.projects.notesTodos.inRepository')}
+        description={t('settings.projects.notesTodos.inRepositoryDescription')}
+      />
+    </SettingsSection>
+  );
+};
+
 export const ProjectGeneralTab: React.FC<{
   form: ProjectIdentityFormState;
   projectRef: ProjectRef;
@@ -219,6 +301,7 @@ export const ProjectGeneralTab: React.FC<{
 }> = ({ form, projectRef, setupState }) => (
   <>
     <ChatDefaultsSection form={form} />
+    {isVSCodeRuntime() ? null : <NotesTodosSection projectRef={projectRef} setupState={setupState} />}
     <TeamFileSection projectRef={projectRef} setupState={setupState} />
   </>
 );

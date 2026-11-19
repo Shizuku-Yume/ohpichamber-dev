@@ -1,5 +1,11 @@
+<<<<<<< HEAD
 import { describe, expect, it } from 'vitest';
 
+||||||| bc50ba56aa
+import { afterEach, describe, expect, it, vi } from 'vitest';
+=======
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+>>>>>>> upstream/main
 import { createSessionAssistRuntime } from './runtime.js';
 
 const scope = { sessionId: 'ses_1', rootSessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', cwd: '/repo' };
@@ -11,6 +17,7 @@ const messages = [
   { messageId: 'assistant-1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 2, providerId: 'provider-1', modelId: 'model-1', parts: [{ type: 'text', partId: 'part-assistant', content: 'Finished the work.' }] },
 ];
 
+<<<<<<< HEAD
 const makeRuntime = ({ session = rootSession, onTurnSettled, lineage } = {}) => createSessionAssistRuntime({
   sessionService: {
     open: async () => ({ session }),
@@ -19,8 +26,68 @@ const makeRuntime = ({ session = rootSession, onTurnSettled, lineage } = {}) => 
   resolveSessionScope: async () => ({ ...scope, sessionId: session.sessionId }),
   onTurnSettled,
   lineage,
+||||||| bc50ba56aa
+const runtimes = [];
+
+const makeRuntime = (overrides = {}) => {
+  const buildOpenCodeUrl = vi.fn(() => 'http://127.0.0.1:1/');
+  const getOpenCodeAuthHeaders = vi.fn(() => ({}));
+  const getSmallModelService = vi.fn(async () => {
+    throw new Error('the small model must not be consulted while assist is parked');
+  });
+  const runtime = createSessionAssistRuntime({
+    buildOpenCodeUrl,
+    getOpenCodeAuthHeaders,
+    getSmallModelService,
+    getTargets: () => ({ recap: true, suggestion: true }),
+    quietMs: 1,
+    ...overrides,
+  });
+  runtimes.push(runtime);
+  return { runtime, buildOpenCodeUrl, getOpenCodeAuthHeaders, getSmallModelService };
+};
+
+const idle = (sessionId = 'ses_1') => ({
+  type: 'session.status',
+  properties: { sessionID: sessionId, status: { type: 'idle' } },
+=======
+const runtimes = [];
+const QUIET_MS = 1;
+
+const makeRuntime = (overrides = {}) => {
+  const completions = new Map();
+  const completionFor = (sessionId = 'ses_1') => {
+    if (!completions.has(sessionId)) completions.set(sessionId, Promise.withResolvers());
+    return completions.get(sessionId);
+  };
+  const buildOpenCodeUrl = vi.fn(() => 'http://127.0.0.1:1/');
+  const getOpenCodeAuthHeaders = vi.fn(() => ({}));
+  const getSmallModelService = vi.fn(async () => {
+    throw new Error('the small model must not be consulted while assist is parked');
+  });
+  const runtime = createSessionAssistRuntime({
+    buildOpenCodeUrl,
+    getOpenCodeAuthHeaders,
+    getSmallModelService,
+    getTargets: () => ({ recap: true, suggestion: true }),
+    quietMs: QUIET_MS,
+    ...overrides,
+    onPendingChange: (change) => {
+      overrides.onPendingChange?.(change);
+      if (!change.pending) completionFor(change.sessionId).resolve();
+    },
+  });
+  runtimes.push(runtime);
+  return { runtime, buildOpenCodeUrl, getOpenCodeAuthHeaders, getSmallModelService, finished: (sessionId) => completionFor(sessionId).promise };
+};
+
+const idle = (sessionId = 'ses_1') => ({
+  type: 'session.status',
+  properties: { sessionID: sessionId, status: { type: 'idle' } },
+>>>>>>> upstream/main
 });
 
+<<<<<<< HEAD
 describe('session-assist canonical consumer', () => {
   it('settles only after a canonical idle status with suggestion path removed', async () => {
     const settled = [];
@@ -29,8 +96,636 @@ describe('session-assist canonical consumer', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(settled).toEqual(['ses_1']);
     runtime.stop();
+||||||| bc50ba56aa
+afterEach(() => {
+  while (runtimes.length > 0) runtimes.pop().stop();
+  vi.restoreAllMocks();
+});
+
+describe('session assist runtime', () => {
+  it('does no work and reaches no service while no assist store is injected', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime, buildOpenCodeUrl, getSmallModelService } = makeRuntime();
+
+    runtime.processPayload(idle());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+    expect(getSmallModelService).not.toHaveBeenCalled();
   });
 
+  it('explains itself once, not on every idle session', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime } = makeRuntime();
+
+    runtime.processPayload(idle('ses_1'));
+    runtime.processPayload(idle('ses_2'));
+    runtime.processPayload(idle('ses_3'));
+
+    const notices = log.mock.calls.filter(([line]) => String(line).includes('[session-assist] parked'));
+    expect(notices).toHaveLength(1);
+  });
+
+  it('ignores everything after stop', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime } = makeRuntime();
+
+    runtime.stop();
+    runtime.processPayload(idle());
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('leaves an archived session alone: no context is loaded and no model is called', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const getSmallModelService = vi.fn(async () => {
+      throw new Error('the small model must not be consulted for an archived session');
+    });
+    const fetchMock = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      const body = url.pathname === '/api/session/ses_1'
+        ? { location: { directory: '/repo' }, data: { id: 'ses_1', location: { directory: '/repo' } } }
+        : { location: { directory: '/repo' }, data: { data: [], cursor: null } };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      getSmallModelService,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      isSessionArchived: async (sessionId) => sessionId === 'ses_1',
+    });
+
+    runtime.processPayload(idle());
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    // The session record was read (that is where the parent/revert checks
+    // live), then the archive check stopped everything else.
+    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual(['/api/session/ses_1']);
+    expect(getSmallModelService).not.toHaveBeenCalled();
+    expect(persistSessionAssist).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('generates and saves an assist for a turn that v2 closed with an idle marker', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const listLimits = [];
+    // Newest first, the way OpenCode serves it: the idle marker sits above
+    // the answer, and a model switch the user made afterwards above that.
+    const records = [
+      { id: 'msg_switch', type: 'model-switched', model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    const fetchMock = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      // `session.get` answers `{ data }`, which the client unwraps; the message
+      // page is `{ data, cursor }` and reaches the reader as is.
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') {
+        listLimits.push(Number(url.searchParams.get('limit')));
+        body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      } else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      isSessionArchived: async () => false,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => ({ text: '{"recap":"Did the thing.","suggestion":"Verify it."}' }),
+      }),
+    });
+
+    runtime.processPayload(idle());
+    for (let i = 0; i < 20 && persistSessionAssist.mock.calls.length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    expect(persistSessionAssist).toHaveBeenCalledTimes(1);
+    expect(persistSessionAssist.mock.calls[0][2]).toMatchObject({ recap: 'Did the thing.', suggestion: 'Verify it.', forMessageID: 'msg_a' });
+    // The pre-write re-check must see past the idle marker as well.
+    expect(listLimits.at(-1)).toBeGreaterThan(2);
+
+    // A new turn deletes the stored assist, once.
+    const busy = { type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } };
+    runtime.processPayload(busy);
+    runtime.processPayload(busy);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(persistSessionAssist).toHaveBeenCalledTimes(2);
+    expect(persistSessionAssist.mock.calls[1][2]).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  // A client keeps a left chat's OpenCode location until its assist is done:
+  // the assist reads the session's directory, which would start it again.
+  describe('pending announcements', () => {
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    const serveSession = () => vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/chat' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const settle = async (changes) => {
+      for (let i = 0; i < 40 && !changes.some((change) => change.pending === false); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+    const run = (overrides) => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const changes = [];
+      const persistSessionAssist = vi.fn(async () => undefined);
+      const { runtime } = makeRuntime({
+        persistSessionAssist,
+        buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+        onPendingChange: (change) => changes.push(change),
+        getSmallModelService: async () => ({
+          describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+          generateSmallModelText: async () => ({ text: '{"recap":"Did the thing.","suggestion":"Verify it."}' }),
+        }),
+        ...overrides,
+      });
+      return { runtime, changes, persistSessionAssist };
+    };
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('announces the wait at the turn end and its end once the assist is written', async () => {
+      serveSession();
+      const { runtime, changes, persistSessionAssist } = run();
+
+      runtime.processPayload(idle(), '/chat');
+      expect(changes).toEqual([{ sessionId: 'ses_1', directory: '/chat', pending: true }]);
+      await settle(changes);
+
+      expect(persistSessionAssist).toHaveBeenCalledTimes(1);
+      expect(changes).toEqual([
+        { sessionId: 'ses_1', directory: '/chat', pending: true },
+        { sessionId: 'ses_1', directory: '/chat', pending: false },
+      ]);
+    });
+
+    it('announces nothing when the recap and the suggestion are both off', async () => {
+      const { runtime, changes } = run({ getTargets: () => ({ recap: false, suggestion: false }) });
+
+      runtime.processPayload(idle(), '/chat');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(changes).toEqual([]);
+    });
+
+    it('ends the wait when the turn-end check rules both fields out', async () => {
+      const { runtime, changes } = run({ evaluateTurn: async () => ({ recap: false, suggestion: false }) });
+
+      runtime.processPayload(idle(), '/chat');
+      await settle(changes);
+
+      expect(changes.map((change) => change.pending)).toEqual([true, false]);
+    });
+
+    it('ends the wait when generation fails', async () => {
+      serveSession();
+      const { runtime, changes, persistSessionAssist } = run({
+        getSmallModelService: async () => ({
+          describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+          generateSmallModelText: async () => { throw new Error('provider down'); },
+        }),
+      });
+
+      runtime.processPayload(idle(), '/chat');
+      await settle(changes);
+
+      expect(persistSessionAssist).not.toHaveBeenCalled();
+      expect(changes.map((change) => change.pending)).toEqual([true, false]);
+    });
+
+    it('ends the wait when a new turn starts first', async () => {
+      const { runtime, changes } = run({ quietMs: 60_000 });
+
+      runtime.processPayload(idle(), '/chat');
+      runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } }, '/chat');
+
+      expect(changes).toEqual([
+        { sessionId: 'ses_1', directory: '/chat', pending: true },
+        { sessionId: 'ses_1', directory: '/chat', pending: false },
+      ]);
+    });
+  });
+
+  it('discards the result when a new turn starts during the final archive check', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    // The first archive check answers at once; the one before the write waits
+    // until the test has started a new turn.
+    let finalCheckStarted;
+    const finalCheckReached = new Promise((resolve) => { finalCheckStarted = resolve; });
+    let finishFinalCheck;
+    const isSessionArchived = vi.fn(async () => {
+      if (isSessionArchived.mock.calls.length === 1) return false;
+      finalCheckStarted();
+      return new Promise((answer) => { finishFinalCheck = () => answer(false); });
+    });
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      isSessionArchived,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => ({ text: '{"recap":"Did the thing.","suggestion":"Verify it."}' }),
+      }),
+    });
+
+    runtime.processPayload(idle());
+    await finalCheckReached;
+    runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } });
+    finishFinalCheck();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(isSessionArchived).toHaveBeenCalledTimes(2);
+    expect(persistSessionAssist).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['skips the session model on a local server', { providerID: 'p', modelID: 'm', source: 'session-model', localEndpoint: true }, 0],
+    ['skips the session model chosen as Small Model on a local server', { providerID: 'p', modelID: 'm', source: 'settings', localEndpoint: true }, 0],
+    ['uses a different small model on a local server', { providerID: 'p', modelID: 'small', source: 'session-provider-small', localEndpoint: true }, 1],
+    ['uses the session model on a hosted provider', { providerID: 'p', modelID: 'm', source: 'session-model', localEndpoint: false }, 1],
+  ])('%s', async (_name, described, generations) => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const describeSmallModel = vi.fn(async () => ({ inputCharBudget: 20_000, ...described }));
+    const generateSmallModelText = vi.fn(async () => ({ text: '{"recap":"Did the thing.","suggestion":""}' }));
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({ describeSmallModel, generateSmallModelText }),
+    });
+
+    runtime.processPayload(idle());
+    for (let i = 0; i < 20 && (describeSmallModel.mock.calls.length === 0 || persistSessionAssist.mock.calls.length < generations); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(describeSmallModel).toHaveBeenCalledTimes(1);
+    expect(generateSmallModelText).toHaveBeenCalledTimes(generations);
+    expect(persistSessionAssist).toHaveBeenCalledTimes(generations);
+    vi.unstubAllGlobals();
+=======
+beforeEach(() => vi.useFakeTimers());
+
+afterEach(() => {
+  while (runtimes.length > 0) runtimes.pop().stop();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+describe('session assist runtime', () => {
+  it('does no work and reaches no service while no assist store is injected', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime, buildOpenCodeUrl, getSmallModelService } = makeRuntime();
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+    expect(getSmallModelService).not.toHaveBeenCalled();
+  });
+
+  it('explains itself once, not on every idle session', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime } = makeRuntime();
+
+    runtime.processPayload(idle('ses_1'));
+    runtime.processPayload(idle('ses_2'));
+    runtime.processPayload(idle('ses_3'));
+
+    const notices = log.mock.calls.filter(([line]) => String(line).includes('[session-assist] parked'));
+    expect(notices).toHaveLength(1);
+  });
+
+  it('ignores everything after stop', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime } = makeRuntime();
+
+    runtime.stop();
+    runtime.processPayload(idle());
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('leaves an archived session alone: no context is loaded and no model is called', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const getSmallModelService = vi.fn(async () => {
+      throw new Error('the small model must not be consulted for an archived session');
+    });
+    const fetchMock = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      const body = url.pathname === '/api/session/ses_1'
+        ? { location: { directory: '/repo' }, data: { id: 'ses_1', location: { directory: '/repo' } } }
+        : { location: { directory: '/repo' }, data: { data: [], cursor: null } };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      getSmallModelService,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      isSessionArchived: async (sessionId) => sessionId === 'ses_1',
+    });
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finished();
+
+    // The session record was read (that is where the parent/revert checks
+    // live), then the archive check stopped everything else.
+    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual(['/api/session/ses_1']);
+    expect(getSmallModelService).not.toHaveBeenCalled();
+    expect(persistSessionAssist).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('generates and saves an assist for a turn that v2 closed with an idle marker', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const listLimits = [];
+    // Newest first, the way OpenCode serves it: the idle marker sits above
+    // the answer, and a model switch the user made afterwards above that.
+    const records = [
+      { id: 'msg_switch', type: 'model-switched', model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    const fetchMock = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      // `session.get` answers `{ data }`, which the client unwraps; the message
+      // page is `{ data, cursor }` and reaches the reader as is.
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') {
+        listLimits.push(Number(url.searchParams.get('limit')));
+        body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      } else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      isSessionArchived: async () => false,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => ({ text: '{"recap":"Did the thing.","suggestion":"Verify it."}' }),
+      }),
+    });
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finished();
+
+    expect(persistSessionAssist).toHaveBeenCalledTimes(1);
+    expect(persistSessionAssist.mock.calls[0][2]).toMatchObject({ recap: 'Did the thing.', suggestion: 'Verify it.', forMessageID: 'msg_a' });
+    // The pre-write re-check must see past the idle marker as well.
+    expect(listLimits.at(-1)).toBeGreaterThan(2);
+
+    // A new turn deletes the stored assist, once.
+    const busy = { type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } };
+    runtime.processPayload(busy);
+    runtime.processPayload(busy);
+    expect(persistSessionAssist).toHaveBeenCalledTimes(2);
+    expect(persistSessionAssist.mock.calls[1][2]).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  // A client keeps a left chat's OpenCode location until its assist is done:
+  // the assist reads the session's directory, which would start it again.
+  describe('pending announcements', () => {
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    const serveSession = () => vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/chat' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const run = (overrides) => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const changes = [];
+      const persistSessionAssist = vi.fn(async () => undefined);
+      const { runtime, finished } = makeRuntime({
+        persistSessionAssist,
+        buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+        onPendingChange: (change) => changes.push(change),
+        getSmallModelService: async () => ({
+          describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+          generateSmallModelText: async () => ({ text: '{"recap":"Did the thing.","suggestion":"Verify it."}' }),
+        }),
+        ...overrides,
+      });
+      return { runtime, changes, persistSessionAssist, finished };
+    };
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('announces the wait at the turn end and its end once the assist is written', async () => {
+      serveSession();
+      const { runtime, changes, persistSessionAssist, finished } = run();
+
+      runtime.processPayload(idle(), '/chat');
+      expect(changes).toEqual([{ sessionId: 'ses_1', directory: '/chat', pending: true }]);
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      await finished();
+
+      expect(persistSessionAssist).toHaveBeenCalledTimes(1);
+      expect(changes).toEqual([
+        { sessionId: 'ses_1', directory: '/chat', pending: true },
+        { sessionId: 'ses_1', directory: '/chat', pending: false },
+      ]);
+    });
+
+    it('announces nothing when the recap and the suggestion are both off', async () => {
+      const { runtime, changes } = run({ getTargets: () => ({ recap: false, suggestion: false }) });
+
+      runtime.processPayload(idle(), '/chat');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+
+      expect(changes).toEqual([]);
+    });
+
+    it('ends the wait when the turn-end check rules both fields out', async () => {
+      const { runtime, changes, finished } = run({ evaluateTurn: async () => ({ recap: false, suggestion: false }) });
+
+      runtime.processPayload(idle(), '/chat');
+      await finished();
+
+      expect(changes.map((change) => change.pending)).toEqual([true, false]);
+    });
+
+    it('ends the wait when generation fails', async () => {
+      serveSession();
+      const { runtime, changes, persistSessionAssist, finished } = run({
+        getSmallModelService: async () => ({
+          describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+          generateSmallModelText: async () => { throw new Error('provider down'); },
+        }),
+      });
+
+      runtime.processPayload(idle(), '/chat');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      await finished();
+
+      expect(persistSessionAssist).not.toHaveBeenCalled();
+      expect(changes.map((change) => change.pending)).toEqual([true, false]);
+    });
+
+    it('ends the wait when a new turn starts first', async () => {
+      const { runtime, changes } = run({ quietMs: 60_000 });
+
+      runtime.processPayload(idle(), '/chat');
+      runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } }, '/chat');
+
+      expect(changes).toEqual([
+        { sessionId: 'ses_1', directory: '/chat', pending: true },
+        { sessionId: 'ses_1', directory: '/chat', pending: false },
+      ]);
+    });
+  });
+
+  it('discards the result when a new turn starts during the final archive check', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    // The first archive check answers at once; the one before the write waits
+    // until the test has started a new turn.
+    let finalCheckStarted;
+    const finalCheckReached = new Promise((resolve) => { finalCheckStarted = resolve; });
+    let finishFinalCheck;
+    const isSessionArchived = vi.fn(async () => {
+      if (isSessionArchived.mock.calls.length === 1) return false;
+      finalCheckStarted();
+      return new Promise((answer) => { finishFinalCheck = () => answer(false); });
+    });
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      isSessionArchived,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => ({ text: '{"recap":"Did the thing.","suggestion":"Verify it."}' }),
+      }),
+    });
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finalCheckReached;
+    runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } });
+    finishFinalCheck();
+    await finished();
+
+    expect(isSessionArchived).toHaveBeenCalledTimes(2);
+    expect(persistSessionAssist).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['skips the session model on a local server', { providerID: 'p', modelID: 'm', source: 'session-model', localEndpoint: true }, 0],
+    ['skips the session model chosen as Small Model on a local server', { providerID: 'p', modelID: 'm', source: 'settings', localEndpoint: true }, 0],
+    ['uses a different small model on a local server', { providerID: 'p', modelID: 'small', source: 'session-provider-small', localEndpoint: true }, 1],
+    ['uses the session model on a hosted provider', { providerID: 'p', modelID: 'm', source: 'session-model', localEndpoint: false }, 1],
+  ])('%s', async (_name, described, generations) => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const describeSmallModel = vi.fn(async () => ({ inputCharBudget: 20_000, ...described }));
+    const generateSmallModelText = vi.fn(async () => ({ text: '{"recap":"Did the thing.","suggestion":""}' }));
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({ describeSmallModel, generateSmallModelText }),
+    });
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finished();
+
+    expect(describeSmallModel).toHaveBeenCalledTimes(1);
+    expect(generateSmallModelText).toHaveBeenCalledTimes(generations);
+    expect(persistSessionAssist).toHaveBeenCalledTimes(generations);
+    vi.unstubAllGlobals();
+>>>>>>> upstream/main
+  });
+
+<<<<<<< HEAD
   it('settles after canonical run.completed event with suggestion path removed', async () => {
     const settled = [];
     const runtime = makeRuntime({ onTurnSettled: (id) => settled.push(id) });
@@ -44,12 +739,95 @@ describe('session-assist canonical consumer', () => {
     const settled = [];
     const runtime = makeRuntime({
       onTurnSettled: (id) => settled.push(id),
+||||||| bc50ba56aa
+  it('says once why the session model on a local endpoint was skipped', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'cpa', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1' || url.pathname === '/api/session/ses_2') body = { data: { id: url.pathname.split('/').pop(), location: { directory: '/repo' } } };
+      else if (url.pathname.endsWith('/message')) body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    // The reporter's setup: a loopback OpenAI-compatible proxy forwarding to a
+    // hosted vendor, so the endpoint looks local to `isLocalModelEndpoint`.
+    const describeSmallModel = vi.fn(async () => ({ inputCharBudget: 20_000, providerID: 'cpa', modelID: 'm', source: 'session-model', localEndpoint: true }));
+    const generateSmallModelText = vi.fn(async () => ({ text: '{"recap":"Did the thing.","suggestion":""}' }));
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({ describeSmallModel, generateSmallModelText }),
+=======
+  it('says once why the session model on a local endpoint was skipped', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'cpa', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1' || url.pathname === '/api/session/ses_2') body = { data: { id: url.pathname.split('/').pop(), location: { directory: '/repo' } } };
+      else if (url.pathname.endsWith('/message')) body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    // The reporter's setup: a loopback OpenAI-compatible proxy forwarding to a
+    // hosted vendor, so the endpoint looks local to `isLocalModelEndpoint`.
+    const describeSmallModel = vi.fn(async () => ({ inputCharBudget: 20_000, providerID: 'cpa', modelID: 'm', source: 'session-model', localEndpoint: true }));
+    const generateSmallModelText = vi.fn(async () => ({ text: '{"recap":"Did the thing.","suggestion":""}' }));
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({ describeSmallModel, generateSmallModelText }),
+>>>>>>> upstream/main
     });
+<<<<<<< HEAD
     runtime.processCanonicalEvent({ type: 'run.completed', sessionId: 'ses_1', runId: 'run_1', epoch: 'epoch_1', sequence: '1', timestamp: 3, finishedAt: 3 }, scope);
     runtime.processCanonicalEvent({ type: 'session.status', sessionId: 'ses_1', epoch: 'epoch_1', sequence: '2', timestamp: 4, runtimeStatus: 'idle', activeRunId: null }, scope);
     await new Promise((resolve) => setTimeout(resolve, 15));
     expect(settled).toEqual(['ses_1']);
     runtime.stop();
+||||||| bc50ba56aa
+
+    runtime.processPayload(idle('ses_1'));
+    runtime.processPayload(idle('ses_2'));
+    for (let i = 0; i < 30 && describeSmallModel.mock.calls.length < 2; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(describeSmallModel).toHaveBeenCalledTimes(2);
+    expect(generateSmallModelText).not.toHaveBeenCalled();
+    const notices = log.mock.calls.filter(([line]) => String(line).includes('[session-assist] skipped'));
+    expect(notices).toHaveLength(1);
+    expect(notices[0][0]).toContain('cpa/m');
+    expect(notices[0][0]).toContain('Set a different Small Model');
+    vi.unstubAllGlobals();
+=======
+
+    runtime.processPayload(idle('ses_1'));
+    runtime.processPayload(idle('ses_2'));
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await Promise.all([finished('ses_1'), finished('ses_2')]);
+
+    expect(describeSmallModel).toHaveBeenCalledTimes(2);
+    expect(generateSmallModelText).not.toHaveBeenCalled();
+    const notices = log.mock.calls.filter(([line]) => String(line).includes('[session-assist] skipped'));
+    expect(notices).toHaveLength(1);
+    expect(notices[0][0]).toContain('cpa/m');
+    expect(notices[0][0]).toContain('Set a different Small Model');
+    vi.unstubAllGlobals();
+>>>>>>> upstream/main
   });
 
   it('does not duplicate onTurnSettled when session.status idle arrives before run.completed', async () => {
@@ -57,26 +835,146 @@ describe('session-assist canonical consumer', () => {
     const runtime = makeRuntime({
       onTurnSettled: (id) => settled.push(id),
     });
+<<<<<<< HEAD
     runtime.processCanonicalEvent({ type: 'session.status', sessionId: 'ses_1', epoch: 'epoch_1', sequence: '1', timestamp: 3, runtimeStatus: 'idle', activeRunId: null }, scope);
     runtime.processCanonicalEvent({ type: 'run.completed', sessionId: 'ses_1', runId: 'run_1', epoch: 'epoch_1', sequence: '2', timestamp: 4, finishedAt: 4 }, scope);
     await new Promise((resolve) => setTimeout(resolve, 15));
     expect(settled).toEqual(['ses_1']);
     runtime.stop();
+||||||| bc50ba56aa
+    const evaluateTurn = vi.fn(async () => ({ recap: false, suggestion: false }));
+    const { runtime, buildOpenCodeUrl } = makeRuntime({ persistSessionAssist, getSmallModelService, evaluateTurn });
+
+    runtime.processPayload(idle());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(evaluateTurn).toHaveBeenCalledWith({ sessionId: 'ses_1', directory: '', assist: { recap: true, suggestion: true } });
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+    expect(getSmallModelService).not.toHaveBeenCalled();
+=======
+    const evaluateTurn = vi.fn(async () => ({ recap: false, suggestion: false }));
+    const { runtime, buildOpenCodeUrl, finished } = makeRuntime({ persistSessionAssist, getSmallModelService, evaluateTurn });
+
+    runtime.processPayload(idle());
+    await finished();
+
+    expect(evaluateTurn).toHaveBeenCalledWith({ sessionId: 'ses_1', directory: '', assist: { recap: true, suggestion: true } });
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+    expect(getSmallModelService).not.toHaveBeenCalled();
+>>>>>>> upstream/main
   });
 
+<<<<<<< HEAD
   it('skips a child session when lineage indicates a child', async () => {
     const settled = [];
     const runtime = makeRuntime({
       session: childSession,
       lineage: { isChild: (id) => id === 'ses_child' },
       onTurnSettled: (id) => settled.push(id),
+||||||| bc50ba56aa
+  it('arms nothing for a known subsession: no gate, no timer, no read', async () => {
+    const lineage = createSessionLineage();
+    lineage.remember('ses_1', 'ses_parent');
+    const evaluateTurn = vi.fn(async () => null);
+    const { runtime, buildOpenCodeUrl } = makeRuntime({ persistSessionAssist: vi.fn(async () => undefined), evaluateTurn, lineage });
+
+    runtime.processPayload(idle());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(evaluateTurn).not.toHaveBeenCalled();
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+  });
+
+  it('drops a gate answer that arrives after the next turn started', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    let answer;
+    const evaluateTurn = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const { runtime, buildOpenCodeUrl } = makeRuntime({ persistSessionAssist, evaluateTurn });
+
+    runtime.processPayload(idle());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } });
+    answer({ recap: true, suggestion: true });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+  });
+
+  it('arms generation again as soon as a store is injected', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const getSmallModelService = vi.fn(async () => {
+      throw new Error('stop here: the transport is what this test observes');
+=======
+  it('arms nothing for a known subsession: no gate, no timer, no read', async () => {
+    const lineage = createSessionLineage();
+    lineage.remember('ses_1', 'ses_parent');
+    const evaluateTurn = vi.fn(async () => null);
+    const { runtime, buildOpenCodeUrl } = makeRuntime({ persistSessionAssist: vi.fn(async () => undefined), evaluateTurn, lineage });
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+
+    expect(evaluateTurn).not.toHaveBeenCalled();
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+  });
+
+  it('drops a gate answer that arrives after the next turn started', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    let answer;
+    const gateStarted = Promise.withResolvers();
+    const evaluateTurn = vi.fn(() => new Promise((resolve) => {
+      answer = resolve;
+      gateStarted.resolve();
+    }));
+    const { runtime, buildOpenCodeUrl } = makeRuntime({ persistSessionAssist, evaluateTurn });
+
+    runtime.processPayload(idle());
+    await gateStarted.promise;
+    runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_1', status: { type: 'busy' } } });
+    answer({ recap: true, suggestion: true });
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+
+    expect(buildOpenCodeUrl).not.toHaveBeenCalled();
+  });
+
+  it('arms generation again as soon as a store is injected', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const getSmallModelService = vi.fn(async () => {
+      throw new Error('stop here: the transport is what this test observes');
+>>>>>>> upstream/main
     });
+<<<<<<< HEAD
     runtime.processCanonicalEvent({ type: 'session.status', sessionId: 'ses_child', epoch: 'epoch_1', sequence: '1', timestamp: 3, runtimeStatus: 'idle', activeRunId: null }, { ...scope, sessionId: 'ses_child' });
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(settled).toEqual([]);
     runtime.stop();
+||||||| bc50ba56aa
+    const buildOpenCodeUrl = vi.fn(() => 'http://127.0.0.1:1/');
+    const { runtime } = makeRuntime({ persistSessionAssist, getSmallModelService, buildOpenCodeUrl });
+
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runtime.processPayload(idle());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    // The idle timer fired and the generation path ran, which is what the gate
+    // above suppresses.
+    expect(buildOpenCodeUrl).toHaveBeenCalled();
+=======
+    const buildOpenCodeUrl = vi.fn(() => 'http://127.0.0.1:1/');
+    const { runtime, finished } = makeRuntime({ persistSessionAssist, getSmallModelService, buildOpenCodeUrl });
+
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finished();
+
+    // The idle timer fired and the generation path ran, which is what the gate
+    // above suppresses.
+    expect(buildOpenCodeUrl).toHaveBeenCalled();
+>>>>>>> upstream/main
   });
 
+<<<<<<< HEAD
   it('does not settle when the session scope belongs to another session', async () => {
     const settled = [];
     const runtime = makeRuntime({ onTurnSettled: (id) => settled.push(id) });
@@ -84,12 +982,155 @@ describe('session-assist canonical consumer', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(settled).toEqual([]);
     runtime.stop();
+||||||| bc50ba56aa
+  it('logs the status, code, and message of a generation failure instead of a bare string', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const failure = Object.assign(new Error('location is not ready'), { statusCode: 503, code: 'cold-start' });
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => { throw failure; },
+      }),
+    });
+
+    runtime.processPayload(idle());
+    for (let i = 0; i < 30 && warn.mock.calls.length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    const logged = warn.mock.calls.map((args) => args.join(' ')).find((line) => line.includes('generation failed'));
+    expect(logged).toContain('status 503');
+    expect(logged).toContain('code cold-start');
+    expect(logged).toContain('location is not ready');
+    expect(persistSessionAssist).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+=======
+  it('logs the status, code and message of a generation failure', async () => {
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const failure = Object.assign(new Error('location is not ready'), {
+      statusCode: 503,
+      code: 'cold-start',
+    });
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => { throw failure; },
+      }),
+    });
+
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finished();
+
+    const logged = warn.mock.calls.map((args) => args.join(' ')).find((line) => line.includes('generation failed'));
+    expect(logged).toContain('status 503');
+    expect(logged).toContain('code cold-start');
+    expect(logged).toContain('location is not ready');
+    expect(persistSessionAssist).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+>>>>>>> upstream/main
   });
 
+<<<<<<< HEAD
   it('notifies onTurnSettled when assistance generation settles', async () => {
     const settled = [];
     const runtime = makeRuntime({
       onTurnSettled: (id) => settled.push(id),
+||||||| bc50ba56aa
+  it('keeps the cause of a tagged SDK rejection that is not an Error', async () => {
+    // The small-model service rethrows raw SDK rejections untouched. Those are
+    // tagged objects, not Errors, so a formatter that reads only
+    // `error instanceof Error` would log the bare line this fix removes.
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => {
+          throw { _tag: 'ProviderAuthError', message: 'provider rejected the key\nretry later' };
+        },
+      }),
+=======
+  it('keeps the cause of a tagged SDK rejection that is not an Error', async () => {
+    // The small-model service rethrows raw SDK rejections untouched. Those are
+    // tagged objects, not Errors, so a formatter that reads only
+    // `error instanceof Error` would log the bare line this fix removes.
+    const persistSessionAssist = vi.fn(async () => undefined);
+    const records = [
+      { id: 'msg_idle', type: 'idle', outcome: 'succeeded' },
+      { id: 'msg_a', type: 'assistant', content: [{ type: 'text', text: 'All done.' }], finish: 'stop', time: { completed: 2 }, model: { providerID: 'p', id: 'm' } },
+      { id: 'msg_u', type: 'user', text: 'Do the thing' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input) => {
+      const url = new URL(String(input));
+      let body;
+      if (url.pathname === '/api/session/ses_1') body = { data: { id: 'ses_1', location: { directory: '/repo' } } };
+      else if (url.pathname === '/api/session/ses_1/message') body = { data: records.slice(0, Number(url.searchParams.get('limit'))), cursor: {} };
+      else throw new Error(`unexpected ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runtime, finished } = makeRuntime({
+      persistSessionAssist,
+      buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
+        generateSmallModelText: async () => {
+          throw { _tag: 'ProviderAuthError', message: 'provider rejected the key\nretry later' };
+        },
+      }),
+>>>>>>> upstream/main
     });
     runtime.processCanonicalEvent({ type: 'session.status', sessionId: 'ses_1', epoch: 'epoch_1', sequence: '1', timestamp: 3, runtimeStatus: 'idle', activeRunId: null }, scope);
     await new Promise((resolve) => setTimeout(resolve, 15));
@@ -97,6 +1138,7 @@ describe('session-assist canonical consumer', () => {
     runtime.stop();
   });
 
+<<<<<<< HEAD
   it('never writes a recap or suggestion, because worker owns predictions and IdleMaintenance owns recaps', async () => {
     const settled = [];
     const runtime = createSessionAssistRuntime({
@@ -111,5 +1153,29 @@ describe('session-assist canonical consumer', () => {
     await new Promise((resolve) => setTimeout(resolve, 15));
     expect(settled).toEqual(['ses_1']);
     runtime.stop();
+||||||| bc50ba56aa
+    runtime.processPayload(idle());
+    for (let i = 0; i < 30 && warn.mock.calls.length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    const logged = warn.mock.calls.map((args) => args.join(' ')).find((line) => line.includes('generation failed'));
+    expect(logged).toContain('provider rejected the key');
+    expect(logged).toContain('tag ProviderAuthError');
+    // The cause stays one line.
+    expect(logged).not.toContain('\n');
+    vi.unstubAllGlobals();
+=======
+    runtime.processPayload(idle());
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    await finished();
+
+    const logged = warn.mock.calls.map((args) => args.join(' ')).find((line) => line.includes('generation failed'));
+    expect(logged).toContain('provider rejected the key');
+    expect(logged).toContain('tag ProviderAuthError');
+    // The cause stays one line.
+    expect(logged).not.toContain('\n');
+    vi.unstubAllGlobals();
+>>>>>>> upstream/main
   });
 });

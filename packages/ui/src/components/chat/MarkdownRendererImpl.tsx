@@ -11,7 +11,14 @@ import {
   type StreamdownProps,
 } from 'streamdown';
 import type { Pluggable } from 'unified';
+<<<<<<< HEAD
 import type { Part } from '@openchamber/agent-contract';
+||||||| bc50ba56aa
+import type { Part } from '@/lib/opencode/model';
+=======
+import type { Part } from '@/lib/opencode/model';
+import type { Theme } from '@/types/theme';
+>>>>>>> upstream/main
 import { cn } from '@/lib/utils';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -45,7 +52,12 @@ import { MarkdownLink, MarkdownInlineCode } from './markdown/MarkdownLink';
 import { MarkdownCode } from './markdown/MarkdownCode';
 import { MarkdownTable, MarkdownTableCell } from './markdown/MarkdownTable';
 import { MarkdownMermaid } from './markdown/MarkdownMermaid';
+<<<<<<< HEAD
 import { fenceUiBlocks } from './uiBlocks/taggedBlocks';
+||||||| bc50ba56aa
+=======
+import { MarkdownSvg } from './markdown/MarkdownSvg';
+>>>>>>> upstream/main
 import { MarkdownUiBlock } from './markdown/MarkdownUiBlock';
 import { MarkdownWindow, MarkdownWindowContext } from './markdown/markdownWindow';
 import { WindowedMarkdownBlock } from './markdown/WindowedMarkdownBlock';
@@ -75,6 +87,13 @@ export interface MarkdownRendererProps {
   variant?: MarkdownVariant;
   onShowPopup?: (content: ToolPopupContent) => void;
   enableFileReferences?: boolean;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  /** What active extensions claim in this message (`useGuestLinkRules`). Keep the array stable. */
+  guestLinks?: readonly GuestLinkRule[] | null;
+=======
+  guestLinks?: readonly GuestLinkRule[] | null;
+>>>>>>> upstream/main
 }
 
 const defaultMermaidControls: MermaidControls = {
@@ -151,7 +170,7 @@ const components: Components = {
   video: ExportSafeVideo,
   p: MarkdownBodyParagraph,
   strong: ({ node: _node, ...props }) => <strong {...props} />,
-  li: ({ node: _node, ...props }) => <li {...props} dir="auto" />,
+  li: ({ node: _node, ...props }) => <li dir="auto" {...props} />,
   blockquote: MarkdownBlockquote,
   summary: ({ node: _node, children, ...props }) => (
     <summary {...props}>
@@ -162,17 +181,18 @@ const components: Components = {
 };
 const renderers = [
   { language: 'mermaid', component: MarkdownMermaid },
+<<<<<<< HEAD
   { language: 'svg', component: MarkdownSvg },
+||||||| bc50ba56aa
+  // Reached only where `uiBlocks` is on (MarkdownCode); elsewhere the block stays code.
+=======
+>>>>>>> upstream/main
   { language: 'openui-lang', component: MarkdownUiBlock },
+  { language: 'svg', component: MarkdownSvg },
 ];
 const linkSafety = { enabled: false };
 const remend: StreamdownProps['remend'] = { linkMode: 'text-only', singleTilde: false };
-// Static mode renders the document whole and never reads the block split, but
-// Streamdown still computes it, running the marked lexer over the full text.
 const wholeDocument = (markdown: string) => [markdown];
-// Read once, when a block mounts. The value lives in a ref the provider keeps
-// for its lifetime: a context value that changed with every streamed update
-// re-rendered every block of the reply on each update.
 type BlockArrival = { active: boolean; firstNewIndex: number };
 const BlockArrivalContext = React.createContext<React.RefObject<BlockArrival>>({ current: { active: false, firstNewIndex: 0 } });
 type ArrivalStyle = React.CSSProperties & { '--oc-md-enter-delay': string };
@@ -180,11 +200,6 @@ const arrivalDelayStyle = (delay: number): ArrivalStyle => ({ '--oc-md-enter-del
 
 const MarkdownArrivalBlock = React.memo(function MarkdownArrivalBlock(props: BlockProps) {
   const arrivalRef = React.useContext(BlockArrivalContext);
-  // Only a block committed while the reply streams enters with the reveal; the
-  // first block and blocks present when the message mounted do not, so a full
-  // initial render does not shimmer. Several blocks committed in one update
-  // cascade by 55 ms each, at most four steps. The mount decision is kept
-  // across stream settlement and parent updates.
   const [delay] = React.useState(() => {
     const arrival = arrivalRef.current;
     return arrival.active && props.index > 0 && props.index >= arrival.firstNewIndex
@@ -229,7 +244,15 @@ function selectedCopyPayload(element: HTMLElement): { text: string; html: string
   if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
 
   const range = selection.getRangeAt(0);
+<<<<<<< HEAD
   if (!element.contains(range.startContainer) || !element.contains(range.endContainer)) return null;
+||||||| bc50ba56aa
+  // A selection that ends in a later row of the same long answer is copied by
+  // the row it starts in (`getMarkdownSelectionText` reads every row it crosses).
+  if (!element.contains(range.startContainer)) return null;
+=======
+  if (!element.contains(range.startContainer)) return null;
+>>>>>>> upstream/main
 
   const containingCode = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest('pre code');
   const code = containingCode(range.startContainer);
@@ -280,16 +303,40 @@ export interface MarkdownContentProps {
   mermaidControls?: MermaidControls;
   allowMermaidWheelEvents?: boolean;
   purpose?: 'copy' | 'image';
+  theme?: Theme;
   preparedHighlights?: ReadonlyMap<string, ReadonlyMap<string, HighlightResult>>;
   onExportCode?: (source: string, language: string) => void;
+<<<<<<< HEAD
   /** `:tada:` reads as 🎉 with these names (`useEmojiShortcodes`); text keeps its shortcodes without them. */
+||||||| bc50ba56aa
+  /** Item text of this repository: `#12`, `@someone` and commit ids link as its host links them. Keep the object stable. */
+  repositoryLinks?: RepositoryLinkContext | null;
+  /** `:tada:` reads as 🎉 with these names (`useEmojiShortcodes`); text keeps its shortcodes without them. */
+=======
+  repositoryLinks?: RepositoryLinkContext | null;
+>>>>>>> upstream/main
   emojiShortcodes?: EmojiShortcodes | null;
+<<<<<<< HEAD
   tableWidthScope?: string;
+||||||| bc50ba56aa
+  /** A long document read in its own scroller: only the blocks near the view mount (`markdownWindow`). */
+=======
+>>>>>>> upstream/main
   windowed?: boolean;
   uiBlocks?: boolean;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  /** Text a person typed: no HTML and no character references, so `<b>` and `&amp;` read as typed (`remarkLiteralText`). */
+  literalText?: boolean;
+  /** What active extensions claim in chat messages (`useGuestLinkRules`); only chat messages pass it. Keep the array stable. */
+  guestLinks?: readonly GuestLinkRule[] | null;
+=======
+  svgFences?: boolean;
+  literalText?: boolean;
+  guestLinks?: readonly GuestLinkRule[] | null;
+>>>>>>> upstream/main
 }
 
-/** Shared screen/copy/image renderer. Streamdown owns the Markdown subtree. */
 export function MarkdownContent({
   content,
   variant = 'assistant',
@@ -311,24 +358,61 @@ export function MarkdownContent({
   mermaidControls = defaultMermaidControls,
   allowMermaidWheelEvents,
   purpose,
+  theme: exportTheme,
   preparedHighlights,
   onExportCode,
   emojiShortcodes,
   tableWidthScope,
   windowed = false,
+<<<<<<< HEAD
   uiBlocks = true,
+||||||| bc50ba56aa
+  uiBlocks = false,
+  literalText = false,
+  guestLinks = null,
+=======
+  uiBlocks = false,
+  svgFences = false,
+  literalText = false,
+  guestLinks = null,
+>>>>>>> upstream/main
 }: MarkdownContentProps) {
   const themeSystem = useOptionalThemeSystem();
-  const theme = themeSystem?.currentTheme ?? getDefaultTheme(
+  const theme = exportTheme ?? themeSystem?.currentTheme ?? getDefaultTheme(
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
   );
   const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
   const codeWrap = useUIStore((state) => state.codeBlockLineWrap);
   const tableWrap = useUIStore((state) => state.tableCellWrap);
   const container = React.useRef<HTMLDivElement>(null);
-  // Null until the first commit: blocks in the first render were not committed
-  // by the stream, they were already there when the message mounted.
   const committedBlockCount = React.useRef<number | null>(null);
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const arrivalActive = mode === 'streaming' && isStreaming && !purpose && committedBlockCount.current !== null;
+  const firstNewIndex = committedBlockCount.current ?? 0;
+  const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(theme), [theme]);
+  const arrival = React.useRef<BlockArrival>({ active: false, firstNewIndex: 0 });
+  // Blocks read this while they render under this commit, never later.
+  arrival.current = { active: arrivalActive, firstNewIndex };
+
+  React.useLayoutEffect(() => {
+    const nativeRoot = container.current?.firstElementChild;
+    committedBlockCount.current = nativeRoot?.childElementCount ?? 0;
+  }, [content]);
+
+=======
+  const arrivalActive = mode === 'streaming' && isStreaming && !purpose && committedBlockCount.current !== null;
+  const firstNewIndex = committedBlockCount.current ?? 0;
+  const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(theme), [theme]);
+  const arrival = React.useRef<BlockArrival>({ active: false, firstNewIndex: 0 });
+  arrival.current = { active: arrivalActive, firstNewIndex };
+
+  React.useLayoutEffect(() => {
+    const nativeRoot = container.current?.firstElementChild;
+    committedBlockCount.current = nativeRoot?.childElementCount ?? 0;
+  }, [content]);
+
+>>>>>>> upstream/main
   const blockWindow = React.useMemo(() => (windowed ? new MarkdownWindow() : null), [windowed]);
   React.useLayoutEffect(() => {
     const element = container.current;
@@ -422,7 +506,20 @@ export function MarkdownContent({
   const processing = React.useMemo(() => {
     const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde, variant === 'reasoning');
     const extra: Pluggable[] = [];
+<<<<<<< HEAD
     if (activeEmojiShortcodes) extra.push([remarkEmojiShortcodes, activeEmojiShortcodes]);
+||||||| bc50ba56aa
+    if (emojiShortcodes) extra.push([remarkEmojiShortcodes, emojiShortcodes]);
+    if (repositoryLinks) extra.push([remarkRepositoryReferences, repositoryLinks]);
+    if (literalText) extra.push(remarkLiteralText);
+    // A copy or an image keeps the text as written.
+    if (activeGuestLinks) extra.push([remarkGuestLinks, activeGuestLinks]);
+=======
+    if (emojiShortcodes) extra.push([remarkEmojiShortcodes, emojiShortcodes]);
+    if (repositoryLinks) extra.push([remarkRepositoryReferences, repositoryLinks]);
+    if (literalText) extra.push(remarkLiteralText);
+    if (activeGuestLinks) extra.push([remarkGuestLinks, activeGuestLinks]);
+>>>>>>> upstream/main
     if (extra.length === 0) return base;
     return { ...base, remarkPlugins: [...(base.remarkPlugins ?? []), ...extra] };
   }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes]);
@@ -433,9 +530,18 @@ export function MarkdownContent({
     loopbackPreview,
     settled,
     purpose,
+<<<<<<< HEAD
     // Only an assistant reply on screen draws UI blocks; copies and image
     // exports keep the block's source.
     uiBlocks: uiBlocks && !purpose,
+||||||| bc50ba56aa
+    // Only an assistant or subagent reply on screen draws UI blocks; copies
+    // and image exports keep the block's source.
+    uiBlocks: uiBlocks && !purpose,
+=======
+    uiBlocks: uiBlocks && purpose !== 'copy',
+    svgFences: svgFences && !purpose,
+>>>>>>> upstream/main
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
     tableWidthScope,
@@ -444,11 +550,20 @@ export function MarkdownContent({
     allowMermaidWheelEvents,
     onShowPopup,
     onExportCode,
+    preparedHighlights,
     confirmFile,
     code,
   }), [
+<<<<<<< HEAD
     directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, sessionId, messageId, disableLinkSafety, tableWidthScope, theme,
     mermaidControls, allowMermaidWheelEvents, onShowPopup, onExportCode, confirmFile, code,
+||||||| bc50ba56aa
+    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, sessionId, messageId, disableLinkSafety, activeGuestLinks, tableWidthScope, theme,
+    mermaidControls, onShowPopup, onExportCode, confirmFile, code,
+=======
+    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, svgFences, sessionId, messageId, disableLinkSafety, activeGuestLinks, tableWidthScope, theme,
+    mermaidControls, onShowPopup, onExportCode, preparedHighlights, confirmFile, code,
+>>>>>>> upstream/main
   ]);
 
   let body = (
@@ -552,8 +667,16 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   const identity = `${messageId}:${part?.partId ?? ''}`;
   const initialMode: 'streaming' | 'static' = isStreaming || (part && !settledPart) ? 'streaming' : 'static';
   const [renderMode, setRenderMode] = React.useState({ identity, mode: initialMode });
+<<<<<<< HEAD
   // A live part keeps its block tree when it settles. A different part starts
   // fresh; already-completed history uses the whole-document static renderer.
+||||||| bc50ba56aa
+  const mode = renderMode.identity === identity ? renderMode.mode : initialMode;
+  // A live part keeps its block tree when it settles. A different part starts
+  // fresh; already-completed history uses the whole-document static renderer.
+=======
+  const mode = renderMode.identity === identity ? renderMode.mode : initialMode;
+>>>>>>> upstream/main
   if (renderMode.identity !== identity) {
     setRenderMode({ identity, mode: initialMode });
   }
@@ -592,7 +715,6 @@ export interface SimpleMarkdownRendererProps extends Omit<
   'directory' | 'mode' | 'mediaMode' | 'isStreaming' | 'settled' | 'purpose' | 'preparedHighlights' | 'onExportCode'
 > {
   frontmatter?: 'hide' | 'properties';
-  /** The folder links and media resolve against; the effective directory when absent. */
   directory?: string | null;
 }
 

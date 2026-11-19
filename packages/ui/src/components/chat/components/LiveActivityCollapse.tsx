@@ -6,6 +6,7 @@ interface LiveActivityCollapseProps {
     id?: string;
 }
 
+<<<<<<< HEAD
 /**
  * A turn's folded work. It opens and closes at once: the work above the
  * reader is its own list rows (`timelineRows.ts`), and the list keeps the
@@ -16,6 +17,14 @@ interface LiveActivityCollapseProps {
  * Suspense hide and reveal that re-renders this region lands on the same open
  * or closed layout it had before.
  */
+||||||| bc50ba56aa
+/**
+ * A turn's folded work. It opens and closes at once: the work above the
+ * reader is its own list rows (`timelineRows.ts`), and the list keeps the
+ * reader's place when a row above them changes size.
+ */
+=======
+>>>>>>> upstream/main
 export function LiveActivityCollapse({ expanded, children, id }: LiveActivityCollapseProps) {
     return (
         <div

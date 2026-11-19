@@ -63,3 +63,28 @@ describe('sessionKnowledgeApi', () => {
     expect(result).toEqual({ notes: ['n1'], plans: [] });
   });
 });
+
+test('a summary read while a pin is written is not served from the cache afterwards', async () => {
+  const { fetchSessionKnowledgeSummary } = await import('./sessionKnowledgeApi');
+  let pinned = false;
+  let releasePin!: () => void;
+  const pinWritten = new Promise<void>((resolve) => { releasePin = resolve; });
+  let summaryReads = 0;
+  request = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const pathname = new URL(input instanceof Request ? input.url : String(input), 'http://app.test').pathname;
+    if (pathname === '/api/session-knowledge/pin') {
+      await pinWritten;
+      pinned = true;
+      return Response.json({ pins: { notes: [], plans: ['p1'] } });
+    }
+    summaryReads += 1;
+    return Response.json({ notes: [], plans: pinned ? [{ id: 'p1', title: 'Plan' }] : [] });
+  });
+
+  const write = setSessionProjectContextPin('/pin-cache', 'ses_1', 'plan', 'p1', true);
+  expect((await fetchSessionKnowledgeSummary('/pin-cache', 'ses_1')).plans).toEqual([]);
+  releasePin();
+  await write;
+  expect((await fetchSessionKnowledgeSummary('/pin-cache', 'ses_1')).plans.map((plan) => plan.id)).toEqual(['p1']);
+  expect(summaryReads).toBe(2);
+});

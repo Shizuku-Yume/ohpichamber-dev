@@ -1,7 +1,5 @@
 import { act } from 'react';
 import { expect, test } from 'bun:test';
-import { plugin } from 'bun';
-import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
@@ -10,17 +8,6 @@ import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { useGuestsStore } from '@/lib/guests/store';
-
-// Bun does not implement Vite's worker asset-query imports.
-plugin({
-  name: 'tool-guest-worker-url',
-  setup(build) {
-    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-      contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`,
-      loader: 'js',
-    }));
-  },
-});
 
 const { default: ToolPart } = await import('./ToolPart');
 
@@ -100,6 +87,7 @@ test('native edit results show performed diffs without treating write input as a
         </SyncProvider>,
       ));
     };
+<<<<<<< HEAD
     await render({
       type: 'tool_result', partId: 'edit-result', toolCallId: 'edit', toolName: 'edit', isError: false,
       output: {
@@ -149,6 +137,63 @@ test('native edit results show performed diffs without treating write input as a
     expect(container.textContent).toContain('Permission denied');
     expect(container.textContent).toContain('Cannot edit src/example.ts');
     expect(container.textContent).not.toContain('+2/-1');
+||||||| bc50ba56aa
+
+    for (const tool of ['patch', 'edit']) {
+      await render(tool, {});
+      expect(container.textContent).not.toContain('+7');
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 7, deletions: 3, status: 'modified' }] });
+      expect(container.textContent).toContain('+7/-3');
+      // Canonical counts win even when a legacy diff is also present.
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 0, deletions: 4, status: 'deleted' }], diff: '+wrong' });
+      expect(container.textContent).toContain('+0/-4');
+      expect(container.textContent).not.toContain('+7/-3');
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 0, deletions: 0, status: 'modified' }] });
+      expect(container.textContent).toContain('+0/-0');
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 7 }] });
+      expect(container.textContent).not.toContain('+7');
+    }
+    await render('patch', { files: [
+      { file: 'src/one.ts', additions: 7, deletions: 3 },
+      { file: 'src/two.ts', additions: 2, deletions: 0 },
+    ] });
+    expect(container.textContent).toContain('+7');
+    expect(container.textContent).toContain('-3');
+    expect(container.textContent).toContain('+2');
+
+    await render('edit', { diff: '@@ -1 +1 @@\n-old\n+new\n+another' });
+    expect(container.textContent).toContain('+2/-1');
+    await render('write', {}, { path: 'new.ts', content: 'one\ntwo' });
+    expect(container.textContent).toContain('+2');
+=======
+
+    for (const tool of ['patch', 'edit']) {
+      await render(tool, {});
+      expect(container.textContent).not.toContain('+7');
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 7, deletions: 3, status: 'modified' }] });
+      expect(container.textContent).toContain('+7 −3');
+      // Canonical counts win even when a legacy diff is also present.
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 0, deletions: 4, status: 'deleted' }], diff: '+wrong' });
+      expect(container.textContent).toContain('+0 −4');
+      expect(container.textContent).not.toContain('+7 −3');
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 0, deletions: 0, status: 'modified' }] });
+      expect(container.textContent).toContain('+0 −0');
+      await render(tool, { files: [{ file: 'src/example.ts', additions: 7 }] });
+      expect(container.textContent).not.toContain('+7');
+    }
+    await render('patch', { files: [
+      { file: 'src/one.ts', additions: 7, deletions: 3 },
+      { file: 'src/two.ts', additions: 2, deletions: 0 },
+    ] });
+    expect(container.textContent).toContain('+7');
+    expect(container.textContent).toContain('−3');
+    expect(container.textContent).toContain('+2');
+
+    await render('edit', { diff: '@@ -1 +1 @@\n-old\n+new\n+another' });
+    expect(container.textContent).toContain('+2 −1');
+    await render('write', {}, { path: 'new.ts', content: 'one\ntwo' });
+    expect(container.textContent).toContain('+2');
+>>>>>>> upstream/main
   } finally {
     await act(async () => { root.unmount(); });
     await happyWindow.happyDOM.abort();

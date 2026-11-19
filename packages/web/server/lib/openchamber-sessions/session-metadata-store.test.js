@@ -23,6 +23,14 @@ describe('mergeMetadataPatch', () => {
       { openchamber: { goal: { status: 'done' }, assist: null }, pins: ['b'] },
     )).toEqual({ openchamber: { goal: { id: 'g1', status: 'done' } }, pins: ['b'] });
   });
+
+  it('keeps unchecked retained values and merges dictionary names without treating inherited members as records', () => {
+    const retained = new Map([['key', 'value']]);
+    const merged = mergeMetadataPatch({ retained }, { constructor: { active: true }, toString: { active: true } });
+    expect(merged.retained).toBe(retained);
+    expect(merged.constructor).toEqual({ active: true });
+    expect(merged.toString).toEqual({ active: true });
+  });
 });
 
 describe('createSessionMetadataStore Host SQLite persistence', () => {
@@ -38,10 +46,103 @@ describe('createSessionMetadataStore Host SQLite persistence', () => {
       .resolves.toMatchObject({ revision: '1' });
     await first.close();
 
+<<<<<<< HEAD
     const reopened = createSessionMetadataStore({ dataDir });
     await expect(reopened.getState('ses_a')).resolves.toEqual({
       metadata: { openchamber: { goal: { status: 'active', turnCount: 2 }, assist: { recap: 'r' } } },
       revision: '2',
+||||||| bc50ba56aa
+const notFound = () => Object.assign(new Error('Session not found'), { _tag: 'SessionNotFoundError' });
+
+/**
+ * OpenCode's side: records by session id. A `write` replaces the whole object,
+ * which is what `PATCH /api/session/{id}` does with `metadata`.
+ */
+const createFakeOpenCode = (records = {}) => {
+  const sessions = new Map(Object.entries(records));
+  const fake = {
+    sessions,
+    writes: [],
+    failRead: null,
+    failWrite: null,
+    read: vi.fn(async (id) => {
+      if (fake.failRead) throw fake.failRead;
+      return sessions.has(id) ? structuredClone(sessions.get(id)) : null;
+    }),
+    write: vi.fn(async (id, metadata) => {
+      // Yield first so concurrent writers really overlap.
+      await Promise.resolve();
+      if (fake.failWrite) throw fake.failWrite;
+      if (!sessions.has(id)) throw notFound();
+      fake.writes.push([id, metadata]);
+      sessions.set(id, structuredClone(metadata));
+    }),
+  };
+  return fake;
+};
+
+const makeStore = (openCode, dataDir = makeDataDir()) => ({
+  dataDir,
+  store: createSessionMetadataStore({ dataDir, openCode }),
+});
+
+describe('createSessionMetadataStore', () => {
+  it('cancels one reader while shared legacy loading continues for another', async () => {
+    const load = Promise.withResolvers();
+    const openCode = createFakeOpenCode({ ses_1: { ready: true } });
+    const store = createSessionMetadataStore({
+      dataDir: makeDataDir(), openCode,
+      fsPromises: { ...fs.promises, readFile: async () => load.promise },
+=======
+const notFound = () => Object.assign(new Error('Session not found'), { _tag: 'SessionNotFoundError' });
+
+/**
+ * OpenCode's side: records by session id. A `write` replaces the whole object,
+ * which is what `PATCH /api/session/{id}` does with `metadata`.
+ */
+const createFakeOpenCode = (records = {}) => {
+  const sessions = new Map(Object.entries(records));
+  const fake = {
+    sessions,
+    writes: [],
+    failRead: null,
+    failWrite: null,
+    read: vi.fn(async (id) => {
+      if (fake.failRead) throw fake.failRead;
+      return sessions.has(id) ? structuredClone(sessions.get(id)) : null;
+    }),
+    write: vi.fn(async (id, metadata) => {
+      // Yield first so concurrent writers really overlap.
+      await Promise.resolve();
+      if (fake.failWrite) throw fake.failWrite;
+      if (!sessions.has(id)) throw notFound();
+      fake.writes.push([id, metadata]);
+      sessions.set(id, structuredClone(metadata));
+    }),
+  };
+  return fake;
+};
+
+const makeStore = (openCode, dataDir = makeDataDir()) => ({
+  dataDir,
+  store: createSessionMetadataStore({ dataDir, openCode }),
+});
+
+describe('createSessionMetadataStore', () => {
+  it('keeps legacy session ids that name object prototype members', async () => {
+    const dataDir = makeDataDir();
+    writeLegacy(dataDir, '{"__proto__":{"kept":true},"constructor":{"kept":true}}');
+    const store = createSessionMetadataStore({ dataDir, openCode: createFakeOpenCode() });
+    expect(await store.get('__proto__')).toEqual({ kept: true });
+    expect(await store.get('constructor')).toEqual({ kept: true });
+  });
+  it('cancels one reader while shared legacy loading continues for another', async () => {
+    const load = Promise.withResolvers();
+    const openCode = createFakeOpenCode({ ses_1: { ready: true } });
+    const store = createSessionMetadataStore({
+      dataDir: makeDataDir(), openCode,
+      fsPromises: { ...fs.promises, readFile: async () => load.promise },
+>>>>>>> upstream/main
     });
     await expect(reopened.get('ses_b')).resolves.toEqual({ openchamber: { linked_issues: [{ id: 'i1' }] } });
     await reopened.close();
@@ -58,6 +159,7 @@ describe('createSessionMetadataStore Host SQLite persistence', () => {
     await store.close();
   });
 
+<<<<<<< HEAD
   it('keeps previous and unrelated rows after a real SQLite failed write', async () => {
     const dataDir = makeDataDir();
     const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
@@ -81,6 +183,42 @@ describe('createSessionMetadataStore Host SQLite persistence', () => {
     const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
     db.prepare('INSERT INTO session_metadata (session_id, revision, payload) VALUES (?, ?, ?)').run('ses_bad', 1, '{broken');
     db.close();
+||||||| bc50ba56aa
+  it('rejects a missing id or a non-object patch', async () => {
+    const { store } = makeStore(createFakeOpenCode());
+    await expect(store.setSessionMetadata('', { a: 1 })).rejects.toThrow();
+    await expect(store.setSessionMetadata('ses_1', ['a'])).rejects.toThrow();
+  });
+
+  describe('legacy sessions-metadata.json', () => {
+    it('serves a legacy entry over the OpenCode record until it is migrated', async () => {
+      const openCode = createFakeOpenCode({ ses_1: { openchamber: { kind: 'review' } } });
+      const dataDir = makeDataDir();
+      writeLegacy(dataDir, { ses_1: { openchamber: { kind: 'review', goal: { id: 'g1' } } } });
+      const { store } = makeStore(openCode, dataDir);
+=======
+  describe('legacy sessions-metadata.json', () => {
+    it('serves and migrates only object entries from a mixed legacy file', async () => {
+      const openCode = createFakeOpenCode({
+        ses_ok: {}, ses_list: { keep: true }, ses_text: { keep: true }, ses_null: { keep: true },
+      });
+      const dataDir = makeDataDir();
+      writeLegacy(dataDir, { ses_ok: { a: 1 }, ses_list: ['a'], ses_text: 'nope', ses_null: null });
+      const { store } = makeStore(openCode, dataDir);
+
+      await expect(store.listUnmigrated()).resolves.toEqual({ ses_ok: { a: 1 } });
+      await expect(store.migrateLegacy()).resolves.toBe(0);
+      expect(Object.fromEntries(openCode.sessions)).toEqual({
+        ses_ok: { a: 1 }, ses_list: { keep: true }, ses_text: { keep: true }, ses_null: { keep: true },
+      });
+    });
+
+    it('serves a legacy entry over the OpenCode record until it is migrated', async () => {
+      const openCode = createFakeOpenCode({ ses_1: { openchamber: { kind: 'review' } } });
+      const dataDir = makeDataDir();
+      writeLegacy(dataDir, { ses_1: { openchamber: { kind: 'review', goal: { id: 'g1' } } } });
+      const { store } = makeStore(openCode, dataDir);
+>>>>>>> upstream/main
 
     const reopened = createSessionMetadataStore({ dataDir });
     await expect(reopened.get('ses_bad')).rejects.toBeInstanceOf(MetadataCorruptError);

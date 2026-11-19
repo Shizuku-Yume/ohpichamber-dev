@@ -1,3 +1,12 @@
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/**
+ * Runtime-scoped pagination metadata shared with the session message loader.
+ */
+
+=======
+
+>>>>>>> upstream/main
 import { getRuntimeKey } from "@/lib/runtime-switch"
 
 type SessionPrefetchMeta = { limit: number; cursor?: string; complete: boolean; at: number }
@@ -37,8 +46,25 @@ export function setSessionPrefetch(input: {
   }
 }
 
+<<<<<<< HEAD
 export function clearSessionPrefetch(directory: string, sessionIds: Iterable<string>, runtimeKey = getRuntimeKey()): void {
   for (const sessionId of sessionIds) if (sessionId) cache.delete(compositeKey(runtimeKey, directory, sessionId))
+||||||| bc50ba56aa
+/** Invalidate cache for specific sessions (e.g. after eviction). */
+export function clearSessionPrefetch(directory: string, sessionIDs: Iterable<string>, runtimeKey = getRuntimeKey()) {
+  for (const sessionID of sessionIDs) {
+    if (!sessionID) continue
+    const id = compositeKey(runtimeKey, directory, sessionID)
+    cache.delete(id)
+  }
+=======
+export function clearSessionPrefetch(directory: string, sessionIDs: Iterable<string>, runtimeKey = getRuntimeKey()) {
+  for (const sessionID of sessionIDs) {
+    if (!sessionID) continue
+    const id = compositeKey(runtimeKey, directory, sessionID)
+    cache.delete(id)
+  }
+>>>>>>> upstream/main
 }
 export function clearDirectorySessionPrefetch(directory: string, runtimeKey = getRuntimeKey()): void {
   const prefix = `${runtimeKey}\n${directory}\n`

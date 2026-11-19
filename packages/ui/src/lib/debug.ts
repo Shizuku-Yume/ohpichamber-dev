@@ -226,7 +226,6 @@ export const debugUtils = {
     }));
   },
 
-  /** Cached message count per session in the current directory store; -1 when not cached. */
   getCachedMessageCount(sessionId: string, directory?: string) {
     const state = getDirectoryState(directory);
     return state?.message[sessionId]?.length ?? -1;
@@ -429,11 +428,14 @@ export const debugUtils = {
       openchamber: {
         settingsInfo,
       },
-      // Empty is a meaningful answer here: it means no prompt was rejected in
-      // this session, so a "my message disappeared" report is not a rejected
-      // send and needs a different explanation.
       recentSendFailures: getRecentSendFailures(),
+<<<<<<< HEAD
       // Same reasoning: empty means this app session recorded no session error.
+||||||| bc50ba56aa
+      // Same reasoning: empty means OpenCode reported no failed turn in this
+      // app session.
+=======
+>>>>>>> upstream/main
       recentSessionErrors: getRecentSessionErrors(),
       currentSessionDirectoryResolution: sessionState.currentSessionId
         ? this.diagnoseSessionDirectory(sessionState.currentSessionId)
@@ -444,21 +446,43 @@ export const debugUtils = {
     return report;
   },
 
+<<<<<<< HEAD
   /**
    * The same text the Runtime Status dialog shows, for a console or remote
    * session that cannot open the dialog.
    */
   async statusReport(): Promise<string> {
     const text = await buildRuntimeStatusReport();
+||||||| bc50ba56aa
+  /**
+   * The same text the status report dialog ("Show OpenCode status") shows, for a
+   * console or remote session that cannot press the shortcut.
+   */
+  async statusReport() {
+    const text = await buildOpenCodeStatusReport();
+=======
+  async statusReport() {
+    const text = await buildOpenCodeStatusReport();
+>>>>>>> upstream/main
     console.log(text);
     return text;
   },
 
+<<<<<<< HEAD
   /**
    * Prompt sends that were rejected and rolled back in this app session.
    * Newest first; empty means no send was rejected.
    */
   getRecentSendFailures(): SendFailureRecord[] {
+||||||| bc50ba56aa
+  /**
+   * Prompt sends that were rejected and rolled back in this app session.
+   * Newest first; empty means no send was rejected.
+   */
+  getRecentSendFailures() {
+=======
+  getRecentSendFailures() {
+>>>>>>> upstream/main
     const failures = getRecentSendFailures();
     if (failures.length === 0) {
       console.log('[OK] No prompt sends were rejected in this session.');
@@ -469,6 +493,7 @@ export const debugUtils = {
     return failures;
   },
 
+<<<<<<< HEAD
   /**
    * Report how a session's directory is resolved, from every source, in
    * precedence order. A send is routed by the winning value, so a disagreement
@@ -476,6 +501,17 @@ export const debugUtils = {
    * against a directory that does not own the session.
    */
   diagnoseSessionDirectory(sessionId?: string): SessionDirectoryReport | null {
+||||||| bc50ba56aa
+  /**
+   * Report how a session's directory is resolved, from every source, in
+   * precedence order. A send is routed by the winning value, so a disagreement
+   * here explains a prompt that vanishes without an error: it was posted
+   * against a directory that does not own the session.
+   */
+  diagnoseSessionDirectory(sessionId?: string) {
+=======
+  diagnoseSessionDirectory(sessionId?: string) {
+>>>>>>> upstream/main
     const sessionState = useSessionUIStore.getState();
     const targetSessionId = sessionId ?? sessionState.currentSessionId;
 
@@ -499,8 +535,18 @@ export const debugUtils = {
     const sources = {
       attachment,
       worktreeMetadata,
+<<<<<<< HEAD
       // Native routing comes from workspace ownership, not public display paths.
       authoritative: owningStoreDirectory,
+||||||| bc50ba56aa
+      // Record first, matching the resolver: holding a session proves
+      // containment, not ownership, so the parent repository holds its
+      // worktrees' sessions too. Reporting membership first made this
+      // diagnostic contradict the routing it exists to explain.
+      authoritative: recordDirectory ?? owningStoreDirectory,
+=======
+      authoritative: recordDirectory ?? owningStoreDirectory,
+>>>>>>> upstream/main
       selected,
       remembered: remembered.runtime,
     };

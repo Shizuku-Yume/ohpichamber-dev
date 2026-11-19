@@ -1,20 +1,27 @@
 import type { Session } from '@openchamber/agent-contract';
 
-// Spend is read against a budget, so it keeps its real precision instead of
-// collapsing to two decimals. Trailing zeros are dropped so exact values stay
-// short. Relocated from WorkStatusPrimaryGroup.tsx so both that component and
-// WorkStatusSubagentsSection share one implementation.
 const trimZeros = (value: string): string =>
   (value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value);
 
 export const formatCost = (cost: number): string => `$${trimZeros(cost.toFixed(4))}`;
 
+<<<<<<< HEAD
 /**
  * Groups a flat live-session list by parentSessionId. One pass, O(n). Sessions
  * without a parentSessionId (roots) are simply absent as keys — callers look up
  * a specific id's children via `.get(id) ?? []`.
  */
 export function buildChildrenIndex(sessions: readonly Session[]): Map<string, Session[]> {
+||||||| bc50ba56aa
+/**
+ * Groups a flat live-session list by parentID. One pass, O(n). Sessions
+ * without a parentID (roots) are simply absent as keys — callers look up a
+ * specific id's children via `.get(id) ?? []`.
+ */
+export function buildChildrenIndex(sessions: Session[]): Map<string, Session[]> {
+=======
+export function buildChildrenIndex(sessions: Session[]): Map<string, Session[]> {
+>>>>>>> upstream/main
   const index = new Map<string, Session[]>();
   for (const session of sessions) {
     const parentSessionId = session.parentSessionId;
@@ -29,7 +36,24 @@ export function buildChildrenIndex(sessions: readonly Session[]): Map<string, Se
   return index;
 }
 
+<<<<<<< HEAD
 /** Canonical sessions do not carry provider billing fields, so spend is unavailable. */
+||||||| bc50ba56aa
+function sessionCost(session: Session | undefined): number {
+  return session?.cost ?? 0;
+}
+
+/**
+ * Own cost plus every descendant's cost, recursively. Cycle-guarded with a
+ * visited set: parentID should form a tree, but this does not trust that
+ * invariant blindly (mirrors opencode-session-cost's src/cost.ts).
+ */
+=======
+function sessionCost(session: Session | undefined): number {
+  return session?.cost ?? 0;
+}
+
+>>>>>>> upstream/main
 export function computeSubtreeCost(
   _id: string,
   _sessionsById: Map<string, Session>,

@@ -17,6 +17,7 @@ import {
 import { getApprovalPresentation } from './permissionPresentation';
 import { usePermissionFromSubagent, usePermissionResponse } from './usePermissionResponse';
 
+<<<<<<< HEAD
 /**
  * The agent's native approval requests, docked above the composer in the same
  * frame as the form dock. Every pending request for the composer's session
@@ -25,6 +26,19 @@ import { usePermissionFromSubagent, usePermissionResponse } from './usePermissio
  * through rather than a stack of cards. The dock answers one request at a time;
  * once it is answered the next one takes its place.
  */
+||||||| bc50ba56aa
+/**
+ * The agent's permission requests, docked above the composer in the same
+ * frame as the form dock. Every pending request for the composer's session
+ * (including its subagents') is a step in the header, one dot per request
+ * with the current one solid, so a batch of requests raised together reads
+ * as one panel to walk through rather than a stack of cards. The dock
+ * answers one request at a time; once it is answered the next one takes
+ * its place. The BTW sheet keeps the inline `PermissionCard` for its child
+ * session's requests.
+ */
+=======
+>>>>>>> upstream/main
 
 interface PermissionDockProps {
     sessionId: string | null;
@@ -47,17 +61,33 @@ const PermissionDockPanel: React.FC<{ permissions: ApprovalRequest[] }> = ({ per
     const [collapsed, setCollapsed] = React.useState(false);
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
+<<<<<<< HEAD
     // "Open session" on a request's toast expands the dock on that request.
     const permissionIds = React.useMemo(() => permissions.map((permission) => permission.approvalId), [permissions]);
+||||||| bc50ba56aa
+    // "Open session" on a request's toast expands the dock on that request.
+    const permissionIds = React.useMemo(() => permissions.map((permission) => permission.id), [permissions]);
+=======
+    const permissionIds = React.useMemo(() => permissions.map((permission) => permission.id), [permissions]);
+>>>>>>> upstream/main
     useRequestReveal(permissionIds, React.useCallback((id: string) => {
         setSelectedId(id);
         setCollapsed(false);
     }, []));
 
+<<<<<<< HEAD
     // The chosen request stays current while it is pending; a request that was
     // answered elsewhere (another client, auto-accept) falls back to the oldest
     // one still open.
     const currentIndex = Math.max(0, permissions.findIndex((permission) => permission.approvalId === selectedId));
+||||||| bc50ba56aa
+    // The chosen request stays current while it is pending; a request that
+    // was answered elsewhere (another client, auto-accept) falls back to the
+    // oldest one still open.
+    const currentIndex = Math.max(0, permissions.findIndex((permission) => permission.id === selectedId));
+=======
+    const currentIndex = Math.max(0, permissions.findIndex((permission) => permission.id === selectedId));
+>>>>>>> upstream/main
     const current = permissions[currentIndex];
     const availableMaxHeight = useMobileAutocompleteMaxHeight(bodyRef, !collapsed, 320);
 
@@ -127,7 +157,6 @@ const PermissionDockRequest: React.FC<{
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={6}>{collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}</TooltipContent>
                 </Tooltip>
-                {/* One dot per pending request, the current one solid. */}
                 {!collapsed && permissions.length > 1 ? (
                     <div className="flex shrink-0 items-center gap-1" role="tablist">
                         {permissions.map((entry, index) => {
@@ -181,5 +210,4 @@ const PermissionDockRequest: React.FC<{
     );
 };
 
-/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
 export const PermissionDock = React.memo(PermissionDockView);

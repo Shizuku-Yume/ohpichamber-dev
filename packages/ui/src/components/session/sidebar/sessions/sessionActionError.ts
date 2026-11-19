@@ -3,11 +3,20 @@ import { CanonicalApiError } from '@/api/canonicalClient';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
+<<<<<<< HEAD
 /**
  * One sentence a person can act on when a session action fails. A canonical
  * failure names the status, problem code and occurrence reference, because
  * "500" alone sends whoever reads it hunting for a server that is in fact up.
  */
+||||||| bc50ba56aa
+/**
+ * One sentence a person can act on when a session action fails. An OpenCode
+ * failure names the status, the error class and the log ref, because "500"
+ * alone sends whoever reads it hunting for a server that is in fact up.
+ */
+=======
+>>>>>>> upstream/main
 export const describeSessionActionError = (error: Error, t: Translate): string => {
   if (error instanceof CanonicalApiError) {
     const problem = error.problem;

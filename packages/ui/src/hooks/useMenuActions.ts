@@ -206,8 +206,6 @@ export const useMenuActions = (
           handleChangeWorkspace();
           break;
 
-        // Legacy right-sidebar menu items now target the context surfaces
-        // that replaced the sidebar's tabs.
         case 'toggle-right-sidebar': {
           const directory = useDirectoryStore.getState().currentDirectory;
           if (!directory) break;
@@ -295,8 +293,6 @@ export const useMenuActions = (
           onToggleMemoryDebug?.();
           break;
 
-        // Same history as the Back/Forward shortcuts, which this menu's
-        // accelerators shadow on Windows and Linux.
         case 'go-back':
           navigateSessionHistory(-1);
           break;

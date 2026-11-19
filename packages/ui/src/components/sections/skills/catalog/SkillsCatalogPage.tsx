@@ -194,9 +194,14 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     void loadCatalog();
   }, [loadCatalog]);
 
+<<<<<<< HEAD
   // Load every source in the background so global search covers all of them.
   // Navigating away aborts the request in flight; the store treats an abort as
   // no result, never as a load failure on the page the user moved to.
+||||||| bc50ba56aa
+  // Load every source in the background so global search covers all of them.
+=======
+>>>>>>> upstream/main
   React.useEffect(() => {
     const unloaded = sources.filter((src) => !loadedSourceIds[src.id]);
     if (unloaded.length === 0) {
@@ -351,8 +356,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     setIsRemovingCatalog(true);
     try {
       const settings = await loadDesktopSettings();
-      // A failed load is not an empty list: writing [] here would drop every
-      // other catalog along with the selected one.
       if (!settings) {
         toast.error(t('settings.skills.catalog.add.toast.saveFailed'));
         return;
@@ -380,8 +383,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     ? t('settings.skills.catalog.page.list.searchTitle')
     : (selectedSource?.label ?? '');
 
-  // The selected source has no items yet and a load is in flight — show the
-  // loading state instead of a stale list from the previously selected source.
   const isSelectedSourceLoading = !isSearching
     && selectedSourceId !== null
     && !loadedSourceIds[selectedSourceId]
@@ -442,7 +443,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
         <SettingsSection
           title={t('settings.skills.catalog.page.section.sources')}
-          divider={false}
           settingsItem="skills.catalog.source"
         >
           <div className="grid grid-cols-1 gap-3 py-1.5 @xl:grid-cols-2">
@@ -718,9 +718,18 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
         </SettingsSection>
       </SettingsPageLayout>
 
+<<<<<<< HEAD
       {/* Dialogs */}
       <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
       <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
+||||||| bc50ba56aa
+        {/* Dialogs */}
+        <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
+        <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
+=======
+        <AddCatalogDialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen} catalogId={editingCatalogId} />
+        <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} items={installItems} />
+>>>>>>> upstream/main
 
       <Dialog open={uninstallItems.length > 0} onOpenChange={(open) => !open && !isUninstalling && setUninstallItems([])}>
         <DialogContent className="max-w-md">

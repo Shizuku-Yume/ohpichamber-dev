@@ -23,7 +23,16 @@ import {
   SettingsControlGroup,
   SettingsRadioGroup,
   SettingsRadioOption,
+<<<<<<< HEAD
   SETTINGS_WIDTH_NUMBER_CLASS,
+||||||| bc50ba56aa
+  SettingsStackedField,
+  SETTINGS_NUMBER_INPUT_CLASS,
+=======
+  SettingsStackedField,
+  SettingsNewBadge,
+  SETTINGS_NUMBER_INPUT_CLASS,
+>>>>>>> upstream/main
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_SPACE_CHECKBOX_CLASS,
@@ -43,10 +52,18 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useMessageQueueStore, type FollowUpBehavior } from '@/stores/messageQueueStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
-import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type LargeTextPasteBehavior } from '@/stores/useUIStore';
+import { DEFAULT_SELECTION_APPROVAL_TEXT, useUIStore, type ChatWidth, type LargeTextPasteBehavior } from '@/stores/useUIStore';
 
 import { MessageSearchSettings } from './MessageSearchSettings';
+<<<<<<< HEAD
 import { useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';
+||||||| bc50ba56aa
+import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
+import { useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';
+=======
+import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
+import { chatSettingsTabAnchors, useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';
+>>>>>>> upstream/main
 
 type ChipOption<T extends string> = { id: T; labelKey: I18nKey };
 
@@ -71,9 +88,20 @@ const DIFF_LAYOUT_OPTIONS: ChipOption<'dynamic' | 'inline' | 'side-by-side'>[] =
   { id: 'side-by-side', labelKey: 'settings.openchamber.visual.option.diffLayout.sideBySide.label' },
 ];
 
+const CHAT_WIDTH_OPTIONS: ChipOption<ChatWidth>[] = [
+  { id: 'default', labelKey: 'settings.openchamber.visual.option.chatWidth.default.label' },
+  { id: 'wider', labelKey: 'settings.openchamber.visual.option.chatWidth.wider.label' },
+  { id: 'full', labelKey: 'settings.openchamber.visual.option.chatWidth.full.label' },
+];
+
 const FOLLOW_UP_BEHAVIOR_OPTIONS: ChipOption<FollowUpBehavior>[] = [
   { id: 'steer', labelKey: 'settings.openchamber.visual.option.followUpBehavior.steer.label' },
   { id: 'queue', labelKey: 'settings.openchamber.visual.option.followUpBehavior.queue.label' },
+];
+
+const QUESTIONS_PLACEMENT_OPTIONS: ChipOption<'popup' | 'chat'>[] = [
+  { id: 'popup', labelKey: 'settings.openchamber.visual.option.questionsPlacement.popup.label' },
+  { id: 'chat', labelKey: 'settings.openchamber.visual.option.questionsPlacement.chat.label' },
 ];
 
 const INPUT_HISTORY_SCOPE_OPTIONS: ChipOption<InputHistoryScope>[] = [
@@ -88,7 +116,6 @@ const LARGE_TEXT_PASTE_BEHAVIOR_OPTIONS: ChipOption<LargeTextPasteBehavior>[] = 
   { id: 'inline-double-paste', labelKey: 'settings.openchamber.visual.option.largeTextPaste.inlineDoublePaste.label' },
 ];
 
-/** A sub-option that only matters while the option above it is on. */
 const NESTED_OPTION_CLASS = 'ps-6';
 
 const useChipOptions = <T extends string>(options: ChipOption<T>[]) => {
@@ -96,7 +123,6 @@ const useChipOptions = <T extends string>(options: ChipOption<T>[]) => {
   return React.useMemo(() => options.map((option) => ({ value: option.id, label: t(option.labelKey) })), [options, t]);
 };
 
-/** How the transcript reads: agent activity, layout, formatting, search. */
 const SelectionApprovalField: React.FC = () => {
   const { t } = useI18n();
   const selectionApprovalText = useUIStore((state) => state.selectionApprovalText);
@@ -137,8 +163,8 @@ const MessagesTab: React.FC = () => {
   const setShowTurnChangedFiles = useUIStore((state) => state.setShowTurnChangedFiles);
   const streamingAutoFollowEnabled = useUIStore((state) => state.streamingAutoFollowEnabled);
   const setStreamingAutoFollowEnabled = useUIStore((state) => state.setStreamingAutoFollowEnabled);
-  const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled);
-  const setWideChatLayoutEnabled = useUIStore((state) => state.setWideChatLayoutEnabled);
+  const chatWidth = useUIStore((state) => state.chatWidth);
+  const setChatWidth = useUIStore((state) => state.setChatWidth);
   const promptNavigatorEnabled = useUIStore((state) => state.promptNavigatorEnabled);
   const setPromptNavigatorEnabled = useUIStore((state) => state.setPromptNavigatorEnabled);
   const collapsibleUserMessages = useUIStore((state) => state.collapsibleUserMessages);
@@ -163,11 +189,10 @@ const MessagesTab: React.FC = () => {
   const userMessageOptions = useChipOptions(USER_MESSAGE_RENDERING_OPTIONS);
   const mermaidOptions = useChipOptions(MERMAID_RENDERING_OPTIONS);
   const diffLayoutOptions = useChipOptions(DIFF_LAYOUT_OPTIONS);
+  const chatWidthOptions = useChipOptions(CHAT_WIDTH_OPTIONS);
 
   const handleActivityRenderModeChange = (mode: 'collapsed' | 'summary') => {
     setActivityRenderMode(mode);
-    // A stored legacy 'sorted' chat mode reads as Collapsed until the user
-    // picks a mode here; retire it so the choice sticks.
     void updateDesktopSettings({ activityRenderMode: mode, chatRenderMode: 'live' });
   };
   const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('chat');
@@ -177,7 +202,13 @@ const MessagesTab: React.FC = () => {
 
   return (
     <>
+<<<<<<< HEAD
       <SettingsSection title={t('settings.layout.chat.section.activity')} divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+||||||| bc50ba56aa
+      <SettingsSection title={t('settings.layout.chat.section.activity')} divider={false} contentClassName="space-y-3">
+=======
+      <SettingsSection title={t('settings.layout.chat.section.activity')} contentClassName="space-y-3">
+>>>>>>> upstream/main
         <SettingsFieldRow label={t('settings.openchamber.visual.section.activityDefault')} settingsItem="chat.activity-default">
           <SettingsChipGroup
             value={activityRenderMode}
@@ -203,7 +234,6 @@ const MessagesTab: React.FC = () => {
               className={NESTED_OPTION_CLASS}
             />
           ) : null}
-          {/* Only a collapsible block can fold while it streams. */}
           {showReasoningTraces && collapsibleThinkingBlocks ? (
             <SettingsCheckboxRow
               checked={expandReasoningWhileStreaming}
@@ -240,68 +270,78 @@ const MessagesTab: React.FC = () => {
       <SettingsSection
         title={t('settings.layout.chat.section.reading')}
         settingsItem="chat.message-appearance"
+<<<<<<< HEAD
         contentClassName={SETTINGS_SPACE_CHECKBOX_CLASS}
+||||||| bc50ba56aa
+        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+=======
+        contentClassName="space-y-3"
+>>>>>>> upstream/main
       >
-        <SettingsCheckboxRow
-          checked={wideChatLayoutEnabled}
-          onChange={(enabled) => {
-            setWideChatLayoutEnabled(enabled);
-            void updateDesktopSettings({ wideChatLayoutEnabled: enabled });
-          }}
-          label={t('settings.openchamber.visual.field.wideChatLayout')}
-          ariaLabel={t('settings.openchamber.visual.field.wideChatLayoutAria')}
-          settingsItem="chat.wide-layout"
-        />
-        <SettingsCheckboxRow
-          checked={streamingAutoFollowEnabled}
-          onChange={setStreamingAutoFollowEnabled}
-          label={t('settings.openchamber.visual.field.streamingAutoFollow')}
-          ariaLabel={t('settings.openchamber.visual.field.streamingAutoFollowAria')}
-          info={t('settings.openchamber.visual.field.streamingAutoFollowInfo')}
-          settingsItem="chat.streaming-auto-follow"
-        />
-        <SettingsCheckboxRow
-          checked={collapsibleUserMessages}
-          onChange={(enabled) => {
-            setCollapsibleUserMessages(enabled);
-            void updateDesktopSettings({ collapsibleUserMessages: enabled });
-          }}
-          label={t('settings.openchamber.visual.field.collapsibleUserMessages')}
-          ariaLabel={t('settings.openchamber.visual.field.collapsibleUserMessagesAria')}
-          settingsItem="chat.collapsible-user-messages"
-        />
-        <SettingsCheckboxRow
-          checked={stickyUserHeader}
-          onChange={(enabled) => {
-            setStickyUserHeader(enabled);
-            void updateDesktopSettings({ stickyUserHeader: enabled });
-          }}
-          label={t('settings.openchamber.visual.field.stickyUserHeader')}
-          ariaLabel={t('settings.openchamber.visual.field.stickyUserHeaderAria')}
-          settingsItem="chat.sticky-user-header"
-        />
-        <SettingsCheckboxRow
-          checked={promptNavigatorEnabled}
-          onChange={(enabled) => {
-            setPromptNavigatorEnabled(enabled);
-            void updateDesktopSettings({ promptNavigatorEnabled: enabled });
-          }}
-          label={t('settings.openchamber.visual.field.promptNavigatorEnabled')}
-          ariaLabel={t('settings.openchamber.visual.field.promptNavigatorEnabledAria')}
-          settingsItem="chat.prompt-navigator"
-        />
-        <SettingsCheckboxRow
-          checked={showSplitAssistantMessageActions}
-          onChange={(enabled) => {
-            setShowSplitAssistantMessageActions(enabled);
-            void updateDesktopSettings({ showSplitAssistantMessageActions: enabled });
-          }}
-          label={t('settings.openchamber.visual.field.showSplitAssistantMessageActions')}
-          ariaLabel={t('settings.openchamber.visual.field.showSplitAssistantMessageActionsAria')}
-          info={t('settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip')}
-          settingsItem="chat.inline-assistant-actions"
-        />
-        <SelectionApprovalField />
+        <SettingsFieldRow
+          label={t('settings.openchamber.visual.field.chatWidth')}
+          info={t('settings.openchamber.visual.field.chatWidthInfo')}
+          settingsItem="chat.width"
+        >
+          <SettingsChipGroup
+            value={chatWidth}
+            options={chatWidthOptions}
+            onChange={setChatWidth}
+            aria-label={t('settings.openchamber.visual.field.chatWidth')}
+          />
+        </SettingsFieldRow>
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <SettingsCheckboxRow
+            checked={streamingAutoFollowEnabled}
+            onChange={setStreamingAutoFollowEnabled}
+            label={t('settings.openchamber.visual.field.streamingAutoFollow')}
+            ariaLabel={t('settings.openchamber.visual.field.streamingAutoFollowAria')}
+            info={t('settings.openchamber.visual.field.streamingAutoFollowInfo')}
+            settingsItem="chat.streaming-auto-follow"
+          />
+          <SettingsCheckboxRow
+            checked={collapsibleUserMessages}
+            onChange={(enabled) => {
+              setCollapsibleUserMessages(enabled);
+              void updateDesktopSettings({ collapsibleUserMessages: enabled });
+            }}
+            label={t('settings.openchamber.visual.field.collapsibleUserMessages')}
+            ariaLabel={t('settings.openchamber.visual.field.collapsibleUserMessagesAria')}
+            settingsItem="chat.collapsible-user-messages"
+          />
+          <SettingsCheckboxRow
+            checked={stickyUserHeader}
+            onChange={(enabled) => {
+              setStickyUserHeader(enabled);
+              void updateDesktopSettings({ stickyUserHeader: enabled });
+            }}
+            label={t('settings.openchamber.visual.field.stickyUserHeader')}
+            ariaLabel={t('settings.openchamber.visual.field.stickyUserHeaderAria')}
+            settingsItem="chat.sticky-user-header"
+          />
+          <SettingsCheckboxRow
+            checked={promptNavigatorEnabled}
+            onChange={(enabled) => {
+              setPromptNavigatorEnabled(enabled);
+              void updateDesktopSettings({ promptNavigatorEnabled: enabled });
+            }}
+            label={t('settings.openchamber.visual.field.promptNavigatorEnabled')}
+            ariaLabel={t('settings.openchamber.visual.field.promptNavigatorEnabledAria')}
+            settingsItem="chat.prompt-navigator"
+          />
+          <SettingsCheckboxRow
+            checked={showSplitAssistantMessageActions}
+            onChange={(enabled) => {
+              setShowSplitAssistantMessageActions(enabled);
+              void updateDesktopSettings({ showSplitAssistantMessageActions: enabled });
+            }}
+            label={t('settings.openchamber.visual.field.showSplitAssistantMessageActions')}
+            ariaLabel={t('settings.openchamber.visual.field.showSplitAssistantMessageActionsAria')}
+            info={t('settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip')}
+            settingsItem="chat.inline-assistant-actions"
+          />
+          <SelectionApprovalField />
+        </div>
       </SettingsSection>
 
       <SettingsSection title={t('settings.layout.chat.section.formatting')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
@@ -426,7 +466,6 @@ const MessagesTab: React.FC = () => {
   );
 };
 
-/** Typing and sending: the send key, follow-ups, pastes, drafts, history. */
 const ComposerTab: React.FC = () => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
@@ -450,10 +489,17 @@ const ComposerTab: React.FC = () => {
   const inputHistoryLimit = useInputHistoryStore((state) => state.entryLimit);
   const applyInputHistoryScope = useInputHistoryStore((state) => state.applyScope);
   const applyInputHistoryLimit = useInputHistoryStore((state) => state.applyEntryLimit);
+<<<<<<< HEAD
   const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('chat');
   const composerSettings = getSectionSettings('composer');
   const btwSettings = getSectionSettings('btw');
+||||||| bc50ba56aa
+=======
+  const questionsInChat = useUIStore((state) => state.questionsInChat);
+  const setQuestionsInChat = useUIStore((state) => state.setQuestionsInChat);
+>>>>>>> upstream/main
   const followUpOptions = useChipOptions(FOLLOW_UP_BEHAVIOR_OPTIONS);
+  const questionsPlacementOptions = useChipOptions(QUESTIONS_PLACEMENT_OPTIONS);
   const historyScopeOptions = useChipOptions(INPUT_HISTORY_SCOPE_OPTIONS);
   const enterSendSelected = enterToSendConfigured ? enterToSend : !isMobile;
 
@@ -479,9 +525,14 @@ const ComposerTab: React.FC = () => {
 
   return (
     <>
+<<<<<<< HEAD
       <SettingsSection title={t('settings.layout.chat.section.sending')} divider={false} settingsItem="chat.composer" contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+||||||| bc50ba56aa
+      <SettingsSection title={t('settings.layout.chat.section.sending')} divider={false} settingsItem="chat.composer" contentClassName="space-y-5">
+=======
+      <SettingsSection title={t('settings.layout.chat.section.sending')} settingsItem="chat.composer" contentClassName="space-y-5">
+>>>>>>> upstream/main
         <div>
-          {/* Phones send with the keyboard's own button, so there is no send key to pick. */}
           {isMobile ? null : (
             <SettingsFieldRow
               label={t('settings.openchamber.visual.field.enterToSend')}
@@ -510,6 +561,7 @@ const ComposerTab: React.FC = () => {
               aria-label={t('settings.openchamber.visual.section.followUpBehaviorAria')}
             />
           </SettingsFieldRow>
+<<<<<<< HEAD
           {isMobile ? (
             <SettingsCheckboxRow
               checked={mobileReturnKeySends}
@@ -520,6 +572,21 @@ const ComposerTab: React.FC = () => {
               settingsItem="chat.mobile-return-key-sends"
             />
           ) : null}
+||||||| bc50ba56aa
+=======
+          <SettingsFieldRow
+            label={t('settings.openchamber.visual.field.questionsPlacement')}
+            info={t('settings.openchamber.visual.field.questionsPlacementInfo')}
+            settingsItem="chat.questions-placement"
+          >
+            <SettingsChipGroup
+              value={questionsInChat ? 'chat' : 'popup'}
+              options={questionsPlacementOptions}
+              onChange={(value) => setQuestionsInChat(value === 'chat')}
+              aria-label={t('settings.openchamber.visual.field.questionsPlacement')}
+            />
+          </SettingsFieldRow>
+>>>>>>> upstream/main
         </div>
         <SettingsControlGroup
           title={t('settings.openchamber.visual.field.largeTextPaste')}
@@ -612,7 +679,6 @@ const ComposerTab: React.FC = () => {
           </SettingsFieldRow>
           <SettingsFieldRow
             label={t('settings.openchamber.visual.field.inputHistoryLimit')}
-            // Lowering the number drops prompts for good, so this stays visible.
             description={t('settings.openchamber.visual.field.inputHistoryLimitDescription')}
             settingsItem="chat.input-history-limit"
           >
@@ -638,7 +704,6 @@ const ComposerTab: React.FC = () => {
   );
 };
 
-/** What OpenChamber adds around a session: starters, recaps, reviews, goals. */
 const AssistanceTab: React.FC = () => {
   const { t } = useI18n();
   const draftStartersVisible = useUIStore((state) => state.draftStartersVisible);
@@ -779,8 +844,15 @@ const AssistanceTab: React.FC = () => {
       <SettingsSection
         title={t('settings.openchamber.visual.section.sessionAssistance')}
         settingsItem="chat.session-assistance"
+<<<<<<< HEAD
         divider={false}
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
+||||||| bc50ba56aa
+        divider={false}
+        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+=======
+        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+>>>>>>> upstream/main
       >
         <SettingsCheckboxRow
           checked={draftStartersVisible}
@@ -799,6 +871,7 @@ const AssistanceTab: React.FC = () => {
           ariaLabel={t('settings.openchamber.visual.field.sessionRecapAria')}
           settingsItem="chat.session-recap"
         />
+<<<<<<< HEAD
         {sessionRecapEnabled ? (
           <div className="ps-6 pb-1">
             <SettingsFieldRow
@@ -858,26 +931,167 @@ const AssistanceTab: React.FC = () => {
           settingsItem="chat.session-review-offer"
         />
       </SettingsSection >
+||||||| bc50ba56aa
+        <SettingsCheckboxRow
+          checked={sessionSuggestionEnabled}
+          onChange={setSessionSuggestionEnabled}
+          label={t('settings.openchamber.visual.field.sessionSuggestion')}
+          ariaLabel={t('settings.openchamber.visual.field.sessionSuggestionAria')}
+          settingsItem="chat.session-suggestion"
+        />
+        {/* Jev runs on the OpenChamber server, which VS Code does not have.
+            The line naming who decides sits under the label, so it reads as
+            part of this option rather than text between two checkboxes. */}
+        {isVSCode ? null : (
+          <SettingsCheckboxRow
+            checked={jevAvailable && sessionReviewOfferEnabled}
+            onChange={setSessionReviewOfferEnabled}
+            disabled={!jevAvailable}
+            label={t('settings.openchamber.visual.field.sessionReviewOffer')}
+            ariaLabel={t('settings.openchamber.visual.field.sessionReviewOffer')}
+            info={t('settings.openchamber.visual.field.sessionReviewOfferInfo')}
+            footer={<JevAccessNote />}
+            settingsItem="chat.session-review-offer"
+          />
+        )}
+      </SettingsSection>
+=======
+        <SettingsCheckboxRow
+          checked={sessionSuggestionEnabled}
+          onChange={setSessionSuggestionEnabled}
+          label={t('settings.openchamber.visual.field.sessionSuggestion')}
+          ariaLabel={t('settings.openchamber.visual.field.sessionSuggestionAria')}
+          settingsItem="chat.session-suggestion"
+        />
+        {isVSCode ? null : (
+          <SettingsCheckboxRow
+            checked={jevAvailable && sessionReviewOfferEnabled}
+            onChange={setSessionReviewOfferEnabled}
+            disabled={!jevAvailable}
+            label={t('settings.openchamber.visual.field.sessionReviewOffer')}
+            ariaLabel={t('settings.openchamber.visual.field.sessionReviewOffer')}
+            info={t('settings.openchamber.visual.field.sessionReviewOfferInfo')}
+            footer={<JevAccessNote />}
+            settingsItem="chat.session-review-offer"
+          />
+        )}
+      </SettingsSection>
+>>>>>>> upstream/main
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+      {/* The goal loop runs in the web server; VS Code only renders goal state. */}
+      {isVSCode ? null : (
+        <SettingsSection
+          title={t('settings.openchamber.visual.goal.sectionTitle')}
+          info={t('settings.openchamber.visual.goal.description')}
+          contentClassName="space-y-3"
+        >
+          <SettingsCheckboxRow
+            checked={sessionGoalEnabled}
+            onChange={setSessionGoalEnabled}
+            label={t('settings.openchamber.visual.field.sessionGoal')}
+            ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
+            settingsItem="chat.session-goal"
+          />
+          <div>
+            <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
+            <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
+            <SettingsFieldRow
+              label={(
+                <SettingsCheckboxRow
+                  checked={sessionGoalDefaultBudgetEnabled}
+                  onChange={setSessionGoalDefaultBudgetEnabled}
+                  disabled={!sessionGoalEnabled}
+                  label={t('settings.openchamber.visual.goal.budgetLabel')}
+                  ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
+                />
+              )}
+              settingsItem="chat.session-goal-budget"
+            >
+              {/* The field keeps its place while the budget is off, so
+                  turning it on does not move the rows around it. */}
+              <NumberInput
+                value={sessionGoalDefaultBudget}
+                onValueChange={(value) => {
+                  if (Number.isFinite(value) && value > 0) {
+                    setSessionGoalDefaultBudget(Math.floor(value));
+                  }
+                }}
+                min={1000}
+                max={100000000}
+                step={50000}
+                disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
+                className={SETTINGS_NUMBER_INPUT_CLASS}
+                aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+              />
+            </SettingsFieldRow>
+          </div>
+        </SettingsSection>
+      )}
+=======
+      {isVSCode ? null : (
+        <SettingsSection
+          title={t('settings.openchamber.visual.goal.sectionTitle')}
+          info={t('settings.openchamber.visual.goal.description')}
+          contentClassName="space-y-3"
+        >
+          <SettingsCheckboxRow
+            checked={sessionGoalEnabled}
+            onChange={setSessionGoalEnabled}
+            label={t('settings.openchamber.visual.field.sessionGoal')}
+            ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
+            settingsItem="chat.session-goal"
+          />
+          <div>
+            <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
+            <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
+            <SettingsFieldRow
+              label={(
+                <SettingsCheckboxRow
+                  checked={sessionGoalDefaultBudgetEnabled}
+                  onChange={setSessionGoalDefaultBudgetEnabled}
+                  disabled={!sessionGoalEnabled}
+                  label={t('settings.openchamber.visual.goal.budgetLabel')}
+                  ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
+                />
+              )}
+              settingsItem="chat.session-goal-budget"
+            >
+              <NumberInput
+                value={sessionGoalDefaultBudget}
+                onValueChange={(value) => {
+                  if (Number.isFinite(value) && value > 0) {
+                    setSessionGoalDefaultBudget(Math.floor(value));
+                  }
+                }}
+                min={1000}
+                max={100000000}
+                step={50000}
+                disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
+                className={SETTINGS_NUMBER_INPUT_CLASS}
+                aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+              />
+            </SettingsFieldRow>
+          </div>
+        </SettingsSection>
+      )}
+>>>>>>> upstream/main
     </>
   );
 };
 
-/**
- * Settings → Chat. Three tabs split what used to be one long page: how the
- * transcript reads, how the composer sends, and what OpenChamber adds around
- * a session. The tab lives in `chatSettingsTabs.ts`, so a search result can
- * open the tab that holds its target.
- */
 export const ChatSettings: React.FC = () => {
   const { t } = useI18n();
   const tab = useChatSettingsTabStore((state) => state.tab);
   const setTab = useChatSettingsTabStore((state) => state.setTab);
-  const tabs = React.useMemo<Array<SortableTabsStripItem & { id: ChatSettingsTab }>>(() => [
-    { id: 'messages', label: t('settings.layout.chat.tab.messages') },
-    { id: 'composer', label: t('settings.layout.chat.tab.composer') },
-    { id: 'assistance', label: t('settings.layout.chat.tab.assistance') },
-  ], [t]);
+  const tabs = React.useMemo<Array<SortableTabsStripItem & { id: ChatSettingsTab }>>(() => (
+    (['messages', 'composer', 'assistance'] as const).map((id) => ({
+      id,
+      label: t(`settings.layout.chat.tab.${id}`),
+      accessory: <SettingsNewBadge items={chatSettingsTabAnchors(id)} />,
+    }))
+  ), [t]);
 
   return (
     <>

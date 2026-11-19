@@ -7,7 +7,7 @@ import { getInjectedBootOutcome } from '@openchamber/ui/lib/desktopBoot';
 import { configureRuntimeUrlResolver } from '@openchamber/ui/lib/runtime-url';
 import { createWebAPIs } from './api';
 
-// The switcher's statuses are warmed after boot settles, not during it.
+
 const HOST_STATUS_WARMUP_DELAY_MS = 3_000;
 
 const sameOrigin = (left: string, right: string): boolean => {
@@ -27,7 +27,7 @@ declare global {
     __OPENCHAMBER_LOCAL_ORIGIN__?: string;
     __OPENCHAMBER_RELAY_HOST_ID__?: string;
     __OPENCHAMBER_EXPLICIT_RUNTIME__?: boolean;
-    /** The Electron preload bridge, present only in the desktop renderer. */
+
     __OPENCHAMBER_DESKTOP__?: {
       invoke?: (cmd: string, args?: Record<string, string>) => Promise<void>;
     };
@@ -56,8 +56,8 @@ export const readRuntimeBootstrapConfig = (): RuntimeBootstrapConfig => {
   };
 };
 
-// Resolved once the desktop relay-host restore (if any) has picked a transport.
-// Immediately-resolved everywhere else. See createConfiguredWebAPIs.
+
+
 let desktopRelayRestoreReady: Promise<void> = Promise.resolve();
 export const getDesktopRelayRestoreReady = (): Promise<void> => desktopRelayRestoreReady;
 
@@ -70,12 +70,36 @@ export const createConfiguredWebAPIs = () => {
     apiBaseUrl: apiBaseUrl || undefined,
     realtimeBaseUrl: apiBaseUrl || undefined,
   });
+<<<<<<< HEAD
   // Tell the desktop shell which instance this window shows, at boot and on
   // every switch. A window opened for a saved host, or one switched to a host
   // in place, carries no host tag of its own, so without the report the shell's
   // window-reuse lookup (a notification click, a session link) opens another
   // window instead of reusing this one. The bridge is absent off desktop, so
   // the report is a no-op there.
+||||||| bc50ba56aa
+  initializeRuntimeEndpoint({
+    apiBaseUrl,
+    runtimeKey: sameOrigin(apiBaseUrl, localOrigin) ? 'local' : (desktopHostId ? `host:${desktopHostId}` : null),
+  });
+  // Tell the desktop shell which instance this window shows, at boot and on
+  // every switch. A window opened for a saved host, or one switched to a host
+  // in place, carries no host tag of its own, so without the report the shell's
+  // window-reuse lookup (a notification click, a session link) opens another
+  // window instead of reusing this one. The bridge is absent off desktop, so
+  // the report is a no-op there.
+=======
+  initializeRuntimeEndpoint({
+    apiBaseUrl,
+    runtimeKey: sameOrigin(apiBaseUrl, localOrigin) ? 'local' : (desktopHostId ? `host:${desktopHostId}` : null),
+  });
+
+
+
+
+
+
+>>>>>>> upstream/main
   const reportWindowRuntimeKey = (runtimeKey: string): void => {
     const key = runtimeKey.trim();
     const invoke = window.__OPENCHAMBER_DESKTOP__?.invoke;
@@ -90,34 +114,66 @@ export const createConfiguredWebAPIs = () => {
   });
   setRuntimeBearerToken(clientToken || null);
   setRuntimeExtraHeaders(runtimeHeaders || null);
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // createWebAPIs imports UI stores, which instantiate the SDK singleton
+  // before the endpoint above is configured.
+  opencodeClient.reconnectToRuntimeBaseUrl();
+=======
+
+
+  opencodeClient.reconnectToRuntimeBaseUrl();
+>>>>>>> upstream/main
   void refreshRuntimeUrlAuthToken(apiBaseUrl || undefined).catch(() => {});
   if (localOrigin && !sameOrigin(apiBaseUrl, localOrigin) && Object.keys(getRuntimeExtraHeadersSync()).length > 0) {
     void refreshLocalRuntimeUrlAuthToken(localOrigin).catch(() => {});
   }
   installRuntimeFetchBridge();
-  // Desktop only: connect a relay-capable host now that the fetch bridge is
-  // installed. No-op elsewhere; resolves in milliseconds when no relay host is
-  // involved. main.tsx holds the app render on this promise so the user sees the
-  // splash instead of a transient auth screen against an endpoint still being
-  // selected.
+
+
+
+
+
   const restoreRelayRuntime = (): Promise<void> => {
-    // Opened for this relay host. Boot already set its runtime key, so force the
-    // restore past its already-active check, or the tunnel never opens.
+
+
     if (relayHostId) return restoreDesktopRelayRuntime(relayHostId, { reconnectActive: true });
-    // Opened for a specific direct instance: keep the injected endpoint.
+
     if (explicitRuntime) return Promise.resolve();
-    // Main window and menu New Window: the default host on relaunch.
+
     return restoreDesktopRelayRuntime();
   };
   desktopRelayRestoreReady = Promise.race([
     restoreRelayRuntime().catch(() => {}),
-    // Never hold the app hostage: a stuck probe/tunnel gives up to the UI.
+
     new Promise<void>((resolve) => { window.setTimeout(resolve, 10_000); }),
+<<<<<<< HEAD
   ]).then(() => {});
   // Learn every instance's reachability in the background, so the switcher opens
   // on real values instead of probing for the first time under the user's
   // cursor. After the endpoint is settled and past the app's own bootstrap:
   // this is unprompted work and the machine's network is busiest at launch.
+||||||| bc50ba56aa
+  ]).then(() => {
+    // Relay-capable windows may select a reachable direct leg before React
+    // subscribes to runtime-change events, so bind the SDK explicitly.
+    opencodeClient.reconnectToRuntimeBaseUrl();
+  });
+  // Learn every instance's reachability in the background, so the switcher opens
+  // on real values instead of probing for the first time under the user's
+  // cursor. After the endpoint is settled and past the app's own bootstrap:
+  // this is unprompted work and the machine's network is busiest at launch.
+=======
+  ]).then(() => {
+
+
+    opencodeClient.reconnectToRuntimeBaseUrl();
+  });
+
+
+
+
+>>>>>>> upstream/main
   void desktopRelayRestoreReady.then(() => {
     window.setTimeout(() => { void warmDesktopHostStatuses().catch(() => {}); }, HOST_STATUS_WARMUP_DELAY_MS);
   });

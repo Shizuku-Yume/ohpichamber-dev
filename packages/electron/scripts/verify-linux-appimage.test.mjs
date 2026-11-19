@@ -27,6 +27,7 @@ const createPayload = () => {
   fs.writeFileSync(path.join(root, 'ohpichamber.desktop'), [
     '[Desktop Entry]', 'Name=OhPiChamber', 'Exec=AppRun --no-sandbox %U', 'Icon=ohpichamber', 'StartupWMClass=ohpichamber', '',
   ].join('\n'));
+<<<<<<< HEAD
   writeElf(path.join(root, 'ohpichamber'), 'x64');
   const agent = path.join(root, 'resources/agent-runtime');
   writeElf(path.join(agent, 'bun'), 'x64');
@@ -41,6 +42,14 @@ const createPayload = () => {
     platform: 'linux', architecture: 'x64', bunVersion: '1.4.4', files,
     packages: ['@oh-my-pi/pi-coding-agent', '@oh-my-pi/pi-natives-linux-x64', 'onnxruntime-node', 'fastembed'].map(name => ({ name })),
   }));
+||||||| bc50ba56aa
+  writeElf(path.join(root, 'openchamber'), 'x64');
+  writeElf(path.join(root, 'resources/opencode-cli/opencode'), 'x64');
+  writeElf(path.join(root, 'resources/ripgrep/rg'), 'x64');
+=======
+  writeElf(path.join(root, 'openchamber'), 'x64');
+  writeElf(path.join(root, 'resources/ripgrep/rg'), 'x64');
+>>>>>>> upstream/main
   for (const name of ['pty.node', 'sherpa-onnx.node']) {
     writeElf(path.join(root, 'resources/app.asar.unpacked/node_modules', name), 'x64');
   }
@@ -67,7 +76,15 @@ const addUnpackedNative = (root, relativePath, architecture) => {
 const verify = (root) => verifyExtractedPayload({
   root,
   targetArchitecture: 'x64',
+<<<<<<< HEAD
   runBunVersion: () => '1.4.4',
+||||||| bc50ba56aa
+  expectedOpenCodeVersion: '1.17.18',
+  runCliVersion: () => '1.17.18',
+=======
+  expectedOpenCodeVersion: '1.17.18',
+  checkOpenCodeServer: () => ({ version: '1.17.18' }),
+>>>>>>> upstream/main
 });
 
 test('reads supported ELF architectures', () => {
@@ -93,7 +110,15 @@ test('verifies identity, version, and native payload architecture', () => {
     const result = verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
+<<<<<<< HEAD
       runBunVersion: () => '1.4.4',
+||||||| bc50ba56aa
+      expectedOpenCodeVersion: '1.17.18',
+      runCliVersion: () => '1.17.18',
+=======
+      expectedOpenCodeVersion: '1.17.18',
+      checkOpenCodeServer: () => ({ version: '1.17.18' }),
+>>>>>>> upstream/main
     });
     assert.equal(result.nativeModuleCount, 2);
   } finally {
@@ -181,26 +206,58 @@ test('fails on a missing native module', () => {
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
+<<<<<<< HEAD
       runBunVersion: () => '1.4.4',
+||||||| bc50ba56aa
+      expectedOpenCodeVersion: '1.17.18',
+      runCliVersion: () => '1.17.18',
+=======
+      expectedOpenCodeVersion: '1.17.18',
+      checkOpenCodeServer: () => ({ version: '1.17.18' }),
+>>>>>>> upstream/main
     }), /Missing packaged native module: pty\.node/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
+<<<<<<< HEAD
 test('fails on wrong Bun version or native architecture', () => {
+||||||| bc50ba56aa
+test('fails on wrong CLI version or native architecture', () => {
+=======
+test('fails on a failed bundled server check or native architecture', () => {
+>>>>>>> upstream/main
   const root = createPayload();
   try {
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
+<<<<<<< HEAD
       runBunVersion: () => '1.4.1',
     }), /Bun version mismatch/);
+||||||| bc50ba56aa
+      expectedOpenCodeVersion: '1.17.18',
+      runCliVersion: () => '1.17.17',
+    }), /OpenCode CLI version mismatch/);
+=======
+      expectedOpenCodeVersion: '1.17.18',
+      checkOpenCodeServer: () => { throw new Error('Bundled OpenCode server reports 1.17.17, expected 1.17.18'); },
+    }), /Bundled OpenCode server reports 1\.17\.17/);
+>>>>>>> upstream/main
     writeElf(path.join(root, 'resources/app.asar.unpacked/node_modules/pty.node'), 'arm64');
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
+<<<<<<< HEAD
       runBunVersion: () => '1.4.4',
+||||||| bc50ba56aa
+      expectedOpenCodeVersion: '1.17.18',
+      runCliVersion: () => '1.17.18',
+=======
+      expectedOpenCodeVersion: '1.17.18',
+      checkOpenCodeServer: () => ({ version: '1.17.18' }),
+>>>>>>> upstream/main
     }), /Native module architecture mismatch/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

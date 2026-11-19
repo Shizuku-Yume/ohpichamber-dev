@@ -5,6 +5,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Prompt cache warming override for the current session',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Workspace default ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Off',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Keep warm when idle',
     'settings.openchamber.defaults.sessionWarming.streaming': 'During replies only',
     'settings.openchamber.defaults.sessionWarming.info': 'Overrides the workspace prompt-cache warming mode for the open session only. Leaving it on the workspace default follows the setting above; choosing a mode here keeps or stops native cache warming for this session even when the workspace default is off.',
@@ -14,17 +15,61 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Applied to the active session worker.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Saved for this session, but the active worker did not confirm the change.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Saved for this session; takes effect the next time its worker runs.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'All sessions',
+    'settings.openchamber.defaults.sessionWarming.session': 'Chosen sessions',
+    'settings.openchamber.defaults.sessionWarming.info': "Some providers forget a conversation's cached context after a few minutes of silence, so the next message is slower and costs more. A warm session gets a tiny \"OK\" request while it sits idle, and each one is billed as a small request. All sessions: OpenCode keeps every session warm with a request every 4 minutes. Chosen sessions: turn it on per session in the session menu or next to Context; each gets its request just before its cache would run out, about once an hour for Claude through a subscription and every 4 minutes for most others. Below, pick how long a session stays warm after each reply.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Keep warm for",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "How long a session stays warm after a reply",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 min",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 hour",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 hours",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 hours",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'All sessions',
+    'settings.openchamber.defaults.sessionWarming.session': 'Chosen sessions',
+    'settings.openchamber.defaults.sessionWarming.info': "Some providers forget a conversation's cached context after a few minutes of silence, so the next message is slower and costs more. While a session sits idle, warming sends a short prompt with the entire session context to the model. Each request may cost money or count against your subscription quota. All sessions: OpenCode keeps every session warm with a request every 4 minutes. Chosen sessions: turn it on per session in the session menu or next to Context; each gets its request just before its cache would run out, about once an hour for Claude through a subscription and every 4 minutes for most others. Below, pick how long a session stays warm after each reply.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Keep warm for",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "How long a session stays warm after a reply",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 min",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 hour",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 hours",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 hours",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Keep warm',
     'sessions.sidebar.session.menu.stopWarm': 'Stop keeping warm',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Keeps native prompt-cache warming on for this session while it sits idle, overriding the workspace default.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Turns off prompt-cache warming for this session.',
     'sessions.warming.toggleFailed': "Couldn't change keep warm for this session",
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Keeps this session's cached context alive after each reply, with a tiny request every 4 minutes. How long is set in Settings.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Stops the keep-alive requests for this session.',
+    'sessions.warming.toggleFailed': 'Couldn\'t change keep warm for this session',
+    'chat.workStatus.warming.turnOn': 'Keep this session warm',
+    'chat.workStatus.warming.turnOff': 'Stop keeping this session warm',
+    'chat.workStatus.warming.off': "Not kept warm. Turn it on to keep the cached context alive after each reply.",
+    'chat.workStatus.warming.remaining': 'Kept warm for {time} more',
+    'chat.workStatus.warming.waiting': "Kept warm once the reply finishes",
+    'chat.workStatus.warming.expired': 'The hour is up. Warming starts again after the next reply.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Keeps this session's cached context alive after each reply. Each request sends the entire session context to the model and may cost money or count against your subscription quota. Set the duration in Settings.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Stops the keep-alive requests for this session.',
+    'sessions.warming.toggleFailed': 'Couldn\'t change keep warm for this session',
+    'chat.workStatus.warming.turnOn': 'Keep this session warm',
+    'chat.workStatus.warming.turnOff': 'Stop keeping this session warm',
+    'chat.workStatus.warming.off': "Not kept warm. Turn it on to keep the cached context alive after each reply.",
+    'chat.workStatus.warming.remaining': 'Kept warm for {time} more',
+    'chat.workStatus.warming.waiting': "Kept warm once the reply finishes",
+    'chat.workStatus.warming.expired': 'The hour is up. Warming starts again after the next reply.',
+>>>>>>> upstream/main
   },
   de: {
     'settings.openchamber.defaults.sessionWarming.label': 'Abweichung für diese Sitzung',
     'settings.openchamber.defaults.sessionWarming.aria': 'Abweichung für das Prompt-Cache-Warmhalten der aktuellen Sitzung',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Arbeitsbereich-Standard ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Aus',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Im Leerlauf warm halten',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Nur während Antworten',
     'settings.openchamber.defaults.sessionWarming.info': 'Überschreibt den Arbeitsbereich-Modus zum Warmhalten des Prompt-Caches nur für die geöffnete Sitzung. Bleibt die Auswahl auf dem Arbeitsbereich-Standard, gilt die Einstellung oben; ein anderer Modus aktiviert oder stoppt das native Cache-Warmhalten für diese Sitzung auch dann, wenn es im Arbeitsbereich ausgeschaltet ist.',
@@ -34,10 +79,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Auf den aktiven Sitzungs-Worker angewendet.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Für diese Sitzung gespeichert, aber der aktive Worker hat die Änderung nicht bestätigt.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Für diese Sitzung gespeichert; wird wirksam, sobald ihr Worker das nächste Mal läuft.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Alle Sitzungen',
+    'settings.openchamber.defaults.sessionWarming.session': 'Ausgewählte Sitzungen',
+    'settings.openchamber.defaults.sessionWarming.info': "Manche Anbieter vergessen den zwischengespeicherten Kontext eines Gesprächs nach ein paar Minuten Ruhe, dann ist die nächste Nachricht langsamer und teurer. Eine warm gehaltene Sitzung bekommt, solange sie ruht, winzige „OK“-Anfragen, und jede wird als kleine Anfrage abgerechnet. Alle Sitzungen: OpenCode hält jede Sitzung mit einer Anfrage alle 4 Minuten warm. Ausgewählte Sitzungen: Du schaltest es pro Sitzung im Sitzungsmenü oder neben Kontext ein; jede bekommt ihre Anfrage kurz bevor ihr Cache abläuft, bei Claude über ein Abo etwa einmal pro Stunde, bei den meisten anderen alle 4 Minuten. Darunter wählst du, wie lange eine Sitzung nach jeder Antwort warm bleibt.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Warm halten für",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Wie lange eine Sitzung nach einer Antwort warm bleibt",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 Min.",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 Stunde",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 Stunden",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 Stunden",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Alle Sitzungen',
+    'settings.openchamber.defaults.sessionWarming.session': 'Ausgewählte Sitzungen',
+    'settings.openchamber.defaults.sessionWarming.info': "Manche Anbieter vergessen den zwischengespeicherten Kontext eines Gesprächs nach ein paar Minuten Ruhe, dann ist die nächste Nachricht langsamer und teurer. Während eine Sitzung ruht, sendet das Warmhalten einen kurzen Prompt mit dem gesamten Sitzungskontext an das Modell. Jede Anfrage kann Kosten verursachen oder dein Abo-Kontingent verbrauchen. Alle Sitzungen: OpenCode hält jede Sitzung mit einer Anfrage alle 4 Minuten warm. Ausgewählte Sitzungen: Du schaltest es pro Sitzung im Sitzungsmenü oder neben Kontext ein; jede bekommt ihre Anfrage kurz bevor ihr Cache abläuft, bei Claude über ein Abo etwa einmal pro Stunde, bei den meisten anderen alle 4 Minuten. Darunter wählst du, wie lange eine Sitzung nach jeder Antwort warm bleibt.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Warm halten für",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Wie lange eine Sitzung nach einer Antwort warm bleibt",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 Min.",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 Stunde",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 Stunden",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 Stunden",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Warm halten',
     'sessions.sidebar.session.menu.stopWarm': 'Nicht mehr warm halten',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Hält das native Prompt-Cache-Warmhalten für diese Sitzung im Leerlauf aktiv und überschreibt den Arbeitsbereich-Standard.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Schaltet das Prompt-Cache-Warmhalten für diese Sitzung aus.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Hält den zwischengespeicherten Kontext dieser Sitzung nach jeder Antwort am Leben, mit einer winzigen Anfrage alle 4 Minuten. Wie lange, legst du in den Einstellungen fest.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Beendet die Keep-alive-Anfragen für diese Sitzung.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Hält den zwischengespeicherten Kontext dieser Sitzung nach jeder Antwort am Leben. Jede Anfrage sendet den gesamten Sitzungskontext an das Modell und kann Kosten verursachen oder dein Abo-Kontingent verbrauchen. Die Dauer legst du in den Einstellungen fest.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Beendet die Keep-alive-Anfragen für diese Sitzung.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Warmhalten konnte für diese Sitzung nicht geändert werden',
   },
   fr: {
@@ -45,6 +119,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Remplacement du maintien au chaud du cache de prompt pour la session en cours',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Par défaut de l’espace de travail ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Désactivé',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Garder au chaud en veille',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Pendant les réponses uniquement',
     'settings.openchamber.defaults.sessionWarming.info': 'Remplace le mode de maintien au chaud du cache de prompt de l’espace de travail uniquement pour la session ouverte. En le laissant sur la valeur par défaut de l’espace de travail, il suit le réglage ci-dessus ; choisir un mode ici active ou arrête le maintien natif du cache pour cette session, même lorsque le réglage de l’espace de travail est désactivé.',
@@ -54,10 +129,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Appliqué au worker de session actif.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Enregistré pour cette session, mais le worker actif n’a pas confirmé le changement.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Enregistré pour cette session ; prendra effet au prochain démarrage de son worker.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Toutes les sessions',
+    'settings.openchamber.defaults.sessionWarming.session': 'Sessions choisies',
+    'settings.openchamber.defaults.sessionWarming.info': "Certains fournisseurs oublient le contexte mis en cache d'une conversation après quelques minutes de silence : le message suivant est alors plus lent et plus cher. Une session gardée au chaud reçoit de toutes petites requêtes « OK » tant qu'elle est inactive, et chacune est facturée comme une petite requête. Toutes les sessions : OpenCode garde chaque session au chaud avec une requête toutes les 4 minutes. Sessions choisies : activez-le session par session dans le menu de la session ou à côté de Contexte ; chacune reçoit sa requête juste avant l'expiration de son cache, environ une fois par heure pour Claude via un abonnement et toutes les 4 minutes pour la plupart des autres. Juste en dessous, choisissez combien de temps une session reste au chaud après chaque réponse.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Garder au chaud pendant",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Combien de temps une session reste au chaud après une réponse",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minutes",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 heure",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 heures",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 heures",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Toutes les sessions',
+    'settings.openchamber.defaults.sessionWarming.session': 'Sessions choisies',
+    'settings.openchamber.defaults.sessionWarming.info': "Certains fournisseurs oublient le contexte mis en cache après quelques minutes de silence, ce qui rend le message suivant plus lent et plus cher. Le maintien envoie au modèle une courte instruction avec tout le contexte de la session. Chaque requête peut entraîner des frais ou compter dans le quota de votre abonnement. Toutes les sessions : OpenCode envoie une requête toutes les 4 minutes. Sessions choisies : activez le maintien dans le menu de la session ou à côté de Contexte. La requête précède l'expiration du cache, environ une fois par heure pour Claude sur abonnement et toutes les 4 minutes pour la plupart des autres. Choisissez ci-dessous la durée du maintien après chaque réponse.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Garder au chaud pendant",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Combien de temps une session reste au chaud après une réponse",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minutes",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 heure",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 heures",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 heures",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Garder au chaud',
     'sessions.sidebar.session.menu.stopWarm': 'Ne plus garder au chaud',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Garde le maintien natif du cache de prompt activé pour cette session lorsqu’elle est inactive, en remplaçant la valeur par défaut de l’espace de travail.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Désactive le maintien au chaud du cache de prompt pour cette session.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Garde le contexte en cache de cette session après chaque réponse, avec une toute petite requête toutes les 4 minutes. La durée se règle dans les paramètres.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Arrête les requêtes de maintien pour cette session.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Garde le contexte de cette session en cache après chaque réponse. Chaque requête envoie tout le contexte de la session au modèle et peut entraîner des frais ou compter dans le quota de votre abonnement. Réglez la durée dans les paramètres.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Arrête les requêtes de maintien pour cette session.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Impossible de modifier le maintien au chaud de cette session',
   },
   nl: {
@@ -65,6 +169,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Afwijking voor het warm houden van de promptcache voor de huidige sessie',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Werkruimtestandaard ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Uit',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Warm houden bij inactiviteit',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Alleen tijdens antwoorden',
     'settings.openchamber.defaults.sessionWarming.info': 'Overschrijft de modus voor het warm houden van de promptcache van de werkruimte alleen voor de geopende sessie. Als je deze op de werkruimtestandaard laat staan, volgt de sessie de instelling hierboven; als je hier een modus kiest, blijft het native warm houden van de cache voor deze sessie aan of uit, zelfs als de werkruimtestandaard uit staat.',
@@ -74,10 +179,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Toegepast op de actieve sessie-worker.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Opgeslagen voor deze sessie, maar de actieve worker heeft de wijziging niet bevestigd.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Opgeslagen voor deze sessie; wordt van kracht zodra de worker de volgende keer draait.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Alle sessies',
+    'settings.openchamber.defaults.sessionWarming.session': 'Gekozen sessies',
+    'settings.openchamber.defaults.sessionWarming.info': "Sommige providers vergeten na een paar minuten stilte de gecachte context van een gesprek, waardoor het volgende bericht langzamer is en meer kost. Een warm gehouden sessie krijgt zolang ze inactief is kleine \"OK\"-verzoeken, en elk verzoek wordt als klein verzoek in rekening gebracht. Alle sessies: OpenCode houdt elke sessie warm met een verzoek elke 4 minuten. Gekozen sessies: zet het per sessie aan in het sessiemenu of naast Context; elke sessie krijgt haar verzoek vlak voordat haar cache zou verlopen, ongeveer eens per uur voor Claude via een abonnement en elke 4 minuten voor de meeste andere. Kies hieronder hoe lang een sessie na elk antwoord warm blijft.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Warm houden voor",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Hoe lang een sessie na een antwoord warm blijft",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minuten",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 uur",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 uur",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 uur",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Alle sessies',
+    'settings.openchamber.defaults.sessionWarming.session': 'Gekozen sessies',
+    'settings.openchamber.defaults.sessionWarming.info': "Sommige providers vergeten na enkele minuten de gecachte gesprekscontext, waardoor het volgende bericht trager en duurder wordt. Warm houden stuurt een korte prompt met de volledige sessiecontext naar het model. Elk verzoek kan geld kosten of meetellen voor je abonnementslimiet. Alle sessies: OpenCode stuurt elke 4 minuten een verzoek. Gekozen sessies: zet dit per sessie aan in het sessiemenu of naast Context. Het verzoek komt vlak voordat de cache verloopt, ongeveer elk uur voor Claude via een abonnement en elke 4 minuten voor de meeste andere providers. Kies hieronder hoe lang een sessie na elk antwoord warm blijft.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Warm houden voor",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Hoe lang een sessie na een antwoord warm blijft",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minuten",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 uur",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 uur",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 uur",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Warm houden',
     'sessions.sidebar.session.menu.stopWarm': 'Niet meer warm houden',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Houdt het native warm houden van de promptcache voor deze sessie actief terwijl ze inactief is, en overschrijft de werkruimtestandaard.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Zet het warm houden van de promptcache voor deze sessie uit.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Houdt de gecachte context van deze sessie na elk antwoord in leven, met een klein verzoek elke 4 minuten. Hoe lang stel je in bij Instellingen.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Stopt de keep-alive-verzoeken voor deze sessie.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Houdt de gecachte context van deze sessie na elk antwoord in leven. Elk verzoek stuurt de volledige sessiecontext naar het model en kan geld kosten of meetellen voor je abonnementslimiet. Stel de duur in bij Instellingen.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Stopt de keep-alive-verzoeken voor deze sessie.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Warm houden kon voor deze sessie niet worden gewijzigd',
   },
   es: {
@@ -85,6 +219,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Anulación del mantenimiento en caliente de la caché de prompts para la sesión actual',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Predeterminado del espacio de trabajo ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Desactivado',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Mantener en caliente en reposo',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Solo durante respuestas',
     'settings.openchamber.defaults.sessionWarming.info': 'Anula el modo de mantenimiento en caliente de la caché de prompts del espacio de trabajo solo para la sesión abierta. Si lo dejas en el valor predeterminado del espacio de trabajo, sigue el ajuste de arriba; elegir un modo aquí mantiene o detiene el mantenimiento nativo de la caché para esta sesión incluso cuando el valor predeterminado está desactivado.',
@@ -94,10 +229,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Aplicado al worker activo de la sesión.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Guardado para esta sesión, pero el worker activo no confirmó el cambio.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Guardado para esta sesión; surtirá efecto la próxima vez que se ejecute su worker.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Todas las sesiones',
+    'settings.openchamber.defaults.sessionWarming.session': 'Sesiones elegidas',
+    'settings.openchamber.defaults.sessionWarming.info': "Algunos proveedores olvidan el contexto en caché de una conversación tras unos minutos de silencio, así que el siguiente mensaje tarda más y cuesta más. Una sesión mantenida activa recibe peticiones mínimas «OK» mientras está inactiva, y cada una se cobra como una petición pequeña. Todas las sesiones: OpenCode mantiene activa cada sesión con una petición cada 4 minutos. Sesiones elegidas: actívalo sesión por sesión en el menú de la sesión o junto a Contexto; cada una recibe su petición justo antes de que caduque su caché, más o menos una vez por hora para Claude con una suscripción y cada 4 minutos para la mayoría de los demás. Debajo, elige cuánto tiempo sigue activa una sesión después de cada respuesta.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Mantener activa durante",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Cuánto tiempo sigue activa una sesión después de una respuesta",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minutos",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 hora",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 horas",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 horas",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Todas las sesiones',
+    'settings.openchamber.defaults.sessionWarming.session': 'Sesiones elegidas',
+    'settings.openchamber.defaults.sessionWarming.info': "Algunos proveedores olvidan el contexto en caché tras unos minutos de silencio, por lo que el siguiente mensaje tarda más y cuesta más. Para mantenerlo, se envía al modelo una instrucción breve con todo el contexto de la sesión. Cada petición puede generar costes o contar para el límite de tu suscripción. Todas las sesiones: OpenCode envía una petición cada 4 minutos. Sesiones elegidas: actívalo en el menú de cada sesión o junto a Contexto. La petición llega antes de que caduque la caché, aproximadamente cada hora para Claude con suscripción y cada 4 minutos para la mayoría de los demás. Elige abajo cuánto tiempo se mantiene activa tras cada respuesta.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Mantener activa durante",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Cuánto tiempo sigue activa una sesión después de una respuesta",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minutos",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 hora",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 horas",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 horas",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Mantener activa',
     'sessions.sidebar.session.menu.stopWarm': 'Dejar de mantener activa',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Mantiene activo el calentamiento nativo de la caché de prompts para esta sesión mientras está inactiva, anulando el valor predeterminado del espacio de trabajo.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Desactiva el calentamiento de la caché de prompts para esta sesión.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Mantiene vivo el contexto en caché de esta sesión después de cada respuesta, con una petición mínima cada 4 minutos. La duración se elige en Ajustes.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Detiene las peticiones de mantenimiento de esta sesión.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Conserva el contexto en caché de esta sesión después de cada respuesta. Cada petición envía todo el contexto de la sesión al modelo y puede generar costes o contar para el límite de tu suscripción. Elige la duración en Ajustes.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Detiene las peticiones de mantenimiento de esta sesión.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'No se pudo cambiar el mantenimiento de esta sesión',
   },
   ja: {
@@ -105,6 +269,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': '現在のセッションのプロンプトキャッシュ温め設定の上書き',
     'settings.openchamber.defaults.sessionWarming.inherit': 'ワークスペースのデフォルト ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'オフ',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'アイドル時も温めておく',
     'settings.openchamber.defaults.sessionWarming.streaming': '応答中のみ',
     'settings.openchamber.defaults.sessionWarming.info': '開いているセッションのみ、ワークスペースのプロンプトキャッシュ温めモードを上書きします。ワークスペースのデフォルトのままにすると上の設定に従います。ここでモードを選ぶと、ワークスペースのデフォルトがオフでもこのセッションのネイティブキャッシュ温めを維持または停止します。',
@@ -114,10 +279,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'アクティブなセッションワーカーに適用しました。',
     'settings.openchamber.defaults.sessionWarming.failed': 'このセッションには保存されましたが、アクティブなワーカーが変更を確認しませんでした。',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'このセッションに保存しました。次にワーカーが起動したときに有効になります。',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'すべてのセッション',
+    'settings.openchamber.defaults.sessionWarming.session': '選んだセッション',
+    'settings.openchamber.defaults.sessionWarming.info': "一部のプロバイダーは、数分間やり取りがないと会話のキャッシュを破棄するため、次のメッセージが遅く高くなります。温めているセッションには、アイドルの間に小さな「OK」リクエストが送られ、それぞれ小さなリクエストとして課金されます。すべてのセッション: OpenCode が 4 分ごとのリクエストですべてのセッションを温めます。選んだセッション: セッションメニューまたはコンテキストの横からセッションごとにオンにします。各セッションにはキャッシュが切れる直前にリクエストが送られ、サブスクリプション経由の Claude ならおよそ 1 時間に 1 回、その他の多くは 4 分ごとです。その下で、各応答の後にどれだけ温めるかを選べます。",
+    'settings.openchamber.defaults.sessionWarming.duration': "温める時間",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "応答の後にセッションを温める時間",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 分",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 時間",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 時間",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 時間",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'すべてのセッション',
+    'settings.openchamber.defaults.sessionWarming.session': '選んだセッション',
+    'settings.openchamber.defaults.sessionWarming.info': "一部のプロバイダーは数分間やり取りがないと会話のキャッシュを破棄するため、次のメッセージが遅く高くなります。温めるための短いプロンプトはセッションの全コンテキストとともにモデルに送られます。各リクエストには料金が発生するか、サブスクリプションの利用枠が消費される場合があります。すべてのセッション: OpenCode が 4 分ごとにリクエストを送ります。選んだセッション: メニューまたはコンテキストの横からセッションごとにオンにします。キャッシュが切れる直前にリクエストが送られ、サブスクリプションの Claude は約 1 時間ごと、その他の多くは 4 分ごとです。下で応答後の維持時間を選べます。",
+    'settings.openchamber.defaults.sessionWarming.duration': "温める時間",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "応答の後にセッションを温める時間",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 分",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 時間",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 時間",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 時間",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': '温めておく',
     'sessions.sidebar.session.menu.stopWarm': '温めるのをやめる',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'ワークスペースのデフォルトを上書きし、このセッションのアイドル中もネイティブのプロンプトキャッシュ温めをオンにします。',
     'sessions.sidebar.session.menuHint.stopWarm': 'このセッションのプロンプトキャッシュ温めをオフにします。',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "各応答の後、4 分ごとの小さなリクエストでこのセッションのキャッシュを保ちます。時間は設定で選べます。",
+    'sessions.sidebar.session.menuHint.stopWarm': 'このセッションのキープアライブリクエストを止めます。',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "各応答の後、このセッションのキャッシュを保ちます。各リクエストはセッションの全コンテキストをモデルに送り、料金が発生するかサブスクリプションの利用枠を消費する場合があります。時間は設定で選べます。",
+    'sessions.sidebar.session.menuHint.stopWarm': 'このセッションのキープアライブリクエストを止めます。',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'このセッションの温め設定を変更できませんでした',
   },
   'pt-BR': {
@@ -125,6 +319,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Substituição do aquecimento de cache de prompt para a sessão atual',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Padrão do espaço de trabalho ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Desativado',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Manter aquecida quando ociosa',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Somente durante respostas',
     'settings.openchamber.defaults.sessionWarming.info': 'Substitui o modo de aquecimento do cache de prompt do espaço de trabalho apenas para a sessão aberta. Deixar no padrão do espaço de trabalho segue a configuração acima; escolher um modo aqui mantém ou interrompe o aquecimento nativo do cache para esta sessão mesmo quando o padrão do espaço de trabalho está desativado.',
@@ -134,10 +329,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Aplicado ao worker ativo da sessão.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Salvo para esta sessão, mas o worker ativo não confirmou a alteração.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Salvo para esta sessão; entra em vigor na próxima vez que o worker rodar.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Todas as sessões',
+    'settings.openchamber.defaults.sessionWarming.session': 'Sessões escolhidas',
+    'settings.openchamber.defaults.sessionWarming.info': "Alguns provedores esquecem o contexto em cache de uma conversa após alguns minutos de silêncio, então a próxima mensagem fica mais lenta e mais cara. Uma sessão aquecida recebe pequenas requisições \"OK\" enquanto está ociosa, e cada uma é cobrada como uma requisição pequena. Todas as sessões: o OpenCode mantém cada sessão aquecida com uma requisição a cada 4 minutos. Sessões escolhidas: ative por sessão no menu da sessão ou ao lado de Contexto; cada uma recebe sua requisição pouco antes de o cache expirar, cerca de uma vez por hora para o Claude por assinatura e a cada 4 minutos para a maioria dos outros. Logo abaixo, escolha por quanto tempo uma sessão fica aquecida após cada resposta.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Manter aquecida por",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Por quanto tempo uma sessão fica aquecida após uma resposta",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minutos",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 hora",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 horas",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 horas",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Todas as sessões',
+    'settings.openchamber.defaults.sessionWarming.session': 'Sessões escolhidas',
+    'settings.openchamber.defaults.sessionWarming.info': "Alguns provedores esquecem o contexto em cache após alguns minutos de silêncio, tornando a próxima mensagem mais lenta e cara. O aquecimento envia ao modelo uma instrução curta com todo o contexto da sessão. Cada requisição pode gerar custos ou consumir a cota da assinatura. Todas as sessões: o OpenCode envia uma requisição a cada 4 minutos. Sessões escolhidas: ative no menu de cada sessão ou ao lado de Contexto. A requisição chega antes de o cache expirar, cerca de uma vez por hora para Claude por assinatura e a cada 4 minutos para a maioria dos outros. Abaixo, escolha por quanto tempo manter a sessão aquecida após cada resposta.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Manter aquecida por",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Por quanto tempo uma sessão fica aquecida após uma resposta",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minutos",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 hora",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 horas",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 horas",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Manter aquecida',
     'sessions.sidebar.session.menu.stopWarm': 'Parar de manter aquecida',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Mantém o aquecimento nativo do cache de prompt ativado para esta sessão enquanto ela fica ociosa, substituindo o padrão do espaço de trabalho.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Desativa o aquecimento do cache de prompt para esta sessão.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Mantém o contexto em cache desta sessão vivo após cada resposta, com uma pequena requisição a cada 4 minutos. A duração fica nas Configurações.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Para as requisições de manutenção desta sessão.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Mantém o contexto desta sessão em cache após cada resposta. Cada requisição envia todo o contexto da sessão ao modelo e pode gerar custos ou consumir a cota da assinatura. Defina a duração nas Configurações.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Para as requisições de manutenção desta sessão.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Não foi possível mudar o aquecimento desta sessão',
   },
   uk: {
@@ -145,6 +369,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Перевизначення прогрівання кешу підказок для поточної сесії',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Типово для робочого простору ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Вимкнено',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Тримати «теплою» під час простою',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Лише під час відповідей',
     'settings.openchamber.defaults.sessionWarming.info': 'Перевизначає режим прогрівання кешу підказок робочого простору лише для відкритої сесії. Якщо залишити типове значення робочого простору, застосовується налаштування вище; вибір режиму тут вмикає або зупиняє нативне прогрівання кешу для цієї сесії, навіть якщо для робочого простору воно вимкнене.',
@@ -154,10 +379,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Застосовано до активного воркера сесії.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Збережено для цієї сесії, але активний воркер не підтвердив зміну.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Збережено для цієї сесії; набуде чинності під час наступного запуску її воркера.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Усі сесії',
+    'settings.openchamber.defaults.sessionWarming.session': 'Вибрані сесії',
+    'settings.openchamber.defaults.sessionWarming.info': "Деякі провайдери забувають закешований контекст розмови після кількох хвилин тиші, тож наступне повідомлення йде повільніше й коштує дорожче. «Тепла» сесія, поки простоює, отримує крихітні запити «OK», і кожен такий запит оплачується як маленький. Усі сесії: OpenCode тримає «теплою» кожну сесію запитом кожні 4 хвилини. Вибрані сесії: вмикайте для окремої сесії в її меню або біля Контексту; кожна отримує запит якраз перед тим, як її кеш мав би зникнути: приблизно раз на годину для Claude через підписку і кожні 4 хвилини для більшості інших. Нижче виберіть, скільки сесія лишається «теплою» після кожної відповіді.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Тримати «теплою»",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Скільки сесія лишається «теплою» після відповіді",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 хв",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 год",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 год",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 год",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Усі сесії',
+    'settings.openchamber.defaults.sessionWarming.session': 'Вибрані сесії',
+    'settings.openchamber.defaults.sessionWarming.info': "Деякі провайдери забувають закешований контекст розмови після кількох хвилин тиші, тому наступне повідомлення йде повільніше й коштує дорожче. Для підтримки кешу моделі надсилається коротка інструкція з усім контекстом сесії. Кожен запит може коштувати грошей або витрачати квоту підписки. Усі сесії: OpenCode надсилає запит кожні 4 хвилини. Вибрані сесії: вмикайте в меню окремої сесії або біля Контексту. Запит надходить перед закінченням дії кешу: приблизно раз на годину для Claude за підпискою і кожні 4 хвилини для більшості інших. Нижче виберіть тривалість після кожної відповіді.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Тримати «теплою»",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Скільки сесія лишається «теплою» після відповіді",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 хв",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 год",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 год",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 год",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Тримати «теплою»',
     'sessions.sidebar.session.menu.stopWarm': 'Не тримати «теплою»',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Залишає нативне прогрівання кешу підказок увімкненим для цієї сесії під час простою, перевизначаючи типове значення робочого простору.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Вимикає прогрівання кешу підказок для цієї сесії.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Тримає закешований контекст цієї сесії після кожної відповіді, з крихітним запитом кожні 4 хвилини. Скільки саме, задається в налаштуваннях.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Зупиняє запити підтримки для цієї сесії.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Зберігає контекст цієї сесії в кеші після кожної відповіді. Кожен запит надсилає моделі весь контекст сесії та може коштувати грошей або витрачати квоту підписки. Тривалість задається в налаштуваннях.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Зупиняє запити підтримки для цієї сесії.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Не вдалося змінити підтримку «теплою» для цієї сесії',
   },
   ko: {
@@ -165,6 +419,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': '현재 세션의 프롬프트 캐시 예열 재정의',
     'settings.openchamber.defaults.sessionWarming.inherit': '작업 공간 기본값 ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': '끄기',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': '유휴 시에도 유지',
     'settings.openchamber.defaults.sessionWarming.streaming': '응답 중에만',
     'settings.openchamber.defaults.sessionWarming.info': '열려 있는 세션에만 작업 공간의 프롬프트 캐시 예열 모드를 재정의합니다. 작업 공간 기본값으로 두면 위의 설정을 따르며, 여기서 모드를 선택하면 작업 공간 기본값이 꺼져 있어도 이 세션의 네이티브 캐시 예열을 유지하거나 중지합니다.',
@@ -174,10 +429,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': '활성 세션 워커에 적용했습니다.',
     'settings.openchamber.defaults.sessionWarming.failed': '이 세션에 저장되었지만 활성 워커가 변경 사항을 확인하지 못했습니다.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': '이 세션에 저장되었으며, 다음에 워커가 실행될 때 적용됩니다.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': '모든 세션',
+    'settings.openchamber.defaults.sessionWarming.session': '선택한 세션',
+    'settings.openchamber.defaults.sessionWarming.info': "일부 제공자는 몇 분 동안 대화가 없으면 캐시된 맥락을 잊어버려 다음 메시지가 느려지고 비용이 늘어납니다. 캐시를 유지하는 세션은 유휴 상태인 동안 아주 작은 \"OK\" 요청을 받으며, 각 요청은 작은 요청으로 과금됩니다. 모든 세션: OpenCode가 4분마다 요청을 보내 모든 세션의 캐시를 유지합니다. 선택한 세션: 세션 메뉴나 컨텍스트 옆에서 세션별로 켭니다. 각 세션은 캐시가 만료되기 직전에 요청을 받으며, 구독으로 쓰는 Claude는 약 1시간에 한 번, 대부분의 다른 제공자는 4분마다입니다. 아래에서 각 응답 후 얼마나 유지할지 고르세요.",
+    'settings.openchamber.defaults.sessionWarming.duration': "유지 시간",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "응답 후 세션의 캐시를 유지하는 시간",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30분",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1시간",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2시간",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3시간",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': '모든 세션',
+    'settings.openchamber.defaults.sessionWarming.session': '선택한 세션',
+    'settings.openchamber.defaults.sessionWarming.info': "일부 제공자는 몇 분 동안 대화가 없으면 캐시된 맥락을 잊어 다음 메시지가 느려지고 비용이 늘어납니다. 캐시 유지를 위한 짧은 프롬프트는 세션의 전체 맥락과 함께 모델에 전송됩니다. 각 요청에 비용이 들거나 구독 사용량이 차감될 수 있습니다. 모든 세션: OpenCode가 4분마다 요청을 보냅니다. 선택한 세션: 세션 메뉴나 컨텍스트 옆에서 세션별로 켭니다. 캐시가 만료되기 직전에 요청을 보내며, 구독으로 쓰는 Claude는 약 1시간마다, 대부분의 다른 제공자는 4분마다입니다. 아래에서 각 응답 후 유지할 시간을 고르세요.",
+    'settings.openchamber.defaults.sessionWarming.duration': "유지 시간",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "응답 후 세션의 캐시를 유지하는 시간",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30분",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1시간",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2시간",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3시간",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': '캐시 유지',
     'sessions.sidebar.session.menu.stopWarm': '캐시 유지 중지',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': '작업 공간 기본값을 재정의하고 이 세션이 유휴 상태인 동안 네이티브 프롬프트 캐시 예열을 계속 켭니다.',
     'sessions.sidebar.session.menuHint.stopWarm': '이 세션의 프롬프트 캐시 예열을 끕니다.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "각 응답 후 4분마다 아주 작은 요청을 보내 이 세션의 캐시된 맥락을 유지합니다. 유지 시간은 설정에서 정합니다.",
+    'sessions.sidebar.session.menuHint.stopWarm': '이 세션의 유지 요청을 멈춥니다.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "각 응답 후 이 세션의 캐시된 맥락을 유지합니다. 각 요청은 세션의 전체 맥락을 모델에 보내며 비용이 들거나 구독 사용량이 차감될 수 있습니다. 유지 시간은 설정에서 정합니다.",
+    'sessions.sidebar.session.menuHint.stopWarm': '이 세션의 유지 요청을 멈춥니다.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': '이 세션의 캐시 유지를 변경하지 못했습니다',
   },
   pl: {
@@ -185,6 +469,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Nadpisanie podtrzymywania pamięci podręcznej promptów dla bieżącej sesji',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Domyślne dla przestrzeni roboczej ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Wyłączone',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Utrzymuj w gotowości w bezczynności',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Tylko podczas odpowiedzi',
     'settings.openchamber.defaults.sessionWarming.info': 'Nadpisuje tryb podtrzymywania pamięci podręcznej promptów przestrzeni roboczej wyłącznie dla otwartej sesji. Pozostawienie wartości domyślnej przestrzeni roboczej stosuje ustawienie powyżej; wybór trybu tutaj utrzymuje lub zatrzymuje natywne podtrzymywanie pamięci podręcznej dla tej sesji, nawet gdy ustawienie domyślne jest wyłączone.',
@@ -194,10 +479,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Zastosowano do aktywnego workera sesji.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Zapisano dla tej sesji, ale aktywny worker nie potwierdził zmiany.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Zapisano dla tej sesji; zacznie działać przy następnym uruchomieniu jej workera.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Wszystkie sesje',
+    'settings.openchamber.defaults.sessionWarming.session': 'Wybrane sesje',
+    'settings.openchamber.defaults.sessionWarming.info': "Niektórzy dostawcy zapominają zapisany w pamięci podręcznej kontekst rozmowy po kilku minutach ciszy, więc następna wiadomość jest wolniejsza i droższa. Sesja utrzymywana w gotowości dostaje malutkie zapytania „OK”, gdy jest bezczynna, a każde jest rozliczane jako małe zapytanie. Wszystkie sesje: OpenCode utrzymuje każdą sesję w gotowości zapytaniem co 4 minuty. Wybrane sesje: włączasz to dla każdej sesji w jej menu lub obok Kontekstu; każda dostaje zapytanie tuż przed wygaśnięciem swojej pamięci podręcznej, mniej więcej raz na godzinę dla Claude w ramach subskrypcji i co 4 minuty dla większości pozostałych. Poniżej wybierz, jak długo sesja pozostaje w gotowości po każdej odpowiedzi.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Utrzymuj w gotowości przez",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Jak długo sesja pozostaje w gotowości po odpowiedzi",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minut",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 godz.",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 godz.",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 godz.",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Wszystkie sesje',
+    'settings.openchamber.defaults.sessionWarming.session': 'Wybrane sesje',
+    'settings.openchamber.defaults.sessionWarming.info': "Niektórzy dostawcy usuwają kontekst rozmowy z pamięci podręcznej po kilku minutach ciszy, przez co następna wiadomość jest wolniejsza i droższa. Utrzymywanie wysyła do modelu krótką instrukcję z całym kontekstem sesji. Każde zapytanie może generować koszty lub zużywać limit subskrypcji. Wszystkie sesje: OpenCode wysyła zapytanie co 4 minuty. Wybrane sesje: włącz to w menu sesji lub obok Kontekstu. Zapytanie jest wysyłane przed wygaśnięciem pamięci podręcznej, mniej więcej raz na godzinę dla Claude w subskrypcji i co 4 minuty dla większości pozostałych. Poniżej wybierz czas utrzymywania po każdej odpowiedzi.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Utrzymuj w gotowości przez",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Jak długo sesja pozostaje w gotowości po odpowiedzi",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 minut",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 godz.",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 godz.",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 godz.",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Utrzymuj w gotowości',
     'sessions.sidebar.session.menu.stopWarm': 'Przestań utrzymywać w gotowości',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Utrzymuje natywne podtrzymywanie pamięci podręcznej promptów dla tej sesji podczas bezczynności, nadpisując domyślne ustawienie przestrzeni roboczej.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Wyłącza podtrzymywanie pamięci podręcznej promptów dla tej sesji.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Utrzymuje kontekst tej sesji w pamięci podręcznej po każdej odpowiedzi, z malutkim zapytaniem co 4 minuty. Jak długo, ustawisz w Ustawieniach.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Zatrzymuje zapytania podtrzymujące dla tej sesji.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Utrzymuje kontekst tej sesji w pamięci podręcznej po każdej odpowiedzi. Każde zapytanie wysyła cały kontekst sesji do modelu i może generować koszty lub zużywać limit subskrypcji. Czas ustawisz w Ustawieniach.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Zatrzymuje zapytania podtrzymujące dla tej sesji.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Nie udało się zmienić utrzymywania tej sesji w gotowości',
   },
   'zh-CN': {
@@ -205,6 +519,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': '当前会话的提示词缓存预热覆盖设置',
     'settings.openchamber.defaults.sessionWarming.inherit': '工作区默认（{mode}）',
     'settings.openchamber.defaults.sessionWarming.off': '关闭',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': '空闲时保持预热',
     'settings.openchamber.defaults.sessionWarming.streaming': '仅在回复期间',
     'settings.openchamber.defaults.sessionWarming.info': '仅对当前打开的会话覆盖工作区的提示词缓存预热模式。保持为工作区默认则会跟随上方设置；在此选择模式后，即使工作区默认处于关闭状态，也会为该会话开启或停止原生缓存预热。',
@@ -214,10 +529,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': '已应用到当前活动的会话工作进程。',
     'settings.openchamber.defaults.sessionWarming.failed': '已为该会话保存，但活动工作进程未确认此次更改。',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': '已为该会话保存；将在下次工作进程运行时生效。',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': '所有会话',
+    'settings.openchamber.defaults.sessionWarming.session': '选定的会话',
+    'settings.openchamber.defaults.sessionWarming.info': "有些提供商在对话静默几分钟后会丢弃缓存的上下文，导致下一条消息更慢、更贵。预热中的会话在空闲期间会收到很小的“OK”请求，每次都按小请求计费。所有会话：OpenCode 每 4 分钟发一次请求，保持每个会话预热。选定的会话：在会话菜单或上下文旁逐个开启；每个会话会在缓存即将过期前收到请求，通过订阅使用的 Claude 大约每小时一次，其他大多数提供商每 4 分钟一次。在下方选择每次回复后预热多久。",
+    'settings.openchamber.defaults.sessionWarming.duration': "预热时长",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "每次回复后会话保持预热的时长",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 分钟",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 小时",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 小时",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 小时",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': '所有会话',
+    'settings.openchamber.defaults.sessionWarming.session': '选定的会话',
+    'settings.openchamber.defaults.sessionWarming.info': "有些提供商在对话静默几分钟后会丢弃缓存的上下文，导致下一条消息更慢、更贵。预热会将简短提示和完整的会话上下文发送给模型。每次请求可能产生费用或消耗订阅额度。所有会话：OpenCode 每 4 分钟发送一次请求。选定的会话：在会话菜单或上下文旁逐个开启。请求会在缓存即将过期前发送，订阅版 Claude 大约每小时一次，其他大多数提供商每 4 分钟一次。在下方选择每次回复后的预热时长。",
+    'settings.openchamber.defaults.sessionWarming.duration': "预热时长",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "每次回复后会话保持预热的时长",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 分钟",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 小时",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 小时",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 小时",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': '保持预热',
     'sessions.sidebar.session.menu.stopWarm': '停止预热',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': '覆盖工作区默认设置，在该会话空闲时保持原生提示词缓存预热开启。',
     'sessions.sidebar.session.menuHint.stopWarm': '关闭此会话的提示词缓存预热。',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "每次回复后，每 4 分钟发送一个很小的请求，保持此会话的缓存上下文。时长在设置中选择。",
+    'sessions.sidebar.session.menuHint.stopWarm': '停止此会话的保活请求。',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "每次回复后保持此会话的缓存上下文。每次请求都会将完整的会话上下文发送给模型，可能产生费用或消耗订阅额度。在设置中选择时长。",
+    'sessions.sidebar.session.menuHint.stopWarm': '停止此会话的保活请求。',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': '无法更改此会话的预热设置',
   },
   'zh-TW': {
@@ -225,6 +569,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': '目前工作階段的提示詞快取預熱覆寫設定',
     'settings.openchamber.defaults.sessionWarming.inherit': '工作區預設（{mode}）',
     'settings.openchamber.defaults.sessionWarming.off': '關閉',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': '閒置時保持預熱',
     'settings.openchamber.defaults.sessionWarming.streaming': '僅在回覆期間',
     'settings.openchamber.defaults.sessionWarming.info': '僅針對目前開啟的工作階段覆寫工作區的提示詞快取預熱模式。保留為工作區預設時會跟隨上方設定；在此選擇模式後，即使工作區預設為關閉，也會為此工作階段維持或停止原生快取預熱。',
@@ -234,10 +579,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': '已套用到目前作用中的工作階段背景工作程序。',
     'settings.openchamber.defaults.sessionWarming.failed': '已為此工作階段儲存，但作用中的背景工作程序未確認此變更。',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': '已為此工作階段儲存；將於下次背景工作程序執行時生效。',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': '所有工作階段',
+    'settings.openchamber.defaults.sessionWarming.session': '選定的工作階段',
+    'settings.openchamber.defaults.sessionWarming.info': "有些供應商在對話靜默幾分鐘後會丟棄快取的上下文，導致下一則訊息更慢、更貴。預熱中的工作階段在閒置期間會收到很小的「OK」請求，每次都按小請求計費。所有工作階段：OpenCode 每 4 分鐘發一次請求，保持每個工作階段預熱。選定的工作階段：在工作階段選單或上下文旁逐一開啟；每個工作階段會在快取即將過期前收到請求，透過訂閱使用的 Claude 大約每小時一次，其他大多數供應商每 4 分鐘一次。在下方選擇每次回覆後預熱多久。",
+    'settings.openchamber.defaults.sessionWarming.duration': "預熱時長",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "每次回覆後工作階段保持預熱的時長",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 分鐘",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 小時",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 小時",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 小時",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': '所有工作階段',
+    'settings.openchamber.defaults.sessionWarming.session': '選定的工作階段',
+    'settings.openchamber.defaults.sessionWarming.info': "有些供應商在對話靜默幾分鐘後會丟棄快取的上下文，導致下一則訊息更慢、更貴。預熱會將簡短提示和完整的工作階段上下文傳送給模型。每次請求可能產生費用或消耗訂閱額度。所有工作階段：OpenCode 每 4 分鐘傳送一次請求。選定的工作階段：在工作階段選單或上下文旁逐一開啟。請求會在快取即將過期前傳送，訂閱版 Claude 大約每小時一次，其他大多數供應商每 4 分鐘一次。在下方選擇每次回覆後的預熱時間。",
+    'settings.openchamber.defaults.sessionWarming.duration': "預熱時長",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "每次回覆後工作階段保持預熱的時長",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 分鐘",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 小時",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 小時",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 小時",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': '保持預熱',
     'sessions.sidebar.session.menu.stopWarm': '停止預熱',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': '覆寫工作區預設設定，在此工作階段閒置時維持原生提示詞快取預熱開啟。',
     'sessions.sidebar.session.menuHint.stopWarm': '關閉此工作階段的提示詞快取預熱。',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "每次回覆後，每 4 分鐘送出一個很小的請求，保持此工作階段的快取上下文。時長在設定中選擇。",
+    'sessions.sidebar.session.menuHint.stopWarm': '停止此工作階段的保活請求。',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "每次回覆後保持此工作階段的快取上下文。每次請求都會將完整的工作階段上下文傳送給模型，可能產生費用或消耗訂閱額度。在設定中選擇時間。",
+    'sessions.sidebar.session.menuHint.stopWarm': '停止此工作階段的保活請求。',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': '無法變更此工作階段的預熱設定',
   },
   tr: {
@@ -245,6 +619,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'Geçerli oturum için istem önbelleği ısıtma geçersiz kılması',
     'settings.openchamber.defaults.sessionWarming.inherit': 'Çalışma alanı varsayılanı ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'Kapalı',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'Boştayken sıcak tut',
     'settings.openchamber.defaults.sessionWarming.streaming': 'Yalnızca yanıtlar sırasında',
     'settings.openchamber.defaults.sessionWarming.info': 'Çalışma alanı istem önbelleği ısıtma modunu yalnızca açık oturum için geçersiz kılar. Çalışma alanı varsayılanında bırakıldığında yukarıdaki ayarı izler; burada bir mod seçmek, çalışma alanı varsayılanı kapalı olsa bile bu oturum için yerel önbellek ısıtmayı açık tutar veya durdurur.',
@@ -254,10 +629,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'Etkin oturum çalışanına uygulandı.',
     'settings.openchamber.defaults.sessionWarming.failed': 'Bu oturum için kaydedildi ancak etkin çalışan değişikliği onaylamadı.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'Bu oturum için kaydedildi; çalışanı bir sonraki çalıştığında geçerli olur.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'Tüm oturumlar',
+    'settings.openchamber.defaults.sessionWarming.session': 'Seçilen oturumlar',
+    'settings.openchamber.defaults.sessionWarming.info': "Bazı sağlayıcılar birkaç dakikalık sessizlikten sonra konuşmanın önbelleğe alınmış bağlamını unutur; bir sonraki mesaj daha yavaş ve daha pahalı olur. Sıcak tutulan bir oturum boşta kaldığı sürece küçük \"OK\" istekleri alır ve her biri küçük bir istek olarak ücretlendirilir. Tüm oturumlar: OpenCode her oturumu 4 dakikada bir gönderdiği istekle sıcak tutar. Seçilen oturumlar: oturum menüsünden veya Bağlam'ın yanından her oturum için ayrı açarsınız; her oturum isteğini önbelleğinin süresi dolmadan hemen önce alır, abonelikle kullanılan Claude için yaklaşık saatte bir, diğerlerinin çoğu için 4 dakikada bir. Aşağıda bir oturumun her yanıttan sonra ne kadar sıcak kalacağını seçin.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Sıcak tutma süresi",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Bir oturumun yanıttan sonra ne kadar sıcak kalacağı",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 dk",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 saat",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 saat",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 saat",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'Tüm oturumlar',
+    'settings.openchamber.defaults.sessionWarming.session': 'Seçilen oturumlar',
+    'settings.openchamber.defaults.sessionWarming.info': "Bazı sağlayıcılar birkaç dakikalık sessizlikten sonra konuşmanın önbellekteki bağlamını unutur; sonraki mesaj daha yavaş ve pahalı olur. Sıcak tutma, kısa bir istemi oturumun tüm bağlamıyla birlikte modele gönderir. Her istek ücret doğurabilir veya abonelik kotanızı tüketebilir. Tüm oturumlar: OpenCode 4 dakikada bir istek gönderir. Seçilen oturumlar: oturum menüsünden veya Bağlam'ın yanından her oturum için açın. İstek önbelleğin süresi dolmadan hemen önce, abonelikle kullanılan Claude için yaklaşık saatte bir, diğerlerinin çoğu için 4 dakikada bir gönderilir. Aşağıda her yanıttan sonra sıcak tutma süresini seçin.",
+    'settings.openchamber.defaults.sessionWarming.duration': "Sıcak tutma süresi",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "Bir oturumun yanıttan sonra ne kadar sıcak kalacağı",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 dk",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "1 saat",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "2 saat",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 saat",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'Sıcak tut',
     'sessions.sidebar.session.menu.stopWarm': 'Sıcak tutmayı durdur',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'Çalışma alanı varsayılanını geçersiz kılarak bu oturum boştayken yerel istem önbelleği ısıtmayı açık tutar.',
     'sessions.sidebar.session.menuHint.stopWarm': 'Bu oturum için istem önbelleği ısıtmayı kapatır.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "Bu oturumun önbelleğe alınmış bağlamını her yanıttan sonra, her 4 dakikada bir küçük bir istekle canlı tutar. Süre Ayarlar'da seçilir.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Bu oturum için canlı tutma isteklerini durdurur.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "Her yanıttan sonra bu oturumun bağlamını önbellekte tutar. Her istek oturumun tüm bağlamını modele gönderir ve ücret doğurabilir veya abonelik kotanızı tüketebilir. Süre Ayarlar'da seçilir.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'Bu oturum için canlı tutma isteklerini durdurur.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'Bu oturum için sıcak tutma değiştirilemedi',
   },
   ar: {
@@ -265,6 +669,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'تجاوز تسخين ذاكرة التخزين المؤقت للموجه للجلسة الحالية',
     'settings.openchamber.defaults.sessionWarming.inherit': 'افتراضي مساحة العمل ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'إيقاف',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'إبقاء نشطة عند الخمول',
     'settings.openchamber.defaults.sessionWarming.streaming': 'أثناء الردود فقط',
     'settings.openchamber.defaults.sessionWarming.info': 'يتجاوز وضع تسخين ذاكرة التخزين المؤقت للموجه في مساحة العمل للجلسة المفتوحة فقط. تركه على افتراضي مساحة العمل يتبع الإعداد أعلاه؛ أما اختيار وضع هنا فيُبقي التسخين الأصلي لذاكرة التخزين المؤقت أو يوقفه لهذه الجلسة حتى عندما يكون افتراضي مساحة العمل متوقفًا.',
@@ -274,10 +679,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'تم التطبيق على عامل الجلسة النشط.',
     'settings.openchamber.defaults.sessionWarming.failed': 'تم الحفظ لهذه الجلسة، لكن العامل النشط لم يؤكد التغيير.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'تم الحفظ لهذه الجلسة؛ يسري مفعوله في المرة التالية التي يعمل فيها العامل.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'كل الجلسات',
+    'settings.openchamber.defaults.sessionWarming.session': 'الجلسات المختارة',
+    'settings.openchamber.defaults.sessionWarming.info': "ينسى بعض الموفرين السياق المخزن مؤقتًا للمحادثة بعد بضع دقائق من الصمت، فتصبح الرسالة التالية أبطأ وأعلى تكلفة. الجلسة المُبقاة نشطة تتلقى طلبات \"OK\" صغيرة أثناء خمولها، ويُحتسب كل طلب كطلب صغير مدفوع. كل الجلسات: يبقي OpenCode كل جلسة نشطة بطلب كل 4 دقائق. الجلسات المختارة: فعّله لكل جلسة من قائمة الجلسة أو بجانب السياق؛ تتلقى كل جلسة طلبها قبيل انتهاء ذاكرتها المؤقتة، أي مرة كل ساعة تقريبًا لـ Claude عبر اشتراك وكل 4 دقائق لمعظم الموفرين الآخرين. اختر في الأسفل مدة بقاء الجلسة نشطة بعد كل رد.",
+    'settings.openchamber.defaults.sessionWarming.duration': "إبقاء نشطة لمدة",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "مدة بقاء الجلسة نشطة بعد الرد",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 دقيقة",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "ساعة",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "ساعتان",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 ساعات",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'كل الجلسات',
+    'settings.openchamber.defaults.sessionWarming.session': 'الجلسات المختارة',
+    'settings.openchamber.defaults.sessionWarming.info': "ينسى بعض الموفرين سياق المحادثة المخزن مؤقتًا بعد بضع دقائق من الصمت، فتصبح الرسالة التالية أبطأ وأعلى تكلفة. يرسل الإبقاء نشطة تعليمة قصيرة مع سياق الجلسة كاملًا إلى النموذج. قد يترتب على كل طلب تكلفة أو يُحتسب ضمن حصة اشتراكك. كل الجلسات: يرسل OpenCode طلبًا كل 4 دقائق. الجلسات المختارة: فعّله لكل جلسة من قائمتها أو بجانب السياق. يُرسل الطلب قبل انتهاء صلاحية الذاكرة المؤقتة، مرة كل ساعة تقريبًا لـ Claude عبر اشتراك وكل 4 دقائق لمعظم الموفرين الآخرين. اختر أدناه مدة الإبقاء بعد كل رد.",
+    'settings.openchamber.defaults.sessionWarming.duration': "إبقاء نشطة لمدة",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "مدة بقاء الجلسة نشطة بعد الرد",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 دقيقة",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "ساعة",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "ساعتان",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 ساعات",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'إبقاء نشطة',
     'sessions.sidebar.session.menu.stopWarm': 'إيقاف الإبقاء نشطة',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'يُبقي التسخين الأصلي لذاكرة التخزين المؤقت للموجه قيد التشغيل لهذه الجلسة أثناء خمولها، متجاوزًا افتراضي مساحة العمل.',
     'sessions.sidebar.session.menuHint.stopWarm': 'يُوقف تسخين ذاكرة التخزين المؤقت للموجه لهذه الجلسة.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "يبقي السياق المخزن مؤقتًا لهذه الجلسة حيًا بعد كل رد، بطلب صغير كل 4 دقائق. تُحدَّد المدة في الإعدادات.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'يوقف طلبات الإبقاء لهذه الجلسة.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "يبقي سياق هذه الجلسة مخزنًا مؤقتًا بعد كل رد. يرسل كل طلب سياق الجلسة كاملًا إلى النموذج وقد يترتب عليه تكلفة أو يُحتسب ضمن حصة اشتراكك. حدد المدة في الإعدادات.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'يوقف طلبات الإبقاء لهذه الجلسة.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'تعذّر تغيير إبقاء هذه الجلسة نشطة',
   },
   he: {
@@ -285,6 +719,7 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.aria': 'עקיפת חימום מטמון ההנחיות עבור ההפעלה הנוכחית',
     'settings.openchamber.defaults.sessionWarming.inherit': 'ברירת המחדל של סביבת העבודה ({mode})',
     'settings.openchamber.defaults.sessionWarming.off': 'כבוי',
+<<<<<<< HEAD
     'settings.openchamber.defaults.sessionWarming.idle': 'לשמור חמה בזמן חוסר פעילות',
     'settings.openchamber.defaults.sessionWarming.streaming': 'במהלך תשובות בלבד',
     'settings.openchamber.defaults.sessionWarming.info': 'עוקף את מצב חימום מטמון ההנחיות של סביבת העבודה עבור ההפעלה הפתוחה בלבד. השארתו על ברירת המחדל של סביבת העבודה פועלת לפי ההגדרה שלמעלה; בחירת מצב כאן משאירה או עוצרת את חימום המטמון הטבעי עבור הפעלה זו גם כשברירת המחדל של סביבת העבודה כבויה.',
@@ -294,10 +729,39 @@ export const sessionWarmingI18n = {
     'settings.openchamber.defaults.sessionWarming.applied': 'הוחל על תהליך ההפעלה הפעיל.',
     'settings.openchamber.defaults.sessionWarming.failed': 'נשמר עבור הפעלה זו, אך התהליך הפעיל לא אישר את השינוי.',
     'settings.openchamber.defaults.sessionWarming.noActiveWorker': 'נשמר עבור הפעלה זו; ייכנס לתוקף בפעם הבאה שהתהליך שלה ירוץ.',
+||||||| bc50ba56aa
+    'settings.openchamber.defaults.sessionWarming.all': 'כל ההפעלות',
+    'settings.openchamber.defaults.sessionWarming.session': 'הפעלות נבחרות',
+    'settings.openchamber.defaults.sessionWarming.info': "יש ספקים ששוכחים את ההקשר השמור של שיחה אחרי כמה דקות של שקט, ולכן ההודעה הבאה איטית ויקרה יותר. הפעלה שנשמרת חמה מקבלת בקשות \"OK\" זעירות כל עוד היא לא פעילה, וכל בקשה מחויבת כבקשה קטנה. כל ההפעלות: OpenCode שומר כל הפעלה חמה עם בקשה כל 4 דקות. הפעלות נבחרות: מפעילים לכל הפעלה בנפרד מתפריט ההפעלה או ליד הקשר; כל הפעלה מקבלת את הבקשה שלה רגע לפני שהמטמון שלה פג, בערך פעם בשעה עבור Claude דרך מנוי וכל 4 דקות עבור רוב האחרים. למטה בוחרים כמה זמן הפעלה נשארת חמה אחרי כל תשובה.",
+    'settings.openchamber.defaults.sessionWarming.duration': "לשמור חמה למשך",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "כמה זמן הפעלה נשארת חמה אחרי תשובה",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 דק׳",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "שעה",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "שעתיים",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 שעות",
+=======
+    'settings.openchamber.defaults.sessionWarming.all': 'כל ההפעלות',
+    'settings.openchamber.defaults.sessionWarming.session': 'הפעלות נבחרות',
+    'settings.openchamber.defaults.sessionWarming.info': "יש ספקים ששוכחים את ההקשר השמור של שיחה אחרי כמה דקות של שקט, ולכן ההודעה הבאה איטית ויקרה יותר. השמירה שולחת למודל הנחיה קצרה עם כל הקשר ההפעלה. כל בקשה עשויה לעלות כסף או להיחשב במכסת המנוי. כל ההפעלות: OpenCode שולח בקשה כל 4 דקות. הפעלות נבחרות: מפעילים לכל הפעלה מתפריט ההפעלה או ליד הקשר. הבקשה נשלחת לפני שתוקף המטמון פג, בערך פעם בשעה עבור Claude דרך מנוי וכל 4 דקות עבור רוב האחרים. למטה בוחרים כמה זמן לשמור אחרי כל תשובה.",
+    'settings.openchamber.defaults.sessionWarming.duration': "לשמור חמה למשך",
+    'settings.openchamber.defaults.sessionWarming.durationAria': "כמה זמן הפעלה נשארת חמה אחרי תשובה",
+    'settings.openchamber.defaults.sessionWarming.duration.30': "30 דק׳",
+    'settings.openchamber.defaults.sessionWarming.duration.60': "שעה",
+    'settings.openchamber.defaults.sessionWarming.duration.120': "שעתיים",
+    'settings.openchamber.defaults.sessionWarming.duration.180': "3 שעות",
+>>>>>>> upstream/main
     'sessions.sidebar.session.menu.keepWarm': 'שמור חמה',
     'sessions.sidebar.session.menu.stopWarm': 'הפסק לשמור חמה',
+<<<<<<< HEAD
     'sessions.sidebar.session.menuHint.keepWarm': 'משאיר את חימום מטמון ההנחיות הטבעי פעיל עבור הפעלה זו בזמן שהיא לא פעילה, ועוקף את ברירת המחדל של סביבת העבודה.',
     'sessions.sidebar.session.menuHint.stopWarm': 'מכבה את חימום מטמון ההנחיות עבור הפעלה זו.',
+||||||| bc50ba56aa
+    'sessions.sidebar.session.menuHint.keepWarm': "שומר את ההקשר השמור של ההפעלה הזו אחרי כל תשובה, עם בקשה זעירה כל 4 דקות. משך הזמן נקבע בהגדרות.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'מפסיק את בקשות השמירה עבור ההפעלה הזו.',
+=======
+    'sessions.sidebar.session.menuHint.keepWarm': "שומר את ההקשר של ההפעלה הזו במטמון אחרי כל תשובה. כל בקשה שולחת למודל את כל הקשר ההפעלה ועשויה לעלות כסף או להיחשב במכסת המנוי. משך הזמן נקבע בהגדרות.",
+    'sessions.sidebar.session.menuHint.stopWarm': 'מפסיק את בקשות השמירה עבור ההפעלה הזו.',
+>>>>>>> upstream/main
     'sessions.warming.toggleFailed': 'לא ניתן היה לשנות את שמירת ההפעלה הזו חמה',
   },
 } as const;

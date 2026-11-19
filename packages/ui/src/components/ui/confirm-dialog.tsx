@@ -14,22 +14,11 @@ type ConfirmRequest = {
   title: string;
   message: string;
   action: string;
-  /** Label for declining, when declining still goes on without the action; defaults to Cancel. */
   decline?: string;
-  /** The action discards something; its button reads as destructive. */
   destructive?: boolean;
   checkbox?: ConfirmCheckbox;
 };
 
-/**
- * A yes-or-no question asked in the product's own dialog.
- *
- * Native `window.confirm` sits outside the page's focus tree: on Windows it can
- * leave Electron's renderer unable to accept text, and in a webview it does
- * not open at all. `confirm` resolves `true` for the action, `false` for cancel
- * or dismissal, and `false` when the owner unmounts while the question is
- * open, so a caller never waits on an answer nobody can give.
- */
 export function useConfirmDialog() {
   const { t } = useI18n();
   const [request, setRequest] = React.useState<ConfirmRequest | null>(null);
@@ -59,6 +48,7 @@ export function useConfirmDialog() {
     return response.promise;
   }, []);
 
+<<<<<<< HEAD
   const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => (
     requestConfirmation(next).then((result) => result.confirmed)
   ), [requestConfirmation]);
@@ -66,6 +56,24 @@ export function useConfirmDialog() {
   const confirmWithCheckbox = React.useCallback((next: ConfirmRequest & { checkbox: ConfirmCheckbox }): Promise<ConfirmResponse> => (
     requestConfirmation(next)
   ), [requestConfirmation]);
+||||||| bc50ba56aa
+  const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => {
+    // A second question while one is open answers the first with "no" first.
+    pending.current?.(false);
+    return new Promise((resolve) => {
+      pending.current = resolve;
+      setRequest(next);
+    });
+  }, []);
+=======
+  const confirm = React.useCallback((next: ConfirmRequest): Promise<boolean> => {
+    pending.current?.(false);
+    return new Promise((resolve) => {
+      pending.current = resolve;
+      setRequest(next);
+    });
+  }, []);
+>>>>>>> upstream/main
 
   const dialog = (
     <Dialog open={request !== null} onOpenChange={(open) => { if (!open) settle(false); }}>

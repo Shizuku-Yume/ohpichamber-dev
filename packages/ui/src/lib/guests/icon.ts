@@ -5,7 +5,6 @@ import type { IconName } from '@/components/icon/icons';
 
 export const FALLBACK_GUEST_ICON: IconName = 'apps';
 
-/** Product marks in `scripts/generate-icon-sprite.mjs`. Guests name Remixicon or a package SVG. */
 const HOST_PRODUCT_ICONS = new Set([
   'claude-code',
   'cloudflare',
@@ -15,8 +14,15 @@ const HOST_PRODUCT_ICONS = new Set([
   'openchamber',
 ]);
 
+<<<<<<< HEAD
 /** A Remixicon in the app's sprite that a guest may name; product marks are the host's own. */
 const isGuestIconName = (name: string): name is IconName => (
+||||||| bc50ba56aa
+/** A Remixicon in the app's sprite that a guest may name; product marks are the host's own. */
+export const isGuestIconName = (name: string): name is IconName => (
+=======
+export const isGuestIconName = (name: string): name is IconName => (
+>>>>>>> upstream/main
   Object.hasOwn(iconSpriteData, name) && !HOST_PRODUCT_ICONS.has(name)
 );
 
@@ -36,18 +42,11 @@ export const guestPackageIconSrc = (
     : undefined
 );
 
-/** What `GuestIcon` draws: a host sprite name, or a package SVG under `iconSrc` (masked in `currentColor`). */
 type GuestToolIcon = {
   icon: IconName;
   iconSrc?: string;
 };
 
-/**
- * The icon a `contributes.tools` rule asks for: a package `.svg` becomes an
- * authenticated asset URL like the panel icon, a Remixicon name the sprite
- * carries is used as is. `null` for no icon or a name the sprite does not
- * know, so the host's own tool icon stays.
- */
 export const resolveGuestToolIcon = (
   guestId: string,
   icon: string | undefined,

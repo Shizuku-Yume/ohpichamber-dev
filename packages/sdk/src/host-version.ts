@@ -1,5 +1,10 @@
 const CORE_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
+<<<<<<< HEAD
 /** `3.0.0` or `>=3.0.0`. Ranges beyond a floor are not accepted. */
+||||||| bc50ba56aa
+/** `1.22.0` or `>=1.22.0`. Ranges beyond a floor are not accepted. */
+=======
+>>>>>>> upstream/main
 export const OPENCHAMBER_ENGINE_PATTERN = /^(>=)?\d+\.\d+\.\d+$/;
 
 type OpenChamberVersionParts = {
@@ -32,7 +37,12 @@ export const compareOpenChamberVersions = (left: string, right: string): number 
   return a.patch - b.patch;
 };
 
+<<<<<<< HEAD
 /** Normalize `>=3.0.0` / `3.0.0` to the floor version string. */
+||||||| bc50ba56aa
+/** Normalize `>=1.22.0` / `1.22.0` to the floor version string. */
+=======
+>>>>>>> upstream/main
 export const openChamberEngineMinimum = (engine: string): string | null => {
   const trimmed = engine.trim();
   if (!OPENCHAMBER_ENGINE_PATTERN.test(trimmed)) {
@@ -42,10 +52,6 @@ export const openChamberEngineMinimum = (engine: string): string | null => {
   return parseOpenChamberVersion(floor) ? floor : null;
 };
 
-/**
- * True when this OpenChamber build is new enough for the guest's `engines.openchamber`.
- * Unknown host versions fail closed when an engine is declared.
- */
 export const hostMeetsOpenChamberEngine = (
   hostVersion: string,
   engine: string,

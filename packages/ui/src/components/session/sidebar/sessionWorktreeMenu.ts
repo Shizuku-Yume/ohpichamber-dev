@@ -24,7 +24,15 @@ export type StartSessionWorktreeMenuLoadResult = {
 };
 
 type SessionWorktreeMenuState = {
+<<<<<<< HEAD
   refreshState: 'loading' | 'error' | null;
+||||||| bc50ba56aa
+  // A refresh runs quietly over the cached list: a "refreshing" line made the
+  // submenu jump as it came and went. Only a failure with nothing to show is said.
+  refreshState: 'error' | null;
+=======
+  refreshState: 'error' | null;
+>>>>>>> upstream/main
   showNewWorktreeAction: boolean;
 };
 
@@ -247,6 +255,27 @@ export const buildSessionWorktreeMenuTargets = (args: {
     if (!normalizedPath || targetsByPath.has(normalizedPath)) {
       return;
     }
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    // The repository root of a project at `repo/app` lies outside the project,
+    // so a session moved there would leave it. It stays listed as the current
+    // place of a session already there.
+    if (
+      normalizedProjectPath
+      && normalizedPath !== normalizedSourceDirectory
+      && checkoutHoldsSubfolder(normalizedPath, normalizedProjectPath)
+    ) {
+      return;
+    }
+=======
+    if (
+      normalizedProjectPath
+      && normalizedPath !== normalizedSourceDirectory
+      && checkoutHoldsSubfolder(normalizedPath, normalizedProjectPath)
+    ) {
+      return;
+    }
+>>>>>>> upstream/main
     targetsByPath.set(normalizedPath, {
       ...target,
       metadata: cloneMetadata({
@@ -313,11 +342,6 @@ export const buildSessionWorktreeMenuTargets = (args: {
   return [...primaryTargets, ...linkedTargets];
 };
 
-// A restored session can keep a source directory whose worktree was deleted:
-// that path no longer matches any known worktree or configured project root,
-// so directory-based resolution fails. The session's worktree metadata still
-// records the owning project root in projectDirectory, so fall back to it
-// before giving up. Without an owner the menu cannot list sibling worktrees.
 export const resolveSessionWorktreeMenuProject = (
   args: StartSessionWorktreeMenuLoadArgs,
   deps: Pick<WorktreeTopologyRefreshDependencies, 'projects' | 'resolveProject'>,

@@ -6,6 +6,7 @@ describe('selected quota dispatcher', () => {
   it('lists public selections without secret resolution', async () => {
     expect(await listConfiguredQuotaProviders({ selections: [{ providerId: 'deepseek' }, { providerId: 'antigravity' }, { providerId: 'not-supported' }] })).toEqual(['deepseek', 'antigravity']);
   });
+<<<<<<< HEAD
   it('lists one logical product for multiple explicit native owners and rejects inherited registry keys', async () => {
     expect(await listConfiguredQuotaProviders({ selections: [
       { quotaProviderId: 'google', providerId: 'google-gemini-cli' },
@@ -51,6 +52,21 @@ describe('selected quota dispatcher', () => {
   it('resolves the selected native descriptor without quota-provider alias lookup', async () => {
     const resolveCredential = vi.fn(async () => ({ type: 'oauth', access: 'selected-access', refresh: 'selected-refresh', expires: Date.now() + 3600000 }));
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 503 })));
+||||||| bc50ba56aa
+
+  it('can list configured providers without missing provider exports', async () => {
+    await expect(listConfiguredQuotaProviders()).resolves.toBeInstanceOf(Array);
+  });
+
+  it('lists ZenMux from its managed credential, whatever the OpenCode auth holds', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'quota-list-'));
+    vi.stubEnv('OPENCHAMBER_DATA_DIR', dataDir);
+=======
+
+  it('lists ZenMux from its managed credential, whatever the OpenCode auth holds', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'quota-list-'));
+    vi.stubEnv('OPENCHAMBER_DATA_DIR', dataDir);
+>>>>>>> upstream/main
     try {
       await fetchQuotaForProvider('codex', { ...selection, providerId: 'openai-codex', resolveCredential });
       expect(resolveCredential).toHaveBeenCalledWith({ ...selection, providerId: 'openai-codex', purpose: 'quota' });
@@ -79,5 +95,16 @@ describe('selected quota dispatcher', () => {
     const result = await fetchQuotaForProvider('codex', { ...selection, providerId: undefined, resolveCredential });
     expect(result.ok).toBe(false);
     expect(resolveCredential).not.toHaveBeenCalled();
+  });
+
+  it.each(['constructor', 'toString', '__proto__', 'null', null])('rejects unsupported registry key %s', async (providerId) => {
+    await expect(fetchQuotaForProvider(providerId)).resolves.toMatchObject({
+      providerId,
+      providerName: providerId,
+      ok: false,
+      configured: false,
+      usage: null,
+      error: 'Unsupported provider',
+    });
   });
 });

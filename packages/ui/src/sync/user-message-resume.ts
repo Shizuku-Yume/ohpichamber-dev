@@ -21,7 +21,6 @@ const defaultDependencies: ResumeDependencies = {
   },
 };
 
-/** Capture before submission; invoke only once the user message was accepted. */
 export function prepareUserMessageResume(
   sessionId: string,
   runtimeKey: string,
@@ -31,8 +30,15 @@ export function prepareUserMessageResume(
   const archivedAt = session?.parentSessionId ? undefined : session?.archivedAt;
   return async () => {
     if (!archivedAt || deps.runtimeKey() !== runtimeKey) return;
+<<<<<<< HEAD
     // A later archive or a manual restore supersedes the send's original state.
     if (deps.session(sessionId)?.archivedAt !== archivedAt) return;
+||||||| bc50ba56aa
+    // A later archive or a manual restore supersedes the send's original state.
+    if (deps.session(sessionId)?.time.archived !== archivedAt) return;
+=======
+    if (deps.session(sessionId)?.time.archived !== archivedAt) return;
+>>>>>>> upstream/main
     try {
       if (await deps.restore(sessionId, runtimeKey)) return;
     } catch {

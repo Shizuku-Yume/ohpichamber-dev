@@ -1,7 +1,17 @@
+<<<<<<< HEAD
 // The panel of Agent Desk: what the service sends arrives on its own, and one
 // button asks the service to start a session.
 import { connectHost } from 'ohpichamber-sdk';
 import { applyHostReady, mountButton, mountText } from 'ohpichamber-sdk/ui';
+||||||| bc50ba56aa
+// The panel of Agent Desk: what the service sends arrives on its own, and one
+// button asks the service to start a session.
+import { connectHost } from '@openchamber/sdk';
+import { applyHostReady, mountButton, mountText } from '@openchamber/sdk/ui';
+=======
+import { connectHost } from '@openchamber/sdk';
+import { applyHostReady, mountButton, mountText } from '@openchamber/sdk/ui';
+>>>>>>> upstream/main
 
 const host = connectHost();
 const root = document.querySelector('#root');

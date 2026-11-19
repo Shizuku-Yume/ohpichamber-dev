@@ -29,12 +29,67 @@ import { withAttachmentChips } from './message/parts/attachmentCitationChips';
 
 const ROW_ACTION_CLASS = 'shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground';
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/** The agent a queued message was captured with, in the composer agent control's colors. */
+const QueuedMessageAgentBadge: React.FC<{ agentName: string }> = ({ agentName }) => {
+    const { t } = useI18n();
+    const getAgentColor = useAgentColors();
+    const knownAgent = useConfigStore((state) => state.agents.find((agent) => agent.name === agentName));
+    const label = agentLabel(knownAgent ?? { name: agentName, displayName: '' });
+    const { color } = getAgentColor(agentName);
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className="flex min-w-0 max-w-[40%] shrink items-center gap-1.5 typography-ui-label font-medium" style={{ color }}>
+                    <Icon name="ai-agent" className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>
+                {t('chat.queuedMessage.sendsAsAgent', { agent: label })}
+            </TooltipContent>
+        </Tooltip>
+    );
+};
+
+=======
+const QueuedMessageAgentBadge: React.FC<{ agentName: string }> = ({ agentName }) => {
+    const { t } = useI18n();
+    const getAgentColor = useAgentColors();
+    const knownAgent = useConfigStore((state) => state.agents.find((agent) => agent.name === agentName));
+    const label = agentLabel(knownAgent ?? { name: agentName, displayName: '' });
+    const { color } = getAgentColor(agentName);
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className="flex min-w-0 max-w-[40%] shrink items-center gap-1.5 typography-ui-label font-medium" style={{ color }}>
+                    <Icon name="ai-agent" className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>
+                {t('chat.queuedMessage.sendsAsAgent', { agent: label })}
+            </TooltipContent>
+        </Tooltip>
+    );
+};
+
+>>>>>>> upstream/main
 interface QueuedMessageRowProps {
     message: QueuedMessage;
     target: MessageQueueTarget;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    /** The agent the composer would send as now; a message captured with another one says so. */
+    composerAgentName: string | null | undefined;
+=======
+    composerAgentName: string | null | undefined;
+>>>>>>> upstream/main
     onEdit: (message: QueuedMessage) => void;
     onSend: (message: QueuedMessage) => void;
-    /** The leading slot: the queue icon for a lone message, a drag handle in the list. */
     lead: React.ReactNode;
 }
 
@@ -43,7 +98,6 @@ const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, on
     const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
     const firstLine = getQueuedMessagePreview(message);
     const attachmentCount = message.attachments?.length ?? 0;
-    // `[image-1.png]` citations of the message's own files read as file chips.
     const attachmentFilenames = React.useMemo(
         () => (message.attachments ?? []).map((file) => file.filename),
         [message.attachments],
@@ -52,6 +106,31 @@ const QueuedMessageRow: React.FC<QueuedMessageRowProps> = ({ message, target, on
     return (
         <>
             {lead}
+<<<<<<< HEAD
+||||||| bc50ba56aa
+            {message.goal ? (
+                // Same lit target as the composer's armed goal button.
+                <span
+                    role="img"
+                    className="flex shrink-0 text-[var(--status-info)]"
+                    title={t('chat.queuedMessage.goal')}
+                    aria-label={t('chat.queuedMessage.goal')}
+                >
+                    <Icon name="target-fill" className="size-3.5" aria-hidden="true" />
+                </span>
+            ) : null}
+=======
+            {message.goal ? (
+                <span
+                    role="img"
+                    className="flex shrink-0 text-[var(--status-info)]"
+                    title={t('chat.queuedMessage.goal')}
+                    aria-label={t('chat.queuedMessage.goal')}
+                >
+                    <Icon name="target-fill" className="size-3.5" aria-hidden="true" />
+                </span>
+            ) : null}
+>>>>>>> upstream/main
             <span className="min-w-0 flex-1 truncate text-sm text-foreground">
                 {firstLine ? withAttachmentChips(firstLine, attachmentFilenames, `queued-${message.id}`) : t('chat.queuedMessage.empty')}
                 {attachmentCount > 0 && (
@@ -123,7 +202,6 @@ const SortableQueuedMessageRow = memo((props: Omit<QueuedMessageRowProps, 'lead'
     return (
         <div
             ref={setNodeRef}
-            // Translate only (no scaleX/scaleY) so the lifted row keeps its size.
             style={{ transform: CSS.Translate.toString(transform), transition }}
             className={cn(ROW_CLASS, isDragging && 'relative z-10 opacity-60')}
         >
@@ -154,22 +232,40 @@ SortableQueuedMessageRow.displayName = 'SortableQueuedMessageRow';
 
 interface QueuedMessagesStripProps {
     target: MessageQueueTarget | null;
+<<<<<<< HEAD
     /** The message was taken from the queue in full; the composer restores it. */
     onEditMessage: (message: QueuedMessage) => void;
+||||||| bc50ba56aa
+    composerAgentName: string | null | undefined;
+    /** The composer takes the message out of the queue and restores it. */
+    onEditMessage: (messageId: string) => void;
+=======
+    composerAgentName: string | null | undefined;
+    onEditMessage: (messageId: string) => void;
+>>>>>>> upstream/main
     onSendMessage: (messageId: string) => void;
 }
 
 const EMPTY_QUEUE: QueuedMessage[] = [];
 
+<<<<<<< HEAD
 /**
  * Messages waiting for the running turn, as a top row of the composer next to
  * the background commands. One message is its own row; several collapse into
  * a count that expands in place into a reorderable list.
  */
 export const QueuedMessagesStrip = memo(({ target, onEditMessage, onSendMessage }: QueuedMessagesStripProps) => {
+||||||| bc50ba56aa
+/**
+ * Messages waiting for the running turn, as a top row of the composer next to
+ * the background commands. One message is its own row; several collapse into
+ * a count that expands in place into a reorderable list.
+ */
+export const QueuedMessagesStrip = memo(({ target, composerAgentName, onEditMessage, onSendMessage }: QueuedMessagesStripProps) => {
+=======
+export const QueuedMessagesStrip = memo(({ target, composerAgentName, onEditMessage, onSendMessage }: QueuedMessagesStripProps) => {
+>>>>>>> upstream/main
     const { t } = useI18n();
-    // One shared preference, so the list stays open (or closed) across
-    // session switches instead of resetting with the queue key.
     const expanded = useUIStore((state) => state.messageQueueExpanded);
     const setMessageQueueExpanded = useUIStore((state) => state.setMessageQueueExpanded);
     const listId = React.useId();
@@ -187,9 +283,7 @@ export const QueuedMessagesStrip = memo(({ target, onEditMessage, onSendMessage 
     const reorderQueue = useMessageQueueStore((state) => state.reorderQueue);
 
     const sensors = useSensors(
-        // Desktop: drag after a small move so other clicks still register.
         useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-        // Touch: long-press to drag (tap still hits buttons, swipe scrolls).
         useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
     );
 
@@ -237,7 +331,6 @@ export const QueuedMessagesStrip = memo(({ target, onEditMessage, onSendMessage 
         );
     }
 
-    // The whole header toggles the list, as the background commands header does.
     return (
         <div role="group" className="border-b border-edge" aria-label={t('chat.queuedMessage.title')}>
             <div className="flex oc-composer-row items-center ps-3 pe-3">
@@ -273,8 +366,6 @@ export const QueuedMessagesStrip = memo(({ target, onEditMessage, onSendMessage 
                         items={queuedMessages.map((m) => m.id)}
                         strategy={verticalListSortingStrategy}
                     >
-                        {/* Four rows, then the list scrolls, so a long queue
-                            cannot push the editor off a short screen. */}
                         <ScrollableOverlay id={listId} outerClassName="max-h-40" className="overscroll-contain" disableHorizontal>
                             {queuedMessages.map((message) => (
                                 <SortableQueuedMessageRow

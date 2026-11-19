@@ -25,10 +25,6 @@ type Props = {
   className?: string;
 };
 
-/**
- * The instance switcher. Instances only exist in the desktop app; everywhere
- * else there is nothing to switch, so nothing renders.
- */
 export function DesktopInstanceMenu({ className }: Props): React.ReactNode {
   const [isDesktopApp] = React.useState(() => isDesktopShell());
   if (!isDesktopApp) {
@@ -51,9 +47,6 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
       return;
     }
 
-    // Same resolution the host switcher's own header uses, so the button and
-    // the panel it opens can never disagree about which instance this is.
-    // Without the saved instances the window's own runtime still names it.
     const hosts = await desktopHostsGet()
       .then((cfg) => withLocalDesktopHost(cfg.hosts, cfg.localOrigin))
       .catch(() => withLocalDesktopHost([], getLocalDesktopOrigin()));
@@ -71,13 +64,168 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
 
   React.useEffect(() => {
     void refreshCurrentInstanceLabel();
-    // Switching instances does not remount the sidebar, so without this the
-    // button would keep naming the instance the window left behind.
     return subscribeRuntimeEndpointChanged(() => {
       void refreshCurrentInstanceLabel();
     });
   }, [refreshCurrentInstanceLabel]);
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const checkRemoteInstanceUpdate = React.useCallback(async () => {
+    if (currentInstanceIsLocal) {
+      setRemoteUpdateInfo(null);
+      setRemoteUpdateError(null);
+      return;
+    }
+
+    setRemoteUpdateChecking(true);
+    setRemoteUpdateError(null);
+    try {
+      // Status-only poll: must not count as usage on the remote server's install id.
+      const params = new URLSearchParams({ appType: 'web', instanceMode: 'remote', reportUsage: 'false' });
+      const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+      // The shared parse keeps installBlocked, so the dialog never offers a
+      // command that cannot update this server.
+      setRemoteUpdateInfo(parseUpdateCheckResponse(await response.json()));
+    } catch (error) {
+      setRemoteUpdateInfo(null);
+      setRemoteUpdateError(error instanceof Error ? error.message : t('header.services.remoteUpdate.error'));
+    } finally {
+      setRemoteUpdateChecking(false);
+    }
+  }, [currentInstanceIsLocal, t]);
+
+  React.useEffect(() => {
+    setRemoteUpdateInfo(null);
+    setRemoteUpdateError(null);
+    setRemoteUpdateDialogOpen(false);
+  }, [currentInstanceIsLocal, currentInstanceLabel]);
+
+  React.useEffect(() => {
+    if (currentInstanceIsLocal) {
+      return;
+    }
+
+    const initialDelayMs = 3000;
+    const intervalMs = 60 * 60 * 1000;
+    let disposed = false;
+    let timer: number | null = null;
+
+    const schedule = (delayMs: number) => {
+      timer = window.setTimeout(() => {
+        if (disposed || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) {
+          schedule(intervalMs);
+          return;
+        }
+        void checkRemoteInstanceUpdate().finally(() => {
+          if (!disposed) {
+            schedule(intervalMs);
+          }
+        });
+      }, delayMs);
+    };
+
+    schedule(initialDelayMs);
+
+    return () => {
+      disposed = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [checkRemoteInstanceUpdate, currentInstanceIsLocal, currentInstanceLabel]);
+
+  const openRemoteInstanceUpdate = React.useCallback(() => {
+    if (remoteUpdateInfo?.available) {
+      setRemoteUpdateDialogOpen(true);
+      return;
+    }
+    void checkRemoteInstanceUpdate();
+  }, [checkRemoteInstanceUpdate, remoteUpdateInfo?.available]);
+
+=======
+  const checkRemoteInstanceUpdate = React.useCallback(async () => {
+    if (currentInstanceIsLocal) {
+      setRemoteUpdateInfo(null);
+      setRemoteUpdateError(null);
+      return;
+    }
+
+    setRemoteUpdateChecking(true);
+    setRemoteUpdateError(null);
+    try {
+      const params = new URLSearchParams({ appType: 'web', instanceMode: 'remote', reportUsage: 'false' });
+      const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+      setRemoteUpdateInfo(parseUpdateCheckResponse(await response.json()));
+    } catch (error) {
+      setRemoteUpdateInfo(null);
+      setRemoteUpdateError(error instanceof Error ? error.message : t('header.services.remoteUpdate.error'));
+    } finally {
+      setRemoteUpdateChecking(false);
+    }
+  }, [currentInstanceIsLocal, t]);
+
+  React.useEffect(() => {
+    setRemoteUpdateInfo(null);
+    setRemoteUpdateError(null);
+    setRemoteUpdateDialogOpen(false);
+  }, [currentInstanceIsLocal, currentInstanceLabel]);
+
+  React.useEffect(() => {
+    if (currentInstanceIsLocal) {
+      return;
+    }
+
+    const initialDelayMs = 3000;
+    const intervalMs = 60 * 60 * 1000;
+    let disposed = false;
+    let timer: number | null = null;
+
+    const schedule = (delayMs: number) => {
+      timer = window.setTimeout(() => {
+        if (disposed || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) {
+          schedule(intervalMs);
+          return;
+        }
+        void checkRemoteInstanceUpdate().finally(() => {
+          if (!disposed) {
+            schedule(intervalMs);
+          }
+        });
+      }, delayMs);
+    };
+
+    schedule(initialDelayMs);
+
+    return () => {
+      disposed = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [checkRemoteInstanceUpdate, currentInstanceIsLocal, currentInstanceLabel]);
+
+  const openRemoteInstanceUpdate = React.useCallback(() => {
+    if (remoteUpdateInfo?.available) {
+      setRemoteUpdateDialogOpen(true);
+      return;
+    }
+    void checkRemoteInstanceUpdate();
+  }, [checkRemoteInstanceUpdate, remoteUpdateInfo?.available]);
+
+>>>>>>> upstream/main
   const handleOpenChange = React.useCallback((next: boolean) => {
     setOpen(next);
     if (next) {
@@ -91,8 +239,6 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
         setOpen(false);
         return;
       }
-      // The trigger lives in the sidebar footer; a collapsed sidebar has to
-      // come back first, or the menu would anchor to a zero-width column.
       const ui = useUIStore.getState();
       if (!ui.isSidebarOpen) {
         ui.setSidebarOpen(true);

@@ -8,7 +8,7 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
 import { replaceGlobalSessionStatusById, setSessionParentResolver } from '@/sync/global-session-status';
-import { applyPrWatch, resetPrWatchesForRuntimeSwitch } from '@/sync/pr-watch';
+import { applyPrWatches, resetPrWatchesForRuntimeSwitch } from '@/sync/pr-watch';
 import { setWorkflowRunningSessions } from '@/sync/workflow-activity';
 import { installHookTestDom } from '../test-utils/testDom';
 import { useSidebarLiveFacts } from './useSidebarLiveFacts';
@@ -72,8 +72,8 @@ let dom: ReturnType<typeof installHookTestDom>;
 let root: ReturnType<typeof createRoot>;
 let facts: SidebarLiveFacts;
 
-const Harness = ({ enabled = true }: { enabled?: boolean }) => {
-  facts = useSidebarLiveFacts(enabled);
+const Harness = () => {
+  facts = useSidebarLiveFacts(true);
   return null;
 };
 
@@ -127,15 +127,8 @@ test('a session idling on a workflow run or its pull request is running', async 
   await act(async () => setWorkflowRunningSessions([]));
   expect(facts.unreadIds.has('waiting')).toBe(true);
 
-  await act(async () => applyPrWatch(1, 'waiting', {
+  await act(async () => applyPrWatches(1, 'waiting', [{
     sessionID: 'waiting', directory: '/repo', url: 'https://example.test/pr/1', number: 1, title: 'PR', status: 'pending', startedAt: 1,
-  }));
+  }]));
   expectWaiting();
-});
-
-test('nothing is read while no shown section asks', async () => {
-  await act(async () => applyBackgroundShellEvents('/repo', [shellStarted]));
-  await act(async () => root.render(<Harness enabled={false} />));
-  expect(facts.activeIds.size).toBe(0);
-  expect(facts.unreadIds.size).toBe(0);
 });

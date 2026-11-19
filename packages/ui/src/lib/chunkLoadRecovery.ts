@@ -42,6 +42,14 @@ function reloadMarkerSignature(error: unknown): string {
 
 function scheduleReloadOnce(error: unknown): void {
   if (typeof window === 'undefined') return;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // VS Code owns webview navigation. Keep the import failure available to the
+  // error boundary instead of replacing the app with an unsupported reload.
+  if (isVSCodeRuntime()) return;
+=======
+  if (isVSCodeRuntime()) return;
+>>>>>>> upstream/main
 
   const now = Date.now();
   const signature = reloadMarkerSignature(error);
@@ -78,7 +86,7 @@ function scheduleReloadOnce(error: unknown): void {
 
 export async function importWithChunkRecovery<T>(
   load: () => Promise<T>,
-  options: { retries?: number } = {},
+  options: { retries?: number; reloadOnFailure?: boolean } = {},
 ): Promise<T> {
   const retries = options.retries ?? 1;
   let lastError: unknown;
@@ -96,7 +104,7 @@ export async function importWithChunkRecovery<T>(
     }
   }
 
-  if (isDynamicImportError(lastError)) {
+  if (options.reloadOnFailure !== false && isDynamicImportError(lastError)) {
     scheduleReloadOnce(lastError);
   }
 

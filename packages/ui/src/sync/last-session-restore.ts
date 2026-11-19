@@ -5,17 +5,24 @@ import { useSessionUIStore } from './session-ui-store';
 import { clearLastActiveSession, readLastActiveSession } from './last-session-cache';
 
 export type LastSessionRestoreResult =
-    /** The session left open last time is selected again. */
     | 'restored'
-    /** Nothing to restore: no pointer, the session is gone, or something else was opened meanwhile. */
     | 'none'
-    /** The session list could not be read; the pointer is kept for a later attempt. */
     | 'failed';
 
+<<<<<<< HEAD
 /**
  * A failed or partial native discovery retains the pointer. Only a completed
  * current-runtime global snapshot may prove that a session is gone.
  */
+||||||| bc50ba56aa
+/**
+ * The session load resolves even when the server could not be read (OpenCode
+ * still starting, a network error): it then returns the cached or fallback
+ * list and marks the store `error`. Only a completed load may say a session is
+ * gone.
+ */
+=======
+>>>>>>> upstream/main
 const isSessionListAuthoritative = (): boolean => {
     const { hasLoaded, status } = useGlobalSessionsStore.getState();
     return hasLoaded && status === 'ready';
@@ -24,17 +31,7 @@ const isSessionListAuthoritative = (): boolean => {
 const loadSessionList = (refresh: boolean) =>
     (refresh ? refreshGlobalSessions() : ensureGlobalSessionsLoaded()).catch(() => null);
 
-/**
- * Reopens the session that was open when the app last closed, on launch.
- *
- * The pointer is written on every session switch and dropped when the user
- * opens a draft themselves (`openNewSessionDraft`), so it names exactly what
- * was on screen at close. The automatic boot draft does not count as a
- * choice and is replaced. Anything opened while the session list loads (a
- * link, a click) wins, as does a user draft, which clears the pointer.
- */
 export const restoreLastActiveSession = async (options: {
-    /** Read the session list fresh rather than accept one already loaded (mobile reconnects). */
     readonly refresh: boolean;
 }): Promise<LastSessionRestoreResult> => {
     if (useSessionUIStore.getState().currentSessionId) return 'none';
@@ -43,14 +40,11 @@ export const restoreLastActiveSession = async (options: {
     if (!persisted) return 'none';
 
     const snapshot = await loadSessionList(options.refresh);
-    // A switch to another instance meanwhile makes this pointer and list foreign.
     if (getRuntimeKey() !== runtimeKey) return 'none';
     if (!snapshot || !isSessionListAuthoritative()) return 'failed';
 
     const session = snapshot.activeSessions.find((entry) => entry.sessionId === persisted.sessionId);
     if (!session) {
-        // The authoritative list says it is gone (deleted or archived): drop
-        // the stale pointer instead of retrying it on every launch.
         clearLastActiveSession(runtimeKey);
         return 'none';
     }
@@ -59,6 +53,14 @@ export const restoreLastActiveSession = async (options: {
     if (latest.currentSessionId || readLastActiveSession(runtimeKey)?.sessionId !== persisted.sessionId) {
         return 'none';
     }
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    // Opening a session admits its folder. A launch is not the user's choice,
+    // so a session outside every project waits for them to open it.
+    if (!isSessionAdmitted(resolveGlobalSessionDirectory(session))) return 'none';
+=======
+    if (!isSessionAdmitted(resolveGlobalSessionDirectory(session))) return 'none';
+>>>>>>> upstream/main
     void latest.setCurrentSession(
         session.sessionId,
         resolveGlobalSessionDirectory(session) ?? persisted.directory ?? undefined,
@@ -68,12 +70,22 @@ export const restoreLastActiveSession = async (options: {
 
 type ReopenedSession = { readonly runtimeKey: string; readonly sessionId: string };
 
+<<<<<<< HEAD
 /**
  * Selects the last session at once, before the session list confirms it, so
  * the launch never shows the automatic draft first. Needs the session's
  * directory without asking the runtime: the pointer's own, or the persisted
  * session list's. Returns null when it selected nothing.
  */
+||||||| bc50ba56aa
+/**
+ * Selects the last session at once, before the session list confirms it, so
+ * the launch never shows the automatic draft first. Needs the session's
+ * directory without asking OpenCode: the pointer's own, or the persisted
+ * session list's. Returns null when it selected nothing.
+ */
+=======
+>>>>>>> upstream/main
 const reopenLastActiveSession = (): ReopenedSession | null => {
     const ui = useSessionUIStore.getState();
     if (ui.currentSessionId) return null;
@@ -82,19 +94,22 @@ const reopenLastActiveSession = (): ReopenedSession | null => {
     if (!persisted) return null;
     const cached = useGlobalSessionsStore.getState().entityById.get(persisted.sessionId);
     const directory = persisted.directory ?? (cached ? resolveGlobalSessionDirectory(cached) : null);
+<<<<<<< HEAD
     if (!directory) return null;
     void ui.setCurrentSession(persisted.sessionId, directory);
+||||||| bc50ba56aa
+    // `setCurrentSession` opens the cached record's folder over the pointer's.
+    if (!directory || !isSessionAdmitted((cached ? resolveGlobalSessionDirectory(cached) : null) ?? directory)) return null;
+    void ui.setCurrentSession(persisted.sessionId, directory, { keepSingleProject: true });
+=======
+    if (!directory || !isSessionAdmitted((cached ? resolveGlobalSessionDirectory(cached) : null) ?? directory)) return null;
+    void ui.setCurrentSession(persisted.sessionId, directory, { keepSingleProject: true });
+>>>>>>> upstream/main
     return { runtimeKey, sessionId: persisted.sessionId };
 };
 
-/**
- * Checks a reopened session against the authoritative session list. A session
- * the list no longer holds (deleted or archived) loses its pointer, and the
- * chat falls back to the draft unless the user has opened something else
- * since. A session that moved directories is reselected in its new one.
- */
-const confirmReopenedSession = async (reopened: ReopenedSession): Promise<LastSessionRestoreResult> => {
-    const snapshot = await loadSessionList(false);
+const confirmReopenedSession = async (reopened: ReopenedSession, refresh: boolean): Promise<LastSessionRestoreResult> => {
+    const snapshot = await loadSessionList(refresh);
     if (getRuntimeKey() !== reopened.runtimeKey) return 'none';
     if (!snapshot || !isSessionListAuthoritative()) return 'failed';
 
@@ -115,21 +130,12 @@ const confirmReopenedSession = async (reopened: ReopenedSession): Promise<LastSe
     return 'none';
 };
 
-/**
- * Launch restore for the web and desktop shell. Call it before the chat's
- * first passive effects, which open the automatic draft when nothing is
- * selected. With `selectNow` it selects the last session at once when its
- * directory is known; otherwise, or without a directory, it waits for the
- * session list as `restoreLastActiveSession` does. Returns the confirmation
- * attempt; `failed` means the session list could not be read yet, and the
- * caller runs the attempt again once startup completes.
- */
 export const beginLastSessionRestore = (options: {
-    /** False when a route already names a session to open. */
     readonly selectNow: boolean;
+    readonly refresh: boolean;
 }): (() => Promise<LastSessionRestoreResult>) => {
     const reopened = options.selectNow ? reopenLastActiveSession() : null;
     return reopened
-        ? () => confirmReopenedSession(reopened)
-        : () => restoreLastActiveSession({ refresh: false });
+        ? () => confirmReopenedSession(reopened, options.refresh)
+        : () => restoreLastActiveSession({ refresh: options.refresh });
 };

@@ -228,22 +228,56 @@ describe('settings registry', () => {
 
   test('section order: a saved order applies as stored and a dragged order stays', () => {
     const original = useUIStore.getState();
+<<<<<<< HEAD
     const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+||||||| bc50ba56aa
+    const savedDefault = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+=======
+    const savedDefault = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+    // Sections added after an order was saved land in it: Tasks after Subagents.
+    const savedWithTasks = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'tasks', 'workflows', 'mcp', 'pinned', 'contextSources'];
+>>>>>>> upstream/main
     try {
       applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: saved }) ?? {});
       // The fork's store has one sanitized order and no explicit marker.
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(saved);
 
+<<<<<<< HEAD
       const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'];
       useUIStore.getState().setWorkStatusSectionOrder(dragged);
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(dragged);
+||||||| bc50ba56aa
+      useUIStore.getState().setWorkStatusSectionOrder(savedDefault);
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
+      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
+=======
+      useUIStore.getState().setWorkStatusSectionOrder(savedDefault);
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedWithTasks);
+      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
+>>>>>>> upstream/main
 
+<<<<<<< HEAD
       // Obsolete ids are dropped and sections the build gained are appended.
       expect(sanitizeWorkStatusSectionOrder(['session', 'legacy-id', 'repository']))
         .toEqual(resolveWorkStatusSectionOrder(['session', 'repository'], []));
       // An order the user never arranged follows the default's Context sources move.
       expect(sanitizeWorkStatusSectionOrder(['session', 'repository', 'usage', 'subagents', 'mcp', 'pinned', 'contextSources'], false))
         .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'mcp', 'pinned', 'telemetry', 'workflows']);
+||||||| bc50ba56aa
+      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedDefault);
+
+      useUIStore.setState({ workStatusSectionOrderExplicit: false });
+      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
+      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
+=======
+      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
+      expect(useUIStore.getState().workStatusSectionOrder).toEqual(savedWithTasks);
+
+      useUIStore.setState({ workStatusSectionOrderExplicit: false });
+      applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: savedDefault, workStatusSectionOrderExplicit: true }) ?? {});
+      expect(useUIStore.getState().workStatusSectionOrderExplicit).toBe(true);
+>>>>>>> upstream/main
     } finally {
       useUIStore.setState(original, true);
     }
@@ -254,7 +288,7 @@ describe('settings registry', () => {
     if (!migrate) throw new Error('Expected a migration');
     const savedDefault = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
     expect(await migrate({ workStatusSectionOrder: savedDefault }, 26)).toMatchObject({
-      workStatusSectionOrder: ['session', 'repository', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'],
+      workStatusSectionOrder: ['session', 'repository', 'usage', 'contextSources', 'telemetry', 'subagents', 'tasks', 'workflows', 'mcp', 'pinned'],
     });
   });
 
@@ -350,6 +384,16 @@ describe('settings registry', () => {
     expect(parseSettingsDocument({ activityRenderMode: 'summary' })).toEqual({ activityRenderMode: 'summary' });
   });
 
+  test('reads the old Wide chat layout switch as the Full chat width until a width is picked', () => {
+    expect(parseSettingsDocument({ wideChatLayoutEnabled: true }))
+      .toEqual({ wideChatLayoutEnabled: true, chatWidth: 'full' });
+    expect(parseSettingsDocument({ wideChatLayoutEnabled: false }))
+      .toEqual({ wideChatLayoutEnabled: false, chatWidth: 'default' });
+    expect(parseSettingsDocument({ wideChatLayoutEnabled: true, chatWidth: 'wider' }))
+      .toEqual({ wideChatLayoutEnabled: true, chatWidth: 'wider' });
+    expect(parseSettingsDocument({ chatWidth: 'wide' })).toEqual({});
+  });
+
   test('applies only the fields a snapshot carries and leaves the rest alone', () => {
     useUIStore.getState().setTerminalShell('fish');
     useUIStore.getState().setShowReasoningTraces(true);
@@ -433,6 +477,7 @@ describe('custom stt endpoint path setting', () => {
     expect(parseSettingsDocument({ sttEndpointPath: `/${'a'.repeat(1024)}` })).toEqual({});
   });
 });
+<<<<<<< HEAD
 
 /**
  * The registry decides what persists, so every row must also name something
@@ -622,3 +667,24 @@ describe('settings registry effects', () => {
     expect(mismatches).toEqual([]);
   });
 });
+||||||| bc50ba56aa
+=======
+
+test('the server\'s message search value replaces whatever the client remembered', async () => {
+  const { useUIStore } = await import('@/stores/useUIStore');
+  const { applySettingsToStores } = await import('./registry');
+  const before = useUIStore.getState().messageSearchEnabled;
+  try {
+    // A client that remembered the old default (off) follows a server that resolved it to on.
+    useUIStore.setState({ messageSearchEnabled: false });
+    applySettingsToStores({ messageSearchEnabled: true });
+    expect(useUIStore.getState().messageSearchEnabled).toBe(true);
+    // A settings payload without the key (VS Code) leaves the client's value alone.
+    useUIStore.setState({ messageSearchEnabled: false });
+    applySettingsToStores({});
+    expect(useUIStore.getState().messageSearchEnabled).toBe(false);
+  } finally {
+    useUIStore.setState({ messageSearchEnabled: before });
+  }
+});
+>>>>>>> upstream/main

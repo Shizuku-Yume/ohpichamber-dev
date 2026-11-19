@@ -132,6 +132,46 @@ export const mountBoard = (host: HostClient, root: Element) => {
     });
     refresh.update({ loading: false });
   };
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // A brief asked for before the board closed arrives when it opens again.
+  // The request names the saved task it was drafted from.
+  const lateBriefs: LateGenerateResult[] = [];
+  const applyLateBriefs = () => {
+    while (ready && !dirty) {
+      const late = lateBriefs.shift();
+      if (!late) return;
+      if (!late.ok) { notice.show('Draft a brief failed', late.error, 'error'); continue; }
+      const prompt = late.request.prompt;
+      const task = tasks.find((entry) => briefPrompt(entry.title, entry.description ?? '') === prompt);
+      if (!task) { notice.show('A brief arrived for a task that changed', 'It was written while the board was closed, for a title or brief that is no longer saved.', 'warning'); continue; }
+      choose(task.id); description = late.result.text; dirty = true; descriptionField.update({ value: description });
+      notice.show('Your brief is ready', 'It was written while the board was closed. Save changes to keep it.', 'success');
+    }
+  };
+  host.onLateGenerateResult((late) => {
+    if (late.request.system !== BRIEF_SYSTEM) return;
+    lateBriefs.push(late); applyLateBriefs();
+  });
+=======
+  const lateBriefs: LateGenerateResult[] = [];
+  const applyLateBriefs = () => {
+    while (ready && !dirty) {
+      const late = lateBriefs.shift();
+      if (!late) return;
+      if (!late.ok) { notice.show('Draft a brief failed', late.error, 'error'); continue; }
+      const prompt = late.request.prompt;
+      const task = tasks.find((entry) => briefPrompt(entry.title, entry.description ?? '') === prompt);
+      if (!task) { notice.show('A brief arrived for a task that changed', 'It was written while the board was closed, for a title or brief that is no longer saved.', 'warning'); continue; }
+      choose(task.id); description = late.result.text; dirty = true; descriptionField.update({ value: description });
+      notice.show('Your brief is ready', 'It was written while the board was closed. Save changes to keep it.', 'success');
+    }
+  };
+  host.onLateGenerateResult((late) => {
+    if (late.request.system !== BRIEF_SYSTEM) return;
+    lateBriefs.push(late); applyLateBriefs();
+  });
+>>>>>>> upstream/main
   void reload();
   void loadNotes();
   return stopWorkspace;

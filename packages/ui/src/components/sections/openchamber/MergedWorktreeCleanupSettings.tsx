@@ -3,8 +3,15 @@ import { SettingsCheckboxRow, SettingsSection } from '@/components/sections/shar
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 
+<<<<<<< HEAD:packages/ui/src/components/sections/openchamber/MergedWorktreeCleanupSettings.tsx
 /** When a worktree whose work is over gets archived: on Done, and after its PR is merged. Both off by default. */
 export const MergedWorktreeCleanupSettings: React.FC = () => {
+||||||| bc50ba56aa:packages/ui/src/components/sections/openchamber/FinishedWorktreesSettings.tsx
+/** When a worktree whose work is over gets archived: on Done, and after its PR is merged. Both off by default. */
+export const FinishedWorktreesSettings: React.FC = () => {
+=======
+export const FinishedWorktreesSettings: React.FC = () => {
+>>>>>>> upstream/main:packages/ui/src/components/sections/openchamber/FinishedWorktreesSettings.tsx
   const { t } = useI18n();
   const archiveOnDone = useUIStore((state) => state.worktreeArchiveOnDoneEnabled);
   const setArchiveOnDone = useUIStore((state) => state.setWorktreeArchiveOnDoneEnabled);

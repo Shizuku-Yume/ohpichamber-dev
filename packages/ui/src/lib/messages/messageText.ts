@@ -1,6 +1,5 @@
 import type { Part, TextPart } from '@openchamber/agent-contract';
 
-/** The non-empty text parts of an assistant message, trimmed, in order. Tool and reasoning parts are left out. */
 export const assistantTextSegments = (parts: Part[]): string[] => parts
     .filter((part): part is TextPart => part.type === 'text')
     .map((part) => part.content.trim())

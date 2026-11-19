@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * Projection of the enterprise policy the connected runtime enforces
  * (`packages/web/server/lib/enterprise-mode.js`). The OpenChamber host is
@@ -5,6 +6,16 @@
  * what the policy forbids; this store only lets Settings hide those ways in
  * and say who decided. Nothing here is persisted.
  */
+||||||| bc50ba56aa
+/**
+ * Projection of the enterprise policy the connected runtime enforces
+ * (`packages/web/server/lib/enterprise-mode.js`, read by the web server and by
+ * the VS Code extension host alike). The runtime is authoritative and refuses
+ * what the policy forbids; this store only lets Settings hide those ways in
+ * and say who decided. Nothing here is persisted.
+ */
+=======
+>>>>>>> upstream/main
 import { z } from 'zod';
 import { create } from 'zustand';
 
@@ -16,8 +27,14 @@ const enterprisePolicySchema = z.object({
   source: z.enum(['policy-file', 'environment']).nullable(),
   organization: z.string().min(1).nullable(),
   policyError: z.string().min(1).nullable(),
-  // Servers from before the network rule never blocked it.
   networkAccessBlocked: z.boolean().default(false),
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // OpenCode CLI path the administrator pinned; servers from before the pin have none.
+  opencodeBinary: z.string().min(1).nullable().default(null),
+=======
+  opencodeBinary: z.string().min(1).nullable().default(null),
+>>>>>>> upstream/main
 });
 
 type EnterprisePolicy = z.infer<typeof enterprisePolicySchema>;
@@ -30,11 +47,6 @@ const NO_POLICY: EnterprisePolicy = {
   networkAccessBlocked: false,
 };
 
-/**
- * The policy, or null when this server predates the route (404): those
- * servers report enterprise mode only through `/api/routing`. Throws on any
- * other failure, which must not read as "no policy".
- */
 const fetchEnterprisePolicy = async (): Promise<EnterprisePolicy | null> => {
   const response = await runtimeFetch('/api/openchamber/enterprise-policy');
   if (response.status === 404) return null;
@@ -47,7 +59,6 @@ interface EnterprisePolicyStoreState extends EnterprisePolicy {
   resetForRuntime: () => void;
 }
 
-/** Bumped on every load and every runtime switch; a response from an older generation is dropped. */
 let loadGeneration = 0;
 
 export const useEnterprisePolicyStore = create<EnterprisePolicyStoreState>()((set) => ({
@@ -60,7 +71,6 @@ export const useEnterprisePolicyStore = create<EnterprisePolicyStoreState>()((se
       if (generation !== loadGeneration) return;
       set(policy ?? NO_POLICY);
     } catch (error) {
-      // A failed read keeps what was known from this same runtime.
       console.warn('[enterprise] policy read failed:', error instanceof Error ? error.message : error);
     }
   },
@@ -71,17 +81,12 @@ export const useEnterprisePolicyStore = create<EnterprisePolicyStoreState>()((se
   },
 }));
 
-/**
- * Whether enterprise mode keeps Jev off: on, and no administrator's endpoint
- * answers. Pages that only configure Jev have nothing to offer then.
- */
 export const useJevBlockedByEnterprise = (): boolean => {
   const enterpriseMode = useEnterpriseMode();
   const jevAvailable = useRoutingStore((state) => state.jevAvailable);
   return enterpriseMode && !jevAvailable;
 };
 
-/** Whether enterprise mode is on for the connected runtime, also on servers that report it only through routing. */
 export const useEnterpriseMode = (): boolean => {
   const fromPolicy = useEnterprisePolicyStore((state) => state.enterpriseMode);
   const fromRouting = useRoutingStore((state) => state.enterpriseMode);

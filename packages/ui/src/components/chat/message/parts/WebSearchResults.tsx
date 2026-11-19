@@ -6,12 +6,22 @@ import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { openExternalUrl } from '@/lib/url';
 import { useWebSearchStore } from '@/stores/useWebSearchStore';
 
+<<<<<<< HEAD
 /**
  * A finished `websearch` call as a list of result cards: site icon and
  * domain, the title linking out, the publish date, and a clamped snippet.
  * Native response details are projected by the canonical worker; malformed
  * responses retain the ordinary tool output renderer.
  */
+||||||| bc50ba56aa
+/**
+ * A finished `websearch` call as a list of result cards: site icon and
+ * domain, the title linking out, the publish date, and a clamped snippet.
+ * Parsing lives in `@/lib/opencode/websearch`; a result it cannot read keeps
+ * the plain text renderer.
+ */
+=======
+>>>>>>> upstream/main
 
 const formatPublished = (iso: string): string | null => {
     const date = new Date(iso);
@@ -27,8 +37,6 @@ const originOf = (url: string): string | null => {
     }
 };
 
-// The site's own icon, fetched from the site itself (no third-party icon
-// service sees the domain); the globe stands in when it has none.
 const SiteIcon: React.FC<{ url: string }> = ({ url }) => {
     const origin = originOf(url);
     const [failed, setFailed] = React.useState(false);
@@ -92,9 +100,14 @@ const ResultCard: React.FC<{ result: NativeSearchSource }> = ({ result }) => {
 
 export const WebSearchResults: React.FC<{ output: NativeSearchOutput }> = ({ output }) => {
     const { t } = useI18n();
+<<<<<<< HEAD
     const response = output.details.response;
     const providerId = response.provider;
     // Name the provider when Settings already read the list; the id otherwise.
+||||||| bc50ba56aa
+    // Name the provider when Settings already read the list; the id otherwise.
+=======
+>>>>>>> upstream/main
     const providerName = useWebSearchStore((store) => {
         if (!providerId) return null;
         const state = store.state;

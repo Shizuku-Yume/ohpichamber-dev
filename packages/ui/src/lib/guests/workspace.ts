@@ -7,6 +7,16 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getAllSyncSessionMap, getDirectoryState, getSyncChildStores } from '@/sync/sync-refs';
 import { getLinkedIssues, isLinkedChange } from '@/lib/linkedIssues';
+<<<<<<< HEAD
+||||||| bc50ba56aa
+import { normalizePath } from '@/lib/pathNormalization';
+=======
+import { isSessionInWork } from '@/lib/sessionWorkMetadata';
+import { isSessionUnread } from '@/sync/session-unread';
+import { currentLiveTool, useSessionLiveWorkStore } from '@/sync/session-live-work';
+import { findSessionModelKey, limitsForAnsweringModel } from '@/lib/routing/contextWindowLimits';
+import { normalizePath } from '@/lib/pathNormalization';
+>>>>>>> upstream/main
 import { checkoutHoldsDirectory, checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
@@ -46,6 +56,33 @@ const toWorktree = (entry: WorktreeMetadata): GuestWorktree => ({
   directory: entry.path, name: entry.name ?? entry.label, branch: entry.branch,
   status: entry.worktreeStatus === 'not-a-repo' ? 'invalid' : entry.worktreeStatus ?? 'ready',
 });
+const TOOL_TARGET_MAX = 200;
+
+const isAbsolute = (path: string): boolean => path.startsWith('/') || /^[A-Za-z]:/.test(path);
+
+const resolvePath = (path: string, root: string): string => {
+  const joined = isAbsolute(path) ? path : `${root}/${path}`;
+  const segments: string[] = [];
+  for (const segment of joined.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') segments.pop();
+    else segments.push(segment);
+  }
+  const lead = joined.startsWith('//') ? '//' : joined.startsWith('/') ? '/' : '';
+  return `${lead}${segments.join('/')}`;
+};
+
+const toolTarget = (path: string, directory: string): string => {
+  const root = normalizePath(directory) ?? directory;
+  const full = resolvePath(normalizePath(path) ?? path, root);
+  const prefix = root.endsWith('/') ? root : `${root}/`;
+  let target: string;
+  if (full === root || `${full}/` === prefix) target = '.';
+  else if (full.startsWith(prefix)) target = full.slice(prefix.length);
+  else target = full.split('/').pop() || '.';
+  return target.length > TOOL_TARGET_MAX ? `…${target.slice(-(TOOL_TARGET_MAX - 1))}` : target;
+};
+
 const combinedState = (states: GuestLoadState[]): GuestLoadState => states.includes('error') ? 'error' : states.includes('loading') ? 'loading' : 'ready';
 
 const guestItems = (session: CanonicalSession, guestId: string): GuestSessionRecord['items'] => {
@@ -73,7 +110,24 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
   const attachedRoot = normalizePath(attached?.path);
   const worktree = (holdingRoot ? worktrees.get(holdingRoot) : undefined)
     ?? (attached && attachedRoot && checkoutHoldsDirectory(attachedRoot, sessionDirectory) ? toWorktree(attached) : null);
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const connected = useConfigStore.getState().isConnected;
+  const statusInvalidated = child?.sessionStatusInvalidated?.[session.id] === true;
+  const linked = getLinkedIssues(session);
+=======
+  const connected = useConfigStore.getState().isConnected;
+  const statusInvalidated = child?.sessionStatusInvalidated?.[session.id] === true;
+  const linked = getLinkedIssues(session);
+  const liveWork = useSessionLiveWorkStore.getState();
+  const liveTool = currentLiveTool(liveWork.tools.get(session.id));
+  const reading = liveWork.context.get(session.id);
+  const contextLimit = reading?.state === 'measured'
+    ? limitsForAnsweringModel(findSessionModelKey(session), useConfigStore.getState().providers).context
+    : 0;
+>>>>>>> upstream/main
   let activity: GuestSessionRecord['activity'] = 'unknown';
+<<<<<<< HEAD
   if (useConfigStore.getState().isConnected) {
     const childReady = child?.sessionStatusReady === true && child.sessionStatusInvalidated?.[id] !== true;
     activity = liveStatus === 'running' || session.runtimeStatus === 'running' && liveStatus === undefined ? 'running'
@@ -82,19 +136,70 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
       : childReady || observed ? 'idle' : 'unknown';
     if (child?.permission[id]?.length) activity = 'waiting-permission';
     else if (child?.form[id]?.length) activity = 'waiting-question';
+||||||| bc50ba56aa
+  if (connected) {
+    if (status?.type === 'busy') activity = 'running';
+    else if (status?.type === 'retry') activity = 'retrying';
+    else if (status?.type === 'idle' || (!statusInvalidated && (child?.sessionStatusReady || observed))) activity = 'idle';
+    if (child?.permission[session.id]?.length) activity = 'waiting-permission';
+    // v2 replaced the v1 question tool with typed forms; both are "the agent
+    // is waiting for the user to answer", so the public activity value stays.
+    else if (child?.form[session.id]?.length) activity = 'waiting-question';
+=======
+  if (connected) {
+    if (status?.type === 'busy') activity = 'running';
+    else if (status?.type === 'retry') activity = 'retrying';
+    else if (status?.type === 'idle' || (!statusInvalidated && (child?.sessionStatusReady || observed))) activity = 'idle';
+    if (child?.permission[session.id]?.length) activity = 'waiting-permission';
+    else if (child?.form[session.id]?.length) activity = 'waiting-question';
+>>>>>>> upstream/main
   }
   // The guest SDK has no cancelled outcome; do not label cancellation a failure.
   const outcome = observed?.outcome;
   return {
+<<<<<<< HEAD
     id, title: session.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null,
     createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity,
     outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null,
     items: guestItems(session, guestId),
     links: getLinkedIssues(session).map((item) => ({ title: item.title, url: item.url, kind: isLinkedChange(item) ? 'change' : 'issue', linkedAt: item.linkedAt })),
+||||||| bc50ba56aa
+    id: session.id, title: session.title || session.id, projectId, directory,
+    ...(session.agent ? { agent: session.agent } : {}),
+    parentId: session.parentID ?? null, createdAt: session.time.created, updatedAt: session.time.updated,
+    archivedAt: session.time.archived || null, worktree,
+    activity, outcome: activity === 'idle' ? observed?.outcome ?? null : null,
+    items: linked.flatMap((item) => {
+      if (item.kind !== 'guest' || item.providerId !== guestId) return [];
+      const reference: GuestSessionRecord['items'][number] = { id: item.identifier };
+      if (item.data !== undefined) reference.data = item.data;
+      return [reference];
+    }),
+    // Every extension with `sessions` sees every link, the agent's and the
+    // user's too: no more than the session titles it already reads. Another
+    // extension's opaque `data` stays out.
+    links: linked.map((item) => ({ title: item.title, url: item.url, kind: isLinkedChange(item) ? 'change' : 'issue', linkedAt: item.linkedAt })),
+=======
+    id: session.id, title: session.title || session.id, projectId, directory,
+    ...(session.agent ? { agent: session.agent } : {}),
+    parentId: session.parentID ?? null, createdAt: session.time.created, updatedAt: session.time.updated,
+    archivedAt: session.time.archived || null, worktree,
+    activity, outcome: activity === 'idle' ? observed?.outcome ?? null : null,
+    items: linked.flatMap((item) => {
+      if (item.kind !== 'guest' || item.providerId !== guestId) return [];
+      const reference: GuestSessionRecord['items'][number] = { id: item.identifier };
+      if (item.data !== undefined) reference.data = item.data;
+      return [reference];
+    }),
+    links: linked.map((item) => ({ title: item.title, url: item.url, kind: isLinkedChange(item) ? 'change' : 'issue', linkedAt: item.linkedAt })),
+    inWork: useUIStore.getState().sessionWorkEnabled && !session.parentID && !session.time.archived && isSessionInWork(session),
+    unread: isSessionUnread(session),
+    tool: liveTool && activity === 'running' ? { name: liveTool.name, target: liveTool.path ? toolTarget(liveTool.path, directory) : null } : null,
+    context: reading?.state === 'measured' ? { tokens: reading.tokens, limit: contextLimit > 0 ? contextLimit : null } : null,
+>>>>>>> upstream/main
   };
 };
 
-/** Store projection only. Layout-owned sync and topology discovery supply hydration. */
 export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string): GuestWorkspaceSnapshot => {
   const projects = useProjectsStore.getState();
   if (query.kind === 'projects') return {
@@ -116,16 +221,33 @@ export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string):
     return { directory, state };
   });
   const worktreeRoots = worktrees.map((worktree) => normalizePath(worktree.directory) ?? worktree.directory);
-  // A session of a project opened on a folder of its repository runs in that
-  // folder of its worktree (`<worktree>/ai`), so a worktree holds its sub-folders.
   const belongsToProject = (directory: string): boolean => {
     const key = normalizePath(directory) ?? directory;
     return directories.has(key) || worktreeRoots.some((root) => checkoutHoldsSubfolder(root, key));
   };
+<<<<<<< HEAD
   const records = new Map<string, { session: CanonicalSession; directory: string }>();
   for (const session of getAllSyncSessionMap().values()) {
     const directory = resolveGlobalSessionDirectory(session);
     if (directory && belongsToProject(directory)) records.set(session.sessionId, { session, directory });
+||||||| bc50ba56aa
+  const records = new Map<string, Session>();
+  // Global records own complete membership, including archives. Child stores fill discovery gaps.
+  for (const [directory, ids] of global.structure.activeIdsByDirectory) {
+    if (!belongsToProject(directory)) continue;
+    for (const id of ids) {
+      const session = global.entityById.get(id);
+      if (session) records.set(id, session);
+    }
+=======
+  const records = new Map<string, Session>();
+  for (const [directory, ids] of global.structure.activeIdsByDirectory) {
+    if (!belongsToProject(directory)) continue;
+    for (const id of ids) {
+      const session = global.entityById.get(id);
+      if (session) records.set(id, session);
+    }
+>>>>>>> upstream/main
   }
   const worktreeByPath = new Map(worktrees.map((worktree) => [normalizePath(worktree.directory) ?? worktree.directory, worktree]));
   return { ...query, state: combinedState([topologyState, ...coverage.map((entry) => entry.state)]), coverage, sessions: [...records.values()].map(({ session, directory }) => projectSession(session, directory, query.projectId, worktreeByPath, guestId)) };
@@ -134,7 +256,6 @@ export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string):
 type Observer = { listeners: Set<(snapshot: GuestWorkspaceSnapshot) => void>; snapshot: GuestWorkspaceSnapshot; dispose: () => void };
 const observers = new Map<string, Observer>();
 
-/** One projection/subscription set per extension and query, shared by its frames. */
 export const observeGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string, listener: (snapshot: GuestWorkspaceSnapshot) => void): (() => void) => {
   const key = JSON.stringify([getRuntimeKey(), guestId, query]);
   let observer = observers.get(key);
@@ -169,7 +290,9 @@ export const observeGuestWorkspace = (query: GuestWorkspaceQuery, guestId: strin
       unsubs.push(
         useGlobalSessionsStore.subscribe((state, previous) => { if (state.activeSessions !== previous.activeSessions || state.archivedSessions !== previous.archivedSessions || state.status !== previous.status) update(); }),
         useGlobalSessionStatusStore.subscribe(update),
-        useConfigStore.subscribe((state, previous) => { if (state.isConnected !== previous.isConnected) update(); }),
+        useConfigStore.subscribe((state, previous) => { if (state.isConnected !== previous.isConnected || state.providers !== previous.providers) update(); }),
+        useSessionLiveWorkStore.subscribe(update),
+        useUIStore.subscribe((state, previous) => { if (state.sessionWorkEnabled !== previous.sessionWorkEnabled) update(); }),
         manager.subscribeBootstrap(update),
         manager.subscribeAllSelected((state) => state.session, update),
         manager.subscribeAllSelected((state) => state.permission, update),

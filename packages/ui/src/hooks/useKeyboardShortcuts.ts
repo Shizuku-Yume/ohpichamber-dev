@@ -1,6 +1,8 @@
 import React from 'react';
+import { hasReceivedPages, useReceivedPagesStore } from '@/components/chat/sharePages/received/receivedPagesStore';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
-import { isTerminalEventTarget } from '@/lib/terminalFocus';
+import { getTerminalFocusOwner, isTerminalEventTarget } from '@/lib/terminalFocus';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { activateAdjacentSessionTab, activateSessionTabByIndex, closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
@@ -12,8 +14,16 @@ import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useKeybinds } from '@/hooks/useKeybind';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
+<<<<<<< HEAD
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
+||||||| bc50ba56aa
+import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
+import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isVSCodeRuntime } from '@/lib/desktop';
+=======
+import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
+import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+>>>>>>> upstream/main
 import {
   eventMatchesShortcut,
   eventMatchesShortcutPrefix,
@@ -46,6 +56,17 @@ import {
   invokeActiveSelectionAddToChat,
 } from '@/lib/addSelectionToChat';
 import { isIMECompositionEvent } from '@/lib/ime';
+<<<<<<< HEAD
+||||||| bc50ba56aa
+import { getNextFavoriteModel } from '@/lib/modelRefs';
+import { dispatchPromptHistorySearch } from '@/components/chat/composer/state/promptHistorySearchRoute';
+import { isLinuxPlatform } from '@/lib/platform';
+=======
+import { useComposerAbortEscape } from './useComposerAbortEscape';
+import { getNextFavoriteModel } from '@/lib/modelRefs';
+import { dispatchPromptHistorySearch } from '@/components/chat/composer/state/promptHistorySearchRoute';
+import { isLinuxPlatform } from '@/lib/platform';
+>>>>>>> upstream/main
 import { canUseDigitShortcut, hasActiveBtwComposer, hasOpenDropdown, isEditableEventTarget, shouldStopDropdownImeEscape } from './keyboard-shortcut-dom';
 
 const dropdownTargetSelector = [
@@ -56,17 +77,22 @@ const dropdownTargetSelector = [
 
 export const useKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
-  const armAbortPrompt = useSessionUIStore((s) => s.armAbortPrompt);
-  const clearAbortPrompt = useSessionUIStore((s) => s.clearAbortPrompt);
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
   const effectiveDirectory = useEffectiveDirectory();
   const activeProject = useProjectsStore((s) => s.getActiveProject());
   const { themeMode, setThemeMode } = useThemeSystem();
   const { phase: sessionPhase } = useCurrentSessionActivity();
-  const abortPrimedUntilRef = React.useRef<number | null>(null);
-  const abortPrimedSessionRef = React.useRef<string | null>(null);
-  const abortPrimedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { handleKeyDown: handleAbortEscapeKeyDown, reset: resetAbortPriming } = useComposerAbortEscape({
+    isBlocked: () => hasOverlayOpen() || hasOpenDropdown(),
+    resolveTarget: (target) => {
+      const pinnedColumn = target.closest<HTMLElement>('[data-chat-column="pinned"]');
+      return pinnedColumn
+        ? { sessionId: pinnedColumn.dataset.chatSessionId ?? null, working: pinnedColumn.dataset.chatWorking === 'true' }
+        : { sessionId: currentSessionId, working: sessionPhase !== 'idle' };
+    },
+    abort: (sessionId) => { void sessionActions.abortCurrentOperation(sessionId); },
+  });
   const themeModeRef = React.useRef(themeMode);
   const dispatcherRef = React.useRef<ShortcutDispatcher | null>(null);
   const selectionToolbarDispatcherRef = React.useRef<ShortcutDispatcher | null>(null);
@@ -98,16 +124,6 @@ export const useKeyboardShortcuts = () => {
 
   React.useEffect(() => { themeModeRef.current = themeMode; }, [themeMode]);
 
-  const resetAbortPriming = React.useCallback(() => {
-    if (abortPrimedTimeoutRef.current) {
-      clearTimeout(abortPrimedTimeoutRef.current);
-      abortPrimedTimeoutRef.current = null;
-    }
-    abortPrimedUntilRef.current = null;
-    abortPrimedSessionRef.current = null;
-    clearAbortPrompt();
-  }, [clearAbortPrompt]);
-
   const toggleTerminalSurface = () => {
     if (!currentDirectory) return;
     useUIStore.getState().openContextSurface(normalizeContextPanelDirectoryKey(currentDirectory), 'terminal');
@@ -126,13 +142,26 @@ export const useKeyboardShortcuts = () => {
 
   useKeybinds({
     open_command_palette: () => {
+<<<<<<< HEAD
+||||||| bc50ba56aa
+      // The palette renders only in the MainLayout (web and desktop); in VS Code
+      // this keystroke is Quick Open.
+      if (isVSCodeRuntime()) return false;
+=======
+      if (isVSCodeRuntime()) return false;
+>>>>>>> upstream/main
       useUIStore.getState().toggleCommandPalette();
     },
     open_timeline_dialog: () => {
       useUIStore.getState().setTimelineDialogOpen(true);
     },
     toggle_source_board: () => {
+<<<<<<< HEAD
       // A desktop and web page: the phone shell has no board.
+||||||| bc50ba56aa
+      // A desktop and web page: the phone shell and VS Code have no board.
+=======
+>>>>>>> upstream/main
       const state = useUIStore.getState();
       if (state.isMobile) return false;
       state.setSourceBoardOpen(!state.isSourceBoardOpen);
@@ -143,9 +172,6 @@ export const useKeyboardShortcuts = () => {
         state.setSessionSwitcherOpen(true);
         return;
       }
-      // The switcher dropdown only mounts while the sidebar is collapsed;
-      // with the sidebar visible the list is already on screen, so the
-      // shortcut opens the sidebar's session search instead.
       if (state.isSidebarOpen) {
         window.dispatchEvent(new CustomEvent('openchamber:sidebar-session-search'));
         return;
@@ -174,6 +200,21 @@ export const useKeyboardShortcuts = () => {
     open_help: () => {
       useUIStore.getState().toggleHelpDialog();
     },
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    open_project_actions: () => {
+      // Desktop and web only: VS Code and the phone shell run no project actions.
+      const state = useUIStore.getState();
+      if (state.isMobile || isVSCodeRuntime()) return false;
+      state.setProjectActionsDialogOpen(!state.isProjectActionsDialogOpen);
+    },
+=======
+    open_project_actions: () => {
+      const state = useUIStore.getState();
+      if (state.isMobile || isVSCodeRuntime()) return false;
+      state.setProjectActionsDialogOpen(!state.isProjectActionsDialogOpen);
+    },
+>>>>>>> upstream/main
     new_mini_chat: () => {
       if (!canUseElectronDesktopIPC()) return false;
       void invokeDesktop('desktop_open_draft_mini_chat_window', {
@@ -256,12 +297,31 @@ export const useKeyboardShortcuts = () => {
       }
     },
     toggle_terminal: () => {
+<<<<<<< HEAD
       if (useUIStore.getState().isMobile) return false;
+||||||| bc50ba56aa
+      // Desktop and web only: no terminal surface renders in VS Code, where
+      // this keystroke toggles the bottom panel.
+      if (useUIStore.getState().isMobile || isVSCodeRuntime()) return false;
+=======
+      if (useUIStore.getState().isMobile || isVSCodeRuntime()) return false;
+>>>>>>> upstream/main
       return toggleTerminalSurface();
     },
+<<<<<<< HEAD
     toggle_terminal_expanded: () => {
       if (useUIStore.getState().isMobile) return false;
       return toggleTerminalSurfaceExpanded();
+||||||| bc50ba56aa
+    toggle_context_panel_expanded: () => {
+      // No ContextPanel renders in VS Code, so the store change would be invisible.
+      if (useUIStore.getState().isMobile || isVSCodeRuntime() || !currentDirectory) return false;
+      toggleExpandedContextZone(currentDirectory);
+=======
+    toggle_context_panel_expanded: () => {
+      if (useUIStore.getState().isMobile || isVSCodeRuntime() || !currentDirectory) return false;
+      toggleExpandedContextZone(currentDirectory);
+>>>>>>> upstream/main
     },
     open_model_selector: () => {
       if (hasActiveBtwComposer()) return false;
@@ -333,8 +393,6 @@ export const useKeyboardShortcuts = () => {
   });
 
   function navigateSessionHistoryByShortcut(event: KeyboardEvent, delta: -1 | 1): boolean | void {
-    // An editor that already handled the chord (CodeMirror outdent/indent)
-    // keeps it.
     if (event.defaultPrevented) return false;
     return navigateSessionHistory(delta) ? undefined : false;
   }
@@ -369,6 +427,7 @@ export const useKeyboardShortcuts = () => {
       const handler = shortcutRegistry.get(actionId);
       return handler ? handler(event) !== false : false;
     };
+    const terminalZoomKeyCodes = new Set<string>();
     const handleTerminalShortcutCapture = (event: KeyboardEvent) => {
       if (!isTerminalEventTarget(event.target)) return;
       const getBinding = (actionId: ShortcutActionId) => getEffectiveShortcutCombo(
@@ -380,6 +439,19 @@ export const useKeyboardShortcuts = () => {
       if (actionId && invokeRegistered(actionId, event)) {
         event.preventDefault();
         event.stopPropagation();
+        return;
+      }
+      if (getTerminalFocusOwner(event.target) === 'main' && !isDesktopShell() && !isVSCodeRuntime() && !isMobileSurfaceRuntime() && !event.defaultPrevented && !isIMECompositionEvent(event)) {
+        const zoom = eventMatchesShortcut(event, getBinding('zoom_in')) ? 'zoom-in'
+          : eventMatchesShortcut(event, getBinding('zoom_out')) ? 'zoom-out'
+          : eventMatchesShortcut(event, getBinding('zoom_reset')) ? 'zoom-reset' : null;
+        if (zoom) {
+          event.preventDefault();
+          event.stopPropagation();
+          terminalZoomKeyCodes.add(event.code);
+          window.dispatchEvent(new CustomEvent('openchamber:zoom', { detail: zoom }));
+          return;
+        }
       }
     };
     const handleSelectionToolbarKeyDownCapture = (event: KeyboardEvent) => {
@@ -446,6 +518,7 @@ export const useKeyboardShortcuts = () => {
       if (state.isSettingsDialogOpen) {
         event.preventDefault();
         state.setSettingsDialogOpen(false);
+<<<<<<< HEAD
         resetAbortPriming();
         return;
       }
@@ -495,12 +568,66 @@ export const useKeyboardShortcuts = () => {
         }
       }, Math.max(expiresAt - now, 0));
     };
+||||||| bc50ba56aa
+      }
+    };
+    // Double Escape stops a run only from a chat's own composer. Escape
+    // anywhere else belongs to what has focus (dialogs, panels, menus), and
+    // an Escape the composer spent on itself (a picker, shell mode, the
+    // expanded input, a selection) arrives here already prevented.
+    const handleAbortEscapeKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const target = event.target instanceof Element ? event.target : null;
+      const fromComposer = Boolean(target?.closest('[data-chat-input="true"]'))
+        && !target?.closest('[data-btw-composer="true"]');
+      if (event.defaultPrevented || !fromComposer || isIMECompositionEvent(event)) {
+        resetAbortPriming();
+        return;
+      }
+      const hasOverlay = hasOverlayOpen() || hasOpenDropdown();
+      // The composer of a chat pinned in the side panel stops that chat's
+      // session, which the column names on its root; the main composer stops
+      // the main chat's.
+      const pinnedColumn = target?.closest<HTMLElement>('[data-chat-column="pinned"]') ?? null;
+      const abortSessionId = pinnedColumn ? pinnedColumn.dataset.chatSessionId ?? null : currentSessionId;
+      const abortable = pinnedColumn ? pinnedColumn.dataset.chatWorking === 'true' : sessionPhase !== 'idle';
+      if (
+        hasOverlay
+        || !abortable
+        || !abortSessionId
+      ) {
+        resetAbortPriming();
+        return;
+      }
+      const now = Date.now();
+      if (abortPrimedUntilRef.current && now < abortPrimedUntilRef.current && abortPrimedSessionRef.current === abortSessionId) {
+        resetAbortPriming();
+        if (pinnedColumn) {
+          event.preventDefault();
+          void sessionActions.abortCurrentOperation(abortSessionId);
+        } else if (invokeRegistered('abort_run', event)) {
+          event.preventDefault();
+        }
+        return;
+      }
+      event.preventDefault();
+      const expiresAt = armAbortPrompt(3000, abortSessionId) ?? now + 3000;
+      abortPrimedUntilRef.current = expiresAt;
+      abortPrimedSessionRef.current = abortSessionId;
+      if (abortPrimedTimeoutRef.current) clearTimeout(abortPrimedTimeoutRef.current);
+      abortPrimedTimeoutRef.current = setTimeout(() => {
+        if (abortPrimedUntilRef.current && Date.now() >= abortPrimedUntilRef.current) {
+          resetAbortPriming();
+        }
+      }, Math.max(expiresAt - now, 0));
+    };
+=======
+      }
+    };
+>>>>>>> upstream/main
     const handleActivePrefixKeyDownCapture = (event: KeyboardEvent) => {
       if (isTerminalEventTarget(event.target)) return;
       if (!dispatcher.hasActivePrefix()) return;
-      // An unmodified completion key typed into an editable target is only a
-      // deliberate sequence when the prefix was armed from that same target;
-      // otherwise it is regular typing and must not be swallowed.
       if (
         !event.ctrlKey && !event.metaKey && !event.altKey
         && isEditableEventTarget(event.target)
@@ -551,6 +678,13 @@ export const useKeyboardShortcuts = () => {
             screenWidth: window.innerWidth,
             tabs: panel?.tabs ?? [],
             sourceControlConnected: Object.values(useSourceControlAuthStore.getState().entries).some((entry) => entry.status?.status === 'connected'),
+<<<<<<< HEAD
+||||||| bc50ba56aa
+            workflowsShown: isWorkflowsSurfaceShown(panel?.tabs ?? [], effectiveDirectory),
+=======
+            workflowsShown: isWorkflowsSurfaceShown(panel?.tabs ?? [], effectiveDirectory),
+            receivedPagesShown: hasReceivedPages(useReceivedPagesStore.getState()),
+>>>>>>> upstream/main
             extras: enabledGuestSurfaces(useGuestsStore.getState().guests, getRuntimeUrlResolver().authenticatedAsset),
           });
           const target = visibleSurfaces[switchSurfaceDigit - 1];
@@ -579,7 +713,57 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
+<<<<<<< HEAD
       if (dispatcher.dispatch(event)) event.preventDefault();
+||||||| bc50ba56aa
+      if (dispatcher.dispatch(event)) {
+        event.preventDefault();
+        return;
+      }
+      if (!useUIStore.getState().isMobile && !hasOverlayOpen()) inputRedirect.redirectKey(event);
+    };
+    const handlePaste = (event: ClipboardEvent) => {
+      const allowComposerFallback = !useUIStore.getState().isMobile
+        && !hasOverlayOpen()
+        && !hasActiveSelectionToolbar();
+      inputRedirect.redirectPaste(event, allowComposerFallback);
+    };
+    let windowFocusFrame: number | null = null;
+    const handleWindowFocus = () => {
+      if (useUIStore.getState().isMobile) return;
+      if (windowFocusFrame !== null) cancelAnimationFrame(windowFocusFrame);
+      // The element that held focus gets it back after the window's own
+      // event; check what holds it once that has happened.
+      windowFocusFrame = requestAnimationFrame(() => {
+        windowFocusFrame = requestAnimationFrame(() => {
+          windowFocusFrame = null;
+          if (!hasOverlayOpen()) inputRedirect.refocusAfterWindowFocus();
+        });
+      });
+=======
+      if (dispatcher.dispatch(event)) {
+        event.preventDefault();
+        return;
+      }
+      if (!useUIStore.getState().isMobile && !hasOverlayOpen()) inputRedirect.redirectKey(event);
+    };
+    const handlePaste = (event: ClipboardEvent) => {
+      const allowComposerFallback = !useUIStore.getState().isMobile
+        && !hasOverlayOpen()
+        && !hasActiveSelectionToolbar();
+      inputRedirect.redirectPaste(event, allowComposerFallback);
+    };
+    let windowFocusFrame: number | null = null;
+    const handleWindowFocus = () => {
+      if (useUIStore.getState().isMobile) return;
+      if (windowFocusFrame !== null) cancelAnimationFrame(windowFocusFrame);
+      windowFocusFrame = requestAnimationFrame(() => {
+        windowFocusFrame = requestAnimationFrame(() => {
+          windowFocusFrame = null;
+          if (!hasOverlayOpen()) inputRedirect.refocusAfterWindowFocus();
+        });
+      });
+>>>>>>> upstream/main
     };
     const handleKeyHoldDown = (event: KeyboardEvent) => {
       heldKeysRef.current.add(event.key.toLowerCase());
@@ -588,9 +772,11 @@ export const useKeyboardShortcuts = () => {
     const handleKeyUp = (event: KeyboardEvent) => {
       heldKeysRef.current.delete(event.key.toLowerCase());
       heldKeysRef.current.delete(resolveShortcutEventKey(event).toLowerCase());
+      if (terminalZoomKeyCodes.delete(event.code)) event.stopPropagation();
     };
     const handleBlur = () => {
       heldKeysRef.current.clear();
+      terminalZoomKeyCodes.clear();
       dispatcher.handleBlur();
       selectionToolbarDispatcher.handleBlur();
     };
@@ -602,6 +788,38 @@ export const useKeyboardShortcuts = () => {
     window.addEventListener('keydown', handleActivePrefixKeyDownCapture, true);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('blur', handleBlur);
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    window.addEventListener('pointerdown', inputRedirect.rememberColumn, true);
+    window.addEventListener('pointerup', inputRedirect.releaseMiddleClick, true);
+    window.addEventListener('pointercancel', inputRedirect.releaseMiddleClick, true);
+    window.addEventListener('focusin', inputRedirect.rememberColumn, true);
+    // Pair a Linux middle click with its paste before a focused editor can
+    // consume it. Keyboard paste keeps the bubble listener below.
+    const captureMiddleClickPaste = isLinuxPlatform();
+    const handleMiddleClickPaste = (event: ClipboardEvent) => {
+      inputRedirect.captureMiddleClickPaste(event);
+    };
+    if (captureMiddleClickPaste) {
+      window.addEventListener('paste', handleMiddleClickPaste, true);
+    }
+    window.addEventListener('paste', handlePaste);
+    window.addEventListener('focus', handleWindowFocus);
+=======
+    window.addEventListener('pointerdown', inputRedirect.rememberColumn, true);
+    window.addEventListener('pointerup', inputRedirect.releaseMiddleClick, true);
+    window.addEventListener('pointercancel', inputRedirect.releaseMiddleClick, true);
+    window.addEventListener('focusin', inputRedirect.rememberColumn, true);
+    const captureMiddleClickPaste = isLinuxPlatform();
+    const handleMiddleClickPaste = (event: ClipboardEvent) => {
+      inputRedirect.captureMiddleClickPaste(event);
+    };
+    if (captureMiddleClickPaste) {
+      window.addEventListener('paste', handleMiddleClickPaste, true);
+    }
+    window.addEventListener('paste', handlePaste);
+    window.addEventListener('focus', handleWindowFocus);
+>>>>>>> upstream/main
     return () => {
       window.removeEventListener('keydown', handleKeyHoldDown, true);
       window.removeEventListener('keydown', handleSelectionToolbarKeyDownCapture, true);
@@ -612,7 +830,15 @@ export const useKeyboardShortcuts = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('blur', handleBlur);
     };
+<<<<<<< HEAD
   }, [armAbortPrompt, currentSessionId, dispatcher, effectiveDirectory, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
 
   React.useEffect(() => () => resetAbortPriming(), [resetAbortPriming]);
+||||||| bc50ba56aa
+  }, [armAbortPrompt, currentSessionId, dispatcher, effectiveDirectory, inputRedirect, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
+
+  React.useEffect(() => () => resetAbortPriming(), [resetAbortPriming]);
+=======
+  }, [currentSessionId, dispatcher, effectiveDirectory, handleAbortEscapeKeyDown, inputRedirect, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
+>>>>>>> upstream/main
 };

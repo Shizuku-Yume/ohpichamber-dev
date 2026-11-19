@@ -1,10 +1,61 @@
-// An uploaded image opened as a page would run an SVG's scripts on the app's
-// origin; this policy keeps it inert and changes nothing where it is drawn as
-// an <img>.
+import type fs from 'node:fs/promises';
+import type nodePath from 'node:path';
+import type nodeCrypto from 'node:crypto';
+import type { spawn as nodeSpawn } from 'node:child_process';
+import type { Application } from '../shared/http-contracts.js';
+import type { SessionProject } from '../projects/contracts.js';
+import type { createFsSearchRuntime as createSearchRuntime, FilesystemFile } from '../fs/search.js';
+import { isString } from '../shared/object-guards.js';
+
+export interface ProjectIconProject extends SessionProject {
+  iconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' } | null;
+}
+
+export interface ProjectIconSettings {
+  projects?: unknown;
+}
+
+export type ProjectIconSavedSettings = {
+  projects?: ProjectIconProject[];
+};
+
+export interface ProjectIconDependencies {
+  fsPromises: Pick<typeof fs, 'readFile' | 'writeFile' | 'unlink' | 'mkdir' | 'readdir'>;
+  path: typeof nodePath;
+  crypto: Pick<typeof nodeCrypto, 'createHash'>;
+  openchamberDataDir: string;
+  sanitizeProjects: (input: ProjectIconSettings['projects']) => ProjectIconProject[] | undefined;
+  readSettingsFromDiskMigrated: () => Promise<ProjectIconSettings>;
+  persistSettings: (changes: ProjectIconSavedSettings) => Promise<ProjectIconSavedSettings>;
+  persistResolvedSettings: (resolve: (current: ProjectIconSettings) => ProjectIconSavedSettings) => Promise<ProjectIconSavedSettings>;
+  createFsSearchRuntime: typeof createSearchRuntime;
+  spawn: typeof nodeSpawn;
+  resolveGitBinaryForSpawn: () => string;
+}
+
+interface IconUploadBody {
+  dataUrl?: unknown;
+  force?: unknown;
+}
+
+type ParsedProjectIcon =
+  | { ok: false; error: string }
+  | { ok: true; mime: string; bytes: Buffer };
+
+interface IconMimeExtensions {
+  [mime: string]: string | undefined;
+}
+
+interface FaviconExtensionScores {
+  [extension: string]: number | undefined;
+}
+
+const hasErrorCode = (error: unknown): error is { code?: unknown } =>
+  Boolean(error) && typeof error === 'object';
+
 export const INERT_IMAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
-/** Sets the CSS `color` of an SVG document, so its `currentColor` follows the theme. */
-export const injectSvgRootColor = (svgMarkup, color) => {
+export const injectSvgRootColor = (svgMarkup: string, color: string) => {
   const svgTagIndex = svgMarkup.search(/<svg\b/i);
   if (svgTagIndex === -1) {
     return svgMarkup;
@@ -19,7 +70,7 @@ export const injectSvgRootColor = (svgMarkup, color) => {
   return `${svgMarkup.slice(0, svgOpenTagEndIndex + 1)}${overrideStyle}${svgMarkup.slice(svgOpenTagEndIndex + 1)}`;
 };
 
-export const registerProjectIconRoutes = (app, dependencies) => {
+export const registerProjectIconRoutes = (app: Application, dependencies: ProjectIconDependencies) => {
   const {
     fsPromises,
     path,
@@ -35,7 +86,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   } = dependencies;
 
   const projectIconsDirPath = path.join(openchamberDataDir, 'project-icons');
-  const projectIconMimeToExtension = {
+  const projectIconMimeToExtension: IconMimeExtensions = {
     'image/png': 'png',
     'image/jpeg': 'jpg',
     'image/svg+xml': 'svg',
@@ -53,8 +104,8 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   };
   const projectIconHexColorPattern = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{4}|[\da-fA-F]{6}|[\da-fA-F]{8})$/;
 
-  const normalizeProjectIconMime = (value) => {
-    if (typeof value !== 'string') {
+  const normalizeProjectIconMime = (value: string | undefined) => {
+    if (value === undefined) {
       return null;
     }
 
@@ -68,12 +119,12 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     return null;
   };
 
-  const projectIconBaseName = (projectId) => {
+  const projectIconBaseName = (projectId: string) => {
     const hash = crypto.createHash('sha1').update(projectId).digest('hex');
     return `project-${hash}`;
   };
 
-  const projectIconPathForMime = (projectId, mime) => {
+  const projectIconPathForMime = (projectId: string, mime: string) => {
     const normalizedMime = normalizeProjectIconMime(mime);
     if (!normalizedMime) {
       return null;
@@ -82,12 +133,12 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     return path.join(projectIconsDirPath, `${projectIconBaseName(projectId)}.${ext}`);
   };
 
-  const projectIconPathCandidates = (projectId) => {
+  const projectIconPathCandidates = (projectId: string) => {
     const base = projectIconBaseName(projectId);
     return Object.values(projectIconMimeToExtension).map((ext) => path.join(projectIconsDirPath, `${base}.${ext}`));
   };
 
-  const removeProjectIconFiles = async (projectId, keepPath) => {
+  const removeProjectIconFiles = async (projectId: string, keepPath?: string) => {
     const candidates = projectIconPathCandidates(projectId);
     await Promise.all(candidates.map(async (candidatePath) => {
       if (keepPath && candidatePath === keepPath) {
@@ -96,15 +147,15 @@ export const registerProjectIconRoutes = (app, dependencies) => {
       try {
         await fsPromises.unlink(candidatePath);
       } catch (error) {
-        if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
+        if (!hasErrorCode(error) || error.code !== 'ENOENT') {
           throw error;
         }
       }
     }));
   };
 
-  const parseProjectIconDataUrl = (value) => {
-    if (typeof value !== 'string') {
+  const parseProjectIconDataUrl = (value: string | undefined): ParsedProjectIcon => {
+    if (value === undefined) {
       return { ok: false, error: 'dataUrl is required' };
     }
 
@@ -120,7 +171,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     }
 
     try {
-      const base64 = match[2].replace(/\s+/g, '');
+      const base64 = (match[2] ?? '').replace(/\s+/g, '');
       const bytes = Buffer.from(base64, 'base64');
       if (bytes.length === 0) {
         return { ok: false, error: 'Icon content is empty' };
@@ -134,11 +185,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     }
   };
 
-  const normalizeProjectIconThemeVariant = (value) => {
-    if (typeof value !== 'string') {
-      return null;
-    }
-
+  const normalizeProjectIconThemeVariant = (value: string) => {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'light' || normalized === 'dark') {
       return normalized;
@@ -146,11 +193,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     return null;
   };
 
-  const normalizeProjectIconColor = (value) => {
-    if (typeof value !== 'string') {
-      return null;
-    }
-
+  const normalizeProjectIconColor = (value: string) => {
     const normalized = value.trim();
     if (!projectIconHexColorPattern.test(normalized)) {
       return null;
@@ -158,12 +201,8 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     return normalized;
   };
 
-  const applyProjectIconSvgTheme = (svgMarkup, themeVariant, iconColor) => {
-    if (typeof svgMarkup !== 'string') {
-      return svgMarkup;
-    }
-
-    const color = iconColor || projectIconThemeColors[themeVariant];
+  const applyProjectIconSvgTheme = (svgMarkup: string, themeVariant: 'light' | 'dark' | null, iconColor: string | null) => {
+    const color = iconColor || (themeVariant === null ? undefined : projectIconThemeColors[themeVariant]);
     if (!color) {
       return svgMarkup;
     }
@@ -171,7 +210,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     return injectSvgRootColor(svgMarkup, color);
   };
 
-  const findProjectById = (settings, projectId) => {
+  const findProjectById = (settings: ProjectIconSettings, projectId: string) => {
     const projects = sanitizeProjects(settings?.projects) || [];
     const index = projects.findIndex((project) => project.id === projectId);
     if (index === -1) {
@@ -180,20 +219,18 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     return { projects, index, project: projects[index] };
   };
 
-  const scoreFaviconCandidate = (entry) => {
+  const scoreFaviconCandidate = (entry: FilesystemFile) => {
     const relPath = (entry.relativePath || '').replace(/\\/g, '/');
     const lowerPath = relPath.toLowerCase();
     const ext = (entry.extension || path.extname(entry.path || '').slice(1)).toLowerCase();
 
-    // Exclude hidden folders (.local, .cache, etc.) and non-source dirs
     if (/(^|\/)\.[^/]/i.test(relPath) || /(^|\/)(tests?|fixtures?|mocks?|examples?|docs?|vendor|third_party)(\/|$)/i.test(lowerPath)) {
       return -1000;
     }
 
     let score = 0;
 
-    // Format preference: SVG (vector + themeable) > PNG (lossless + alpha) > WEBP > ICO > JPG
-    const extScores = {
+    const extScores: FaviconExtensionScores = {
       svg: 50,
       png: 40,
       webp: 30,
@@ -203,22 +240,17 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     };
     score += extScores[ext] || 0;
 
-    // Directory preference
     const segments = relPath.split('/').filter(Boolean);
     const depth = segments.length;
 
     if (depth === 1) {
-      // Root level: favicon.ico / favicon.svg
       score += 40;
     } else if (/(^|\/)(public|static|assets|src\/assets)(\/|$)/i.test(lowerPath)) {
-      // Standard frontend asset directories
       score += 30;
     }
 
-    // Shallower directory depth preferred
     score -= Math.min(depth * 5, 25);
 
-    // Slight length penalty as tie-breaker
     score -= Math.min(relPath.length * 0.1, 10);
 
     return score;
@@ -232,7 +264,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   });
 
   app.get('/api/projects/:projectId/icon', async (req, res) => {
-    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+    const projectId = isString(req.params.projectId) ? req.params.projectId.trim() : '';
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' });
     }
@@ -251,9 +283,9 @@ export const registerProjectIconRoutes = (app, dependencies) => {
         : projectIconPathCandidates(projectId);
 
       const themeQuery = Array.isArray(req.query?.theme) ? req.query.theme[0] : req.query?.theme;
-      const requestedThemeVariant = normalizeProjectIconThemeVariant(themeQuery);
+      const requestedThemeVariant = isString(themeQuery) ? normalizeProjectIconThemeVariant(themeQuery) : null;
       const iconColorQuery = Array.isArray(req.query?.iconColor) ? req.query.iconColor[0] : req.query?.iconColor;
-      const requestedIconColor = normalizeProjectIconColor(iconColorQuery);
+      const requestedIconColor = isString(iconColorQuery) ? normalizeProjectIconColor(iconColorQuery) : null;
 
       for (const iconPath of candidates) {
         try {
@@ -263,7 +295,6 @@ export const registerProjectIconRoutes = (app, dependencies) => {
             ? metadataMime
             : projectIconExtensionToMime[ext] || 'application/octet-stream';
           const contentType = resolvedMime === 'image/svg+xml' ? 'image/svg+xml; charset=utf-8' : resolvedMime;
-          // Icons come from repositories.
           res.setHeader('Content-Security-Policy', INERT_IMAGE_CSP);
           res.setHeader('X-Content-Type-Options', 'nosniff');
 
@@ -287,7 +318,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
           return res.send(data);
         } catch (error) {
-          if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
+          if (!hasErrorCode(error) || error.code !== 'ENOENT') {
             console.warn('Failed to read project icon:', error);
             return res.status(500).json({ error: 'Failed to read project icon' });
           }
@@ -301,13 +332,13 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     }
   });
 
-  app.put('/api/projects/:projectId/icon', async (req, res) => {
-    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+  app.put<IconUploadBody>('/api/projects/:projectId/icon', async (req, res) => {
+    const projectId = isString(req.params.projectId) ? req.params.projectId.trim() : '';
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' });
     }
 
-    const parsed = parseProjectIconDataUrl(req.body?.dataUrl);
+    const parsed = parseProjectIconDataUrl(isString(req.body?.dataUrl) ? req.body.dataUrl : undefined);
     if (!parsed.ok) {
       return res.status(400).json({ error: parsed.error });
     }
@@ -329,7 +360,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
       await removeProjectIconFiles(projectId, iconPath);
 
       const updatedAt = Date.now();
-      const nextProjects = projects.map((entry) => (
+      const nextProjects = projects.map<ProjectIconProject>((entry) => (
         entry.id === projectId
           ? { ...entry, iconImage: { mime: parsed.mime, updatedAt, source: 'custom' } }
           : entry
@@ -345,7 +376,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   });
 
   app.delete('/api/projects/:projectId/icon', async (req, res) => {
-    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+    const projectId = isString(req.params.projectId) ? req.params.projectId.trim() : '';
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' });
     }
@@ -374,8 +405,8 @@ export const registerProjectIconRoutes = (app, dependencies) => {
     }
   });
 
-  app.post('/api/projects/:projectId/icon/discover', async (req, res) => {
-    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+  app.post<IconUploadBody>('/api/projects/:projectId/icon/discover', async (req, res) => {
+    const projectId = isString(req.params.projectId) ? req.params.projectId.trim() : '';
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' });
     }
@@ -440,9 +471,6 @@ export const registerProjectIconRoutes = (app, dependencies) => {
         return res.status(415).json({ error: 'Unsupported favicon format' });
       }
 
-      // The search above can outlast other saves, and every added project runs
-      // it. The project may be gone or have a chosen icon by now, and the new
-      // icon goes onto the list as it is at write time.
       const { project: latest } = findProjectById(await readSettingsFromDiskMigrated(), projectId);
       if (!latest) {
         return res.status(404).json({ error: 'Project not found' });

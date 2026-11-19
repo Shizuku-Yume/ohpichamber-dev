@@ -8,14 +8,28 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { toggleSessionPin } from '@/sync/session-pins';
 import { useUIStore } from '@/stores/useUIStore';
+<<<<<<< HEAD
 import { SessionDirectoryMissingError, setSessionWorkState } from '@/sync/session-actions';
+||||||| bc50ba56aa
+import { setSessionWorkState } from '@/sync/session-actions';
+import { setSessionPinList } from '@/sync/session-pins';
+import { getSessionPinList } from '@/lib/sessionPins';
+import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
+import { requestPinTo } from '@/components/session/sidebar/sections/sectionActions';
+=======
+import { setSessionWorkState } from '@/sync/session-actions';
+import { settleRunningOperatorChildren } from '@/sync/operator-children-done';
+import { setSessionPinList } from '@/sync/session-pins';
+import { getSessionPinList } from '@/lib/sessionPins';
+import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
+import { requestPinTo } from '@/components/session/sidebar/sections/sectionActions';
+>>>>>>> upstream/main
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSessionDirectory } from '../mobileSessionFields';
 import { problemMessage } from '@/lib/problemMessage';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
 
-/** The active sessions by parent, read when an action runs rather than on every render. */
 const childrenOfActiveSessions = (): Map<string, Session[]> => {
  const children = new Map<string, Session[]>();
  for (const session of useGlobalSessionsStore.getState().activeSessions) {
@@ -26,20 +40,27 @@ const childrenOfActiveSessions = (): Map<string, Session[]> => {
  return children;
 };
 
-/** Opens a session from the list: its project becomes the active one and the drawer closes. */
 export const selectMobileSession = (session: Session, projectId: string | null, close: () => void): void => {
+<<<<<<< HEAD
  // Selecting a session always leaves a full-page surface, as on the desktop.
  useUIStore.getState().closeMainSurfaces();
  if (projectId) useProjectsStore.getState().setActiveProjectIdOnly(projectId);
  void useSessionUIStore.getState().setCurrentSession(session.sessionId, getSessionDirectory(session) || null);
  close();
+||||||| bc50ba56aa
+  // Selecting a session always leaves a full-page surface, as on the desktop.
+  useUIStore.getState().closeMainSurfaces();
+  if (projectId) useProjectsStore.getState().setActiveProjectIdOnly(projectId);
+  void useSessionUIStore.getState().setCurrentSession(session.id, getSessionDirectory(session) || null);
+  close();
+=======
+  useUIStore.getState().closeMainSurfaces();
+  if (projectId) useProjectsStore.getState().setActiveProjectIdOnly(projectId);
+  void useSessionUIStore.getState().setCurrentSession(session.id, getSessionDirectory(session) || null);
+  close();
+>>>>>>> upstream/main
 };
 
-/**
- * Archive or delete a session with its subagents. Lineage is resolved over
- * every active session rather than the rows on screen: a subagent can sit in
- * another worktree and still belongs to its parent.
- */
 export const runMobileSubtreeAction = (action: SessionSubtreeAction, session: Session, t: Translate): ReturnType<typeof runSessionSubtreeAction> => {
  const store = useSessionUIStore.getState();
  return runSessionSubtreeAction(
@@ -51,15 +72,36 @@ export const runMobileSubtreeAction = (action: SessionSubtreeAction, session: Se
  );
 };
 
-/**
- * Track a root session's work, or with sessions of it in work, mark all of
- * them done, as the desktop row does.
- */
 export const toggleMobileSessionWork = async (session: Session, sessionsInWork: readonly Session[], t: Translate): Promise<void> => {
+<<<<<<< HEAD
  try {
   if (sessionsInWork.length === 0) {
    await setSessionWorkState(session.sessionId, getSessionDirectory(session) || null, 'open');
    return;
+||||||| bc50ba56aa
+  try {
+    if (sessionsInWork.length === 0) {
+      await setSessionWorkState(session.id, getSessionDirectory(session) || null, 'open');
+      return;
+    }
+    for (const entry of sessionsInWork) {
+      await setSessionWorkState(entry.id, getSessionDirectory(entry) || getSessionDirectory(session) || null, 'done');
+    }
+  } catch {
+    toast.error(t('sessions.sidebar.session.work.updateFailed'));
+=======
+  try {
+    if (sessionsInWork.length === 0) {
+      await setSessionWorkState(session.id, getSessionDirectory(session) || null, 'open');
+      return;
+    }
+    if (!await settleRunningOperatorChildren(sessionsInWork.map((entry) => entry.id))) return;
+    for (const entry of sessionsInWork) {
+      await setSessionWorkState(entry.id, getSessionDirectory(entry) || getSessionDirectory(session) || null, 'done');
+    }
+  } catch {
+    toast.error(t('sessions.sidebar.session.work.updateFailed'));
+>>>>>>> upstream/main
   }
   for (const entry of sessionsInWork) {
    await setSessionWorkState(entry.sessionId, getSessionDirectory(entry) || getSessionDirectory(session) || null, 'done');

@@ -1,11 +1,3 @@
-// ---------------------------------------------------------------------------
-// Notification store — what OpenCode reported for failed turns, and the
-// "the user saw this session" entry point.
-//
-// Whether a session is unread is not kept here: OpenCode keeps it on the
-// session record (`session-unread.ts`). This store holds the live error details
-// the chat shows under a failed turn, which the record does not carry.
-// ---------------------------------------------------------------------------
 
 import { create } from "zustand"
 import { clearDesktopSessionNotifications } from "@/lib/desktop"
@@ -17,12 +9,11 @@ export type ErrorNotification = {
   directory?: string
   session?: string
   time: number
-  /** What OpenCode reported for the failed turn; both null when it gave no details. */
   error?: { name: string | null; message: string | null; responseBody?: string | null }
 }
 
 const MAX_NOTIFICATIONS = 500
-const NOTIFICATION_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
+const NOTIFICATION_TTL_MS = 1000 * 60 * 60 * 24 * 30
 
 function pruneNotifications(list: ErrorNotification[]): ErrorNotification[] {
   const cutoff = Date.now() - NOTIFICATION_TTL_MS
@@ -47,21 +38,36 @@ export function appendErrorNotification(notification: ErrorNotification) {
   useNotificationStore.getState().append(notification)
 }
 
-/**
- * The user saw the session: its unread mark clears on every device, and so do
- * its native notifications, including ones that left no unread mark, such as a
- * permission request. The server also resets the phone's push badge count,
- * since the user is in the app.
- */
-export function markSessionViewed(sessionId: string) {
-  markSessionUnreadSeen(sessionId)
-  clearDesktopSessionNotifications(sessionId)
-  runtimeFetch(`/api/sessions/${encodeURIComponent(sessionId)}/view`, { method: "POST" })
-    .catch(() => { /* the badge resets on the next engagement signal */ })
+function closeWebPushSessionNotifications(sessionId: string) {
+  void navigator.serviceWorker?.getRegistration()
+    .then((registration) => registration?.getNotifications())
+    .then((shown) => {
+      for (const notification of shown ?? []) {
+        if (notification.data?.sessionId === sessionId) notification.close()
+      }
+    })
+    .catch(() => { /* a browser without push notifications has nothing to close */ })
 }
 
-/** Every unread session the client knows of is marked seen, the same way opening each would. */
+function clearSessionNotifications(sessionId: string) {
+  clearDesktopSessionNotifications(sessionId)
+  closeWebPushSessionNotifications(sessionId)
+  runtimeFetch(`/api/sessions/${encodeURIComponent(sessionId)}/view`, { method: "POST" })
+    .catch(() => { /* the phones drop them with the next push */ })
+}
+
+export function markSessionViewed(sessionId: string) {
+  markSessionUnreadSeen(sessionId)
+  clearSessionNotifications(sessionId)
+}
+
+export function markSessionRead(sessionId: string) {
+  markSessionUnreadSeen(sessionId, { explicit: true })
+  clearSessionNotifications(sessionId)
+}
+
 export function markAllSessionsViewed() {
+<<<<<<< HEAD
   const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState()
   const marked: string[] = []
   for (const session of [...activeSessions, ...archivedSessions]) {
@@ -74,9 +80,18 @@ export function markAllSessionsViewed() {
   // The route only resets the push badge, so one call covers them all.
   runtimeFetch(`/api/sessions/${encodeURIComponent(marked[0])}/view`, { method: "POST" })
     .catch(() => { /* the badge resets on the next engagement signal */ })
+||||||| bc50ba56aa
+  const marked = markSessionsUnreadSeen(getUnreadSessionIds())
+  if (marked.length === 0) return
+  for (const sessionId of marked) clearDesktopSessionNotifications(sessionId)
+  // The route only resets the push badge, so one call covers them all.
+  runtimeFetch(`/api/sessions/${encodeURIComponent(marked[0])}/view`, { method: "POST" })
+    .catch(() => { /* the badge resets on the next engagement signal */ })
+=======
+  for (const sessionId of markSessionsUnreadSeen(getUnreadSessionIds(), { explicit: true })) clearSessionNotifications(sessionId)
+>>>>>>> upstream/main
 }
 
-/** The newest error OpenCode reported for this session. */
 export function useLatestSessionError(sessionId: string): ErrorNotification | null {
   return useNotificationStore((s) => {
     if (!sessionId) return null

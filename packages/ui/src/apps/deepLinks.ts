@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * OpenChamber deep-link vocabulary — the single source of truth for the `ohpichamber://`
  * URL scheme used across every native entry point: notification taps, home-screen / lock-
@@ -9,6 +10,20 @@
  * Keep this file pure (no React, no stores, no Capacitor) so it can be imported from any
  * context — including, eventually, a tiny encoder shared with the native widget/extension.
  */
+||||||| bc50ba56aa
+/**
+ * OpenChamber deep-link vocabulary — the single source of truth for the `openchamber://`
+ * URL scheme used across every native entry point: notification taps, home-screen / lock-
+ * screen widgets, and (later) Live Activities. Anything that wants to drive navigation
+ * builds a URL with {@link buildDeepLink} and anything that receives one parses it with
+ * {@link parseDeepLink} into a typed {@link DeepLinkIntent}; the navigation layer
+ * (deepLinkNavigation) is the only place that knows how to *apply* an intent.
+ *
+ * Keep this file pure (no React, no stores, no Capacitor) so it can be imported from any
+ * context — including, eventually, a tiny encoder shared with the native widget/extension.
+ */
+=======
+>>>>>>> upstream/main
 
 import { isLinkIdentifier } from '@/lib/router/messageFocus';
 import { parsePairingConnectionPayload, parsePairingConnectionPayloadString, type PairingConnectionPayload } from '@/lib/connectionPayload';
@@ -18,27 +33,29 @@ const DEEP_LINK_SCHEME = 'ohpichamber';
 export type SessionsFilter = 'all' | 'attention' | 'recent';
 export type ViewTarget = 'files' | 'mcp' | 'instances';
 
-/**
- * Every navigable destination the app exposes to the outside world. New widget/notification
- * ideas should add a variant here first, then teach deepLinkNavigation how to apply it —
- * that keeps the "blocks" composable without leaking ad-hoc URL parsing into features.
- */
 export type DeepLinkIntent =
   | { type: 'pairing'; payload: PairingConnectionPayload }
   | { type: 'session'; sessionId: string; directory?: string; messageId?: string }
   | { type: 'new-session'; directory?: string; projectId?: string; agent?: string; model?: string }
   | { type: 'sessions'; filter?: SessionsFilter }
   | { type: 'status' }
-  | { type: 'settings'; section?: string }
+  | { type: 'settings'; section?: string; providerId?: string }
   | { type: 'changes'; path?: string; staged?: boolean }
   | { type: 'view'; target: ViewTarget };
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, '');
 
 const segmentsOf = (url: URL): string[] => {
+<<<<<<< HEAD
   // Custom-scheme URLs put the first route token in `host` (ohpichamber://session/<id>),
   // but be tolerant of authority-less forms (ohpichamber:/session/<id>) where it lands in
   // the pathname instead.
+||||||| bc50ba56aa
+  // Custom-scheme URLs put the first route token in `host` (openchamber://session/<id>),
+  // but be tolerant of authority-less forms (openchamber:/session/<id>) where it lands in
+  // the pathname instead.
+=======
+>>>>>>> upstream/main
   const pathSegments = trimSlashes(url.pathname).split('/').filter(Boolean);
   if (url.host) {
     return [url.host, ...pathSegments];
@@ -46,11 +63,20 @@ const segmentsOf = (url: URL): string[] => {
   return pathSegments;
 };
 
+<<<<<<< HEAD
 /**
  * Parse a raw `ohpichamber://…` string into a typed intent, or `null` if it isn't a
  * recognised OpenChamber deep link. Tolerant by design: unknown routes return `null`
  * rather than throwing, so callers can fall back without a try/catch.
  */
+||||||| bc50ba56aa
+/**
+ * Parse a raw `openchamber://…` string into a typed intent, or `null` if it isn't a
+ * recognised OpenChamber deep link. Tolerant by design: unknown routes return `null`
+ * rather than throwing, so callers can fall back without a try/catch.
+ */
+=======
+>>>>>>> upstream/main
 export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | null {
   if (typeof raw !== 'string' || raw.length === 0) {
     return null;
@@ -83,7 +109,6 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
       if (!sessionId) {
         return null;
       }
-      // A message link (`?message=<id>`) also names the message to show.
       const messageId = query.get('message')?.trim() ?? '';
       return {
         type: 'session',
@@ -114,8 +139,15 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
     case 'status':
       return { type: 'status' };
 
-    case 'settings':
-      return { type: 'settings', section: rest[0] || query.get('section') || undefined };
+    case 'settings': {
+      const section = rest[0] || query.get('section') || undefined;
+      const provider = query.get('provider')?.trim();
+      const intent: DeepLinkIntent = { type: 'settings', section };
+      if (section === 'usage' && provider && /^[a-z0-9][a-z0-9-]{0,79}$/.test(provider)) {
+        intent.providerId = provider;
+      }
+      return intent;
+    }
 
     case 'changes':
       return {
@@ -126,7 +158,6 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
 
     case 'view': {
       const target = (rest[0] || '').toLowerCase();
-      // `changes` has its own richer intent (diff path); route the bare view token to it.
       if (target === 'changes') {
         return { type: 'changes' };
       }

@@ -199,6 +199,73 @@
     "agentNotifyToolEnabled": {
       "scope": "instance"
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
+||||||| bc50ba56aa:packages/vscode/src/settings-registry.json
+    "agentRenderToolEnabled": {
+      "scope": "instance"
+    },
+    "agentUsageToolEnabled": {
+      "scope": "instance"
+    },
+    "agentImageToolEnabled": {
+      "scope": "instance"
+    },
+    "agentImageModel": {
+      "scope": "instance"
+    },
+    "agentSecretToolEnabled": {
+      "scope": "instance"
+    },
+    "agentMemoryToolEnabled": {
+      "scope": "instance"
+    },
+    "agentKnowledgeToolEnabled": {
+      "scope": "instance"
+    },
+    "agentWorkflowToolEnabled": {
+      "scope": "instance"
+    },
+=======
+    "agentRenderToolEnabled": {
+      "scope": "instance"
+    },
+    "agentUsageToolEnabled": {
+      "scope": "instance"
+    },
+    "agentTerminalToolEnabled": {
+      "scope": "instance"
+    },
+    "agentImageToolEnabled": {
+      "scope": "instance"
+    },
+    "agentImageModel": {
+      "scope": "instance"
+    },
+    "agentSecretToolEnabled": {
+      "scope": "instance"
+    },
+    "agentMemoryToolEnabled": {
+      "scope": "instance"
+    },
+    "agentMemoryDreamingEnabled": {
+      "scope": "instance"
+    },
+    "agentMemoryDreamingModel": {
+      "scope": "instance"
+    },
+    "agentMemoryDreamingVariant": {
+      "scope": "instance"
+    },
+    "agentKnowledgeToolEnabled": {
+      "scope": "instance"
+    },
+    "agentWorkflowToolEnabled": {
+      "scope": "instance"
+    },
+    "agentWorkflowAutoApprove": {
+      "scope": "instance"
+    },
+>>>>>>> upstream/main:packages/vscode/src/settings-registry.json
     "isolatedSpacesEnabled": {
       "scope": "instance"
     },
@@ -322,6 +389,13 @@
       "scope": "profile",
       "perSurface": true
     },
+    "sidebarKeepPinnedInPlace": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarSessionBatchSize": {
+      "scope": "profile"
+    },
     "sidebarProjectSortOrder": {
       "scope": "profile"
     },
@@ -399,6 +473,10 @@
       "perSurface": true
     },
     "promptNavigatorEnabled": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "chatWidth": {
       "scope": "profile",
       "perSurface": true
     },
@@ -481,8 +559,84 @@
     "confirmFileTreeMove": {
       "scope": "profile"
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
     "autoCreateWorktree": {
       "scope": "profile"
+||||||| bc50ba56aa:packages/vscode/src/settings-registry.json
+    "fileTreeSide": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "layoutAnimations": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "openLinksInBrowserPanel": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "liveBrowserTabLimit": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "openTrackerLinksOnBoard": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
+=======
+    "fileTreeSide": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "layoutAnimations": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "openLinksInBrowserPanel": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "liveBrowserTabLimit": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "agentBrowserSharesLogins": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "openTrackerLinksOnBoard": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
+>>>>>>> upstream/main:packages/vscode/src/settings-registry.json
     },
     "terminalCloseOnExit": {
       "scope": "profile",
@@ -492,6 +646,23 @@
         "mobile"
       ]
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
+||||||| bc50ba56aa:packages/vscode/src/settings-registry.json
+    "autoCreateWorktree": {
+      "scope": "profile"
+    },
+=======
+    "terminalOpenOnProjectAction": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "autoCreateWorktree": {
+      "scope": "profile"
+    },
+>>>>>>> upstream/main:packages/vscode/src/settings-registry.json
     "sessionTabsEnabled": {
       "scope": "profile",
       "surfaces": [
@@ -852,6 +1023,7 @@
       "scope": "device",
       "local": true
     },
+<<<<<<< HEAD:packages/web/server/lib/host/settings-registry.json
     "sidebarFoldedForExpandedZone": {
       "scope": "device",
       "local": true
@@ -869,6 +1041,19 @@
       "local": true
     },
     "contextZoneExpandedChatSizes": {
+||||||| bc50ba56aa:packages/vscode/src/settings-registry.json
+    "agentMemoryViewedAt": {
+=======
+    "mobileKeepScreenAwake": {
+      "scope": "device",
+      "local": true
+    },
+    "questionsInChat": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryViewedAt": {
+>>>>>>> upstream/main:packages/vscode/src/settings-registry.json
       "scope": "device",
       "local": true
     },

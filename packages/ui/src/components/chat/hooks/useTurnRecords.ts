@@ -76,10 +76,19 @@ export const useTurnRecords = (
         });
     }, [messages, options.showTextJustificationActivity, options.showTurnChangedFiles, options.sessionKey]);
 
+<<<<<<< HEAD
     // The last turn is the live tail only while nothing follows it. A notice
     // that lands after it (a shell run) ends the turn, so the turn joins the
     // history and keeps its place above that notice.
     const lastMessageId = messages[messages.length - 1]?.messageId;
+||||||| bc50ba56aa
+    // The last turn is the live tail only while nothing follows it. A notice
+    // that lands after it (a shell run) ends the turn, so the
+    // turn joins the history and keeps its place above that notice.
+    const lastMessageId = messages[messages.length - 1]?.info.id;
+=======
+    const lastMessageId = messages[messages.length - 1]?.info.id;
+>>>>>>> upstream/main
     const tailIsTurn = !lastMessageId || !projection.ungroupedMessageIds.has(lastMessageId);
 
     const staticTurns = React.useMemo(() => {

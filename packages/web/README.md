@@ -42,6 +42,12 @@ bun run start           # Start via bin/cli.js serve
 
 
 
+Published packages run emitted JavaScript from `build/server` and `build/bin`.
+To build from a checkout, run `bun install` and `bun run build:web` at the repo
+root. `bun run start:web` runs the source CLI with Bun; `bun run dev`,
+`dev:server`, `dev:server:watch` and tests use sources without a server build.
+`bun run build:server` builds only the backend and its runtime assets.
+
 ## Usage
 
 ```bash

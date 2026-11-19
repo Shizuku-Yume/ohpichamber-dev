@@ -28,20 +28,23 @@ const emptyPersonal = {
   setupWorktreeMode: 'append',
   worktreeDirectory: null,
   teardownWorktree: [],
+  createWorktreeCommand: '',
   projectActions: [],
   projectActionsPrimaryId: null,
   draftStarters: [],
   hiddenSharedActionIds: [],
   sharedTrust: null,
+  notesTodosInRepository: false,
 };
 
-const createRuntime = async () => {
+const createRuntime = async (deps = {}) => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'oc-project-setup-'));
   const runtime = createProjectConfigRuntime({
     fsPromises: await import('fs/promises'),
     path,
     projectsDirPath: path.join(tempRoot, 'projects'),
     createTaskID: () => 'task-fixed-id',
+    ...deps,
   });
   return {
     runtime,
@@ -115,11 +118,13 @@ describe('project setup sanitizers', () => {
       setupWorktreeMode: 'replace',
       worktreeDirectory: ' ../trees ',
       teardownWorktree: [' docker compose down ', ''],
+      createWorktreeCommand: ' git parhel add "$WORKTREE_PATH" "$WORKTREE_BRANCH" ',
       projectActions: [{ id: 'a', name: 'A', command: 'x' }],
       projectActionsPrimaryId: 'missing',
       draftStarters: [{ type: 'skill', name: 's' }],
       hiddenSharedActionIds: ['dev', '', 'dev', 7],
       sharedTrust: { hash: 'sha256:abc', trustedAt: 5 },
+      notesTodosInRepository: true,
       scheduledTasks: [{ id: 't' }],
     })).toEqual({
       setupWorktree: ['bun install'],
@@ -127,11 +132,13 @@ describe('project setup sanitizers', () => {
       setupWorktreeMode: 'replace',
       worktreeDirectory: '../trees',
       teardownWorktree: ['docker compose down'],
+      createWorktreeCommand: 'git parhel add "$WORKTREE_PATH" "$WORKTREE_BRANCH"',
       projectActions: [{ id: 'a', name: 'A', command: 'x', icon: null }],
       projectActionsPrimaryId: null,
       draftStarters: [{ type: 'skill', name: 's' }],
       hiddenSharedActionIds: ['dev'],
       sharedTrust: { hash: 'sha256:abc', trustedAt: 5 },
+      notesTodosInRepository: true,
     });
     expect(projectSetupViewOf(null)).toEqual(emptyPersonal);
   });
@@ -154,6 +161,10 @@ describe('project setup sanitizers', () => {
     expect(projectSetupPatchToStored({})).toEqual({});
     expect(projectSetupPatchToStored({ teardownWorktree: [' docker compose down ', ''] })).toEqual({ teardownWorktree: ['docker compose down'] });
     expect(() => projectSetupPatchToStored({ teardownWorktree: 'docker compose down' })).toThrow('teardownWorktree must be');
+    expect(projectSetupPatchToStored({ createWorktreeCommand: ' git parhel add "$WORKTREE_PATH" ' })).toEqual({ createWorktreeCommand: 'git parhel add "$WORKTREE_PATH"' });
+    // An empty command removes the key, back to the built-in creation.
+    expect(projectSetupPatchToStored({ createWorktreeCommand: '  ' })).toEqual({ createWorktreeCommand: undefined });
+    expect(() => projectSetupPatchToStored({ createWorktreeCommand: ['git'] })).toThrow('createWorktreeCommand must be');
     expect(() => projectSetupPatchToStored({ setupWorktree: 'a' })).toThrow('setupWorktree must be');
     expect(() => projectSetupPatchToStored({ setupWorktreeWait: 'yes' })).toThrow('setupWorktreeWait must be');
     expect(() => projectSetupPatchToStored({ projectActions: {} })).toThrow('projectActions must be');
@@ -163,6 +174,10 @@ describe('project setup sanitizers', () => {
     expect(() => projectSetupPatchToStored({ worktreeDirectory: 42 })).toThrow('worktreeDirectory must be');
     expect(() => projectSetupPatchToStored({ sharedTrustHash: '' })).toThrow('sharedTrustHash must be');
     expect(projectSetupPatchToStored({ sharedTrustHash: null })).toEqual({ sharedTrust: undefined });
+    expect(projectSetupPatchToStored({ notesTodosInRepository: true })).toEqual({ notesTodosInRepository: true });
+    // Off removes the key: the personal file holds only what the user turned on.
+    expect(projectSetupPatchToStored({ notesTodosInRepository: false })).toEqual({ notesTodosInRepository: undefined });
+    expect(() => projectSetupPatchToStored({ notesTodosInRepository: 'yes' })).toThrow('notesTodosInRepository must be');
     expect(projectSetupPatchToStored({ sharedTrustHash: 'sha256:x' }).sharedTrust).toMatchObject({ hash: 'sha256:x' });
     expect(() => projectSetupPatchToStored([])).toThrow('patch must be');
   });
@@ -436,6 +451,7 @@ describe('project setup runtime', () => {
     }
   });
 
+<<<<<<< HEAD
   it('round-trips the personal worktree directory and clears it with null', async () => {
     const { runtime, readRaw, cleanup } = await createRuntime();
     try {
@@ -455,6 +471,46 @@ describe('project setup runtime', () => {
     }
   });
 
+||||||| bc50ba56aa
+=======
+  it('turns repository notes and todos on per project through the switch, which commits the option', async () => {
+    const switched = [];
+    const { runtime, tempRoot, cleanup } = await createRuntime({
+      switchNotesTodosStorage: async (id, { enabled, file, commit }) => {
+        switched.push({ id, enabled, file });
+        await commit();
+      },
+    });
+    try {
+      const projectID = createProjectIdFromPath(path.join(tempRoot, 'repo'));
+      const file = path.join(tempRoot, 'repo', '.openchamber', 'notes-todos.json');
+      expect(await runtime.resolveNotesTodosFile(projectID)).toBeNull();
+      await runtime.updateProjectSetup(projectID, { notesTodosInRepository: true });
+      expect((await runtime.readProjectSetup(projectID)).personal.notesTodosInRepository).toBe(true);
+      expect(await runtime.resolveNotesTodosFile(projectID)).toBe(file);
+      await runtime.updateProjectSetup(projectID, { notesTodosInRepository: true });
+      await runtime.updateProjectSetup(projectID, { notesTodosInRepository: false });
+      expect(await runtime.resolveNotesTodosFile(projectID)).toBeNull();
+      expect(switched).toEqual([{ id: projectID, enabled: true, file }, { id: projectID, enabled: false, file }]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('keeps the option when the switch fails', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime({
+      switchNotesTodosStorage: async () => { throw new Error('move failed'); },
+    });
+    try {
+      const projectID = createProjectIdFromPath(path.join(tempRoot, 'repo'));
+      await expect(runtime.updateProjectSetup(projectID, { notesTodosInRepository: true })).rejects.toThrow('move failed');
+      expect((await runtime.readProjectSetup(projectID)).personal.notesTodosInRepository).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+>>>>>>> upstream/main
   it('leaves the file alone when the patch is invalid', async () => {
     const { runtime, tempRoot, cleanup } = await createRuntime();
     try {

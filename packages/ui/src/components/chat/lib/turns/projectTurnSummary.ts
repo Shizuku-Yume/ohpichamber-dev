@@ -51,6 +51,7 @@ export const projectTurnSummary = (assistantMessages: ChatMessageEntry[]): TurnS
     return {};
 };
 
+<<<<<<< HEAD
 /**
  * "+N −M across F files" for a turn, summed from the edits the turn itself
  * made. v1 read these numbers off a working-tree snapshot on the user
@@ -83,6 +84,18 @@ export const projectTurnDiffStats = (changedFiles: TurnChangedFile[] | undefined
  * Native execution supplies no filesystem snapshot. Line counts come from
  * each call's patch; files changed only in a child session are not listed here.
  */
+||||||| bc50ba56aa
+/**
+ * Files this turn changed, as evidenced by its own edit/write calls.
+ *
+ * v1 also carried a working-tree snapshot on the user message, which supplied
+ * line counts and was the only record of edits a turn delegated to subagents.
+ * v2 has no such snapshot, so the turn's own tool calls are the whole story:
+ * line counts come from each call's patch, and files a subagent changed in a
+ * child session are not listed here.
+ */
+=======
+>>>>>>> upstream/main
 export const projectTurnChangedFiles = (
     assistantMessages: ChatMessageEntry[],
 ): TurnChangedFile[] | undefined => {

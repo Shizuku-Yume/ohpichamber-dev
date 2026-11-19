@@ -1,6 +1,17 @@
+<<<<<<< HEAD
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createSessionFoldersStore, type SessionFoldersRuntime } from './useSessionFoldersStore';
+||||||| bc50ba56aa
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
+=======
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { directoryEnvironment } from './test-support/directoryEnvironment';
+import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { flushDeferredStorage } from './utils/safeStorage';
+>>>>>>> upstream/main
 
+const environment = directoryEnvironment({ fakeTimers: false });
+const browserWindow = window;
 const storage = new Map<string, string>();
 let storageSetCount = 0;
 let runtimeKey = 'runtime-a';
@@ -38,7 +49,25 @@ const deviceStorage: Storage = {
   get length() {
     return storage.size;
   },
+<<<<<<< HEAD
 };
+||||||| bc50ba56aa
+} as Storage;
+
+mock.module('./utils/safeStorage', () => ({
+  getDeferredSafeStorage: () => safeStorage,
+  getSafeStorage: () => safeStorage,
+}));
+
+mock.module('@/lib/desktop', () => ({
+  isVSCodeRuntime: () => false,
+}));
+=======
+} as Storage;
+
+Object.defineProperty(window, 'localStorage', { configurable: true, value: safeStorage });
+Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: safeStorage });
+>>>>>>> upstream/main
 
 type ServerRequest = { method: string; body: unknown };
 const requests: ServerRequest[] = [];
@@ -46,11 +75,20 @@ const requests: ServerRequest[] = [];
 let respond: (request: ServerRequest) => Response = () => json(diskResponseBody);
 const json = (body: ServerAnswer, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+<<<<<<< HEAD
 // The store's real transport seam: the fake Host stands in for runtimeFetch.
 const runtime: SessionFoldersRuntime = {
   fetch: async (_path: string, init?: RequestInit) => {
+||||||| bc50ba56aa
+mock.module('@/lib/runtime-fetch', () => ({
+  runtimeFetch: mock(async (_path: string, init?: RequestInit) => {
+=======
+environment.respond(async (url, init) => {
+    if (url.pathname !== '/api/session-folders') throw new Error(`Unexpected request: ${url}`);
+>>>>>>> upstream/main
     const request = { method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null };
     requests.push(request);
+<<<<<<< HEAD
     return respond(request);
   },
   runtimeKey: () => runtimeKey,
@@ -58,17 +96,45 @@ const runtime: SessionFoldersRuntime = {
   immediateStorage: deviceStorage,
   connected: () => connected,
 };
+||||||| bc50ba56aa
+    return respond(request, init?.signal);
+  }),
+}));
+mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
+=======
+    return respond(request, init?.signal);
+});
+const activateRuntime = (key: string) => {
+  runtimeKey = key;
+  switchRuntimeEndpoint({ apiBaseUrl: 'https://local.test', runtimeKey: key });
+};
+>>>>>>> upstream/main
 
+<<<<<<< HEAD
 const { store: useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = createSessionFoldersStore(runtime);
+||||||| bc50ba56aa
+const { useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = await import('./useSessionFoldersStore');
+=======
+const { useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = await import('./useSessionFoldersStore');
+Reflect.deleteProperty(globalThis, 'window');
+>>>>>>> upstream/main
 
 const waitForPersist = () => new Promise((resolve) => setTimeout(resolve, 350));
 
 describe('useSessionFoldersStore folder assignments', () => {
+<<<<<<< HEAD
   beforeEach(async () => {
     connected = false;
+||||||| bc50ba56aa
+  beforeEach(() => {
+=======
+  beforeEach(() => {
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    flushDeferredStorage();
+>>>>>>> upstream/main
     storage.clear();
     storageSetCount = 0;
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     diskResponseBody = { version: 1, exists: false };
     requests.length = 0;
     respond = () => json(diskResponseBody);
@@ -124,17 +190,30 @@ describe('useSessionFoldersStore folder assignments', () => {
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project-worktree')[0]?.sessionIds).toEqual(['ses_1', 'ses_2']);
   });
 
+  test('a session moved into a worktree leaves the folder of the project it left', () => {
+    const store = useSessionFoldersStore.getState();
+    const tasks = store.createFolder('/workspace/project', 'Tasks');
+    store.addSessionsToFolder('/workspace/project', tasks.id, ['ses_moved', 'ses_stays']);
+    const before = useSessionFoldersStore.getState().foldersMap;
+
+    store.followSessionMove('ses_moved', '/workspace/project/docs', null);
+    expect(useSessionFoldersStore.getState().foldersMap).toBe(before);
+
+    store.followSessionMove('ses_moved', '/workspace/project-worktree', '/workspace/project-worktree');
+    expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project')[0]?.sessionIds).toEqual(['ses_stays']);
+  });
+
   test('restores independent folder snapshots across runtime switches', async () => {
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Runtime A');
     await waitForPersist();
 
-    runtimeKey = 'runtime-b';
+    activateRuntime('runtime-b');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project')).toEqual([]);
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Runtime B');
     await waitForPersist();
 
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Runtime A']);
   });
@@ -142,9 +221,9 @@ describe('useSessionFoldersStore folder assignments', () => {
   test('flushes the outgoing runtime before a debounced browser write can be lost', () => {
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Runtime A pending');
 
-    runtimeKey = 'runtime-b';
+    activateRuntime('runtime-b');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
 
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Runtime A pending']);
@@ -152,9 +231,9 @@ describe('useSessionFoldersStore folder assignments', () => {
 
   test('does not replace browser folders when the server has no disk snapshot', async () => {
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Browser folder');
-    runtimeKey = 'runtime-b';
+    activateRuntime('runtime-b');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -164,11 +243,26 @@ describe('useSessionFoldersStore folder assignments', () => {
 
   // Connect only inside the wrapper, as the browser-only hydration did.
   const withWindow = (run: () => Promise<void>) => async () => {
+<<<<<<< HEAD
     connected = true;
+||||||| bc50ba56aa
+    const original = globalThis.window;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: {} });
+=======
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
+>>>>>>> upstream/main
     try {
       await run();
     } finally {
+<<<<<<< HEAD
       connected = false;
+||||||| bc50ba56aa
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: original });
+=======
+      if (original) Object.defineProperty(globalThis, 'window', original);
+      else Reflect.deleteProperty(globalThis, 'window');
+>>>>>>> upstream/main
     }
   };
 
@@ -354,12 +448,12 @@ describe('useSessionFoldersStore folder assignments', () => {
 
   test('does not silently evict folder state from older runtimes', () => {
     for (let index = 0; index < 10; index += 1) {
-      runtimeKey = `runtime-${index}`;
+      activateRuntime(`runtime-${index}`);
       useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
       useSessionFoldersStore.getState().createFolder('/workspace/project', `Folder ${index}`);
     }
 
-    runtimeKey = 'runtime-0';
+    activateRuntime('runtime-0');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Folder 0']);
   });

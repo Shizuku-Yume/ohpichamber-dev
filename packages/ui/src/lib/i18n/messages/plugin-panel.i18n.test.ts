@@ -29,9 +29,6 @@ const requiredKeys = [
   'contextPanel.plugin.sessionLink.noSession',
   'contextPanel.plugin.sessionLink.failed',
   'contextPanel.plugin.sessionLink.linked',
-  'chat.chatInput.linked.guest.openInBrowserAria',
-  'chat.chatInput.linked.guest.removeAria',
-  'chat.chatInput.linked.guest.pr.number',
   'chat.workStatus.linkedIssues.openGuest',
   'session.newWorktree.actions.startFromGuest',
   'contextPanel.plugin.actionDialog.description',
@@ -39,6 +36,8 @@ const requiredKeys = [
   'contextRail.surface.plugin.badgeAriaPlural',
   'contextRail.surface.plugin.badgeTooltipSingle',
   'contextRail.surface.plugin.badgeTooltipPlural',
+  'contextRail.surface.plugin.listeningAria',
+  'contextRail.surface.plugin.listeningTooltip',
   'chat.chatInput.toast.guestCommandNothing',
   'chat.chatInput.toast.guestCommandFailed',
   'chat.chatInput.toast.guestCommandUnavailable',
@@ -48,7 +47,6 @@ const requiredKeys = [
 const sameInEveryLocale = new Set<string>([
   'contextPanel.plugin.toast.ok',
   'contextRail.surface.plugin',
-  'chat.chatInput.linked.guest.pr.number',
   // "item" is the same word in Portuguese, so the singular forms match English there.
   'contextRail.surface.plugin.badgeAriaSingle',
   'contextRail.surface.plugin.badgeTooltipSingle',

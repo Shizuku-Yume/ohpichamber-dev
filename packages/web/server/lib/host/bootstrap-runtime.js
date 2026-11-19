@@ -1,7 +1,62 @@
 import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
+<<<<<<<< HEAD:packages/web/server/lib/host/bootstrap-runtime.js
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/bootstrap-runtime.js
+import { registerHttpResponseDiagnostics } from './core-routes.js';
+========
+import { registerHttpResponseDiagnostics } from './core-routes.js';
+import type {
+  AuthAndAccessDependencies,
+  CommonRequestDependencies,
+  ServerStatusDependencies,
+  registerAuthAndAccessRoutes,
+  registerCommonRequestMiddleware,
+  registerServerStatusRoutes,
+} from './core-routes.js';
+import type { Application, ExpressFactory } from '../shared/http-contracts.js';
+import type { createAgentToolRuntime } from '../agent-tool/runtime.js';
+import type { createLimitFailoverRuntime } from '../limit-failover/runtime.js';
+import type { registerNotificationRoutes } from '../notifications/routes.js';
+import type { OpenChamberRouteDependencies, registerOpenChamberRoutes } from '../self-update/openchamber-routes.js';
+import type { SayTtsCapability } from '../tts/capability-runtime.js';
+import type { createUiAuth } from '../ui-auth/ui-auth.js';
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/bootstrap-runtime.ts
 
-export const createBootstrapRuntime = (dependencies) => {
+type AgentTool = Pick<ReturnType<typeof createAgentToolRuntime>, 'authorizeRequest' | 'registerRoutes'>;
+type Notifications = Parameters<typeof registerNotificationRoutes>[1];
+type SessionSnapshots = Pick<Notifications, 'getSessionActivitySnapshot' | 'getSessionStateSnapshot' |
+  'getPendingBlockingRequestsSnapshot' | 'getSessionContextSnapshot' | 'getSessionState'>;
+type SayTtsDependencies = { sayTTSCapability: Promise<SayTtsCapability> };
+
+interface BootstrapDependencies {
+  createUiAuth: typeof createUiAuth;
+  registerServerStatusRoutes: typeof registerServerStatusRoutes;
+  registerCommonRequestMiddleware: typeof registerCommonRequestMiddleware;
+  registerAuthAndAccessRoutes: typeof registerAuthAndAccessRoutes;
+  registerTtsRoutes: (app: Application, dependencies: SayTtsDependencies) => void;
+  registerNotificationRoutes: typeof registerNotificationRoutes;
+  registerOpenChamberRoutes: typeof registerOpenChamberRoutes;
+  registerAgentToolRoutes?: (app: Application, dependencies: { express: ExpressFactory; agentToolRuntime: AgentTool }) => void;
+  express: ExpressFactory;
+}
+
+type BaseRoutesOptions =
+  & Required<Omit<ServerStatusDependencies, 'express' | 'uiAuthController' | 'tunnelAuthController'>>
+  & Required<Omit<AuthAndAccessDependencies, 'express' | 'uiAuthController'>>
+  & Required<Omit<CommonRequestDependencies, 'express'>>
+  & Required<Omit<Notifications, 'uiAuthController' | keyof SessionSnapshots>>
+  & Required<Omit<OpenChamberRouteDependencies, 'desktopUpdater'>>
+  & { desktopUpdater: OpenChamberRouteDependencies['desktopUpdater'] }
+  & SayTtsDependencies
+  & {
+    uiPassword: string | null;
+    sessionRuntime: Required<SessionSnapshots>;
+    agentToolRuntime: AgentTool;
+    limitFailoverRuntime: Pick<ReturnType<typeof createLimitFailoverRuntime>, 'registerRoutes'> | null;
+    pluginNotificationEmitter: Parameters<typeof registerNotificationEmitRoutes>[1]['emitter'];
+  };
+
+export const createBootstrapRuntime = (dependencies: BootstrapDependencies) => {
   const {
     createUiAuth,
     registerServerStatusRoutes,
@@ -13,7 +68,7 @@ export const createBootstrapRuntime = (dependencies) => {
     express,
   } = dependencies;
 
-  const setupBaseRoutes = (app, options) => {
+  const setupBaseRoutes = (app: Application, options: BaseRoutesOptions) => {
     const {
       process,
       openchamberVersion,
@@ -53,14 +108,40 @@ export const createBootstrapRuntime = (dependencies) => {
       resolveApnsStatus,
       updateUiVisibility,
       clearPendingPushBadge,
+      clearSessionPushNotifications,
       isUiVisible,
       getUiNotificationClients,
       writeSseEvent,
       sessionRuntime,
       setPushInitialized,
+<<<<<<<< HEAD:packages/web/server/lib/host/bootstrap-runtime.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/bootstrap-runtime.js
+      fs,
+      os,
+      path,
+      server,
+      __dirname,
+      openchamberDataDir,
+========
+      fs,
+      os,
+      path,
+      server,
+      cliEntry,
+      openchamberDataDir,
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/bootstrap-runtime.ts
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
       setAutoAcceptSession,
+<<<<<<<< HEAD:packages/web/server/lib/host/bootstrap-runtime.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/bootstrap-runtime.js
+      agentToolRuntime,
+      limitFailoverRuntime,
+========
+      isLocalOnlyPushRequest,
+      agentToolRuntime,
+      limitFailoverRuntime,
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/bootstrap-runtime.ts
       pluginNotificationEmitter,
       skipBodyParsing,
       isRequestOriginAllowed,
@@ -142,18 +223,39 @@ export const createBootstrapRuntime = (dependencies) => {
       resolveApnsStatus,
       updateUiVisibility,
       clearPendingPushBadge,
+      clearSessionPushNotifications,
       isUiVisible,
       getUiNotificationClients,
       writeSseEvent,
       getSessionActivitySnapshot: sessionRuntime.getSessionActivitySnapshot,
       getSessionStateSnapshot: sessionRuntime.getSessionStateSnapshot,
       getPendingBlockingRequestsSnapshot: sessionRuntime.getPendingBlockingRequestsSnapshot,
+      getSessionContextSnapshot: sessionRuntime.getSessionContextSnapshot,
       getSessionState: sessionRuntime.getSessionState,
       setPushInitialized,
       setAutoAcceptSession,
+      isLocalOnlyPushRequest,
     });
 
     registerOpenChamberRoutes(app, {
+<<<<<<<< HEAD:packages/web/server/lib/host/bootstrap-runtime.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/bootstrap-runtime.js
+      fs,
+      os,
+      path,
+      process,
+      server,
+      __dirname,
+      openchamberDataDir,
+========
+      fs,
+      os,
+      path,
+      process,
+      server,
+      cliEntry,
+      openchamberDataDir,
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/bootstrap-runtime.ts
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
     });

@@ -41,6 +41,7 @@ export type QuotaGiftResetType = 'FIVE_HOUR' | 'WEEK';
 
 const PROVIDER_LIST_TIMEOUT_MS = 10_000;
 
+<<<<<<< HEAD
 /**
  * Providers the instance has a credential for, or null when it could not say.
  * Null is an explicit failure: callers must not fan out to every provider.
@@ -52,6 +53,17 @@ export const fetchConfiguredQuotaProviders = async (
 ): Promise<{ providers: ReadonlySet<string>; nativeToLogical: Record<string, string> } | null> => {
   const timeoutMs = typeof optionsOrTimeout === 'number' ? optionsOrTimeout : (optionsOrTimeout.timeoutMs ?? PROVIDER_LIST_TIMEOUT_MS);
   const workspaceId = typeof optionsOrTimeout === 'object' ? optionsOrTimeout.workspaceId : maybeWorkspaceId;
+||||||| bc50ba56aa
+/**
+ * Providers the instance has a credential for, or null when it could not say.
+ * Null is not "none": the caller asks every provider, as a cold instance, a
+ * restarting OpenCode or a server without this route answer here. The deadline
+ * covers the body too, because every quota load waits on this read.
+ */
+export const fetchConfiguredQuotaProviders = async (timeoutMs = PROVIDER_LIST_TIMEOUT_MS): Promise<ReadonlySet<string> | null> => {
+=======
+export const fetchConfiguredQuotaProviders = async (timeoutMs = PROVIDER_LIST_TIMEOUT_MS): Promise<ReadonlySet<string> | null> => {
+>>>>>>> upstream/main
   const controller = new AbortController();
   const read = async () => {
     const options: RuntimeFetchOptions = { signal: controller.signal };
@@ -82,7 +94,6 @@ export const fetchConfiguredQuotaProviders = async (
   }
 };
 
-/** The deadline covers response bodies too, including transports that ignore abort. */
 export const fetchQuota = async (
   providerId: QuotaProviderId,
   { signal, timeoutMs = 30_000, workspaceId }: { signal?: AbortSignal; timeoutMs?: number; workspaceId?: string } = {},
@@ -133,7 +144,6 @@ export const fetchQuota = async (
   }
 };
 
-/** The deadline covers response bodies too, including transports that ignore abort. */
 export const activateGiftReset = async (
   providerId: QuotaProviderId,
   recordId: number,
@@ -157,7 +167,15 @@ export const activateGiftReset = async (
     const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}/gift-reset/use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+<<<<<<< HEAD
       body: JSON.stringify({ recordId, resetType, grantType, workspaceId }),
+||||||| bc50ba56aa
+      // grantType is omitted from the JSON when undefined (the record carried
+      // none); the server then falls back to 'GLOBAL'.
+      body: JSON.stringify({ recordId, resetType, grantType }),
+=======
+      body: JSON.stringify({ recordId, resetType, grantType }),
+>>>>>>> upstream/main
       signal: controller.signal,
     });
     const payload = await response.json();

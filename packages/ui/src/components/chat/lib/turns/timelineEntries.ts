@@ -1,6 +1,5 @@
 import type { ChatMessageEntry, TurnRecord } from './types';
 
-/** One row of the transcript list: a turn, or a message that belongs to no turn. */
 export type TimelineEntry =
     | {
         kind: 'ungrouped';
@@ -8,6 +7,13 @@ export type TimelineEntry =
         message: ChatMessageEntry;
         previousMessage?: ChatMessageEntry;
         nextMessage?: ChatMessageEntry;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+        /** The first row the transcript draws; it gets the session's top spacing. */
+        isFirstRow?: boolean;
+=======
+        isFirstRow?: boolean;
+>>>>>>> upstream/main
     }
     | {
         kind: 'turn';
@@ -15,7 +21,6 @@ export type TimelineEntry =
         turn: TurnRecord;
         isLastTurn: boolean;
         hasLaterAssistant?: boolean;
-        /** The first message of the row after this turn, for the last assistant message's footer. */
         nextEntryFirstMessage?: ChatMessageEntry;
     };
 
@@ -23,14 +28,28 @@ type HistoryEntriesInput = {
     staticTurns: readonly TurnRecord[];
     lastTurnId: string | null;
     turnsWithLaterAssistant: ReadonlySet<string>;
-    /** Every displayed message, in order; read only when some are ungrouped. */
     messages: readonly ChatMessageEntry[];
     ungroupedMessageIds: ReadonlySet<string>;
     hasStreamingTurn: boolean;
-    /** First message of the live tail row, which follows the history. */
     trailingEntryFirstMessage: ChatMessageEntry | undefined;
 };
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/**
+ * The first message the transcript draws. Skipped roles render nothing, except
+ * session notices, which render despite their role.
+ */
+export const findFirstVisibleMessageId = (messages: readonly ChatMessageEntry[]): string | undefined => (
+    messages.find((message) => !isSkippedTimelineMessage(message.info) || readSessionNotice(message.info))?.info.id
+);
+
+=======
+export const findFirstVisibleMessageId = (messages: readonly ChatMessageEntry[]): string | undefined => (
+    messages.find((message) => !isSkippedTimelineMessage(message.info) || readSessionNotice(message.info))?.info.id
+);
+
+>>>>>>> upstream/main
 const entryFirstMessage = (entry: TimelineEntry): ChatMessageEntry => (
     entry.kind === 'turn' ? entry.turn.userMessage : entry.message
 );
@@ -64,8 +83,15 @@ const orderHistoryEntries = ({
             ordered.push(turnEntry);
             return;
         }
+<<<<<<< HEAD
         if (!ungroupedMessageIds.has(message.messageId)) return;
         // Without a live turn the trailing entry renders the last message.
+||||||| bc50ba56aa
+        if (!ungroupedMessageIds.has(message.info.id)) return;
+        // Without a live turn the trailing entry renders the last message.
+=======
+        if (!ungroupedMessageIds.has(message.info.id)) return;
+>>>>>>> upstream/main
         if (!hasStreamingTurn && index === messages.length - 1) return;
         ordered.push({
             kind: 'ungrouped',
@@ -93,14 +119,6 @@ const isSameEntry = (previous: TimelineEntry, next: TimelineEntry): boolean => {
     return false;
 };
 
-/**
- * The transcript's history rows (everything before the live tail).
- *
- * Rows are memoized on the entry object, so an entry whose content did not
- * change keeps the object it had in `previous`: a new turn arriving or the
- * tail re-projecting re-renders the rows that changed, not every mounted one.
- * Returns `previous` itself when no row changed.
- */
 export const buildHistoryEntries = (
     input: HistoryEntriesInput,
     previous: TimelineEntry[],

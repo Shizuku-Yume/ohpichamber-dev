@@ -63,8 +63,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     deleteCommand: s.deleteCommand,
     loadCommands: s.loadCommands,
   })));
-  // Settings browses whichever project its own selector points at; the app
-  // stays where it is.
   const settingsDirectory = useSettingsDirectory();
   const commands = useCommandsStore((state) => selectCommandsForDirectory(state, settingsDirectory));
   React.useEffect(() => { void loadCommands(settingsDirectory); }, [loadCommands, settingsDirectory]);
@@ -75,7 +73,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const bgClass = 'bg-background';
 
   const handleCreateNew = () => {
-    // Generate unique name
     const baseName = 'new-command';
     let newName = baseName;
     let counter = 1;
@@ -84,8 +81,15 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       counter++;
     }
 
+<<<<<<< HEAD
     // Set draft and open the page for editing
     setCommandDraft({ name: newName, scope: 'agent' });
+||||||| bc50ba56aa
+    // Set draft and open the page for editing
+    setCommandDraft({ name: newName, scope: 'user' });
+=======
+    setCommandDraft({ name: newName, scope: 'user' });
+>>>>>>> upstream/main
     setSelectedCommand(newName);
     onItemSelect?.();
 
@@ -127,7 +131,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       newName = `${baseName}-copy-${copyNumber}`;
     }
 
-    // Set draft with prefilled values from source command
     setCommandDraft({
       name: newName,
       scope: command.scope === 'workspace' ? 'workspace' : 'agent',
@@ -167,11 +170,53 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
+<<<<<<< HEAD
     const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory, renameDialogCommand.commandId);
+||||||| bc50ba56aa
+    // Create new command with new name and all existing config
+    const success = await createCommand({
+      name: sanitizedName,
+      description: renameDialogCommand.description,
+      template: renameDialogCommand.template,
+      agent: renameDialogCommand.agent,
+      model: renameDialogCommand.model,
+      subagent: renameDialogCommand.subagent,
+      scope: renameDialogCommand.scope,
+    }, settingsDirectory);
+=======
+    const success = await createCommand({
+      name: sanitizedName,
+      description: renameDialogCommand.description,
+      template: renameDialogCommand.template,
+      agent: renameDialogCommand.agent,
+      model: renameDialogCommand.model,
+      subagent: renameDialogCommand.subagent,
+      scope: renameDialogCommand.scope,
+    }, settingsDirectory);
+>>>>>>> upstream/main
 
     if (success) {
+<<<<<<< HEAD
       toast.success(t('settings.common.status.saved'));
       setSelectedCommand(sanitizedName);
+||||||| bc50ba56aa
+      // Delete old command
+      const deleteSuccess = await deleteCommand(renameDialogCommand.name, settingsDirectory);
+      if (deleteSuccess) {
+        toast.success(`Command renamed to "${sanitizedName}"`);
+        setSelectedCommand(sanitizedName);
+      } else {
+        toast.error(t('settings.commands.sidebar.toast.removeOldAfterRenameFailed'));
+      }
+=======
+      const deleteSuccess = await deleteCommand(renameDialogCommand.name, settingsDirectory);
+      if (deleteSuccess) {
+        toast.success(`Command renamed to "${sanitizedName}"`);
+        setSelectedCommand(sanitizedName);
+      } else {
+        toast.error(t('settings.commands.sidebar.toast.removeOldAfterRenameFailed'));
+      }
+>>>>>>> upstream/main
     } else {
       toast.error(t('settings.commands.sidebar.toast.renameFailed'));
     }
@@ -263,7 +308,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         </Dialog>
       ) : null}
 
-      {/* Rename Dialog */}
       <Dialog open={renameDialogCommand !== null} onOpenChange={(open) => !open && setRenameDialogCommand(null)}>
         <DialogContent>
           <DialogHeader>

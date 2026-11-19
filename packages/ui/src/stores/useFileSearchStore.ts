@@ -49,6 +49,52 @@ const cacheKeyMatchesDirectory = (cacheKey: string, directory: string) => {
   }
 };
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+// A running search behind the toggles stops once nobody waits for it. A caller
+// without a signal never stops waiting.
+interface SupplementalWalk {
+  controller: AbortController;
+  waiters: number;
+  abandon: () => void;
+}
+
+const supplementalWalks = new WeakMap<Promise<ProjectFileSearchHit[]>, SupplementalWalk>();
+
+const waitForWalk = (walk: SupplementalWalk, signal: AbortSignal | undefined) => {
+  if (!signal) {
+    walk.waiters = Infinity;
+    return;
+  }
+  walk.waiters += 1;
+  signal.addEventListener('abort', () => {
+    walk.waiters -= 1;
+    if (walk.waiters === 0) walk.abandon();
+  }, { once: true });
+};
+
+=======
+interface SupplementalWalk {
+  controller: AbortController;
+  waiters: number;
+  abandon: () => void;
+}
+
+const supplementalWalks = new WeakMap<Promise<ProjectFileSearchHit[]>, SupplementalWalk>();
+
+const waitForWalk = (walk: SupplementalWalk, signal: AbortSignal | undefined) => {
+  if (!signal) {
+    walk.waiters = Infinity;
+    return;
+  }
+  walk.waiters += 1;
+  signal.addEventListener('abort', () => {
+    walk.waiters -= 1;
+    if (walk.waiters === 0) walk.abandon();
+  }, { once: true });
+};
+
+>>>>>>> upstream/main
 export const useFileSearchStore = create<FileSearchStoreState>()(
   devtools(
     (set, get) => ({
@@ -79,6 +125,7 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
           return inflight;
         }
 
+<<<<<<< HEAD
         // Host search owns hidden-file and gitignore filtering as well as type.
         const searchPromise = hostFilesystem
           .searchFiles(normalizedQuery, {
@@ -87,6 +134,115 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
             type,
             includeHidden,
             respectGitignore,
+||||||| bc50ba56aa
+        const runtimeFiles = type === 'file' && (includeHidden || !respectGitignore)
+          ? getRegisteredRuntimeAPIs()?.files
+          : undefined;
+        // Through the plain search's own entry, so a caller showing those hits
+        // before the supplement answers costs no second OpenCode request.
+        const indexedSearch = runtimeFiles
+          ? get().searchFiles(normalizedDirectory, normalizedQuery, limit, { type })
+          : opencodeClient.searchFiles(normalizedQuery, {
+              directory: normalizedDirectory,
+              limit,
+              type,
+            });
+        let supplementalFailed = false;
+        const walkController = new AbortController();
+        const supplementalSearch = runtimeFiles
+          ? runtimeFiles.search({
+              directory: normalizedDirectory,
+              query: normalizedQuery,
+              maxResults: limit,
+              includeHidden,
+              respectGitignore,
+              signal: walkController.signal,
+            }).then((results) =>
+              results.map((result) => {
+                const normalizedPath = result.path.replace(/\\/g, '/');
+                const previewPath = result.preview?.[0]
+                  ? result.preview[0].replace(/\\/g, '/')
+                  : normalizedPath;
+                const name = previewPath.split('/').filter(Boolean).pop() || normalizedPath.split('/').filter(Boolean).pop() || '';
+                return {
+                  name,
+                  path: normalizedPath,
+                  relativePath: previewPath,
+                  extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+                };
+              })
+            ).catch((error: unknown) => {
+              supplementalFailed = true;
+              if (!walkController.signal.aborted) {
+                console.warn('Supplemental file search failed; keeping indexed results:', error);
+              }
+              return [];
+            })
+          : Promise.resolve([]);
+
+        const searchPromise = Promise.all([indexedSearch, supplementalSearch])
+          .then(([indexed, supplemental]) => {
+            if (supplemental.length === 0) return indexed;
+            const seen = new Set(indexed.map((file) => file.path.replace(/\\/g, '/')));
+            return [...indexed, ...supplemental.filter((file) => {
+              if (seen.has(file.path)) return false;
+              seen.add(file.path);
+              return true;
+            })].slice(0, limit);
+=======
+        const runtimeFiles = type === 'file' && (includeHidden || !respectGitignore)
+          ? getRegisteredRuntimeAPIs()?.files
+          : undefined;
+        const indexedSearch = runtimeFiles
+          ? get().searchFiles(normalizedDirectory, normalizedQuery, limit, { type })
+          : opencodeClient.searchFiles(normalizedQuery, {
+              directory: normalizedDirectory,
+              limit,
+              type,
+            });
+        let supplementalFailed = false;
+        const walkController = new AbortController();
+        const supplementalSearch = runtimeFiles
+          ? runtimeFiles.search({
+              directory: normalizedDirectory,
+              query: normalizedQuery,
+              maxResults: limit,
+              includeHidden,
+              respectGitignore,
+              signal: walkController.signal,
+            }).then((results) =>
+              results.map((result) => {
+                const normalizedPath = result.path.replace(/\\/g, '/');
+                const previewPath = result.preview?.[0]
+                  ? result.preview[0].replace(/\\/g, '/')
+                  : normalizedPath;
+                const name = previewPath.split('/').filter(Boolean).pop() || normalizedPath.split('/').filter(Boolean).pop() || '';
+                return {
+                  name,
+                  path: normalizedPath,
+                  relativePath: previewPath,
+                  extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+                };
+              })
+            ).catch((error: unknown) => {
+              supplementalFailed = true;
+              if (!walkController.signal.aborted) {
+                console.warn('Supplemental file search failed; keeping indexed results:', error);
+              }
+              return [];
+            })
+          : Promise.resolve([]);
+
+        const searchPromise = Promise.all([indexedSearch, supplementalSearch])
+          .then(([indexed, supplemental]) => {
+            if (supplemental.length === 0) return indexed;
+            const seen = new Set(indexed.map((file) => file.path.replace(/\\/g, '/')));
+            return [...indexed, ...supplemental.filter((file) => {
+              if (seen.has(file.path)) return false;
+              seen.add(file.path);
+              return true;
+            })].slice(0, limit);
+>>>>>>> upstream/main
           })
           .then((files) => {
             set((state) => {
@@ -131,6 +287,38 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
           },
         }));
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+        if (runtimeFiles) {
+          const walk: SupplementalWalk = {
+            controller: walkController,
+            waiters: 0,
+            // Out of the in-flight list at once: the same query asked again
+            // starts its own walk instead of joining the stopped one.
+            abandon: () => {
+              walkController.abort();
+              dropInFlight();
+            },
+          };
+          supplementalWalks.set(searchPromise, walk);
+          waitForWalk(walk, options?.signal);
+        }
+
+=======
+        if (runtimeFiles) {
+          const walk: SupplementalWalk = {
+            controller: walkController,
+            waiters: 0,
+            abandon: () => {
+              walkController.abort();
+              dropInFlight();
+            },
+          };
+          supplementalWalks.set(searchPromise, walk);
+          waitForWalk(walk, options?.signal);
+        }
+
+>>>>>>> upstream/main
         return searchPromise;
       },
       invalidateDirectory(directory) {

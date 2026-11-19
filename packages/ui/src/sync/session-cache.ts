@@ -26,8 +26,41 @@ export function getProtectedSessionCacheIds(store: SessionCache): Set<string> {
     if ((approvals?.length ?? 0) > 0) protectedIds.add(sessionId)
   }
 
+<<<<<<< HEAD
   for (const [sessionId, questions] of Object.entries(store.form ?? {})) {
     if ((questions?.length ?? 0) > 0) protectedIds.add(sessionId)
+||||||| bc50ba56aa
+  for (const [sessionID, forms] of Object.entries(store.form ?? {})) {
+    if ((forms?.length ?? 0) > 0) {
+      protectedIds.add(sessionID)
+    }
+  }
+
+  for (const [sessionID, messages] of Object.entries(store.message ?? {})) {
+    // Plumbing roles can land after the assistant message that is still
+    // streaming, so protection follows the last conversation message. An idle
+    // session is settled even when its last assistant step never completed.
+    if (
+      store.session_status[sessionID]?.type !== "idle"
+      && isIncompleteAssistantTurn(getLastConversationMessage(messages))
+    ) {
+      protectedIds.add(sessionID)
+    }
+=======
+  for (const [sessionID, forms] of Object.entries(store.form ?? {})) {
+    if ((forms?.length ?? 0) > 0) {
+      protectedIds.add(sessionID)
+    }
+  }
+
+  for (const [sessionID, messages] of Object.entries(store.message ?? {})) {
+    if (
+      store.session_status[sessionID]?.type !== "idle"
+      && isIncompleteAssistantTurn(getLastConversationMessage(messages))
+    ) {
+      protectedIds.add(sessionID)
+    }
+>>>>>>> upstream/main
   }
 
   return protectedIds

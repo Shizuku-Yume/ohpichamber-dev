@@ -1,8 +1,12 @@
 import { printTunnelWarning } from '../cloudflare-tunnel.js';
-import { createTunnelService } from '../tunnels/index.js';
-import { createTunnelRoutesRuntime } from '../tunnels/routes.js';
+import { createTunnelService } from './index.js';
+import { createTunnelRoutesRuntime } from './routes.js';
+import type { TunnelRoutesDependencies } from './routes.js';
+import type { Application } from '../shared/http-contracts.js';
 
-export const createTunnelWiringRuntime = (dependencies) => {
+export type TunnelWiringDependencies = Omit<TunnelRoutesDependencies, 'tunnelService' | 'hasUiPassword' | 'getActivePort'>;
+
+export const createTunnelWiringRuntime = (dependencies: TunnelWiringDependencies) => {
   const {
     crypto,
     URL,
@@ -32,7 +36,7 @@ export const createTunnelWiringRuntime = (dependencies) => {
     setRuntimeManagedRemoteTunnelToken,
   } = dependencies;
 
-  const initialize = (app, initialPort, hasUiPassword) => {
+  const initialize = (app: Application, initialPort: number, hasUiPassword: boolean) => {
     let activePort = initialPort;
 
     const tunnelService = createTunnelService({
@@ -81,9 +85,9 @@ export const createTunnelWiringRuntime = (dependencies) => {
 
     return {
       tunnelService,
-      startTunnelWithNormalizedRequest: (...args) => tunnelRoutesRuntime.startTunnelWithNormalizedRequest(...args),
+      startTunnelWithNormalizedRequest: (...args: Parameters<typeof tunnelRoutesRuntime.startTunnelWithNormalizedRequest>) => tunnelRoutesRuntime.startTunnelWithNormalizedRequest(...args),
       getActivePort: () => activePort,
-      setActivePort: (value) => {
+      setActivePort: (value: number) => {
         activePort = value;
       },
     };

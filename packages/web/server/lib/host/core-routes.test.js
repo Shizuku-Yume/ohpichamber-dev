@@ -1,10 +1,207 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.test.js
 import { createTunnelAuth } from './tunnel-auth.js';
 import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerServerStatusRoutes } from './core-routes.js';
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.test.js
+import { createTunnelAuth } from './tunnel-auth.js';
+import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerHttpResponseDiagnostics, registerServerStatusRoutes } from './core-routes.js';
+import { createServerDiagnosticJournal } from '../diagnostics/server-journal.js';
+========
+import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
+import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerHttpResponseDiagnostics, registerServerStatusRoutes, registerSettingsUtilityRoutes } from './core-routes.js';
+import { createServerDiagnosticJournal } from '../diagnostics/server-journal.js';
+import { createUiAuth } from '../ui-auth/ui-auth.js';
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.test.js
 
 describe('core-routes', () => {
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.test.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.test.js
+  it('captures the final response status, including missing routes and parser errors, without request data', async () => {
+    const journal = createServerDiagnosticJournal();
+    const app = express();
+    registerHttpResponseDiagnostics(app, journal);
+    app.use(express.json({ limit: '16b' }));
+    app.get('/api/session/:sessionID', (_req, res) => res.sendStatus(404));
+    await request(app).get('/api/session/ses_private?token=secret').expect(404);
+    await request(app).post('/api/other').send({ prompt: 'private prompt private prompt' }).expect(413);
+    const details = journal.snapshot().events.map((event) => event.detail);
+    expect(details).toEqual([
+      'method=GET route=/api/session/:sessionID stage=downstream_response http=404',
+      'method=POST route=/api/other stage=downstream_response http=413',
+    ]);
+    expect(JSON.stringify(journal.snapshot())).not.toMatch(/ses_private|token|secret|prompt/);
+  });
+
+  it('does not report an aborted response as a completed HTTP status', async () => {
+    const journal = createServerDiagnosticJournal();
+    const app = express();
+    registerHttpResponseDiagnostics(app, journal);
+    app.get('/api/aborted', (_req, res) => res.destroy());
+    await expect(request(app).get('/api/aborted')).rejects.toThrow();
+    expect(journal.snapshot().events).toEqual([]);
+  });
+
+  it('requires authentication for local file diagnostics', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, res) => res.status(401).json({ error: 'Unauthorized' }));
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      uiAuthController: { requireAuth },
+    });
+    await request(app).get('/api/diagnostics/local-files').expect(401);
+    expect(requireAuth).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects tunneled diagnostics even when the proxy connects through loopback', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, _res, next) => next());
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      tunnelAuthController: { classifyRequestScope: () => 'tunnel' },
+      uiAuthController: { requireAuth },
+    });
+    await request(app).get('/api/diagnostics/local-files').expect(403);
+    expect(requireAuth).not.toHaveBeenCalled();
+  });
+
+  it('rejects diagnostics forwarded by the private relay over loopback', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, _res, next) => next());
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      uiAuthController: { requireAuth },
+    });
+    await request(app).get('/api/diagnostics/local-files').set('x-openchamber-relay-connection', 'conn-1').expect(403);
+    expect(requireAuth).not.toHaveBeenCalled();
+  });
+
+  it('serves the OpenCode load under the same local-only gate', async () => {
+    const app = express();
+    const readOpenCodeLoad = vi.fn(async () => ({ locations: 2, processes: null }));
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      uiAuthController: { requireAuth: (_req, _res, next) => next() },
+      readOpenCodeLoad,
+    });
+    await request(app).get('/api/diagnostics/opencode-load').set('x-openchamber-relay-connection', 'conn-1').expect(403);
+    expect(readOpenCodeLoad).not.toHaveBeenCalled();
+    const response = await request(app).get('/api/diagnostics/opencode-load').expect(200);
+    expect(response.body).toEqual({ locations: 2, processes: null });
+  });
+========
+  it('captures the final response status, including missing routes and parser errors, without request data', async () => {
+    const journal = createServerDiagnosticJournal();
+    const app = express();
+    registerHttpResponseDiagnostics(app, journal);
+    app.use(express.json({ limit: '16b' }));
+    app.get('/api/session/:sessionID', (_req, res) => res.sendStatus(404));
+    await request(app).get('/api/session/ses_private?token=secret').expect(404);
+    await request(app).post('/api/other').send({ prompt: 'private prompt private prompt' }).expect(413);
+    const details = journal.snapshot().events.map((event) => event.detail);
+    expect(details).toEqual([
+      'method=GET route=/api/session/:sessionID stage=downstream_response http=404',
+      'method=POST route=/api/other stage=downstream_response http=413',
+    ]);
+    expect(JSON.stringify(journal.snapshot())).not.toMatch(/ses_private|token|secret|prompt/);
+  });
+
+  it('does not report an aborted response as a completed HTTP status', async () => {
+    const journal = createServerDiagnosticJournal();
+    const app = express();
+    registerHttpResponseDiagnostics(app, journal);
+    app.get('/api/aborted', (_req, res) => res.destroy());
+    await expect(request(app).get('/api/aborted')).rejects.toThrow();
+    expect(journal.snapshot().events).toEqual([]);
+  });
+
+  it('retains the configuration reload error path for null and undefined rejections', async () => {
+    for (const rejection of [null, undefined]) {
+      const app = express();
+      registerSettingsUtilityRoutes(app, {
+        refreshOpenCodeAfterConfigChange: async () => { throw rejection; },
+      });
+      app.use((error, _req, res, _next) => {
+        res.json({ status: res.statusCode, error: error.message, type: error.name });
+      });
+      const response = await request(app).post('/api/config/reload').expect(500);
+      expect(response.body).toEqual({
+        status: 500,
+        error: `Cannot read properties of ${rejection} (reading 'message')`,
+        type: 'TypeError',
+      });
+    }
+  });
+
+  it('requires authentication for local file diagnostics', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, res) => res.status(401).json({ error: 'Unauthorized' }));
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      uiAuthController: { requireAuth },
+    });
+    await request(app).get('/api/diagnostics/local-files').expect(401);
+    expect(requireAuth).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects tunneled diagnostics even when the proxy connects through loopback', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, _res, next) => next());
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      tunnelAuthController: { classifyRequestScope: () => 'tunnel' },
+      uiAuthController: { requireAuth },
+    });
+    await request(app).get('/api/diagnostics/local-files').expect(403);
+    expect(requireAuth).not.toHaveBeenCalled();
+  });
+
+  it('rejects diagnostics forwarded by the private relay over loopback', async () => {
+    const app = express();
+    const requireAuth = vi.fn((_req, _res, next) => next());
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      uiAuthController: { requireAuth },
+    });
+    await request(app).get('/api/diagnostics/local-files').set('x-openchamber-relay-connection', 'conn-1').expect(403);
+    expect(requireAuth).not.toHaveBeenCalled();
+  });
+
+  it('serves the OpenCode load under the same local-only gate', async () => {
+    const app = express();
+    const readOpenCodeLoad = vi.fn(async () => ({ locations: 2, processes: null }));
+    registerServerStatusRoutes(app, {
+      express,
+      getHealthSnapshot: () => ({}),
+      gracefulShutdown: vi.fn(),
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      uiAuthController: { requireAuth: (_req, _res, next) => next() },
+      readOpenCodeLoad,
+    });
+    await request(app).get('/api/diagnostics/opencode-load').set('x-openchamber-relay-connection', 'conn-1').expect(403);
+    expect(readOpenCodeLoad).not.toHaveBeenCalled();
+    const response = await request(app).get('/api/diagnostics/opencode-load').expect(200);
+    expect(response.body).toEqual({ locations: 2, processes: null });
+  });
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.test.js
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -451,6 +648,7 @@ describe('core-routes', () => {
       allowedClientKinds: ['mobile'],
       createdByClientId: null,
       usesRelay: false,
+      localOnly: true,
     });
   });
 
@@ -506,7 +704,7 @@ describe('core-routes', () => {
       hostEncPubJwk: { kty: 'EC', crv: 'P-256', x: 'aaa', y: 'bbb' },
       priority: 30,
     };
-    const { app } = createPairingRouteApp({ getRelayPairingCandidate: vi.fn(async () => relayCandidate) });
+    const { app, dependencies } = createPairingRouteApp({ getRelayPairingCandidate: vi.fn(async () => relayCandidate) });
 
     const response = await request(app)
       .post('/api/client-auth/pairing/sessions')
@@ -518,6 +716,24 @@ describe('core-routes', () => {
       { type: 'lan', url: 'http://runtime.example', priority: 10 },
       relayCandidate,
     ]);
+    expect(dependencies.clientPairingRuntime.createPairingSession).toHaveBeenCalledWith(
+      expect.objectContaining({ usesRelay: true, localOnly: false }),
+    );
+  });
+
+  it('does not mark a device local-only when it may reach the server through a public tunnel', async () => {
+    const { app, dependencies } = createPairingRouteApp();
+
+    await request(app)
+      .post('/api/client-auth/pairing/sessions')
+      .set('Host', 'chamber.example.com')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ label: 'Pair phone', serverUrl: 'http://192.168.1.20:2606', includeRelay: false })
+      .expect(201);
+
+    expect(dependencies.clientPairingRuntime.createPairingSession).toHaveBeenCalledWith(
+      expect.objectContaining({ usesRelay: false, localOnly: false }),
+    );
   });
 
   it('still returns the direct candidate when the relay candidate lookup throws', async () => {
@@ -577,6 +793,24 @@ describe('core-routes', () => {
       .post('/api/client-auth/pairing/redeem')
       .send({ pairingId: 'pair_2', secret: 'wrong' })
       .expect(400, { error: 'Invalid or expired pairing session' });
+  });
+
+  it('removes the push registrations of the device record a pairing replaces before answering', async () => {
+    const removeClientPushDevices = vi.fn(async () => {});
+    const { app, dependencies } = createPairingRouteApp({ removeClientPushDevices });
+    dependencies.clientPairingRuntime.redeemPairingSession.mockResolvedValueOnce({
+      pairing: { fingerprint: 'ABCD-1234' },
+      client: { id: 'client-2', label: 'Phone', authMethod: 'pairing' },
+      token: 'oc_client_token',
+      replacedClientIds: ['client-1'],
+    });
+
+    await request(app)
+      .post('/api/client-auth/pairing/redeem')
+      .send({ pairingId: 'pair_1', secret: 'secret', clientKind: 'mobile' })
+      .expect(200);
+
+    expect(removeClientPushDevices).toHaveBeenCalledWith(['client-1']);
   });
 
   it('rate limits pairing redeem attempts by socket address and pairingId, then resets after the window', async () => {
@@ -783,6 +1017,37 @@ describe('client auth routes', () => {
     ]);
   });
 
+  it('keeps the relay away from a device paired for the home network only', async () => {
+    const app = express();
+    const dependencies = {
+      ...createDependencies({ resolveAuthContext: async () => ({ type: 'client', clientId: 'client-1', client: { id: 'client-1', localOnly: true } }) }),
+      getDirectCandidateUrls: () => ['http://192.168.1.20:3000'],
+      getRelayPairingCandidate: async () => ({ type: 'relay', relayUrl: 'wss://relay.example/ws', serverId: 'server-abc', hostEncPubJwk: {}, priority: 30 }),
+      getServerId: async () => 'server-abc',
+    };
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    const response = await request(app).get('/api/client-auth/connection/candidates');
+    expect(response.status).toBe(200);
+    expect(response.body.candidates).toEqual([{ type: 'lan', url: 'http://192.168.1.20:3000', priority: 10 }]);
+  });
+
+  it('judges the device by its own bearer token when a cookie session rides along', async () => {
+    const app = express();
+    const dependencies = createDependencies({ resolveAuthContext: async () => ({ type: 'session', token: 'cookie' }) });
+    dependencies.remoteClientAuthRuntime.authenticateBearerToken = async (token) => (
+      token === 'oc_client_home' ? { ok: true, client: { id: 'client-1', localOnly: true } } : null
+    );
+    dependencies.getDirectCandidateUrls = () => ['http://192.168.1.20:3000'];
+    dependencies.getRelayPairingCandidate = async () => ({ type: 'relay', relayUrl: 'wss://relay.example/ws', serverId: 's', hostEncPubJwk: {}, priority: 30 });
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    const home = await request(app).get('/api/client-auth/connection/candidates').set('Authorization', 'Bearer oc_client_home');
+    expect(home.body.candidates.map((candidate) => candidate.type)).toEqual(['lan']);
+    const owner = await request(app).get('/api/client-auth/connection/candidates');
+    expect(owner.body.candidates.map((candidate) => candidate.type)).toEqual(['lan', 'relay']);
+  });
+
   it('omits serverId and relay candidate when unavailable and survives failures', async () => {
     const app = express();
     const dependencies = {
@@ -913,6 +1178,91 @@ describe('client auth routes', () => {
     expect(dependencies.testHooks.requireAuth).not.toHaveBeenCalled();
   });
 
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.test.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.test.js
+  it('renames a passkey through the UI-session route', async () => {
+    const app = express();
+    const dependencies = createDependencies();
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    await request(app)
+      .patch('/api/passkeys/credential-1')
+      .send({ label: 'Office laptop' })
+      .expect(200, { renamed: true });
+
+    expect(dependencies.testHooks.requireSessionAuth).toHaveBeenCalledTimes(1);
+    expect(dependencies.testHooks.requireAuth).not.toHaveBeenCalled();
+  });
+
+  it('keeps passkey renames off the tunnel scope', async () => {
+    const app = express();
+    const dependencies = createDependencies();
+    const tunnelAuthController = createTunnelAuth();
+    tunnelAuthController.setActiveTunnel({ tunnelId: 'tunnel-1', publicUrl: 'https://tunnel.example.com' });
+    dependencies.tunnelAuthController = tunnelAuthController;
+    dependencies.uiAuthController.handlePasskeyRename = vi.fn((_req, res) => res.json({ renamed: true }));
+
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    const response = await request(app)
+      .patch('/api/passkeys/credential-1')
+      .set('Host', 'tunnel.example.com')
+      .send({ label: 'Office laptop' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.tunnelLocked).toBe(true);
+    expect(dependencies.uiAuthController.handlePasskeyRename).not.toHaveBeenCalled();
+  });
+
+========
+  it('renames a passkey through the UI-session route', async () => {
+    const app = express();
+    const dependencies = createDependencies();
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    await request(app)
+      .patch('/api/passkeys/credential-1')
+      .send({ label: 'Office laptop' })
+      .expect(200, { renamed: true });
+
+    expect(dependencies.testHooks.requireSessionAuth).toHaveBeenCalledTimes(1);
+    expect(dependencies.testHooks.requireAuth).not.toHaveBeenCalled();
+  });
+
+  it('forwards the missing rename handler error when UI password protection is off', async () => {
+    const app = express();
+    const dependencies = createDependencies();
+    dependencies.uiAuthController = createUiAuth();
+    registerAuthAndAccessRoutes(app, dependencies);
+    app.use((error, _req, res, _next) => res.status(500).json({ error: error.message, type: error.name }));
+
+    await request(app).patch('/api/passkeys/credential-1').send({ label: 'Office laptop' }).expect(500, {
+      error: 'uiAuthController.handlePasskeyRename is not a function',
+      type: 'TypeError',
+    });
+  });
+
+  it('keeps passkey renames off the tunnel scope', async () => {
+    const app = express();
+    const dependencies = createDependencies();
+    const tunnelAuthController = createTunnelAuth();
+    tunnelAuthController.setActiveTunnel({ tunnelId: 'tunnel-1', publicUrl: 'https://tunnel.example.com' });
+    dependencies.tunnelAuthController = tunnelAuthController;
+    dependencies.uiAuthController.handlePasskeyRename = vi.fn((_req, res) => res.json({ renamed: true }));
+
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    const response = await request(app)
+      .patch('/api/passkeys/credential-1')
+      .set('Host', 'tunnel.example.com')
+      .send({ label: 'Office laptop' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.tunnelLocked).toBe(true);
+    expect(dependencies.uiAuthController.handlePasskeyRename).not.toHaveBeenCalled();
+  });
+
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.test.js
   it('treats private LAN hosts as local even when a tunnel is active', async () => {
     const app = express();
     const dependencies = createDependencies();

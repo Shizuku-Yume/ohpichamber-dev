@@ -21,9 +21,43 @@ import {
   rankFileMentionResults,
   type FileMentionHit,
 } from './fileMentionResults';
+<<<<<<< HEAD
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
+||||||| bc50ba56aa
+import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
+import { AutocompleteLoadingRow, AutocompleteRowDetail } from './composer/ui/AutocompleteRowParts';
+import { rankSessionMentions } from './sessionMentionResults';
+import type { Session } from '@/lib/opencode/model';
+import { ensureGlobalSessionsLoaded, resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useAutocompleteSelectionScroll } from './composer/ui/useAutocompleteSelectionScroll';
+import { useHeightMorph } from '@/lib/motion/useSizeMorph';
+import { guestsOfferMentions, searchGuestMentions, type GuestMention } from '@/lib/guests/mentions';
+import { useGuestsStore } from '@/lib/guests/store';
+import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
+import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+import { GuestIcon } from '@/components/layout/GuestRailIcon';
+
+/** Subagents listed before the user types; the rest are a keystroke away. */
+const AGENTS_SHOWN_WITHOUT_QUERY = 6;
+=======
+import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
+import { AutocompleteLoadingRow, AutocompleteRowDetail } from './composer/ui/AutocompleteRowParts';
+import { rankSessionMentions } from './sessionMentionResults';
+import type { Session } from '@/lib/opencode/model';
+import { ensureGlobalSessionsLoaded, resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useAutocompleteSelectionScroll } from './composer/ui/useAutocompleteSelectionScroll';
+import { useHeightMorph } from '@/lib/motion/useSizeMorph';
+import { guestsOfferMentions, searchGuestMentions, type GuestMention } from '@/lib/guests/mentions';
+import { useGuestsStore } from '@/lib/guests/store';
+import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
+import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+import { GuestIcon } from '@/components/layout/GuestRailIcon';
+
+const AGENTS_SHOWN_WITHOUT_QUERY = 6;
+>>>>>>> upstream/main
 
 type FileInfo = ProjectFileSearchHit;
+<<<<<<< HEAD
 const OMP_INTERNAL_SCHEMES: readonly FileMentionHit[] = [
   { name: 'skill://', path: 'skill://', relativePath: 'skill://', kind: 'file' },
   { name: 'local://', path: 'local://', relativePath: 'local://', kind: 'file' },
@@ -31,6 +65,77 @@ const OMP_INTERNAL_SCHEMES: readonly FileMentionHit[] = [
   { name: 'agent://', path: 'agent://', relativePath: 'agent://', kind: 'file' },
   { name: 'history://', path: 'history://', relativePath: 'history://', kind: 'file' },
 ] as const;
+||||||| bc50ba56aa
+type AgentInfo = {
+  name: string;
+  displayName: string;
+  description?: string;
+  mode?: string | null;
+};
+
+/** The rows the list shows, top to bottom, and the search they answer. */
+type MentionRows = {
+  key: string | null;
+  agents: AgentInfo[];
+  moreAgents: boolean;
+  recentFiles: FileInfo[];
+  results: FileMentionHit[];
+  sessions: Session[];
+  extensions: GuestMention[];
+};
+
+/** The extension's own mark, so a row says whose it is before it is read. */
+const ExtensionMentionIcon = ({ guestId }: { guestId: string }) => {
+  const icon = useGuestsStore((state) => state.guests.find((guest) => guest.id === guestId)?.icon) ?? '';
+  const iconSrc = React.useMemo(
+    () => guestPackageIconSrc(guestId, icon, getRuntimeUrlResolver().authenticatedAsset),
+    [guestId, icon],
+  );
+  return <GuestIcon icon={resolveGuestIconName(icon)} iconSrc={iconSrc} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+};
+
+const mentionRowIds = ({ agents, recentFiles, results, sessions, extensions }: MentionRows): string[] => [
+  ...agents.map((agent) => `agent:${agent.name}`),
+  ...recentFiles.map((file) => `file:${file.path}`),
+  ...results.map((file) => `file:${file.path}`),
+  ...sessions.map((session) => `session:${session.id}`),
+  ...extensions.map((mention) => `extension:${mention.guestId}:${mention.id}`),
+];
+=======
+type AgentInfo = {
+  name: string;
+  displayName: string;
+  description?: string;
+  mode?: string | null;
+};
+
+type MentionRows = {
+  key: string | null;
+  agents: AgentInfo[];
+  moreAgents: boolean;
+  recentFiles: FileInfo[];
+  results: FileMentionHit[];
+  sessions: Session[];
+  extensions: GuestMention[];
+};
+
+const ExtensionMentionIcon = ({ guestId }: { guestId: string }) => {
+  const icon = useGuestsStore((state) => state.guests.find((guest) => guest.id === guestId)?.icon) ?? '';
+  const iconSrc = React.useMemo(
+    () => guestPackageIconSrc(guestId, icon, getRuntimeUrlResolver().authenticatedAsset),
+    [guestId, icon],
+  );
+  return <GuestIcon icon={resolveGuestIconName(icon)} iconSrc={iconSrc} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+};
+
+const mentionRowIds = ({ agents, recentFiles, results, sessions, extensions }: MentionRows): string[] => [
+  ...agents.map((agent) => `agent:${agent.name}`),
+  ...recentFiles.map((file) => `file:${file.path}`),
+  ...results.map((file) => `file:${file.path}`),
+  ...sessions.map((session) => `session:${session.id}`),
+  ...extensions.map((mention) => `extension:${mention.guestId}:${mention.id}`),
+];
+>>>>>>> upstream/main
 
 export interface FileMentionHandle {
   handleKeyDown: (key: string) => void;
@@ -38,7 +143,24 @@ export interface FileMentionHandle {
 
 interface FileMentionAutocompleteProps {
   searchQuery: string;
+<<<<<<< HEAD
   onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
+||||||| bc50ba56aa
+  onFileSelect: (file: FileInfo) => void;
+  onAgentSelect?: (agentName: string) => void;
+  /** Lists other sessions by title once the user types; without it, none. */
+  onSessionSelect?: (session: Session) => void;
+  /** Lists rows from extensions that answer `@`; without it, none. */
+  onExtensionMentionSelect?: (mention: GuestMention) => void;
+  /** The session being written in, which the session list leaves out. */
+  currentSessionId?: string | null;
+=======
+  onFileSelect: (file: FileInfo) => void;
+  onAgentSelect?: (agentName: string) => void;
+  onSessionSelect?: (session: Session) => void;
+  onExtensionMentionSelect?: (mention: GuestMention) => void;
+  currentSessionId?: string | null;
+>>>>>>> upstream/main
   onClose: () => void;
   style?: React.CSSProperties;
 }
@@ -72,25 +194,95 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const removeUnselectedOpenPath = useFilesViewTabsStore((state) => state.removeUnselectedOpenPath);
   const [staleRecentPaths, setStaleRecentPaths] = React.useState<ReadonlySet<string>>(() => new Set());
   const verifiedPathsRef = React.useRef<Set<string>>(new Set());
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // Subscribed, not read once: the session's directory may still be loading its agents.
+  const configAgents = useConfigStore((state) => state.agents);
+=======
+  const configAgents = useConfigStore((state) => state.agents);
+>>>>>>> upstream/main
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
+<<<<<<< HEAD
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [directories, setDirectories] = React.useState<FileInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const pendingSearchRef = React.useRef(0);
+||||||| bc50ba56aa
+  // The server's hits, with the search they answer: rows from another query
+  // are never shown as this one's.
+  const [search, setSearch] = React.useState<{ key: string; files: FileInfo[]; directories: FileInfo[] } | null>(null);
+  // Derived, not stored: the subagent list follows the registry, and only the
+  // ranking follows the query, in the same render as the keystroke.
+  const subagents = React.useMemo<AgentInfo[]>(() => filterVisibleAgents(configAgents)
+    .filter((agent) => agent.mode && agent.mode !== 'primary')
+    .map((agent) => ({
+      name: agent.name,
+      displayName: agent.displayName,
+      description: agent.description,
+      mode: agent.mode,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name)), [configAgents]);
+  // The trigger lets a space through only for a session title; paths and
+  // agent names hold none, so such a query lists sessions alone.
+  const sessionsOnly = (searchQuery ?? '').includes(' ');
+  const agents = React.useMemo(
+    () => sessionsOnly ? [] : rankByQuery(subagents, searchQuery ?? '', (agent) => [agent.name, agent.displayName, agent.description]),
+    [searchQuery, sessionsOnly, subagents],
+  );
+  const searchOptions = { includeHidden: showHidden, respectGitignore: !showGitignored };
+  const wantedSearchKey = mentionSearchKey(currentDirectory, searchQuery ?? '', searchOptions);
+  const debouncedSearchKey = mentionSearchKey(currentDirectory, debouncedQuery ?? '', searchOptions);
+  // From the keystroke until its search answers, debounce included.
+  const searchPending = wantedSearchKey !== null && search?.key !== wantedSearchKey;
+=======
+  const [search, setSearch] = React.useState<{ key: string; files: FileInfo[]; directories: FileInfo[] } | null>(null);
+  const subagents = React.useMemo<AgentInfo[]>(() => filterVisibleAgents(configAgents)
+    .filter((agent) => agent.mode && agent.mode !== 'primary')
+    .map((agent) => ({
+      name: agent.name,
+      displayName: agent.displayName,
+      description: agent.description,
+      mode: agent.mode,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name)), [configAgents]);
+  const sessionsOnly = (searchQuery ?? '').includes(' ');
+  const agents = React.useMemo(
+    () => sessionsOnly ? [] : rankByQuery(subagents, searchQuery ?? '', (agent) => [agent.name, agent.displayName, agent.description]),
+    [searchQuery, sessionsOnly, subagents],
+  );
+  const searchOptions = { includeHidden: showHidden, respectGitignore: !showGitignored };
+  const wantedSearchKey = mentionSearchKey(currentDirectory, searchQuery ?? '', searchOptions);
+  const debouncedSearchKey = mentionSearchKey(currentDirectory, debouncedQuery ?? '', searchOptions);
+  const searchPending = wantedSearchKey !== null && search?.key !== wantedSearchKey;
+>>>>>>> upstream/main
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const [marqueeWidth, setMarqueeWidth] = React.useState(360);
-  // Only the selected row scrolls an overflowing path, so only it is measured.
   const [selectedOverflow, setSelectedOverflow] = React.useState<{ index: number; duration: number } | null>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const labelRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
   const measureRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // Narrowing as the user types, the box eases into its new height; its
+  // bottom edge stays on the composer (`bottom-full`), so it moves upward.
+  useHeightMorph(containerRef);
+=======
+  useHeightMorph(containerRef);
+>>>>>>> upstream/main
   const isMobile = useUIStore((state) => state.isMobile);
+<<<<<<< HEAD
   const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, true);
+||||||| bc50ba56aa
+  // A caret placement brings its own max-height.
+  const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined);
+=======
+  const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined);
+>>>>>>> upstream/main
   const normalizedSearchQuery = (searchQuery ?? '').trim();
 
   React.useEffect(() => {
@@ -194,6 +386,41 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     };
   }, [filesApi, projectRoot, recentCandidatePathsKey, removeUnselectedOpenPath]);
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const visibleAgents = React.useMemo(
+    () => normalizedSearchQuery.length > 0 ? agents : agents.slice(0, AGENTS_SHOWN_WITHOUT_QUERY),
+    [agents, normalizedSearchQuery.length],
+  );
+  // Ranked from a snapshot per query (and once more when the list arrives),
+  // not the live list: other sessions update all the time, which must neither
+  // re-rank thousands of titles nor move the row under the keyboard.
+  const sessionsLoaded = useGlobalSessionsStore((state) => state.hasLoaded);
+  const listsSessions = onSessionSelect !== undefined;
+  React.useEffect(() => {
+    if (listsSessions) void ensureGlobalSessionsLoaded().catch(() => undefined);
+  }, [listsSessions]);
+  const visibleSessions = React.useMemo(() => {
+    if (!listsSessions || !sessionsLoaded) return [];
+    const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
+    return rankSessionMentions([...activeSessions, ...archivedSessions], normalizedSearchQuery, { currentSessionId, projectRoot });
+  }, [currentSessionId, listsSessions, normalizedSearchQuery, projectRoot, sessionsLoaded]);
+=======
+  const visibleAgents = React.useMemo(
+    () => normalizedSearchQuery.length > 0 ? agents : agents.slice(0, AGENTS_SHOWN_WITHOUT_QUERY),
+    [agents, normalizedSearchQuery.length],
+  );
+  const sessionsLoaded = useGlobalSessionsStore((state) => state.hasLoaded);
+  const listsSessions = onSessionSelect !== undefined;
+  React.useEffect(() => {
+    if (listsSessions) void ensureGlobalSessionsLoaded().catch(() => undefined);
+  }, [listsSessions]);
+  const visibleSessions = React.useMemo(() => {
+    if (!listsSessions || !sessionsLoaded) return [];
+    const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
+    return rankSessionMentions([...activeSessions, ...archivedSessions], normalizedSearchQuery, { currentSessionId, projectRoot });
+  }, [currentSessionId, listsSessions, normalizedSearchQuery, projectRoot, sessionsLoaded]);
+>>>>>>> upstream/main
   const visibleRecentFiles = React.useMemo(
     () => filterStaleRecentFiles(recentFiles, staleRecentPaths),
     [recentFiles, staleRecentPaths],
@@ -204,10 +431,89 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     return OMP_INTERNAL_SCHEMES.filter(s => s.name.toLowerCase().includes(q));
   }, [normalizedSearchQuery]);
   const visibleResults = React.useMemo(() => {
+<<<<<<< HEAD
     const ranked = rankFileMentionResults(files, directories, normalizedSearchQuery, 20);
     if (visibleSchemes.length === 0) return ranked;
     return [...visibleSchemes, ...ranked];
   }, [files, directories, normalizedSearchQuery, visibleSchemes]);
+||||||| bc50ba56aa
+    if (!settledSearch) return [];
+    const recentSet = new Set(visibleRecentFiles.map((file) => file.path));
+    const files = settledSearch.files.filter((hit) => !recentSet.has(hit.path));
+    return rankFileMentionResults(files, settledSearch.directories, normalizedSearchQuery, 20);
+  }, [settledSearch, visibleRecentFiles, normalizedSearchQuery]);
+  const settledSearchKey = settledSearch?.key ?? null;
+  // Extensions answer on their own time: their rows join the list when they
+  // arrive and never hold the files back.
+  const asksExtensions = useGuestsStore((state) => onExtensionMentionSelect !== undefined && guestsOfferMentions(state.guests));
+  const [extensionRows, setExtensionRows] = React.useState<GuestMention[]>([]);
+  React.useEffect(() => {
+    if (!asksExtensions) {
+      setExtensionRows([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    void searchGuestMentions(debouncedQuery ?? '', currentDirectory || null, controller.signal).then((rows) => {
+      if (!controller.signal.aborted) setExtensionRows(rows);
+    });
+    return () => controller.abort();
+  }, [asksExtensions, currentDirectory, debouncedQuery]);
+  const liveView = React.useMemo<MentionRows>(() => ({
+    key: settledSearchKey,
+    agents: visibleAgents,
+    moreAgents: visibleAgents.length < agents.length,
+    recentFiles: visibleRecentFiles,
+    results: visibleResults,
+    sessions: visibleSessions,
+    extensions: extensionRows,
+  }), [agents.length, extensionRows, settledSearchKey, visibleAgents, visibleRecentFiles, visibleResults, visibleSessions]);
+  // While a query searches, the popup keeps the last settled rows, so it does
+  // not collapse and regrow on every keystroke: its height changes once per
+  // answer, by what the answer changed.
+  const [heldView, setHeldView] = React.useState(liveView);
+  if (!searchPending && heldView !== liveView) {
+    setHeldView(liveView);
+  }
+  const view = searchPending ? heldView : liveView;
+  const rowCount = view.agents.length + view.recentFiles.length + view.results.length + view.sessions.length + view.extensions.length;
+  const listState = mentionListState(rowCount, searchPending);
+=======
+    if (!settledSearch) return [];
+    const recentSet = new Set(visibleRecentFiles.map((file) => file.path));
+    const files = settledSearch.files.filter((hit) => !recentSet.has(hit.path));
+    return rankFileMentionResults(files, settledSearch.directories, normalizedSearchQuery, 20);
+  }, [settledSearch, visibleRecentFiles, normalizedSearchQuery]);
+  const settledSearchKey = settledSearch?.key ?? null;
+  const asksExtensions = useGuestsStore((state) => onExtensionMentionSelect !== undefined && guestsOfferMentions(state.guests));
+  const [extensionRows, setExtensionRows] = React.useState<GuestMention[]>([]);
+  React.useEffect(() => {
+    if (!asksExtensions) {
+      setExtensionRows([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    void searchGuestMentions(debouncedQuery ?? '', currentDirectory || null, controller.signal).then((rows) => {
+      if (!controller.signal.aborted) setExtensionRows(rows);
+    });
+    return () => controller.abort();
+  }, [asksExtensions, currentDirectory, debouncedQuery]);
+  const liveView = React.useMemo<MentionRows>(() => ({
+    key: settledSearchKey,
+    agents: visibleAgents,
+    moreAgents: visibleAgents.length < agents.length,
+    recentFiles: visibleRecentFiles,
+    results: visibleResults,
+    sessions: visibleSessions,
+    extensions: extensionRows,
+  }), [agents.length, extensionRows, settledSearchKey, visibleAgents, visibleRecentFiles, visibleResults, visibleSessions]);
+  const [heldView, setHeldView] = React.useState(liveView);
+  if (!searchPending && heldView !== liveView) {
+    setHeldView(liveView);
+  }
+  const view = searchPending ? heldView : liveView;
+  const rowCount = view.agents.length + view.recentFiles.length + view.results.length + view.sessions.length + view.extensions.length;
+  const listState = mentionListState(rowCount, searchPending);
+>>>>>>> upstream/main
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -241,6 +547,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     }
 
     let cancelled = false;
+<<<<<<< HEAD
     pendingSearchRef.current++;
     setLoading(true);
 
@@ -271,6 +578,58 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           }
         }
       });
+||||||| bc50ba56aa
+    let answered = false;
+    const serverQuery = mentionServerQuery(debouncedQuery ?? '');
+    const options = { includeHidden: showHidden, respectGitignore: !showGitignored };
+    // A failed kind lists nothing without taking the other kind's hits with it.
+    const directorySearch = searchFiles(currentDirectory, serverQuery, 20, { ...options, type: 'directory' }).catch((): FileInfo[] => []);
+    // OpenCode's index answers at once; the search behind the hidden and
+    // gitignored toggles can walk the project for seconds. Its hits are shown
+    // as soon as there are any, and the toggles' extra rows join them later.
+    void Promise.all([
+      searchFiles(currentDirectory, serverQuery, 80, { type: 'file' }).catch((): FileInfo[] => []),
+      directorySearch,
+    ]).then(([files, directories]) => {
+      if (!cancelled && !answered && files.length + directories.length > 0) {
+        setSearch({ key: debouncedSearchKey, files, directories });
+      }
+    });
+    // A new query or a closed list stops that walk; nobody is left to read it.
+    const walk = new AbortController();
+    void Promise.all([
+      searchFiles(currentDirectory, serverQuery, 80, { ...options, type: 'file', signal: walk.signal }).catch((): FileInfo[] => []),
+      directorySearch,
+    ]).then(([files, directories]) => {
+      answered = true;
+      if (!cancelled) {
+        setSearch({ key: debouncedSearchKey, files, directories });
+      }
+    });
+=======
+    let answered = false;
+    const serverQuery = mentionServerQuery(debouncedQuery ?? '');
+    const options = { includeHidden: showHidden, respectGitignore: !showGitignored };
+    const directorySearch = searchFiles(currentDirectory, serverQuery, 20, { ...options, type: 'directory' }).catch((): FileInfo[] => []);
+    void Promise.all([
+      searchFiles(currentDirectory, serverQuery, 80, { type: 'file' }).catch((): FileInfo[] => []),
+      directorySearch,
+    ]).then(([files, directories]) => {
+      if (!cancelled && !answered && files.length + directories.length > 0) {
+        setSearch({ key: debouncedSearchKey, files, directories });
+      }
+    });
+    const walk = new AbortController();
+    void Promise.all([
+      searchFiles(currentDirectory, serverQuery, 80, { ...options, type: 'file', signal: walk.signal }).catch((): FileInfo[] => []),
+      directorySearch,
+    ]).then(([files, directories]) => {
+      answered = true;
+      if (!cancelled) {
+        setSearch({ key: debouncedSearchKey, files, directories });
+      }
+    });
+>>>>>>> upstream/main
 
     return () => {
       cancelled = true;
@@ -281,6 +640,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     };
   }, [currentDirectory, debouncedQuery, visibleRecentFiles, searchFiles, showHidden, showGitignored]);
 
+<<<<<<< HEAD
   React.useEffect(() => {
     if (!currentDirectory) {
       setDirectories([]);
@@ -334,6 +694,27 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 
   React.useEffect(() => {
     setSelectedIndex(0);
+||||||| bc50ba56aa
+  // A new query's answer starts at its best match; rows held while a query
+  // searches keep the selection where the keyboard put it, and new rows for
+  // the same query leave it on the row the user is on. Before paint and the
+  // next key, so Enter never reads the old position in the new rows.
+  React.useLayoutEffect(() => {
+    const previous = previousViewRef.current;
+    previousViewRef.current = view;
+    const selected = previous && view.key !== null && previous.key === view.key
+      ? mentionRowIds(previous)[selectedIndexRef.current]
+      : undefined;
+    setSelectedIndex(selected === undefined ? 0 : Math.max(mentionRowIds(view).indexOf(selected), 0));
+=======
+  React.useLayoutEffect(() => {
+    const previous = previousViewRef.current;
+    previousViewRef.current = view;
+    const selected = previous && view.key !== null && previous.key === view.key
+      ? mentionRowIds(previous)[selectedIndexRef.current]
+      : undefined;
+    setSelectedIndex(selected === undefined ? 0 : Math.max(mentionRowIds(view).indexOf(selected), 0));
+>>>>>>> upstream/main
     setSelectedOverflow(null);
   }, [visibleResults, visibleRecentFiles]);
 
@@ -487,9 +868,81 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             <Icon name="refresh" className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
+<<<<<<< HEAD
           <div className="pb-2">
             {visibleRecentFiles.map((file, index) => {
               const rowIndex = index;
+||||||| bc50ba56aa
+          // Rows held from the last query fade only when the search takes
+          // long enough to notice; a quick answer just replaces them.
+          <div
+            data-mention-list=""
+            aria-busy={searchPending || undefined}
+            className={cn('transition-opacity duration-150', searchPending && 'opacity-60 delay-150')}
+          >
+            {view.agents.map((agent, index) => {
+              const isSelected = selectedIndex === index;
+              return (
+                <div
+                  key={`agent-${agent.name}`}
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    isSelected && 'bg-interactive-selection',
+                  )}
+                  onClick={() => handleAgentPick(agent.name)}
+                  onMouseMove={() => { setSelectedIndex(index); }}
+                >
+                  <span className="max-w-[60%] shrink-0 truncate font-semibold">@{agent.name}</span>
+                  <AutocompleteRowDetail description={agent.description} />
+                </div>
+              );
+            })}
+            {view.moreAgents && (
+              <div className="px-2 py-1 typography-meta text-muted-foreground">
+                {t('chat.fileMentionAutocomplete.searchMoreAgents')}
+              </div>
+            )}
+            {view.agents.length > 0 && (view.recentFiles.length > 0 || view.results.length > 0 || view.sessions.length > 0) && (
+              <div className="my-1 border-t border-edge" />
+            )}
+            {view.recentFiles.map((file, index) => {
+              const rowIndex = view.agents.length + index;
+=======
+          <div
+            data-mention-list=""
+            aria-busy={searchPending || undefined}
+            className={cn('transition-opacity duration-150', searchPending && 'opacity-60 delay-150')}
+          >
+            {view.agents.map((agent, index) => {
+              const isSelected = selectedIndex === index;
+              return (
+                <div
+                  key={`agent-${agent.name}`}
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    isSelected && 'bg-interactive-selection',
+                  )}
+                  onClick={() => handleAgentPick(agent.name)}
+                  onMouseMove={() => { setSelectedIndex(index); }}
+                >
+                  <span className="max-w-[60%] shrink-0 truncate font-semibold">@{agent.name}</span>
+                  <AutocompleteRowDetail description={agent.description} />
+                </div>
+              );
+            })}
+            {view.moreAgents && (
+              <div className="px-2 py-1 typography-meta text-muted-foreground">
+                {t('chat.fileMentionAutocomplete.searchMoreAgents')}
+              </div>
+            )}
+            {view.agents.length > 0 && (view.recentFiles.length > 0 || view.results.length > 0 || view.sessions.length > 0) && (
+              <div className="my-1 border-t border-edge" />
+            )}
+            {view.recentFiles.map((file, index) => {
+              const rowIndex = view.agents.length + index;
+>>>>>>> upstream/main
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
@@ -510,6 +963,13 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                   {getFileIcon(file)}
                   <span
                     ref={(el) => { labelRefs.current[rowIndex] = el; }}
+<<<<<<< HEAD
+||||||| bc50ba56aa
+                    // Paths read left to right in every language; the marquee and its fade assume it.
+                    dir="ltr"
+=======
+                    dir="ltr"
+>>>>>>> upstream/main
                     className="relative flex-1 min-w-0 overflow-hidden file-mention-marquee-container"
                     style={isSelected ? {
                       ['--file-mention-marquee-width' as string]: `${marqueeWidth}px`,
@@ -563,6 +1023,13 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                     : getFileIcon(file)}
                   <span
                     ref={(el) => { labelRefs.current[rowIndex] = el; }}
+<<<<<<< HEAD
+||||||| bc50ba56aa
+                    // Paths read left to right in every language; the marquee and its fade assume it.
+                    dir="ltr"
+=======
+                    dir="ltr"
+>>>>>>> upstream/main
                     className="relative flex-1 min-w-0 overflow-hidden file-mention-marquee-container"
                     style={isSelected ? {
                       ['--file-mention-marquee-width' as string]: `${marqueeWidth}px`,
@@ -601,6 +1068,99 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 {t('chat.fileMentionAutocomplete.empty')}
               </div>
             )}
+<<<<<<< HEAD
+||||||| bc50ba56aa
+            {/* After the files: Enter on `@pack` keeps choosing the file it always did. */}
+            {view.sessions.map((session, index) => {
+              const rowIndex = view.agents.length + view.recentFiles.length + view.results.length + index;
+              const directory = resolveGlobalSessionDirectory(session);
+              const project = directory ? directory.split('/').filter(Boolean).pop() : null;
+              const detail = [project, session.time.archived ? t('chat.fileMentionAutocomplete.sessionArchived') : null].filter(Boolean).join(' · ');
+              return (
+                <div
+                  key={`session-${session.id}`}
+                  ref={(el) => { itemRefs.current[rowIndex] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    selectedIndex === rowIndex && 'bg-interactive-selection',
+                  )}
+                  onClick={() => onSessionSelect?.(session)}
+                  onMouseMove={() => { setSelectedIndex(rowIndex); }}
+                >
+                  <Icon name="chat-3" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="max-w-[60%] shrink-0 truncate font-medium">{session.title}</span>
+                  <AutocompleteRowDetail description={detail} />
+                </div>
+              );
+            })}
+            {view.extensions.length > 0 && (view.agents.length > 0 || view.recentFiles.length > 0 || view.results.length > 0 || view.sessions.length > 0) && (
+              <div className="my-1 border-t border-edge" />
+            )}
+            {view.extensions.map((mention, index) => {
+              const rowIndex = view.agents.length + view.recentFiles.length + view.results.length + view.sessions.length + index;
+              return (
+                <div
+                  key={`extension-${mention.guestId}-${mention.id}`}
+                  ref={(el) => { itemRefs.current[rowIndex] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    selectedIndex === rowIndex && 'bg-interactive-selection',
+                  )}
+                  onClick={() => onExtensionMentionSelect?.(mention)}
+                  onMouseMove={() => { setSelectedIndex(rowIndex); }}
+                >
+                  <ExtensionMentionIcon guestId={mention.guestId} />
+                  <span className="max-w-[60%] shrink-0 truncate font-medium">{mention.title}</span>
+                  <AutocompleteRowDetail description={mention.subtitle ?? mention.label} />
+                </div>
+              );
+            })}
+=======
+            {view.sessions.map((session, index) => {
+              const rowIndex = view.agents.length + view.recentFiles.length + view.results.length + index;
+              const directory = resolveGlobalSessionDirectory(session);
+              const project = directory ? directory.split('/').filter(Boolean).pop() : null;
+              const detail = [project, session.time.archived ? t('chat.fileMentionAutocomplete.sessionArchived') : null].filter(Boolean).join(' · ');
+              return (
+                <div
+                  key={`session-${session.id}`}
+                  ref={(el) => { itemRefs.current[rowIndex] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    selectedIndex === rowIndex && 'bg-interactive-selection',
+                  )}
+                  onClick={() => onSessionSelect?.(session)}
+                  onMouseMove={() => { setSelectedIndex(rowIndex); }}
+                >
+                  <Icon name="chat-3" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="max-w-[60%] shrink-0 truncate font-medium">{session.title}</span>
+                  <AutocompleteRowDetail description={detail} />
+                </div>
+              );
+            })}
+            {view.extensions.length > 0 && (view.agents.length > 0 || view.recentFiles.length > 0 || view.results.length > 0 || view.sessions.length > 0) && (
+              <div className="my-1 border-t border-edge" />
+            )}
+            {view.extensions.map((mention, index) => {
+              const rowIndex = view.agents.length + view.recentFiles.length + view.results.length + view.sessions.length + index;
+              return (
+                <div
+                  key={`extension-${mention.guestId}-${mention.id}`}
+                  ref={(el) => { itemRefs.current[rowIndex] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    selectedIndex === rowIndex && 'bg-interactive-selection',
+                  )}
+                  onClick={() => onExtensionMentionSelect?.(mention)}
+                  onMouseMove={() => { setSelectedIndex(rowIndex); }}
+                >
+                  <ExtensionMentionIcon guestId={mention.guestId} />
+                  <span className="max-w-[60%] shrink-0 truncate font-medium">{mention.title}</span>
+                  <AutocompleteRowDetail description={mention.subtitle ?? mention.label} />
+                </div>
+              );
+            })}
+>>>>>>> upstream/main
           </div>
         )}
         </ScrollableOverlay>

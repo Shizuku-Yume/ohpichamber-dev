@@ -3,11 +3,6 @@ import { z } from 'zod';
 import { publicNotificationsSchema } from '@/lib/guests/parse';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-/**
- * The account card of an extension notification channel talks to
- * `/api/notifications/channels` (`packages/web/server/lib/notifications/channel-routes.js`).
- * Answers are parsed here; a token never comes back from the server.
- */
 
 const accountSchema = z.object({
   id: z.string().min(1).max(256),
@@ -56,10 +51,8 @@ type ConnectChannelResult =
   | { ok: true; account: NotificationChannelAccount }
   | { ok: false; code: ConnectChannelFailureCode; message: string | null };
 
-/** What the card sends to connect: the token, the username a `basic` channel needs, the instance a user-typed one needs. */
 export type ConnectChannelInput = { token: string; username?: string; instance?: string };
 
-/** The channels the server lists, one row at a time: a row this build cannot read is left out, the rest stay. `null` is a body that is not a list. */
 export const parseNotificationChannelsJson = (json: string): NotificationChannel[] | null => {
   let body: z.input<typeof listSchema>;
   try {
@@ -77,12 +70,19 @@ export const parseNotificationChannelsJson = (json: string): NotificationChannel
   return channels;
 };
 
+<<<<<<< HEAD
 type LoadChannelsResult =
   | { ok: true; channels: NotificationChannel[] }
   | { ok: false; absent: boolean };
 
 /** Loads notification channels; distinguishes absent capability (404) from real failure. */
 export const loadNotificationChannels = async (): Promise<LoadChannelsResult> => {
+||||||| bc50ba56aa
+/** `null` is a failed load, never an empty list. */
+export const loadNotificationChannels = async (): Promise<NotificationChannel[] | null> => {
+=======
+export const loadNotificationChannels = async (): Promise<NotificationChannel[] | null> => {
+>>>>>>> upstream/main
   try {
     const response = await runtimeFetch('/api/notifications/channels');
     if (response.status === 404) return { ok: false, absent: true };

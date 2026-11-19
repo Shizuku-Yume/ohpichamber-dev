@@ -3,19 +3,31 @@ import { useDirectorySync, useSession, useSessionStatus } from '@/sync/sync-cont
 import { getCurrentSessionAssist, type SessionAssistPayload } from '@/lib/sessionAssistMetadata';
 import { selectBoundRunId, sessionActivityPhase } from '@/hooks/useSessionActivity';
 import { useUIStore } from '@/stores/useUIStore';
+<<<<<<< HEAD
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { SessionRecapListResponseSchema } from '@openchamber/agent-contract';
 import { useSessionRecapStore } from '@/stores/useSessionRecapStore';
 import { useSessionSuggestionStore } from '@/stores/useSessionSuggestionStore';
+||||||| bc50ba56aa
+
+// How long the chat must sit untouched before the recap becomes visible.
+// The suggestion has no such delay — it shows as soon as it arrives.
+const RECAP_VISIBILITY_DELAY_MS = 60 * 1000;
+=======
+
+const RECAP_VISIBILITY_DELAY_MS = 60 * 1000;
+>>>>>>> upstream/main
 
 export interface SessionAssistState {
-  /** Valid (fresh) assist payload, or null. */
   assist: SessionAssistPayload | null;
+<<<<<<< HEAD
   /** Recap text, shown as soon as OMP publishes one for an idle session. */
+||||||| bc50ba56aa
+  /** Recap text, only when the 1-minute quiet window has elapsed. */
+=======
+>>>>>>> upstream/main
   visibleRecap: string | null;
-  /** Suggestion text — fresh payload, session idle; caller still gates on input emptiness. */
   suggestion: string | null;
-  /** False until the session record is in memory; the recap cannot be decided before that. */
   sessionKnown: boolean;
 }
 
@@ -74,6 +86,7 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   // session update is authoritative, not the last loaded assistant answer.
   const assist = isSettled ? getCurrentSessionAssist(session) : null;
 
+<<<<<<< HEAD
   // A recap the worker just published wins immediately; the journal route covers
   // the frames this client missed (reload, reconnect), and the metadata payload
   // remains the last fallback for a session that predates the journal. No
@@ -86,6 +99,42 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   );
   const journalledRecap = useNativeRecap(sessionId, sessionRecapEnabled && isSettled && recapReadable);
   const promoted = pushedRecap ?? journalledRecap ?? (assist && assist.recap ? assist.recap : null);
+||||||| bc50ba56aa
+  const isIdle = !status || status.type === 'idle';
+  // Same freshness rule as the sidebar row's recap tooltip. Comparing against the
+  // last loaded message disagreed with it: in v2 the newest record is the
+  // turn's `idle` marker (or a model/agent switch), never the assistant answer.
+  const assist = isIdle ? getCurrentSessionAssist(session) : null;
+
+  // Recap waits out the quiet window after the turn ended; re-render once when
+  // the boundary passes.
+  const idleAt = session?.time?.idle ?? 0;
+  const [, forceTick] = React.useReducer((tick: number) => tick + 1, 0);
+  const quietElapsed = assist ? Date.now() - idleAt >= RECAP_VISIBILITY_DELAY_MS : false;
+
+  React.useEffect(() => {
+    if (!assist || quietElapsed || !idleAt) return undefined;
+    const remaining = RECAP_VISIBILITY_DELAY_MS - (Date.now() - idleAt);
+    if (remaining <= 0) return undefined;
+    const timer = setTimeout(forceTick, remaining + 250);
+    return () => clearTimeout(timer);
+  }, [assist, quietElapsed, idleAt]);
+=======
+  const isIdle = !status || status.type === 'idle';
+  const assist = isIdle ? getCurrentSessionAssist(session) : null;
+
+  const idleAt = session?.time?.idle ?? 0;
+  const [, forceTick] = React.useReducer((tick: number) => tick + 1, 0);
+  const quietElapsed = assist ? Date.now() - idleAt >= RECAP_VISIBILITY_DELAY_MS : false;
+
+  React.useEffect(() => {
+    if (!assist || quietElapsed || !idleAt) return undefined;
+    const remaining = RECAP_VISIBILITY_DELAY_MS - (Date.now() - idleAt);
+    if (remaining <= 0) return undefined;
+    const timer = setTimeout(forceTick, remaining + 250);
+    return () => clearTimeout(timer);
+  }, [assist, quietElapsed, idleAt]);
+>>>>>>> upstream/main
 
   return {
     assist,

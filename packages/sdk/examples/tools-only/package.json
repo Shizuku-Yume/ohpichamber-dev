@@ -1,6 +1,12 @@
 {
   "name": "@openchamber/example-tools-only",
+<<<<<<< HEAD
   "version": "1.0.0",
+||||||| bc50ba56aa
+  "version": "1.1.0",
+=======
+  "version": "1.2.0",
+>>>>>>> upstream/main
   "private": true,
   "type": "module",
   "openchamber": {
@@ -39,7 +45,50 @@
           ]
         },
         {
+<<<<<<< HEAD
           "match": "mcp__*",
+||||||| bc50ba56aa
+          "match": "mcp.*",
+=======
+          "match": "example_issue",
+          "name": "Issue",
+          "icon": "bug",
+          "title": "Issue · {input.key}",
+          "output": "card",
+          "card": {
+            "label": "{output.key} · {output.fields.issuetype.name}",
+            "title": "{output.fields.summary}",
+            "status": {
+              "value": "{output.fields.status.name}",
+              "tones": { "In Progress": "info", "Blocked": "error", "Done": "success" }
+            },
+            "fields": [
+              { "label": "Assignee", "value": "{output.fields.assignee.displayName}" },
+              { "label": "Priority", "value": "{output.fields.priority.name}" }
+            ],
+            "link": { "label": "Open in tracker", "url": "{output.url}" }
+          }
+        },
+        {
+          "match": "example_issues",
+          "name": "Issues",
+          "icon": "bug",
+          "title": "Issues · {input.query}",
+          "subtitle": "{output.summary}",
+          "output": "card",
+          "card": {
+            "label": "{output.key}",
+            "title": "{output.fields.summary}",
+            "status": {
+              "value": "{output.fields.status.name}",
+              "tones": { "In Progress": "info", "Blocked": "error", "Done": "success" }
+            },
+            "fields": [{ "label": "Assignee", "value": "{output.fields.assignee.displayName}" }]
+          }
+        },
+        {
+          "match": "example_*",
+>>>>>>> upstream/main
           "name": "Tool result",
           "icon": "tools",
           "output": "json"

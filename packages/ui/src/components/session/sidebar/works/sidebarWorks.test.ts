@@ -106,6 +106,7 @@ describe('sidebar works', () => {
       expect(orderInWorkWorks(order, index, rootOf, notChat).map((ref) => ({ key: ref.key, projectId: ref.projectId })))
         .toEqual([]);
     });
+<<<<<<< HEAD
 
     test('archived sessions, chats and sessions not in work are left out', () => {
       const index = buildSidebarWorkIndex([section]);
@@ -117,6 +118,19 @@ describe('sidebar works', () => {
       expect(orderInWorkWorks([archived, idle, chat], index, rootIndex, (directory) => directory?.includes('/chats/') ?? false))
         .toEqual([]);
     });
+||||||| bc50ba56aa
+
+    test('archived sessions, chats and sessions not in work are left out', () => {
+      const index = buildSidebarWorkIndex([section]);
+      const archived = session('archived', { ...outside, ...inWork, time: { created: 1, updated: 1, archived: 2 } });
+      const idle = session('idle', outside);
+      const chat = session('chat', { ...inWork, directory: '/home/.config/openchamber/chats/2026-10-26/session-1' });
+      const rootIndex = buildSessionRootIndex([archived, idle, chat], new Map());
+      expect(orderInWorkWorks([archived, idle, chat], index, rootIndex, (directory) => directory?.includes('/chats/') ?? false))
+        .toEqual([]);
+    });
+=======
+>>>>>>> upstream/main
   });
 
   test('a worktree keeps the place its archived newest session gave it', () => {

@@ -20,6 +20,7 @@ export const coerceToText = (value: unknown, fallback = ''): string => {
     }
 };
 
+<<<<<<< HEAD
 /** SDK result envelopes are retained verbatim by the canonical projection. */
 export const nativeToolResultContent = (result: ToolResultPart | undefined): {
     text: string;
@@ -63,6 +64,18 @@ export const nativeToolResultContent = (result: ToolResultPart | undefined): {
 // V8's Zone allocator and hard-crashes the renderer before any virtualization or
 // CSS clip can help. Capping the string length before that work happens keeps a
 // useful head of the output while preventing the pathological allocation.
+||||||| bc50ba56aa
+// Guards the renderer process against V8 "Zone Allocation failed" OOM crashes
+// (issue #2265). When a tool returns oversized external content — e.g. a fetched
+// web page with full-resolution base64 images inlined — the entire payload flows
+// through this module as a single JS string that is JSON.parsed, syntax
+// highlighted, and attached to the DOM. A large enough single string exceeds
+// V8's Zone allocator and hard-crashes the renderer before any virtualization or
+// CSS clip can help. Capping the string length before that work happens keeps a
+// useful head of the output while preventing the pathological allocation.
+=======
+// external: #2265 Cap oversized tool strings before parsing or rendering can exhaust the V8 Zone allocator.
+>>>>>>> upstream/main
 export const TOOL_OUTPUT_MAX_CHARS = 512 * 1024;
 
 export const capToolOutputText = (
@@ -112,10 +125,6 @@ const TEXT_BLOCK_UNWRAP_PASSES = 4;
 const textBlockSchema = z.object({ type: z.literal('text'), text: z.string() });
 type TextBlock = z.infer<typeof textBlockSchema>;
 
-// The content-block envelope, a single block or a list of them, validated one
-// block at a time so the first non-text entry stops the parse (a whole-array
-// schema instead accumulates an error per entry, which stalls on large
-// structured results such as a serialized numeric array).
 const parseTextBlocks = (value: JsonValue): TextBlock[] | null => {
     const blocks = Array.isArray(value) ? value : [value];
     if (blocks.length === 0) return null;
@@ -133,6 +142,7 @@ const looksLikeJsonContainer = (text: string): boolean => {
     return (trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'));
 };
 
+<<<<<<< HEAD
 /**
  * The text of a tool result made of text content blocks, joined on newlines.
  * A finished tool call may carry its result as `[{type:"text",text}]`, and the
@@ -140,6 +150,17 @@ const looksLikeJsonContainer = (text: string): boolean => {
  * again while it is itself such a list, four passes at most (upstream #5067).
  * Any other result returns null.
  */
+||||||| bc50ba56aa
+/**
+ * The text of a tool result made of text content blocks, joined on newlines.
+ * A finished v2 tool call carries its result as `[{type:"text",text}]`, and
+ * the transport may serialize that list once more, so the joined text is
+ * unwrapped again while it is itself such a list, four passes at most
+ * (issue #5067). Any other result returns null.
+ */
+=======
+// external: #5067 OpenCode text-content results can be serialized in nested envelopes; unwrapping is bounded.
+>>>>>>> upstream/main
 export const unwrapTextBlocks = (data: JsonValue): string | null => {
     let blocks = parseTextBlocks(data);
     if (!blocks) return null;
@@ -166,6 +187,193 @@ export const unwrapTextBlocks = (data: JsonValue): string | null => {
     return text;
 };
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>): string => {
+    let cleaned = cleanOutput(output);
+
+    if (isFileChangeTool(toolName) && hasLspDiagnostics(cleaned)) {
+        cleaned = stripLspDiagnostics(cleaned);
+    }
+
+    if (carriesFileDiffs(toolName) && cleaned.trim().length === 0) {
+        const diff = getToolMetadataPatch(metadata);
+        if (diff) {
+            return diff;
+        }
+    }
+
+    return cleaned;
+};
+
+interface ParsedReadOutputLine {
+    text: string;
+    lineNumber: number | null;
+    isInfo: boolean;
+}
+
+interface ParsedReadToolOutput {
+    type: 'file' | 'directory' | 'unknown';
+    lines: ParsedReadOutputLine[];
+}
+
+export const parseReadToolOutput = (output: string): ParsedReadToolOutput => {
+    const typeMatch = output.match(/<type>(file|directory)<\/type>/i);
+    const detectedType = (typeMatch?.[1]?.toLowerCase() ?? 'unknown') as ParsedReadToolOutput['type'];
+
+    const contentMatch = output.match(/<content>([\s\S]*?)<\/content>/i);
+    const rawContent = contentMatch?.[1] ?? output;
+    const normalizedContent = rawContent.replace(/\r\n/g, '\n');
+    const rawLines = normalizedContent.split('\n');
+
+    const isTruncationInfoLine = (text: string): boolean => {
+        return /\(\s*File has more lines\..*offset.*\)/i.test(text.trim());
+    };
+
+    const parsedLines = rawLines.map((line): ParsedReadOutputLine => {
+        const trimmed = line.trim();
+        const isInfo = (trimmed.startsWith('(') && trimmed.endsWith(')')) || isTruncationInfoLine(trimmed);
+
+        if (detectedType !== 'directory') {
+            const numberedMatch = line.match(/^(\d+):\s?(.*)$/);
+            if (numberedMatch) {
+                const numberedText = numberedMatch[2];
+                const numberedTrimmed = numberedText.trim();
+                const numberedIsInfo =
+                    (numberedTrimmed.startsWith('(') && numberedTrimmed.endsWith(')'))
+                    || isTruncationInfoLine(numberedTrimmed);
+                return {
+                    lineNumber: numberedIsInfo ? null : Number(numberedMatch[1]),
+                    text: numberedText,
+                    isInfo: numberedIsInfo,
+                };
+            }
+        }
+
+        return {
+            lineNumber: null,
+            text: line,
+            isInfo,
+        };
+    });
+
+    const lines = parsedLines.filter((line, index, arr) => {
+        if (line.text.trim().length > 0) {
+            return true;
+        }
+
+        const prev = arr[index - 1];
+        const next = arr[index + 1];
+        const adjacentToInfo = Boolean(prev?.isInfo || next?.isInfo);
+        const hasNumber = line.lineNumber !== null;
+
+        // Drop numbered blank lines wrapped around helper/info rows.
+        if (adjacentToInfo && hasNumber) {
+            return false;
+        }
+
+        return true;
+    });
+
+    return {
+        type: detectedType,
+        lines,
+    };
+};
+
+=======
+export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>): string => {
+    let cleaned = cleanOutput(output);
+
+    if (isFileChangeTool(toolName) && hasLspDiagnostics(cleaned)) {
+        cleaned = stripLspDiagnostics(cleaned);
+    }
+
+    if (carriesFileDiffs(toolName) && cleaned.trim().length === 0) {
+        const diff = getToolMetadataPatch(metadata);
+        if (diff) {
+            return diff;
+        }
+    }
+
+    return cleaned;
+};
+
+interface ParsedReadOutputLine {
+    text: string;
+    lineNumber: number | null;
+    isInfo: boolean;
+}
+
+interface ParsedReadToolOutput {
+    type: 'file' | 'directory' | 'unknown';
+    lines: ParsedReadOutputLine[];
+}
+
+export const parseReadToolOutput = (output: string): ParsedReadToolOutput => {
+    const typeMatch = output.match(/<type>(file|directory)<\/type>/i);
+    const detectedType = (typeMatch?.[1]?.toLowerCase() ?? 'unknown') as ParsedReadToolOutput['type'];
+
+    const contentMatch = output.match(/<content>([\s\S]*?)<\/content>/i);
+    const rawContent = contentMatch?.[1] ?? output;
+    const normalizedContent = rawContent.replace(/\r\n/g, '\n');
+    const rawLines = normalizedContent.split('\n');
+
+    const isTruncationInfoLine = (text: string): boolean => {
+        return /\(\s*File has more lines\..*offset.*\)/i.test(text.trim());
+    };
+
+    const parsedLines = rawLines.map((line): ParsedReadOutputLine => {
+        const trimmed = line.trim();
+        const isInfo = (trimmed.startsWith('(') && trimmed.endsWith(')')) || isTruncationInfoLine(trimmed);
+
+        if (detectedType !== 'directory') {
+            const numberedMatch = line.match(/^(\d+):\s?(.*)$/);
+            if (numberedMatch) {
+                const numberedText = numberedMatch[2];
+                const numberedTrimmed = numberedText.trim();
+                const numberedIsInfo =
+                    (numberedTrimmed.startsWith('(') && numberedTrimmed.endsWith(')'))
+                    || isTruncationInfoLine(numberedTrimmed);
+                return {
+                    lineNumber: numberedIsInfo ? null : Number(numberedMatch[1]),
+                    text: numberedText,
+                    isInfo: numberedIsInfo,
+                };
+            }
+        }
+
+        return {
+            lineNumber: null,
+            text: line,
+            isInfo,
+        };
+    });
+
+    const lines = parsedLines.filter((line, index, arr) => {
+        if (line.text.trim().length > 0) {
+            return true;
+        }
+
+        const prev = arr[index - 1];
+        const next = arr[index + 1];
+        const adjacentToInfo = Boolean(prev?.isInfo || next?.isInfo);
+        const hasNumber = line.lineNumber !== null;
+
+        if (adjacentToInfo && hasNumber) {
+            return false;
+        }
+
+        return true;
+    });
+
+    return {
+        type: detectedType,
+        lines,
+    };
+};
+
+>>>>>>> upstream/main
 const GREP_DOT_STYLE = { backgroundColor: 'var(--status-info)', opacity: 0.6 };
 
 /** Non-React renderers receive the component's translator; count-dependent

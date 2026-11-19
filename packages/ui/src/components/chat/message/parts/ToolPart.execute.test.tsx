@@ -1,5 +1,13 @@
 import { act } from 'react';
+<<<<<<< HEAD
 import { expect, mock, test } from 'bun:test';
+||||||| bc50ba56aa
+import { expect, test } from 'bun:test';
+import { plugin } from 'bun';
+import { pathToFileURL } from 'node:url';
+=======
+import { expect, test } from 'bun:test';
+>>>>>>> upstream/main
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
@@ -13,10 +21,25 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
+<<<<<<< HEAD
 // Bun cannot load Vite's `?worker&url` import that markdown-worker makes.
 mock.module('../../markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
 
 // Loaded after the shim so the worker URL never reaches Bun's loader.
+||||||| bc50ba56aa
+// Bun does not implement Vite's worker asset-query imports.
+plugin({
+  name: 'tool-guest-worker-url',
+  setup(build) {
+    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
+      contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`,
+      loader: 'js',
+    }));
+  },
+});
+
+=======
+>>>>>>> upstream/main
 const { default: ToolPart } = await import('./ToolPart');
 const { default: ProgressiveGroup } = await import('./ProgressiveGroup');
 
@@ -170,12 +193,71 @@ test('native bash calls and results retain separate identities and paired comman
         openDiff: unexpectedRuntimeCall,
       },
     };
+<<<<<<< HEAD
     useDirectoryStore.setState({ currentDirectory: '/project' });
     const readCases = [
       { input: 'src/example.ts:50-100', path: '/project/src/example.ts', line: 50 },
       { input: 'src/example.ts:raw:50-100', path: '/project/src/example.ts', line: 50 },
       { input: 'C:\\project\\src\\example.ts:50-100', path: 'C:/project/src/example.ts', line: 50 },
       { input: 'C:\\project\\src\\example.ts', path: 'C:/project/src/example.ts', line: undefined },
+||||||| bc50ba56aa
+    await act(async () => {
+      root.render(
+        <SyncProvider sdk={sdk} directory="">
+          <I18nProvider>
+            <ThemeSystemContext.Provider value={themeContext}>
+              <ToolPart part={namespacePart} isExpanded={false} isMobile={false} onToggle={() => {}} />
+            </ThemeSystemContext.Provider>
+          </I18nProvider>
+        </SyncProvider>,
+      );
+    });
+    expect(container.textContent).toContain('OpenCodeListed worktrees, Renamed the session');
+    expect(container.textContent).not.toContain('Script');
+    expect(container.querySelector('use[href="#oc-opencode"]')).not.toBeNull();
+
+    // OpenChamber actions draw their own view of the answer, never the envelope's JSON.
+    const views: Array<[string, string, { [key: string]: JsonValue }, string[]]> = [
+      ['openchamber_memory', 'memory.read', { memory: { memoryId: 'm1', title: 'Telemetry caveats', type: 'reference', scope: 'project', body: 'Counts are per install.' } }, ['Read a memory', 'Reference · This project', 'Telemetry caveats', 'Counts are per install.', 'Show the raw answer']],
+      ['openchamber', 'session.messages', { sessionId: 'ses_x', directory: '/repo', role: 'all', messages: [{ id: 'b', role: 'assistant', createdAt: 2, completedAt: 3, model: 'a/b', text: 'Fixed the cookie.' }] }, ['Agent · a/b', 'Fixed the cookie.', 'Open session']],
+      ['openchamber', 'pr.watch', { watching: { url: 'https://github.com/a/b/pull/7', number: 7, title: 'Fix login', status: 'pending' }, next: 'x' }, ['#7 Fix login', 'Checks running']],
+      ['openchamber_web', 'browser.inspect', { ok: true, selector: '#save', tag: 'button', label: 'Save', styles: { color: 'red' } }, ['button · Save', '#save', 'color', 'red']],
+      ['openchamber_web', 'browser.scroll', { ok: true, scrollY: 400, maxScrollY: 1200, atTop: false, atBottom: false }, ['Position', '400 of 1200 px']],
+      ['openchamber_workflow', 'workflow.check', { name: 'audit-routes', description: 'Audit every route', phases: ['Find', 'Audit'], limits: { concurrentAgents: 8, agentsPerRun: 200 } }, ['audit-routes', 'Audit every route', '1. Find', '2. Audit']],
+      ['openchamber_workflow', 'workflow.status', { id: 'run_1', parentSessionId: 'ses_exec', directory: '/repo', name: 'audit-routes', description: 'Audit every route', state: 'running', attempt: 1, createdAt: 1, currentPhase: 'Audit', phases: ['Find', 'Audit'], agents: [{ key: 'a', label: 'One', phase: 'Audit', state: 'completed' }, { key: 'b', label: 'Two', phase: 'Audit', state: 'running' }], logs: [] }, ['Running', 'Audit', '1 of 2 done']],
+      ['openchamber_workflow', 'workflow.result', { runId: 'run_1', state: 'completed', result: 'Two routes lack auth.' }, ['Done', 'Two routes lack auth.']],
+      ['openchamber_workflow', 'workflow.list', { workflows: [{ name: 'audit-routes', description: 'Audit every route' }], runs: [{ runId: 'run_1', name: 'audit-routes', state: 'failed', createdAt: 1 }] }, ['Saved', 'Runs', 'Failed']],
+=======
+    await act(async () => {
+      root.render(
+        <SyncProvider sdk={sdk} directory="">
+          <I18nProvider>
+            <ThemeSystemContext.Provider value={themeContext}>
+              <ToolPart part={namespacePart} isExpanded={false} isMobile={false} onToggle={() => {}} />
+            </ThemeSystemContext.Provider>
+          </I18nProvider>
+        </SyncProvider>,
+      );
+    });
+    expect(container.textContent).toContain('OpenCodeListed worktrees, Renamed the session');
+    expect(container.textContent).not.toContain('Script');
+    expect(container.querySelector('use[href="#oc-opencode"]')).not.toBeNull();
+
+    // OpenChamber actions draw their own view of the answer, never the envelope's JSON.
+    const views: Array<[string, string, { [key: string]: JsonValue }, string[]]> = [
+      ['openchamber_memory', 'memory.read', { memory: { memoryId: 'm1', title: 'Telemetry caveats', type: 'reference', scope: 'project', body: 'Counts are per install.' } }, ['Read a memory', 'Reference · This project', 'Telemetry caveats', 'Counts are per install.', 'Show the raw answer']],
+      ['openchamber', 'session.messages', { sessionId: 'ses_x', directory: '/repo', role: 'all', messages: [{ id: 'b', role: 'assistant', createdAt: 2, completedAt: 3, model: 'a/b', text: 'Fixed the cookie.' }] }, ['Agent · a/b', 'Fixed the cookie.', 'Open session']],
+      ['openchamber', 'pr.watch', { watching: { url: 'https://github.com/a/b/pull/7', number: 7, title: 'Fix login', status: 'pending' }, next: 'x' }, ['#7 Fix login', 'Checks running']],
+      ['openchamber', 'wait.start', { waiting: { waitId: 'wait_1', source: 'timer', extension: 'OpenChamber', title: 'Timer', label: '20 min', args: { minutes: 20 }, status: 'waiting' }, next: 'x' }, ['Timer · 20 min']],
+      ['openchamber', 'wait.start', { waiting: { waitId: 'wait_2', source: 'kit/deploy', extension: 'Deploy Kit', title: 'Deploy', label: 'prod', args: {}, status: 'waiting' }, next: 'x' }, ['Deploy (prod)', 'Deploy Kit']],
+      ['openchamber', 'wait.list', { waiting: [{ waitId: 'https://github.com/a/b/pull/7', source: 'pr', extension: 'OpenChamber', title: '#7 Fix login', label: 'failed', args: { url: 'https://github.com/a/b/pull/7' }, status: 'waiting' }], sources: [{ source: 'timer', extension: 'OpenChamber', title: 'Timer' }, { source: 'pr', extension: 'OpenChamber', title: 'Pull request' }] }, ['Waiting on', '#7 Fix login', 'Can wait on', 'Timer', 'Pull request']],
+      ['openchamber_web', 'browser.inspect', { ok: true, selector: '#save', tag: 'button', label: 'Save', styles: { color: 'red' } }, ['button · Save', '#save', 'color', 'red']],
+      ['openchamber_web', 'browser.scroll', { ok: true, scrollY: 400, maxScrollY: 1200, atTop: false, atBottom: false }, ['Position', '400 of 1200 px']],
+      ['openchamber_workflow', 'workflow.check', { name: 'audit-routes', description: 'Audit every route', phases: ['Find', 'Audit'], limits: { concurrentAgents: 8, agentsPerRun: 200 } }, ['audit-routes', 'Audit every route', '1. Find', '2. Audit']],
+      ['openchamber_workflow', 'workflow.status', { id: 'run_1', parentSessionId: 'ses_exec', directory: '/repo', name: 'audit-routes', description: 'Audit every route', state: 'running', attempt: 1, createdAt: 1, currentPhase: 'Audit', phases: ['Find', 'Audit'], agents: [{ key: 'a', label: 'One', phase: 'Audit', state: 'completed' }, { key: 'b', label: 'Two', phase: 'Audit', state: 'running' }], logs: [] }, ['Running', 'Audit', '1 of 2 done']],
+      ['openchamber_workflow', 'workflow.result', { runId: 'run_1', state: 'completed', result: 'Two routes lack auth.' }, ['Done', 'Two routes lack auth.']],
+      ['openchamber_workflow', 'workflow.list', { workflows: [{ name: 'audit-routes', description: 'Audit every route' }], runs: [{ runId: 'run_1', name: 'audit-routes', state: 'failed', createdAt: 1 }] }, ['Saved', 'Runs', 'Failed']],
+>>>>>>> upstream/main
     ];
     for (const readCase of readCases) {
       const read: ToolCallPart = { type: 'tool_call', partId: 'read-part', toolCallId: 'read-call',

@@ -29,6 +29,7 @@ interface CatalogState {
   installSkills: (request: InstallInput, options?: { directory?: string | null }) => Promise<SkillRepositoryInstallResult>;
   resetForRuntimeSwitch: () => void;
 }
+<<<<<<< HEAD
 const initial = { sources: [], itemsBySource: {}, loadedSourceIds: {}, selectedSourceId: null, isLoadingCatalog: false, isLoadingSource: false, isScanning: false, isInstalling: false, lastCatalogError: null, lastScanError: null, lastInstallError: null, scanResults: null };
 const failure = (error: Error | string): SkillRepositoryError => ({ kind: error instanceof CanonicalApiError && error.problem.status === 401 ? 'authRequired' : 'unknown', message: error instanceof Error ? error.message : error });
 const directory = (): string => {
@@ -87,7 +88,72 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
             ...(options?.refresh ? { itemsBySource: {}, loadedSourceIds: {}, isLoadingSource: false } : {})
           }));
           catalogLoadedAt = Date.now();
+||||||| bc50ba56aa
+
+export const useSkillsCatalogStore = create<SkillsCatalogState>()(
+  devtools(
+    (set, get) => ({
+      // Empty until the server answers: it decides which catalogs exist, and a
+      // machine policy can hide the built-in ones.
+      sources: [],
+      itemsBySource: {},
+      selectedSourceId: null,
+      loadedSourceIds: {},
+
+      isLoadingCatalog: false,
+      isLoadingSource: false,
+      isScanning: false,
+      isInstalling: false,
+
+      lastCatalogError: null,
+      lastScanError: null,
+      lastInstallError: null,
+
+      scanResults: null,
+
+      setSelectedSource: (id) => set({ selectedSourceId: id }),
+
+      loadCatalog: async (options) => {
+        const currentDirectory = getRequestDirectory();
+        const cacheKey = getSkillsCatalogCacheKey(currentDirectory);
+        const now = Date.now();
+        const loadedAt = skillsCatalogLastLoadedAt.get(cacheKey) ?? 0;
+        // An empty list can be the answer, so freshness alone decides.
+        const hasCachedCatalog = loadedAt > 0;
+        if (!options?.refresh && hasCachedCatalog && now - loadedAt < SKILLS_CATALOG_LOAD_CACHE_TTL_MS) {
+=======
+
+export const useSkillsCatalogStore = create<SkillsCatalogState>()(
+  devtools(
+    (set, get) => ({
+      sources: [],
+      itemsBySource: {},
+      selectedSourceId: null,
+      loadedSourceIds: {},
+
+      isLoadingCatalog: false,
+      isLoadingSource: false,
+      isScanning: false,
+      isInstalling: false,
+
+      lastCatalogError: null,
+      lastScanError: null,
+      lastInstallError: null,
+
+      scanResults: null,
+
+      setSelectedSource: (id) => set({ selectedSourceId: id }),
+
+      loadCatalog: async (options) => {
+        const currentDirectory = getRequestDirectory();
+        const cacheKey = getSkillsCatalogCacheKey(currentDirectory);
+        const now = Date.now();
+        const loadedAt = skillsCatalogLastLoadedAt.get(cacheKey) ?? 0;
+        const hasCachedCatalog = loadedAt > 0;
+        if (!options?.refresh && hasCachedCatalog && now - loadedAt < SKILLS_CATALOG_LOAD_CACHE_TTL_MS) {
+>>>>>>> upstream/main
           return true;
+<<<<<<< HEAD
         } catch (error) { if (scope.owner === generation && requestRevision === catalogRequestRevision) set({ lastCatalogError: failure(error instanceof Error ? error : String(error)) }); return false; }
         finally { if (scope.owner === generation && requestRevision === catalogRequestRevision) set({ isLoadingCatalog: false }); }
       })();
@@ -103,6 +169,202 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
       let resolvePending!: (value: boolean) => void;
       const pending = new Promise<boolean>((resolve) => { resolvePending = resolve; });
       void (async () => {
+||||||| bc50ba56aa
+        }
+
+        const inFlight = skillsCatalogLoadInFlight.get(cacheKey);
+        if (!options?.refresh && inFlight) {
+          return inFlight;
+        }
+
+        const request = (async () => {
+          set({ isLoadingCatalog: true, lastCatalogError: null });
+
+          const previous = {
+            sources: get().sources,
+            itemsBySource: get().itemsBySource,
+            loadedSourceIds: get().loadedSourceIds,
+          };
+
+          let lastError: SkillsCatalogResponse['error'] | null = null;
+
+          try {
+            const refresh = options?.refresh ? '?refresh=true' : '';
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), 3000);
+
+            try {
+              const response = await runtimeFetch(`/api/config/skills/catalog${refresh}`, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
+              });
+
+              const payload = (await response.json().catch(() => null)) as SkillsCatalogResponse | null;
+              if (!response.ok || !payload?.ok) {
+                lastError = payload?.error || { kind: 'unknown', message: `Failed to load catalog (${response.status})` };
+                throw new Error(lastError.message);
+              }
+
+              // The server's list is the answer, empty included: a machine
+              // policy can hide every built-in catalog.
+              const sources = payload.sources ?? previous.sources;
+              const itemsBySource = options?.refresh ? {} : (get().itemsBySource || {});
+              const loadedSourceIds = options?.refresh ? {} : (get().loadedSourceIds || {});
+              const currentSelected = get().selectedSourceId;
+              const selectedSourceId =
+                (currentSelected && sources.some((s) => s.id === currentSelected))
+                  ? currentSelected
+                  : (sources[0]?.id ?? null);
+
+              set({
+                sources,
+                itemsBySource,
+                loadedSourceIds,
+                selectedSourceId,
+              });
+
+              skillsCatalogLastLoadedAt.set(cacheKey, Date.now());
+              return true;
+            } finally {
+              window.clearTimeout(timeoutId);
+            }
+          } catch (error) {
+            lastError = lastError || { kind: 'unknown', message: error instanceof Error ? error.message : String(error) };
+
+            set({
+              sources: previous.sources,
+              itemsBySource: previous.itemsBySource,
+              loadedSourceIds: previous.loadedSourceIds,
+              lastCatalogError: lastError || { kind: 'unknown', message: 'Failed to load catalog' },
+            });
+
+            return false;
+          } finally {
+            set({ isLoadingCatalog: false });
+          }
+        })();
+
+        skillsCatalogLoadInFlight.set(cacheKey, request);
+        try {
+          return await request;
+        } finally {
+          skillsCatalogLoadInFlight.delete(cacheKey);
+        }
+      },
+
+      loadSource: async (sourceId, options) => {
+        if (!sourceId) {
+          return false;
+        }
+
+        // Deduplicate concurrent loads of the same source: the background
+        // loader effect can restart while a request for this source is
+        // already in flight.
+        if (!options?.refresh) {
+          const inFlight = sourceLoadInFlight.get(sourceId);
+          if (inFlight) {
+            return inFlight;
+          }
+        }
+
+        activeSourceLoads += 1;
+=======
+        }
+
+        const inFlight = skillsCatalogLoadInFlight.get(cacheKey);
+        if (!options?.refresh && inFlight) {
+          return inFlight;
+        }
+
+        const request = (async () => {
+          set({ isLoadingCatalog: true, lastCatalogError: null });
+
+          const previous = {
+            sources: get().sources,
+            itemsBySource: get().itemsBySource,
+            loadedSourceIds: get().loadedSourceIds,
+          };
+
+          let lastError: SkillsCatalogResponse['error'] | null = null;
+
+          try {
+            const refresh = options?.refresh ? '?refresh=true' : '';
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), 3000);
+
+            try {
+              const response = await runtimeFetch(`/api/config/skills/catalog${refresh}`, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
+              });
+
+              const payload = (await response.json().catch(() => null)) as SkillsCatalogResponse | null;
+              if (!response.ok || !payload?.ok) {
+                lastError = payload?.error || { kind: 'unknown', message: `Failed to load catalog (${response.status})` };
+                throw new Error(lastError.message);
+              }
+
+              const sources = payload.sources ?? previous.sources;
+              const itemsBySource = options?.refresh ? {} : (get().itemsBySource || {});
+              const loadedSourceIds = options?.refresh ? {} : (get().loadedSourceIds || {});
+              const currentSelected = get().selectedSourceId;
+              const selectedSourceId =
+                (currentSelected && sources.some((s) => s.id === currentSelected))
+                  ? currentSelected
+                  : (sources[0]?.id ?? null);
+
+              set({
+                sources,
+                itemsBySource,
+                loadedSourceIds,
+                selectedSourceId,
+              });
+
+              skillsCatalogLastLoadedAt.set(cacheKey, Date.now());
+              return true;
+            } finally {
+              window.clearTimeout(timeoutId);
+            }
+          } catch (error) {
+            lastError = lastError || { kind: 'unknown', message: error instanceof Error ? error.message : String(error) };
+
+            set({
+              sources: previous.sources,
+              itemsBySource: previous.itemsBySource,
+              loadedSourceIds: previous.loadedSourceIds,
+              lastCatalogError: lastError || { kind: 'unknown', message: 'Failed to load catalog' },
+            });
+
+            return false;
+          } finally {
+            set({ isLoadingCatalog: false });
+          }
+        })();
+
+        skillsCatalogLoadInFlight.set(cacheKey, request);
+        try {
+          return await request;
+        } finally {
+          skillsCatalogLoadInFlight.delete(cacheKey);
+        }
+      },
+
+      loadSource: async (sourceId, options) => {
+        if (!sourceId) {
+          return false;
+        }
+
+        if (!options?.refresh) {
+          const inFlight = sourceLoadInFlight.get(sourceId);
+          if (inFlight) {
+            return inFlight;
+          }
+        }
+
+        activeSourceLoads += 1;
+>>>>>>> upstream/main
         set({ isLoadingSource: true, lastCatalogError: null });
         try {
           const workspace = await canonicalClient.resolveWorkspace(scope.directory, { signal: options?.signal });

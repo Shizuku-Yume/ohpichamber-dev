@@ -5,16 +5,8 @@ import type { WorkerPoolManager } from '@pierre/diffs/worker';
 import { useOptionalThemeSystem } from './useThemeSystem';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
-// NOTE: keep provider lightweight; avoid main-thread diff parsing here.
-// This module must not statically import `@pierre/diffs` runtime code:
-// `@pierre/diffs/worker` pulls the highlighter stack (Highlights, plus Shiki
-// for its fallback) into the eager startup graph and `initialize()` spawns
-// workers plus a main-thread shared highlighter before any diff is visible.
-// Everything heavy loads on demand and is only warmed after startup idle.
 
-// Preload common languages for faster initial diff rendering
 const PRELOAD_LANGS: SupportedLanguages[] = [
-  // Keep small; workers load others on-demand.
   'typescript',
   'javascript',
   'tsx',
@@ -93,9 +85,10 @@ const terminatePoolSafely = (pool: WorkerPoolManager | undefined): void => {
 const loadPoolModules = (): Promise<PoolModules> => {
   poolModulesPromise ??= Promise.all([
     import('@pierre/diffs/worker'),
-    import('@/lib/diff/workerFactory'),
+    import('@/lib/diff/workerFactory').then(({ workerFactory }) => workerFactory),
     import('@/lib/shiki/appThemeRegistry'),
     import('@/lib/shiki/diffsHighlighter'),
+<<<<<<< HEAD
   ])
     .then(([workerModule, factoryModule, themeRegistryModule, highlighterModule]) => ({
       WorkerPoolManager: workerModule.WorkerPoolManager,
@@ -107,6 +100,21 @@ const loadPoolModules = (): Promise<PoolModules> => {
       poolModulesPromise = null;
       throw cause;
     });
+||||||| bc50ba56aa
+  ]).then(([workerModule, factoryModule, themeRegistryModule, highlighterModule]) => ({
+    WorkerPoolManager: workerModule.WorkerPoolManager,
+    workerFactory: factoryModule.workerFactory,
+    ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
+    highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
+  }));
+=======
+  ]).then(([workerModule, workerFactory, themeRegistryModule, highlighterModule]) => ({
+    WorkerPoolManager: workerModule.WorkerPoolManager,
+    workerFactory,
+    ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
+    highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
+  }));
+>>>>>>> upstream/main
   return poolModulesPromise;
 };
 
@@ -191,6 +199,7 @@ const applyRenderOptions = (style: WorkerPoolStyle, pool: WorkerPoolManager): Pr
 const ensurePool = (style: WorkerPoolStyle): void => {
   if (globalThis.window === undefined || poolsRequested.has(style)) return;
   poolsRequested.add(style);
+<<<<<<< HEAD
   setPoolState(style, 'pending', undefined);
   const generation = poolLifecycleGeneration;
   void loadPoolModules()
@@ -210,6 +219,40 @@ const ensurePool = (style: WorkerPoolStyle): void => {
           onWorkerError: (event) => {
             event.preventDefault();
           },
+||||||| bc50ba56aa
+  void loadPoolModules().then((modules) => {
+    if (pools[style]) return;
+    const config = WORKER_POOL_CONFIG[style];
+    const pool = new modules.WorkerPoolManager(
+      {
+        workerFactory: modules.workerFactory,
+        poolSize: config.poolSize,
+        totalASTLRUCacheSize: config.totalASTLRUCacheSize,
+        // Highlights tokenizes this much in about a millisecond, less than a
+        // worker round trip, so small files and diffs paint highlighted in
+        // their first frame. Shiki is slower but the threshold stays small.
+        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
+      },
+      {
+        theme: {
+          light: 'pierre-light',
+          dark: 'pierre-dark',
+=======
+  void loadPoolModules().then((modules) => {
+    if (pools[style]) return;
+    const config = WORKER_POOL_CONFIG[style];
+    const pool = new modules.WorkerPoolManager(
+      {
+        workerFactory: modules.workerFactory,
+        poolSize: config.poolSize,
+        totalASTLRUCacheSize: config.totalASTLRUCacheSize,
+        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
+      },
+      {
+        theme: {
+          light: 'pierre-light',
+          dark: 'pierre-dark',
+>>>>>>> upstream/main
         },
         {
           theme: {
@@ -302,11 +345,6 @@ export const DiffWorkerProvider: DiffWorkerProviderComponent = ({ children }) =>
     themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
     fallbackDark;
 
-  // Register the active app themes with @pierre/diffs and forward them to any
-  // live pools. Registration goes through the deferred module load so the
-  // theme registry (and its @pierre/diffs import) stays out of the eager
-  // startup graph; each diff surface also registers the themes it renders
-  // with, so ordering is preserved even before this resolves.
   useEffect(() => {
     let cancelled = false;
     const generation = poolLifecycleGeneration;
@@ -327,11 +365,6 @@ export const DiffWorkerProvider: DiffWorkerProviderComponent = ({ children }) =>
     };
   }, [darkTheme, lightTheme]);
 
-  // Warm the worker pools once startup work has settled so the first diff a
-  // user opens does not pay worker spawn + highlighter init. Idle-deferred:
-  // warming competed with initial load (3 workers and their highlighters)
-  // when it ran during mount. Main-thread Highlights warms with them, so the
-  // first code block in chat paints highlighted instead of plain.
   useEffect(() => {
     if (globalThis.window === undefined) return;
     const warm = () => {

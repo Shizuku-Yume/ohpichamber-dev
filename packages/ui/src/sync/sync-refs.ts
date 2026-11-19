@@ -1,9 +1,3 @@
-/**
- * Sync refs — imperative access to sync state from non-React code.
- *
- * SyncProvider sets these refs on mount. Store actions (session-ui-store,
- * session-actions) use them to read child-store domain data without hooks.
- */
 
 import type { Part } from "@openchamber/agent-contract"
 import { getRuntimeKey } from "@/lib/runtime-switch"
@@ -36,9 +30,20 @@ export function setSyncRefs(
   _directory = directory
 }
 
+<<<<<<< HEAD
 /** Remember explicit session routing before directory discovery catches up. */
 export function registerSessionDirectory(sessionId: string, directory: string) {
   if (sessionId && directory) registeredSessionDirectories.set(sessionId, directory)
+||||||| bc50ba56aa
+/** Pre-register a session→directory mapping in the routing index.
+ *  Called from session-actions when creating sessions so SSE events
+ *  arriving before session.created can be routed correctly. */
+export function registerSessionDirectory(sessionID: string, directory: string) {
+  _registerSessionDirectory?.(sessionID, directory)
+=======
+export function registerSessionDirectory(sessionID: string, directory: string) {
+  _registerSessionDirectory?.(sessionID, directory)
+>>>>>>> upstream/main
 }
 
 export function getSyncChildStores(): ChildStoreManager {
@@ -46,7 +51,6 @@ export function getSyncChildStores(): ChildStoreManager {
   return _childStores
 }
 
-/** Read current directory's child store state. Returns undefined if not bootstrapped. */
 export function getDirectoryState(directory?: string): State | undefined {
   const stores = _childStores
   if (!stores || boundRuntimeKey !== getRuntimeKey()) return undefined
@@ -55,6 +59,7 @@ export function getDirectoryState(directory?: string): State | undefined {
   return stores.getState(dir)
 }
 
+<<<<<<< HEAD
 /**
  * Re-read initialized directories' canonical environments after a settings
  * write moved a fact they all derive: the model catalog carries
@@ -75,21 +80,56 @@ export function refreshDirectoryCatalogs(): void {
   if (!stores || boundRuntimeKey !== getRuntimeKey()) return
   for (const directory of stores.children.keys()) {
     stores.requestBootstrap({ directory, priority: "selected", reason: "action-demand", force: true })
+||||||| bc50ba56aa
+/** Read resolved OpenCode config from a directory child store, if bootstrapped. */
+export function getSyncConfig(directory?: string): Config | undefined {
+  const config = getDirectoryState(directory)?.config
+  return config && Object.keys(config).length > 0 ? config : undefined
+}
+
+export function subscribeToSyncConfigChanges(listener: (directory: string, config: Config) => void): () => void {
+  configListeners.add(listener)
+  return () => {
+    configListeners.delete(listener)
+=======
+export function getSyncConfig(directory?: string): Config | undefined {
+  const config = getDirectoryState(directory)?.config
+  return config && Object.keys(config).length > 0 ? config : undefined
+}
+
+export function subscribeToSyncConfigChanges(listener: (directory: string, config: Config) => void): () => void {
+  configListeners.add(listener)
+  return () => {
+    configListeners.delete(listener)
+>>>>>>> upstream/main
   }
 }
 
 
+<<<<<<< HEAD
 /** Read sessions from current directory's child store */
 export function getSyncSessions(directory?: string): State["session"] {
+||||||| bc50ba56aa
+/** Read sessions from current directory's child store */
+export function getSyncSessions(directory?: string) {
+=======
+export function getSyncSessions(directory?: string) {
+>>>>>>> upstream/main
   return getDirectoryState(directory)?.session ?? []
 }
 
+<<<<<<< HEAD
 /** Read sessions across all initialized child stores */
 export function getAllSyncSessions(): State["session"] {
+||||||| bc50ba56aa
+/** Read sessions across all initialized child stores */
+export function getAllSyncSessions() {
+=======
+export function getAllSyncSessions() {
+>>>>>>> upstream/main
   return Array.from(getAllSyncSessionMap().values())
 }
 
-/** Read the cached cross-directory session index, rebuilding only when a session slice changes. */
 export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][number]> {
   const stores = _childStores
   if (!stores || boundRuntimeKey !== getRuntimeKey()) return new Map()
@@ -122,26 +162,56 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
   return cachedSessionsById
 }
 
+<<<<<<< HEAD
 /** Native workspace ownership is registered by the directory loader and actions.
  * A child store is a directory-scoped owner; public records contain no Host path. */
+||||||| bc50ba56aa
+/**
+ * Directory of a child store that holds this session.
+ *
+ * This reports containment, not ownership, and a session can be held by more
+ * than one store: a project's session list includes the sessions of its
+ * worktrees so the sidebar can group them, so the parent repository holds
+ * worktree sessions too. Ownership comes from the session record's own
+ * directory; this is the fallback for a record that carries none. Returns
+ * `null` when no initialized child store contains the session, which means
+ * "unknown", never "no directory".
+ */
+=======
+>>>>>>> upstream/main
 export function getSyncSessionDirectory(sessionId: string): string | null {
   if (!sessionId || boundRuntimeKey !== getRuntimeKey()) return null
   getAllSyncSessionMap()
   return registeredSessionDirectories.get(sessionId) ?? cachedSessionDirectoryById.get(sessionId) ?? null
 }
 
+<<<<<<< HEAD
 /** Read messages for a session from current directory's child store */
 export function getSyncMessages(sessionId: string, directory?: string): State["message"][string] {
+||||||| bc50ba56aa
+/** Read messages for a session from current directory's child store */
+export function getSyncMessages(sessionId: string, directory?: string) {
+=======
+export function getSyncMessages(sessionId: string, directory?: string) {
+>>>>>>> upstream/main
   return getDirectoryState(directory)?.message[sessionId] ?? []
 }
 
+<<<<<<< HEAD
 /** Read renderability of a session snapshot from current directory's child store */
 export function getSyncSessionMaterializationStatus(sessionId: string, directory?: string): SessionMaterializationStatus {
+||||||| bc50ba56aa
+/** Read renderability of a session snapshot from current directory's child store */
+export function getSyncSessionMaterializationStatus(sessionId: string, directory?: string) {
+=======
+export function getSyncSessionMaterializationStatus(sessionId: string, directory?: string) {
+>>>>>>> upstream/main
   const state = getDirectoryState(directory)
   if (!state) return { hasMessages: false, renderable: false, missingPartMessageIDs: [] }
   return getSessionMaterializationStatus(state, sessionId)
 }
 
+<<<<<<< HEAD
 /** Read parts for a message from current directory's child store */
 export function getSyncParts(messageId: string, directory?: string): Part[] {
   const messages = getDirectoryState(directory)?.message
@@ -151,4 +221,21 @@ export function getSyncParts(messageId: string, directory?: string): Part[] {
     if (message) return message.parts
   }
   return []
+||||||| bc50ba56aa
+/** Read parts for a message from current directory's child store */
+export function getSyncParts(messageId: string, directory?: string) {
+  return getDirectoryState(directory)?.part[messageId] ?? []
+}
+
+/** Read session status from current directory's child store */
+export function getSyncSessionStatus(sessionId: string, directory?: string) {
+  return getDirectoryState(directory)?.session_status[sessionId]
+=======
+export function getSyncParts(messageId: string, directory?: string) {
+  return getDirectoryState(directory)?.part[messageId] ?? []
+}
+
+export function getSyncSessionStatus(sessionId: string, directory?: string) {
+  return getDirectoryState(directory)?.session_status[sessionId]
+>>>>>>> upstream/main
 }

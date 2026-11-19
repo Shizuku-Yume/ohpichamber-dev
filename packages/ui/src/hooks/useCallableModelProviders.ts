@@ -2,11 +2,28 @@ import { useEffect, useMemo } from 'react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
+<<<<<<< HEAD
 /**
  * Provider ids the Small Model and Changes Walkthrough pickers may offer,
  * resolved through OMP `modelRoles` and the model catalog (decision 2026-11-05).
  * `undefined` until providers are loaded.
  */
+||||||| bc50ba56aa
+/**
+ * Provider ids the Small Model and Changes Walkthrough pickers may offer, from
+ * `GET /api/small-model`. `undefined` until the server has answered.
+ *
+ * Asked again whenever the provider catalog changes. A panel that mounts while
+ * OpenCode is still starting gets an empty answer, and asking once per mount
+ * left a walkthrough panel restored at launch with an empty picker for the
+ * whole run. The catalog arriving, a provider login and a runtime switch all
+ * replace the catalog, and each can change this answer. A failed request keeps
+ * the previous answer. The model list is directory-scoped, so the request
+ * names the current directory; without one the picker would answer for
+ * OpenCode's own working location, which need not hold the project's models.
+ */
+=======
+>>>>>>> upstream/main
 export function useCallableModelProviders(enabled = true): string[] | undefined {
   const providers = useConfigStore((state) => state.providers);
   const providersLoaded = useConfigStore((state) => state.providersLoaded);

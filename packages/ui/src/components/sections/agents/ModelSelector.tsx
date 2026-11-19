@@ -32,29 +32,19 @@ interface ModelSelectorProps {
     tooltipsEnabled?: boolean;
     dropdownPortalToBody?: boolean;
     directory?: string;
-    /**
-     * Drop the model name and the chevron, leaving the provider logo. For
-     * headers that run out of room before they run out of controls — the logo
-     * still says which provider is answering, which is the part a glance is
-     * usually after.
-     */
     compact?: boolean;
-    /**
-     * Offer the Auto routing row on top, as the composer does. Only for
-     * selections that are later sent through the routing rewrite (Session
-     * Defaults); a routing category or fallback must name a real model.
-     */
     offerAuto?: boolean;
-    /**
-     * Tooltip on the desktop trigger alone, so it never catches focus or the
-     * mouse from the list.
-     */
     triggerTooltip?: string;
+<<<<<<< HEAD
     /**
      * The caller's value is still being read. The trigger shows the loading
      * state rather than the placeholder that the value replaces a moment later.
      */
     loading?: boolean;
+||||||| bc50ba56aa
+=======
+    disabled?: boolean;
+>>>>>>> upstream/main
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -71,7 +61,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     directory,
     offerAuto = false,
     triggerTooltip,
+<<<<<<< HEAD
     loading = false,
+||||||| bc50ba56aa
+=======
+    disabled = false,
+>>>>>>> upstream/main
 }) => {
     const { t } = useI18n();
     const autoReady = useRoutingStore(selectAutoReady);
@@ -79,11 +74,20 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
+<<<<<<< HEAD
     const readiness = useCatalogReadiness('models', directory);
     // A pending value is not ready: the trigger spins and cannot open until it arrives.
     const isReady = !loading && readiness.isReady;
     const isUnavailable = !loading && readiness.isUnavailable;
     const catalogProviders = useConfigStore((state) => directory === undefined
+||||||| bc50ba56aa
+    const { isReady, isUnavailable } = useOpenCodeReadiness('models', directory);
+    const providers: ModelPickerProvider[] = useConfigStore((state) => directory === undefined
+=======
+    const { isReady, isUnavailable } = useOpenCodeReadiness('models', directory);
+    const canOpen = isReady && !disabled;
+    const providers: ModelPickerProvider[] = useConfigStore((state) => directory === undefined
+>>>>>>> upstream/main
         ? state.providers : selectProvidersForDirectory(state, directory));
     const providers: ModelPickerProvider[] = catalogProviders;
     const loadProviders = useConfigStore((state) => state.loadProviders);
@@ -111,9 +115,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }, []);
 
     const handleSelect = React.useCallback((entry: ModelPickerEntry) => {
+<<<<<<< HEAD
         onChange(entry.providerId, entry.modelId);
         // Auto has its own pinned row; it does not belong in Recent.
         if (!isAutoModel(entry.providerId, entry.modelId)) addRecentModel(entry.providerId, entry.modelId);
+||||||| bc50ba56aa
+        onChange(entry.providerID, entry.modelID);
+        // Auto has its own pinned row; it does not belong in Recent.
+        if (!isAutoModel(entry.providerID, entry.modelID)) addRecentModel(entry.providerID, entry.modelID);
+=======
+        onChange(entry.providerID, entry.modelID);
+        if (!isAutoModel(entry.providerID, entry.modelID)) addRecentModel(entry.providerID, entry.modelID);
+>>>>>>> upstream/main
         closePicker();
     }, [addRecentModel, closePicker, onChange]);
 
@@ -142,8 +155,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }), [placeholder, t]);
 
     const selectedModel = providerId && modelId ? { providerID: providerId, modelID: modelId } : null;
+<<<<<<< HEAD
     const displayReady = isReady || (!loading && Boolean(selectedModel));
     // Show the model's display name (as in the picker list), not the raw provider/model id.
+||||||| bc50ba56aa
+    const displayReady = isReady || Boolean(selectedModel);
+    // Show the model's display name (as in the picker list), not the raw provider/model id.
+=======
+    const displayReady = isReady || Boolean(selectedModel);
+>>>>>>> upstream/main
     const triggerLabel = React.useMemo(() => {
         if (!providerId || !modelId) {
             return placeholder || t('settings.agents.modelSelector.notSelected');
@@ -189,8 +209,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <>
                 <button
                     type="button"
-                    onClick={isReady ? () => setIsMobilePanelOpen(true) : undefined}
-                    disabled={!isReady}
+                    onClick={canOpen ? () => setIsMobilePanelOpen(true) : undefined}
+                    disabled={!canOpen}
                     className={cn(
                         dropdownTriggerVariants({ size: 'mobile' }),
                         'w-fit max-w-full',
@@ -232,11 +252,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 className={cn(
                     dropdownTriggerVariants(),
                     'min-w-0 w-fit',
-                    !isReady && 'opacity-60 cursor-not-allowed',
+                    !canOpen && 'opacity-60 cursor-not-allowed',
                     className,
                 )}
-                // The name is gone from the trigger, so it has to stay
-                // reachable somewhere.
                 title={compact && displayReady && !triggerTooltip ? triggerLabel : undefined}
             >
                 {!displayReady ? (
@@ -266,7 +284,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     );
 
     return (
-        <DropdownMenu open={isReady && isDropdownOpen} onOpenChange={isReady ? setIsDropdownOpen : undefined}>
+        <DropdownMenu open={canOpen && isDropdownOpen} onOpenChange={canOpen ? setIsDropdownOpen : undefined}>
             {triggerTooltip ? <HoverTooltip label={triggerTooltip} side="bottom">{trigger}</HoverTooltip> : trigger}
             <DropdownMenuContent className="w-[min(380px,calc(100vw-2rem))] p-0 flex flex-col" align="start" portalToBody={dropdownPortalToBody}>
                 {picker}

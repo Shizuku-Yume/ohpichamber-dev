@@ -9,7 +9,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Mark as done',
     'contextTooltips.workspace.todo.reopen': 'Mark as not done',
     'contextTooltips.workspace.todo.send': 'Send to a session',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Delete all finished todos',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Delete all finished todos',
+    'contextTooltips.workspace.memory.scope.project': 'Show memories of this project',
+    'contextTooltips.workspace.memory.scope.global': 'Show memories about you',
+    'contextTooltips.workspace.memory.tidy': 'Start a session that tidies memory',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Show memories of this project',
+    'contextTooltips.workspace.memory.scope.global': 'Show memories about you',
+    'contextTooltips.workspace.memory.tidy': 'Start a session that tidies memory',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Choose a workflow run',
     'contextTooltips.workspace.workflow.view.agents': "Show the run's agents",
     'contextTooltips.workspace.workflow.view.log': "Show the run's log",
@@ -37,7 +48,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'وضع علامة مكتملة',
     'contextTooltips.workspace.todo.reopen': 'وضع علامة غير مكتملة',
     'contextTooltips.workspace.todo.send': 'إرسال إلى جلسة',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'حذف كل المهام المكتملة',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'حذف كل المهام المكتملة',
+    'contextTooltips.workspace.memory.scope.project': 'عرض ذاكرة هذا المشروع',
+    'contextTooltips.workspace.memory.scope.global': 'عرض ما يُتذكَّر عنك',
+    'contextTooltips.workspace.memory.tidy': 'بدء جلسة لترتيب الذاكرة',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'عرض ذاكرة هذا المشروع',
+    'contextTooltips.workspace.memory.scope.global': 'عرض ما يُتذكَّر عنك',
+    'contextTooltips.workspace.memory.tidy': 'بدء جلسة لترتيب الذاكرة',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'اختيار تشغيل لسير العمل',
     'contextTooltips.workspace.workflow.view.agents': 'عرض وكلاء التشغيل',
     'contextTooltips.workspace.workflow.view.log': 'عرض سجل التشغيل',
@@ -65,7 +87,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Als erledigt markieren',
     'contextTooltips.workspace.todo.reopen': 'Als nicht erledigt markieren',
     'contextTooltips.workspace.todo.send': 'An eine Sitzung senden',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Alle erledigten Aufgaben löschen',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Alle erledigten Aufgaben löschen',
+    'contextTooltips.workspace.memory.scope.project': 'Erinnerungen zu diesem Projekt anzeigen',
+    'contextTooltips.workspace.memory.scope.global': 'Erinnerungen über Sie anzeigen',
+    'contextTooltips.workspace.memory.tidy': 'Sitzung zum Aufräumen des Gedächtnisses starten',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Erinnerungen zu diesem Projekt anzeigen',
+    'contextTooltips.workspace.memory.scope.global': 'Erinnerungen über Sie anzeigen',
+    'contextTooltips.workspace.memory.tidy': 'Sitzung zum Aufräumen des Gedächtnisses starten',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Workflow-Lauf auswählen',
     'contextTooltips.workspace.workflow.view.agents': 'Agenten des Laufs anzeigen',
     'contextTooltips.workspace.workflow.view.log': 'Protokoll des Laufs anzeigen',
@@ -93,7 +126,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Marcar como completada',
     'contextTooltips.workspace.todo.reopen': 'Marcar como no completada',
     'contextTooltips.workspace.todo.send': 'Enviar a una sesión',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Eliminar todas las tareas completadas',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Eliminar todas las tareas completadas',
+    'contextTooltips.workspace.memory.scope.project': 'Mostrar recuerdos de este proyecto',
+    'contextTooltips.workspace.memory.scope.global': 'Mostrar recuerdos sobre ti',
+    'contextTooltips.workspace.memory.tidy': 'Iniciar una sesión que ordene la memoria',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Mostrar recuerdos de este proyecto',
+    'contextTooltips.workspace.memory.scope.global': 'Mostrar recuerdos sobre ti',
+    'contextTooltips.workspace.memory.tidy': 'Iniciar una sesión que ordene la memoria',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Elegir una ejecución de workflow',
     'contextTooltips.workspace.workflow.view.agents': 'Mostrar los agentes de la ejecución',
     'contextTooltips.workspace.workflow.view.log': 'Mostrar el registro de la ejecución',
@@ -121,7 +165,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Marquer comme terminée',
     'contextTooltips.workspace.todo.reopen': 'Marquer comme non terminée',
     'contextTooltips.workspace.todo.send': 'Envoyer à une session',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Supprimer toutes les tâches terminées',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Supprimer toutes les tâches terminées',
+    'contextTooltips.workspace.memory.scope.project': 'Afficher les souvenirs de ce projet',
+    'contextTooltips.workspace.memory.scope.global': 'Afficher les souvenirs à votre sujet',
+    'contextTooltips.workspace.memory.tidy': 'Lancer une session pour ranger la mémoire',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Afficher les souvenirs de ce projet',
+    'contextTooltips.workspace.memory.scope.global': 'Afficher les souvenirs à votre sujet',
+    'contextTooltips.workspace.memory.tidy': 'Lancer une session pour ranger la mémoire',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Choisir une exécution de workflow',
     'contextTooltips.workspace.workflow.view.agents': "Afficher les agents de l'exécution",
     'contextTooltips.workspace.workflow.view.log': "Afficher le journal de l'exécution",
@@ -149,7 +204,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'סימון כהושלמה',
     'contextTooltips.workspace.todo.reopen': 'סימון כלא הושלמה',
     'contextTooltips.workspace.todo.send': 'שליחה להפעלה',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'מחיקת כל המשימות שהושלמו',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'מחיקת כל המשימות שהושלמו',
+    'contextTooltips.workspace.memory.scope.project': 'הצגת זיכרונות של הפרויקט הזה',
+    'contextTooltips.workspace.memory.scope.global': 'הצגת זיכרונות עליך',
+    'contextTooltips.workspace.memory.tidy': 'התחלת הפעלה שמסדרת את הזיכרון',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'הצגת זיכרונות של הפרויקט הזה',
+    'contextTooltips.workspace.memory.scope.global': 'הצגת זיכרונות עליך',
+    'contextTooltips.workspace.memory.tidy': 'התחלת הפעלה שמסדרת את הזיכרון',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'בחירת הרצה של תהליך עבודה',
     'contextTooltips.workspace.workflow.view.agents': 'הצגת הסוכנים של ההרצה',
     'contextTooltips.workspace.workflow.view.log': 'הצגת היומן של ההרצה',
@@ -177,7 +243,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': '完了にする',
     'contextTooltips.workspace.todo.reopen': '未完了に戻す',
     'contextTooltips.workspace.todo.send': 'セッションに送信',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': '完了したTodoをすべて削除',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': '完了したTodoをすべて削除',
+    'contextTooltips.workspace.memory.scope.project': 'このプロジェクトのメモリを表示',
+    'contextTooltips.workspace.memory.scope.global': 'あなたに関するメモリを表示',
+    'contextTooltips.workspace.memory.tidy': 'メモリを整理するセッションを開始',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'このプロジェクトのメモリを表示',
+    'contextTooltips.workspace.memory.scope.global': 'あなたに関するメモリを表示',
+    'contextTooltips.workspace.memory.tidy': 'メモリを整理するセッションを開始',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'ワークフロー実行を選択',
     'contextTooltips.workspace.workflow.view.agents': 'この実行のエージェントを表示',
     'contextTooltips.workspace.workflow.view.log': 'この実行のログを表示',
@@ -205,7 +282,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': '완료로 표시',
     'contextTooltips.workspace.todo.reopen': '미완료로 표시',
     'contextTooltips.workspace.todo.send': '세션으로 보내기',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': '완료된 할 일 모두 삭제',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': '완료된 할 일 모두 삭제',
+    'contextTooltips.workspace.memory.scope.project': '이 프로젝트의 메모리 보기',
+    'contextTooltips.workspace.memory.scope.global': '사용자에 관한 메모리 보기',
+    'contextTooltips.workspace.memory.tidy': '메모리를 정리하는 세션 시작',
+=======
+    'contextTooltips.workspace.memory.scope.project': '이 프로젝트의 메모리 보기',
+    'contextTooltips.workspace.memory.scope.global': '사용자에 관한 메모리 보기',
+    'contextTooltips.workspace.memory.tidy': '메모리를 정리하는 세션 시작',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': '워크플로 실행 선택',
     'contextTooltips.workspace.workflow.view.agents': '이 실행의 에이전트 보기',
     'contextTooltips.workspace.workflow.view.log': '이 실행의 로그 보기',
@@ -233,7 +321,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Markeren als afgerond',
     'contextTooltips.workspace.todo.reopen': 'Markeren als niet afgerond',
     'contextTooltips.workspace.todo.send': 'Naar een sessie sturen',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Alle afgeronde taken verwijderen',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Alle afgeronde taken verwijderen',
+    'contextTooltips.workspace.memory.scope.project': 'Herinneringen van dit project tonen',
+    'contextTooltips.workspace.memory.scope.global': 'Herinneringen over u tonen',
+    'contextTooltips.workspace.memory.tidy': 'Sessie starten die het geheugen opruimt',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Herinneringen van dit project tonen',
+    'contextTooltips.workspace.memory.scope.global': 'Herinneringen over u tonen',
+    'contextTooltips.workspace.memory.tidy': 'Sessie starten die het geheugen opruimt',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Workflow-run kiezen',
     'contextTooltips.workspace.workflow.view.agents': 'Agents van de run tonen',
     'contextTooltips.workspace.workflow.view.log': 'Log van de run tonen',
@@ -261,7 +360,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Oznacz jako ukończone',
     'contextTooltips.workspace.todo.reopen': 'Oznacz jako nieukończone',
     'contextTooltips.workspace.todo.send': 'Wyślij do sesji',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Usuń wszystkie ukończone zadania',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Usuń wszystkie ukończone zadania',
+    'contextTooltips.workspace.memory.scope.project': 'Pokaż wspomnienia tego projektu',
+    'contextTooltips.workspace.memory.scope.global': 'Pokaż wspomnienia o Tobie',
+    'contextTooltips.workspace.memory.tidy': 'Uruchom sesję porządkującą pamięć',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Pokaż wspomnienia tego projektu',
+    'contextTooltips.workspace.memory.scope.global': 'Pokaż wspomnienia o Tobie',
+    'contextTooltips.workspace.memory.tidy': 'Uruchom sesję porządkującą pamięć',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Wybierz uruchomienie workflow',
     'contextTooltips.workspace.workflow.view.agents': 'Pokaż agentów uruchomienia',
     'contextTooltips.workspace.workflow.view.log': 'Pokaż dziennik uruchomienia',
@@ -289,7 +399,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Marcar como concluída',
     'contextTooltips.workspace.todo.reopen': 'Marcar como não concluída',
     'contextTooltips.workspace.todo.send': 'Enviar para uma sessão',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Excluir todas as tarefas concluídas',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Excluir todas as tarefas concluídas',
+    'contextTooltips.workspace.memory.scope.project': 'Mostrar memórias deste projeto',
+    'contextTooltips.workspace.memory.scope.global': 'Mostrar memórias sobre você',
+    'contextTooltips.workspace.memory.tidy': 'Iniciar uma sessão que organiza a memória',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Mostrar memórias deste projeto',
+    'contextTooltips.workspace.memory.scope.global': 'Mostrar memórias sobre você',
+    'contextTooltips.workspace.memory.tidy': 'Iniciar uma sessão que organiza a memória',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Escolher uma execução de workflow',
     'contextTooltips.workspace.workflow.view.agents': 'Mostrar os agentes da execução',
     'contextTooltips.workspace.workflow.view.log': 'Mostrar o log da execução',
@@ -317,7 +438,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Tamamlandı olarak işaretle',
     'contextTooltips.workspace.todo.reopen': 'Tamamlanmadı olarak işaretle',
     'contextTooltips.workspace.todo.send': 'Bir oturuma gönder',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Tamamlanan tüm yapılacakları sil',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Tamamlanan tüm yapılacakları sil',
+    'contextTooltips.workspace.memory.scope.project': 'Bu projenin hafızasını göster',
+    'contextTooltips.workspace.memory.scope.global': 'Senin hakkındaki hafızayı göster',
+    'contextTooltips.workspace.memory.tidy': 'Hafızayı toparlayan bir oturum başlat',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Bu projenin hafızasını göster',
+    'contextTooltips.workspace.memory.scope.global': 'Senin hakkındaki hafızayı göster',
+    'contextTooltips.workspace.memory.tidy': 'Hafızayı toparlayan bir oturum başlat',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Bir iş akışı çalıştırması seç',
     'contextTooltips.workspace.workflow.view.agents': 'Çalıştırmanın ajanlarını göster',
     'contextTooltips.workspace.workflow.view.log': 'Çalıştırmanın günlüğünü göster',
@@ -345,7 +477,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': 'Позначити як завершене',
     'contextTooltips.workspace.todo.reopen': 'Позначити як незавершене',
     'contextTooltips.workspace.todo.send': 'Надіслати в сесію',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': 'Видалити всі завершені завдання',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': 'Видалити всі завершені завдання',
+    'contextTooltips.workspace.memory.scope.project': 'Показати памʼять цього проєкту',
+    'contextTooltips.workspace.memory.scope.global': 'Показати памʼять про вас',
+    'contextTooltips.workspace.memory.tidy': 'Запустити сесію, яка впорядкує памʼять',
+=======
+    'contextTooltips.workspace.memory.scope.project': 'Показати памʼять цього проєкту',
+    'contextTooltips.workspace.memory.scope.global': 'Показати памʼять про вас',
+    'contextTooltips.workspace.memory.tidy': 'Запустити сесію, яка впорядкує памʼять',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': 'Вибрати прогін воркфлоу',
     'contextTooltips.workspace.workflow.view.agents': 'Показати агентів прогону',
     'contextTooltips.workspace.workflow.view.log': 'Показати журнал прогону',
@@ -373,7 +516,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': '标记为已完成',
     'contextTooltips.workspace.todo.reopen': '标记为未完成',
     'contextTooltips.workspace.todo.send': '发送到会话',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': '删除所有已完成的待办',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': '删除所有已完成的待办',
+    'contextTooltips.workspace.memory.scope.project': '显示此项目的记忆',
+    'contextTooltips.workspace.memory.scope.global': '显示关于你的记忆',
+    'contextTooltips.workspace.memory.tidy': '启动一个整理记忆的会话',
+=======
+    'contextTooltips.workspace.memory.scope.project': '显示此项目的记忆',
+    'contextTooltips.workspace.memory.scope.global': '显示关于你的记忆',
+    'contextTooltips.workspace.memory.tidy': '启动一个整理记忆的会话',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': '选择工作流运行',
     'contextTooltips.workspace.workflow.view.agents': '显示此次运行的代理',
     'contextTooltips.workspace.workflow.view.log': '显示此次运行的日志',
@@ -401,7 +555,18 @@ export const tooltipsWorkspaceI18n = {
     'contextTooltips.workspace.todo.complete': '標記為已完成',
     'contextTooltips.workspace.todo.reopen': '標記為未完成',
     'contextTooltips.workspace.todo.send': '傳送到工作階段',
+<<<<<<< HEAD
     'contextTooltips.workspace.todo.clearCompleted': '刪除所有已完成的待辦',
+||||||| bc50ba56aa
+    'contextTooltips.workspace.todo.clearCompleted': '刪除所有已完成的待辦',
+    'contextTooltips.workspace.memory.scope.project': '顯示此專案的記憶',
+    'contextTooltips.workspace.memory.scope.global': '顯示關於你的記憶',
+    'contextTooltips.workspace.memory.tidy': '啟動整理記憶的工作階段',
+=======
+    'contextTooltips.workspace.memory.scope.project': '顯示此專案的記憶',
+    'contextTooltips.workspace.memory.scope.global': '顯示關於你的記憶',
+    'contextTooltips.workspace.memory.tidy': '啟動整理記憶的工作階段',
+>>>>>>> upstream/main
     'contextTooltips.workspace.workflow.pickRun': '選擇工作流程執行',
     'contextTooltips.workspace.workflow.view.agents': '顯示此次執行的代理',
     'contextTooltips.workspace.workflow.view.log': '顯示此次執行的記錄',

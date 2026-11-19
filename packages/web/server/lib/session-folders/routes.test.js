@@ -70,12 +70,658 @@ afterEach(() => {
 const folderPayload = (updatedAt) => ({ version: 1, foldersMap: {}, collapsedFolderIds: [], updatedAt });
 
 const folder = (id, name, sessionIds) => ({ id, name, sessionIds, createdAt: 1 });
+<<<<<<< HEAD
 const registerStore = (dataDir, options = {}) => {
   const routes = new Map();
   const app = {
     get(routePath, handler) { routes.set(`GET ${routePath}`, handler); },
     post(routePath, handler) { routes.set(`POST ${routePath}`, handler); },
     patch(routePath, handler) { routes.set(`PATCH ${routePath}`, handler); },
+||||||| bc50ba56aa
+
+describe('session folders routes', () => {
+  it('uses unique temp files for concurrent saves', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const tempPaths = [];
+    const fsPromises = {
+      readFile: vi.fn(missingFile),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (tempPath) => {
+        tempPaths.push(tempPath);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }),
+      rename: vi.fn(async () => {}),
+    };
+
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const handler = getRoute('POST', '/api/session-folders');
+
+    await Promise.all([
+      handler({ body: folderPayload(1) }, createMockResponse()),
+      handler({ body: folderPayload(2) }, createMockResponse()),
+    ]);
+
+    expect(tempPaths).toHaveLength(2);
+    expect(new Set(tempPaths).size).toBe(2);
+    expect(tempPaths.every((tempPath) => tempPath.includes('sessions-directories.json.tmp-'))).toBe(true);
+  });
+
+  it('removes the temp file when rename fails', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = {
+      readFile: vi.fn(missingFile),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async () => {}),
+      rename: vi.fn(async () => {
+        throw new Error('rename failed');
+      }),
+      unlink: vi.fn(async () => {}),
+    };
+
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const handler = getRoute('POST', '/api/session-folders');
+    const response = createMockResponse();
+
+    await handler({ body: folderPayload(1) }, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(fsPromises.unlink).toHaveBeenCalledWith(expect.stringContaining('sessions-directories.json.tmp-'));
+  });
+
+  it('does not present a missing disk file as an authoritative empty snapshot', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = { readFile: vi.fn(missingFile) };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('GET', '/api/session-folders')({}, response);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ version: 1, exists: false });
+  });
+
+  it('rejects malformed disk state instead of clearing valid browser state', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = { readFile: vi.fn(async () => '{broken') };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('GET', '/api/session-folders')({}, response);
+
+    expect(response.statusCode).toBe(500);
+  });
+
+  it('rejects structurally invalid folder entries from disk', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const malformedPayload = {
+      ...folderPayload(10),
+      foldersMap: { project: [{ id: 'folder', name: 'Folder', sessionIds: 'session-1', createdAt: 1 }] },
+    };
+    const fsPromises = { readFile: vi.fn(async () => JSON.stringify(malformedPayload)) };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('GET', '/api/session-folders')({}, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toEqual({ error: 'Stored session folders have an invalid shape' });
+  });
+
+  it('merges an older-stamped write without losing either side', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { a: [folder('f1', 'One', ['s1'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const offlineDevice = {
+      ...folderPayload(10),
+      foldersMap: { b: [folder('f2', 'Two', ['s2'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: offlineDevice }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(Object.keys(saved.foldersMap).sort()).toEqual(['a', 'b']);
+    // The write changed the folders, so the revision moves past the stored one.
+    expect(saved.updatedAt).toBeGreaterThan(20);
+  });
+
+  it('announces an older client\'s change with a revision past the stored one', async () => {
+    const onChanged = vi.fn();
+    const routes = createPersistingRoutes({
+      ...folderPayload(5_000),
+      foldersMap: { a: [folder('f1', 'One', ['s1'])] },
+    }, { onChanged, now: () => 10 });
+
+    // The older client's clock is behind the revision a current client wrote.
+    await routes.post({ ...folderPayload(3_000), foldersMap: { a: [folder('f1', 'Renamed', ['s1'])] } });
+
+    expect(onChanged).toHaveBeenCalledWith(5_001);
+    expect((await routes.get()).updatedAt).toBe(5_001);
+  });
+
+  it('refuses changes on top of a malformed file instead of replacing it', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = { readFile: vi.fn(async () => '{broken'), writeFile: vi.fn(), mkdir: vi.fn(), rename: vi.fn() };
+    registerSessionFoldersRoutes(app, { fsPromises, path, openchamberDataDir: '/tmp/openchamber-test' });
+
+    const response = createMockResponse();
+    await getRoute('PATCH', '/api/session-folders')({
+      body: { changes: [{ type: 'create', scopeKey: '/repo', folder: { id: 'f', name: 'F', parentId: null, createdAt: 1 } }] },
+    }, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(fsPromises.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('unions scopes when a duplicate revision carries different data', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { existing: [folder('f1', 'Existing', ['s1'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const duplicateRevision = {
+      ...folderPayload(20),
+      foldersMap: { replacement: [folder('f2', 'Replacement', ['s2'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: duplicateRevision }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(Object.keys(saved.foldersMap).sort()).toEqual(['existing', 'replacement']);
+  });
+
+  it('preserves scopes the incoming snapshot never saw', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { '/home/ai': [folder('f1', 'coco', ['s1', 's2'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const staleDevice = {
+      ...folderPayload(30),
+      foldersMap: { '/other/project': [folder('f2', 'Other', ['s3'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: staleDevice }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(saved.foldersMap['/home/ai']).toEqual([folder('f1', 'coco', ['s1', 's2'])]);
+    expect(saved.foldersMap['/other/project']).toEqual([folder('f2', 'Other', ['s3'])]);
+  });
+
+  it('unions folders within a shared scope and keeps ones the writer dropped', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { '/home/ai': [folder('f1', 'Keep', ['s1']), folder('f2', 'Drop', ['s2'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const hydratedWriter = {
+      ...folderPayload(30),
+      foldersMap: { '/home/ai': [folder('f1', 'Keep', ['s1']), folder('f3', 'Add', ['s3'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: hydratedWriter }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(saved.foldersMap['/home/ai'].map((entry) => entry.id).sort()).toEqual(['f1', 'f2', 'f3']);
+  });
+
+  const createPersistingRoutes = (initial, { onChanged, now } = {}) => {
+    const { app, getRoute } = createRouteRegistry();
+    const state = { persisted: initial === undefined ? null : JSON.stringify(initial) };
+    const fsPromises = {
+      readFile: vi.fn(async () => {
+        if (state.persisted === null) return missingFile();
+        return state.persisted;
+      }),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        state.persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, { fsPromises, path, openchamberDataDir: '/tmp/openchamber-test', onChanged, now });
+    const post = async (body) => {
+      const response = createMockResponse();
+      await getRoute('POST', '/api/session-folders')({ body }, response);
+      return response;
+    };
+    const patch = async (changes) => {
+      const response = createMockResponse();
+      await getRoute('PATCH', '/api/session-folders')({ body: { changes } }, response);
+      return response;
+    };
+    const get = async () => {
+      const response = createMockResponse();
+      await getRoute('GET', '/api/session-folders')({}, response);
+      return response.body;
+    };
+    return { post, patch, get, state, fsPromises };
+=======
+
+describe('session folders routes', () => {
+  it('uses unique temp files for concurrent saves', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const tempPaths = [];
+    const fsPromises = {
+      readFile: vi.fn(missingFile),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (tempPath) => {
+        tempPaths.push(tempPath);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }),
+      rename: vi.fn(async () => {}),
+    };
+
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const handler = getRoute('POST', '/api/session-folders');
+
+    await Promise.all([
+      handler({ body: folderPayload(1) }, createMockResponse()),
+      handler({ body: folderPayload(2) }, createMockResponse()),
+    ]);
+
+    expect(tempPaths).toHaveLength(2);
+    expect(new Set(tempPaths).size).toBe(2);
+    expect(tempPaths.every((tempPath) => tempPath.includes('sessions-directories.json.tmp-'))).toBe(true);
+  });
+
+  it('removes the temp file when rename fails', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = {
+      readFile: vi.fn(missingFile),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async () => {}),
+      rename: vi.fn(async () => {
+        throw new Error('rename failed');
+      }),
+      unlink: vi.fn(async () => {}),
+    };
+
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const handler = getRoute('POST', '/api/session-folders');
+    const response = createMockResponse();
+
+    await handler({ body: folderPayload(1) }, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(fsPromises.unlink).toHaveBeenCalledWith(expect.stringContaining('sessions-directories.json.tmp-'));
+  });
+
+  it('does not present a missing disk file as an authoritative empty snapshot', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = { readFile: vi.fn(missingFile) };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('GET', '/api/session-folders')({}, response);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ version: 1, exists: false });
+  });
+
+  it('rejects malformed disk state instead of clearing valid browser state', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = { readFile: vi.fn(async () => '{broken') };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('GET', '/api/session-folders')({}, response);
+
+    expect(response.statusCode).toBe(500);
+  });
+
+  it('rejects structurally invalid folder entries from disk', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const malformedPayload = {
+      ...folderPayload(10),
+      foldersMap: { project: [{ id: 'folder', name: 'Folder', sessionIds: 'session-1', createdAt: 1 }] },
+    };
+    const fsPromises = { readFile: vi.fn(async () => JSON.stringify(malformedPayload)) };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('GET', '/api/session-folders')({}, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toEqual({ error: 'Stored session folders have an invalid shape' });
+  });
+
+  it('merges an older-stamped write without losing either side', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { a: [folder('f1', 'One', ['s1'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const offlineDevice = {
+      ...folderPayload(10),
+      foldersMap: { b: [folder('f2', 'Two', ['s2'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: offlineDevice }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(Object.keys(saved.foldersMap).sort()).toEqual(['a', 'b']);
+    // The write changed the folders, so the revision moves past the stored one.
+    expect(saved.updatedAt).toBeGreaterThan(20);
+  });
+
+  it('saves a scope named like an inherited object property', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { a: [folder('f1', 'One', ['s1'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    await getRoute('POST', '/api/session-folders')({
+      body: { ...folderPayload(30), foldersMap: { constructor: [folder('f2', 'Two', ['s2'])] } },
+    }, response);
+
+    expect(response.body).toEqual({ success: true });
+    expect(Object.keys(JSON.parse(persisted).foldersMap).sort()).toEqual(['a', 'constructor']);
+  });
+
+  it('announces an older client\'s change with a revision past the stored one', async () => {
+    const onChanged = vi.fn();
+    const routes = createPersistingRoutes({
+      ...folderPayload(5_000),
+      foldersMap: { a: [folder('f1', 'One', ['s1'])] },
+    }, { onChanged, now: () => 10 });
+
+    // The older client's clock is behind the revision a current client wrote.
+    await routes.post({ ...folderPayload(3_000), foldersMap: { a: [folder('f1', 'Renamed', ['s1'])] } });
+
+    expect(onChanged).toHaveBeenCalledWith(5_001);
+    expect((await routes.get()).updatedAt).toBe(5_001);
+  });
+
+  it('refuses changes on top of a malformed file instead of replacing it', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const fsPromises = { readFile: vi.fn(async () => '{broken'), writeFile: vi.fn(), mkdir: vi.fn(), rename: vi.fn() };
+    registerSessionFoldersRoutes(app, { fsPromises, path, openchamberDataDir: '/tmp/openchamber-test' });
+
+    const response = createMockResponse();
+    await getRoute('PATCH', '/api/session-folders')({
+      body: { changes: [{ type: 'create', scopeKey: '/repo', folder: { id: 'f', name: 'F', parentId: null, createdAt: 1 } }] },
+    }, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(fsPromises.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('unions scopes when a duplicate revision carries different data', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { existing: [folder('f1', 'Existing', ['s1'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const duplicateRevision = {
+      ...folderPayload(20),
+      foldersMap: { replacement: [folder('f2', 'Replacement', ['s2'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: duplicateRevision }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(Object.keys(saved.foldersMap).sort()).toEqual(['existing', 'replacement']);
+  });
+
+  it('preserves scopes the incoming snapshot never saw', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { '/home/ai': [folder('f1', 'coco', ['s1', 's2'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const staleDevice = {
+      ...folderPayload(30),
+      foldersMap: { '/other/project': [folder('f2', 'Other', ['s3'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: staleDevice }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(saved.foldersMap['/home/ai']).toEqual([folder('f1', 'coco', ['s1', 's2'])]);
+    expect(saved.foldersMap['/other/project']).toEqual([folder('f2', 'Other', ['s3'])]);
+  });
+
+  it('unions folders within a shared scope and keeps ones the writer dropped', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { '/home/ai': [folder('f1', 'Keep', ['s1']), folder('f2', 'Drop', ['s2'])] },
+    });
+    const fsPromises = {
+      readFile: vi.fn(async () => persisted),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir: '/tmp/openchamber-test',
+    });
+
+    const response = createMockResponse();
+    const hydratedWriter = {
+      ...folderPayload(30),
+      foldersMap: { '/home/ai': [folder('f1', 'Keep', ['s1']), folder('f3', 'Add', ['s3'])] },
+    };
+    await getRoute('POST', '/api/session-folders')({ body: hydratedWriter }, response);
+
+    expect(response.body).toEqual({ success: true });
+    const saved = JSON.parse(persisted);
+    expect(saved.foldersMap['/home/ai'].map((entry) => entry.id).sort()).toEqual(['f1', 'f2', 'f3']);
+  });
+
+  const createPersistingRoutes = (initial, { onChanged, now } = {}) => {
+    const { app, getRoute } = createRouteRegistry();
+    const state = { persisted: initial === undefined ? null : JSON.stringify(initial) };
+    const fsPromises = {
+      readFile: vi.fn(async () => {
+        if (state.persisted === null) return missingFile();
+        return state.persisted;
+      }),
+      mkdir: vi.fn(async () => {}),
+      writeFile: vi.fn(async (_tempPath, value) => {
+        state.persisted = value;
+      }),
+      rename: vi.fn(async () => {}),
+      unlink: vi.fn(async () => {}),
+    };
+    registerSessionFoldersRoutes(app, { fsPromises, path, openchamberDataDir: '/tmp/openchamber-test', onChanged, now });
+    const post = async (body) => {
+      const response = createMockResponse();
+      await getRoute('POST', '/api/session-folders')({ body }, response);
+      return response;
+    };
+    const patch = async (changes) => {
+      const response = createMockResponse();
+      await getRoute('PATCH', '/api/session-folders')({ body: { changes } }, response);
+      return response;
+    };
+    const get = async () => {
+      const response = createMockResponse();
+      await getRoute('GET', '/api/session-folders')({}, response);
+      return response.body;
+    };
+    return { post, patch, get, state, fsPromises };
+>>>>>>> upstream/main
   };
   const store = createSessionFoldersStore({ openchamberDataDir: dataDir, ...options });
   registerSessionFoldersRoutes(app, { sessionFoldersStore: store });
@@ -104,6 +750,7 @@ describe('session folders routes backed by Host SQLite', () => {
     await store.close();
   });
 
+<<<<<<< HEAD
   it('converts legacy folders once, retains the original and survives a real reopen', async () => {
     const dataDir = makeDataDir();
     const legacy = { ...folderPayload(10), foldersMap: { project: [folder('f1', 'One', ['s1'])] } };
@@ -111,6 +758,39 @@ describe('session folders routes backed by Host SQLite', () => {
     const first = registerStore(dataDir);
     await expect(first.get()).resolves.toMatchObject({
       body: { foldersMap: legacy.foldersMap, revision: '1', errors: {}, conversion: { status: 'complete' }, exists: true },
+||||||| bc50ba56aa
+  it('unions session lists of same-name folders created independently', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { '/home/ai': [folder('a1', 'project root', ['s1'])] },
+=======
+  it.each([undefined, null, 'old', 0, -10])('preserves stored revision acceptance for %s', async (updatedAt) => {
+    const initial = {
+      ...folderPayload(updatedAt),
+      foldersMap: { '/repo': [folder('f', 'Before', [])] },
+    };
+    const routes = createPersistingRoutes(initial, { now: () => 100 });
+
+    expect(await routes.get()).toEqual({ error: 'Stored session folders have an invalid shape' });
+
+    const unchanged = await routes.patch([{ type: 'rename', scopeKey: '/repo', folderId: 'f', name: 'Before' }]);
+    expect(unchanged.statusCode).toBe(200);
+    expect(unchanged.body.updatedAt).toBe(updatedAt);
+    expect(routes.fsPromises.writeFile).not.toHaveBeenCalled();
+
+    const changed = await routes.patch([{ type: 'rename', scopeKey: '/repo', folderId: 'f', name: 'After' }]);
+    expect(changed.statusCode).toBe(200);
+    expect(changed.body.updatedAt).toBe(100);
+    expect((await routes.get()).updatedAt).toBe(100);
+  });
+
+  it('unions session lists of same-name folders created independently', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    let persisted = JSON.stringify({
+      ...folderPayload(20),
+      foldersMap: { '/home/ai': [folder('a1', 'project root', ['s1'])] },
+>>>>>>> upstream/main
     });
     await first.store.close();
     expect(fs.readFileSync(path.join(dataDir, 'sessions-directories.json'), 'utf8')).toBe(JSON.stringify(legacy));

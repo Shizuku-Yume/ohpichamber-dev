@@ -27,10 +27,19 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
   const { currentTheme } = useThemeSystem();
   const isMobile = useUIStore((state) => state.isMobile);
   const [sheetOpen, setSheetOpen] = React.useState(false);
+<<<<<<< HEAD
   const projects = useProjectsStore((state) => state.projects);
   // Settings-only selection. Picking a project here used to call
   // `setActiveProject`, which relocates the chat, the session list and the file
   // tree; reading another project's configuration must not move the app.
+||||||| bc50ba56aa
+  const sortedProjects = useProjectsInSidebarOrder(useProjectsStore((state) => state.projects));
+  // Settings-only selection. Picking a project here used to call
+  // `setActiveProject`, which relocates the chat, the session list and the file
+  // tree; reading another project's configuration must not move the app.
+=======
+  const sortedProjects = useProjectsInSidebarOrder(useProjectsStore((state) => state.projects));
+>>>>>>> upstream/main
   const settingsDirectory = useSettingsDirectory();
   const setSettingsProjectPath = useUIStore((state) => state.setSettingsProjectPath);
 
@@ -50,8 +59,6 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
     if (project) setSettingsProjectPath(project.path);
   };
 
-  // Mobile reuses the composer's bottom-sheet project picker: a select popup
-  // over a phone viewport cannot scroll far enough for long project lists.
   if (isMobile) {
     return (
       <>

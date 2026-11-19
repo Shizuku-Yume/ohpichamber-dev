@@ -1,4 +1,5 @@
 import { normalizePath } from '@/lib/pathNormalization';
+import { withoutShareLinkKeys } from '@/lib/received-pages/link';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { countSyncPersistenceSerialization } from '@/sync/performance-diagnostics';
 
@@ -43,14 +44,30 @@ export const createChatDraftIdentity = (
 
 const WORK_DRAFT_KEY_PREFIX = 'draft:';
 
-/**
- * The composer key of a new session's draft. Each draft opened in a project
- * has its own, so two drafts in one folder never share their text; the draft
- * becomes a session under its own id when sent. A new Chat, and every draft in
- * VS Code, keep the per-folder key `null`.
- */
 export const workDraftComposerKey = (workDraftId: string): string => `${WORK_DRAFT_KEY_PREFIX}${workDraftId}`;
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/** The draft id of a project draft's composer key, or null for any other key. */
+export const workDraftIdOfComposerKey = (sessionId: string | null | undefined): string | null => (
+  sessionId?.startsWith(WORK_DRAFT_KEY_PREFIX) ? sessionId.slice(WORK_DRAFT_KEY_PREFIX.length) : null
+);
+
+/** Whether the identity is a new session's draft rather than a session's composer. */
+export const isNewSessionDraftIdentity = (identity: ChatDraftIdentity): boolean => (
+  identity.sessionId === null || workDraftIdOfComposerKey(identity.sessionId) !== null
+);
+
+=======
+export const workDraftIdOfComposerKey = (sessionId: string | null | undefined): string | null => (
+  sessionId?.startsWith(WORK_DRAFT_KEY_PREFIX) ? sessionId.slice(WORK_DRAFT_KEY_PREFIX.length) : null
+);
+
+export const isNewSessionDraftIdentity = (identity: ChatDraftIdentity): boolean => (
+  identity.sessionId === null || workDraftIdOfComposerKey(identity.sessionId) !== null
+);
+
+>>>>>>> upstream/main
 export const getChatDraftIdentityKey = (identity: ChatDraftIdentity): string =>
   JSON.stringify([identity.runtimeKey, identity.directory, identity.sessionId]);
 
@@ -102,6 +119,37 @@ export const readChatDraft = (identity: ChatDraftIdentity | null): ChatDraftSnap
     : { text: '', confirmedMentions: new Set() };
 };
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/**
+ * `readChatDraft` for a composer opening an identity. A project draft opened
+ * under its own key (`draft:<id>`) with nothing saved there takes over the
+ * text its folder kept under the per-folder key, where every new project
+ * draft was saved before drafts had their own; the folder key is emptied, so
+ * only one draft takes it.
+ */
+export const readChatDraftClaimingFolderDraft = (identity: ChatDraftIdentity | null): ChatDraftSnapshot => {
+  const saved = readChatDraft(identity);
+  if (!identity || workDraftIdOfComposerKey(identity.sessionId) === null || saved.text) return saved;
+  const folderIdentity = { ...identity, sessionId: null };
+  const folderDraft = readChatDraft(folderIdentity);
+  if (!folderDraft.text) return saved;
+  writeChatDraft(identity, folderDraft.text, folderDraft.confirmedMentions);
+  clearChatDraft(folderIdentity);
+  return folderDraft;
+};
+=======
+export const readChatDraftClaimingFolderDraft = (identity: ChatDraftIdentity | null): ChatDraftSnapshot => {
+  const saved = readChatDraft(identity);
+  if (!identity || workDraftIdOfComposerKey(identity.sessionId) === null || saved.text) return saved;
+  const folderIdentity = { ...identity, sessionId: null };
+  const folderDraft = readChatDraft(folderIdentity);
+  if (!folderDraft.text) return saved;
+  writeChatDraft(identity, folderDraft.text, folderDraft.confirmedMentions);
+  clearChatDraft(folderIdentity);
+  return folderDraft;
+};
+>>>>>>> upstream/main
 
 export const writeChatDraft = (
   identity: ChatDraftIdentity | null,
@@ -109,6 +157,7 @@ export const writeChatDraft = (
   confirmedMentions: Iterable<string>,
 ): void => {
   if (!identity) return;
+  text = withoutShareLinkKeys(text);
   const envelope = readEnvelope();
   const key = getChatDraftIdentityKey(identity);
   const mentions = Array.from(new Set(confirmedMentions));

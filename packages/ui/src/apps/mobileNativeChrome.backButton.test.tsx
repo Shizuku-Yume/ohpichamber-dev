@@ -44,6 +44,7 @@ mock.module('@/components/sections/agents/AgentsSidebar', () => ({
 
 const dom = new Window({ url: 'http://localhost/mobile.html' });
 Object.assign(globalThis, {
+<<<<<<< HEAD
  window: dom,
  document: dom.document,
  navigator: dom.navigator,
@@ -59,6 +60,39 @@ Object.assign(globalThis, {
  sessionStorage: dom.sessionStorage,
  IS_REACT_ACT_ENVIRONMENT: true,
  fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
+||||||| bc50ba56aa
+  window: dom,
+  document: dom.document,
+  navigator: dom.navigator,
+  HTMLElement: dom.HTMLElement,
+  Element: dom.Element,
+  Node: dom.Node,
+  Event: dom.Event,
+  KeyboardEvent: dom.KeyboardEvent,
+  ResizeObserver: dom.ResizeObserver,
+  requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+  cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
+  localStorage: dom.localStorage,
+  sessionStorage: dom.sessionStorage,
+  IS_REACT_ACT_ENVIRONMENT: true,
+  fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
+=======
+  window: dom,
+  document: dom.document, CustomEvent: dom.CustomEvent,
+  navigator: dom.navigator,
+  HTMLElement: dom.HTMLElement,
+  Element: dom.Element,
+  Node: dom.Node,
+  Event: dom.Event,
+  KeyboardEvent: dom.KeyboardEvent,
+  ResizeObserver: dom.ResizeObserver,
+  requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+  cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
+  localStorage: dom.localStorage,
+  sessionStorage: dom.sessionStorage,
+  IS_REACT_ACT_ENVIRONMENT: true,
+  fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
+>>>>>>> upstream/main
 });
 dom.HTMLElement.prototype.scrollIntoView = () => { };
 

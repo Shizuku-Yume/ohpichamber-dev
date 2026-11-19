@@ -1,6 +1,7 @@
 import type { Message, Part } from "@openchamber/agent-contract"
 import type { State } from "./types"
 
+<<<<<<< HEAD
 type UserMessageHistoryRecord = { message: Message; parts: Part[] }
 export type TranscriptPrompt = { text: string; createdAt: number }
 type UserMessageHistorySnapshot = {
@@ -8,6 +9,52 @@ type UserMessageHistorySnapshot = {
   records: UserMessageHistoryRecord[]
   history: TranscriptPrompt[]
 }
+||||||| bc50ba56aa
+type UserMessageHistoryRecord = {
+  message: Message;
+  parts: Part[];
+};
+
+/** One prompt the user sent in a session, as the visible transcript shows it. */
+export type TranscriptPrompt = {
+  text: string;
+  /** `message.time.created`, milliseconds. */
+  createdAt: number;
+};
+
+export type UserMessageHistorySnapshot = {
+  sessionID: string;
+  revertMessageID?: string;
+  records: UserMessageHistoryRecord[];
+  /** Oldest first. */
+  history: TranscriptPrompt[];
+};
+
+const EMPTY_PARTS: Part[] = [];
+const EMPTY_RECORDS: UserMessageHistoryRecord[] = [];
+const EMPTY_HISTORY: TranscriptPrompt[] = [];
+=======
+type UserMessageHistoryRecord = {
+  message: Message;
+  parts: Part[];
+};
+
+export type TranscriptPrompt = {
+  text: string;
+  createdAt: number;
+};
+
+export type UserMessageHistorySnapshot = {
+  sessionID: string;
+  revertMessageID?: string;
+  records: UserMessageHistoryRecord[];
+  history: TranscriptPrompt[];
+};
+
+const EMPTY_PARTS: Part[] = [];
+const EMPTY_RECORDS: UserMessageHistoryRecord[] = [];
+const EMPTY_HISTORY: TranscriptPrompt[] = [];
+>>>>>>> upstream/main
 
 const EMPTY_RECORDS: UserMessageHistoryRecord[] = []
 const EMPTY_HISTORY: TranscriptPrompt[] = []

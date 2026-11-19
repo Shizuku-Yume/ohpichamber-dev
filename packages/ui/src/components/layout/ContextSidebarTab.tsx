@@ -1,6 +1,14 @@
 import React from 'react';
+<<<<<<< HEAD
 import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+||||||| bc50ba56aa
+import type { Message, Part } from '@/lib/opencode/model';
+import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+=======
+import type { Message, Part } from '@/lib/opencode/model';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
+>>>>>>> upstream/main
 
 import { Icon } from "@/components/icon/Icon";
 import { selectConfiguredModelPair, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
@@ -48,7 +56,148 @@ const EMPTY_BUCKETS: ContextBuckets = {
 
 const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => readTokenBreakdown(message.info.usage);
 
+<<<<<<< HEAD
 const estimateJsonLength = (value: JsonValue): number => JSON.stringify(value).length;
+||||||| bc50ba56aa
+const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => {
+  const tokenCandidate = (message.info as { tokens?: unknown }).tokens;
+  const source =
+    tokenCandidate !== undefined
+      ? tokenCandidate
+      : (message.parts.find((part) => (part as { tokens?: unknown }).tokens !== undefined) as { tokens?: unknown } | undefined)?.tokens;
+
+  if (typeof source === 'number') {
+    return {
+      ...EMPTY_BREAKDOWN,
+      total: toNonNegativeNumber(source),
+    };
+  }
+
+  if (!source || typeof source !== 'object') {
+    return EMPTY_BREAKDOWN;
+  }
+
+  const breakdown = source as {
+    total?: unknown;
+    input?: unknown;
+    output?: unknown;
+    reasoning?: unknown;
+    cache?: { read?: unknown; write?: unknown };
+  };
+
+  const input = toNonNegativeNumber(breakdown.input);
+  const output = toNonNegativeNumber(breakdown.output);
+  const reasoning = toNonNegativeNumber(breakdown.reasoning);
+  const cacheRead = toNonNegativeNumber(breakdown.cache?.read);
+  const cacheWrite = toNonNegativeNumber(breakdown.cache?.write);
+  // Multi-step turns accumulate the fields across API round-trips (every tool
+  // call re-reads the whole cached prompt), so summing them overstates the
+  // window. The server-reported total is the final round-trip's window.
+  const reportedTotal = toNonNegativeNumber(breakdown.total);
+
+  return {
+    input,
+    output,
+    reasoning,
+    cacheRead,
+    cacheWrite,
+    total: reportedTotal > 0 ? reportedTotal : input + output + reasoning + cacheRead + cacheWrite,
+  };
+};
+
+const pickString = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return '';
+};
+
+const estimateTextLength = (value: unknown): number => {
+  if (typeof value === 'string') {
+    return value.length;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).length;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce((sum, item) => sum + estimateTextLength(item), 0);
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + estimateTextLength(item), 0);
+  }
+  return 0;
+};
+=======
+const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => {
+  const tokenCandidate = (message.info as { tokens?: unknown }).tokens;
+  const source =
+    tokenCandidate !== undefined
+      ? tokenCandidate
+      : (message.parts.find((part) => (part as { tokens?: unknown }).tokens !== undefined) as { tokens?: unknown } | undefined)?.tokens;
+
+  if (typeof source === 'number') {
+    return {
+      ...EMPTY_BREAKDOWN,
+      total: toNonNegativeNumber(source),
+    };
+  }
+
+  if (!source || typeof source !== 'object') {
+    return EMPTY_BREAKDOWN;
+  }
+
+  const breakdown = source as {
+    total?: unknown;
+    input?: unknown;
+    output?: unknown;
+    reasoning?: unknown;
+    cache?: { read?: unknown; write?: unknown };
+  };
+
+  const input = toNonNegativeNumber(breakdown.input);
+  const output = toNonNegativeNumber(breakdown.output);
+  const reasoning = toNonNegativeNumber(breakdown.reasoning);
+  const cacheRead = toNonNegativeNumber(breakdown.cache?.read);
+  const cacheWrite = toNonNegativeNumber(breakdown.cache?.write);
+  const reportedTotal = toNonNegativeNumber(breakdown.total);
+
+  return {
+    input,
+    output,
+    reasoning,
+    cacheRead,
+    cacheWrite,
+    total: reportedTotal > 0 ? reportedTotal : input + output + reasoning + cacheRead + cacheWrite,
+  };
+};
+
+const pickString = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return '';
+};
+
+const estimateTextLength = (value: unknown): number => {
+  if (typeof value === 'string') {
+    return value.length;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).length;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce((sum, item) => sum + estimateTextLength(item), 0);
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + estimateTextLength(item), 0);
+  }
+  return 0;
+};
+>>>>>>> upstream/main
 
 const estimatePartChars = (part: Part, role: 'user' | 'assistant' | 'tool' | 'other'): ContextBuckets => {
   if (part.type === 'reasoning') {
@@ -67,8 +216,65 @@ const estimatePartChars = (part: Part, role: 'user' | 'assistant' | 'tool' | 'ot
       tool: (part.output ? estimateJsonLength(part.output) : 0) + (part.error?.length ?? 0) + part.toolName.length,
     };
   }
+<<<<<<< HEAD
   if (part.type === 'attachment') {
     return { ...EMPTY_BUCKETS, other: part.name.length + part.mediaType.length + part.uri.length };
+||||||| bc50ba56aa
+
+  const directText = pickString(
+    partRecord.text,
+    partRecord.content,
+    partRecord.value,
+    (partRecord.source as { value?: unknown; text?: { value?: unknown } } | undefined)?.value,
+    (partRecord.source as { value?: unknown; text?: { value?: unknown } } | undefined)?.text?.value,
+  );
+
+  if (type === 'tool' || role === 'tool') {
+    const toolInputOutputLength =
+      estimateTextLength(partRecord.input)
+      + estimateTextLength(partRecord.output)
+      + estimateTextLength(partRecord.error)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.input)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.output)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.error);
+
+    const toolPayloadLength =
+      toolInputOutputLength
+      + estimateTextLength(partRecord.raw)
+      + Math.round(estimateTextLength(partRecord.metadata) * 0.25)
+      + Math.round(estimateTextLength(partRecord.state) * 0.1)
+      // A result left out of the page still counts, by the length the server reported.
+      + Math.round((toolContentShellChars(part) ?? 0) * 0.1);
+
+    return { user: 0, assistant: 0, tool: toolPayloadLength, other: 0 };
+=======
+
+  const directText = pickString(
+    partRecord.text,
+    partRecord.content,
+    partRecord.value,
+    (partRecord.source as { value?: unknown; text?: { value?: unknown } } | undefined)?.value,
+    (partRecord.source as { value?: unknown; text?: { value?: unknown } } | undefined)?.text?.value,
+  );
+
+  if (type === 'tool' || role === 'tool') {
+    const toolInputOutputLength =
+      estimateTextLength(partRecord.input)
+      + estimateTextLength(partRecord.output)
+      + estimateTextLength(partRecord.error)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.input)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.output)
+      + estimateTextLength((partRecord.call as { input?: unknown; output?: unknown; error?: unknown } | undefined)?.error);
+
+    const toolPayloadLength =
+      toolInputOutputLength
+      + estimateTextLength(partRecord.raw)
+      + Math.round(estimateTextLength(partRecord.metadata) * 0.25)
+      + Math.round(estimateTextLength(partRecord.state) * 0.1)
+      + Math.round((toolContentShellChars(part) ?? 0) * 0.1);
+
+    return { user: 0, assistant: 0, tool: toolPayloadLength, other: 0 };
+>>>>>>> upstream/main
   }
   if (part.type === 'notice') {
     return { ...EMPTY_BUCKETS, other: (part.title?.length ?? 0) + (part.message?.length ?? 0) };
@@ -89,6 +295,41 @@ const deriveRoleBucket = (message: SessionMessage): 'user' | 'assistant' | 'tool
   return 'other';
 };
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+// Keyed by the message record, which the sync layer replaces whenever the
+// message or its parts change: a streamed delta re-measures one message, and
+// records that leave the session are collected with the map entry.
+const messageCharsCache = new WeakMap<SessionMessage, ContextBuckets>();
+
+const messageChars = (message: SessionMessage): ContextBuckets => {
+  const cached = messageCharsCache.get(message);
+  if (cached) return cached;
+  const role = deriveRoleBucket(message);
+  let bucket = { ...EMPTY_BUCKETS };
+  for (const part of message.parts) {
+    bucket = addBuckets(bucket, estimatePartChars(part, role));
+  }
+  messageCharsCache.set(message, bucket);
+  return bucket;
+};
+
+=======
+const messageCharsCache = new WeakMap<SessionMessage, ContextBuckets>();
+
+const messageChars = (message: SessionMessage): ContextBuckets => {
+  const cached = messageCharsCache.get(message);
+  if (cached) return cached;
+  const role = deriveRoleBucket(message);
+  let bucket = { ...EMPTY_BUCKETS };
+  for (const part of message.parts) {
+    bucket = addBuckets(bucket, estimatePartChars(part, role));
+  }
+  messageCharsCache.set(message, bucket);
+  return bucket;
+};
+
+>>>>>>> upstream/main
 const computeContextBreakdown = (
   sessionMessages: SessionMessage[],
   systemPrompt: string,
@@ -129,6 +370,349 @@ const formatDateTime = (timestamp: number | null, timeFormatPreference: TimeForm
   });
 };
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+const resolveProviderAndModel = (
+  providers: ProviderLike[],
+  providerID: string,
+  modelID: string,
+): { providerName: string; modelName: string; contextLimit: number | null } => {
+  const provider = providers.find((entry) => entry.id === providerID);
+  const model = provider?.models?.find((entry) => entry.id === modelID);
+
+  return {
+    providerName: provider?.name || providerID || '-',
+    modelName: model?.name || modelID || '-',
+    contextLimit: typeof model?.limit?.context === 'number' ? model.limit.context : null,
+  };
+};
+
+type TokenFigures = {
+  /** Every prompt token, cached or not; the cache cells beside it split it up. */
+  prompt: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheHitPercent: number | null;
+};
+
+/** Six token figures under a title; `null` figures, not yet known, read as dashes. */
+const TokenFiguresCard: React.FC<{ title: string; figures: TokenFigures | null }> = ({ title, figures }) => {
+  const { t } = useI18n();
+  const items = [
+    { label: t('contextSidebar.tokens.input'), value: figures?.prompt ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.output'), value: figures?.output ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.reasoning'), value: figures?.reasoning ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.cacheRead'), value: figures?.cacheRead ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.cacheWrite'), value: figures?.cacheWrite ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.cacheHit'), value: figures?.cacheHitPercent ?? null, format: 'percent' },
+  ] as const;
+
+  return (
+    <div className="mb-5 rounded-lg bg-[var(--surface-elevated)]/70 px-4 py-3.5">
+      <div className="typography-micro text-muted-foreground mb-2.5">{title}</div>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+        {items.map((item) => (
+          <div key={item.label}>
+            <div className="typography-micro text-muted-foreground">{item.label}</div>
+            <div className="mt-0.5 typography-ui-label tabular-nums text-foreground">
+              {item.value === null
+                ? '—'
+                : item.format === 'percent'
+                  ? `${item.value.toFixed(1)}%`
+                  : formatNumber(item.value)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type RawMessageRowProps = {
+  message: SessionMessage;
+  isExpanded: boolean;
+  isCopied: boolean;
+  timeFormatPreference: TimeFormatPreference;
+  onToggle: (messageId: string) => void;
+  onCopy: (messageId: string, value: string) => void;
+};
+
+// Memoized on the message record, which the sync layer keeps by reference
+// while the message is unchanged: a streamed delta re-renders only the row of
+// the message it touched, not one row per message of the session.
+const RawMessageRow = React.memo(function RawMessageRow({
+  message,
+  isExpanded,
+  isCopied,
+  timeFormatPreference,
+  onToggle,
+  onCopy,
+}: RawMessageRowProps) {
+  const { t } = useI18n();
+  const role = message.info.role;
+  const isAssistant = role === 'assistant';
+  const isUser = role === 'user';
+  const messageCreatedAt = (message.info.time?.created ?? null) as number | null;
+  const partsLabel = derivePartsLabel(message.parts);
+  const tokens = isAssistant ? extractTokenBreakdown(message) : null;
+  const userSnippet = isUser ? deriveUserSnippet(message.parts) : '';
+  const previewTime = formatMessagePreviewTime(messageCreatedAt, timeFormatPreference);
+  // Keep token/time columns stable; the message label owns all
+  // remaining space and truncates before it can push metrics.
+  const assistantLeft = partsLabel || '—';
+  const assistantMiddle = tokens
+    ? formatAssistantTokens(tokens.input, tokens.output, formatNumber)
+    : '';
+  const otherLeft = role || 'unknown';
+  const otherLabel = partsLabel ? `${otherLeft}: ${partsLabel}` : otherLeft;
+
+  const jsonValue = isExpanded
+    ? JSON.stringify({ info: message.info, parts: message.parts }, null, 2)
+    : '';
+
+  return (
+    <div className="overflow-hidden rounded-lg bg-[var(--surface-elevated)]/70">
+      <button
+        type="button"
+        className="w-full cursor-pointer px-3 py-1.5 text-start hover:bg-[var(--interactive-hover)]"
+        aria-expanded={isExpanded}
+        onClick={() => onToggle(message.info.id)}
+      >
+        <div
+          className="grid items-center gap-x-2 whitespace-nowrap typography-micro"
+          style={{ gridTemplateColumns: isAssistant ? 'minmax(0, 1fr) 7.5rem max-content' : 'minmax(0, 1fr) max-content' }}
+        >
+          {isUser ? (
+            <span className="min-w-0 truncate text-muted-foreground">
+              <span className="typography-ui-label text-foreground">user:</span>{' '}
+              {userSnippet}
+            </span>
+          ) : (
+            <>
+              <span className="min-w-0 truncate text-muted-foreground">
+                {isAssistant ? assistantLeft : otherLabel}
+              </span>
+              {isAssistant && (
+                <span className="text-end text-muted-foreground tabular-nums">
+                  {assistantMiddle}
+                </span>
+              )}
+            </>
+          )}
+          <span className="text-end text-muted-foreground">{previewTime}</span>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="border-t border-[var(--surface-subtle)] p-0">
+          <ScrollableOverlay outerClassName="max-h-[26rem] bg-[var(--surface-background)]" className="group relative" disableHorizontal>
+            <div className="absolute top-1 inset-e-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-muted-foreground transition-colors hover:bg-interactive-hover/60 hover:text-foreground"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCopy(message.info.id, jsonValue);
+                    }}
+                    aria-label={isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}
+                  >
+                    {isCopied ? <Icon name="check" className="size-3.5" /> : <Icon name="file-copy" className="size-3.5" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>{isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}</TooltipContent>
+              </Tooltip>
+            </div>
+            <WorkerHighlightedCode
+              language="json"
+              code={jsonValue}
+              style={{
+                margin: 0,
+                padding: '0.75rem',
+                background: 'transparent',
+                fontSize: 'var(--text-micro)',
+                lineHeight: '1.35',
+              }}
+              wrap
+            />
+          </ScrollableOverlay>
+        </div>
+      )}
+    </div>
+  );
+});
+
+=======
+const resolveProviderAndModel = (
+  providers: ProviderLike[],
+  providerID: string,
+  modelID: string,
+): { providerName: string; modelName: string; contextLimit: number | null } => {
+  const provider = providers.find((entry) => entry.id === providerID);
+  const model = provider?.models?.find((entry) => entry.id === modelID);
+
+  return {
+    providerName: provider?.name || providerID || '-',
+    modelName: model?.name || modelID || '-',
+    contextLimit: typeof model?.limit?.context === 'number' ? model.limit.context : null,
+  };
+};
+
+type TokenFigures = {
+  prompt: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheHitPercent: number | null;
+};
+
+const TokenFiguresCard: React.FC<{ title: string; figures: TokenFigures | null }> = ({ title, figures }) => {
+  const { t } = useI18n();
+  const items = [
+    { label: t('contextSidebar.tokens.input'), value: figures?.prompt ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.output'), value: figures?.output ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.reasoning'), value: figures?.reasoning ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.cacheRead'), value: figures?.cacheRead ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.cacheWrite'), value: figures?.cacheWrite ?? null, format: 'count' },
+    { label: t('contextSidebar.tokens.cacheHit'), value: figures?.cacheHitPercent ?? null, format: 'percent' },
+  ] as const;
+
+  return (
+    <div className="mb-5 rounded-lg bg-[var(--surface-elevated)]/70 px-4 py-3.5">
+      <div className="typography-micro text-muted-foreground mb-2.5">{title}</div>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+        {items.map((item) => (
+          <div key={item.label}>
+            <div className="typography-micro text-muted-foreground">{item.label}</div>
+            <div className="mt-0.5 typography-ui-label tabular-nums text-foreground">
+              {item.value === null
+                ? '—'
+                : item.format === 'percent'
+                  ? `${item.value.toFixed(1)}%`
+                  : formatNumber(item.value)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type RawMessageRowProps = {
+  message: SessionMessage;
+  isExpanded: boolean;
+  isCopied: boolean;
+  timeFormatPreference: TimeFormatPreference;
+  onToggle: (messageId: string) => void;
+  onCopy: (messageId: string, value: string) => void;
+};
+
+const RawMessageRow = React.memo(function RawMessageRow({
+  message,
+  isExpanded,
+  isCopied,
+  timeFormatPreference,
+  onToggle,
+  onCopy,
+}: RawMessageRowProps) {
+  const { t } = useI18n();
+  const role = message.info.role;
+  const isAssistant = role === 'assistant';
+  const isUser = role === 'user';
+  const messageCreatedAt = (message.info.time?.created ?? null) as number | null;
+  const partsLabel = derivePartsLabel(message.parts);
+  const tokens = isAssistant ? extractTokenBreakdown(message) : null;
+  const userSnippet = isUser ? deriveUserSnippet(message.parts) : '';
+  const previewTime = formatMessagePreviewTime(messageCreatedAt, timeFormatPreference);
+  const assistantLeft = partsLabel || '—';
+  const assistantMiddle = tokens
+    ? formatAssistantTokens(tokens.input, tokens.output, formatNumber)
+    : '';
+  const otherLeft = role || 'unknown';
+  const otherLabel = partsLabel ? `${otherLeft}: ${partsLabel}` : otherLeft;
+
+  const jsonValue = isExpanded
+    ? JSON.stringify({ info: message.info, parts: message.parts }, null, 2)
+    : '';
+
+  return (
+    <div className="overflow-hidden rounded-lg bg-[var(--surface-elevated)]/70">
+      <button
+        type="button"
+        className="w-full cursor-pointer px-3 py-1.5 text-start hover:bg-[var(--interactive-hover)]"
+        aria-expanded={isExpanded}
+        onClick={() => onToggle(message.info.id)}
+      >
+        <div
+          className="grid items-center gap-x-2 whitespace-nowrap typography-micro"
+          style={{ gridTemplateColumns: isAssistant ? 'minmax(0, 1fr) 7.5rem max-content' : 'minmax(0, 1fr) max-content' }}
+        >
+          {isUser ? (
+            <span className="min-w-0 truncate text-muted-foreground">
+              <span className="typography-ui-label text-foreground">user:</span>{' '}
+              {userSnippet}
+            </span>
+          ) : (
+            <>
+              <span className="min-w-0 truncate text-muted-foreground">
+                {isAssistant ? assistantLeft : otherLabel}
+              </span>
+              {isAssistant && (
+                <span className="text-end text-muted-foreground tabular-nums">
+                  {assistantMiddle}
+                </span>
+              )}
+            </>
+          )}
+          <span className="text-end text-muted-foreground">{previewTime}</span>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="border-t border-[var(--surface-subtle)] p-0">
+          <ScrollableOverlay outerClassName="max-h-[26rem] bg-[var(--surface-background)]" className="group relative" disableHorizontal>
+            <div className="absolute top-1 inset-e-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-muted-foreground transition-colors hover:bg-interactive-hover/60 hover:text-foreground"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCopy(message.info.id, jsonValue);
+                    }}
+                    aria-label={isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}
+                  >
+                    {isCopied ? <Icon name="check" className="size-3.5" /> : <Icon name="file-copy" className="size-3.5" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>{isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}</TooltipContent>
+              </Tooltip>
+            </div>
+            <HighlightedCode
+              language="json"
+              code={jsonValue}
+              style={{
+                margin: 0,
+                padding: '0.75rem',
+                background: 'transparent',
+                fontSize: 'var(--text-micro)',
+                lineHeight: '1.35',
+              }}
+              wrap
+            />
+          </ScrollableOverlay>
+        </div>
+      )}
+    </div>
+  );
+});
+
+>>>>>>> upstream/main
 export const ContextPanelContent: React.FC = () => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
@@ -200,24 +784,49 @@ export const ContextPanelContent: React.FC = () => {
     const assistantMessages = sessionMessages.filter((entry) => entry.info.role === 'assistant');
     const userMessages = sessionMessages.filter((entry) => entry.info.role === 'user');
 
+<<<<<<< HEAD
     const contextFill = findLatestContextFill(sessionMessages.map(({ info }): ContextFillMessage => ({
       messageId: info.messageId,
       role: info.role,
       usage: info.usage,
     })));
+||||||| bc50ba56aa
+    // After a compaction the fill is unknown until a response reports tokens;
+    // the compaction record itself still supplies the last-turn breakdown.
+    const contextFill = findLatestContextFill(sessionMessages.map((entry) => entry.info));
+=======
+    const contextFill = findLatestContextFill(sessionMessages.map((entry) => entry.info));
+>>>>>>> upstream/main
     const contextMessage = contextFill ? sessionMessages[contextFill.index] ?? null : null;
 
     const tokenBreakdown = contextMessage ? extractTokenBreakdown(contextMessage) : EMPTY_BREAKDOWN;
 
-    // Cache hit rate for the last assistant message. `input` is the non-cached portion
-    // (total input - cache.read - cache.write per SDK's session.ts:getUsage),
-    // so hit rate = cache.read / (input + cache.read + cache.write).
     const cacheHitRate = computeCacheHitRate({
       input: tokenBreakdown.input,
       cache: { read: tokenBreakdown.cacheRead, write: tokenBreakdown.cacheWrite },
     });
 
+<<<<<<< HEAD
     const totalAssistantCost = assistantMessages.reduce((sum, message) => sum + (message.info.usage?.cost.total ?? 0), 0);
+||||||| bc50ba56aa
+    // The session record carries the whole session's cost; the loaded
+    // messages are only its tail once a long chat was opened cold or cut back
+    // (`SessionMessageLoader.trimHistory`). A persisted snapshot strips the
+    // field, so the sum stands in until the live record arrives.
+    const totalAssistantCost = Number.isFinite(currentSession?.cost)
+      ? toNonNegativeNumber(currentSession?.cost)
+      : assistantMessages.reduce((sum, message) => {
+        const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost);
+        return sum + cost;
+      }, 0);
+=======
+    const totalAssistantCost = Number.isFinite(currentSession?.cost)
+      ? toNonNegativeNumber(currentSession?.cost)
+      : assistantMessages.reduce((sum, message) => {
+        const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost);
+        return sum + cost;
+      }, 0);
+>>>>>>> upstream/main
 
     // The newest answer is the authority. Before one exists, the session's own
     // selection wins, then the configured pair of the session's directory; the
@@ -243,18 +852,32 @@ export const ContextPanelContent: React.FC = () => {
       ? Math.min(999, (tokenBreakdown.total / contextLimit) * 100)
       : 0;
 
-    // OpenCode v2 delivers instruction text as its own `system` message
-    // instead of hanging a `system` string off the first user message.
     const systemMessage = [...sessionMessages].reverse().find((entry) => entry.info.role === 'system');
     const systemPrompt = systemMessage?.info.role === 'system' ? systemMessage.info.parts.filter((part) => part.type === 'text').map((part) => part.content).join('') : '';
 
     const computedBreakdown = computeContextBreakdown(sessionMessages, systemPrompt);
 
+<<<<<<< HEAD
     const userTokens = computedBreakdown.user;
     const assistantTokens = computedBreakdown.assistant;
     const toolTokens = computedBreakdown.tool;
     const otherTokens = Math.max(0, tokenBreakdown.input - userTokens - assistantTokens - toolTokens);
     const breakdownTotal = userTokens + assistantTokens + toolTokens + otherTokens;
+||||||| bc50ba56aa
+    // The bar sits under the readout, so it is measured against the same window
+    // the readout reports, not against its own estimate. `other` is then the
+    // real unattributed remainder — prompt, schemas, skills, estimation error —
+    // rather than a leftover clamped to zero.
+    //
+    // A completed compaction record can still carry the summarizing turn's
+    // tokens. The readout shows `—` for that state because the fill is unknown,
+    // so the bar must not denominate against the pre-compaction window either;
+    // zero sends it to the estimate, which is the same fallback the panel
+    // documents for an unknown window.
+    const breakdown = composeContextBreakdown(computedBreakdown, { windowTokens: tokenBreakdown.total, compacted: isCompacted });
+=======
+    const breakdown = composeContextBreakdown(computedBreakdown, { windowTokens: tokenBreakdown.total, compacted: isCompacted });
+>>>>>>> upstream/main
 
     const firstMessageTs = sessionMessages[0]?.info.createdAt;
     const lastMessageTs = sessionMessages.length > 0
@@ -301,9 +924,28 @@ export const ContextPanelContent: React.FC = () => {
 
   return (
     <ScrollableOverlay outerClassName="h-full" className="bg-background">
+<<<<<<< HEAD
+||||||| bc50ba56aa
+      {/* In the context panel the session title names the panel itself, in
+          place of the generic "Context" label. */}
+      {inPanelHeader ? (
+        <ContextPanelHeaderToolbar>
+          <div className="flex min-w-0 flex-1 items-center ps-1.5 pe-1">
+            <span dir="auto" className="truncate typography-ui-label text-foreground" title={viewModel.sessionTitle}>{viewModel.sessionTitle}</span>
+          </div>
+        </ContextPanelHeaderToolbar>
+      ) : null}
+=======
+      {inPanelHeader ? (
+        <ContextPanelHeaderToolbar>
+          <div className="flex min-w-0 flex-1 items-center ps-1.5 pe-1">
+            <span dir="auto" className="truncate typography-ui-label text-foreground" title={viewModel.sessionTitle}>{viewModel.sessionTitle}</span>
+          </div>
+        </ContextPanelHeaderToolbar>
+      ) : null}
+>>>>>>> upstream/main
       <div className="mx-auto w-full max-w-[52rem] px-5 py-6">
 
-        {/* ── Session header ── */}
         <div className="mb-6">
           <h2 dir="auto" className="typography-ui-header font-semibold text-foreground truncate text-left">{viewModel.sessionTitle}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 typography-micro text-muted-foreground/70">
@@ -317,7 +959,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Context usage ── */}
         <div className="mb-5 rounded-lg bg-[var(--surface-elevated)]/70 px-4 py-3.5">
           <div className="flex items-baseline justify-between">
             <span className="typography-micro text-muted-foreground">{t('contextSidebar.section.context')}</span>
@@ -342,7 +983,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Stat grid ── */}
         <div className="mb-5 grid grid-cols-2 gap-2">
           {([
             { label: t('contextSidebar.stats.messages'), value: formatNumber(viewModel.messagesCount) },
@@ -357,6 +997,7 @@ export const ContextPanelContent: React.FC = () => {
           ))}
         </div>
 
+<<<<<<< HEAD
         {/* ── Last turn tokens ── */}
         <div className="mb-5 rounded-lg bg-[var(--surface-elevated)]/70 px-4 py-3.5">
           <div className="typography-micro text-muted-foreground mb-2.5">{t('contextSidebar.section.lastAssistantMessage')}</div>
@@ -386,8 +1027,35 @@ export const ContextPanelContent: React.FC = () => {
             ))}
           </div>
         </div>
+||||||| bc50ba56aa
+        {/* ── Whole-session tokens, then the last turn's, in the same columns ── */}
+        <TokenFiguresCard
+          title={t('contextSidebar.section.sessionTotals')}
+          figures={viewModel.sessionTotals}
+        />
+        <TokenFiguresCard
+          title={t('contextSidebar.section.lastAssistantMessage')}
+          figures={{
+            ...viewModel.tokenBreakdown,
+            prompt: viewModel.tokenBreakdown.input + viewModel.tokenBreakdown.cacheRead + viewModel.tokenBreakdown.cacheWrite,
+            cacheHitPercent: viewModel.cacheHitRate.hasInput ? viewModel.cacheHitRate.percent : null,
+          }}
+        />
+=======
+        <TokenFiguresCard
+          title={t('contextSidebar.section.sessionTotals')}
+          figures={viewModel.sessionTotals}
+        />
+        <TokenFiguresCard
+          title={t('contextSidebar.section.lastAssistantMessage')}
+          figures={{
+            ...viewModel.tokenBreakdown,
+            prompt: viewModel.tokenBreakdown.input + viewModel.tokenBreakdown.cacheRead + viewModel.tokenBreakdown.cacheWrite,
+            cacheHitPercent: viewModel.cacheHitRate.hasInput ? viewModel.cacheHitRate.percent : null,
+          }}
+        />
+>>>>>>> upstream/main
 
-        {/* ── Context breakdown ── */}
         <div className="mb-6">
           <div className="flex h-1 w-full overflow-hidden rounded-full bg-[var(--surface-subtle)]">
             {segments.map((segment) => {
@@ -418,7 +1086,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Raw messages ── */}
         <div>
           <div className="typography-micro text-muted-foreground">{t('contextSidebar.section.rawMessages')}</div>
           <div className="mt-2.5 space-y-1">

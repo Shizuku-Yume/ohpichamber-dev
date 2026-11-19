@@ -59,7 +59,6 @@ import {
   type CatalogSkillComponent,
 } from '@/lib/integrations-catalog/registry';
 
-/** Unique within an entry: an entry may bundle several skills or plugins. */
 const catalogComponentKey = (component: CatalogComponent): string => {
   if (component.kind === 'skill') return `skill:${component.subpath}`;
   if (component.kind === 'plugin') return `plugin:${component.spec}`;
@@ -67,7 +66,6 @@ const catalogComponentKey = (component: CatalogComponent): string => {
   return 'mcp';
 };
 
-/** Where a component can be viewed: the skill's folder on GitHub, the plugin on npm. */
 const catalogComponentHref = (component: CatalogComponent): string | null => {
   if (component.kind === 'skill') return `https://github.com/${component.source}/tree/HEAD/${component.subpath}`;
   if (component.kind === 'plugin') return `https://www.npmjs.com/package/${catalogPluginPackageName(component.spec)}`;
@@ -93,17 +91,38 @@ type ConfirmRequest =
   | { kind: 'uninstall'; entry: CatalogEntry };
 
 
+<<<<<<< HEAD
 // Stable empty references: a selector returning a fresh [] or {} on every
 // call re-renders the component forever (Maximum update depth exceeded).
 const EMPTY_MCP_SERVERS: MCPServerConfig[] = [];
 const EMPTY_MCP_STATUSES: Record<string, McpServerRuntimeState> = {};
 const EMPTY_GUESTS: InstalledGuest[] = [];
+||||||| bc50ba56aa
+// Stable empty references: a selector returning a fresh [] or {} on every
+// call re-renders the component forever (Maximum update depth exceeded).
+const EMPTY_MCP_SERVERS: never[] = [];
+const EMPTY_MCP_STATUSES: Record<string, McpServerStatus> = {};
+const EMPTY_PLUGIN_ENTRIES: PluginEntry[] = [];
+const EMPTY_GUESTS: import('@/lib/guests/types').InstalledGuest[] = [];
+const EMPTY_REGISTRY_INFO: Record<string, RegistryResult> = {};
+=======
+const EMPTY_MCP_SERVERS: never[] = [];
+const EMPTY_MCP_STATUSES: Record<string, McpServerStatus> = {};
+const EMPTY_PLUGIN_ENTRIES: PluginEntry[] = [];
+const EMPTY_GUESTS: import('@/lib/guests/types').InstalledGuest[] = [];
+const EMPTY_REGISTRY_INFO: Record<string, RegistryResult> = {};
+>>>>>>> upstream/main
 const EMPTY_SKILLS: DiscoveredSkill[] = [];
 
+<<<<<<< HEAD
 /** An authored skill path is its folder under the scope's skills root; the catalog names it `skillDir`. */
 const catalogSkillKey = (folder: string, name: string): string => `${folder}\u0000${name}`;
 
 /** The name the Agent Service reports for a skill: SKILL.md frontmatter when it differs from the folder basename. */
+||||||| bc50ba56aa
+/** The name OpenCode reports for a skill: SKILL.md frontmatter when it differs from the folder basename. */
+=======
+>>>>>>> upstream/main
 const skillReportedName = (component: CatalogSkillComponent): string => component.skillName ?? component.skillDir;
 
 const requiresNoteKey = {
@@ -124,9 +143,9 @@ const CATEGORY_LABEL_KEY = {
   other: 'integrationsCatalog.category.other',
 } satisfies Record<CatalogCategory, I18nKey>;
 
-/** What a card's status pill shows. */
 type CatalogCardStatus = { label: string; tone: IntegrationCatalogStatusTone };
 
+<<<<<<< HEAD
 /**
  * The catalog's server in the canonical workspace config: one `MCPServerConfig`
  * without secrets. A token becomes a credential reference after the config
@@ -138,6 +157,46 @@ const buildCatalogMcpConfig = (
   values: Record<string, string>,
   scope: 'project' | 'user' = 'project',
 ): MCPServerConfig => {
+||||||| bc50ba56aa
+/** A user-scope MCP draft with the same defaults the Settings → MCP add form uses. */
+const buildCatalogMcpDraft = (entry: CatalogEntry, component: CatalogMcpComponent, values: Record<string, string>, token: string): McpDraft => {
+  const base: McpDraft = {
+    name: entry.id,
+    scope: 'user',
+    type: 'local',
+    command: [],
+    url: '',
+    environment: [],
+    headers: [],
+    ...MCP_DRAFT_OAUTH_UNSET,
+    oauthAuthServerMetadataUrl: '',
+    protocol: 'legacy',
+    timeoutStartup: '',
+    timeoutCatalog: '',
+    timeoutExecution: '',
+    codemode: 'default',
+    disabled: false,
+  };
+=======
+const buildCatalogMcpDraft = (entry: CatalogEntry, component: CatalogMcpComponent, values: Record<string, string>, token: string): McpDraft => {
+  const base: McpDraft = {
+    name: entry.id,
+    scope: 'user',
+    type: 'local',
+    command: [],
+    url: '',
+    environment: [],
+    headers: [],
+    ...MCP_DRAFT_OAUTH_UNSET,
+    oauthAuthServerMetadataUrl: '',
+    protocol: 'legacy',
+    timeoutStartup: '',
+    timeoutCatalog: '',
+    timeoutExecution: '',
+    codemode: 'default',
+    disabled: false,
+  };
+>>>>>>> upstream/main
   if (component.remote) {
     return {
       serverId: entry.id,
@@ -159,11 +218,6 @@ const TILE_SIZE = {
   lg: { tile: 'size-16 rounded-2xl', glyph: 'size-9' },
 } as const;
 
-/**
- * The entry's mark: its official glyph on a tile in the brand's own color,
- * else the vendor's own app icon, else the generic sprite icon on a neutral
- * tile.
- */
 function BrandTile({ entry, size }: { entry: CatalogEntry; size: keyof typeof TILE_SIZE }): React.ReactNode {
   const brand = brandIconFor(entry.id);
   const logo = brand ? undefined : vendorLogoFor(entry.id);
@@ -187,7 +241,6 @@ function BrandTile({ entry, size }: { entry: CatalogEntry; size: keyof typeof TI
   );
 }
 
-/** A section heading with its count, set off by a rule. */
 function SectionHeading({ title, count }: { title: string; count?: number }): React.ReactNode {
   return (
     <h2 className="flex items-baseline gap-2 border-b border-[var(--interactive-border)] pb-2.5 text-base font-semibold text-foreground">
@@ -248,19 +301,27 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const guests = useGuestsStore((state) => open ? state.guests : EMPTY_GUESTS);
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+<<<<<<< HEAD
   /**
    * The entry an install just saved with sign-in still pending. Its panel starts
    * the one sign-in method on mount instead of asking for a second click; a
    * later visit to the same page signs in from the Authorize button.
    */
   const [autoStartEntryId, setAutoStartEntryId] = React.useState<string | null>(null);
+||||||| bc50ba56aa
+  /** The entry whose OAuth sign-in starts as soon as its detail page can show it, right after install. */
+  const [pendingSignInId, setPendingSignInId] = React.useState<string | null>(null);
+  /** A sign-in in progress keeps its panel while the server reconnects. */
+  const [mcpSignInActive, setMcpSignInActive] = React.useState(false);
+=======
+  const [pendingSignInId, setPendingSignInId] = React.useState<string | null>(null);
+  const [mcpSignInActive, setMcpSignInActive] = React.useState(false);
+>>>>>>> upstream/main
   const showEntry = React.useCallback((id: string | null) => {
     setSelectedId(id);
     setAutoStartEntryId(current => (current !== null && current !== id ? null : current));
   }, []);
 
-  // Browse and detail share one scroller: a detail page opens at its top,
-  // and going back returns the browse list to where it was left.
   const scrollerRef = React.useRef<HTMLElement | null>(null);
   const browseScrollTopRef = React.useRef(0);
   React.useLayoutEffect(() => {
@@ -269,7 +330,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     scroller.scrollTop = selectedId ? 0 : browseScrollTopRef.current;
   }, [selectedId]);
   const [query, setQuery] = React.useState('');
-  /** The category chip the browse view is narrowed to; null shows every section. */
   const [category, setCategory] = React.useState<CatalogCategory | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [confirm, setConfirm] = React.useState<ConfirmRequest | null>(null);
@@ -344,9 +404,16 @@ export function IntegrationsCatalogView(): React.ReactNode {
       .map((plugin) => plugin.target.name)),
     [pluginCatalog],
   );
+<<<<<<< HEAD
   // A skill counts when the Agent Service authored it in the same folder under
   // a writable scope; a same-named skill the user keeps elsewhere is not the
   // catalog's to show or delete.
+||||||| bc50ba56aa
+  // The catalog installs skills into the user's OpenCode skills folder, so
+  // only a skill there counts; a same-named skill the user keeps elsewhere
+  // (another tool's folder, a project) is not the catalog's to show or delete.
+=======
+>>>>>>> upstream/main
   const catalogSkillKeys = React.useMemo(
     () => new Set(skills.flatMap((skill) => skill.readOnly || !skill.authoredSkillId
       ? []
@@ -372,7 +439,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const isExtensionInstalled = React.useCallback((guestId: string): boolean =>
     installedGuestIds.has(guestId), [installedGuestIds]);
 
-  /** Every installable part of the integration is present. */
   const isComponentInstalled = React.useCallback((entry: CatalogEntry, component: CatalogComponent): boolean => {
     if (component.kind === 'mcp') return isMcpInstalled(entry);
     if (component.kind === 'plugin') return isPluginInstalled(component);
@@ -380,18 +446,9 @@ export function IntegrationsCatalogView(): React.ReactNode {
     return isSkillInstalled(component);
   }, [isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled]);
 
-  /**
-   * The integration is set up once its main part is: the MCP server when it
-   * ships one, else its first part. Bundled skills are extras; a missing one
-   * gets its own Install on the detail page.
-   */
   const isEntryInstalled = React.useCallback((entry: CatalogEntry): boolean =>
     isComponentInstalled(entry, catalogMcpComponent(entry) ?? entry.components[0]), [isComponentInstalled]);
 
-  /**
-   * Entries with any part installed, for the rail: a bundle whose MCP server
-   * is set up but whose skills are not yet is still one the user works with.
-   */
   const installedEntries = React.useMemo(
     () => CATALOG_ENTRIES.filter((entry) => entry.components.some((component) => isComponentInstalled(entry, component))),
     [isComponentInstalled],
@@ -409,9 +466,19 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
 
   const statusOf = React.useCallback((entry: CatalogEntry): CatalogCardStatus => {
+<<<<<<< HEAD
     const state = mcpStatuses[entry.id];
     if (mcpAuthRequired(state)) return { label: t('integrationsCatalog.status.needsAuth'), tone: 'warning' };
     const runtime = mcpStatusOf(state);
+||||||| bc50ba56aa
+    // Runtime status outranks everything: a bundled entry whose MCP server
+    // asks for sign-in must show it even while its skills are not installed.
+    const runtime = readMcpStatusName(mcpStatuses[entry.id]);
+    if (runtime === 'needs_auth') return { label: t('integrationsCatalog.status.needsAuth'), tone: 'warning' };
+=======
+    const runtime = readMcpStatusName(mcpStatuses[entry.id]);
+    if (runtime === 'needs_auth') return { label: t('integrationsCatalog.status.needsAuth'), tone: 'warning' };
+>>>>>>> upstream/main
     if (runtime === 'failed') return { label: t('integrationsCatalog.status.failed'), tone: 'warning' };
     if (isEntryInstalled(entry)) {
       const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
@@ -434,11 +501,20 @@ export function IntegrationsCatalogView(): React.ReactNode {
     setSettingsDialogOpen(true);
   }, [setSettingsDialogOpen, setSelectedMcp, setSettingsPage]);
 
+<<<<<<< HEAD
   /**
    * Opens Settings on the page that owns one component: MCP → its server page,
    * plugin → its entry, skill → the skills catalog, extension → the
    * extensions page.
    */
+||||||| bc50ba56aa
+  /**
+   * Opens Settings on the page that owns one component, with that component
+   * selected: MCP → its server page, plugin → its entry, skill → its editor,
+   * extension → the extensions page.
+   */
+=======
+>>>>>>> upstream/main
   const configureComponent = React.useCallback((entry: CatalogEntry, component: CatalogComponent) => {
     if (component.kind === 'mcp') {
       setSettingsPage('mcp');
@@ -512,6 +588,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     return { ok: true, refs };
   }, [settingsDirectory]);
 
+<<<<<<< HEAD
   /**
    * One Install pass over every component of the entry: the MCP server, the
    * plugin, and the skills. Already-installed components are skipped, so a
@@ -520,13 +597,34 @@ export function IntegrationsCatalogView(): React.ReactNode {
    * the repository scan and the conflict prompt.
    */
   const installEntry = React.useCallback(async (entry: CatalogEntry, only?: CatalogComponent, targetScope?: 'project' | 'user') => {
+||||||| bc50ba56aa
+  /**
+   * One Install pass over every component of the entry: the MCP server, the
+   * plugin, and the skills. Already-installed components are skipped, so a
+   * re-run cannot fail on "already exists". A plugin keeps its explicit
+   * confirmation; skills install with skip-all conflicts so nothing is
+   * overwritten silently.
+   */
+  const installEntry = React.useCallback(async (entry: CatalogEntry, only?: CatalogComponent) => {
+=======
+  const installEntry = React.useCallback(async (entry: CatalogEntry, only?: CatalogComponent) => {
+>>>>>>> upstream/main
     setBusyId(entry.id);
     try {
       let failed = false;
       let errorDetail: string | null = null;
+<<<<<<< HEAD
       let hadAuthPending = false;
       let allAlreadyInstalled = true;
       let openedSettings = false;
+||||||| bc50ba56aa
+      // Skills of one source install in a single call (one clone), with the
+      // repo-root-relative subpath as the selection: the installer
+      // sparse-checkouts selections from the repository root.
+      const pendingSkills = new Map<string, CatalogSkillComponent[]>();
+=======
+      const pendingSkills = new Map<string, CatalogSkillComponent[]>();
+>>>>>>> upstream/main
       for (const component of only ? [only] : entry.components) {
         if (component.kind === 'mcp') {
           if (isMcpInstalled(entry)) continue;
@@ -551,6 +649,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
             errorDetail = t('integrationsCatalog.envInputs.projectOnly');
             continue;
           }
+<<<<<<< HEAD
           // The credential route addresses a configured server, and an env
           // reference is what lets a local server connect. So the server is
           // saved first (enabled, as usual), then each value is written as a
@@ -569,6 +668,38 @@ export function IntegrationsCatalogView(): React.ReactNode {
               failed = true;
               errorDetail = firstSave.failure instanceof Error ? firstSave.failure.message : String(firstSave.failure);
               continue;
+||||||| bc50ba56aa
+          if (result.reloadFailed) {
+            toast.warning(result.message || t('integrationsCatalog.install.success', { name: entry.name }), {
+              description: result.warning || undefined,
+            });
+          }
+          // The config write reaches disk immediately, but OpenCode rereads
+          // it on its own schedule; without a reload the mcp_* OAuth
+          // integration is missing from integration.list and the sign-in
+          // panel below cannot appear. The same reload Settings performs
+          // on Apply & Restart.
+          try {
+            const response = await runtimeFetch('/api/config/reload', { method: 'POST' });
+            if (!response.ok) {
+              const payload = await response.json().catch(() => null);
+              if (payload?.requiresManualRestart) {
+                toast.warning(payload?.message ?? undefined);
+              }
+=======
+          if (result.reloadFailed) {
+            toast.warning(result.message || t('integrationsCatalog.install.success', { name: entry.name }), {
+              description: result.warning || undefined,
+            });
+          }
+          try {
+            const response = await runtimeFetch('/api/config/reload', { method: 'POST' });
+            if (!response.ok) {
+              const payload = await response.json().catch(() => null);
+              if (payload?.requiresManualRestart) {
+                toast.warning(payload?.message ?? undefined);
+              }
+>>>>>>> upstream/main
             }
             // No `result` means the save itself was refused (authorization,
             // validation, conflict), so nothing was persisted to reference.
@@ -623,6 +754,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
           } else if (component.auth === 'oauth') {
             setSelectedId(entry.id);
           }
+<<<<<<< HEAD
           if (component.auth === 'token') {
             try {
               const attached = await attachMcpToken(entry, component, readToken(entry));
@@ -635,6 +767,27 @@ export function IntegrationsCatalogView(): React.ReactNode {
               failed = true;
               errorDetail = failure instanceof Error ? failure.message : String(failure);
               continue;
+||||||| bc50ba56aa
+          try {
+            await useMcpStore.getState().connect(entry.id, currentDirectory);
+          } catch {
+            if (component.auth === 'oauth') {
+              // A failed connect is the expected 401 path for an OAuth
+              // server: refresh statuses so needs_auth lands in the map and
+              // the sign-in panel can open the browser. A real network or
+              // server failure shows up as the failed pill instead.
+              await useMcpStore.getState().refresh({ directory: currentDirectory, silent: true }).catch(() => undefined);
+            } else {
+              toast.error(t('integrationsCatalog.connect.failed', { name: entry.name }));
+=======
+          try {
+            await useMcpStore.getState().connect(entry.id, currentDirectory);
+          } catch {
+            if (component.auth === 'oauth') {
+              await useMcpStore.getState().refresh({ directory: currentDirectory, silent: true }).catch(() => undefined);
+            } else {
+              toast.error(t('integrationsCatalog.connect.failed', { name: entry.name }));
+>>>>>>> upstream/main
             }
           }
           try {
@@ -689,8 +842,17 @@ export function IntegrationsCatalogView(): React.ReactNode {
     } finally {
       setBusyId(null);
     }
+<<<<<<< HEAD
   }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp, writeMcpEnvCredentials]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
+||||||| bc50ba56aa
+  }, [createMcp, createPluginEntry, currentDirectory, installSkills, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, readInput, readToken, t]);
+
+  /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
+=======
+  }, [createMcp, createPluginEntry, currentDirectory, installSkills, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, readInput, readToken, t]);
+
+>>>>>>> upstream/main
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
     setConfirm(null);
@@ -723,6 +885,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
             errorDetail = t('integrationsCatalog.uninstall.extensionDetail', { name: component.guestId });
           }
         }
+<<<<<<< HEAD
         // Deletion keys on the authored folder while the installed check also
         // matches the SKILL.md frontmatter name; the two differ for some
         // vendors (Vercel's react skill). Only the catalog's own copy goes.
@@ -738,6 +901,22 @@ export function IntegrationsCatalogView(): React.ReactNode {
               failed = true;
               errorDetail = t('integrationsCatalog.uninstall.skillDetail', { name: component.skillDir });
             }
+||||||| bc50ba56aa
+        // Deletion keys on the folder basename, while the installed check also
+        // matches the SKILL.md frontmatter name; the two differ for some
+        // vendors (Vercel's react skill). Only the catalog's own copy goes.
+        if (component.kind === 'skill' && isSkillInstalled(component)) {
+          const ok = await useSkillsStore.getState().deleteSkill(component.skillDir, currentDirectory, { scope: 'user', source: 'opencode' });
+          if (!ok) {
+            failed = true;
+            errorDetail = t('integrationsCatalog.uninstall.skillDetail', { name: component.skillDir });
+=======
+        if (component.kind === 'skill' && isSkillInstalled(component)) {
+          const ok = await useSkillsStore.getState().deleteSkill(component.skillDir, currentDirectory, { scope: 'user', source: 'opencode' });
+          if (!ok) {
+            failed = true;
+            errorDetail = t('integrationsCatalog.uninstall.skillDetail', { name: component.skillDir });
+>>>>>>> upstream/main
           }
         }
       }
@@ -773,6 +952,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     return 'text-muted-foreground';
   };
 
+<<<<<<< HEAD
   /** Install, or the detail page when the entry still needs a token or a field filled in there. */
   const promptInstall = (entry: CatalogEntry, component?: CatalogComponent) => {
     const hasMcp = entry.components.some((c) => c.kind === 'mcp');
@@ -784,6 +964,10 @@ export function IntegrationsCatalogView(): React.ReactNode {
     void installEntry(entry, component);
   };
 
+||||||| bc50ba56aa
+  /** Install, or the detail page when the entry still needs a token or a field filled in there. */
+=======
+>>>>>>> upstream/main
   const requestInstall = (entry: CatalogEntry) => {
     if (!canInstallEntry(entry)) {
       showEntry(entry.id);
@@ -796,7 +980,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     promptInstall(entry);
   };
 
-  /** The end of a browse row: install, progress, or where the entry stands. */
   const renderRowAction = (entry: CatalogEntry): React.ReactNode => {
     if (busyId === entry.id) {
       return (
@@ -806,7 +989,12 @@ export function IntegrationsCatalogView(): React.ReactNode {
       );
     }
     const status = statusOf(entry);
+<<<<<<< HEAD
     // A failed or switched-off server outranks a bundle part still missing.
+||||||| bc50ba56aa
+    // A server asking for sign-in outranks a bundle part still missing.
+=======
+>>>>>>> upstream/main
     if (status.tone === 'warning') {
       return <span className={cn('shrink-0 typography-micro', statusTextClass(status.tone))}>{status.label}</span>;
     }
@@ -973,7 +1161,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     </div>
   );
 
-  /** The rail: back to browsing, then every installed integration with its state. */
   const renderRail = (): React.ReactNode => (
     <aside className="flex w-56 shrink-0 flex-col border-e border-border/50">
       <div className="flex-1 overflow-y-auto p-2">
@@ -1022,7 +1209,12 @@ export function IntegrationsCatalogView(): React.ReactNode {
     </aside>
   );
 
+<<<<<<< HEAD
   /** Token field, env values, picker inputs and prerequisites, shown before the first install. */
+||||||| bc50ba56aa
+  /** Token field, picker inputs and prerequisites, shown before the first install. */
+=======
+>>>>>>> upstream/main
   const renderSetup = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const needsToken = mcp.auth === 'token' && Boolean(mcp.remote);
     const envInputs = mcp.local?.envInputs ?? [];
@@ -1106,7 +1298,18 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
+<<<<<<< HEAD
   /** Where the installed MCP server stands, with the sign-in when it is an OAuth server. */
+||||||| bc50ba56aa
+  /**
+   * Where the installed MCP server stands, with the sign-in when it asks for
+   * one. A failed OAuth server offers it too: the service may have rejected
+   * the stored token, and only a fresh sign-in replaces it. A connected one
+   * offers it as well — a live transport does not prove the user authorized
+   * the tools (#5934).
+   */
+=======
+>>>>>>> upstream/main
   const renderConnection = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const runtime = mcpStatusOf(mcpStatuses[entry.id]);
     const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
@@ -1150,7 +1353,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
-  /** One part of the integration: what it is, where it comes from, and whether it is installed. */
   const renderComponentRow = (entry: CatalogEntry, component: CatalogComponent): React.ReactNode => {
     const componentInstalled = isComponentInstalled(entry, component);
     const href = catalogComponentHref(component);
@@ -1240,7 +1442,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
-  /** Install for an entry not yet installed; Manage and a menu with Uninstall once it is. */
   const renderHeaderActions = (entry: CatalogEntry): React.ReactNode => {
     const isBusy = busyId === entry.id;
     if (!isEntryInstalled(entry)) {

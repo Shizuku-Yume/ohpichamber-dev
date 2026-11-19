@@ -35,14 +35,81 @@ import {
   SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+type AgentVariantProvider = {
+  id: string;
+  models: Array<{ id: string; modelID: string; variants: Array<{ id: string }> }>;
+};
+
+const getVariantOptionsForModel = (
+  providers: AgentVariantProvider[],
+  modelValue: string,
+): string[] => {
+  const parsedModel = parseModelIdentifier(modelValue);
+  if (!parsedModel) {
+    return [];
+  }
+
+  const provider = providers.find((item) => item.id === parsedModel.providerId);
+  const model = findCatalogModel(provider?.models, parsedModel.modelId);
+  return modelVariantNames(model);
+};
+/** The colour the form shows for a stored value; empty reads as automatic, as in the colour resolver. */
+const storedAgentColor = (stored: string | null | undefined): string => configuredAgentColor(stored)?.toLowerCase() ?? '';
+
+/** Everything the page writes into the agent's config file. */
+=======
+type AgentVariantProvider = {
+  id: string;
+  models: Array<{ id: string; modelID: string; variants: Array<{ id: string }> }>;
+};
+
+const getVariantOptionsForModel = (
+  providers: AgentVariantProvider[],
+  modelValue: string,
+): string[] => {
+  const parsedModel = parseModelIdentifier(modelValue);
+  if (!parsedModel) {
+    return [];
+  }
+
+  const provider = providers.find((item) => item.id === parsedModel.providerId);
+  const model = findCatalogModel(provider?.models, parsedModel.modelId);
+  return modelVariantNames(model);
+};
+const storedAgentColor = (stored: string | null | undefined): string => configuredAgentColor(stored)?.toLowerCase() ?? '';
+
+>>>>>>> upstream/main
 interface FormState {
   name: string;
   description: string;
+<<<<<<< HEAD
   model: Agent['model'];
   systemPromptOverride: string;
   allowedTools: string[] | null;
   thinkingLevel: AgentThinkingLevel | 'default';
   spawns: string;
+||||||| bc50ba56aa
+  mode: 'primary' | 'subagent' | 'all';
+  model: string;
+  variant: string;
+  steps: number | undefined;
+  temperature: number | undefined;
+  topP: number | undefined;
+  system: string;
+  /** Six-digit hex, or '' for the automatic theme colour. */
+  color: string;
+=======
+  mode: 'primary' | 'subagent' | 'all';
+  model: string;
+  variant: string;
+  steps: number | undefined;
+  temperature: number | undefined;
+  topP: number | undefined;
+  system: string;
+  color: string;
+>>>>>>> upstream/main
 }
 
 const fieldsForAgent = (agent: Agent): FormState => ({
@@ -83,7 +150,56 @@ const thinkingLevelLabel = (level: AgentThinkingLevel | 'default', t: ReturnType
 
 export const AgentsPage: React.FC = () => {
   const { t } = useI18n();
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const providers = useConfigStore((state) => state.providers) as AgentVariantProvider[];
+  const {
+    selectedAgentName,
+    getAgentByName,
+    createAgent,
+    updateAgent,
+    fetchAgentEntity,
+    agentDraft,
+    setAgentDraft,
+    setSelectedAgent,
+  } = useAgentsStore(useShallow((s) => ({
+    selectedAgentName: s.selectedAgentName,
+    getAgentByName: s.getAgentByName,
+    createAgent: s.createAgent,
+    updateAgent: s.updateAgent,
+    fetchAgentEntity: s.fetchAgentEntity,
+    agentDraft: s.agentDraft,
+    setAgentDraft: s.setAgentDraft,
+    setSelectedAgent: s.setSelectedAgent,
+  })));
+
+  // Settings browses whichever project its own selector points at; the app
+  // stays where it is.
+=======
+  const providers = useConfigStore((state) => state.providers) as AgentVariantProvider[];
+  const {
+    selectedAgentName,
+    getAgentByName,
+    createAgent,
+    updateAgent,
+    fetchAgentEntity,
+    agentDraft,
+    setAgentDraft,
+    setSelectedAgent,
+  } = useAgentsStore(useShallow((s) => ({
+    selectedAgentName: s.selectedAgentName,
+    getAgentByName: s.getAgentByName,
+    createAgent: s.createAgent,
+    updateAgent: s.updateAgent,
+    fetchAgentEntity: s.fetchAgentEntity,
+    agentDraft: s.agentDraft,
+    setAgentDraft: s.setAgentDraft,
+    setSelectedAgent: s.setSelectedAgent,
+  })));
+
+>>>>>>> upstream/main
   const settingsDirectory = useSettingsDirectory();
+<<<<<<< HEAD
   const directoryKey = settingsDirectory?.trim() || '__default__';
   const {
     selectedAgentName, createAgent, updateAgent, loadAgents, agentDraft, setAgentDraft, setSelectedAgent,
@@ -97,14 +213,95 @@ export const AgentsPage: React.FC = () => {
   const subagentSettings = getSectionSettings('subagents');
   const prewalkSettings = getSectionSettings('prewalk');
   const advisorSettings = getSectionSettings('advisor');
+||||||| bc50ba56aa
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
+  // SAFETY: the agents store attaches scope, group, path and legacy to every
+  // entry it loads (`AgentWithExtras`); the editable fields are read from the
+  // stored entry, not from the resolved `AgentInfo`.
+  const selectedAgent = (selectedAgentName ? getAgentByName(selectedAgentName, settingsDirectory) : null) as AgentWithExtras | null;
+  const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent);
+  // The resolved runtime values (built-in defaults, plugin-injected agents) are
+  // shown only as placeholder hints; the form state stays the stored entry, so
+  // a save never writes them back.
+  const runtimeDescription = isNewAgent ? '' : selectedAgent?.description?.trim() ?? '';
+  const runtimeSystem = isNewAgent ? '' : selectedAgent?.system?.trim() ?? '';
+=======
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
+  // SAFETY: the agents store attaches scope, group, path and legacy to every
+  // entry it loads (`AgentWithExtras`); the editable fields are read from the
+  // stored entry, not from the resolved `AgentInfo`.
+  const selectedAgent = (selectedAgentName ? getAgentByName(selectedAgentName, settingsDirectory) : null) as AgentWithExtras | null;
+  const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent);
+  const runtimeDescription = isNewAgent ? '' : selectedAgent?.description?.trim() ?? '';
+  const runtimeSystem = isNewAgent ? '' : selectedAgent?.system?.trim() ?? '';
+>>>>>>> upstream/main
 
+<<<<<<< HEAD
   const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
   const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
   const roleSelectors = React.useMemo(
     () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
     [rolesMap],
+||||||| bc50ba56aa
+  const [draftName, setDraftName] = React.useState('');
+  const [draftScope, setDraftScope] = React.useState<AgentScope>('user');
+  const [description, setDescription] = React.useState('');
+  const [mode, setMode] = React.useState<'primary' | 'subagent' | 'all'>('subagent');
+  const [model, setModel] = React.useState('');
+  const [variant, setVariant] = React.useState('');
+  const [steps, setSteps] = React.useState<number | undefined>(undefined);
+  const [temperature, setTemperature] = React.useState<number | undefined>(undefined);
+  const [topP, setTopP] = React.useState<number | undefined>(undefined);
+  const [system, setSystem] = React.useState('');
+  const [color, setColor] = React.useState('');
+  const [isCreating, setIsCreating] = React.useState(false);
+  const [storedAt, setStoredAt] = React.useState<{ legacy: boolean; path: string | null; source: AgentEntityEnvelope['source'] } | null>(null);
+
+  /**
+   * The agent's stored entry. A save rewrites `request` wholesale, so the
+   * headers and body keys this form does not expose are carried over from here
+   * instead of being dropped.
+   */
+  const entityRef = React.useRef<AgentEntity>({});
+
+  /**
+   * The permissions section's save routine. It writes its own request, but the
+   * page owns the indicator, so the page's save runs it too and reports one
+   * outcome for both.
+   */
+  const permissionsSaveRef = React.useRef<(() => Promise<AutosaveResult>) | null>(null);
+  const registerPermissionsSave = React.useCallback(
+    (routine: (() => Promise<AutosaveResult>) | null) => {
+      permissionsSaveRef.current = routine;
+    },
+    [],
+=======
+  const [draftName, setDraftName] = React.useState('');
+  const [draftScope, setDraftScope] = React.useState<AgentScope>('user');
+  const [description, setDescription] = React.useState('');
+  const [mode, setMode] = React.useState<'primary' | 'subagent' | 'all'>('subagent');
+  const [model, setModel] = React.useState('');
+  const [variant, setVariant] = React.useState('');
+  const [steps, setSteps] = React.useState<number | undefined>(undefined);
+  const [temperature, setTemperature] = React.useState<number | undefined>(undefined);
+  const [topP, setTopP] = React.useState<number | undefined>(undefined);
+  const [system, setSystem] = React.useState('');
+  const [color, setColor] = React.useState('');
+  const [isCreating, setIsCreating] = React.useState(false);
+  const [storedAt, setStoredAt] = React.useState<{ legacy: boolean; path: string | null; source: AgentEntityEnvelope['source'] } | null>(null);
+
+  const entityRef = React.useRef<AgentEntity>({});
+
+  const permissionsSaveRef = React.useRef<(() => Promise<AutosaveResult>) | null>(null);
+  const registerPermissionsSave = React.useCallback(
+    (routine: (() => Promise<AutosaveResult>) | null) => {
+      permissionsSaveRef.current = routine;
+    },
+    [],
+>>>>>>> upstream/main
   );
 
+<<<<<<< HEAD
   const handleRoleChange = React.useCallback(
     async (role: 'task' | 'advisor', selector: string) => {
       if (!ompState) return;
@@ -139,6 +336,16 @@ export const AgentsPage: React.FC = () => {
   const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent);
   const source = isNewAgent ? agentDraft : selectedAgent;
   const selectionKey = JSON.stringify([settingsDirectory, source?.agentId, selectedAgentName, isNewAgent]);
+||||||| bc50ba56aa
+  // What the agent's config file currently holds. A save writes only when the
+  // form differs from it, and an incoming refresh only repopulates the form
+  // when the stored value moved away from it.
+  const savedRef = React.useRef<FormState | null>(null);
+  const selectionKey = JSON.stringify([selectedAgentName, settingsDirectory, isNewAgent]);
+=======
+  const savedRef = React.useRef<FormState | null>(null);
+  const selectionKey = JSON.stringify([selectedAgentName, settingsDirectory, isNewAgent]);
+>>>>>>> upstream/main
   const selectionRef = React.useRef(selectionKey);
   selectionRef.current = selectionKey;
   const creationOwnerRef = React.useRef({ directory: settingsDirectory, name: selectedAgentName });
@@ -209,6 +416,7 @@ export const AgentsPage: React.FC = () => {
   React.useEffect(() => { void loadAgents(settingsDirectory); }, [loadAgents, settingsDirectory]);
 
   React.useEffect(() => {
+<<<<<<< HEAD
     if (!source) {
       hydratedSelectionRef.current = null;
       entityRef.current = null;
@@ -216,6 +424,292 @@ export const AgentsPage: React.FC = () => {
       revisionRef.current = undefined;
       setSaveError(null);
       return;
+||||||| bc50ba56aa
+    if (!isNewAgent || !agentDraft) return;
+    hydratedSelectionRef.current = null;
+    const parsedModel = parseModelSelection(agentDraft.model);
+    const draftNameValue = agentDraft.name || '';
+    const draftScopeValue = agentDraft.scope || 'user';
+    const descriptionValue = agentDraft.description || '';
+    const modeValue = agentDraft.mode || 'subagent';
+    const modelValue = parsedModel ? `${parsedModel.providerID}/${parsedModel.modelID}` : '';
+    const variantValue = parsedModel?.variant || '';
+    const stepsValue = agentDraft.steps ?? undefined;
+    const temperatureValue = agentDraft.temperature ?? undefined;
+    const topPValue = agentDraft.top_p ?? undefined;
+    const systemValue = agentDraft.system || '';
+    const colorValue = '';
+
+    entityRef.current = {};
+    setStoredAt(null);
+    setDraftName(draftNameValue);
+    setDraftScope(draftScopeValue);
+    setDescription(descriptionValue);
+    setMode(modeValue);
+    setModel(modelValue);
+    setVariant(variantValue);
+    setSteps(stepsValue);
+    setTemperature(temperatureValue);
+    setTopP(topPValue);
+    setSystem(systemValue);
+    setColor(colorValue);
+
+    savedRef.current = {
+      draftName: draftNameValue,
+      draftScope: draftScopeValue,
+      description: descriptionValue,
+      mode: modeValue,
+      model: modelValue,
+      variant: variantValue,
+      steps: stepsValue,
+      temperature: temperatureValue,
+      topP: topPValue,
+      system: systemValue,
+      color: colorValue,
+    };
+  }, [agentDraft, isNewAgent]);
+
+  // An existing agent is edited from its OWN stored entry, not from the
+  // resolved `AgentInfo`: the resolved view already merges built-in defaults
+  // and global config, and writing that back would bake them into the file.
+  React.useEffect(() => {
+    if (isNewAgent || !selectedAgentName) return;
+    let cancelled = false;
+    void (async () => {
+      const envelope = await fetchAgentEntity(selectedAgentName, settingsDirectory);
+      if (cancelled || selectionRef.current !== selectionKey || !envelope) return;
+      const entity = envelope.config;
+      entityRef.current = entity;
+      const parsedModel = parseModelSelection(entity.model);
+      const body = entity.request?.body;
+      const next: FormState = {
+        draftName: '',
+        draftScope: 'user',
+        description: entity.description || '',
+        // A stored override often omits `mode` (built-in build/plan); fall back
+        // to the resolved mode so an unrelated edit never writes `subagent`.
+        mode: entity.mode || selectedAgent?.mode || 'subagent',
+        model: parsedModel ? `${parsedModel.providerID}/${parsedModel.modelID}` : '',
+        variant: parsedModel?.variant || '',
+        steps: entity.steps ?? undefined,
+        temperature: body?.temperature,
+        topP: body?.top_p,
+        system: entity.system || '',
+        color: storedAgentColor(entity.color),
+      };
+
+      const saved = savedRef.current;
+      const current = currentFieldsRef.current;
+      const dirty = saved !== null && (
+        current.description !== saved.description || current.mode !== saved.mode ||
+        current.model !== saved.model || current.variant !== saved.variant ||
+        current.steps !== saved.steps || current.temperature !== saved.temperature ||
+        current.topP !== saved.topP || current.system !== saved.system ||
+        current.color !== saved.color
+      );
+      setStoredAt({ legacy: envelope.legacy === true, path: envelope.path, source: envelope.source });
+      // A refresh can publish an older write while the next draft is still being edited.
+      if (hydratedSelectionRef.current === selectionKey && dirty) return;
+      hydratedSelectionRef.current = selectionKey;
+
+      setDescription(next.description);
+      setMode(next.mode);
+      setModel(next.model);
+      setVariant(next.variant);
+      setSteps(next.steps);
+      setTemperature(next.temperature);
+      setTopP(next.topP);
+      setSystem(next.system);
+      setColor(next.color);
+      savedRef.current = next;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchAgentEntity, isNewAgent, selectedAgent, selectedAgentName, settingsDirectory, selectionKey]);
+
+  const buildConfig = React.useCallback((agentName: string): AgentConfig => {
+    const parsedModel = parseModelIdentifier(model.trim());
+    const joinedModel = parsedModel
+      ? formatModelSelection({
+          providerID: parsedModel.providerId,
+          modelID: parsedModel.modelId,
+          variant: variant.trim() || undefined,
+        })
+      : null;
+
+    // `request` is replaced as a whole on write, so the headers and any body
+    // keys this form does not own are carried over from the stored entry.
+    const storedRequest = entityRef.current.request;
+    const body: AgentRequestBody = { ...storedRequest?.body };
+    if (temperature === undefined) delete body.temperature;
+    else body.temperature = temperature;
+    if (topP === undefined) delete body.top_p;
+    else body.top_p = topP;
+
+    const headers = storedRequest?.headers;
+    const request: AgentRequest = {};
+    if (headers && Object.keys(headers).length > 0) request.headers = headers;
+    if (Object.keys(body).length > 0) request.body = body;
+
+    const trimmedDescription = description.trim();
+    const trimmedSystem = system.trim();
+    const config: AgentConfig = {
+      name: agentName,
+      mode,
+      model: joinedModel,
+      steps: steps ?? null,
+      system: trimmedSystem || (isNewAgent ? undefined : null),
+      request: Object.keys(request).length > 0 ? request : null,
+    };
+    if (trimmedDescription) config.description = trimmedDescription;
+    // Written only when it changed, so an untouched agent keeps whatever its
+    // file holds; null removes the key and the theme colour returns.
+    if (color !== (savedRef.current?.color ?? '')) config.color = color || null;
+    if (isNewAgent && draftScope) config.scope = draftScope;
+    if (isNewAgent && agentDraft?.hidden !== undefined) config.hidden = agentDraft.hidden;
+    // A duplicate carries the source agent's rules; the permissions editor only
+    // appears once the agent exists, so this is the one path that writes them
+    // at creation time.
+    if (isNewAgent && agentDraft?.permissions?.length) {
+      config.permissions = agentDraft.permissions;
+=======
+    if (!isNewAgent || !agentDraft) return;
+    hydratedSelectionRef.current = null;
+    const parsedModel = parseModelSelection(agentDraft.model);
+    const draftNameValue = agentDraft.name || '';
+    const draftScopeValue = agentDraft.scope || 'user';
+    const descriptionValue = agentDraft.description || '';
+    const modeValue = agentDraft.mode || 'subagent';
+    const modelValue = parsedModel ? `${parsedModel.providerID}/${parsedModel.modelID}` : '';
+    const variantValue = parsedModel?.variant || '';
+    const stepsValue = agentDraft.steps ?? undefined;
+    const temperatureValue = agentDraft.temperature ?? undefined;
+    const topPValue = agentDraft.top_p ?? undefined;
+    const systemValue = agentDraft.system || '';
+    const colorValue = '';
+
+    entityRef.current = {};
+    setStoredAt(null);
+    setDraftName(draftNameValue);
+    setDraftScope(draftScopeValue);
+    setDescription(descriptionValue);
+    setMode(modeValue);
+    setModel(modelValue);
+    setVariant(variantValue);
+    setSteps(stepsValue);
+    setTemperature(temperatureValue);
+    setTopP(topPValue);
+    setSystem(systemValue);
+    setColor(colorValue);
+
+    savedRef.current = {
+      draftName: draftNameValue,
+      draftScope: draftScopeValue,
+      description: descriptionValue,
+      mode: modeValue,
+      model: modelValue,
+      variant: variantValue,
+      steps: stepsValue,
+      temperature: temperatureValue,
+      topP: topPValue,
+      system: systemValue,
+      color: colorValue,
+    };
+  }, [agentDraft, isNewAgent]);
+
+  React.useEffect(() => {
+    if (isNewAgent || !selectedAgentName) return;
+    let cancelled = false;
+    void (async () => {
+      const envelope = await fetchAgentEntity(selectedAgentName, settingsDirectory);
+      if (cancelled || selectionRef.current !== selectionKey || !envelope) return;
+      const entity = envelope.config;
+      entityRef.current = entity;
+      const parsedModel = parseModelSelection(entity.model);
+      const body = entity.request?.body;
+      const next: FormState = {
+        draftName: '',
+        draftScope: 'user',
+        description: entity.description || '',
+        mode: entity.mode || selectedAgent?.mode || 'subagent',
+        model: parsedModel ? `${parsedModel.providerID}/${parsedModel.modelID}` : '',
+        variant: parsedModel?.variant || '',
+        steps: entity.steps ?? undefined,
+        temperature: body?.temperature,
+        topP: body?.top_p,
+        system: entity.system || '',
+        color: storedAgentColor(entity.color),
+      };
+
+      const saved = savedRef.current;
+      const current = currentFieldsRef.current;
+      const dirty = saved !== null && (
+        current.description !== saved.description || current.mode !== saved.mode ||
+        current.model !== saved.model || current.variant !== saved.variant ||
+        current.steps !== saved.steps || current.temperature !== saved.temperature ||
+        current.topP !== saved.topP || current.system !== saved.system ||
+        current.color !== saved.color
+      );
+      setStoredAt({ legacy: envelope.legacy === true, path: envelope.path, source: envelope.source });
+      if (hydratedSelectionRef.current === selectionKey && dirty) return;
+      hydratedSelectionRef.current = selectionKey;
+
+      setDescription(next.description);
+      setMode(next.mode);
+      setModel(next.model);
+      setVariant(next.variant);
+      setSteps(next.steps);
+      setTemperature(next.temperature);
+      setTopP(next.topP);
+      setSystem(next.system);
+      setColor(next.color);
+      savedRef.current = next;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchAgentEntity, isNewAgent, selectedAgent, selectedAgentName, settingsDirectory, selectionKey]);
+
+  const buildConfig = React.useCallback((agentName: string): AgentConfig => {
+    const parsedModel = parseModelIdentifier(model.trim());
+    const joinedModel = parsedModel
+      ? formatModelSelection({
+          providerID: parsedModel.providerId,
+          modelID: parsedModel.modelId,
+          variant: variant.trim() || undefined,
+        })
+      : null;
+
+    const storedRequest = entityRef.current.request;
+    const body: AgentRequestBody = { ...storedRequest?.body };
+    if (temperature === undefined) delete body.temperature;
+    else body.temperature = temperature;
+    if (topP === undefined) delete body.top_p;
+    else body.top_p = topP;
+
+    const headers = storedRequest?.headers;
+    const request: AgentRequest = {};
+    if (headers && Object.keys(headers).length > 0) request.headers = headers;
+    if (Object.keys(body).length > 0) request.body = body;
+
+    const trimmedDescription = description.trim();
+    const trimmedSystem = system.trim();
+    const config: AgentConfig = {
+      name: agentName,
+      mode,
+      model: joinedModel,
+      steps: steps ?? null,
+      system: trimmedSystem || (isNewAgent ? undefined : null),
+      request: Object.keys(request).length > 0 ? request : null,
+    };
+    if (trimmedDescription) config.description = trimmedDescription;
+    if (color !== (savedRef.current?.color ?? '')) config.color = color || null;
+    if (isNewAgent && draftScope) config.scope = draftScope;
+    if (isNewAgent && agentDraft?.hidden !== undefined) config.hidden = agentDraft.hidden;
+    if (isNewAgent && agentDraft?.permissions?.length) {
+      config.permissions = agentDraft.permissions;
+>>>>>>> upstream/main
     }
     const sameSelection = hydratedSelectionRef.current === selectionKey;
     // Catalog events may publish an older save while the user is editing the next draft.
@@ -260,6 +754,7 @@ export const AgentsPage: React.FC = () => {
 
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
     const saved = savedRef.current;
+<<<<<<< HEAD
     if (isNewAgent || !selectedAgent || !saved || hydratedSelectionRef.current !== selectionKey) return AUTOSAVE_UNCHANGED;
     if (fieldsEqual(form, saved)) return AUTOSAVE_UNCHANGED;
     if (toolsCatalogError && form.allowedTools !== saved.allowedTools) return AUTOSAVE_UNCHANGED;
@@ -288,6 +783,139 @@ export const AgentsPage: React.FC = () => {
       savingRef.current = false;
     }
   }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, toolsCatalogError, t]);
+||||||| bc50ba56aa
+    const agentName = selectedAgentName?.trim();
+    if (isNewAgent || !saved || !agentName) return AUTOSAVE_UNCHANGED;
+
+    // The permissions section is part of this page, so its write goes out with
+    // the page's and both report through one indicator.
+    const permissionsResult = permissionsSaveRef.current
+      ? await permissionsSaveRef.current()
+      : AUTOSAVE_UNCHANGED;
+
+    const unchanged =
+      description === saved.description &&
+      mode === saved.mode &&
+      model === saved.model &&
+      variant === saved.variant &&
+      steps === saved.steps &&
+      temperature === saved.temperature &&
+      topP === saved.topP &&
+      system === saved.system &&
+      color === saved.color;
+    if (unchanged) return permissionsResult;
+    if (!permissionsResult.ok) return permissionsResult;
+
+    const config = buildConfig(agentName);
+    const result: AgentMutationResult = await updateAgent(agentName, config, settingsDirectory);
+    if (!result.ok) return autosaveFailed(t('settings.agents.page.toast.updateFailed'));
+    if (selectionRef.current !== selectionKey) return AUTOSAVE_SAVED;
+
+    entityRef.current = {
+      ...entityRef.current,
+      model: config.model,
+      system: config.system ?? undefined,
+      steps: config.steps,
+      request: config.request ?? undefined,
+    };
+    savedRef.current = {
+      ...saved,
+      description,
+      mode,
+      model,
+      variant,
+      steps,
+      temperature,
+      topP,
+      system,
+      color,
+    };
+    return AUTOSAVE_SAVED;
+  }, [
+    buildConfig,
+    color,
+    description,
+    isNewAgent,
+    mode,
+    model,
+    selectedAgentName,
+    selectionKey,
+    settingsDirectory,
+    steps,
+    system,
+    t,
+    temperature,
+    topP,
+    updateAgent,
+    variant,
+  ]);
+
+=======
+    const agentName = selectedAgentName?.trim();
+    if (isNewAgent || !saved || !agentName) return AUTOSAVE_UNCHANGED;
+
+    const permissionsResult = permissionsSaveRef.current
+      ? await permissionsSaveRef.current()
+      : AUTOSAVE_UNCHANGED;
+
+    const unchanged =
+      description === saved.description &&
+      mode === saved.mode &&
+      model === saved.model &&
+      variant === saved.variant &&
+      steps === saved.steps &&
+      temperature === saved.temperature &&
+      topP === saved.topP &&
+      system === saved.system &&
+      color === saved.color;
+    if (unchanged) return permissionsResult;
+    if (!permissionsResult.ok) return permissionsResult;
+
+    const config = buildConfig(agentName);
+    const result: AgentMutationResult = await updateAgent(agentName, config, settingsDirectory);
+    if (!result.ok) return autosaveFailed(t('settings.agents.page.toast.updateFailed'));
+    if (selectionRef.current !== selectionKey) return AUTOSAVE_SAVED;
+
+    entityRef.current = {
+      ...entityRef.current,
+      model: config.model,
+      system: config.system ?? undefined,
+      steps: config.steps,
+      request: config.request ?? undefined,
+    };
+    savedRef.current = {
+      ...saved,
+      description,
+      mode,
+      model,
+      variant,
+      steps,
+      temperature,
+      topP,
+      system,
+      color,
+    };
+    return AUTOSAVE_SAVED;
+  }, [
+    buildConfig,
+    color,
+    description,
+    isNewAgent,
+    mode,
+    model,
+    selectedAgentName,
+    selectionKey,
+    settingsDirectory,
+    steps,
+    system,
+    t,
+    temperature,
+    topP,
+    updateAgent,
+    variant,
+  ]);
+
+>>>>>>> upstream/main
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
 
@@ -411,6 +1039,7 @@ export const AgentsPage: React.FC = () => {
     );
   }
 
+<<<<<<< HEAD
   return <SettingsPageLayout
     title={isNewAgent ? t('settings.agents.page.title.new') : selectedAgentName}
     description={isNewAgent ? t('settings.agents.page.subtitle.new') : t('settings.agents.page.subtitle.edit')}
@@ -448,6 +1077,56 @@ export const AgentsPage: React.FC = () => {
               setForm({ ...form, thinkingLevel: value as AgentThinkingLevel | 'default' });
               requestSave();
             }}
+||||||| bc50ba56aa
+  return (
+    <SettingsPageLayout
+      title={isNewAgent ? t('settings.agents.page.title.new') : selectedAgentName}
+      description={isNewAgent ? t('settings.agents.page.subtitle.new') : t('settings.agents.page.subtitle.edit')}
+      onBlurCapture={autosave.onBlurCapture}
+    >
+      {!isNewAgent && storedAt && (
+        <SettingsLegacyFormatNote legacy={storedAt.legacy} path={storedAt.path} />
+      )}
+      {!isNewAgent && storedAt?.source === 'none' && (
+        <p className={`mb-4 flex items-start gap-1.5 ${SETTINGS_HELPER_CLASS}`}>
+          <Icon name="information" className="mt-[0.2em] h-3.5 w-3.5 shrink-0 opacity-70" />
+          <span>{t('settings.agents.page.runtimeProvided.note')}</span>
+        </p>
+      )}
+      <SettingsSection
+        title={t('settings.agents.page.section.identityRole')}
+        divider={false}
+        contentClassName="space-y-3"
+      >
+        {isNewAgent && (
+          <SettingsFieldRow
+            settingsItem="agents.name"
+            label={t('settings.agents.page.field.agentName')}
+=======
+  return (
+    <SettingsPageLayout
+      title={isNewAgent ? t('settings.agents.page.title.new') : selectedAgentName}
+      description={isNewAgent ? t('settings.agents.page.subtitle.new') : t('settings.agents.page.subtitle.edit')}
+      onBlurCapture={autosave.onBlurCapture}
+    >
+      {!isNewAgent && storedAt && (
+        <SettingsLegacyFormatNote legacy={storedAt.legacy} path={storedAt.path} />
+      )}
+      {!isNewAgent && storedAt?.source === 'none' && (
+        <p className={`mb-4 flex items-start gap-1.5 ${SETTINGS_HELPER_CLASS}`}>
+          <Icon name="information" className="mt-[0.2em] h-3.5 w-3.5 shrink-0 opacity-70" />
+          <span>{t('settings.agents.page.runtimeProvided.note')}</span>
+        </p>
+      )}
+      <SettingsSection
+        title={t('settings.agents.page.section.identityRole')}
+        contentClassName="space-y-3"
+      >
+        {isNewAgent && (
+          <SettingsFieldRow
+            settingsItem="agents.name"
+            label={t('settings.agents.page.field.agentName')}
+>>>>>>> upstream/main
           >
             <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
               <SelectValue>{thinkingLevelLabel(form.thinkingLevel, t)}</SelectValue>

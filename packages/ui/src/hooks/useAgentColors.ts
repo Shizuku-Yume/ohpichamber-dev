@@ -5,8 +5,6 @@ import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStor
 import { createAgentColorResolver } from '@/lib/agentColors';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 
-// Message footers share one allocation with the composer. Immutable theme and
-// roster identities invalidate it; weak keys release obsolete snapshots.
 const resolvers = new WeakMap<Theme, WeakMap<Agent[], ReturnType<typeof createAgentColorResolver>>>();
 
 export function useAgentColors(directory?: string | null) {

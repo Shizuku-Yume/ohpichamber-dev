@@ -4,7 +4,22 @@ import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive } f
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { desktopHostsGet, getDesktopHostApiUrl, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 import { getSyncChildStores } from '@/sync/sync-refs';
+<<<<<<< HEAD
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
+||||||| bc50ba56aa
+import { useBackgroundShellsStore } from '@/sync/background-shells';
+import { useBackgroundImagesStore } from '@/sync/background-images';
+import { collectOpenTurnSessionIds, useGlobalSessionStatusStore } from '@/sync/global-session-status';
+import { usePrWatchStore } from '@/sync/pr-watch';
+import { useWorkflowActivityStore } from '@/sync/workflow-activity';
+=======
+import { useBackgroundShellsStore } from '@/sync/background-shells';
+import { useBackgroundImagesStore } from '@/sync/background-images';
+import { collectOpenTurnSessionIds, useGlobalSessionStatusStore } from '@/sync/global-session-status';
+import { usePrWatchStore } from '@/sync/pr-watch';
+import { useExtensionWaitsStore } from '@/sync/extension-waits';
+import { useWorkflowActivityStore } from '@/sync/workflow-activity';
+>>>>>>> upstream/main
 import {
   useGlobalBlockingRequestsStore,
   type BlockingFormRequest,
@@ -32,15 +47,7 @@ import type { ProjectEntry } from '@/lib/api/types';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { toast } from '@/components/ui';
 
-// Native tray/menu bar bridge. The Electron main process owns the Tray UI; this hook
-// streams a compact snapshot of live session/approval state to it via the
-// `desktop_tray_update` IPC command, and routes tray clicks back into the app.
-//
-// Dock badges share the IPC command, but remain active when the menu bar is
-// disabled. That path observes unread state only, without tray polling or quotas.
-
 const TRAY_ACTION_EVENT = 'openchamber:tray-action';
-// Event-driven updates do the real work; this is just a slow safety net.
 const POLL_INTERVAL_MS = 5000;
 const FLUSH_DEBOUNCE_MS = 500;
 const MAX_SESSIONS = 20;
@@ -55,7 +62,6 @@ type TraySession = {
   unseen: number;
   hasError: boolean;
   directory: string;
-  // Secondary line for the menu row: "project · branch" (rendered as sublabel).
   subtitle: string;
 };
 
@@ -66,6 +72,15 @@ type TrayApproval = {
   sessionTitle: string;
   label: string;
   directory: string;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // Whether responding "always" would remember anything. Forms never can, and a
+  // permission can only when the request carries save patterns, so the tray can
+  // drop the "Allow always" item instead of offering a no-op.
+  canSave: boolean;
+=======
+  canSave: boolean;
+>>>>>>> upstream/main
 };
 
 type TrayUsageRow = { label: string; value: string };
@@ -75,21 +90,30 @@ type TrayUsage = { mode: 'usage' | 'remaining'; groups: TrayUsageGroup[] };
 type TraySnapshot = {
   sessions: TraySession[];
   approvals: TrayApproval[];
-  // Active instance label (e.g. "Local OpenChamber" or a remote host name) so
-  // the tray header makes clear which instance/window it reflects.
   instanceName: string;
-  // Provider rate-limit usage, only for providers the user enabled for the
-  // dropdown (same "configured to show" rule as the header/mobile). Empty
-  // groups → the tray omits the Usage submenu entirely.
   usage: TrayUsage;
+<<<<<<< HEAD
   // Number of chats (root sessions) with unseen activity, for the macOS dock
   // badge. 0 when the user disabled the badge — the main process clears it.
+||||||| bc50ba56aa
+  // Number of chats (root sessions with a sidebar row) with unseen activity,
+  // for the macOS dock badge. 0 when the user disabled the badge — the main
+  // process clears it.
+=======
+>>>>>>> upstream/main
   dockBadgeCount: number;
 };
 
+<<<<<<< HEAD
 // focus-session / new-session are routed natively by the main process through
 // the existing `openchamber:open-session` / `openchamber:open-draft-session`
 // events (handled in App.tsx). Only respond-permission needs handling here.
+||||||| bc50ba56aa
+// focus-session / new-session are routed natively by the main process through
+// the existing `openchamber:open-session` / `openchamber:open-draft-session`
+// events (handled in App.tsx). Permission responses and mark-all-read run here.
+=======
+>>>>>>> upstream/main
 type TrayAction =
   | { type: 'respond-permission'; sessionId: string; id: string; response: 'once' | 'always' | 'reject' };
 
@@ -114,8 +138,15 @@ const permissionLabel = (request: BlockingPermissionRequest): string =>
 
 const formLabel = (request: BlockingFormRequest): string => request.prompt.trim() || 'Question';
 
+<<<<<<< HEAD
 const trayStatus = (status: SessionRuntimeStatus | undefined): TraySessionStatus =>
   status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input' ? 'busy' : 'idle';
+||||||| bc50ba56aa
+// The tray lists sessions by activity alone; pins only order the sidebar.
+const NO_PINNED_SESSIONS = new Set<string>();
+=======
+const NO_PINNED_SESSIONS = new Set<string>();
+>>>>>>> upstream/main
 
 const compareSessionOrder = (left: Session, right: Session): number => (
   compareSessionsByLifecycleOrder(
@@ -132,7 +163,15 @@ const basenameOf = (p: string): string => {
   return idx >= 0 ? norm.slice(idx + 1) : norm;
 };
 
+<<<<<<< HEAD
 // Resolve the project metadata line using Host directory and cached Git facts.
+||||||| bc50ba56aa
+// Resolve the "project · branch" metadata line for a session from its directory,
+// covering both project-root sessions and worktree sessions (which map back to
+// their parent project). Branch prefers the live VCS value; falls back to the
+// worktree's recorded branch when the directory isn't currently synced.
+=======
+>>>>>>> upstream/main
 const resolveSessionSubtitle = (
   directory: string,
   projects: ProjectEntry[],
@@ -143,9 +182,18 @@ const resolveSessionSubtitle = (
   const projectName = project?.label?.trim() || basenameOf(directory);
   const normDir = normalizeProjectPath(directory);
 
+<<<<<<< HEAD
   // Cached Git status and recorded worktree metadata remain independent of
   // canonical session DTOs; the runtime does not expose legacy VCS state.
   let branch = '';
+||||||| bc50ba56aa
+  // Branch resolution, most-authoritative first: live VCS from the sync store,
+  // then the git store's cached status (covers project-root sessions whose
+  // directory isn't actively synced), then recorded worktree metadata.
+  let branch = (normDir && branchByDirectory.get(normDir)) || '';
+=======
+  let branch = (normDir && branchByDirectory.get(normDir)) || '';
+>>>>>>> upstream/main
   if (!branch) {
     for (const [dir, gitState] of useGitStore.getState().directories) {
       if (normalizeProjectPath(dir) === normDir) { branch = gitState.status?.current ?? ''; break; }
@@ -161,12 +209,19 @@ const resolveSessionSubtitle = (
   return branch ? `${projectName} · ${branch}` : projectName;
 };
 
+<<<<<<< HEAD
 // Build the usage groups exactly like the header/mobile: only providers the
 // user enabled for the dropdown AND that report as configured. Window rows only
 // (the headline limits) — model breakdowns stay in the full UI.
 const translateQuota = (key: I18nKey, params?: I18nParams): string =>
   formatMessage(useI18nStore.getState().dictionary, key, params);
 
+||||||| bc50ba56aa
+// Build the usage groups exactly like the header/mobile: only providers the
+// user enabled for the dropdown AND that report as configured. Window rows only
+// (the headline limits) — model breakdowns stay in the full UI.
+=======
+>>>>>>> upstream/main
 const buildUsage = (): TrayUsage => {
   const { results, dropdownProviderIds, displayMode } = useQuotaStore.getState();
   const mode: TrayUsage['mode'] = displayMode === 'remaining' ? 'remaining' : 'usage';
@@ -195,9 +250,6 @@ const buildUsage = (): TrayUsage => {
   return { mode, groups };
 };
 
-// Mirrors the header's instance resolution (Header.refreshCurrentInstanceLabel):
-// the local origin shows as "Local OpenChamber"; a remote host shows its
-// configured name. Async because the host config is read over IPC.
 const resolveInstanceName = async (): Promise<string> => {
   try {
     if (isDesktopLocalOriginActive()) return 'Local OhPiChamber';
@@ -215,8 +267,6 @@ const resolveInstanceName = async (): Promise<string> => {
   }
 };
 
-// Live data lives in the directory-scoped sync child stores. Aggregate it once
-// into flat lookups so we can attach it to the global session list by id.
 type LiveData = {
   statusById: Map<string, TraySessionStatus>;
   approvals: TrayApproval[];
@@ -237,17 +287,20 @@ const collectLiveData = (): LiveData => {
 
   for (const [directory, store] of stores.children.entries()) {
     const state = store.getState();
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    // Normalize the key so it matches the session directory regardless of
+    // trailing slashes / separators.
+    if (state.vcs?.branch) branchByDirectory.set(normalizeProjectPath(directory) ?? directory, state.vcs.branch);
+=======
+    if (state.vcs?.branch) branchByDirectory.set(normalizeProjectPath(directory) ?? directory, state.vcs.branch);
+>>>>>>> upstream/main
 
     for (const session of state.session) {
       if (!session?.sessionId) continue;
       titleById.set(session.sessionId, session.title ?? '');
     }
 
-    // Status comes from the status map itself, NOT from the session list — a
-    // just-created session can have a live status entry before (or without)
-    // appearing in this store's list, and the same session can be listed by
-    // several stores. Never let one store's missing/idle entry clobber another
-    // store's busy/retry.
     for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
       const mapped = trayStatus(status);
       const existing = statusById.get(sessionId);
@@ -273,22 +326,22 @@ const collectLiveData = (): LiveData => {
   return { statusById, approvals, titleById };
 };
 
-// Status for sessions outside the synced child stores arrives two ways, both
-// landing in useGlobalSessionStatusStore (the fallback in the rollup below):
-//  - live: the global event stream carries status events for every directory;
-//    the sync dispatcher routes the ones without a child store into the store;
-//  - seeded: events only deliver changes, so the root global-sessions poll
-//    seeds the store from the host's cross-project map (`/api/sessions/status`,
-//    see `sync/host-session-status-seed.ts`). The tray no longer polls the
-//    upstream `/session/status?directory=` endpoint: that call creates an
-//    OpenCode instance per directory.
 const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot => {
+<<<<<<< HEAD
 
   // The list source is the GLOBAL store — every project/worktree the backend
   // knows about, independent of which directories this client has opened. Live
   // status/unread/branch are merged in by id where we have them (the session's
   // directory is synced); otherwise the row is shown as idle.
+||||||| bc50ba56aa
+  // The list source is the GLOBAL store — every project/worktree the backend
+  // knows about, independent of which directories this client has opened. Live
+  // status/unread/branch are merged in by id where we have them (the session's
+  // directory is synced); otherwise the row is shown as idle.
+=======
+>>>>>>> upstream/main
   const allSessions = useGlobalSessionsStore.getState().activeSessions;
+<<<<<<< HEAD
   const childrenByParent = new Map<string, string[]>();
   for (const session of allSessions) {
     if (!session?.sessionId) continue;
@@ -296,9 +349,90 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       const siblings = childrenByParent.get(session.parentSessionId) ?? [];
       siblings.push(session.sessionId);
       childrenByParent.set(session.parentSessionId, siblings);
-    }
-  }
+||||||| bc50ba56aa
+  const lineage = createSessionLineage(allSessions);
+  const collectDescendants = (rootId: string): string[] => (
+    lineage.descendantsOf(rootId, 'active').map((session) => session.id)
+  );
 
+  const projects = useProjectsStore.getState().projects;
+  const worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject;
+
+  // The tray and the dock badge cover the sessions that have a sidebar row
+  // (`sessionHasSidebarRow`). Sessions from unconfigured directories (an eval
+  // run in /tmp, a removed project, a /btw fork) have none, cannot be opened
+  // or removed from there, so they would take the tray's limited slots and
+  // hold a dock count the user has no way to clear. Pending approvals use the
+  // same admission rule below.
+  const pinnedIds = useSessionPinnedStore.getState().ids;
+  type Sections = { chats: boolean; pinned: boolean; work: boolean };
+  const hasRowIn = (session: Session, sections: Sections): boolean => {
+    const directory = resolveGlobalSessionDirectory(session);
+    const isAdmitted = isSessionDirectoryAdmitted(directory, projects, worktreesByProject);
+    // A managed chat keeps its identity when its directory no longer sits under
+    // the chats root, so the project id identifies it too. Only the Chats section
+    // lists a chat: the Pinned and In work zones leave chats out.
+    if (isChatDirectoryPath(directory) || session.projectID === CHAT_DRAFT_PROJECT_ID) {
+      return sessionHasSidebarRow(session, { isAdmitted, isPlaced: sections.chats, isPinned: false, zones: { pinned: false, work: false } });
+=======
+  const lineage = createSessionLineage(allSessions);
+  const collectDescendants = (rootId: string): string[] => (
+    lineage.descendantsOf(rootId, 'active').map((session) => session.id)
+  );
+
+  const projects = useProjectsStore.getState().projects;
+  const worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject;
+
+  const pinnedIds = useSessionPinnedStore.getState().ids;
+  type Sections = { chats: boolean; pinned: boolean; work: boolean };
+  const hasRowIn = (session: Session, sections: Sections): boolean => {
+    const directory = resolveGlobalSessionDirectory(session);
+    const isAdmitted = isSessionDirectoryAdmitted(directory, projects, worktreesByProject);
+    if (isChatDirectoryPath(directory) || session.projectID === CHAT_DRAFT_PROJECT_ID) {
+      return sessionHasSidebarRow(session, { isAdmitted, isPlaced: sections.chats, isPinned: false, zones: { pinned: false, work: false } });
+>>>>>>> upstream/main
+    }
+<<<<<<< HEAD
+  }
+||||||| bc50ba56aa
+    return sessionHasSidebarRow(session, {
+      isAdmitted,
+      isPlaced: isSpaceDirectory(directory)
+        || resolveProjectForSessionDirectory(projects, worktreesByProject, directory) !== null,
+      isPinned: isSessionPinned(pinnedIds, session.directory, session.id),
+      zones: sections,
+    });
+  };
+  // The badge counts only rows the sidebar renders now: with the Chats,
+  // Pinned or In work section hidden, a session only that section lists has no
+  // row to read. The tray list keeps such a session, because its tray row
+  // opens it directly.
+  const display = useSessionDisplayStore.getState();
+  const shownSections: Sections = {
+    chats: display.showChatsSection,
+    pinned: display.showPinnedSection,
+    work: useUIStore.getState().sessionWorkEnabled && display.showWorkSection,
+  };
+  const allSections: Sections = { chats: true, pinned: true, work: true };
+=======
+    return sessionHasSidebarRow(session, {
+      isAdmitted,
+      isPlaced: isSpaceDirectory(directory)
+        || resolveProjectForSessionDirectory(projects, worktreesByProject, directory) !== null,
+      isPinned: isSessionPinned(pinnedIds, session.directory, session.id),
+      zones: sections,
+    });
+  };
+  const display = useSessionDisplayStore.getState();
+  const shownSections: Sections = {
+    chats: display.showChatsSection,
+    pinned: display.showPinnedSection,
+    work: useUIStore.getState().sessionWorkEnabled && display.showWorkSection,
+  };
+  const allSections: Sections = { chats: true, pinned: true, work: true };
+>>>>>>> upstream/main
+
+<<<<<<< HEAD
   const collectDescendants = (rootId: string): string[] => {
     const out: string[] = [];
     const stack = [...(childrenByParent.get(rootId) ?? [])];
@@ -312,7 +446,29 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
     }
     return out;
   };
+||||||| bc50ba56aa
+  // OpenCode stamps a turn's end on the record even when the session only idles
+  // on background work: until that work ends its row reads as working, so it
+  // counts as unread nowhere here.
+  const openTurnIds = collectOpenTurnSessionIds(useGlobalSessionStatusStore.getState().activeSessionIds, [
+    useWorkflowActivityStore.getState().runningSessionIds,
+    useBackgroundShellsStore.getState().sessionIds,
+    useBackgroundImagesStore.getState().sessionIds,
+    usePrWatchStore.getState().bySession.keys(),
+  ]);
+  const hasUnreadTurn = (session: Session): boolean => isSessionUnread(session) && !openTurnIds.has(session.id);
+=======
+  const openTurnIds = collectOpenTurnSessionIds(useGlobalSessionStatusStore.getState().activeSessionIds, [
+    useWorkflowActivityStore.getState().runningSessionIds,
+    useBackgroundShellsStore.getState().sessionIds,
+    useBackgroundImagesStore.getState().sessionIds,
+    usePrWatchStore.getState().bySession.keys(),
+    useExtensionWaitsStore.getState().bySession.keys(),
+  ]);
+  const hasUnreadTurn = (session: Session): boolean => isSessionUnread(session) && !openTurnIds.has(session.id);
+>>>>>>> upstream/main
 
+<<<<<<< HEAD
   // Count the full root list, independently of the tray's visibility and limit.
   const ui = useUIStore.getState();
   let dockBadgeCount = 0;
@@ -328,6 +484,28 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       if (familyUnseen > 0) dockBadgeCount += 1;
     }
   }
+||||||| bc50ba56aa
+  // Count the full root list, independently of the tray's visibility and limit.
+  // Only top-level sessions are ever unread (`isSessionUnread`); a subtask
+  // reports to its parent.
+  const dockUnread = useUIStore.getState().dockBadgeEnabled
+    ? allSessions.filter((session) => hasUnreadTurn(session) && hasRowIn(session, shownSections))
+    : [];
+  const dockBadgeCount = dockUnread.length;
+  const dockUnreadSessions = dockUnread
+    .sort((left, right) => (right.time.idle ?? right.time.updated) - (left.time.idle ?? left.time.updated) || left.id.localeCompare(right.id))
+    .slice(0, 10)
+    .map((session) => ({ id: session.id, title: session.title, directory: resolveGlobalSessionDirectory(session) ?? '' }));
+=======
+  const dockUnread = useUIStore.getState().dockBadgeEnabled
+    ? allSessions.filter((session) => hasUnreadTurn(session) && hasRowIn(session, shownSections))
+    : [];
+  const dockBadgeCount = dockUnread.length;
+  const dockUnreadSessions = dockUnread
+    .sort((left, right) => (right.time.idle ?? right.time.updated) - (left.time.idle ?? left.time.updated) || left.id.localeCompare(right.id))
+    .slice(0, 10)
+    .map((session) => ({ id: session.id, title: session.title, directory: resolveGlobalSessionDirectory(session) ?? '' }));
+>>>>>>> upstream/main
   if (!includeTray) {
     return { sessions: [], approvals: [], instanceName, usage: { mode: 'usage', groups: [] }, dockBadgeCount };
   }
@@ -342,10 +520,6 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
     }
   }
 
-  // A session is active if EITHER source says so: the synced child stores
-  // (instant, but can miss sessions created outside this window) or the
-  // cross-project status map (event-driven for every directory + polled
-  // reconciliation). Requiring agreement would re-introduce the gaps.
   const globalStatusById = useGlobalSessionStatusStore.getState().statusById;
   const resolveStatus = (id: string): TraySessionStatus => {
     const fromStores = live.statusById.get(id);
@@ -364,7 +538,15 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   const worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject;
 
   const sessions: TraySession[] = allSessions
+<<<<<<< HEAD
     .filter((s) => s?.sessionId && !s.parentSessionId) // root rows; sub-session work rolls up
+||||||| bc50ba56aa
+    .filter((s) => s?.id && !s.parentID) // root rows; sub-session work rolls up
+    .filter((session) => hasRowIn(session, allSections))
+=======
+    .filter((s) => s?.id && !s.parentID)
+    .filter((session) => hasRowIn(session, allSections))
+>>>>>>> upstream/main
     .slice()
     .sort(compareSessionOrder)
     .slice(0, MAX_SESSIONS)
@@ -384,8 +566,6 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       };
     });
 
-  // Directory stores list approvals for open directories; the cross-directory
-  // index adds the ones from directories this window never initialized.
   const approvals = live.approvals.map((a) => ({ ...a, sessionTitle: titleById.get(a.sessionId) || '' }));
   const seen = new Set(approvals.map((a) => a.id));
   for (const [sessionId, pending] of useGlobalBlockingRequestsStore.getState().bySession) {
@@ -396,11 +576,25 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       seen.add(id);
       approvals.push({ kind: 'permission', id, sessionId: request.sessionId, sessionTitle, label: permissionLabel(request), directory: pending.directory });
     }
+<<<<<<< HEAD
     for (const request of pending.forms) {
       const id = request.questionId;
       if (seen.has(id)) continue;
       seen.add(id);
       approvals.push({ kind: 'form', id, sessionId: request.sessionId, sessionTitle, label: formLabel(request), directory: pending.directory });
+||||||| bc50ba56aa
+    // A page that waits for the user's answer is listed like a form: the tray
+    // only opens the session for either.
+    for (const request of [...pending.forms, ...pending.pages]) {
+      if (seen.has(request.id)) continue;
+      seen.add(request.id);
+      approvals.push({ kind: 'form', id: request.id, sessionId, sessionTitle, label: formLabel(request), directory: pending.directory, canSave: false });
+=======
+    for (const request of [...pending.forms, ...pending.pages]) {
+      if (seen.has(request.id)) continue;
+      seen.add(request.id);
+      approvals.push({ kind: 'form', id: request.id, sessionId, sessionTitle, label: formLabel(request), directory: pending.directory, canSave: false });
+>>>>>>> upstream/main
     }
   }
 
@@ -415,8 +609,6 @@ export const useTraySync = (): void => {
     let disposed = false;
     let lastSerialized = '';
     let flushTimer: number | null = null;
-    // The active instance is fixed per window load (switching hosts re-navigates
-    // the window, remounting this hook). Resolve it once, then re-push.
     let instanceName = '';
     const flushNow = () => {
       if (disposed) return;
@@ -427,9 +619,6 @@ export const useTraySync = (): void => {
       void invokeDesktop('desktop_tray_update', snapshot);
     };
 
-    // Coalesce bursts (e.g. token-by-token streaming updates a store rapidly)
-    // into at most one push per FLUSH_DEBOUNCE_MS; discrete events surface within
-    // that window. The main app UI stays instant via SSE/stores.
     const scheduleFlush = () => {
       if (disposed || flushTimer !== null) return;
       flushTimer = window.setTimeout(() => {
@@ -440,8 +629,60 @@ export const useTraySync = (): void => {
 
     const unsubscribeNotif = useNotificationStore.subscribe(() => scheduleFlush());
     const unsubscribeGlobal = useGlobalSessionsStore.subscribe(() => scheduleFlush());
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    // Cross-project status map: fed live by the sync dispatcher from the global
+    // event stream and seeded from the host by the root global-sessions poll.
+    // The tray used to poll `/session/status?directory=` for up to 20
+    // directories every 5 seconds, which made OpenCode create an instance for
+    // each of them; the host seed covers the same startup gap for free.
+    const unsubscribeGlobalStatus = useGlobalSessionStatusStore.subscribe(() => scheduleFlush());
+    // Background work ending turns a waiting session unread with no change to its record.
+    const unsubscribeWorkflows = useWorkflowActivityStore.subscribe(() => scheduleFlush());
+    const unsubscribeShells = useBackgroundShellsStore.subscribe(() => scheduleFlush());
+    const unsubscribeImages = useBackgroundImagesStore.subscribe(() => scheduleFlush());
+    const unsubscribePrWatches = usePrWatchStore.subscribe(() => scheduleFlush());
+=======
+    const unsubscribeGlobalStatus = useGlobalSessionStatusStore.subscribe(() => scheduleFlush());
+    const unsubscribeWorkflows = useWorkflowActivityStore.subscribe(() => scheduleFlush());
+    const unsubscribeShells = useBackgroundShellsStore.subscribe(() => scheduleFlush());
+    const unsubscribeImages = useBackgroundImagesStore.subscribe(() => scheduleFlush());
+    const unsubscribePrWatches = usePrWatchStore.subscribe(() => scheduleFlush());
+    const unsubscribeExtensionWaits = useExtensionWaitsStore.subscribe(() => scheduleFlush());
+>>>>>>> upstream/main
     const unsubscribeUI = useUIStore.subscribe((state, previous) => {
+<<<<<<< HEAD
       if (state.dockBadgeEnabled !== previous.dockBadgeEnabled || state.notifyOnSubtasks !== previous.notifyOnSubtasks) {
+||||||| bc50ba56aa
+      if (state.dockBadgeEnabled !== previous.dockBadgeEnabled
+        || state.sessionWorkEnabled !== previous.sessionWorkEnabled) {
+        scheduleFlush();
+      }
+    });
+    // Projects, discovered worktrees, pins and the shown sections decide which
+    // sessions have a sidebar row, so they move the badge as well as the tray
+    // list and its "project · branch" subtitles (deduped, so cheap).
+    const unsubscribeProjects = useProjectsStore.subscribe(() => scheduleFlush());
+    const unsubscribeWorktrees = useSessionUIStore.subscribe(() => scheduleFlush());
+    const unsubscribePins = useSessionPinnedStore.subscribe(() => scheduleFlush());
+    const unsubscribeSections = useSessionDisplayStore.subscribe((state, previous) => {
+      if (state.showChatsSection !== previous.showChatsSection
+        || state.showPinnedSection !== previous.showPinnedSection
+        || state.showWorkSection !== previous.showWorkSection) {
+=======
+      if (state.dockBadgeEnabled !== previous.dockBadgeEnabled
+        || state.sessionWorkEnabled !== previous.sessionWorkEnabled) {
+        scheduleFlush();
+      }
+    });
+    const unsubscribeProjects = useProjectsStore.subscribe(() => scheduleFlush());
+    const unsubscribeWorktrees = useSessionUIStore.subscribe(() => scheduleFlush());
+    const unsubscribePins = useSessionPinnedStore.subscribe(() => scheduleFlush());
+    const unsubscribeSections = useSessionDisplayStore.subscribe((state, previous) => {
+      if (state.showChatsSection !== previous.showChatsSection
+        || state.showPinnedSection !== previous.showPinnedSection
+        || state.showWorkSection !== previous.showWorkSection) {
+>>>>>>> upstream/main
         scheduleFlush();
       }
     });
@@ -450,6 +691,21 @@ export const useTraySync = (): void => {
       if (flushTimer !== null) window.clearTimeout(flushTimer);
       unsubscribeNotif();
       unsubscribeGlobal();
+<<<<<<< HEAD
+||||||| bc50ba56aa
+      unsubscribeGlobalStatus();
+      unsubscribeWorkflows();
+      unsubscribeShells();
+      unsubscribeImages();
+      unsubscribePrWatches();
+=======
+      unsubscribeGlobalStatus();
+      unsubscribeWorkflows();
+      unsubscribeShells();
+      unsubscribeImages();
+      unsubscribePrWatches();
+      unsubscribeExtensionWaits();
+>>>>>>> upstream/main
       unsubscribeUI();
     };
 
@@ -464,9 +720,6 @@ export const useTraySync = (): void => {
       flushNow();
     });
 
-    // Event-driven: subscribe to each directory store so session create/update/
-    // status changes propagate immediately, and to the registry so stores for
-    // newly-opened directories get wired up as they appear.
     const storeUnsubs = new Map<string, () => void>();
 
     const rebindStores = () => {
@@ -518,15 +771,19 @@ export const useTraySync = (): void => {
     const unsubscribeSessionOrder = useSessionOrderingStore.subscribe(() => scheduleFlush());
     const unsubscribePinnedSessions = useSessionPinnedStore.subscribe(() => scheduleFlush());
 
+<<<<<<< HEAD
     // Usage: push to the tray whenever the quota store changes, and do one
     // initial fetch for enabled providers so the submenu isn't empty on launch.
     // Settings and quotas are read by the boot registry, not by a tray mount:
     // a tray-only read was the second reader that kept the store's settings
     // disagreement alive. Opening the tray asks for fresh numbers instead.
+||||||| bc50ba56aa
+    // Seed dropdown quotas once after readiness; later native openings refresh
+    // through the readouts' shared freshness window without a tray quota timer.
+=======
+>>>>>>> upstream/main
     const unsubscribeQuota = useQuotaStore.subscribe(() => scheduleFlush());
 
-    // Safety net: catches anything the event subscriptions miss (e.g. a store
-    // that existed before the registry subscription was attached).
     const interval = window.setInterval(() => { rebindStores(); flushNow(); }, POLL_INTERVAL_MS);
 
     flushNow();
@@ -570,8 +827,30 @@ export const useTraySync = (): void => {
       if (!action || typeof action !== 'object' || typeof action.type !== 'string') return;
       handle(action);
     })
+<<<<<<< HEAD
       .then((fn) => { unlisten = fn; })
       .catch(() => { /* ignore */ });
+||||||| bc50ba56aa
+      .then((fn) => {
+        if (disposed) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+        void invokeDesktop('desktop_tray_actions_ready');
+      })
+      .catch(() => { /* ignore */ });
+=======
+      .then((fn) => {
+        if (disposed) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+        void invokeDesktop('desktop_tray_actions_ready');
+      })
+      .catch(() => {   });
+>>>>>>> upstream/main
 
     return () => {
       try {

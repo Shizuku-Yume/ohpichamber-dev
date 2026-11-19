@@ -1,3 +1,4 @@
+import { OpenCode } from '@opencode/client';
 import { describe, expect, it } from 'vitest';
 
 import { SessionCreateRequestSchema } from '@openchamber/agent-contract';
@@ -62,6 +63,7 @@ const sessionsFor = (service, options = {}) => createWorkflowAgentSessions({
 const emptyPage = { sessionId: 'ses_agent', turns: [], messages: [] };
 
 describe('workflow agent sessions', () => {
+<<<<<<< HEAD
   it('creates a session in the run workspace, prompts it and returns the turn outcome', async () => {
     const page = {
       sessionId: 'ses_agent',
@@ -73,6 +75,46 @@ describe('workflow agent sessions', () => {
     const result = await sessionsFor(service).start({
       directory: '/repo', parentSessionId: 'ses_parent', title: 'agent', model: 'openai/gpt-6-luna',
       text: 'work', signal: new AbortController().signal, onSession: (id) => seen.push(id),
+||||||| bc50ba56aa
+  it.each([false, true])('awaits the child-id checkpoint before prompting, rejection=%s', async (rejectCheckpoint) => {
+    let release;
+    let seen;
+    const checkpoint = new Promise((resolve, reject) => { release = () => rejectCheckpoint ? reject(new Error('checkpoint failed')) : resolve(); });
+    void checkpoint.catch(() => {});
+    const created = new Promise((resolve) => { seen = resolve; });
+    const prompts = [];
+    const sessions = createWorkflowAgentSessions({
+      buildOpenCodeUrl: (route) => `http://localhost:4096${route}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: { subscribeEvent: () => () => {} },
+      createClient: () => ({
+        session: {
+          create: async () => ({ id: 'ses_empty_child' }),
+          prompt: async ({ text }) => { prompts.push(text); throw new Error('prompt reached'); },
+        },
+        message: { list: async () => ({ data: [] }) },
+      }),
+=======
+  it.each([false, true])('awaits the child-id checkpoint before prompting, rejection=%s', async (rejectCheckpoint) => {
+    let release;
+    let seen;
+    const checkpoint = new Promise((resolve, reject) => { release = () => rejectCheckpoint ? reject(new Error('checkpoint failed')) : resolve(); });
+    void checkpoint.catch(() => {});
+    const created = new Promise((resolve) => { seen = resolve; });
+    const prompts = [];
+    const sessions = createWorkflowAgentSessions({
+      buildOpenCodeUrl: (route) => `http://localhost:4096${route}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: { subscribeEvent: () => () => {} },
+      createClient: () => ({
+        session: {
+          get: async () => ({ id: 'ses_parent' }),
+          create: async () => ({ id: 'ses_empty_child' }),
+          prompt: async ({ text }) => { prompts.push(text); throw new Error('prompt reached'); },
+        },
+        message: { list: async () => ({ data: [] }) },
+      }),
+>>>>>>> upstream/main
     });
     expect(service.calls.created[0]).toMatchObject({
       projectId: 'proj_1',
@@ -86,6 +128,7 @@ describe('workflow agent sessions', () => {
     expect(result).toEqual({ sessionId: 'ses_agent', outcome: { state: 'completed', text: 'the answer', errorMessage: '' } });
   });
 
+<<<<<<< HEAD
   it("inherits the proposing session's model when the call names none", async () => {
     const parentPage = { sessionId: 'ses_parent', turns: [], messages: [assistant('m_parent', 'turn_p', 'hi', { providerId: 'anthropic', modelId: 'claude' })] };
     const page = { sessionId: 'ses_agent', turns: [turn('turn_1', 'run_1', 'completed', ['m_a'])], messages: [assistant('m_a', 'turn_1', 'ok')] };
@@ -94,6 +137,76 @@ describe('workflow agent sessions', () => {
       directory: '/repo', parentSessionId: 'ses_parent', title: 'agent', text: 'work', signal: new AbortController().signal, onSession: () => {},
     });
     expect(service.calls.created[0].options).toMatchObject({ providerId: 'anthropic', modelId: 'claude' });
+||||||| bc50ba56aa
+  it('marks the session as a workflow agent, so the sidebar leaves it out', async () => {
+    const request = await createSessionRequest({ parent: null, allowTools: [], model: 'openai/gpt-6-luna' });
+    expect(request).toMatchObject({ parentID: 'ses_parent', metadata: { openchamber: { kind: 'workflow-agent' } } });
+=======
+  it('links the agent to its parent by metadata, without an OpenCode parentID that would wake the parent', async () => {
+    const request = await createSessionRequest({
+      parent: { id: 'ses_parent', location: { directory: '/repo/worktree' } },
+      allowTools: [],
+      model: 'openai/gpt-6-luna',
+    });
+    expect(request).not.toHaveProperty('parentID');
+    expect(request).toMatchObject({
+      metadata: { openchamber: { kind: 'workflow-agent', parentID: 'ses_parent' } },
+      location: { directory: '/repo/worktree' },
+    });
+  });
+
+  it("runs on the parent's model when the call names none", async () => {
+    const model = { providerID: 'openai', id: 'gpt-6-luna', variant: 'high' };
+    const request = await createSessionRequest({ parent: { id: 'ses_parent', model }, allowTools: [] });
+    expect(request.model).toEqual(model);
+  });
+
+  it('passes an explicitly undefined parent variant through to the client', async () => {
+    const model = { providerID: 'openai', id: 'test-model', variant: undefined };
+    const request = await createSessionRequest({ parent: { id: 'ses_parent', model }, allowTools: [] });
+    expect(request.model).toEqual(model);
+    expect(Object.hasOwn(request.model, 'variant')).toBe(true);
+  });
+
+  it('uses the real client for a parent model without a variant', async () => {
+    const requests = [];
+    const controller = new AbortController();
+    const sessions = createWorkflowAgentSessions({
+      buildOpenCodeUrl: (route) => `http://localhost:4096${route}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: { subscribeEvent: () => () => {} },
+      fetchImpl: async (url, init) => {
+        requests.push({ url: String(url), init });
+        const data = init.method === 'GET'
+          ? { id: 'ses_parent', model: { providerID: 'test', id: 'model' } }
+          : { id: 'ses_agent' };
+        return Response.json({ data });
+      },
+    });
+    await expect(sessions.start({
+      directory: '/repo', parentSessionId: 'ses_parent', title: 'agent',
+      text: 'work', signal: controller.signal, onSession: () => controller.abort(),
+    })).rejects.toBeInstanceOf(WorkflowAgentStopped);
+    expect(requests.map(({ url }) => url)).toEqual([
+      'http://localhost:4096/api/session/ses_parent',
+      'http://localhost:4096/api/session',
+    ]);
+    expect(JSON.parse(requests[1].init.body).model).toEqual({ providerID: 'test', id: 'model' });
+    sessions.stop();
+  });
+
+  it('accepts an explicitly undefined variant at the real SDK serialization boundary', async () => {
+    const bodies = [];
+    const client = OpenCode.make({
+      baseUrl: 'http://localhost:4096',
+      fetch: async (_url, init) => {
+        bodies.push(JSON.parse(init.body));
+        return Response.json({ data: { id: 'ses_agent' } });
+      },
+    });
+    await client.session.create({ model: { providerID: 'test', id: 'model', variant: undefined } });
+    expect(bodies).toEqual([{ model: { providerID: 'test', id: 'model' } }]);
+>>>>>>> upstream/main
   });
 
   it('maps a failed turn to the error outcome the run records', async () => {
@@ -149,12 +262,29 @@ describe('workflow agent sessions', () => {
     });
   });
 
+<<<<<<< HEAD
   it('interrupts the active run of a stopped agent', async () => {
     const service = fakeSessionService();
     await sessionsFor(service).interrupt('/repo', 'ses_agent');
     expect(service.calls.controlled).toEqual([{ sessionId: 'ses_agent', operation: { type: 'abort', runId: 'run_1' } }]);
+||||||| bc50ba56aa
+  it('sets no permissions without tools to allow, so the parent rules are inherited', async () => {
+    const request = await createSessionRequest({ parent: { id: 'ses_parent' }, allowTools: [], model: 'openai/gpt-6-luna' });
+    expect(request).not.toHaveProperty('permissions');
+=======
+  it("copies the parent's rules without tools to allow", async () => {
+    const parentRule = { action: 'bash', resource: '*', effect: 'deny' };
+    const request = await createSessionRequest({ parent: { id: 'ses_parent', permissions: [parentRule] }, allowTools: [], model: 'openai/gpt-6-luna' });
+    expect(request.permissions).toEqual([parentRule]);
   });
 
+  it('sets no permissions when neither the parent nor the call has any', async () => {
+    const request = await createSessionRequest({ parent: { id: 'ses_parent' }, allowTools: [], model: 'openai/gpt-6-luna' });
+    expect(request).not.toHaveProperty('permissions');
+>>>>>>> upstream/main
+  });
+
+<<<<<<< HEAD
   it('delivers a report as synthetic context and leaves a non-resuming report to the run record', async () => {
     const parentPage = { sessionId: 'ses_parent', turns: [], messages: [assistant('m_parent', 'turn_p', 'hi', { providerId: 'openai', modelId: 'gpt-6-luna' })] };
     const service = fakeSessionService({ pages: [parentPage] });
@@ -237,5 +367,29 @@ describe('workflow agent sessions', () => {
     expect(service.calls.sent[0].payload.options.agentId).toBeNull();
     expect(() => assertRootPromptAdmission(service.calls.sent[0].payload)).not.toThrow();
     expect(result.outcome.text).toBe('review complete');
+||||||| bc50ba56aa
+  it("leaves permissions alone when the parent's rules cannot be read", async () => {
+    const request = await createSessionRequest({ parent: null, allowTools: ['openchamber_workflow_answer'], model: 'openai/gpt-6-luna' });
+    expect(request).not.toHaveProperty('permissions');
+=======
+  it("starts no session when the parent's rules cannot be read", async () => {
+    const created = [];
+    const sessions = createWorkflowAgentSessions({
+      buildOpenCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: { subscribeEvent: () => () => {} },
+      createClient: () => ({
+        session: {
+          get: async () => { throw new Error('OpenCode is down'); },
+          create: async (request) => { created.push(request); return { id: 'ses_agent' }; },
+        },
+      }),
+    });
+    await expect(sessions.start({
+      directory: '/repo', parentSessionId: 'ses_parent', title: 'agent', model: 'openai/gpt-6-luna',
+      allowTools: [], text: 'work', signal: new AbortController().signal, onSession: () => {},
+    })).rejects.toThrow('OpenCode is down');
+    expect(created).toEqual([]);
+>>>>>>> upstream/main
   });
 });

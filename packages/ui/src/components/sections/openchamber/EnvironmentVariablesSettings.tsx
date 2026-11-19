@@ -13,7 +13,16 @@ type LoadState =
   | { state: 'ready'; names: string[] }
   | { state: 'failed' };
 
+<<<<<<< HEAD
 /** Host-owned environment variables for commands started by OpenChamber. */
+||||||| bc50ba56aa
+/**
+ * Variables for everything OpenChamber starts: OpenCode, Git, the terminal and
+ * project actions. OpenCode reads its environment once, at start, so a change
+ * reaches it after a restart; Git and the terminal get it on their next run.
+ */
+=======
+>>>>>>> upstream/main
 export const EnvironmentVariablesSettings: React.FC = () => {
   const { t } = useI18n();
   const enterpriseMode = useEnterpriseMode();

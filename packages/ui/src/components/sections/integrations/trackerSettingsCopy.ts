@@ -1,6 +1,5 @@
 import type { I18nKey } from '@/lib/i18n';
 
-/** The sentences a tracker's Settings card shows. */
 type TrackerSettingsCopy = {
   description: I18nKey;
   connected: I18nKey;
@@ -48,8 +47,6 @@ type TrackerSettingsCopy = {
   };
 };
 
-// Sentences that name only the tracker take `{provider}`; callers pass the
-// tracker's name. A tracker without an entry of its own reads these.
 const GENERIC_COPY: TrackerSettingsCopy = {
   description: 'settings.integrations.tracker.description',
   connected: 'settings.integrations.tracker.status.connected',
@@ -96,9 +93,6 @@ const GENERIC_COPY: TrackerSettingsCopy = {
   },
 };
 
-// Linear's own nouns (workspace, team) cannot be interpolated without breaking
-// case and gender in de, pl, uk and fr, so its sentences that carry them stay
-// whole per tracker.
 const LINEAR_COPY: TrackerSettingsCopy = {
   ...GENERIC_COPY,
   description: 'settings.integrations.linear.description',
@@ -119,5 +113,4 @@ const LINEAR_COPY: TrackerSettingsCopy = {
 
 const COPY_BY_TRACKER = new Map<string, TrackerSettingsCopy>([['linear', LINEAR_COPY]]);
 
-/** The Settings sentences of a tracker, by its id; a tracker without its own reads the generic ones. */
 export const trackerSettingsCopy = (id: string): TrackerSettingsCopy => COPY_BY_TRACKER.get(id) ?? GENERIC_COPY;

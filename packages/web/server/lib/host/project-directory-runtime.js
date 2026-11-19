@@ -1,14 +1,43 @@
 import { createRealpathCache } from '../path-realpath-cache.js';
+import type { promises as nodeFsPromises } from 'node:fs';
+import type { PlatformPath } from 'node:path';
+import type { Request } from '../shared/http-contracts.js';
+import type { JsonValue } from '../shared/json-values.js';
+import type { SettingsDocument } from '../settings/settings-helpers.js';
+import type { DirectoryValidation, SessionProject } from './contracts.js';
 
-// Browser transport percent-encodes directory hints and marks them explicitly.
-// Only marked values are decoded so literal percent sequences from direct API
-// clients are preserved.
-const safeDecodeMarkedURIComponent = (value, encoding) => {
-  if (encoding !== 'uri') return value;
-  try { return decodeURIComponent(value); } catch { return value; }
+type ReadDirectorySettings = () => Promise<SettingsDocument>;
+type DirectorySettingsSource =
+  | { readSettingsFromDiskMigrated: ReadDirectorySettings; getReadSettingsFromDiskMigrated?: never }
+  | { readSettingsFromDiskMigrated?: ReadDirectorySettings; getReadSettingsFromDiskMigrated: () => ReadDirectorySettings };
+
+export type ProjectDirectoryDependencies = DirectorySettingsSource & {
+  fsPromises: Pick<typeof nodeFsPromises, 'realpath' | 'stat'>;
+  path: Pick<PlatformPath, 'resolve'>;
+  normalizeDirectoryPath: (value: string) => string;
+  sanitizeProjects: (value: SettingsDocument[string]) => SessionProject[] | null | undefined;
+  refuseDirectory?: (candidate: string) => string | null;
 };
 
-export const createProjectDirectoryRuntime = (dependencies) => {
+export type ProjectDirectoryRequest = { get?: (name: string) => string | string[] | null | undefined; query?: Request['query'] };
+export type ProjectDirectoryValidation =
+  | (DirectoryValidation & { ok: true; requestedDirectory: string })
+  | Extract<DirectoryValidation, { ok: false }>;
+export interface ProjectDirectoryResolution {
+  directory: string | null;
+  requestedDirectory: string | null;
+  error: string | null;
+}
+
+const isDirectoryString = (value: unknown): value is string => typeof value === 'string';
+const isDirectoryError = (value: unknown): value is { code?: unknown } => Boolean(value && typeof value === 'object');
+
+const safeDecodeMarkedURIComponent = (value: string | string[], encoding: string | string[] | null | undefined) => {
+  if (encoding !== 'uri') return value;
+  try { return decodeURIComponent(String(value)); } catch { return value; }
+};
+
+export const createProjectDirectoryRuntime = (dependencies: ProjectDirectoryDependencies) => {
   const {
     fsPromises,
     path,
@@ -16,17 +45,14 @@ export const createProjectDirectoryRuntime = (dependencies) => {
     readSettingsFromDiskMigrated,
     getReadSettingsFromDiskMigrated,
     sanitizeProjects,
-    // `refuseDirectory(candidate)` answers the reason a directory may not be used on this host,
-    // or null. It runs before the path is looked at, so a refused directory is never touched and
-    // never falls back to another one. The isolated-spaces host refuses `/spaces/...` with it.
     refuseDirectory = () => null,
   } = dependencies;
   const realpathCache = createRealpathCache({
     realpath: fsPromises.realpath.bind(fsPromises),
   });
 
-  const resolveDirectoryCandidate = (value) => {
-    if (typeof value !== 'string') {
+  const resolveDirectoryCandidate = (value: JsonValue | undefined) => {
+    if (!isDirectoryString(value)) {
       return null;
     }
     const trimmed = value.trim();
@@ -37,13 +63,13 @@ export const createProjectDirectoryRuntime = (dependencies) => {
     return path.resolve(normalized);
   };
 
-  const validateDirectoryPath = async (candidate) => {
+  const validateDirectoryPath = async (candidate: JsonValue | undefined): Promise<ProjectDirectoryValidation> => {
     const resolved = resolveDirectoryCandidate(candidate);
     if (!resolved) {
       return { ok: false, error: 'Directory parameter is required' };
     }
     const refusal = refuseDirectory(resolved);
-    if (typeof refusal === 'string' && refusal.length > 0) {
+    if (refusal !== null && refusal.length > 0) {
       return { ok: false, error: refusal };
     }
     try {
@@ -52,27 +78,22 @@ export const createProjectDirectoryRuntime = (dependencies) => {
         return { ok: false, error: 'Specified path is not a directory' };
       }
       const realPath = await realpathCache.resolve(resolved);
-      // `requestedDirectory` is the pre-realpath candidate the caller asked
-      // for. Callers that address files in the user-visible path space (the
-      // file tree, the read-family FS routes) need it when the project root
-      // is itself a symlink and the canonical `directory` no longer contains
-      // the paths the client sends.
       return { ok: true, directory: realPath, requestedDirectory: resolved };
     } catch (error) {
       const err = error;
-      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+      if (isDirectoryError(err) && err.code === 'ENOENT') {
         return { ok: false, error: 'Directory not found' };
       }
-      if (err && typeof err === 'object' && err.code === 'EACCES') {
+      if (isDirectoryError(err) && err.code === 'EACCES') {
         return { ok: false, error: 'Access to directory denied' };
       }
       return { ok: false, error: 'Failed to validate directory' };
     }
   };
 
-  const resolveProjectDirectory = async (req) => {
-    const rawHeaderDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
-    const headerEncoding = typeof req.get === 'function' ? req.get('x-opencode-directory-encoding') : null;
+  const resolveProjectDirectory = async (req: ProjectDirectoryRequest): Promise<ProjectDirectoryResolution> => {
+    const rawHeaderDirectory = req.get ? req.get('x-opencode-directory') : null;
+    const headerEncoding = req.get ? req.get('x-opencode-directory-encoding') : null;
     const headerDirectory = rawHeaderDirectory ? safeDecodeMarkedURIComponent(rawHeaderDirectory, headerEncoding) : null;
     const queryDirectory = Array.isArray(req.query?.directory)
       ? req.query.directory[0]
@@ -80,7 +101,7 @@ export const createProjectDirectoryRuntime = (dependencies) => {
     const requested = [headerDirectory, queryDirectory].filter(Boolean);
 
     if (requested.length > 0) {
-      let lastError = null;
+      let lastError: string | null = null;
       for (const candidate of requested) {
         const validated = await validateDirectoryPath(candidate);
         if (validated.ok) {
@@ -91,19 +112,12 @@ export const createProjectDirectoryRuntime = (dependencies) => {
       return { directory: null, requestedDirectory: null, error: lastError };
     }
 
-    const readSettings = typeof getReadSettingsFromDiskMigrated === 'function'
+    const readSettings = getReadSettingsFromDiskMigrated
       ? getReadSettingsFromDiskMigrated()
       : readSettingsFromDiskMigrated;
     const settings = await readSettings();
 
-    // `lastDirectory` reflects the directory the UI is currently browsing —
-    // useDirectoryStore.setDirectory() persists it on every navigation.
-    // Prefer it over activeProjectId, because the user may have navigated
-    // away from the project that was last "clicked" in the sidebar (e.g. via
-    // `go to parent`, directory picker, or a deep link), leaving
-    // activeProjectId stale. Fetches scoped to the stale project would 400
-    // with "Path is outside of active workspace".
-    if (typeof settings.lastDirectory === 'string' && settings.lastDirectory.trim()) {
+    if (isDirectoryString(settings.lastDirectory) && settings.lastDirectory.trim()) {
       const validated = await validateDirectoryPath(settings.lastDirectory);
       if (validated.ok) {
         return { directory: validated.directory, requestedDirectory: validated.requestedDirectory, error: null };
@@ -115,7 +129,7 @@ export const createProjectDirectoryRuntime = (dependencies) => {
       return { directory: null, requestedDirectory: null, error: 'Directory parameter or active project is required' };
     }
 
-    const activeId = typeof settings.activeProjectId === 'string' ? settings.activeProjectId : '';
+    const activeId = isDirectoryString(settings.activeProjectId) ? settings.activeProjectId : '';
     const active = projects.find((project) => project.id === activeId) || projects[0];
     if (!active || !active.path) {
       return { directory: null, requestedDirectory: null, error: 'Directory parameter or active project is required' };
@@ -129,9 +143,9 @@ export const createProjectDirectoryRuntime = (dependencies) => {
     return { directory: validated.directory, requestedDirectory: validated.requestedDirectory, error: null };
   };
 
-  const resolveOptionalProjectDirectory = async (req) => {
-    const rawHeaderDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
-    const headerEncoding = typeof req.get === 'function' ? req.get('x-opencode-directory-encoding') : null;
+  const resolveOptionalProjectDirectory = async (req: ProjectDirectoryRequest): Promise<ProjectDirectoryResolution> => {
+    const rawHeaderDirectory = req.get ? req.get('x-opencode-directory') : null;
+    const headerEncoding = req.get ? req.get('x-opencode-directory-encoding') : null;
     const headerDirectory = rawHeaderDirectory ? safeDecodeMarkedURIComponent(rawHeaderDirectory, headerEncoding) : null;
     const queryDirectory = Array.isArray(req.query?.directory)
       ? req.query.directory[0]
@@ -142,7 +156,7 @@ export const createProjectDirectoryRuntime = (dependencies) => {
       return { directory: null, requestedDirectory: null, error: null };
     }
 
-    let lastError = null;
+    let lastError: string | null = null;
     for (const candidate of requested) {
       const validated = await validateDirectoryPath(candidate);
       if (validated.ok) {

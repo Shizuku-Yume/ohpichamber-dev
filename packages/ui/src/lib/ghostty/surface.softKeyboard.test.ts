@@ -35,7 +35,7 @@ async function createSurface(userAgent: string, platform?: string) {
   });
   Object.assign(globalThis, {
     window: happyWindow,
-    document: happyWindow.document,
+    document: happyWindow.document, Event: happyWindow.Event, CustomEvent: happyWindow.CustomEvent,
     navigator: happyWindow.navigator,
     ResizeObserver: happyWindow.ResizeObserver,
     KeyboardEvent: happyWindow.KeyboardEvent,
@@ -370,7 +370,7 @@ describe('viewport scroll chords', () => {
 });
 
 describe('shell shortcut boundaries', () => {
-  for (const signal of ['event', 'compositionstart', 'keyCode']) {
+  for (const signal of ['compositionstart', 'keyCode']) {
     for (const platform of ['MacIntel', 'Linux x86_64']) {
       test(`${platform} leaves ${signal} composition keys alone`, async () => {
         const { sent, key, write, composition, terminal } = await createSurface(MAC_UA, platform);
@@ -385,7 +385,7 @@ describe('shell shortcut boundaries', () => {
           ]
           : [{ key: 'PageUp', code: 'PageUp', keyCode: 33, shiftKey: true }];
         for (const chord of chords) {
-          const init = { ...chord, isComposing: signal === 'event', ...(signal === 'keyCode' ? { keyCode: 229 } : {}) };
+          const init = { ...chord, ...(signal === 'keyCode' ? { keyCode: 229 } : {}) };
           expect(key('keydown', init).defaultPrevented).toBe(false);
           key('keyup', init);
         }

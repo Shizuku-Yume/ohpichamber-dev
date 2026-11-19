@@ -8,14 +8,53 @@ import { desktopHostsGet, desktopHostsSet } from '@/lib/desktopHosts';
 import { useI18n } from '@/lib/i18n';
 
 type ChooserScreenProps = {
+<<<<<<< HEAD
   onChooseLocal?: () => void;
+||||||| bc50ba56aa
+  /** Callback when CLI becomes available */
+  onCliAvailable?: () => void;
+=======
+  onCliAvailable?: () => void;
+>>>>>>> upstream/main
   localAvailable?: boolean;
 };
 
 
+<<<<<<< HEAD
 export function ChooserScreen({ onChooseLocal, localAvailable = true }: ChooserScreenProps) {
+||||||| bc50ba56aa
+// Its own component: the blink re-renders this dot once a second, not the whole screen.
+function WatchingDot() {
+  const blink = useWaitingBlink(true);
+  return <span className={cn('absolute inset-0 rounded-full', blink)} style={{ backgroundColor: 'var(--primary-base)' }} />;
+}
+
+export function ChooserScreen({ onCliAvailable, localAvailable = true }: ChooserScreenProps) {
+=======
+function WatchingDot() {
+  const blink = useWaitingBlink(true);
+  return <span className={cn('absolute inset-0 rounded-full', blink)} style={{ backgroundColor: 'var(--primary-base)' }} />;
+}
+
+export function ChooserScreen({ onCliAvailable, localAvailable = true }: ChooserScreenProps) {
+>>>>>>> upstream/main
   const { t } = useI18n();
   const [isDesktopApp, setIsDesktopApp] = React.useState(false);
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const [isApplyingPath, setIsApplyingPath] = React.useState(false);
+  const [isManualChecking, setIsManualChecking] = React.useState(false);
+  const [opencodeBinary, setOpencodeBinary] = React.useState('');
+  // The server ignores the user's path while the administrator pins one.
+  const pinnedBinary = useEnterprisePolicyStore((state) => state.opencodeBinary);
+  const [platform, setPlatform] = React.useState<OnboardingPlatform>('unknown');
+=======
+  const [isApplyingPath, setIsApplyingPath] = React.useState(false);
+  const [isManualChecking, setIsManualChecking] = React.useState(false);
+  const [opencodeBinary, setOpencodeBinary] = React.useState('');
+  const pinnedBinary = useEnterprisePolicyStore((state) => state.opencodeBinary);
+  const [platform, setPlatform] = React.useState<OnboardingPlatform>('unknown');
+>>>>>>> upstream/main
   const [activeTab, setActiveTab] = React.useState<'local' | 'remote'>(() => localAvailable ? 'local' : 'remote');
 
   React.useEffect(() => {
@@ -52,6 +91,187 @@ export function ChooserScreen({ onChooseLocal, localAvailable = true }: ChooserS
     onChooseLocal?.();
   }, [isDesktopApp, onChooseLocal, persistFirstChoice]);
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // Background polling: while the local tab is visible, periodically check
+  // whether the OpenCode CLI is reachable. As soon as it is, transition
+  // automatically — the user doesn't have to click anything.
+  React.useEffect(() => {
+    if (!localAvailable || activeTab !== 'local') return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const available = await checkCliAvailability();
+        if (cancelled) return;
+        if (available) {
+          await announceAvailable();
+          return;
+        }
+      } catch {
+        // ignore
+      }
+      if (!cancelled) {
+        timer = setTimeout(tick, POLL_INTERVAL_MS);
+      }
+    };
+
+    timer = setTimeout(tick, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeTab, checkCliAvailability, announceAvailable, localAvailable]);
+
+  const handleManualCheck = React.useCallback(async () => {
+    setIsManualChecking(true);
+    try {
+      const available = await checkCliAvailability();
+      if (available) await announceAvailable();
+    } finally {
+      setIsManualChecking(false);
+    }
+  }, [checkCliAvailability, announceAvailable]);
+
+  const handleBrowse = React.useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    if (!isDesktopApp) return;
+
+    try {
+      const selected = await requestFileAccess();
+      if (selected.success && selected.path && selected.path.trim().length > 0) {
+        setOpencodeBinary(selected.path.trim());
+      }
+    } catch {
+      // ignore
+    }
+  }, [isDesktopApp]);
+
+  const handleApplyPath = React.useCallback(async () => {
+    setIsApplyingPath(true);
+    try {
+      await updateDesktopSettings({ opencodeBinary: opencodeBinary.trim() });
+      if (isDesktopApp) {
+        await persistFirstChoice('local');
+        await restartDesktopApp();
+        return;
+      }
+      await runtimeFetch('/api/config/reload', { method: 'POST' });
+    } finally {
+      setTimeout(() => setIsApplyingPath(false), 1000);
+    }
+  }, [isDesktopApp, opencodeBinary, persistFirstChoice]);
+
+  const handleCopy = React.useCallback(async () => {
+    const result = await copyTextToClipboard(platform === 'windows' ? WINDOWS_INSTALL_COMMAND : INSTALL_COMMAND);
+    if (result.ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      console.error('Failed to copy:', result.error);
+    }
+  }, [platform]);
+
+  const docsUrl = DOCS_URL;
+  const binaryPlaceholder =
+    platform === 'windows'
+      ? 'C:\\Users\\you\\AppData\\Roaming\\npm\\opencode.cmd'
+      : platform === 'linux'
+        ? '/home/you/.opencode/bin/opencode'
+        : '/Users/you/.opencode/bin/opencode';
+=======
+  React.useEffect(() => {
+    if (!localAvailable || activeTab !== 'local') return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const available = await checkCliAvailability();
+        if (cancelled) return;
+        if (available) {
+          await announceAvailable();
+          return;
+        }
+      } catch {
+        // ignore
+      }
+      if (!cancelled) {
+        timer = setTimeout(tick, POLL_INTERVAL_MS);
+      }
+    };
+
+    timer = setTimeout(tick, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeTab, checkCliAvailability, announceAvailable, localAvailable]);
+
+  const handleManualCheck = React.useCallback(async () => {
+    setIsManualChecking(true);
+    try {
+      const available = await checkCliAvailability();
+      if (available) await announceAvailable();
+    } finally {
+      setIsManualChecking(false);
+    }
+  }, [checkCliAvailability, announceAvailable]);
+
+  const handleBrowse = React.useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    if (!isDesktopApp) return;
+
+    try {
+      const selected = await requestFileAccess();
+      if (selected.success && selected.path && selected.path.trim().length > 0) {
+        setOpencodeBinary(selected.path.trim());
+      }
+    } catch {
+      // ignore
+    }
+  }, [isDesktopApp]);
+
+  const handleApplyPath = React.useCallback(async () => {
+    setIsApplyingPath(true);
+    try {
+      await updateDesktopSettings({ opencodeBinary: opencodeBinary.trim() });
+      if (isDesktopApp) {
+        await persistFirstChoice('local');
+        await restartDesktopApp();
+        return;
+      }
+      await runtimeFetch('/api/config/reload', { method: 'POST' });
+    } finally {
+      setTimeout(() => setIsApplyingPath(false), 1000);
+    }
+  }, [isDesktopApp, opencodeBinary, persistFirstChoice]);
+
+  const handleCopy = React.useCallback(async () => {
+    const result = await copyTextToClipboard(platform === 'windows' ? WINDOWS_INSTALL_COMMAND : INSTALL_COMMAND);
+    if (result.ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      console.error('Failed to copy:', result.error);
+    }
+  }, [platform]);
+
+  const docsUrl = DOCS_URL;
+  const binaryPlaceholder =
+    platform === 'windows'
+      ? 'C:\\Users\\you\\AppData\\Roaming\\npm\\opencode.cmd'
+      : platform === 'linux'
+        ? '/home/you/.opencode/bin/opencode'
+        : '/Users/you/.opencode/bin/opencode';
+>>>>>>> upstream/main
 
   const showLocal = localAvailable && (!isDesktopApp || activeTab === 'local');
 

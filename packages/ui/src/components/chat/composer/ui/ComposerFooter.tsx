@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useUIStore } from '@/stores/useUIStore';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
@@ -14,6 +15,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
  * at the composer wrapper level so a recording started from the collapsed pill
  * survives the expand.
  */
+||||||| bc50ba56aa
+/**
+ * The composer's footer row.
+ *
+ * Desktop lays it out as attachments and toggles on the left, model controls
+ * and send on the right. Mobile keeps everything on one line and swaps the
+ * model controls for the compact buttons above the text, because the footer
+ * has to stay reachable with one thumb.
+ *
+ * The dictation component is rendered here on desktop only: on mobile it lives
+ * at the composer wrapper level so a recording started from the collapsed pill
+ * survives the expand.
+ */
+=======
+>>>>>>> upstream/main
 
 import type { SourceControlProvider } from '@/lib/api/types';
 import type { SessionMode } from '@openchamber/agent-contract';
@@ -71,11 +87,18 @@ interface ComposerFooterProps {
     onOpenSettings?: () => void;
     onPickLocalFiles: () => void;
     onOpenGitHubPicker: () => void;
+<<<<<<< HEAD
     /** The host the project's issues and change requests come from. */
     repositoryProvider?: SourceControlProvider;
     /** The VS Code webview offers only local files, never the linked pickers. */
     isVSCode: boolean;
     /** One entry per signed-in tracker, in the server's order. */
+||||||| bc50ba56aa
+    /** The host the project's issues and change requests come from. */
+    repositoryProvider?: SourceControlProvider | null;
+=======
+    repositoryProvider?: SourceControlProvider | null;
+>>>>>>> upstream/main
     trackerPickers?: readonly ComposerTrackerPicker[];
     attachGuests?: readonly GuestAttachItem[];
     onOpenGuestAttach?: (guestId: string) => void;
@@ -91,22 +114,56 @@ interface ComposerFooterProps {
     onDictationSendStart: () => void;
     onDictationStart: () => void;
     onDictationContentHeightChange: (height: number | null) => void;
-    /** Desktop only: the composer box hides its other contents while the overlay is up. */
     onDictationActiveChange?: (active: boolean) => void;
     isBtw?: boolean;
+<<<<<<< HEAD
     pinnedSelection?: ComposerModelSelection | null;
     /** The composer's double Escape stops the run (not in the mini chat). */
+||||||| bc50ba56aa
+    /** The composer's double Escape stops the run (not in the mini chat). */
+=======
+>>>>>>> upstream/main
     escapeStops?: boolean;
+<<<<<<< HEAD
     /** Offers "Run on several models" in the model picker (desktop). */
+||||||| bc50ba56aa
+    modelSessionId?: string | null;
+    btwSelection: BtwSelection;
+    /** Whether the BTW model picker is open; the model shortcut toggles it. */
+    btwModelSelectorOpen?: boolean;
+    onBtwModelSelectorOpenChange?: (open: boolean) => void;
+    /** A pinned column's own model, agent and effort (see pinnedComposerSelection.ts). */
+    pinnedSelection?: BtwSelection | null;
+    /** Offers "Run on several models" in the model picker (desktop). */
+=======
+    modelSessionId?: string | null;
+    btwSelection: BtwSelection;
+    btwModelSelectorOpen?: boolean;
+    onBtwModelSelectorOpenChange?: (open: boolean) => void;
+    pinnedSelection?: BtwSelection | null;
+>>>>>>> upstream/main
     onRunInParallel?: () => void;
-    /** Set while the composer is in "Run in parallel" mode: the primary action launches the run. */
     parallelRun?: { runCount: number; launching: boolean; onLaunch: () => void } | null;
+<<<<<<< HEAD
     /** A sent message is held until Agent Service's first connection. */
     waitingForAgent: boolean;
+||||||| bc50ba56aa
+    /** A sent message is held until OpenCode's first connection. */
+    waitingForOpenCode: boolean;
+=======
+    waitingForOpenCode: boolean;
+>>>>>>> upstream/main
 }
 
+<<<<<<< HEAD
 /** Quiet note beside the send button while a sent message waits for the Agent Service to start. */
 function AgentStartupNote({ className }: { className?: string }) {
+||||||| bc50ba56aa
+/** Quiet note beside the send button while a sent message waits for OpenCode to start. */
+function OpenCodeStartupNote({ className }: { className?: string }) {
+=======
+function OpenCodeStartupNote({ className }: { className?: string }) {
+>>>>>>> upstream/main
     const { t } = useI18n();
     return (
         <span
@@ -185,6 +242,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
             className={cn(
                 'bg-transparent flex-shrink-0',
                 footerPaddingClass,
+                !isMobile && !isVSCode && 'pe-2',
+                isMobile && 'h-12 pe-3.5',
                 isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
             )}
             style={{
@@ -192,8 +251,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                 borderBottomRightRadius: chatInputRadius,
             }}
             data-chat-input-footer="true"
-            // On the path from the composer box to the desktop dictation
-            // overlay (see the .oc-dictation-overlay rule in design-system.css).
             data-dictation-chain={isMobile ? undefined : 'true'}
         >
             {isMobile ? (
@@ -225,6 +282,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
                             {waitingForAgent ? <AgentStartupNote /> : null}
                             <div className="flex items-center gap-x-1 flex-shrink-0">
+<<<<<<< HEAD
                                 {!isBtw && showDictation ? (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
@@ -252,6 +310,43 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                         </TooltipContent>
                                     </Tooltip>
                                 ) : null}
+||||||| bc50ba56aa
+                                {!isBtw && showDictation ? <Tooltip><TooltipTrigger asChild><button
+                                    type="button"
+                                    className={footerIconButtonClass}
+                                    // Keep the soft keyboard open (same guard as
+                                    // PermissionAutoAcceptButton); the recording
+                                    // engine lives in the wrapper-level
+                                    // ComposerDictation instance.
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onPointerDownCapture={(event) => {
+                                        if (event.pointerType === 'touch') {
+                                            event.preventDefault();
+                                        }
+                                    }}
+                                    onClick={onStartDictation}
+                                    disabled={dictationActive}
+                                    aria-label={t('chat.dictation.start')}
+                                >
+                                    <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
+                                </button></TooltipTrigger><TooltipContent side="top"><TooltipLabelWithShortcut label={t('chat.dictation.start')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_dictation', shortcutOverrides), '')} /></TooltipContent></Tooltip> : null}
+=======
+                                {!isBtw && showDictation ? <Tooltip><TooltipTrigger asChild><button
+                                    type="button"
+                                    className={footerIconButtonClass}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onPointerDownCapture={(event) => {
+                                        if (event.pointerType === 'touch') {
+                                            event.preventDefault();
+                                        }
+                                    }}
+                                    onClick={onStartDictation}
+                                    disabled={dictationActive}
+                                    aria-label={t('chat.dictation.start')}
+                                >
+                                    <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
+                                </button></TooltipTrigger><TooltipContent side="top"><TooltipLabelWithShortcut label={t('chat.dictation.start')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_dictation', shortcutOverrides), '')} /></TooltipContent></Tooltip> : null}
+>>>>>>> upstream/main
                                 <ComposerActionButtons
                                     isMobile={isMobile}
                                     footerIconButtonClass={footerIconButtonClass}
@@ -265,6 +360,12 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                     onPrimaryAction={onPrimaryAction}
                                     onQueueMessage={onQueueMessage}
                                     onAbort={onAbort}
+<<<<<<< HEAD
+||||||| bc50ba56aa
+                                    escapeStops={escapeStops && !isBtw}
+=======
+                                    escapeStops={escapeStops}
+>>>>>>> upstream/main
                                 />
                             </div>
                         </div>
@@ -301,6 +402,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             withTooltip
                         />
                     </div>
+<<<<<<< HEAD
                     <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')} data-dictation-chain="true">
                         {waitingForAgent ? <AgentStartupNote className="flex-shrink-0" /> : null}
                         {parallelRun ? <div className="flex-1" /> : pinnedSelection ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={currentSessionId} selection={pinnedSelection} agentSelectable /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
@@ -316,6 +418,15 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             directory={directory}
                             onDraftModeChange={onDraftModeChange}
                         /> : null}
+||||||| bc50ba56aa
+                    <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')} data-dictation-chain="true">
+                        {waitingForOpenCode ? <OpenCodeStartupNote className="flex-shrink-0" /> : null}
+                        {parallelRun ? <MemoModelControls className="flex-1 min-w-0" agentOnly /> : isBtw ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={modelSessionId ?? null} selection={btwSelection} rememberVariantPicks={false} modelSelectorOpen={btwModelSelectorOpen} onModelSelectorOpenChange={onBtwModelSelectorOpenChange} /> : pinnedSelection ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={currentSessionId} selection={pinnedSelection} rememberVariantPicks /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
+=======
+                    <div className={cn('flex items-center flex-1 justify-end', isVSCode ? cn(footerGapClass, 'md:gap-x-3') : 'gap-x-2')} data-dictation-chain="true">
+                        {waitingForOpenCode ? <OpenCodeStartupNote className="flex-shrink-0" /> : null}
+                        {parallelRun ? <MemoModelControls className={cn('flex-1 min-w-0')} agentOnly /> : isBtw ? <ModelControls className={cn('flex-1 min-w-0 justify-end')} sessionId={modelSessionId ?? null} selection={btwSelection} rememberVariantPicks={false} modelSelectorOpen={btwModelSelectorOpen} onModelSelectorOpenChange={onBtwModelSelectorOpenChange} /> : pinnedSelection ? <ModelControls className={cn('flex-1 min-w-0 justify-end')} sessionId={currentSessionId} selection={pinnedSelection} rememberVariantPicks /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
+>>>>>>> upstream/main
                         {!isBtw ? <MemoComposerDictation
                             radius={chatInputRadius}
                             isMobile={isMobile}
@@ -331,9 +442,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             onActiveChange={onDictationActiveChange}
                         /> : null}
                         {parallelRun ? (
-                            // Parallel mode keeps the ordinary send button: the strip above
-                            // already shows how many runs start, and submitting the form
-                            // launches them (ChatInput routes the submit to the run).
                             <ComposerActionButtons
                                 isMobile={isMobile}
                                 footerIconButtonClass={footerIconButtonClass}
@@ -362,6 +470,12 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             onPrimaryAction={onPrimaryAction}
                             onQueueMessage={onQueueMessage}
                             onAbort={onAbort}
+<<<<<<< HEAD
+||||||| bc50ba56aa
+                            escapeStops={escapeStops && !isBtw}
+=======
+                            escapeStops={escapeStops}
+>>>>>>> upstream/main
                         />}
                     </div>
                 </>
@@ -370,5 +484,4 @@ function ComposerFooterView(props: ComposerFooterProps) {
     );
 }
 
-/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
 export const ComposerFooter = React.memo(ComposerFooterView);

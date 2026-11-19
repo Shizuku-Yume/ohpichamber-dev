@@ -4,12 +4,24 @@ import { JevAccessNote } from '@/components/sections/classification/JevAccessNot
 import { useI18n } from '@/lib/i18n';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
+<<<<<<< HEAD
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 /**
  * "In work": the sidebar block and the Track / Done actions, and whether Jev
  * moves sessions in on its own. Jev runs on the OpenChamber server.
  */
+||||||| bc50ba56aa
+
+/**
+ * What the sidebar lists: the Chats section and "In work" (the sidebar block,
+ * the Track / Done actions, and sessions going in on a sent message). Jev
+ * decides nothing here (it only hints that work looks done, which the info
+ * explains), so no Jev access note.
+ */
+=======
+
+>>>>>>> upstream/main
 export const SessionWorkSettings: React.FC = () => {
   const { t } = useI18n();
   const enabled = useUIStore((state) => state.sessionWorkEnabled);

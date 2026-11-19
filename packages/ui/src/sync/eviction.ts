@@ -1,6 +1,22 @@
 import type { DisposeCheck, EvictPlan, State } from "./types"
 
+<<<<<<< HEAD
 /** A directory with a pending approval or question must remain available. */
+||||||| bc50ba56aa
+/**
+ * Returns true when the directory's child store holds at least one pending
+ * blocking request — a form awaiting an answer or a permission awaiting
+ * approval. Such directories must never be evicted, otherwise the SSE-routed
+ * request data is lost and the user can never satisfy the agent.
+ *
+ * Tracks the same `state.form` / `state.permission` shape that
+ * {@link bootstrapDirectory} re-hydrates on a fresh `ensureChild` call —
+ * an empty record key (e.g. after a `form.settled` event clears the
+ * array) is treated as "no pending requests" so a fully resolved directory
+ * remains a normal eviction candidate.
+ */
+=======
+>>>>>>> upstream/main
 export function hasPendingBlockingRequests(state: State | undefined): boolean {
   if (!state) return false
   for (const requests of Object.values(state.form ?? {})) {

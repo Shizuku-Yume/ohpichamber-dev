@@ -1,12 +1,3 @@
-/**
- * The other drafts waiting in the folder a new session is about to start in,
- * as a control at the end of the draft's project and branch row. Every way
- * into a new session opens a fresh, empty draft, and this is where the user
- * finds what they left there. A control in a row that is already there takes
- * no height and lines up with its neighbours; a list on the draft screen sat
- * between the title and the composer at a width matching neither. A new Chat
- * keeps one draft in its composer and has none stored, so it shows nothing.
- */
 
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
@@ -40,7 +31,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 const NO_DRAFTS: readonly SessionDraft[] = [];
 const noop = (): void => undefined;
 
-/** The stored drafts of the open draft's exact folder, newest first, without the open one. */
 function useDraftsHere(): readonly SessionDraft[] {
  const directory = useSessionUIStore((state) => (
   !state.currentSessionId && state.newSessionDraft.open && state.newSessionDraft.target === 'project'
@@ -67,11 +57,8 @@ const DraftTime: React.FC<{ draft: SessionDraft }> = ({ draft }) => (
  <span className="shrink-0 typography-micro text-muted-foreground">{formatSessionCompactDateLabel(draft.updatedAt)}</span>
 );
 
-// The time and, on the highlighted entry, the cross share one slot, as a
-// session row's time and its hover actions do. The hidden time is invisible
-// rather than transparent: an opacity below 1 paints it above the cross, where
-// it took the click and opened the draft.
 const DraftMenuItem: React.FC<{ draft: SessionDraft }> = ({ draft }) => {
+<<<<<<< HEAD
  const { t } = useI18n();
  const { label, open, discard } = useSessionDraftRow(draft, noop);
  return (
@@ -95,6 +82,53 @@ const DraftMenuItem: React.FC<{ draft: SessionDraft }> = ({ draft }) => {
    </span>
   </DropdownMenuItem>
  );
+||||||| bc50ba56aa
+    const { t } = useI18n();
+    const { label, open, discard } = useSessionDraftRow(draft, noop);
+    return (
+        <DropdownMenuItem onClick={open} className="group/draft gap-2">
+            <span dir="auto" className="oc-ui-start-align min-w-0 flex-1 truncate italic">{label}</span>
+            <span className="grid shrink-0 place-items-end [&>*]:[grid-area:1/1]">
+                <span className="group-data-[highlighted]/draft:invisible"><DraftTime draft={draft} /></span>
+                <button
+                    type="button"
+                    aria-label={t('sessions.sidebar.draft.discard')}
+                    // The entry keeps the menu open and the draft closed: the
+                    // click stops here before the item's own handlers.
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        discard();
+                    }}
+                    className="pointer-events-none inline-flex size-4 items-center justify-center self-center rounded-md text-muted-foreground opacity-0 hover:text-foreground group-data-[highlighted]/draft:pointer-events-auto group-data-[highlighted]/draft:opacity-100"
+                >
+                    <Icon name="close" className="size-3" />
+                </button>
+            </span>
+        </DropdownMenuItem>
+    );
+=======
+    const { t } = useI18n();
+    const { label, open, discard } = useSessionDraftRow(draft, noop);
+    return (
+        <DropdownMenuItem onClick={open} className="group/draft gap-2">
+            <span dir="auto" className="oc-ui-start-align min-w-0 flex-1 truncate italic">{label}</span>
+            <span className="grid shrink-0 place-items-end [&>*]:[grid-area:1/1]">
+                <span className="group-data-[highlighted]/draft:invisible"><DraftTime draft={draft} /></span>
+                <button
+                    type="button"
+                    aria-label={t('sessions.sidebar.draft.discard')}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        discard();
+                    }}
+                    className="pointer-events-none inline-flex size-4 items-center justify-center self-center rounded-md text-muted-foreground opacity-0 hover:text-foreground group-data-[highlighted]/draft:pointer-events-auto group-data-[highlighted]/draft:opacity-100"
+                >
+                    <Icon name="close" className="size-3" />
+                </button>
+            </span>
+        </DropdownMenuItem>
+    );
+>>>>>>> upstream/main
 };
 
 const DraftsHerePickerView: React.FC = () => {
@@ -130,7 +164,6 @@ const DraftsHerePickerView: React.FC = () => {
  );
 };
 
-/** Memoized: the composer re-renders on every keystroke. */
 export const DraftsHerePicker = React.memo(DraftsHerePickerView);
 
 const DraftSheetRow: React.FC<{ draft: SessionDraft; onClose: () => void }> = ({ draft, onClose }) => {
@@ -142,7 +175,6 @@ const DraftSheetRow: React.FC<{ draft: SessionDraft; onClose: () => void }> = ({
  );
 };
 
-/** Phone: the same control in the draft's trigger row, opening a bottom sheet as its neighbours do. */
 const MobileDraftsHerePickerView: React.FC = () => {
  const { t } = useI18n();
  const drafts = useDraftsHere();

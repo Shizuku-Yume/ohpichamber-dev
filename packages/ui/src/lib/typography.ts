@@ -5,10 +5,32 @@ export const SEMANTIC_TYPOGRAPHY = {
   uiLabel: '0.84375rem',
   meta: '0.78125rem',
   micro: '0.75rem',
-  /** Settings page / detail-pane title — larger than section headers */
   settingsPageTitle: '1.0625rem',
 } as const;
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+export const VSCODE_TYPOGRAPHY = {
+  // Keep VS Code webview typography slightly tighter; VS Code UI chrome already provides density.
+  markdown: '0.8438rem',
+  code: '0.8125rem',
+  uiHeader: '0.8438rem',
+  uiLabel: '0.7813rem',
+  meta: '0.7813rem',
+  micro: '0.75rem',
+  settingsPageTitle: '1rem',
+} as const;
+=======
+export const VSCODE_TYPOGRAPHY = {
+  markdown: '0.8438rem',
+  code: '0.8125rem',
+  uiHeader: '0.8438rem',
+  uiLabel: '0.7813rem',
+  meta: '0.7813rem',
+  micro: '0.75rem',
+  settingsPageTitle: '1rem',
+} as const;
+>>>>>>> upstream/main
 
 export type SemanticTypographyKey = keyof typeof SEMANTIC_TYPOGRAPHY;
 
@@ -16,6 +38,37 @@ export function getTypographyVariable(key: SemanticTypographyKey): string {
   return `--text-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
 }
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+/**
+ * Inline style that scales the semantic text sizes of one area (the chat) by
+ * `percent`, on top of the interface size the rem unit already carries.
+ * Undefined at 100%, so the area inherits the root sizes unchanged.
+ */
+export function getScaledTypographyStyle(
+  percent: number,
+  base: Record<SemanticTypographyKey, string> = SEMANTIC_TYPOGRAPHY,
+): Record<string, string> | undefined {
+  if (percent === 100) return undefined;
+  const scale = percent / 100;
+  // SAFETY: base is typed by SemanticTypographyKey, so its own keys are those keys.
+  const entries = Object.entries(base) as Array<[SemanticTypographyKey, string]>;
+  return Object.fromEntries(entries.map(([key, size]) => [getTypographyVariable(key), `calc(${size} * ${scale})`]));
+}
+
+=======
+export function getScaledTypographyStyle(
+  percent: number,
+  base: Record<SemanticTypographyKey, string> = SEMANTIC_TYPOGRAPHY,
+): Record<string, string> | undefined {
+  if (percent === 100) return undefined;
+  const scale = percent / 100;
+  // SAFETY: base is typed by SemanticTypographyKey, so its own keys are those keys.
+  const entries = Object.entries(base) as Array<[SemanticTypographyKey, string]>;
+  return Object.fromEntries(entries.map(([key, size]) => [getTypographyVariable(key), `calc(${size} * ${scale})`]));
+}
+
+>>>>>>> upstream/main
 export const typography = {
 
   semanticMarkdown: {

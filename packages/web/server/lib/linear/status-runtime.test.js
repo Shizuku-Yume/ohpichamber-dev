@@ -36,6 +36,7 @@ describe('Linear session status runtime', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     clearLinearAuth();
     if (previousDataDir === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
@@ -45,7 +46,14 @@ describe('Linear session status runtime', () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
+<<<<<<< HEAD
   it('posts completed on the first canonical idle status, then ignores later idles', async () => {
+||||||| bc50ba56aa
+  it('posts completed on the first idle after started, then ignores later idles', async () => {
+=======
+  it('posts completed on the first idle after started, then ignores later idles', async () => {
+    vi.useFakeTimers();
+>>>>>>> upstream/main
     const { postLinearSessionStatus } = await import('./status.js');
     vi.stubGlobal('fetch', stubLinearGraphql({ commentId: 'started' }));
     await postLinearSessionStatus({ kind: 'started', sessionId: 'ses_1', issueIdentifier: 'ENG-12', sessionOrigin: 'https://app.example.com' });
@@ -79,6 +87,7 @@ describe('Linear session status runtime', () => {
     });
     runtime.stop();
   });
+<<<<<<< HEAD
 
   it('does not treat a canonical running status as completed', async () => {
     const graphql = stubLinearGraphql();
@@ -89,4 +98,20 @@ describe('Linear session status runtime', () => {
     expect(graphql).not.toHaveBeenCalled();
     runtime.stop();
   });
+||||||| bc50ba56aa
+
+  it('does not treat busy as completed', async () => {
+    const graphql = stubLinearGraphql();
+    vi.stubGlobal('fetch', graphql);
+    const runtime = createLinearSessionStatusRuntime();
+    runtime.processPayload({
+      type: 'session.status',
+      properties: { sessionID: 'ses_1', status: { type: 'busy' } },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(graphql).not.toHaveBeenCalled();
+    runtime.stop();
+  });
+=======
+>>>>>>> upstream/main
 });

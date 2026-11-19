@@ -12,8 +12,6 @@ interface ModelListItem {
   modelID: string;
 }
 
-// `directory` resolves favorites and recents against that directory's catalog
-// (a settings page editing another project), not the active one.
 export const useModelLists = (directory?: string) => {
   const providers = useConfigStore((state) => (directory === undefined
     ? state.providers

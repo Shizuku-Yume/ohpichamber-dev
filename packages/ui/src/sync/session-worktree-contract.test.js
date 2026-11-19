@@ -147,6 +147,7 @@ describe('resolveSessionWorktreeState', () => {
     expect(result.degraded).toBe(true);
   });
 
+<<<<<<< HEAD
   test('falls back to worktreeRoot when cwd escapes root', () => {
     const result = resolveSessionWorktreeState({
       sessionDirectory: '/repo/worktrees/feat-a-other/src',
@@ -166,6 +167,29 @@ describe('resolveSessionWorktreeState', () => {
     expect(result.degraded).toBe(true);
   });
 
+||||||| bc50ba56aa
+  test('falls back to worktreeRoot when cwd escapes root', () => {
+    const result = resolveSessionWorktreeState({
+      sessionDirectory: '/repo/worktrees/feat-a/src',
+      metadata: {
+        path: '/repo/worktrees/feat-a',
+        projectDirectory: '/repo',
+        branch: 'feat-a',
+        label: 'feat-a',
+        worktreeRoot: '/repo/worktrees/feat-a',
+        worktreeStatus: 'ready',
+        headState: 'branch',
+      },
+      cwdExists: true,
+    });
+
+    // cwd is inside worktreeRoot so should be kept
+    expect(result.cwd).toBe('/repo/worktrees/feat-a/src');
+    expect(result.degraded).toBe(false);
+  });
+
+=======
+>>>>>>> upstream/main
   test('marks missing metadata as legacy with invalid status', () => {
     const result = resolveSessionWorktreeState({
       sessionDirectory: '/repo',

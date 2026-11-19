@@ -19,13 +19,6 @@ type PendingSendTarget = {
   todoText: string;
 };
 
-/**
- * Sending a todo to an agent.
- *
- * Creating a session, picking its model/agent, and dispatching the prompt is
- * the heaviest thing this surface does and has nothing to do with how todos are
- * stored, so it lives apart from the list that triggers it.
- */
 export const useProjectTodoSend = (options: {
   projectRef: ProjectRef | null;
   canCreateWorktree: boolean;
@@ -104,6 +97,29 @@ export const useProjectTodoSend = (options: {
       setSendingTodoId(pendingSendTarget.todoId);
 
       try {
+<<<<<<< HEAD
+||||||| bc50ba56aa
+        // The todo's project owns the prompts, also when the session lands in a new worktree.
+        const prompts = await loadMagicPrompts(projectRef.path);
+        const visiblePrompt = prompts.render('plan.todo.visible', {
+          todo_text: pendingSendTarget.todoText,
+        });
+        const instructionsText = prompts.render('plan.todo.instructions', {
+          todo_text: pendingSendTarget.todoText,
+        });
+        const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
+
+=======
+        const prompts = await loadMagicPrompts(projectRef.path);
+        const visiblePrompt = prompts.render('plan.todo.visible', {
+          todo_text: pendingSendTarget.todoText,
+        });
+        const instructionsText = prompts.render('plan.todo.instructions', {
+          todo_text: pendingSendTarget.todoText,
+        });
+        const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
+
+>>>>>>> upstream/main
         routeToChat();
 
         let sessionId: string | null = null;

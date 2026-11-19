@@ -83,14 +83,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Safety net',
     'settings.sessions.permissions.mode.auto': 'Accept everything',
     'settings.classification.page.title': 'Classification providers',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Small decision models that OhPiChamber uses across different workflows. They see short excerpts of your conversation and the action being checked, never files or images.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Small decision models that OpenChamber uses across different workflows. They see short excerpts of your conversation and the action being checked, never files or images.',
+=======
+    'settings.classification.page.description': 'Small decision models that OpenChamber uses across different workflows. They can receive your latest message and excerpts of the recent conversation, the action an agent asks permission for (for a new file, its whole content, images written as text such as SVG included) and, for goal checks, the goal and the agent\'s last answer.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Where Jev is used',
     'settings.classification.card.ready': 'Ready',
     'settings.classification.card.notSetUp': 'Not set up',
     'settings.classification.card.off': 'Off',
     'settings.classification.card.usedFor': 'Used across workflows',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev by TypeSafe',
     'settings.classification.jev.info': 'TypeSafe\'s decision model. OhPiChamber asks it quick questions about your prompts and the agent\'s actions.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev by TypeSafe',
+    'settings.classification.jev.info': 'TypeSafe\'s decision model. OpenChamber asks it quick questions about your prompts and the agent\'s actions.',
+=======
+    'settings.classification.model.title': 'Decision model',
+    'settings.classification.model.info': 'The model OpenChamber asks quick questions about your prompts and the agent\'s actions: TypeSafe\'s Jev through the route you pick, or Google\'s Decision 1.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'No classification provider can be used right now, so the safety net and Auto are hidden.',
     'settings.classification.status.enterprise': 'This server runs in enterprise mode, which keeps Jev off so conversations only reach the providers in your agent configuration. Features that need Jev stay hidden.',
     'settings.classification.status.enterprisePinned': 'This server runs in enterprise mode: Jev can use your organization\'s endpoint below, or stay off.',
@@ -108,8 +122,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Uses an OpenRouter API key configured in Providers. Charges your OpenRouter account.',
     'settings.classification.source.openrouter.missing': 'No OpenRouter API key is available. Add one in Settings → Providers.',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway key',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Uses a Vercel AI Gateway API key configured in Providers. Charges your Vercel account.',
     'settings.classification.source.vercel.missing': 'No Vercel AI Gateway API key is available. Add one in Settings → Providers.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'The AI Gateway key from OpenCode or AI_GATEWAY_API_KEY, billed to your Vercel account.',
+    'settings.classification.source.vercel.missing': 'No AI Gateway key in OpenCode or AI_GATEWAY_API_KEY. Add an API key to the Vercel AI Gateway provider.',
+=======
+    'settings.classification.source.vercel.description': 'The AI Gateway key from OpenCode or AI_GATEWAY_API_KEY, billed to your Vercel account.',
+    'settings.classification.source.vercel.missing': 'No AI Gateway key in OpenCode or AI_GATEWAY_API_KEY. Add an API key to the Vercel AI Gateway provider.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Google\'s Decision 1 model, not Jev, with the key below or the Google key from OpenCode or GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, billed to your Google account. On Google\'s free tier, Google may use the requests to improve its products.',
+    'settings.classification.source.gemini.missing': 'No Gemini key here, in OpenCode or in GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Paste one below to use it.',
+    'settings.classification.gemini.key.label': 'Gemini API key',
+    'settings.classification.gemini.key.info': 'For Jev only. Stored on the OpenChamber server in its own file and never sent to the browser. It wins over the Google key in OpenCode, which would also open every Gemini chat model there. Saving a key switches Jev to it.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': 'Open {provider}',
     'settings.classification.source.typesafe.name': 'TypeSafe API key',
     'settings.classification.source.typesafe.description': 'Your own TypeSafe key and quota.',
@@ -262,13 +289,27 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Vangnet',
     'settings.sessions.permissions.mode.auto': 'Alles accepteren',
     'settings.classification.page.title': 'Classificatieproviders',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Kleine beslismodellen die OhPiChamber in verschillende werkstromen gebruikt. Ze krijgen korte fragmenten uit uw gesprek en de actie die wordt gecontroleerd, nooit bestanden of afbeeldingen.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Kleine beslismodellen die OpenChamber in verschillende werkstromen gebruikt. Ze krijgen korte fragmenten uit uw gesprek en de actie die wordt gecontroleerd, nooit bestanden of afbeeldingen.',
+=======
+    'settings.classification.page.description': 'Kleine beslismodellen die OpenChamber in verschillende werkstromen gebruikt. Ze kunnen uw laatste bericht en fragmenten uit het recente gesprek ontvangen, de actie waarvoor een agent toestemming vraagt (bij een nieuw bestand de volledige inhoud, ook afbeeldingen die als tekst zijn geschreven, zoals SVG) en, bij controles van een goal, de goal en het laatste antwoord van de agent.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Waar Jev wordt gebruikt',
     'settings.classification.card.ready': 'Gereed',
     'settings.classification.card.notSetUp': 'Niet ingesteld',
     'settings.classification.card.usedFor': 'In meerdere werkstromen gebruikt',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev van TypeSafe',
     'settings.classification.jev.info': 'Het beslismodel van TypeSafe. OhPiChamber stelt het snelle vragen over uw prompts en de acties van de agent.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev van TypeSafe',
+    'settings.classification.jev.info': 'Het beslismodel van TypeSafe. OpenChamber stelt het snelle vragen over uw prompts en de acties van de agent.',
+=======
+    'settings.classification.model.title': 'Beslismodel',
+    'settings.classification.model.info': 'Het model waaraan OpenChamber snelle vragen stelt over uw prompts en de acties van de agent: Jev van TypeSafe via de route die u kiest, of Decision 1 van Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Er kan nu geen classificatieprovider worden gebruikt, waardoor het vangnet en Auto verborgen zijn.',
     'settings.classification.status.fallback': 'Uw keuze kan nu niet worden gebruikt, waardoor Jev via {provider} loopt.',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen-actie',
@@ -282,8 +323,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Gebruikt een in Providers geconfigureerde OpenRouter API-sleutel. Wordt in rekening gebracht op uw OpenRouter-account.',
     'settings.classification.source.openrouter.missing': 'Er is geen OpenRouter API-sleutel beschikbaar. Voeg er een toe in Instellingen → Providers.',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway-sleutel',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Gebruikt een in Providers geconfigureerde Vercel AI Gateway API-sleutel. Wordt in rekening gebracht op uw Vercel-account.',
     'settings.classification.source.vercel.missing': 'Er is geen Vercel AI Gateway API-sleutel beschikbaar. Voeg er een toe in Instellingen → Providers.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'De AI Gateway-sleutel uit OpenCode of AI_GATEWAY_API_KEY, doorberekend aan uw Vercel-account.',
+    'settings.classification.source.vercel.missing': 'Geen AI Gateway-sleutel in OpenCode of AI_GATEWAY_API_KEY. Voeg een API-sleutel toe aan de Vercel AI Gateway-provider.',
+=======
+    'settings.classification.source.vercel.description': 'De AI Gateway-sleutel uit OpenCode of AI_GATEWAY_API_KEY, doorberekend aan uw Vercel-account.',
+    'settings.classification.source.vercel.missing': 'Geen AI Gateway-sleutel in OpenCode of AI_GATEWAY_API_KEY. Voeg een API-sleutel toe aan de Vercel AI Gateway-provider.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Het Decision 1-model van Google, niet Jev, met de sleutel hieronder of de Google-sleutel uit OpenCode of GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, doorberekend aan uw Google-account. Bij de gratis versie van Google mag Google de verzoeken gebruiken om zijn producten te verbeteren.',
+    'settings.classification.source.gemini.missing': 'Geen Gemini-sleutel hier, in OpenCode of in GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Plak hieronder een sleutel om deze te gebruiken.',
+    'settings.classification.gemini.key.label': 'Gemini API-sleutel',
+    'settings.classification.gemini.key.info': 'Alleen voor Jev. Wordt in een eigen bestand op de OpenChamber-server opgeslagen en nooit naar de browser gestuurd. Gaat voor op de Google-sleutel in OpenCode, die daar ook alle Gemini-chatmodellen zou openzetten. Bij het opslaan van een sleutel schakelt Jev over op die sleutel.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '{provider} openen',
     'settings.classification.source.typesafe.name': 'TypeSafe API-sleutel',
     'settings.classification.source.typesafe.description': 'Uw eigen TypeSafe-sleutel en limiet.',
@@ -379,14 +433,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Запобіжник',
     'settings.sessions.permissions.mode.auto': 'Приймати все',
     'settings.classification.page.title': 'Постачальники класифікації',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Невеликі моделі рішень, які OhPiChamber використовує в різних робочих процесах. Вони бачать короткі уривки вашої розмови й дію, яку перевіряють, ніколи файли чи зображення.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Невеликі моделі рішень, які OpenChamber використовує в різних робочих процесах. Вони бачать короткі уривки вашої розмови й дію, яку перевіряють, ніколи файли чи зображення.',
+=======
+    'settings.classification.page.description': 'Невеликі моделі рішень, які OpenChamber використовує в різних робочих процесах. Вони можуть отримувати ваше останнє повідомлення й уривки нещодавньої розмови, дію, на яку агент просить дозволу (для нового файлу — увесь його вміст, зокрема зображення, записані як текст, наприклад SVG), а для перевірок цілі — саму ціль і останню відповідь агента.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Де використовується Jev',
     'settings.classification.card.ready': 'Готово',
     'settings.classification.card.notSetUp': 'Не налаштовано',
     'settings.classification.card.off': 'Вимкнено',
     'settings.classification.card.usedFor': 'Використовується в різних процесах',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev від TypeSafe',
     'settings.classification.jev.info': 'Модель рішень TypeSafe. OhPiChamber ставить їй короткі запитання про ваші запити й дії агента.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev від TypeSafe',
+    'settings.classification.jev.info': 'Модель рішень TypeSafe. OpenChamber ставить їй короткі запитання про ваші запити й дії агента.',
+=======
+    'settings.classification.model.title': 'Модель рішень',
+    'settings.classification.model.info': 'Модель, якій OpenChamber ставить короткі запитання про ваші запити й дії агента: Jev від TypeSafe через обраний вами шлях або Decision 1 від Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Зараз жоден постачальник класифікації недоступний, тож запобіжник і Auto приховано.',
     'settings.classification.status.enterprise': 'Цей сервер працює в режимі enterprise, тому Jev вимкнений і розмови потрапляють лише до провайдерів із вашої конфігурації Agent Service. Функції, яким потрібен Jev, приховано.',
     'settings.classification.status.enterprisePinned': 'Цей сервер працює в режимі enterprise: Jev може використовувати endpoint вашої організації нижче або залишатися вимкненим.',
@@ -404,8 +472,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Використовує API-ключ OpenRouter, налаштований у Провайдерах. Списує кошти з вашого акаунта OpenRouter.',
     'settings.classification.source.openrouter.missing': 'Немає доступного API-ключа OpenRouter. Додайте його в Налаштування → Провайдери.',
     'settings.classification.source.vercel.name': 'Ключ Vercel AI Gateway',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Використовує API-ключ Vercel AI Gateway, налаштований у Провайдерах. Списує кошти з вашого акаунта Vercel.',
     'settings.classification.source.vercel.missing': 'Немає доступного API-ключа Vercel AI Gateway. Додайте його в Налаштування → Провайдери.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'Ключ AI Gateway з OpenCode або з AI_GATEWAY_API_KEY, за рахунок вашого акаунта Vercel.',
+    'settings.classification.source.vercel.missing': 'Немає ключа AI Gateway ні в OpenCode, ні в AI_GATEWAY_API_KEY. Додайте API-ключ до провайдера Vercel AI Gateway.',
+=======
+    'settings.classification.source.vercel.description': 'Ключ AI Gateway з OpenCode або з AI_GATEWAY_API_KEY, за рахунок вашого акаунта Vercel.',
+    'settings.classification.source.vercel.missing': 'Немає ключа AI Gateway ні в OpenCode, ні в AI_GATEWAY_API_KEY. Додайте API-ключ до провайдера Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Модель Decision 1 від Google, не Jev, з ключем нижче або з ключем Google з OpenCode чи GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, за рахунок вашого акаунта Google. На безкоштовному тарифі Google може використовувати запити для покращення своїх продуктів.',
+    'settings.classification.source.gemini.missing': 'Немає ключа Gemini ні тут, ні в OpenCode, ні в GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Вставте ключ нижче, щоб скористатися ним.',
+    'settings.classification.gemini.key.label': 'API-ключ Gemini',
+    'settings.classification.gemini.key.info': 'Лише для Jev. Зберігається на сервері OpenChamber в окремому файлі й ніколи не передається в браузер. Має перевагу над ключем Google в OpenCode, який відкрив би там і всі чат-моделі Gemini. Збережений ключ одразу стає джерелом для Jev.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': 'Відкрити {provider}',
     'settings.classification.source.typesafe.name': 'API-ключ TypeSafe',
     'settings.classification.source.typesafe.description': 'Ваш власний ключ і квота TypeSafe.',
@@ -527,14 +608,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Sicherheitsnetz',
     'settings.sessions.permissions.mode.auto': 'Alles akzeptieren',
     'settings.classification.page.title': 'Klassifizierungsanbieter',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Kleine Entscheidungsmodelle, die OhPiChamber in verschiedenen Abläufen nutzt. Sie sehen kurze Auszüge Ihrer Unterhaltung und die geprüfte Aktion, nie Dateien oder Bilder.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Kleine Entscheidungsmodelle, die OpenChamber in verschiedenen Abläufen nutzt. Sie sehen kurze Auszüge Ihrer Unterhaltung und die geprüfte Aktion, nie Dateien oder Bilder.',
+=======
+    'settings.classification.page.description': 'Kleine Entscheidungsmodelle, die OpenChamber in verschiedenen Abläufen nutzt. Sie können Ihre letzte Nachricht und Auszüge der jüngsten Unterhaltung erhalten, die Aktion, für die ein Agent um Erlaubnis fragt (bei einer neuen Datei ihren ganzen Inhalt, auch als Text geschriebene Bilder wie SVG), und bei Zielprüfungen das Ziel und die letzte Antwort des Agenten.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Wo Jev genutzt wird',
     'settings.classification.card.ready': 'Bereit',
     'settings.classification.card.notSetUp': 'Nicht eingerichtet',
     'settings.classification.card.off': 'Aus',
     'settings.classification.card.usedFor': 'In verschiedenen Abläufen genutzt',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev von TypeSafe',
     'settings.classification.jev.info': 'Das Entscheidungsmodell von TypeSafe. OhPiChamber stellt ihm kurze Fragen zu Ihren Prompts und den Aktionen des Agenten.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev von TypeSafe',
+    'settings.classification.jev.info': 'Das Entscheidungsmodell von TypeSafe. OpenChamber stellt ihm kurze Fragen zu Ihren Prompts und den Aktionen des Agenten.',
+=======
+    'settings.classification.model.title': 'Entscheidungsmodell',
+    'settings.classification.model.info': 'Das Modell, dem OpenChamber kurze Fragen zu Ihren Prompts und den Aktionen des Agenten stellt: Jev von TypeSafe über den gewählten Weg oder Googles Decision 1.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Derzeit ist kein Klassifizierungsanbieter nutzbar, daher sind Sicherheitsnetz und Auto ausgeblendet.',
     'settings.classification.status.enterprise': 'Dieser Server läuft im Enterprise-Modus. Jev bleibt deshalb aus, damit Unterhaltungen nur die Anbieter aus Ihrer Agent-Service-Konfiguration erreichen. Funktionen, die Jev brauchen, bleiben ausgeblendet.',
     'settings.classification.status.enterprisePinned': 'Dieser Server läuft im Enterprise-Modus: Jev kann den Endpunkt Ihrer Organisation unten nutzen oder ausgeschaltet bleiben.',
@@ -552,8 +647,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Verwendet einen unter Anbieter konfigurierten OpenRouter-API-Schlüssel. Wird über Ihr OpenRouter-Konto abgerechnet.',
     'settings.classification.source.openrouter.missing': 'Kein OpenRouter-API-Schlüssel verfügbar. Fügen Sie einen unter Einstellungen → Anbieter hinzu.',
     'settings.classification.source.vercel.name': 'Vercel-AI-Gateway-Schlüssel',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Verwendet einen unter Anbieter konfigurierten Vercel-AI-Gateway-API-Schlüssel. Wird über Ihr Vercel-Konto abgerechnet.',
     'settings.classification.source.vercel.missing': 'Kein Vercel-AI-Gateway-API-Schlüssel verfügbar. Fügen Sie einen unter Einstellungen → Anbieter hinzu.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'Der AI-Gateway-Schlüssel aus OpenCode oder AI_GATEWAY_API_KEY, abgerechnet über Ihr Vercel-Konto.',
+    'settings.classification.source.vercel.missing': 'Kein AI-Gateway-Schlüssel in OpenCode oder AI_GATEWAY_API_KEY. Fügen Sie dem Anbieter Vercel AI Gateway einen API-Schlüssel hinzu.',
+=======
+    'settings.classification.source.vercel.description': 'Der AI-Gateway-Schlüssel aus OpenCode oder AI_GATEWAY_API_KEY, abgerechnet über Ihr Vercel-Konto.',
+    'settings.classification.source.vercel.missing': 'Kein AI-Gateway-Schlüssel in OpenCode oder AI_GATEWAY_API_KEY. Fügen Sie dem Anbieter Vercel AI Gateway einen API-Schlüssel hinzu.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Googles Modell Decision 1, nicht Jev, mit dem Schlüssel unten oder dem Google-Schlüssel aus OpenCode oder GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, abgerechnet über Ihr Google-Konto. In Googles kostenloser Stufe darf Google die Anfragen zur Verbesserung seiner Produkte nutzen.',
+    'settings.classification.source.gemini.missing': 'Kein Gemini-Schlüssel hier, in OpenCode oder in GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Fügen Sie unten einen Schlüssel ein, um ihn zu verwenden.',
+    'settings.classification.gemini.key.label': 'Gemini-API-Schlüssel',
+    'settings.classification.gemini.key.info': 'Nur für Jev. Wird auf dem OpenChamber-Server in einer eigenen Datei gespeichert und nie an den Browser gesendet. Hat Vorrang vor dem Google-Schlüssel in OpenCode, der dort auch alle Gemini-Chatmodelle freischalten würde. Ein gespeicherter Schlüssel wird sofort für Jev verwendet.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '{provider} öffnen',
     'settings.classification.source.typesafe.name': 'TypeSafe-API-Schlüssel',
     'settings.classification.source.typesafe.description': 'Ihr eigener TypeSafe-Schlüssel und Ihr eigenes Kontingent.',
@@ -675,14 +783,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Filet de sécurité',
     'settings.sessions.permissions.mode.auto': 'Tout accepter',
     'settings.classification.page.title': 'Fournisseurs de classification',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Petits modèles de décision qu’OhPiChamber utilise dans différents workflows. Ils ne voient que de courts extraits de votre conversation et l’action vérifiée, jamais de fichiers ni d’images.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Petits modèles de décision qu’OpenChamber utilise dans différents workflows. Ils ne voient que de courts extraits de votre conversation et l’action vérifiée, jamais de fichiers ni d’images.',
+=======
+    'settings.classification.page.description': 'Petits modèles de décision qu’OpenChamber utilise dans différents workflows. Ils peuvent recevoir votre dernier message et des extraits de la conversation récente, l’action pour laquelle un agent demande une permission (pour un nouveau fichier, tout son contenu, y compris les images écrites sous forme de texte comme le SVG) et, pour les vérifications d’objectif, l’objectif et la dernière réponse de l’agent.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Où Jev est utilisé',
     'settings.classification.card.ready': 'Prêt',
     'settings.classification.card.notSetUp': 'Non configuré',
     'settings.classification.card.off': 'Désactivé',
     'settings.classification.card.usedFor': 'Utilisé dans plusieurs workflows',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev par TypeSafe',
     'settings.classification.jev.info': 'Le modèle de décision de TypeSafe. OhPiChamber lui pose de courtes questions sur vos prompts et les actions de l’agent.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev par TypeSafe',
+    'settings.classification.jev.info': 'Le modèle de décision de TypeSafe. OpenChamber lui pose de courtes questions sur vos prompts et les actions de l’agent.',
+=======
+    'settings.classification.model.title': 'Modèle de décision',
+    'settings.classification.model.info': 'Le modèle auquel OpenChamber pose de courtes questions sur vos prompts et les actions de l’agent : Jev de TypeSafe par la voie que vous choisissez, ou Decision 1 de Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Aucun fournisseur de classification n’est utilisable pour l’instant, le filet de sécurité et Auto sont donc masqués.',
     'settings.classification.status.enterprise': 'Ce serveur fonctionne en mode entreprise, ce qui laisse Jev désactivé pour que les conversations n’atteignent que les fournisseurs de votre configuration du service Agent. Les fonctionnalités qui ont besoin de Jev restent masquées.',
     'settings.classification.status.enterprisePinned': 'Ce serveur fonctionne en mode entreprise : Jev peut utiliser le point de terminaison de votre organisation ci-dessous, ou rester désactivé.',
@@ -700,8 +822,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Utilise une clé API OpenRouter configurée dans Fournisseurs. Facturé sur votre compte OpenRouter.',
     'settings.classification.source.openrouter.missing': 'Aucune clé API OpenRouter disponible. Ajoutez-en une dans Paramètres → Fournisseurs.',
     'settings.classification.source.vercel.name': 'Clé Vercel AI Gateway',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Utilise une clé API Vercel AI Gateway configurée dans Fournisseurs. Facturé sur votre compte Vercel.',
     'settings.classification.source.vercel.missing': 'Aucune clé API Vercel AI Gateway disponible. Ajoutez-en une dans Paramètres → Fournisseurs.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'La clé AI Gateway d’OpenCode ou de AI_GATEWAY_API_KEY, facturée sur votre compte Vercel.',
+    'settings.classification.source.vercel.missing': 'Aucune clé AI Gateway dans OpenCode ni dans AI_GATEWAY_API_KEY. Ajoutez une clé API au fournisseur Vercel AI Gateway.',
+=======
+    'settings.classification.source.vercel.description': 'La clé AI Gateway d’OpenCode ou de AI_GATEWAY_API_KEY, facturée sur votre compte Vercel.',
+    'settings.classification.source.vercel.missing': 'Aucune clé AI Gateway dans OpenCode ni dans AI_GATEWAY_API_KEY. Ajoutez une clé API au fournisseur Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Le modèle Decision 1 de Google, pas Jev, avec la clé ci-dessous, ou la clé Google d’OpenCode ou de GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, facturé sur votre compte Google. Avec l’offre gratuite de Google, Google peut utiliser les requêtes pour améliorer ses produits.',
+    'settings.classification.source.gemini.missing': 'Aucune clé Gemini ici, dans OpenCode ni dans GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Collez une clé ci-dessous pour l’utiliser.',
+    'settings.classification.gemini.key.label': 'Clé API Gemini',
+    'settings.classification.gemini.key.info': 'Pour Jev uniquement. Stockée sur le serveur OpenChamber dans un fichier dédié et jamais envoyée au navigateur. Elle passe avant la clé Google d’OpenCode, qui y ouvrirait aussi tous les modèles de chat Gemini. Une clé enregistrée devient aussitôt la source de Jev.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': 'Ouvrir {provider}',
     'settings.classification.source.typesafe.name': 'Clé API TypeSafe',
     'settings.classification.source.typesafe.description': 'Votre propre clé et votre propre quota TypeSafe.',
@@ -823,14 +958,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Red de seguridad',
     'settings.sessions.permissions.mode.auto': 'Aceptar todo',
     'settings.classification.page.title': 'Proveedores de clasificación',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Pequeños modelos de decisión que OhPiChamber usa en distintos flujos de trabajo. Solo ven fragmentos breves de tu conversación y la acción que se comprueba, nunca archivos ni imágenes.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Pequeños modelos de decisión que OpenChamber usa en distintos flujos de trabajo. Solo ven fragmentos breves de tu conversación y la acción que se comprueba, nunca archivos ni imágenes.',
+=======
+    'settings.classification.page.description': 'Pequeños modelos de decisión que OpenChamber usa en distintos flujos de trabajo. Pueden recibir tu último mensaje y fragmentos de la conversación reciente, la acción para la que un agente pide permiso (en un archivo nuevo, todo su contenido, incluidas las imágenes escritas como texto, como SVG) y, en las comprobaciones de objetivos, el objetivo y la última respuesta del agente.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Dónde se usa Jev',
     'settings.classification.card.ready': 'Listo',
     'settings.classification.card.notSetUp': 'Sin configurar',
     'settings.classification.card.off': 'Desactivado',
     'settings.classification.card.usedFor': 'Se usa en varios flujos',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev de TypeSafe',
     'settings.classification.jev.info': 'El modelo de decisión de TypeSafe. OhPiChamber le hace preguntas breves sobre tus prompts y las acciones del agente.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev de TypeSafe',
+    'settings.classification.jev.info': 'El modelo de decisión de TypeSafe. OpenChamber le hace preguntas breves sobre tus prompts y las acciones del agente.',
+=======
+    'settings.classification.model.title': 'Modelo de decisión',
+    'settings.classification.model.info': 'El modelo al que OpenChamber hace preguntas breves sobre tus prompts y las acciones del agente: Jev de TypeSafe por la vía que elijas, o Decision 1 de Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Ahora mismo no se puede usar ningún proveedor de clasificación, así que la red de seguridad y Auto están ocultos.',
     'settings.classification.status.enterprise': 'Este servidor funciona en modo empresa, que mantiene Jev desactivado para que las conversaciones solo lleguen a los proveedores de tu configuración de Agent Service. Las funciones que necesitan Jev siguen ocultas.',
     'settings.classification.status.enterprisePinned': 'Este servidor funciona en modo empresa: Jev puede usar el endpoint de tu organización que aparece abajo, o seguir desactivado.',
@@ -848,8 +997,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Usa una clave API de OpenRouter configurada en Proveedores. Con cargo a tu cuenta de OpenRouter.',
     'settings.classification.source.openrouter.missing': 'No hay ninguna clave API de OpenRouter disponible. Añade una en Ajustes → Proveedores.',
     'settings.classification.source.vercel.name': 'Clave de Vercel AI Gateway',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Usa una clave API de Vercel AI Gateway configurada en Proveedores. Con cargo a tu cuenta de Vercel.',
     'settings.classification.source.vercel.missing': 'No hay ninguna clave API de Vercel AI Gateway disponible. Añade una en Ajustes → Proveedores.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'La clave de AI Gateway de OpenCode o de AI_GATEWAY_API_KEY, con cargo a tu cuenta de Vercel.',
+    'settings.classification.source.vercel.missing': 'No hay clave de AI Gateway en OpenCode ni en AI_GATEWAY_API_KEY. Añade una clave API al proveedor Vercel AI Gateway.',
+=======
+    'settings.classification.source.vercel.description': 'La clave de AI Gateway de OpenCode o de AI_GATEWAY_API_KEY, con cargo a tu cuenta de Vercel.',
+    'settings.classification.source.vercel.missing': 'No hay clave de AI Gateway en OpenCode ni en AI_GATEWAY_API_KEY. Añade una clave API al proveedor Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'El modelo Decision 1 de Google, no Jev, con la clave de abajo o la clave de Google de OpenCode o de GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, con cargo a tu cuenta de Google. En el nivel gratuito de Google, Google puede usar las solicitudes para mejorar sus productos.',
+    'settings.classification.source.gemini.missing': 'No hay clave de Gemini aquí, en OpenCode ni en GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Pega una clave abajo para usarla.',
+    'settings.classification.gemini.key.label': 'Clave API de Gemini',
+    'settings.classification.gemini.key.info': 'Solo para Jev. Se guarda en el servidor de OpenChamber en su propio archivo y nunca se envía al navegador. Tiene prioridad sobre la clave de Google de OpenCode, que allí también abriría todos los modelos de chat de Gemini. Al guardar una clave, Jev pasa a usarla.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': 'Abrir {provider}',
     'settings.classification.source.typesafe.name': 'Clave API de TypeSafe',
     'settings.classification.source.typesafe.description': 'Tu propia clave y cuota de TypeSafe.',
@@ -971,14 +1133,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'セーフティネット',
     'settings.sessions.permissions.mode.auto': 'すべて承認',
     'settings.classification.page.title': '分類プロバイダー',
+<<<<<<< HEAD
     'settings.classification.page.description': 'OhPiChamber がさまざまなワークフローで使う小さな判断モデルです。見るのは会話の短い抜粋と確認対象の操作だけで、ファイルや画像は見ません。',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'OpenChamber がさまざまなワークフローで使う小さな判断モデルです。見るのは会話の短い抜粋と確認対象の操作だけで、ファイルや画像は見ません。',
+=======
+    'settings.classification.page.description': 'OpenChamber がさまざまなワークフローで使う小さな判断モデルです。受け取ることがあるのは、最新のメッセージと最近の会話の抜粋、エージェントが許可を求める操作（新しいファイルなら、SVG のようにテキストで書かれた画像も含めた内容全体）、そしてゴールの確認ではゴールとエージェントの最後の回答です。',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Jev が使われる場所',
     'settings.classification.card.ready': '準備完了',
     'settings.classification.card.notSetUp': '未設定',
     'settings.classification.card.off': 'オフ',
     'settings.classification.card.usedFor': '複数のワークフローで使用',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'TypeSafe の Jev',
     'settings.classification.jev.info': 'TypeSafe の判断モデル。OhPiChamber はプロンプトやエージェントの操作について短い質問をします。',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'TypeSafe の Jev',
+    'settings.classification.jev.info': 'TypeSafe の判断モデル。OpenChamber はプロンプトやエージェントの操作について短い質問をします。',
+=======
+    'settings.classification.model.title': '判断モデル',
+    'settings.classification.model.info': 'OpenChamber がプロンプトやエージェントの操作について短い質問をするモデルです。選んだ経路で使う TypeSafe の Jev か、Google の Decision 1 です。',
+>>>>>>> upstream/main
     'settings.classification.status.none': '現在使える分類プロバイダーがないため、セーフティネットと Auto は非表示です。',
     'settings.classification.status.enterprise': 'このサーバーはエンタープライズモードで動作しています。会話が Agent Service の設定にあるプロバイダーにだけ届くよう、Jev はオフのままです。Jev が必要な機能は表示されません。',
     'settings.classification.status.enterprisePinned': 'このサーバーはエンタープライズモードで動作しています。Jev は下にある組織のエンドポイントを使うか、オフのままにできます。',
@@ -996,8 +1172,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'プロバイダーで設定された OpenRouter API キーを使用します。OpenRouter アカウントに請求されます。',
     'settings.classification.source.openrouter.missing': '利用可能な OpenRouter API キーがありません。設定 → プロバイダー で追加してください。',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway キー',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'プロバイダーで設定された Vercel AI Gateway API キーを使用します。Vercel アカウントに請求されます。',
     'settings.classification.source.vercel.missing': '利用可能な Vercel AI Gateway API キーがありません。設定 → プロバイダー で追加してください。',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'OpenCode または AI_GATEWAY_API_KEY の AI Gateway キー。Vercel アカウントに請求されます。',
+    'settings.classification.source.vercel.missing': 'OpenCode にも AI_GATEWAY_API_KEY にも AI Gateway キーがありません。Vercel AI Gateway プロバイダーに API キーを追加してください。',
+=======
+    'settings.classification.source.vercel.description': 'OpenCode または AI_GATEWAY_API_KEY の AI Gateway キー。Vercel アカウントに請求されます。',
+    'settings.classification.source.vercel.missing': 'OpenCode にも AI_GATEWAY_API_KEY にも AI Gateway キーがありません。Vercel AI Gateway プロバイダーに API キーを追加してください。',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Jev ではなく Google の Decision 1 モデルを、下のキー、または OpenCode か GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY の Google キーで使います。Google アカウントに請求されます。Google の無料枠では、Google がリクエストを自社製品の改善に使うことがあります。',
+    'settings.classification.source.gemini.missing': 'ここにも OpenCode にも GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY にも Gemini キーがありません。使うには下にキーを貼り付けてください。',
+    'settings.classification.gemini.key.label': 'Gemini API キー',
+    'settings.classification.gemini.key.info': 'Jev 専用です。OpenChamber サーバー上の専用ファイルに保存され、ブラウザーには送信されません。OpenCode の Google キーより優先されます。そちらのキーは OpenCode ですべての Gemini チャットモデルも使えるようにします。キーを保存すると Jev はそのキーを使います。',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '{provider} を開く',
     'settings.classification.source.typesafe.name': 'TypeSafe API キー',
     'settings.classification.source.typesafe.description': 'ご自身の TypeSafe キーとクォータ。',
@@ -1119,14 +1308,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': '안전망',
     'settings.sessions.permissions.mode.auto': '모두 승인',
     'settings.classification.page.title': '분류 제공자',
+<<<<<<< HEAD
     'settings.classification.page.description': 'OhPiChamber가 여러 워크플로에서 사용하는 작은 판단 모델입니다. 대화의 짧은 발췌와 확인 중인 작업만 보며 파일이나 이미지는 보지 않습니다.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'OpenChamber가 여러 워크플로에서 사용하는 작은 판단 모델입니다. 대화의 짧은 발췌와 확인 중인 작업만 보며 파일이나 이미지는 보지 않습니다.',
+=======
+    'settings.classification.page.description': 'OpenChamber가 여러 워크플로에서 사용하는 작은 판단 모델입니다. 받을 수 있는 내용은 가장 최근 메시지와 최근 대화의 발췌, 에이전트가 권한을 요청하는 작업(새 파일이라면 SVG처럼 텍스트로 작성된 이미지를 포함한 전체 내용), 그리고 목표 확인에서는 목표와 에이전트의 마지막 답변입니다.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Jev가 쓰이는 곳',
     'settings.classification.card.ready': '준비됨',
     'settings.classification.card.notSetUp': '설정 안 됨',
     'settings.classification.card.off': '끔',
     'settings.classification.card.usedFor': '여러 워크플로에서 사용',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'TypeSafe의 Jev',
     'settings.classification.jev.info': 'TypeSafe의 판단 모델입니다. OhPiChamber는 프롬프트와 에이전트의 작업에 대해 짧은 질문을 합니다.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'TypeSafe의 Jev',
+    'settings.classification.jev.info': 'TypeSafe의 판단 모델입니다. OpenChamber는 프롬프트와 에이전트의 작업에 대해 짧은 질문을 합니다.',
+=======
+    'settings.classification.model.title': '판단 모델',
+    'settings.classification.model.info': 'OpenChamber가 프롬프트와 에이전트의 작업에 대해 짧은 질문을 하는 모델입니다. 선택한 경로를 통한 TypeSafe의 Jev 또는 Google의 Decision 1입니다.',
+>>>>>>> upstream/main
     'settings.classification.status.none': '지금 사용할 수 있는 분류 제공자가 없어 안전망과 Auto가 숨겨져 있습니다.',
     'settings.classification.status.enterprise': '이 서버는 엔터프라이즈 모드로 실행 중입니다. 대화가 Agent Service 설정에 있는 제공자에게만 전달되도록 Jev는 꺼져 있습니다. Jev가 필요한 기능은 표시되지 않습니다.',
     'settings.classification.status.enterprisePinned': '이 서버는 엔터프라이즈 모드로 실행 중입니다. Jev는 아래 조직 엔드포인트를 사용하거나 꺼진 상태로 둘 수 있습니다.',
@@ -1144,8 +1347,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': '프로바이더에 설정된 OpenRouter API 키를 사용합니다. OpenRouter 계정에 청구됩니다.',
     'settings.classification.source.openrouter.missing': '사용할 수 있는 OpenRouter API 키가 없습니다. 설정 → 프로바이더에서 추가하세요.',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway 키',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': '프로바이더에 설정된 Vercel AI Gateway API 키를 사용합니다. Vercel 계정에 청구됩니다.',
     'settings.classification.source.vercel.missing': '사용할 수 있는 Vercel AI Gateway API 키가 없습니다. 설정 → 프로바이더에서 추가하세요.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'OpenCode 또는 AI_GATEWAY_API_KEY의 AI Gateway 키로, Vercel 계정에 청구됩니다.',
+    'settings.classification.source.vercel.missing': 'OpenCode에도 AI_GATEWAY_API_KEY에도 AI Gateway 키가 없습니다. Vercel AI Gateway 제공자에 API 키를 추가하세요.',
+=======
+    'settings.classification.source.vercel.description': 'OpenCode 또는 AI_GATEWAY_API_KEY의 AI Gateway 키로, Vercel 계정에 청구됩니다.',
+    'settings.classification.source.vercel.missing': 'OpenCode에도 AI_GATEWAY_API_KEY에도 AI Gateway 키가 없습니다. Vercel AI Gateway 제공자에 API 키를 추가하세요.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Jev가 아닌 Google의 Decision 1 모델을 아래 키 또는 OpenCode나 GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY의 Google 키로 사용하며, Google 계정에 청구됩니다. Google 무료 등급에서는 Google이 요청을 자사 제품 개선에 사용할 수 있습니다.',
+    'settings.classification.source.gemini.missing': '여기에도 OpenCode에도 GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY에도 Gemini 키가 없습니다. 사용하려면 아래에 키를 붙여 넣으세요.',
+    'settings.classification.gemini.key.label': 'Gemini API 키',
+    'settings.classification.gemini.key.info': 'Jev 전용입니다. OpenChamber 서버의 별도 파일에 저장되며 브라우저로 전송되지 않습니다. OpenCode의 Google 키보다 우선합니다. 그 키는 OpenCode에서 모든 Gemini 채팅 모델도 열어 줍니다. 키를 저장하면 Jev가 바로 그 키를 사용합니다.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '{provider} 열기',
     'settings.classification.source.typesafe.name': 'TypeSafe API 키',
     'settings.classification.source.typesafe.description': '본인의 TypeSafe 키와 할당량.',
@@ -1267,14 +1483,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Siatka bezpieczeństwa',
     'settings.sessions.permissions.mode.auto': 'Akceptuj wszystko',
     'settings.classification.page.title': 'Dostawcy klasyfikacji',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Małe modele decyzyjne, których OhPiChamber używa w różnych przepływach pracy. Widzą tylko krótkie fragmenty Twojej rozmowy i sprawdzane działanie, nigdy pliki ani obrazy.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Małe modele decyzyjne, których OpenChamber używa w różnych przepływach pracy. Widzą tylko krótkie fragmenty Twojej rozmowy i sprawdzane działanie, nigdy pliki ani obrazy.',
+=======
+    'settings.classification.page.description': 'Małe modele decyzyjne, których OpenChamber używa w różnych przepływach pracy. Mogą otrzymać Twoją ostatnią wiadomość i fragmenty niedawnej rozmowy, działanie, na które agent prosi o zgodę (przy nowym pliku całą jego zawartość, także obrazy zapisane jako tekst, np. SVG), a przy sprawdzaniu celu sam cel i ostatnią odpowiedź agenta.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Gdzie używany jest Jev',
     'settings.classification.card.ready': 'Gotowe',
     'settings.classification.card.notSetUp': 'Nieskonfigurowane',
     'settings.classification.card.off': 'Wyłączone',
     'settings.classification.card.usedFor': 'Używany w różnych przepływach',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev od TypeSafe',
     'settings.classification.jev.info': 'Model decyzyjny TypeSafe. OhPiChamber zadaje mu krótkie pytania o Twoje prompty i działania agenta.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev od TypeSafe',
+    'settings.classification.jev.info': 'Model decyzyjny TypeSafe. OpenChamber zadaje mu krótkie pytania o Twoje prompty i działania agenta.',
+=======
+    'settings.classification.model.title': 'Model decyzyjny',
+    'settings.classification.model.info': 'Model, któremu OpenChamber zadaje krótkie pytania o Twoje prompty i działania agenta: Jev od TypeSafe przez wybraną drogę albo Decision 1 od Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Żaden dostawca klasyfikacji nie jest teraz dostępny, więc siatka bezpieczeństwa i Auto są ukryte.',
     'settings.classification.status.enterprise': 'Ten serwer działa w trybie enterprise, więc Jev pozostaje wyłączony, a rozmowy trafiają tylko do dostawców z konfiguracji Agent Service. Funkcje wymagające Jev pozostają ukryte.',
     'settings.classification.status.enterprisePinned': 'Ten serwer działa w trybie enterprise: Jev może korzystać z poniższego endpointu organizacji albo pozostać wyłączony.',
@@ -1292,8 +1522,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Używa klucza API OpenRouter skonfigurowanego w Dostawcach. Rozliczany z Twojego konta OpenRouter.',
     'settings.classification.source.openrouter.missing': 'Brak dostępnego klucza API OpenRouter. Dodaj go w Ustawienia → Dostawcy.',
     'settings.classification.source.vercel.name': 'Klucz Vercel AI Gateway',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Używa klucza API Vercel AI Gateway skonfigurowanego w Dostawcach. Rozliczany z Twojego konta Vercel.',
     'settings.classification.source.vercel.missing': 'Brak dostępnego klucza API Vercel AI Gateway. Dodaj go w Ustawienia → Dostawcy.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'Klucz AI Gateway z OpenCode lub z AI_GATEWAY_API_KEY, rozliczany z Twojego konta Vercel.',
+    'settings.classification.source.vercel.missing': 'Brak klucza AI Gateway w OpenCode i w AI_GATEWAY_API_KEY. Dodaj klucz API do dostawcy Vercel AI Gateway.',
+=======
+    'settings.classification.source.vercel.description': 'Klucz AI Gateway z OpenCode lub z AI_GATEWAY_API_KEY, rozliczany z Twojego konta Vercel.',
+    'settings.classification.source.vercel.missing': 'Brak klucza AI Gateway w OpenCode i w AI_GATEWAY_API_KEY. Dodaj klucz API do dostawcy Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Model Decision 1 firmy Google, nie Jev, z kluczem poniżej albo z kluczem Google z OpenCode lub z GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, rozliczany z Twojego konta Google. W darmowym planie Google może używać zapytań do ulepszania swoich produktów.',
+    'settings.classification.source.gemini.missing': 'Brak klucza Gemini tutaj, w OpenCode i w GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Wklej klucz poniżej, aby go użyć.',
+    'settings.classification.gemini.key.label': 'Klucz API Gemini',
+    'settings.classification.gemini.key.info': 'Tylko dla Jev. Przechowywany na serwerze OpenChamber w osobnym pliku i nigdy nie trafia do przeglądarki. Ma pierwszeństwo przed kluczem Google w OpenCode, który otworzyłby tam też wszystkie modele czatu Gemini. Zapisanie klucza od razu przełącza na niego Jev.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': 'Otwórz {provider}',
     'settings.classification.source.typesafe.name': 'Klucz API TypeSafe',
     'settings.classification.source.typesafe.description': 'Twój własny klucz i limit TypeSafe.',
@@ -1415,14 +1658,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Rede de segurança',
     'settings.sessions.permissions.mode.auto': 'Aceitar tudo',
     'settings.classification.page.title': 'Provedores de classificação',
+<<<<<<< HEAD
     'settings.classification.page.description': 'Pequenos modelos de decisão que o OhPiChamber usa em diferentes fluxos de trabalho. Eles veem apenas trechos curtos da sua conversa e a ação verificada, nunca arquivos ou imagens.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'Pequenos modelos de decisão que o OpenChamber usa em diferentes fluxos de trabalho. Eles veem apenas trechos curtos da sua conversa e a ação verificada, nunca arquivos ou imagens.',
+=======
+    'settings.classification.page.description': 'Pequenos modelos de decisão que o OpenChamber usa em diferentes fluxos de trabalho. Eles podem receber sua última mensagem e trechos da conversa recente, a ação para a qual um agente pede permissão (em um arquivo novo, todo o conteúdo, incluindo imagens escritas como texto, como SVG) e, nas verificações de objetivo, o objetivo e a última resposta do agente.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Onde o Jev é usado',
     'settings.classification.card.ready': 'Pronto',
     'settings.classification.card.notSetUp': 'Não configurado',
     'settings.classification.card.off': 'Desativado',
     'settings.classification.card.usedFor': 'Usado em vários fluxos',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev da TypeSafe',
     'settings.classification.jev.info': 'O modelo de decisão da TypeSafe. O OhPiChamber faz a ele perguntas curtas sobre seus prompts e as ações do agente.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev da TypeSafe',
+    'settings.classification.jev.info': 'O modelo de decisão da TypeSafe. O OpenChamber faz a ele perguntas curtas sobre seus prompts e as ações do agente.',
+=======
+    'settings.classification.model.title': 'Modelo de decisão',
+    'settings.classification.model.info': 'O modelo a que o OpenChamber faz perguntas curtas sobre seus prompts e as ações do agente: o Jev da TypeSafe pela via que você escolher, ou o Decision 1 do Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Nenhum provedor de classificação pode ser usado agora, então a rede de segurança e o Auto estão ocultos.',
     'settings.classification.status.enterprise': 'Este servidor funciona no modo empresarial, que mantém o Jev desativado para que as conversas só cheguem aos provedores da sua configuração do Agent Service. Os recursos que precisam do Jev ficam ocultos.',
     'settings.classification.status.enterprisePinned': 'Este servidor funciona no modo empresarial: o Jev pode usar o endpoint da sua organização abaixo ou continuar desativado.',
@@ -1440,8 +1697,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Usa uma chave de API do OpenRouter configurada em Provedores. Cobrada da sua conta OpenRouter.',
     'settings.classification.source.openrouter.missing': 'Nenhuma chave de API do OpenRouter disponível. Adicione uma em Configurações → Provedores.',
     'settings.classification.source.vercel.name': 'Chave do Vercel AI Gateway',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Usa uma chave de API do Vercel AI Gateway configurada em Provedores. Cobrada da sua conta Vercel.',
     'settings.classification.source.vercel.missing': 'Nenhuma chave de API do Vercel AI Gateway disponível. Adicione uma em Configurações → Provedores.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'A chave do AI Gateway do OpenCode ou de AI_GATEWAY_API_KEY, cobrada da sua conta Vercel.',
+    'settings.classification.source.vercel.missing': 'Não há chave do AI Gateway no OpenCode nem em AI_GATEWAY_API_KEY. Adicione uma chave de API ao provedor Vercel AI Gateway.',
+=======
+    'settings.classification.source.vercel.description': 'A chave do AI Gateway do OpenCode ou de AI_GATEWAY_API_KEY, cobrada da sua conta Vercel.',
+    'settings.classification.source.vercel.missing': 'Não há chave do AI Gateway no OpenCode nem em AI_GATEWAY_API_KEY. Adicione uma chave de API ao provedor Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'O modelo Decision 1 do Google, não o Jev, com a chave abaixo ou a chave do Google do OpenCode ou de GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, cobrado da sua conta Google. No nível gratuito do Google, o Google pode usar as solicitações para melhorar seus produtos.',
+    'settings.classification.source.gemini.missing': 'Não há chave do Gemini aqui, no OpenCode nem em GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Cole uma chave abaixo para usá-la.',
+    'settings.classification.gemini.key.label': 'Chave de API do Gemini',
+    'settings.classification.gemini.key.info': 'Só para o Jev. Armazenada no servidor do OpenChamber em um arquivo próprio e nunca enviada ao navegador. Tem prioridade sobre a chave do Google no OpenCode, que lá também liberaria todos os modelos de chat do Gemini. Ao salvar uma chave, o Jev passa a usá-la.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': 'Abrir {provider}',
     'settings.classification.source.typesafe.name': 'Chave de API da TypeSafe',
     'settings.classification.source.typesafe.description': 'Sua própria chave e cota da TypeSafe.',
@@ -1563,14 +1833,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'Güvenlik ağı',
     'settings.sessions.permissions.mode.auto': 'Her şeyi kabul et',
     'settings.classification.page.title': 'Sınıflandırma sağlayıcıları',
+<<<<<<< HEAD
     'settings.classification.page.description': 'OhPiChamber\'ın farklı iş akışlarında kullandığı küçük karar modelleri. Yalnızca konuşmanızdan kısa alıntıları ve kontrol edilen eylemi görürler, asla dosya veya görsel görmezler.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'OpenChamber\'ın farklı iş akışlarında kullandığı küçük karar modelleri. Yalnızca konuşmanızdan kısa alıntıları ve kontrol edilen eylemi görürler, asla dosya veya görsel görmezler.',
+=======
+    'settings.classification.page.description': 'OpenChamber\'ın farklı iş akışlarında kullandığı küçük karar modelleri. Son mesajınızı ve yakın zamandaki konuşmadan alıntıları, bir ajanın izin istediği eylemi (yeni bir dosyada, SVG gibi metin olarak yazılmış görseller dahil tüm içeriği) ve hedef kontrollerinde hedefi ve ajanın son yanıtını alabilirler.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Jev\'in kullanıldığı yerler',
     'settings.classification.card.ready': 'Hazır',
     'settings.classification.card.notSetUp': 'Ayarlanmadı',
     'settings.classification.card.off': 'Kapalı',
     'settings.classification.card.usedFor': 'Farklı iş akışlarında kullanılır',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'TypeSafe\'ten Jev',
     'settings.classification.jev.info': 'TypeSafe\'in karar modeli. OhPiChamber ona istemleriniz ve ajanın eylemleri hakkında kısa sorular sorar.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'TypeSafe\'ten Jev',
+    'settings.classification.jev.info': 'TypeSafe\'in karar modeli. OpenChamber ona istemleriniz ve ajanın eylemleri hakkında kısa sorular sorar.',
+=======
+    'settings.classification.model.title': 'Karar modeli',
+    'settings.classification.model.info': 'OpenChamber\'ın istemleriniz ve ajanın eylemleri hakkında kısa sorular sorduğu model: seçtiğiniz yoldan TypeSafe\'in Jev\'i ya da Google\'ın Decision 1\'i.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'Şu anda kullanılabilecek bir sınıflandırma sağlayıcısı yok, bu yüzden güvenlik ağı ve Auto gizli.',
     'settings.classification.status.enterprise': 'Bu sunucu kurumsal modda çalışıyor; konuşmalar yalnızca Agent Service yapılandırmanızdaki sağlayıcılara ulaşsın diye Jev kapalı kalır. Jev gerektiren özellikler gizli kalır.',
     'settings.classification.status.enterprisePinned': 'Bu sunucu kurumsal modda çalışıyor: Jev aşağıdaki kuruluş uç noktanızı kullanabilir ya da kapalı kalabilir.',
@@ -1588,8 +1872,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': 'Provider\'lar bölümünde yapılandırılmış bir OpenRouter API anahtarını kullanır. OpenRouter hesabınıza faturalanır.',
     'settings.classification.source.openrouter.missing': 'Kullanılabilir OpenRouter API anahtarı yok. Ayarlar → Provider\'lar bölümünden bir tane ekleyin.',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway anahtarı',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': 'Provider\'lar bölümünde yapılandırılmış bir Vercel AI Gateway API anahtarını kullanır. Vercel hesabınıza faturalanır.',
     'settings.classification.source.vercel.missing': 'Kullanılabilir Vercel AI Gateway API anahtarı yok. Ayarlar → Provider\'lar bölümünden bir tane ekleyin.',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': 'OpenCode\'daki veya AI_GATEWAY_API_KEY içindeki AI Gateway anahtarı; Vercel hesabınıza faturalanır.',
+    'settings.classification.source.vercel.missing': 'Ne OpenCode\'da ne de AI_GATEWAY_API_KEY içinde AI Gateway anahtarı var. Vercel AI Gateway sağlayıcısına bir API anahtarı ekleyin.',
+=======
+    'settings.classification.source.vercel.description': 'OpenCode\'daki veya AI_GATEWAY_API_KEY içindeki AI Gateway anahtarı; Vercel hesabınıza faturalanır.',
+    'settings.classification.source.vercel.missing': 'Ne OpenCode\'da ne de AI_GATEWAY_API_KEY içinde AI Gateway anahtarı var. Vercel AI Gateway sağlayıcısına bir API anahtarı ekleyin.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Jev değil, Google\'ın Decision 1 modeli; aşağıdaki anahtarla ya da OpenCode\'daki veya GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY içindeki Google anahtarıyla, Google hesabınıza faturalanır. Google\'ın ücretsiz katmanında Google istekleri ürünlerini geliştirmek için kullanabilir.',
+    'settings.classification.source.gemini.missing': 'Ne burada, ne OpenCode\'da ne de GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY içinde Gemini anahtarı var. Kullanmak için aşağıya bir anahtar yapıştırın.',
+    'settings.classification.gemini.key.label': 'Gemini API anahtarı',
+    'settings.classification.gemini.key.info': 'Yalnızca Jev için. OpenChamber sunucusunda ayrı bir dosyada saklanır ve tarayıcıya asla gönderilmez. OpenCode\'daki Google anahtarına göre önceliklidir; o anahtar OpenCode\'da tüm Gemini sohbet modellerini de açar. Kaydedilen anahtar Jev için hemen kullanılmaya başlar.',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '{provider} sayfasını aç',
     'settings.classification.source.typesafe.name': 'TypeSafe API anahtarı',
     'settings.classification.source.typesafe.description': 'Kendi TypeSafe anahtarınız ve kotanız.',
@@ -1711,14 +2008,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': '风险拦截',
     'settings.sessions.permissions.mode.auto': '全部接受',
     'settings.classification.page.title': '分类提供方',
+<<<<<<< HEAD
     'settings.classification.page.description': 'OhPiChamber 在多个工作流中使用的小型决策模型。它们只看到对话的简短摘录和被检查的操作，从不查看文件或图片。',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'OpenChamber 在多个工作流中使用的小型决策模型。它们只看到对话的简短摘录和被检查的操作，从不查看文件或图片。',
+=======
+    'settings.classification.page.description': 'OpenChamber 在多个工作流中使用的小型决策模型。它们可能收到你最新的一条消息和近期对话的摘录、智能体请求许可的操作（对于新文件，是其全部内容，包括以文本写成的图片，例如 SVG），以及目标检查时的目标和智能体的最后一个回答。',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Jev 的使用场景',
     'settings.classification.card.ready': '就绪',
     'settings.classification.card.notSetUp': '未设置',
     'settings.classification.card.off': '关闭',
     'settings.classification.card.usedFor': '用于多个工作流',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'TypeSafe 的 Jev',
     'settings.classification.jev.info': 'TypeSafe 的决策模型。OhPiChamber 会就你的提示和智能体的操作向它提出简短问题。',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'TypeSafe 的 Jev',
+    'settings.classification.jev.info': 'TypeSafe 的决策模型。OpenChamber 会就你的提示和智能体的操作向它提出简短问题。',
+=======
+    'settings.classification.model.title': '决策模型',
+    'settings.classification.model.info': 'OpenChamber 就你的提示和智能体的操作向其提出简短问题的模型：通过你选择的途径使用 TypeSafe 的 Jev，或 Google 的 Decision 1。',
+>>>>>>> upstream/main
     'settings.classification.status.none': '目前没有可用的分类提供方，因此风险拦截和 Auto 已隐藏。',
     'settings.classification.status.enterprise': '此服务器运行在企业模式下，Jev 会保持关闭，让对话只发送到你的 Agent Service 配置中的提供方。需要 Jev 的功能会保持隐藏。',
     'settings.classification.status.enterprisePinned': '此服务器运行在企业模式下：Jev 可以使用下方你所在组织的端点，也可以保持关闭。',
@@ -1736,8 +2047,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': '使用在提供商中配置的 OpenRouter API 密钥。从你的 OpenRouter 账户扣费。',
     'settings.classification.source.openrouter.missing': '没有可用的 OpenRouter API 密钥。请在 设置 → 提供商 中添加一个。',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway 密钥',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': '使用在提供商中配置的 Vercel AI Gateway API 密钥。从你的 Vercel 账户扣费。',
     'settings.classification.source.vercel.missing': '没有可用的 Vercel AI Gateway API 密钥。请在 设置 → 提供商 中添加一个。',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': '来自 OpenCode 或 AI_GATEWAY_API_KEY 的 AI Gateway 密钥，从你的 Vercel 账户扣费。',
+    'settings.classification.source.vercel.missing': 'OpenCode 和 AI_GATEWAY_API_KEY 中都没有 AI Gateway 密钥。请为 Vercel AI Gateway 提供方添加 API 密钥。',
+=======
+    'settings.classification.source.vercel.description': '来自 OpenCode 或 AI_GATEWAY_API_KEY 的 AI Gateway 密钥，从你的 Vercel 账户扣费。',
+    'settings.classification.source.vercel.missing': 'OpenCode 和 AI_GATEWAY_API_KEY 中都没有 AI Gateway 密钥。请为 Vercel AI Gateway 提供方添加 API 密钥。',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Google 的 Decision 1 模型，不是 Jev。使用下方的密钥，或来自 OpenCode 或 GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY 的 Google 密钥，从你的 Google 账户扣费。在 Google 的免费层级，Google 可能会用这些请求改进其产品。',
+    'settings.classification.source.gemini.missing': '这里、OpenCode 和 GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY 中都没有 Gemini 密钥。请在下方粘贴密钥以使用它。',
+    'settings.classification.gemini.key.label': 'Gemini API 密钥',
+    'settings.classification.gemini.key.info': '仅供 Jev 使用。保存在 OpenChamber 服务器上的单独文件中，从不发送到浏览器。它优先于 OpenCode 中的 Google 密钥；那个密钥还会在 OpenCode 中开放所有 Gemini 聊天模型。保存密钥后，Jev 会立即改用它。',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '打开 {provider}',
     'settings.classification.source.typesafe.name': 'TypeSafe API 密钥',
     'settings.classification.source.typesafe.description': '你自己的 TypeSafe 密钥和配额。',
@@ -1859,14 +2183,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': '安全網',
     'settings.sessions.permissions.mode.auto': '全部接受',
     'settings.classification.page.title': '分類提供者',
+<<<<<<< HEAD
     'settings.classification.page.description': 'OhPiChamber 在多個工作流程中使用的小型決策模型。它們只看到對話的簡短摘錄與被檢查的操作，從不查看檔案或圖片。',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'OpenChamber 在多個工作流程中使用的小型決策模型。它們只看到對話的簡短摘錄與被檢查的操作，從不查看檔案或圖片。',
+=======
+    'settings.classification.page.description': 'OpenChamber 在多個工作流程中使用的小型決策模型。它們可能收到你最新的一則訊息和近期對話的摘錄、代理請求許可的操作（對於新檔案，是其全部內容，包括以文字寫成的圖片，例如 SVG），以及目標檢查時的目標和代理的最後一個回答。',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'Jev 的使用情境',
     'settings.classification.card.ready': '就緒',
     'settings.classification.card.notSetUp': '未設定',
     'settings.classification.card.off': '關閉',
     'settings.classification.card.usedFor': '用於多個工作流程',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'TypeSafe 的 Jev',
     'settings.classification.jev.info': 'TypeSafe 的決策模型。OhPiChamber 會就你的提示與代理的操作向它提出簡短問題。',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'TypeSafe 的 Jev',
+    'settings.classification.jev.info': 'TypeSafe 的決策模型。OpenChamber 會就你的提示與代理的操作向它提出簡短問題。',
+=======
+    'settings.classification.model.title': '決策模型',
+    'settings.classification.model.info': 'OpenChamber 就你的提示與代理的操作向其提出簡短問題的模型：透過你選擇的途徑使用 TypeSafe 的 Jev，或 Google 的 Decision 1。',
+>>>>>>> upstream/main
     'settings.classification.status.none': '目前沒有可用的分類提供者，因此安全網與 Auto 已隱藏。',
     'settings.classification.status.enterprise': '此伺服器以企業模式執行，Jev 會維持關閉，讓對話只傳送到你的 Agent Service 設定中的提供者。需要 Jev 的功能會維持隱藏。',
     'settings.classification.status.enterprisePinned': '此伺服器以企業模式執行：Jev 可以使用下方你所屬組織的端點，也可以維持關閉。',
@@ -1884,8 +2222,21 @@ export const routingI18n = {
     'settings.classification.source.openrouter.description': '使用在供應商中設定的 OpenRouter API 金鑰。從你的 OpenRouter 帳戶扣款。',
     'settings.classification.source.openrouter.missing': '沒有可用的 OpenRouter API 金鑰。請在 設定 → 供應商 中新增一個。',
     'settings.classification.source.vercel.name': 'Vercel AI Gateway 金鑰',
+<<<<<<< HEAD
     'settings.classification.source.vercel.description': '使用在供應商中設定的 Vercel AI Gateway API 金鑰。從你的 Vercel 帳戶扣款。',
     'settings.classification.source.vercel.missing': '沒有可用的 Vercel AI Gateway API 金鑰。請在 設定 → 供應商 中新增一個。',
+||||||| bc50ba56aa
+    'settings.classification.source.vercel.description': '來自 OpenCode 或 AI_GATEWAY_API_KEY 的 AI Gateway 金鑰，從你的 Vercel 帳戶扣款。',
+    'settings.classification.source.vercel.missing': 'OpenCode 和 AI_GATEWAY_API_KEY 中都沒有 AI Gateway 金鑰。請為 Vercel AI Gateway 提供者新增 API 金鑰。',
+=======
+    'settings.classification.source.vercel.description': '來自 OpenCode 或 AI_GATEWAY_API_KEY 的 AI Gateway 金鑰，從你的 Vercel 帳戶扣款。',
+    'settings.classification.source.vercel.missing': 'OpenCode 和 AI_GATEWAY_API_KEY 中都沒有 AI Gateway 金鑰。請為 Vercel AI Gateway 提供者新增 API 金鑰。',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'Google 的 Decision 1 模型，不是 Jev。使用下方的金鑰，或來自 OpenCode 或 GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY 的 Google 金鑰，從你的 Google 帳戶扣款。在 Google 的免費方案中，Google 可能會用這些請求改善其產品。',
+    'settings.classification.source.gemini.missing': '這裡、OpenCode 和 GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY 中都沒有 Gemini 金鑰。請在下方貼上金鑰以使用它。',
+    'settings.classification.gemini.key.label': 'Gemini API 金鑰',
+    'settings.classification.gemini.key.info': '僅供 Jev 使用。儲存在 OpenChamber 伺服器上的獨立檔案中，從不傳送到瀏覽器。它優先於 OpenCode 中的 Google 金鑰；那把金鑰還會在 OpenCode 中開放所有 Gemini 聊天模型。儲存金鑰後，Jev 會立即改用它。',
+>>>>>>> upstream/main
     'settings.classification.source.openProvider': '開啟 {provider}',
     'settings.classification.source.typesafe.name': 'TypeSafe API 金鑰',
     'settings.classification.source.typesafe.description': '你自己的 TypeSafe 金鑰與配額。',
@@ -2007,14 +2358,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'شبكة الأمان',
     'settings.sessions.permissions.mode.auto': 'قبول كل شيء',
     'settings.classification.page.title': 'موفرو التصنيف',
+<<<<<<< HEAD
     'settings.classification.page.description': 'نماذج قرار صغيرة يستخدمها OhPiChamber في مسارات عمل مختلفة. ترى مقتطفات قصيرة من محادثتك والإجراء الذي يُفحص، ولا ترى الملفات أو الصور أبدًا.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'نماذج قرار صغيرة يستخدمها OpenChamber في مسارات عمل مختلفة. ترى مقتطفات قصيرة من محادثتك والإجراء الذي يُفحص، ولا ترى الملفات أو الصور أبدًا.',
+=======
+    'settings.classification.page.description': 'نماذج قرار صغيرة يستخدمها OpenChamber في مسارات عمل مختلفة. قد تتلقى رسالتك الأخيرة ومقتطفات من المحادثة الحديثة، والإجراء الذي يطلب الوكيل الإذن به (في الملف الجديد محتواه كاملًا، بما في ذلك الصور المكتوبة كنص مثل SVG)، وفي فحوص الأهداف الهدف وآخر إجابة للوكيل.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'أين يُستخدم Jev',
     'settings.classification.card.ready': 'جاهز',
     'settings.classification.card.notSetUp': 'غير مُعدّ',
     'settings.classification.card.off': 'معطّل',
     'settings.classification.card.usedFor': 'يُستخدم في مسارات العمل',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev من TypeSafe',
     'settings.classification.jev.info': 'نموذج القرار من TypeSafe. يطرح عليه OhPiChamber أسئلة سريعة عن طلباتك وإجراءات الوكيل.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev من TypeSafe',
+    'settings.classification.jev.info': 'نموذج القرار من TypeSafe. يطرح عليه OpenChamber أسئلة سريعة عن طلباتك وإجراءات الوكيل.',
+=======
+    'settings.classification.model.title': 'نموذج القرار',
+    'settings.classification.model.info': 'النموذج الذي يطرح عليه OpenChamber أسئلة سريعة عن طلباتك وإجراءات الوكيل: Jev من TypeSafe عبر المسار الذي تختاره، أو Decision 1 من Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': "لا يمكن استخدام أي موفر تصنيف الآن، لذا فإن شبكة الأمان و\"تلقائي\" مخفيان.",
     'settings.classification.status.enterprise': 'يعمل هذا الخادم في وضع المؤسسات، الذي يبقي Jev معطّلًا كي لا تصل المحادثات إلا إلى الموفرين في إعدادات OpenCode. تبقى الميزات التي تحتاج إلى Jev مخفية.',
     'settings.classification.status.enterprisePinned': 'يعمل هذا الخادم في وضع المؤسسات: يمكن لـ Jev استخدام نقطة النهاية الخاصة بمؤسستك أدناه، أو البقاء معطّلًا.',
@@ -2034,6 +2399,11 @@ export const routingI18n = {
     'settings.classification.source.vercel.name': 'مفتاح Vercel AI Gateway',
     'settings.classification.source.vercel.description': 'مفتاح AI Gateway من OpenCode أو AI_GATEWAY_API_KEY، وتُحتسب التكلفة على حساب Vercel الخاص بك.',
     'settings.classification.source.vercel.missing': 'لا يوجد مفتاح AI Gateway في OpenCode أو AI_GATEWAY_API_KEY. أضف مفتاح API إلى موفر Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'نموذج Decision 1 من Google، وليس Jev، بالمفتاح أدناه أو بمفتاح Google من OpenCode أو GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY، وتُحتسب التكلفة على حساب Google الخاص بك. في الفئة المجانية من Google، قد تستخدم Google الطلبات لتحسين منتجاتها.',
+    'settings.classification.source.gemini.missing': 'لا يوجد مفتاح Gemini هنا أو في OpenCode أو GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. الصق مفتاحًا أدناه لاستخدامه.',
+    'settings.classification.gemini.key.label': 'مفتاح Gemini API',
+    'settings.classification.gemini.key.info': 'لـ Jev فقط. يُخزَّن على خادم OpenChamber في ملف خاص به ولا يُرسل أبدًا إلى المتصفح. له الأولوية على مفتاح Google في OpenCode، الذي يفتح هناك أيضًا كل نماذج الدردشة من Gemini. حفظ مفتاح يجعل Jev يستخدمه.',
     'settings.classification.source.openProvider': 'فتح {provider}',
     'settings.classification.source.typesafe.name': 'مفتاح TypeSafe API',
     'settings.classification.source.typesafe.description': 'مفتاح TypeSafe الخاص بك وحصتك.',
@@ -2155,14 +2525,28 @@ export const routingI18n = {
     'settings.sessions.permissions.mode.safety': 'רשת ביטחון',
     'settings.sessions.permissions.mode.auto': 'לאשר הכול',
     'settings.classification.page.title': 'ספקי סיווג',
+<<<<<<< HEAD
     'settings.classification.page.description': 'מודלי החלטה קטנים ש-OhPiChamber משתמש בהם בתהליכי עבודה שונים. הם רואים קטעים קצרים מהשיחה ואת הפעולה שנבדקת, אף פעם לא קבצים או תמונות.',
+||||||| bc50ba56aa
+    'settings.classification.page.description': 'מודלי החלטה קטנים ש-OpenChamber משתמש בהם בתהליכי עבודה שונים. הם רואים קטעים קצרים מהשיחה ואת הפעולה שנבדקת, אף פעם לא קבצים או תמונות.',
+=======
+    'settings.classification.page.description': 'מודלי החלטה קטנים ש-OpenChamber משתמש בהם בתהליכי עבודה שונים. הם יכולים לקבל את ההודעה האחרונה שלך וקטעים מהשיחה הנוכחית, את הפעולה שסוכן מבקש עליה הרשאה (בקובץ חדש, את כל התוכן שלו, כולל תמונות שנכתבו כטקסט כמו SVG), ובבדיקות יעד את היעד ואת התשובה האחרונה של הסוכן.',
+>>>>>>> upstream/main
     'settings.classification.page.docsLink': 'איפה משתמשים ב-Jev',
     'settings.classification.card.ready': 'מוכן',
     'settings.classification.card.notSetUp': 'לא הוגדר',
     'settings.classification.card.off': 'כבוי',
     'settings.classification.card.usedFor': 'משמש בתהליכי עבודה שונים',
+<<<<<<< HEAD
     'settings.classification.jev.title': 'Jev של TypeSafe',
     'settings.classification.jev.info': 'מודל ההחלטה של TypeSafe. OhPiChamber שואל אותו שאלות קצרות על ההנחיות ועל פעולות הסוכן.',
+||||||| bc50ba56aa
+    'settings.classification.jev.title': 'Jev של TypeSafe',
+    'settings.classification.jev.info': 'מודל ההחלטה של TypeSafe. OpenChamber שואל אותו שאלות קצרות על ההנחיות ועל פעולות הסוכן.',
+=======
+    'settings.classification.model.title': 'מודל החלטה',
+    'settings.classification.model.info': 'המודל ש-OpenChamber שואל שאלות קצרות על ההנחיות ועל פעולות הסוכן: Jev של TypeSafe בנתיב שבחרת, או Decision 1 של Google.',
+>>>>>>> upstream/main
     'settings.classification.status.none': 'אף ספק סיווג אינו זמין כרגע, ולכן רשת הביטחון והמצב האוטומטי מוסתרים.',
     'settings.classification.status.enterprise': 'השרת הזה פועל במצב ארגוני, שמשאיר את Jev כבוי כדי שהשיחות יגיעו רק לספקים שבתצורת OpenCode. תכונות שצריכות את Jev נשארות מוסתרות.',
     'settings.classification.status.enterprisePinned': 'השרת הזה פועל במצב ארגוני: Jev יכול להשתמש בנקודת הקצה של הארגון שלמטה, או להישאר כבוי.',
@@ -2182,6 +2566,11 @@ export const routingI18n = {
     'settings.classification.source.vercel.name': 'מפתח Vercel AI Gateway',
     'settings.classification.source.vercel.description': 'מפתח AI Gateway מ-OpenCode או מ-AI_GATEWAY_API_KEY, בחיוב לחשבון Vercel.',
     'settings.classification.source.vercel.missing': 'אין מפתח AI Gateway ב-OpenCode או ב-AI_GATEWAY_API_KEY. יש להוסיף מפתח API לספק Vercel AI Gateway.',
+    'settings.classification.source.gemini.name': 'Google Gemini',
+    'settings.classification.source.gemini.description': 'מודל Decision 1 של Google, לא Jev, עם המפתח שלמטה או עם מפתח Google מ-OpenCode או מ-GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY, בחיוב לחשבון Google שלך. בשכבה החינמית של Google, Google עשויה להשתמש בבקשות כדי לשפר את המוצרים שלה.',
+    'settings.classification.source.gemini.missing': 'אין מפתח Gemini כאן, ב-OpenCode או ב-GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. יש להדביק מפתח למטה כדי להשתמש בו.',
+    'settings.classification.gemini.key.label': 'מפתח API של Gemini',
+    'settings.classification.gemini.key.info': 'ל-Jev בלבד. נשמר בשרת OpenChamber בקובץ נפרד ולעולם לא נשלח לדפדפן. קודם למפתח Google ב-OpenCode, שהיה פותח שם גם את כל מודלי הצ׳אט של Gemini. שמירת מפתח מעבירה את Jev להשתמש בו.',
     'settings.classification.source.openProvider': 'פתח את {provider}',
     'settings.classification.source.typesafe.name': 'מפתח API של TypeSafe',
     'settings.classification.source.typesafe.description': 'מפתח ומכסה משלך ב-TypeSafe.',

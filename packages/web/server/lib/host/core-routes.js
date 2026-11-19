@@ -1,10 +1,153 @@
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
 import { hasLegacyOpenCodeData } from './legacy-data.js';
 import { ThemeImportStorageError } from './theme-runtime.js';
 import { registerThemeCatalogRoutes } from './theme-catalog.js';
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+import { buildExternalManualRestartResponse } from './config-mutation-response.js';
+import { ThemeImportStorageError } from './theme-runtime.js';
+import { registerThemeCatalogRoutes } from './theme-catalog.js';
+========
+import { buildExternalManualRestartResponse } from '../opencode/config-mutation-response.js';
+import { ThemeImportStorageError } from '../appearance/theme-runtime.js';
+import { registerThemeCatalogRoutes } from '../appearance/theme-catalog.js';
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
 import { collectLocalFileDiagnostics } from '../diagnostics/local-files.js';
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+import { serverDiagnosticJournal } from '../diagnostics/server-journal.js';
 
-const parseLoopbackUrl = (rawUrl) => {
-  if (typeof rawUrl !== 'string') {
+// Install before any routes or body parsers so early 4xx responses are covered too.
+export const registerHttpResponseDiagnostics = (app, journal = serverDiagnosticJournal) => {
+  app.use((req, res, next) => {
+    res.once('finish', () => {
+      journal.recordHttpResponse(req.method, req.path, res.statusCode);
+    });
+    next();
+  });
+};
+========
+import { serverDiagnosticJournal } from '../diagnostics/server-journal.js';
+import { getBearerTokenFromRequest } from '../ui-auth/ui-auth.js';
+import { candidateUrlType, isLocalOnlyCandidateSet, isLoopbackCandidateUrl, normalizeCandidateUrl } from '../client-auth/pairing-candidates.js';
+import { isBoolean, isString } from '../shared/object-guards.js';
+import type { AddressInfo, Server } from 'node:net';
+import type { Application, ExpressFactory, NextFunction, Request, RequestHandler, Response } from '../shared/http-contracts.js';
+import type { DiagnosticJournal, OpenCodeLoad } from '../diagnostics/contracts.js';
+import type { AuthContext, createUiAuth } from '../ui-auth/ui-auth.js';
+import type { createTunnelAuth } from '../tunnels/tunnel-auth.js';
+import type { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
+import type { createClientPairingRuntime } from '../client-auth/pairing.js';
+import type { ClientInput, PairingInput, RedemptionInput } from '../client-auth/contracts.js';
+import type { RelayPairingCandidate } from '../relay/service.js';
+import type { TunnelRoutesDependencies } from '../tunnels/routes.js';
+import type { createThemeRuntime } from '../appearance/theme-runtime.js';
+import type { createClientPushAccess } from '../notifications/client-push-access.js';
+import type { createOpenCodeLifecycleRuntime } from '../opencode/lifecycle.js';
+
+type UiAuthController = ReturnType<typeof createUiAuth>;
+type TunnelAuthController = ReturnType<typeof createTunnelAuth>;
+type ManagementAuthContext = Pick<AuthContext, 'type' | 'client' | 'clientId'>;
+type ThemeRuntime = ReturnType<typeof createThemeRuntime>;
+
+export interface RequestAuthorizationDependencies {
+  tunnelAuthController: TunnelAuthController | null;
+  uiAuthController: UiAuthController | null;
+}
+
+export interface ServerStatusDependencies {
+  express: ExpressFactory;
+  process: NodeJS.Process;
+  openchamberVersion: string;
+  runtimeName: string;
+  serverStartedAt: string;
+  gracefulShutdown: (options: { exitProcess: boolean }) => Promise<void>;
+  getHealthSnapshot: () => object;
+  getServerPort?: () => number | null;
+  getTunnelUrl?: () => string | null;
+  getServerId?: () => Promise<string | null>;
+  tunnelAuthController?: TunnelAuthController | null;
+  uiAuthController?: UiAuthController | null;
+  readOpenCodeLoad?: (() => Promise<OpenCodeLoad>) | null;
+}
+
+export interface DirectPairingCandidate {
+  type: 'lan' | 'tunnel';
+  url: string;
+  priority: number;
+}
+
+export interface AuthAndAccessDependencies {
+  express: ExpressFactory;
+  tunnelAuthController: TunnelAuthController;
+  uiAuthController: UiAuthController;
+  remoteClientAuthRuntime: ReturnType<typeof createRemoteClientAuthRuntime>;
+  clientPairingRuntime: ReturnType<typeof createClientPairingRuntime>;
+  readSettingsFromDiskMigrated: TunnelRoutesDependencies['readSettingsFromDiskMigrated'];
+  normalizeTunnelSessionTtlMs: TunnelRoutesDependencies['normalizeTunnelSessionTtlMs'];
+  getRelayPairingCandidate?: (options: { ensureEnabled: boolean }) => RelayPairingCandidate | null | Promise<RelayPairingCandidate | null>;
+  reconcileRelay?: () => Promise<void>;
+  removeClientPushDevices?: ReturnType<typeof createClientPushAccess>['removeDevicesOfClients'];
+  getPairingTransports?: (req: Request) => { local: string | null; lan: string | null; relayAvailable: boolean };
+  getDirectCandidateUrls?: (req: Request) => string[];
+  getServerId?: () => Promise<string | null>;
+  getServerLabel?: () => string;
+}
+
+export interface SettingsUtilityDependencies {
+  readCustomThemesFromDisk: ThemeRuntime['readCustomThemesFromDisk'];
+  saveImportedTheme: ThemeRuntime['saveImportedTheme'];
+  deleteImportedTheme: ThemeRuntime['deleteImportedTheme'];
+  refreshOpenCodeAfterConfigChange: ReturnType<typeof createOpenCodeLifecycleRuntime>['refreshOpenCodeAfterConfigChange'];
+  clientReloadDelayMs: number;
+}
+
+export interface CommonRequestDependencies {
+  express: ExpressFactory;
+  verboseRequestLogs?: boolean;
+  skipBodyParsing?: (req: Request) => boolean;
+}
+
+interface RouteInput extends ClientInput, PairingInput, RedemptionInput {
+  previewUrls?: unknown;
+  pairingId?: unknown;
+  serverUrl?: unknown;
+  includeRelay?: unknown;
+  includeDirect?: unknown;
+  url?: unknown;
+  theme?: unknown;
+}
+
+interface ServerIdentity {
+  serverId?: string;
+}
+
+interface ServerInfo {
+  openchamberVersion: string;
+  runtime: string;
+  pid: number;
+  startedAt: string;
+  port?: number | null;
+  tunnelUrl?: string | null;
+}
+
+const hasRouteInput = (value: unknown): value is RouteInput => value != null;
+const readBody = (req: Request) => hasRouteInput(req.body) ? req.body : undefined;
+const hasErrorDetails = (value: unknown): value is { message?: unknown; statusCode?: unknown } => value != null;
+const isNumber = (value: unknown): value is number => typeof value === 'number';
+const isAddressInfo = (value: ReturnType<Server['address']>): value is AddressInfo => Boolean(value) && typeof value === 'object';
+
+export const registerHttpResponseDiagnostics = (app: Application, journal: DiagnosticJournal = serverDiagnosticJournal) => {
+  app.use((req, res, next) => {
+    res.once('finish', () => {
+      journal.recordHttpResponse(req.method, req.path, res.statusCode);
+    });
+    next();
+  });
+};
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
+
+const parseLoopbackUrl = (rawUrl: RouteInput['url']) => {
+  if (!isString(rawUrl)) {
     return null;
   }
 
@@ -27,20 +170,16 @@ const parseLoopbackUrl = (rawUrl) => {
   return url;
 };
 
-/**
- * Whether a request carries credentials /api would accept, without refusing
- * it: routes open before login use this to leave private details out.
- */
-export const isRequestAuthorized = async (req, res, { tunnelAuthController, uiAuthController }) => {
+export const isRequestAuthorized = async (req: Request, res: Response, { tunnelAuthController, uiAuthController }: RequestAuthorizationDependencies) => {
   const scope = tunnelAuthController?.classifyRequestScope?.(req);
   if (scope === 'tunnel' || scope === 'unknown-public') {
-    return Boolean(tunnelAuthController.getTunnelSessionFromRequest(req));
+    return Boolean(tunnelAuthController?.getTunnelSessionFromRequest(req));
   }
   if (!uiAuthController) return false;
   return Boolean(await uiAuthController.resolveAuthContext(req, res, { allowUrlToken: false }));
 };
 
-export const registerServerStatusRoutes = (app, dependencies) => {
+export const registerServerStatusRoutes = (app: Application, dependencies: ServerStatusDependencies) => {
   const {
     express,
     process,
@@ -49,29 +188,27 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     serverStartedAt,
     gracefulShutdown,
     getHealthSnapshot,
-    // Port this OpenChamber instance serves on and the tunnel public URL (if
-    // a tunnel is active). Exposed on /api/system/info so the UI can surface
-    // the active instance's service URLs. Optional: older wiring omits them
-    // and the endpoint reports null.
     getServerPort = () => null,
     getTunnelUrl = () => null,
-    // Stable server identity (hash of the public signing key — not a secret).
-    // Exposed on /health and /api/version so a client can verify that a
-    // learned/probed address belongs to the expected server BEFORE sending its
-    // bearer token there. Optional: older wiring omits it.
     getServerId = async () => null,
     tunnelAuthController = null,
     uiAuthController = null,
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+    // Loaded OpenCode directories and process counts for the diagnostic
+    // export (`../diagnostics/opencode-load.js`); older wiring omits it.
+    readOpenCodeLoad = null,
+========
+    readOpenCodeLoad = null,
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
   } = dependencies;
 
-  // The identity is immutable for the process lifetime; resolve once, and never
-  // let an identity failure break health reporting.
-  let cachedServerId = null;
+  let cachedServerId: string | null = null;
   const resolveServerId = async () => {
     if (cachedServerId) return cachedServerId;
     try {
       const value = await getServerId();
-      cachedServerId = typeof value === 'string' && value.trim() ? value.trim() : null;
+      cachedServerId = value && value.trim() ? value.trim() : null;
     } catch {
       cachedServerId = null;
     }
@@ -80,13 +217,13 @@ export const registerServerStatusRoutes = (app, dependencies) => {
 
   const allocateLoopbackPort = async () => {
     const net = await import('node:net');
-    return await new Promise((resolve, reject) => {
+    return await new Promise<number>((resolve, reject) => {
       const server = net.createServer();
       server.on('error', reject);
       server.listen(0, '127.0.0.1', () => {
         try {
           const address = server.address();
-          const port = address && typeof address === 'object' ? address.port : 0;
+          const port = isAddressInfo(address) ? address.port : 0;
           server.close(() => {
             resolve(port);
           });
@@ -94,6 +231,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
           try {
             server.close();
           } catch {
+            void 0;
           }
           reject(error);
         }
@@ -112,31 +250,36 @@ export const registerServerStatusRoutes = (app, dependencies) => {
       'realtime.sse.v1',
       'realtime.websocket.global-events.v1',
       'terminal.websocket.v1',
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+      // Message pages honour `x-openchamber-part-shells` (message-shells.js).
+      'api.message-part-shells.v1',
+========
+      'api.message-part-shells.v1',
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
     ],
   };
 
   const isDevShutdownAllowed = () => {
-    // Dev-only escape hatch: allow terminating the whole dev process group.
-    // This should never be enabled in production runtimes.
     return process.env.OPENCHAMBER_DEV_SHUTDOWN === 'true';
   };
 
-  const isSameOriginRequest = (req) => {
-    const rawOrigin = typeof req.get === 'function' ? req.get('origin') : '';
-    const rawHost = typeof req.get === 'function' ? req.get('host') : '';
+  const isSameOriginRequest = (req: Request) => {
+    const rawOrigin = req.get('origin');
+    const rawHost = req.get('host');
     if (!rawOrigin || !rawHost) {
       return false;
     }
     try {
-      const origin = new URL(rawOrigin);
+      const origin = new URL(String(rawOrigin));
       return origin.host === rawHost;
     } catch {
       return false;
     }
   };
 
-  const resolveProcessGroupId = async (pid) => {
-    if (!pid || typeof pid !== 'number' || !Number.isFinite(pid) || pid <= 0) {
+  const resolveProcessGroupId = async (pid: number | null) => {
+    if (!pid || !Number.isFinite(pid) || pid <= 0) {
       return null;
     }
     if (process.platform === 'win32') {
@@ -156,8 +299,8 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     }
   };
 
-  const parseLoopbackPort = (rawUrl) => {
-    if (typeof rawUrl !== 'string') {
+  const parseLoopbackPort = (rawUrl: RouteInput['previewUrls']) => {
+    if (!isString(rawUrl)) {
       return null;
     }
     let url;
@@ -180,7 +323,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     return port;
   };
 
-  const killListenPort = async (port) => {
+  const killListenPort = async (port: number) => {
     if (!Number.isFinite(port) || port <= 0) {
       return;
     }
@@ -204,6 +347,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
         try {
           process.kill(pid, 'SIGTERM');
         } catch {
+          void 0;
         }
       }
       if (pids.length > 0) {
@@ -212,33 +356,33 @@ export const registerServerStatusRoutes = (app, dependencies) => {
             try {
               process.kill(pid, 'SIGKILL');
             } catch {
+              void 0;
             }
           }
         }, 1200).unref?.();
       }
     } catch {
-      // ignore (no lsof, no permission, etc.)
+      void 0;
     }
   };
 
   app.get('/health', async (_req, res) => {
     const serverId = await resolveServerId();
+    const identity: ServerIdentity = {};
+    if (serverId) identity.serverId = serverId;
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       openchamberVersion,
       runtime: runtimeName,
       compatibility,
-      ...(serverId ? { serverId } : {}),
+      ...identity,
       ...getHealthSnapshot(),
     });
   });
 
-  // This is a local support export, not an API for connected remote clients.
-  // Check the socket address rather than proxy-provided forwarding headers.
-  // The private relay also dials loopback, and stamps every request it forwards.
-  const requireLocalDiagnostics = (req, res, next) => {
-    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress)
+  const requireLocalDiagnostics: RequestHandler = (req, res, next) => {
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress ?? '')
       || req.headers['x-openchamber-relay-connection']
       || (tunnelAuthController?.classifyRequestScope && tunnelAuthController.classifyRequestScope(req) !== 'local')) {
       res.status(403).json({ error: 'Local diagnostics require a loopback connection' });
@@ -250,7 +394,8 @@ export const registerServerStatusRoutes = (app, dependencies) => {
 
   app.get('/api/diagnostics/local-files', requireLocalDiagnostics, async (_req, res) => {
     try {
-      res.json(await collectLocalFileDiagnostics({ webPort: getServerPort() }));
+      const webPort = getServerPort();
+      res.json(await collectLocalFileDiagnostics(webPort === null ? {} : { webPort }));
     } catch {
       res.status(500).json({ error: 'Diagnostics unavailable' });
     }
@@ -258,26 +403,28 @@ export const registerServerStatusRoutes = (app, dependencies) => {
 
   app.get('/api/version', async (_req, res) => {
     const serverId = await resolveServerId();
+    const identity: ServerIdentity = {};
+    if (serverId) identity.serverId = serverId;
     res.json({
       status: 'ok',
       openchamberVersion,
       runtime: runtimeName,
       startedAt: serverStartedAt,
       compatibility,
-      ...(serverId ? { serverId } : {}),
+      ...identity,
     });
   });
 
-  const requireShutdownAuth = async (req, res, next) => {
-    if (!uiAuthController || typeof uiAuthController.requireAuth !== 'function') {
+  const requireShutdownAuth: RequestHandler = async (req, res, next) => {
+    if (!uiAuthController) {
       return next();
     }
-    const requestScope = typeof tunnelAuthController?.classifyRequestScope === 'function'
+    const requestScope = tunnelAuthController?.classifyRequestScope
       ? tunnelAuthController.classifyRequestScope(req)
       : 'local';
     if (
       (requestScope === 'tunnel' || requestScope === 'unknown-public')
-      && typeof tunnelAuthController?.requireTunnelSession === 'function'
+      && tunnelAuthController?.requireTunnelSession
     ) {
       return tunnelAuthController.requireTunnelSession(req, res, next);
     }
@@ -307,31 +454,36 @@ export const registerServerStatusRoutes = (app, dependencies) => {
 
     res.json({ ok: true });
 
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
     // Terminate the entire dev process group so `bun run dev` leaves no orphans.
     // We still run graceful shutdown to clean up terminals and websockets.
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+    // Terminate the entire dev process group so `bun run dev` leaves no orphans.
+    // We still run graceful shutdown to clean up OpenCode, terminals, websockets.
+========
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
     try {
-      const rawPreviewUrls = Array.isArray(req.body?.previewUrls) ? req.body.previewUrls : [];
+      const previewUrls = readBody(req)?.previewUrls;
+      const rawPreviewUrls = Array.isArray(previewUrls) ? previewUrls : [];
       const previewPorts = Array.from(new Set(
         rawPreviewUrls
-          .map((value) => parseLoopbackPort(value))
-          .filter((port) => typeof port === 'number')
+          .map((value: RouteInput['previewUrls']) => parseLoopbackPort(value))
+          .filter(isNumber)
       ));
-      // Attempt to stop preview servers that may have daemonized away from the PTY.
-      // This is dev-only and limited to loopback ports supplied by the UI.
       await Promise.all(previewPorts.map((port) => killListenPort(port)));
 
       const pgid = await resolveProcessGroupId(process.pid);
-      const ppid = typeof process.ppid === 'number' ? process.ppid : null;
+      const ppid = process.ppid;
       const parentPgid = ppid ? await resolveProcessGroupId(ppid) : null;
 
-      // Kick off shutdown cleanup first.
       void gracefulShutdown({ exitProcess: false });
 
-      const pgidsToKill = Array.from(new Set([pgid, parentPgid].filter(Boolean)));
+      const pgidsToKill = Array.from(new Set([pgid, parentPgid].filter((id): id is number => Boolean(id))));
       for (const id of pgidsToKill) {
         try {
           process.kill(-id, 'SIGTERM');
         } catch {
+          void 0;
         }
       }
 
@@ -340,32 +492,30 @@ export const registerServerStatusRoutes = (app, dependencies) => {
           try {
             process.kill(-id, 'SIGKILL');
           } catch {
+            void 0;
           }
         }
       }, 1500).unref?.();
 
-      // Ensure the server process itself exits even if the group kill fails.
       setTimeout(() => {
         try {
           process.exit(0);
         } catch {
+          void 0;
         }
       }, 2500).unref?.();
     } catch (error) {
-      console.error('Dev shutdown request failed:', error?.message || error);
-      // As a last resort, exit.
+      console.error('Dev shutdown request failed:', (hasErrorDetails(error) && error.message) || error);
       try {
         process.exit(0);
       } catch {
+        void 0;
       }
     }
   });
 
   app.get('/api/system/info', async (req, res) => {
-    // Open before login: the CLI matches `pid` against its pid file to tell
-    // its own server from whatever else holds the port. Where this server is
-    // reachable (port, tunnel address) is for signed-in callers only.
-    const info = {
+    const info: ServerInfo = {
       openchamberVersion,
       runtime: runtimeName,
       pid: process.pid,
@@ -378,8 +528,6 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     res.json(info);
   });
 
-  // Allocates a best-effort free TCP port hint on 127.0.0.1.
-  // Another process can still claim it before the preview server binds.
   app.get('/api/system/free-port', async (_req, res) => {
     try {
       const port = await allocateLoopbackPort();
@@ -388,13 +536,13 @@ export const registerServerStatusRoutes = (app, dependencies) => {
       }
       return res.json({ port });
     } catch (error) {
-      return res.status(500).json({ error: (error && error.message) || 'Failed to allocate port' });
+      return res.status(500).json({ error: (hasErrorDetails(error) && error.message) || 'Failed to allocate port' });
     }
   });
 
 };
 
-export const registerAuthAndAccessRoutes = (app, dependencies) => {
+export const registerAuthAndAccessRoutes = (app: Application, dependencies: AuthAndAccessDependencies) => {
   const {
     express,
     tunnelAuthController,
@@ -403,10 +551,8 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     clientPairingRuntime,
     readSettingsFromDiskMigrated,
     normalizeTunnelSessionTtlMs,
-    // Returns the relay pairing candidate ({ type:'relay', relayUrl, serverId,
-    // hostEncPubJwk, priority }) when the host relay is enabled, else null.
-    // Injected lazily because the relay service is constructed after these routes.
     getRelayPairingCandidate = async () => null,
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
     // Re-evaluate the relay lifecycle after pairing/device changes.
     reconcileRelay = async () => { },
     removeClientPushDevices = async () => { },
@@ -417,21 +563,45 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     // Returns ALL direct LAN URLs the server is currently reachable on (client-
     // reached address first, then interface scan) for the candidates-refresh
     // endpoint. Empty when the server is loopback-only.
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+    // Re-evaluate the relay lifecycle after pairing/device changes.
+    reconcileRelay = async () => {},
+    // Drops the push registrations of the given clients' devices.
+    removeClientPushDevices = async () => {},
+    // Returns { local, lan, relayAvailable } — the direct transport URLs the
+    // server can actually be reached on (LAN derived from the server bind, not
+    // the UI origin), for the create-device dialog.
+    getPairingTransports = () => ({ local: null, lan: null, relayAvailable: true }),
+    // Returns ALL direct LAN URLs the server is currently reachable on (client-
+    // reached address first, then interface scan) for the candidates-refresh
+    // endpoint. Empty when the server is loopback-only.
+========
+    reconcileRelay = async () => {},
+    removeClientPushDevices = async () => {},
+    getPairingTransports = () => ({ local: null, lan: null, relayAvailable: true }),
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
     getDirectCandidateUrls = () => [],
-    // Stable server identity for client-side verification of learned addresses.
     getServerId = async () => null,
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
     // Display name a paired device shows for THIS server (issuing machine's
     // hostname), distinct from the per-device pairing label typed by the operator.
     getServerLabel = () => 'OhPiChamber',
     getLegacyDataPresence = hasLegacyOpenCodeData,
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+    // Display name a paired device shows for THIS server (issuing machine's
+    // hostname), distinct from the per-device pairing label typed by the operator.
+    getServerLabel = () => 'OpenChamber',
+========
+    getServerLabel = () => 'OpenChamber',
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
   } = dependencies;
   const PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
   const PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS = 10;
-  const pairingRedeemAttempts = new Map();
+  const pairingRedeemAttempts = new Map<string, { count: number; firstAttemptAt: number }>();
 
-  const runWithUiAuth = async (req, res, next, handler, options = {}) => {
+  const runWithUiAuth = async (req: Request, res: Response, next: NextFunction, handler: () => Promise<void | Response>, options: { sessionOnly?: boolean } = {}) => {
     try {
-      const requireAuth = options.sessionOnly === true && typeof uiAuthController.requireSessionAuth === 'function'
+      const requireAuth = options.sessionOnly === true && uiAuthController.requireSessionAuth
         ? uiAuthController.requireSessionAuth
         : uiAuthController.requireAuth;
       await requireAuth(req, res, async () => {
@@ -442,9 +612,9 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   };
 
-  const runWithClientManagementAuth = async (req, res, next, handler) => {
+  const runWithClientManagementAuth = async (req: Request, res: Response, next: NextFunction, handler: (context: ManagementAuthContext) => Promise<void | Response>) => {
     try {
-      if (typeof uiAuthController.resolveAuthContext === 'function') {
+      if (uiAuthController.resolveAuthContext) {
         const context = await uiAuthController.resolveAuthContext(req, res, {
           allowClientAuth: true,
           allowUrlToken: false,
@@ -463,9 +633,9 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   };
 
-  const runWithClientCreateAuth = async (req, res, next, handler) => {
+  const runWithClientCreateAuth = async (req: Request, res: Response, next: NextFunction, handler: (context: ManagementAuthContext) => Promise<void | Response>) => {
     try {
-      if (typeof uiAuthController.resolveAuthContext === 'function') {
+      if (uiAuthController.resolveAuthContext) {
         const context = await uiAuthController.resolveAuthContext(req, res, {
           allowClientAuth: true,
           allowUrlToken: false,
@@ -492,13 +662,13 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   };
 
-  const clientIdFromAuthContext = (context) => {
+  const clientIdFromAuthContext = (context: ManagementAuthContext) => {
     const raw = context?.client?.id || context?.clientId;
-    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+    return raw && raw.length > 0 ? raw : null;
   };
 
-  const clientRecordFromAuthContext = async (context) => {
-    if (context?.client && typeof context.client === 'object') {
+  const clientRecordFromAuthContext = async (context: ManagementAuthContext) => {
+    if (context?.client) {
       return context.client;
     }
     const clientId = clientIdFromAuthContext(context);
@@ -507,28 +677,30 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     return clients.find((client) => client.id === clientId) || null;
   };
 
-  const requestOrigin = (req) => {
-    const forwardedProto = typeof req.headers?.['x-forwarded-proto'] === 'string'
-      ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+  const requestOrigin = (req: Request) => {
+    const forwardedProto = isString(req.headers?.['x-forwarded-proto'])
+      ? req.headers['x-forwarded-proto'].split(',')[0]?.trim()
       : '';
-    const protocol = forwardedProto || (req.socket?.encrypted ? 'https' : 'http');
-    const host = typeof req.headers?.host === 'string' ? req.headers.host.trim() : '';
+    const protocol = forwardedProto || (req.socket && 'encrypted' in req.socket && req.socket.encrypted ? 'https' : 'http');
+    const host = isString(req.headers?.host) ? req.headers.host.trim() : '';
     if (!host) return null;
     return `${protocol}://${host}`;
   };
 
-  const requestIp = (req) => {
-    // Do not use req.ip here: Express rewrites it from X-Forwarded-For when
-    // trust proxy is enabled, and redeem is unauthenticated before this limit.
+  const requestIp = (req: Request) => {
     return req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
   };
 
-  const pairingIdFromRequest = (req) => {
-    const raw = typeof req.body?.pairingId === 'string' ? req.body.pairingId.trim() : '';
+  const pairingIdFromRequest = (req: Request) => {
+    const pairingId = readBody(req)?.pairingId;
+    const raw = isString(pairingId) ? pairingId.trim() : '';
     return raw || 'missing';
   };
 
-  const checkPairingRedeemRateLimit = (req) => {
+  const checkPairingRedeemRateLimit = (req: Request): {
+    remaining: number;
+    reset: number;
+  } & ({ allowed: true } | { allowed: false; retryAfter: number }) => {
     const now = Date.now();
     const key = `${requestIp(req)}:${pairingIdFromRequest(req)}`;
     for (const [entryKey, entry] of pairingRedeemAttempts.entries()) {
@@ -554,52 +726,16 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     return { allowed: true, remaining: PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS - entry.count, reset };
   };
 
-  const clearPairingRedeemRateLimit = (req) => {
+  const clearPairingRedeemRateLimit = (req: Request) => {
     pairingRedeemAttempts.delete(`${requestIp(req)}:${pairingIdFromRequest(req)}`);
   };
 
-  const normalizeCandidateUrl = (value) => {
-    if (typeof value !== 'string' || !value.trim()) return null;
-    try {
-      const parsed = new URL(value.trim());
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-      parsed.hash = '';
-      parsed.search = '';
-      return parsed.toString().replace(/\/+$/, '');
-    } catch {
-      return null;
-    }
-  };
-
-  const candidateUrlType = (url) => {
-    try {
-      return new URL(url).protocol === 'https:' ? 'tunnel' : 'lan';
-    } catch {
-      return 'lan';
-    }
-  };
-
-  const isLoopbackCandidateUrl = (url) => {
-    try {
-      const hostname = new URL(url).hostname.toLowerCase();
-      return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
-    } catch {
-      return true;
-    }
-  };
-
-  // `preferredServerUrl` is the caller-supplied externally reachable URL (the
-  // desktop UI reaches its own server over loopback, so the request origin is not
-  // scannable — it passes the LAN URL instead). Falls back to the request origin
-  // for remote callers where the Host header IS the reachable address.
-  //
-  // `includeRelay` is the per-link transport choice from the create-link dialog:
-  //   true  → add the relay candidate, enabling the relay host on demand;
-  //   false → direct only, never relay;
-  //   undefined → legacy: advertise relay only if it is already enabled.
-  // `includeDirect === false` produces a relay-only link (no direct candidate).
-  const pairingServerCandidates = async (req, { preferredServerUrl, includeRelay, includeDirect = true } = {}) => {
-    const candidates = [];
+  const pairingServerCandidates = async (req: Request, { preferredServerUrl, includeRelay, includeDirect = true }: {
+    preferredServerUrl?: RouteInput['serverUrl'];
+    includeRelay?: boolean | undefined;
+    includeDirect?: boolean;
+  } = {}) => {
+    const candidates: (DirectPairingCandidate | RelayPairingCandidate)[] = [];
     if (includeDirect) {
       const preferred = normalizeCandidateUrl(preferredServerUrl);
       const origin = normalizeCandidateUrl(requestOrigin(req));
@@ -607,72 +743,68 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       if (direct) {
         candidates.push({ type: candidateUrlType(direct), url: direct, priority: 10 });
       }
-      // The origin the creator is browsing over (e.g. a public https domain in
-      // front of a reverse proxy) is a reachable address the server cannot
-      // discover from its own interfaces. Carry it as an additional direct
-      // candidate so the paired device can keep using that same domain instead
-      // of depending on LAN hairpin behavior or relay availability. Loopback
-      // origins (desktop shell, localhost dev) are unreachable from another
-      // device and are skipped.
       if (origin && direct && origin !== direct && !isLoopbackCandidateUrl(origin)) {
         candidates.push({ type: candidateUrlType(origin), url: origin, priority: 20 });
       }
     }
-    // The client races candidates and falls back to relay only if the direct URL
-    // is unreachable (relay carries a higher priority number).
     if (includeRelay !== false) {
       try {
         const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: includeRelay === true });
         if (relayCandidate) candidates.push(relayCandidate);
       } catch {
-        // A relay enable/status failure must not break direct pairing.
+        void 0;
       }
     }
     return candidates;
   };
 
-  const sendPairingRedeemError = (res, error) => {
-    const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : 400;
+  const sendPairingRedeemError = (res: Response, error: { statusCode?: unknown }) => {
+    const statusCode = isNumber(error?.statusCode) ? error.statusCode : 400;
     res.status(statusCode).json({ error: 'Invalid or expired pairing session' });
   };
 
-  /**
-   * Endpoints that carry their own authority instead of a UI session.
-   *
-   * The repository credential helper runs from Git itself, in a terminal or
-   * the agent's shell, wherever a repository names it in `.git/config`. It
-   * authenticates with the secret the server writes beside its endpoint file,
-   * rotated every start, and the route refuses any peer that is not this
-   * machine. It has no UI session and cannot obtain one, so leaving it behind
-   * the session guard would make a repository's account silently unusable on
-   * every instance that sets a UI password, which Docker requires.
-   */
   const selfAuthenticatedApiPaths = new Set(['/api/git/repository-credential']);
 
-  // An extension tracker's OAuth callback (`/tracker/ext-<id>/oauth/callback`)
-  // is the same kind of page: the tracker redirects the browser here with no
-  // UI bearer, and the route accepts only a `state` this process issued.
-  const isGuestOauthCallback = (req) => (
+  const isGuestOauthCallback = (req: Request) => (
     req.method === 'GET'
     && /^\/(?:guests\/[a-z][a-z0-9-]*|tracker\/ext-[a-z][a-z0-9-]*)\/oauth\/callback$/.test(req.path || '')
+  );
+
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
+  // An HTML preview runs in an opaque-origin sandbox and carries no session.
+  // The grant in its path is the capability; the fs route checks it.
+  const isFilePreviewRead = (req) => (
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+  // An MCP server's OAuth callback lands on the OpenChamber origin because a
+  // browser on another machine cannot reach OpenCode's loopback listener. The
+  // route forwards it there only for a state bound to a live sign-in.
+  const isMcpOauthCallback = (req) => (
+    req.method === 'GET'
+    && /^\/mcp\/oauth\/[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?\/callback$/.test(req.path || '')
   );
 
   // An HTML preview runs in an opaque-origin sandbox and carries no session.
   // The grant in its path is the capability; the fs route checks it.
   const isFilePreviewRead = (req) => (
+========
+  const isMcpOauthCallback = (req: Request) => (
+    req.method === 'GET'
+    && /^\/mcp\/oauth\/[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?\/callback$/.test(req.path || '')
+  );
+
+  const isFilePreviewRead = (req: Request) => (
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
     req.method === 'GET'
     && /^\/fs\/preview\/[^/]+\/./.test(req.path || '')
   );
 
-  // An extension frame is sandboxed the same way and loads its package
-  // through a grant in the path; the guests route checks it.
-  const isGuestFrameFileRead = (req) => (
+  const isGuestFrameFileRead = (req: Request) => (
     req.method === 'GET'
     && /^\/guest-files\/[^/]+\/./.test(req.path || '')
   );
 
-  const requireApiAuth = async (req, res, next) => {
-    const pathname = (req.originalUrl || '').split('?')[0];
+  const requireApiAuth: RequestHandler = async (req, res, next) => {
+    const pathname = (req.originalUrl || '').split('?', 1).join('');
     if (selfAuthenticatedApiPaths.has(pathname)) return next();
     if (isGuestOauthCallback(req) || isFilePreviewRead(req) || isGuestFrameFileRead(req)) {
       return next();
@@ -798,6 +930,41 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   });
 
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+  app.patch('/api/passkeys/:id', express.json({ limit: '8kb' }), async (req, res, next) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+      return res.status(403).json({ error: 'Passkey management is disabled for tunnel scope', tunnelLocked: true });
+    }
+    try {
+      await uiAuthController.requireSessionAuth(req, res, async () => {
+        await uiAuthController.handlePasskeyRename(req, res);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+========
+  app.patch('/api/passkeys/:id', express.json({ limit: '8kb' }), async (req, res, next) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+      return res.status(403).json({ error: 'Passkey management is disabled for tunnel scope', tunnelLocked: true });
+    }
+    try {
+      await uiAuthController.requireSessionAuth(req, res, async () => {
+        if (!uiAuthController.handlePasskeyRename) {
+          throw new TypeError('uiAuthController.handlePasskeyRename is not a function');
+        }
+        await uiAuthController.handlePasskeyRename(req, res);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
   app.post('/api/auth/reset', async (req, res, next) => {
     const requestScope = tunnelAuthController.classifyRequestScope(req);
     if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
@@ -816,9 +983,6 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     await runWithClientManagementAuth(req, res, next, async (authContext) => {
       if (authContext.type === 'client') {
         const client = await clientRecordFromAuthContext(authContext);
-        // The desktop shell's local client is the trusted operator of this
-        // server; it manages devices just like a browser UI session. Every
-        // other client token is scoped to its own record.
         if (client?.clientKind !== 'desktop-local') {
           return res.json({ clients: client ? [client] : [] });
         }
@@ -831,21 +995,19 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   app.post('/api/client-auth/clients', express.json({ limit: '64kb' }), async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       const result = await remoteClientAuthRuntime.createClient({
-        label: req.body?.label,
-        clientKind: req.body?.clientKind,
-        dedupeKey: req.body?.dedupeKey,
+        label: readBody(req)?.label,
+        clientKind: readBody(req)?.clientKind,
+        dedupeKey: readBody(req)?.dedupeKey,
       });
       res.setHeader('Cache-Control', 'no-store');
       res.status(201).json(result);
     });
   });
 
-  app.delete('/api/client-auth/clients/:id', async (req, res, next) => {
+  app.delete<unknown, { id: string }>('/api/client-auth/clients/:id', async (req, res, next) => {
     await runWithClientManagementAuth(req, res, next, async (authContext) => {
       if (authContext.type === 'client') {
         const actingClient = await clientRecordFromAuthContext(authContext);
-        // The desktop shell's local client manages every device; other client
-        // tokens may only revoke themselves.
         if (actingClient?.clientKind !== 'desktop-local') {
           const clientId = clientIdFromAuthContext(authContext);
           if (!clientId || clientId !== req.params?.id) {
@@ -869,8 +1031,6 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     await runWithClientManagementAuth(req, res, next, async (authContext) => {
       if (authContext.type === 'client') {
         const actingClient = await clientRecordFromAuthContext(authContext);
-        // Purging revoked devices is a whole-server management action; only the
-        // trusted desktop shell client (or a UI session) may do it.
         if (actingClient?.clientKind !== 'desktop-local') {
           return res.status(403).json({ purged: 0, error: 'Client tokens cannot purge revoked devices' });
         }
@@ -884,17 +1044,19 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
 
   app.post('/api/client-auth/pairing/sessions', express.json({ limit: '64kb' }), async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async (authContext) => {
+      const includeRelay = readBody(req)?.includeRelay;
       const candidates = await pairingServerCandidates(req, {
-        preferredServerUrl: req.body?.serverUrl,
-        includeRelay: typeof req.body?.includeRelay === 'boolean' ? req.body.includeRelay : undefined,
-        includeDirect: req.body?.includeDirect !== false,
+        preferredServerUrl: readBody(req)?.serverUrl,
+        includeRelay: isBoolean(includeRelay) ? includeRelay : undefined,
+        includeDirect: readBody(req)?.includeDirect !== false,
       });
       const usesRelay = candidates.some((candidate) => candidate.type === 'relay');
       const result = await clientPairingRuntime.createPairingSession({
-        label: req.body?.label,
-        allowedClientKinds: req.body?.allowedClientKinds,
+        label: readBody(req)?.label,
+        allowedClientKinds: readBody(req)?.allowedClientKinds,
         createdByClientId: clientIdFromAuthContext(authContext),
         usesRelay,
+        localOnly: isLocalOnlyCandidateSet(candidates),
       });
       void reconcileRelay();
       res.setHeader('Cache-Control', 'no-store');
@@ -905,18 +1067,9 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     });
   });
 
-  // Current reachable transports for an ALREADY-PAIRED device. Pairing-payload
-  // candidates are a snapshot: when DHCP hands this machine a new address, the
-  // device's saved LAN candidate goes stale and it is stuck on the relay forever.
-  // A client that connected over any live transport calls this to learn the
-  // server's present LAN URLs (plus the relay candidate when enabled) and update
-  // its saved candidate set. `serverId` lets the client bind the response — and
-  // later /health probes of the learned addresses — to this server's identity
-  // before trusting them with its bearer token.
-  // Auth: UI session or client bearer; never the short-lived URL token.
   app.get('/api/client-auth/connection/candidates', async (req, res, next) => {
-    await runWithClientManagementAuth(req, res, next, async () => {
-      const candidates = [];
+    await runWithClientManagementAuth(req, res, next, async (authContext) => {
+      const candidates: (DirectPairingCandidate | RelayPairingCandidate)[] = [];
       const directUrls = (() => {
         try {
           const urls = getDirectCandidateUrls(req);
@@ -929,25 +1082,31 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
         const normalized = normalizeCandidateUrl(url);
         if (normalized) candidates.push({ type: 'lan', url: normalized, priority: 10 });
       }
-      try {
-        const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: false });
-        if (relayCandidate) candidates.push(relayCandidate);
-      } catch {
-        // Relay status failure must not break the direct-candidate refresh.
+      const bearerToken = getBearerTokenFromRequest(req);
+      const bearerClient = bearerToken ? await remoteClientAuthRuntime.authenticateBearerToken(bearerToken, req) : null;
+      const actingClient = bearerClient?.client ?? (authContext.type === 'client' ? await clientRecordFromAuthContext(authContext) : null);
+      if (actingClient?.localOnly !== true) {
+        try {
+          const relayCandidate = await getRelayPairingCandidate({ ensureEnabled: false });
+          if (relayCandidate) candidates.push(relayCandidate);
+        } catch {
+          void 0;
+        }
       }
       let serverId = null;
       try {
         const value = await getServerId();
-        serverId = typeof value === 'string' && value.trim() ? value.trim() : null;
+        serverId = value && value.trim() ? value.trim() : null;
       } catch {
         serverId = null;
       }
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ label: getServerLabel(), ...(serverId ? { serverId } : {}), candidates });
+      const identity: ServerIdentity = {};
+      if (serverId) identity.serverId = serverId;
+      res.json({ label: getServerLabel(), ...identity, candidates });
     });
   });
 
-  // Direct transports the server can be reached on (for the create-device dialog).
   app.get('/api/client-auth/pairing/transports', async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       res.setHeader('Cache-Control', 'no-store');
@@ -955,8 +1114,6 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     });
   });
 
-  // Pending pairing sessions (link created, device not yet connected) for the
-  // "pending devices" list. Secrets are never included.
   app.get('/api/client-auth/pairing/sessions', async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       const pending = await clientPairingRuntime.listPendingSessions();
@@ -987,19 +1144,22 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
         return res.status(429).json({ error: 'Invalid or expired pairing session' });
       }
       const result = await clientPairingRuntime.redeemPairingSession({
-        pairingId: req.body?.pairingId,
-        secret: req.body?.secret,
-        clientLabel: req.body?.clientLabel,
-        clientKind: req.body?.clientKind,
-        deviceName: req.body?.deviceName,
-        devicePlatform: req.body?.devicePlatform,
-        deviceModel: req.body?.deviceModel,
-        appVersion: req.body?.appVersion,
-        dedupeKey: req.body?.dedupeKey,
+        pairingId: readBody(req)?.pairingId,
+        secret: readBody(req)?.secret,
+        clientLabel: readBody(req)?.clientLabel,
+        clientKind: readBody(req)?.clientKind,
+        deviceName: readBody(req)?.deviceName,
+        devicePlatform: readBody(req)?.devicePlatform,
+        deviceModel: readBody(req)?.deviceModel,
+        appVersion: readBody(req)?.appVersion,
+        dedupeKey: readBody(req)?.dedupeKey,
       });
       clearPairingRedeemRateLimit(req);
-      // The session became a device: relay demand may have moved from the pending
-      // session to the paired device (or a non-relay redeem may drop it).
+      if (result.replacedClientIds?.length) {
+        await removeClientPushDevices(result.replacedClientIds).catch((error) => {
+          console.warn('Failed to remove push registrations of a replaced client:', error?.message ?? error);
+        });
+      }
       void reconcileRelay();
       res.setHeader('Cache-Control', 'no-store');
       res.json({
@@ -1013,7 +1173,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
         clientToken: result.token,
       });
     } catch (error) {
-      if (error?.message === 'Invalid or expired pairing session') {
+      if (hasErrorDetails(error) && error.message === 'Invalid or expired pairing session') {
         sendPairingRedeemError(res, error);
         return;
       }
@@ -1023,7 +1183,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
 
   app.get('/connect', async (req, res) => {
     try {
-      const token = typeof req.query?.t === 'string' ? req.query.t : '';
+      const token = isString(req.query?.t) ? req.query.t : '';
       const settings = await readSettingsFromDiskMigrated();
       const tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
 
@@ -1053,7 +1213,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   app.post('/api/system/probe-url', express.json({ limit: '16kb' }), async (req, res, next) => {
     try {
       await requireApiAuth(req, res, async () => {
-        const url = parseLoopbackUrl(req.body?.url);
+        const url = parseLoopbackUrl(readBody(req)?.url);
         if (!url) {
           return res.status(400).json({ ok: false, error: 'Invalid loopback URL' });
         }
@@ -1066,7 +1226,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
           });
           return res.json({ ok: response.status >= 200 && response.status < 600, status: response.status });
         } catch (error) {
-          return res.json({ ok: false, error: error?.message || 'Probe failed' });
+          return res.json({ ok: false, error: (hasErrorDetails(error) && error.message) || 'Probe failed' });
         }
       });
     } catch (error) {
@@ -1093,7 +1253,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   });
 };
 
-export const registerSettingsUtilityRoutes = (app, dependencies) => {
+export const registerSettingsUtilityRoutes = (app: Application, dependencies: SettingsUtilityDependencies) => {
   const {
     readCustomThemesFromDisk,
     saveImportedTheme,
@@ -1112,7 +1272,7 @@ export const registerSettingsUtilityRoutes = (app, dependencies) => {
 
   app.post('/api/config/themes', async (req, res) => {
     try {
-      const theme = await saveImportedTheme(req.body?.theme);
+      const theme = await saveImportedTheme(readBody(req)?.theme);
       res.status(201).json({ theme });
     } catch (error) {
       if (error instanceof ThemeImportStorageError) {
@@ -1133,12 +1293,71 @@ export const registerSettingsUtilityRoutes = (app, dependencies) => {
       res.status(error instanceof ThemeImportStorageError ? error.status : 500).json({ error: 'delete' });
     }
   });
+<<<<<<<< HEAD:packages/web/server/lib/host/core-routes.js
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/core-routes.js
+
+  app.post('/api/config/reload', async (_req, res) => {
+    try {
+      console.log('[Server] Manual configuration reload requested');
+
+      const refreshResult = await refreshOpenCodeAfterConfigChange('manual configuration reload');
+
+      if (refreshResult?.external) {
+        return res.json(buildExternalManualRestartResponse(
+          'Configuration is saved on disk. Restart your connected OpenCode server to apply the changes.',
+        ));
+      }
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: 'Configuration reloaded successfully. Refreshing interface…',
+        reloadDelayMs: clientReloadDelayMs,
+      });
+    } catch (error) {
+      console.error('[Server] Failed to reload configuration:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to reload configuration',
+        success: false,
+      });
+    }
+  });
+========
+
+  app.post('/api/config/reload', async (_req, res) => {
+    try {
+      console.log('[Server] Manual configuration reload requested');
+
+      const refreshResult = await refreshOpenCodeAfterConfigChange('manual configuration reload');
+
+      if (refreshResult?.external) {
+        return res.json(buildExternalManualRestartResponse(
+          'Configuration is saved on disk. Restart your connected OpenCode server to apply the changes.',
+        ));
+      }
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: 'Configuration reloaded successfully. Refreshing interface…',
+        reloadDelayMs: clientReloadDelayMs,
+      });
+    } catch (error) {
+      console.error('[Server] Failed to reload configuration:', error);
+      const response = res.status(500);
+      if (!hasErrorDetails(error)) {
+        throw new TypeError(`Cannot read properties of ${error} (reading 'message')`);
+      }
+      response.json({
+        error: error.message || 'Failed to reload configuration',
+        success: false,
+      });
+    }
+  });
+>>>>>>>> upstream/main:packages/web/server/lib/server-frame/core-routes.ts
 };
 
-export const registerCommonRequestMiddleware = (app, dependencies) => {
-  // `skipBodyParsing(req)` names a request whose body must reach its route untouched: a
-  // request the isolated-spaces dispatcher streams into a space, where a parsed body would
-  // otherwise be consumed here and lost.
+export const registerCommonRequestMiddleware = (app: Application, dependencies: CommonRequestDependencies) => {
   const { express, verboseRequestLogs = false, skipBodyParsing = () => false } = dependencies;
 
   app.use((req, res, next) => {

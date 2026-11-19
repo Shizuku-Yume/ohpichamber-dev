@@ -27,9 +27,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Open a session first.',
     'contextPanel.plugin.sessionLink.failed': 'Could not link that item.',
     'contextPanel.plugin.sessionLink.linked': 'Linked to this session.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'Open {id} in the browser',
-    'chat.chatInput.linked.guest.removeAria': 'Remove {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'Open {id}',
     'session.newWorktree.actions.startFromGuest': '{name}',
     'contextPanel.plugin.actionDialog.description': 'The extension is working with the message or session you chose.',
@@ -38,10 +35,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} items',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} item',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} items',
+    'contextRail.surface.plugin.listeningAria': '{label}, using your microphone',
+    'contextRail.surface.plugin.listeningTooltip': 'Using your microphone',
     'chat.chatInput.toast.guestCommandNothing': '{name} found nothing to attach.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} failed: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} did not answer.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'This extension is not available here. Open it on OhPiChamber web or desktop.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'This extension is not available here. Open it on OpenChamber web or desktop.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'This extension is not available here. Open it on OpenChamber web or desktop.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} does not open on the phone. Open it in OpenChamber on the web or desktop.',
+>>>>>>> upstream/main
   },
   nl: {
     'chat.workStatus.sections.extensionBadge': 'Extensie',
@@ -70,9 +76,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Open eerst een sessie.',
     'contextPanel.plugin.sessionLink.failed': 'Kan dat item niet koppelen.',
     'contextPanel.plugin.sessionLink.linked': 'Gekoppeld aan deze sessie.',
-    'chat.chatInput.linked.guest.openInBrowserAria': '{id} in de browser openen',
-    'chat.chatInput.linked.guest.removeAria': '{id} verwijderen',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '{id} openen',
     'session.newWorktree.actions.startFromGuest': 'Starten vanaf {name}',
     'contextPanel.plugin.actionDialog.description': 'De extensie werkt met het bericht of de sessie die u hebt gekozen.',
@@ -81,10 +84,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} items',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} item',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} items',
+    'contextRail.surface.plugin.listeningAria': '{label}, gebruikt je microfoon',
+    'contextRail.surface.plugin.listeningTooltip': 'Gebruikt je microfoon',
     'chat.chatInput.toast.guestCommandNothing': '{name} vond niets om toe te voegen.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} mislukt: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} gaf geen antwoord.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Deze extensie is hier niet beschikbaar. Open hem in OhPiChamber web of desktop.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Deze extensie is hier niet beschikbaar. Open hem in OpenChamber web of desktop.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Deze extensie is hier niet beschikbaar. Open hem in OpenChamber web of desktop.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} opent niet op de telefoon. Open het in OpenChamber web of desktop.',
+>>>>>>> upstream/main
   },
   de: {
     'chat.workStatus.sections.extensionBadge': 'Erweiterung',
@@ -113,9 +125,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Öffne zuerst eine Sitzung.',
     'contextPanel.plugin.sessionLink.failed': 'Der Eintrag konnte nicht verknüpft werden.',
     'contextPanel.plugin.sessionLink.linked': 'Mit dieser Sitzung verknüpft.',
-    'chat.chatInput.linked.guest.openInBrowserAria': '{id} im Browser öffnen',
-    'chat.chatInput.linked.guest.removeAria': '{id} entfernen',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '{id} öffnen',
     'session.newWorktree.actions.startFromGuest': 'Von {name} starten',
     'contextPanel.plugin.actionDialog.description': 'Die Erweiterung arbeitet mit der gewählten Nachricht oder Sitzung.',
@@ -124,10 +133,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} Einträge',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} Eintrag',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} Einträge',
+    'contextRail.surface.plugin.listeningAria': '{label}, verwendet dein Mikrofon',
+    'contextRail.surface.plugin.listeningTooltip': 'Verwendet dein Mikrofon',
     'chat.chatInput.toast.guestCommandNothing': '{name} hat nichts zum Anhängen gefunden.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} fehlgeschlagen: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} hat nicht geantwortet.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Diese Erweiterung ist hier nicht verfügbar. Öffne sie in OhPiChamber Web oder Desktop.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Diese Erweiterung ist hier nicht verfügbar. Öffne sie in OpenChamber Web oder Desktop.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Diese Erweiterung ist hier nicht verfügbar. Öffne sie in OpenChamber Web oder Desktop.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} lässt sich auf dem Telefon nicht öffnen. Öffne es in OpenChamber Web oder Desktop.',
+>>>>>>> upstream/main
   },
   fr: {
     'chat.workStatus.sections.extensionBadge': 'Extension',
@@ -156,9 +174,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Ouvrez d’abord une session.',
     'contextPanel.plugin.sessionLink.failed': 'Impossible de lier cet élément.',
     'contextPanel.plugin.sessionLink.linked': 'Lié à cette session.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'Ouvrir {id} dans le navigateur',
-    'chat.chatInput.linked.guest.removeAria': 'Retirer {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'Ouvrir {id}',
     'session.newWorktree.actions.startFromGuest': 'Démarrer depuis {name}',
     'contextPanel.plugin.actionDialog.description': 'L’extension travaille avec le message ou la session choisis.',
@@ -167,10 +182,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} éléments',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} élément',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} éléments',
+    'contextRail.surface.plugin.listeningAria': '{label}, utilise ton micro',
+    'contextRail.surface.plugin.listeningTooltip': 'Utilise ton micro',
     'chat.chatInput.toast.guestCommandNothing': '{name} n’a rien trouvé à joindre.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} a échoué : {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} n’a pas répondu.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Cette extension n’est pas disponible ici. Ouvrez-la dans OhPiChamber web ou desktop.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Cette extension n’est pas disponible ici. Ouvrez-la dans OpenChamber web ou desktop.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Cette extension n’est pas disponible ici. Ouvrez-la dans OpenChamber web ou desktop.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} ne s’ouvre pas sur le téléphone. Ouvrez-le dans OpenChamber web ou desktop.',
+>>>>>>> upstream/main
   },
   es: {
     'chat.workStatus.sections.extensionBadge': 'Extensión',
@@ -199,9 +223,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Abre una sesión primero.',
     'contextPanel.plugin.sessionLink.failed': 'No se pudo vincular ese elemento.',
     'contextPanel.plugin.sessionLink.linked': 'Vinculado a esta sesión.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'Abrir {id} en el navegador',
-    'chat.chatInput.linked.guest.removeAria': 'Quitar {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'Abrir {id}',
     'session.newWorktree.actions.startFromGuest': 'Empezar desde {name}',
     'contextPanel.plugin.actionDialog.description': 'La extensión está trabajando con el mensaje o la sesión que elegiste.',
@@ -210,10 +231,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} elementos',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} elemento',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} elementos',
+    'contextRail.surface.plugin.listeningAria': '{label}, usando tu micrófono',
+    'contextRail.surface.plugin.listeningTooltip': 'Usando tu micrófono',
     'chat.chatInput.toast.guestCommandNothing': '{name} no encontró nada que adjuntar.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} falló: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} no respondió.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Esta extensión no está disponible aquí. Ábrela en OhPiChamber web o escritorio.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensión no está disponible aquí. Ábrela en OpenChamber web o escritorio.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensión no está disponible aquí. Ábrela en OpenChamber web o escritorio.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} no se abre en el teléfono. Ábrelo en OpenChamber web o escritorio.',
+>>>>>>> upstream/main
   },
   ja: {
     'chat.workStatus.sections.extensionBadge': '拡張機能',
@@ -242,9 +272,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': '先にセッションを開いてください。',
     'contextPanel.plugin.sessionLink.failed': 'その項目をリンクできませんでした。',
     'contextPanel.plugin.sessionLink.linked': 'このセッションにリンクしました。',
-    'chat.chatInput.linked.guest.openInBrowserAria': '{id}をブラウザで開く',
-    'chat.chatInput.linked.guest.removeAria': '{id}を削除',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '{id}を開く',
     'session.newWorktree.actions.startFromGuest': '{name}から開始',
     'contextPanel.plugin.actionDialog.description': '拡張機能が選択したメッセージまたはセッションを処理しています。',
@@ -253,10 +280,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}、{count} 件',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} 件',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} 件',
+    'contextRail.surface.plugin.listeningAria': '{label}、マイクを使用中',
+    'contextRail.surface.plugin.listeningTooltip': 'マイクを使用中',
     'chat.chatInput.toast.guestCommandNothing': '{name} には添付するものが見つかりませんでした。',
     'chat.chatInput.toast.guestCommandFailed': '/{command} が失敗しました: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} が応答しませんでした。',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'この拡張機能はここでは利用できません。OhPiChamber のウェブ版かデスクトップ版で開いてください。',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'この拡張機能はここでは利用できません。OpenChamber のウェブ版かデスクトップ版で開いてください。',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'この拡張機能はここでは利用できません。OpenChamber のウェブ版かデスクトップ版で開いてください。',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} はスマートフォンでは開けません。OpenChamber のウェブ版かデスクトップ版で開いてください。',
+>>>>>>> upstream/main
   },
   ko: {
     'chat.workStatus.sections.extensionBadge': '확장 프로그램',
@@ -285,9 +321,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': '먼저 세션을 여세요.',
     'contextPanel.plugin.sessionLink.failed': '그 항목을 연결하지 못했습니다.',
     'contextPanel.plugin.sessionLink.linked': '이 세션에 연결했습니다.',
-    'chat.chatInput.linked.guest.openInBrowserAria': '브라우저에서 {id} 열기',
-    'chat.chatInput.linked.guest.removeAria': '{id} 제거',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '{id} 열기',
     'session.newWorktree.actions.startFromGuest': '{name}에서 시작',
     'contextPanel.plugin.actionDialog.description': '확장 프로그램이 선택한 메시지 또는 세션을 처리하고 있습니다.',
@@ -296,10 +329,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count}개 항목',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count}개 항목',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count}개 항목',
+    'contextRail.surface.plugin.listeningAria': '{label}, 마이크 사용 중',
+    'contextRail.surface.plugin.listeningTooltip': '마이크 사용 중',
     'chat.chatInput.toast.guestCommandNothing': '{name}에서 첨부할 항목을 찾지 못했습니다.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} 실패: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name}이(가) 응답하지 않았습니다.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': '이 확장은 여기에서 사용할 수 없습니다. OhPiChamber 웹 또는 데스크톱에서 여세요.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': '이 확장은 여기에서 사용할 수 없습니다. OpenChamber 웹 또는 데스크톱에서 여세요.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': '이 확장은 여기에서 사용할 수 없습니다. OpenChamber 웹 또는 데스크톱에서 여세요.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name}은(는) 휴대폰에서 열리지 않습니다. OpenChamber 웹 또는 데스크톱에서 여세요.',
+>>>>>>> upstream/main
   },
   pl: {
     'chat.workStatus.sections.extensionBadge': 'Rozszerzenie',
@@ -328,9 +370,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Najpierw otwórz sesję.',
     'contextPanel.plugin.sessionLink.failed': 'Nie udało się powiązać tego elementu.',
     'contextPanel.plugin.sessionLink.linked': 'Powiązano z tą sesją.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'Otwórz {id} w przeglądarce',
-    'chat.chatInput.linked.guest.removeAria': 'Usuń {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'Otwórz {id}',
     'session.newWorktree.actions.startFromGuest': 'Zacznij od {name}',
     'contextPanel.plugin.actionDialog.description': 'Rozszerzenie pracuje z wybraną wiadomością lub sesją.',
@@ -339,10 +378,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} elementów',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} element',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} elementów',
+    'contextRail.surface.plugin.listeningAria': '{label}, używa mikrofonu',
+    'contextRail.surface.plugin.listeningTooltip': 'Używa mikrofonu',
     'chat.chatInput.toast.guestCommandNothing': '{name} nie znalazło nic do załączenia.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} nie powiodło się: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} nie odpowiedziało.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'To rozszerzenie nie jest tu dostępne. Otwórz je w OhPiChamber web lub na desktopie.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'To rozszerzenie nie jest tu dostępne. Otwórz je w OpenChamber web lub na desktopie.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'To rozszerzenie nie jest tu dostępne. Otwórz je w OpenChamber web lub na desktopie.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} nie otwiera się na telefonie. Otwórz je w OpenChamber web lub na desktopie.',
+>>>>>>> upstream/main
   },
   'pt-BR': {
     'chat.workStatus.sections.extensionBadge': 'Extensão',
@@ -371,9 +419,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Abra uma sessão primeiro.',
     'contextPanel.plugin.sessionLink.failed': 'Não foi possível vincular esse item.',
     'contextPanel.plugin.sessionLink.linked': 'Vinculado a esta sessão.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'Abrir {id} no navegador',
-    'chat.chatInput.linked.guest.removeAria': 'Remover {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'Abrir {id}',
     'session.newWorktree.actions.startFromGuest': 'Começar a partir de {name}',
     'contextPanel.plugin.actionDialog.description': 'A extensão está trabalhando com a mensagem ou sessão que você escolheu.',
@@ -382,10 +427,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} itens',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} item',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} itens',
+    'contextRail.surface.plugin.listeningAria': '{label}, usando seu microfone',
+    'contextRail.surface.plugin.listeningTooltip': 'Usando seu microfone',
     'chat.chatInput.toast.guestCommandNothing': '{name} não encontrou nada para anexar.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} falhou: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} não respondeu.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Esta extensão não está disponível aqui. Abra no OhPiChamber web ou desktop.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensão não está disponível aqui. Abra no OpenChamber web ou desktop.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Esta extensão não está disponível aqui. Abra no OpenChamber web ou desktop.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} não abre no celular. Abra no OpenChamber web ou desktop.',
+>>>>>>> upstream/main
   },
   uk: {
     'chat.workStatus.sections.extensionBadge': 'Розширення',
@@ -414,9 +468,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Спочатку відкрийте сесію.',
     'contextPanel.plugin.sessionLink.failed': 'Не вдалося прив’язати цей елемент.',
     'contextPanel.plugin.sessionLink.linked': 'Прив’язано до цієї сесії.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'Відкрити {id} у браузері',
-    'chat.chatInput.linked.guest.removeAria': 'Прибрати {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'Відкрити {id}',
     'session.newWorktree.actions.startFromGuest': 'Почати з {name}',
     'contextPanel.plugin.actionDialog.description': 'Розширення працює з вибраним повідомленням або сесією.',
@@ -425,10 +476,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} елементів',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} елемент',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} елементів',
+    'contextRail.surface.plugin.listeningAria': '{label}, використовує мікрофон',
+    'contextRail.surface.plugin.listeningTooltip': 'Використовує мікрофон',
     'chat.chatInput.toast.guestCommandNothing': '{name} не знайшло, що прикріпити.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} не спрацювала: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} не відповіло.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Це розширення тут недоступне. Відкрийте його в OhPiChamber web або на десктопі.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Це розширення тут недоступне. Відкрийте його в OpenChamber web або на десктопі.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Це розширення тут недоступне. Відкрийте його в OpenChamber web або на десктопі.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} не відкривається на телефоні. Відкрийте його в OpenChamber web або на десктопі.',
+>>>>>>> upstream/main
   },
   'zh-CN': {
     'chat.workStatus.sections.extensionBadge': '扩展',
@@ -457,9 +517,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': '请先打开一个会话。',
     'contextPanel.plugin.sessionLink.failed': '无法关联该项目。',
     'contextPanel.plugin.sessionLink.linked': '已关联到此会话。',
-    'chat.chatInput.linked.guest.openInBrowserAria': '在浏览器中打开 {id}',
-    'chat.chatInput.linked.guest.removeAria': '移除 {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '打开 {id}',
     'session.newWorktree.actions.startFromGuest': '从 {name} 开始',
     'contextPanel.plugin.actionDialog.description': '扩展正在处理你选择的消息或会话。',
@@ -468,10 +525,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}，{count} 项',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} 项',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} 项',
+    'contextRail.surface.plugin.listeningAria': '{label}，正在使用你的麦克风',
+    'contextRail.surface.plugin.listeningTooltip': '正在使用你的麦克风',
     'chat.chatInput.toast.guestCommandNothing': '{name} 没有找到可附加的内容。',
     'chat.chatInput.toast.guestCommandFailed': '/{command} 失败：{reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} 没有响应。',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': '此扩展在此处不可用。请在 OhPiChamber 网页版或桌面版中打开。',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': '此扩展在此处不可用。请在 OpenChamber 网页版或桌面版中打开。',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': '此扩展在此处不可用。请在 OpenChamber 网页版或桌面版中打开。',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} 无法在手机上打开。请在 OpenChamber 网页版或桌面版中打开。',
+>>>>>>> upstream/main
   },
   'zh-TW': {
     'chat.workStatus.sections.extensionBadge': '擴充功能',
@@ -500,9 +566,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': '請先開啟一個會話。',
     'contextPanel.plugin.sessionLink.failed': '無法關聯該項目。',
     'contextPanel.plugin.sessionLink.linked': '已關聯到此會話。',
-    'chat.chatInput.linked.guest.openInBrowserAria': '在瀏覽器開啟 {id}',
-    'chat.chatInput.linked.guest.removeAria': '移除 {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '開啟 {id}',
     'session.newWorktree.actions.startFromGuest': '從 {name} 開始',
     'contextPanel.plugin.actionDialog.description': '擴充功能正在處理你選擇的訊息或會話。',
@@ -511,10 +574,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}，{count} 項',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} 項',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} 項',
+    'contextRail.surface.plugin.listeningAria': '{label}，正在使用你的麥克風',
+    'contextRail.surface.plugin.listeningTooltip': '正在使用你的麥克風',
     'chat.chatInput.toast.guestCommandNothing': '{name} 沒有找到可附加的內容。',
     'chat.chatInput.toast.guestCommandFailed': '/{command} 失敗：{reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} 沒有回應。',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': '此擴充功能在此處無法使用。請在 OhPiChamber 網頁版或桌面版中開啟。',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': '此擴充功能在此處無法使用。請在 OpenChamber 網頁版或桌面版中開啟。',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': '此擴充功能在此處無法使用。請在 OpenChamber 網頁版或桌面版中開啟。',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} 無法在手機上開啟。請在 OpenChamber 網頁版或桌面版中開啟。',
+>>>>>>> upstream/main
   },
   tr: {
     'chat.workStatus.sections.extensionBadge': 'Uzantı',
@@ -543,9 +615,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'Önce bir oturum açın.',
     'contextPanel.plugin.sessionLink.failed': 'O öğe bağlanamadı.',
     'contextPanel.plugin.sessionLink.linked': 'Bu oturuma bağlandı.',
-    'chat.chatInput.linked.guest.openInBrowserAria': '{id} öğesini tarayıcıda aç',
-    'chat.chatInput.linked.guest.removeAria': '{id} öğesini kaldır',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': '{id} öğesini aç',
     'session.newWorktree.actions.startFromGuest': '{name} ile başla',
     'contextPanel.plugin.actionDialog.description': 'Uzantı, seçtiğin mesaj veya oturumla çalışıyor.',
@@ -554,10 +623,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} öğe',
     'contextRail.surface.plugin.badgeTooltipSingle': '{count} öğe',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} öğe',
+    'contextRail.surface.plugin.listeningAria': '{label}, mikrofonunu kullanıyor',
+    'contextRail.surface.plugin.listeningTooltip': 'Mikrofonunu kullanıyor',
     'chat.chatInput.toast.guestCommandNothing': '{name} eklenecek bir şey bulamadı.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} başarısız oldu: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} yanıt vermedi.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'Bu eklenti burada kullanılamıyor. OhPiChamber web veya masaüstünde açın.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'Bu eklenti burada kullanılamıyor. OpenChamber web veya masaüstünde açın.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'Bu eklenti burada kullanılamıyor. OpenChamber web veya masaüstünde açın.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} telefonda açılmıyor. OpenChamber web veya masaüstünde açın.',
+>>>>>>> upstream/main
   },
   ar: {
     'chat.workStatus.sections.extensionBadge': 'إضافة',
@@ -585,9 +663,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'افتح جلسة أولًا.',
     'contextPanel.plugin.sessionLink.failed': 'تعذّر ربط ذلك العنصر.',
     'contextPanel.plugin.sessionLink.linked': 'تم الربط بهذه الجلسة.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'فتح {id} في المتصفح',
-    'chat.chatInput.linked.guest.removeAria': 'إزالة {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'فتح {id}',
     'session.newWorktree.actions.startFromGuest': '{name}',
     'contextPanel.plugin.actionDialog.description': 'تعمل الإضافة على الرسالة أو الجلسة التي اخترتها.',
@@ -596,10 +671,19 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}، {count} عناصر',
     'contextRail.surface.plugin.badgeTooltipSingle': 'عنصر واحد ({count})',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} عناصر',
+    'contextRail.surface.plugin.listeningAria': '{label}، يستخدم الميكروفون',
+    'contextRail.surface.plugin.listeningTooltip': 'يستخدم الميكروفون',
     'chat.chatInput.toast.guestCommandNothing': 'لم يجد {name} شيئًا لإرفاقه.',
     'chat.chatInput.toast.guestCommandFailed': 'تعذّر تنفيذ /{command}: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': 'لم يستجب {name}.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'هذه الإضافة غير متاحة هنا. افتحها في OhPiChamber على الويب أو سطح المكتب.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'هذه الإضافة غير متاحة هنا. افتحها في OpenChamber على الويب أو سطح المكتب.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'هذه الإضافة غير متاحة هنا. افتحها في OpenChamber على الويب أو سطح المكتب.',
+    'chat.chatInput.toast.guestNotOnPhone': 'لا يُفتح {name} على الهاتف. افتحه في OpenChamber على الويب أو سطح المكتب.',
+>>>>>>> upstream/main
   },
   he: {
     'chat.workStatus.sections.extensionBadge': 'הרחבה',
@@ -627,9 +711,6 @@ export const pluginPanelI18n = {
     'contextPanel.plugin.sessionLink.noSession': 'יש לפתוח הפעלה קודם.',
     'contextPanel.plugin.sessionLink.failed': 'לא ניתן היה לקשר את הפריט.',
     'contextPanel.plugin.sessionLink.linked': 'קושר להפעלה הזו.',
-    'chat.chatInput.linked.guest.openInBrowserAria': 'פתח את {id} בדפדפן',
-    'chat.chatInput.linked.guest.removeAria': 'הסר את {id}',
-    'chat.chatInput.linked.guest.pr.number': 'PR {id}',
     'chat.workStatus.linkedIssues.openGuest': 'פתח את {id}',
     'session.newWorktree.actions.startFromGuest': '{name}',
     'contextPanel.plugin.actionDialog.description': 'ההרחבה עובדת עם ההודעה או ההפעלה שנבחרה.',
@@ -638,9 +719,18 @@ export const pluginPanelI18n = {
     'contextRail.surface.plugin.badgeAriaPlural': '{label}, {count} פריטים',
     'contextRail.surface.plugin.badgeTooltipSingle': 'פריט {count}',
     'contextRail.surface.plugin.badgeTooltipPlural': '{count} פריטים',
+    'contextRail.surface.plugin.listeningAria': '{label}, משתמש במיקרופון',
+    'contextRail.surface.plugin.listeningTooltip': 'משתמש במיקרופון',
     'chat.chatInput.toast.guestCommandNothing': '{name} לא מצא שום דבר לצרף.',
     'chat.chatInput.toast.guestCommandFailed': '/{command} נכשל: {reason}',
     'chat.chatInput.toast.guestCommandUnavailable': '{name} לא ענה.',
+<<<<<<< HEAD
     'chat.chatInput.toast.guestUnavailableHere': 'ההרחבה הזו אינה זמינה כאן. אפשר לפתוח אותה ב-OhPiChamber בגרסת הרשת או בגרסת שולחן העבודה.',
+||||||| bc50ba56aa
+    'chat.chatInput.toast.guestUnavailableHere': 'ההרחבה הזו אינה זמינה כאן. אפשר לפתוח אותה ב-OpenChamber בגרסת הרשת או בגרסת שולחן העבודה.',
+=======
+    'chat.chatInput.toast.guestUnavailableHere': 'ההרחבה הזו אינה זמינה כאן. אפשר לפתוח אותה ב-OpenChamber בגרסת הרשת או בגרסת שולחן העבודה.',
+    'chat.chatInput.toast.guestNotOnPhone': '{name} לא נפתח בטלפון. אפשר לפתוח אותו ב-OpenChamber בגרסת הרשת או בגרסת שולחן העבודה.',
+>>>>>>> upstream/main
   },
 } as const;

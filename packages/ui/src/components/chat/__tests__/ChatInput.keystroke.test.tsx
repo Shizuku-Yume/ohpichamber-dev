@@ -133,8 +133,21 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
 plugin({
   name: 'composer-keystroke-vite-modules',
   setup(build) {
+<<<<<<< HEAD
     build.onResolve({ filter: /\?worker&url$/ }, ({ path }) => ({ path, namespace: 'worker-url' }));
     build.onLoad({ filter: /.*/, namespace: 'worker-url' }, () => ({ contents: 'export default "";', loader: 'js' }));
+||||||| bc50ba56aa
+    // A load transform, as the sibling tests do it, and never an onResolve into a namespace of
+    // its own: Bun keeps transpiled files in a cache on disk that every test process shares, and
+    // a rewritten import specifier cached from this file broke every later file that imports
+    // markdown-worker with "Cannot find module 'worker-url:...'".
+    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, () => ({ contents: 'export default "";', loader: 'js' }));
+=======
+    // A load transform, as the sibling tests do it, and never an onResolve into a namespace of
+    // its own: Bun keeps transpiled files in a cache on disk that every test process shares, and
+    // a rewritten import specifier cached from this file broke every later file that imports
+    // the rewritten module.
+>>>>>>> upstream/main
     build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
       const directory = resolve(dirname(path), '../assets/provider-logos');
       const logos = Object.fromEntries(readdirSync(directory).filter((name) => name.endsWith('.svg')).map((name) => [
@@ -161,6 +174,39 @@ const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
 const runtimeAPIs = { runtime: { platform: 'web', isDesktop: false }, sourceControl: {} } as RuntimeAPIs;
 
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
+<<<<<<< HEAD
+||||||| bc50ba56aa
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
+useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace' }] });
+const { dispatchPromptHistorySearch } = await import('../composer/state/promptHistorySearchRoute');
+const { createInputHistoryIdentity, useInputHistoryStore } = await import('@/stores/useInputHistoryStore');
+const { getRuntimeKey } = await import('@/lib/runtime-switch');
+
+// Stands in for the window keydown listener that useKeyboardShortcuts installs
+// for search_prompt_history: the combo match is the dispatcher's job, and the
+// route it hands the event to is the real one the composer registers.
+window.addEventListener('keydown', (event: KeyboardEvent) => {
+  if (event.key === 'ArrowUp' && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    dispatchPromptHistorySearch(event);
+  }
+});
+=======
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
+useProjectsStore.setState({ projects: [{ id: 'project', path: '/workspace' }] });
+const { dispatchPromptHistorySearch } = await import('../composer/state/promptHistorySearchRoute');
+const { createInputHistoryIdentity, useInputHistoryStore } = await import('@/stores/useInputHistoryStore');
+const { getRuntimeKey } = await import('@/lib/runtime-switch');
+const { useConfigStore } = await import('@/stores/useConfigStore');
+
+// Stands in for the window keydown listener that useKeyboardShortcuts installs
+// for search_prompt_history: the combo match is the dispatcher's job, and the
+// route it hands the event to is the real one the composer registers.
+window.addEventListener('keydown', (event: KeyboardEvent) => {
+  if (event.key === 'ArrowUp' && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    dispatchPromptHistorySearch(event);
+  }
+});
+>>>>>>> upstream/main
 
 const KEYSTROKES = 20;
 
@@ -270,6 +316,8 @@ afterAll(() => {
  * Before this guard (same scenario, 20 keystrokes): an existing session
  * rendered 23 components and re-tokenized the editor's language context on
  * every keystroke; a new-session draft rendered 52 components per keystroke.
+ * Then ChatInputComponent itself still rendered on every keystroke, because
+ * the draft text was its state; the text now lives in `composerText`.
  */
 const TEXT_INDEPENDENT_CHILDREN = [
   'ComposerFooterView',
@@ -285,8 +333,9 @@ const TEXT_INDEPENDENT_CHILDREN = [
   'ComposerModeSelector',
 ];
 
-const expectOnlyTheEditorFollowsTheText = (cost: TypingCost) => {
-  expect(cost.rendersByComponent.get('ChatInputComponent')).toBe(KEYSTROKES);
+const expectNothingFollowsTheText = (cost: TypingCost) => {
+  // Once, when the first key makes the composer sendable.
+  expect(cost.rendersByComponent.get('ChatInputComponent') ?? 0).toBe(1);
   expect(cost.languageContextUpdates).toBe(0);
   for (const name of TEXT_INDEPENDENT_CHILDREN) {
     // Paired with the name so a failure says which child followed the text.
@@ -295,12 +344,12 @@ const expectOnlyTheEditorFollowsTheText = (cost: TypingCost) => {
   }
 };
 
-test('typing in an existing session re-renders only the composer shell and its editor', async () => {
-  expectOnlyTheEditorFollowsTheText(await measureTyping('session'));
+test('typing in an existing session re-renders the composer only on the first key', async () => {
+  expectNothingFollowsTheText(await measureTyping('session'));
 });
 
-test('typing in a new-session draft re-renders only the composer shell and its editor', async () => {
-  expectOnlyTheEditorFollowsTheText(await measureTyping('draft'));
+test('typing in a new-session draft re-renders the composer only on the first key', async () => {
+  expectNothingFollowsTheText(await measureTyping('draft'));
 });
 
 test('mounting the composer before Git discovery does not reset the draft from a linked worktree', async () => {
@@ -410,5 +459,36 @@ test('worker catalog builtins appear without disk templates and context output i
     await act(async () => root.unmount());
     container.remove();
     load.mockRestore(); loadTemplates.mockRestore(); run.mockRestore(); compact.mockRestore(); notice.mockRestore();
+  }
+});
+
+/** Types `text` one key at a time, each key a transaction of its own, as the keyboard does. */
+const typeKeys = (view: CodeMirrorView, text: string) => {
+  for (const char of text) {
+    const end = view.state.doc.length;
+    view.dispatch({ changes: { from: end, insert: char }, selection: { anchor: end + 1 }, userEvent: 'input.type' });
+  }
+};
+
+test('Enter pressed right after the last key sends the whole text', async () => {
+  const sent: string[] = [];
+  const sendMessage = useSessionUIStore.getState().sendMessage;
+  const config = useConfigStore.getState();
+  useSessionUIStore.setState({ sendMessage: async (content: string) => { sent.push(content); } });
+  useConfigStore.setState({ currentProviderId: 'provider', currentModelId: 'model' });
+  const composer = await mountComposer('');
+  try {
+    // One synchronous turn: the keys and Enter all land before React renders.
+    await act(async () => {
+      typeKeys(composer.view, 'hello');
+      composer.view.contentDOM.dispatchEvent(keyEvent('Enter'));
+    });
+    await flushFrames();
+    expect(sent).toEqual(['hello']);
+    expect(composer.view.state.doc.toString()).toBe('');
+  } finally {
+    await unmountComposer(composer);
+    useSessionUIStore.setState({ sendMessage });
+    useConfigStore.setState({ currentProviderId: config.currentProviderId, currentModelId: config.currentModelId });
   }
 });

@@ -1,6 +1,46 @@
 import { z } from 'zod';
+import type fs from 'node:fs/promises';
+import type nodePath from 'node:path';
+import type nodeCrypto from 'node:crypto';
+import type { Application, QueryValue, Request } from '../shared/http-contracts.js';
+import type { SettingsDocument } from '../settings/settings-helpers.js';
+import { isString } from '../shared/object-guards.js';
 
 import { INERT_IMAGE_CSP, injectSvgRootColor } from './project-icon-routes.js';
+
+export interface ProviderLogo {
+  mime: string;
+  updatedAt: number;
+}
+
+const logoSettingsUpdateSchema = z.object({ customProviderLogos: z.record(z.string(), z.unknown()) });
+export type ProviderLogoSettingsUpdate = z.infer<typeof logoSettingsUpdateSchema>;
+
+export interface ProviderLogoDependencies {
+  fsPromises: Pick<typeof fs, 'readdir' | 'unlink' | 'readFile' | 'mkdir' | 'writeFile'>;
+  path: Pick<typeof nodePath, 'join'>;
+  crypto: Pick<typeof nodeCrypto, 'createHash'>;
+  openchamberDataDir: string;
+  readSettingsFromDiskMigrated: () => Promise<SettingsDocument>;
+  persistResolvedSettings: (resolve: (current: SettingsDocument) => ProviderLogoSettingsUpdate) => Promise<SettingsDocument>;
+}
+
+interface LogoUploadBody {
+  dataUrl?: unknown;
+}
+
+interface ProviderLogoInput {
+  mime?: unknown;
+  updatedAt?: unknown;
+}
+
+type ParsedLogo = { ok: false; error: string } | { ok: true; mime: string; bytes: Buffer };
+
+const hasLogoEntries = (value: unknown): value is Record<string, unknown> => value != null;
+const hasLogoFields = (value: unknown): value is ProviderLogoInput => value != null;
+const hasUploadBody = (value: unknown): value is LogoUploadBody => value != null;
+const hasErrorCode = (value: unknown): value is { code?: unknown } => value != null;
+const isSafeInteger = (value: unknown): value is number => Number.isSafeInteger(value);
 
 const PROVIDER_LOGO_EXTENSIONS = new Map([
   ['image/png', 'png'],
@@ -9,33 +49,51 @@ const PROVIDER_LOGO_EXTENSIONS = new Map([
   ['image/svg+xml', 'svg'],
 ]);
 
+<<<<<<<< HEAD:packages/web/server/lib/host/provider-logo-routes.js
 // A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/provider-logo-routes.js
+/** What a provider logo may be; mirrors CUSTOM_PROVIDER_LOGO_MIMES in packages/ui/src/lib/customProviderLogos.ts. */
+export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
+// A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
+========
+export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
+>>>>>>>> upstream/main:packages/web/server/lib/appearance/provider-logo-routes.ts
 export const PROVIDER_LOGO_MAX_BYTES = 1024 * 1024;
-const SVG_THEME_COLORS = new Map([['light', '#111111'], ['dark', '#f5f5f5']]);
+const SVG_THEME_COLORS = new Map<QueryValue | undefined, string>([['light', '#111111'], ['dark', '#f5f5f5']]);
+const isProviderLogoMime = (value: unknown): value is string => isString(value) && PROVIDER_LOGO_EXTENSIONS.has(value);
 
+<<<<<<<< HEAD:packages/web/server/lib/host/provider-logo-routes.js
 /**
  * An SVG logo's markup with its CSS colour set for `theme`, so `currentColor`
  * reads on either background. Null for anything but `light` or `dark`.
  */
 const themedLogoSvg = (data, theme) => {
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/provider-logo-routes.js
+/**
+ * An SVG logo's markup with its CSS colour set for `theme`, so `currentColor`
+ * reads on either background. Null for anything but `light` or `dark`.
+ */
+export const themedLogoSvg = (data, theme) => {
+========
+export const themedLogoSvg = (data: Buffer, theme: QueryValue | undefined) => {
+>>>>>>>> upstream/main:packages/web/server/lib/appearance/provider-logo-routes.ts
   const color = SVG_THEME_COLORS.get(theme);
   return color ? injectSvgRootColor(data.toString('utf8'), color) : null;
 };
 
-// The settings sanitizer keeps provider IDs up to 128 characters.
 const providerIdSchema = z.string().trim().min(1).max(128);
-const readProviderId = (req) => providerIdSchema.safeParse(req.params.providerId).data ?? null;
+const readProviderId = (req: Request) => providerIdSchema.safeParse(req.params.providerId).data ?? null;
 
-const parseLogoDataUrl = (value) => {
+const parseLogoDataUrl = (value: LogoUploadBody['dataUrl']): ParsedLogo => {
   const match = z.string().safeParse(value).data?.trim().match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/i);
   if (!match) {
     return { ok: false, error: 'dataUrl must be a base64 data URL' };
   }
-  const mime = match[1].trim().toLowerCase();
+  const mime = (match[1] ?? '').trim().toLowerCase();
   if (!PROVIDER_LOGO_EXTENSIONS.has(mime)) {
     return { ok: false, error: 'Logo must be PNG, JPEG, WebP or SVG' };
   }
-  const bytes = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+  const bytes = Buffer.from((match[2] ?? '').replace(/\s+/g, ''), 'base64');
   if (bytes.length === 0) {
     return { ok: false, error: 'Logo is empty' };
   }
@@ -45,21 +103,12 @@ const parseLogoDataUrl = (value) => {
   return { ok: true, mime, bytes };
 };
 
-/**
- * A provider's uploaded logo. The bytes live under `<data dir>/provider-logos/`;
- * the `customProviderLogos` profile setting holds `{ mime, updatedAt }` per
- * provider ID, which clients use to know a logo exists and to version its URL.
- * The logo outlives the provider: it is keyed by ID like a chosen icon, so a
- * provider removed from the config and added again gets it back, and only
- * DELETE removes it.
- */
-export const registerProviderLogoRoutes = (app, dependencies) => {
+export const registerProviderLogoRoutes = (app: Application, dependencies: ProviderLogoDependencies) => {
   const { fsPromises, path, crypto, openchamberDataDir, readSettingsFromDiskMigrated, persistResolvedSettings } = dependencies;
   const logosDirPath = path.join(openchamberDataDir, 'provider-logos');
 
-  const filePrefix = (providerId) => `provider-${crypto.createHash('sha1').update(providerId).digest('hex')}-`;
-  // Each upload gets its own file, so the file a setting names is never rewritten.
-  const logoPath = (providerId, logo) => path.join(
+  const filePrefix = (providerId: string) => `provider-${crypto.createHash('sha1').update(providerId).digest('hex')}-`;
+  const logoPath = (providerId: string, logo: ProviderLogo) => path.join(
     logosDirPath,
     `${filePrefix(providerId)}${logo.updatedAt}.${PROVIDER_LOGO_EXTENSIONS.get(logo.mime)}`,
   );
@@ -70,27 +119,23 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
     return lastUpdatedAt;
   };
 
-  // Runs once the setting is saved, so a file it cannot remove is logged and
-  // left for the provider's next upload or removal, never reported as a failed save.
-  const removeLogoFiles = async (providerId, keepPath) => {
+  const removeLogoFiles = async (providerId: string, keepPath: string | null) => {
     try {
       const prefix = filePrefix(providerId);
       const names = (await fsPromises.readdir(logosDirPath)).filter((name) => name.startsWith(prefix));
       await Promise.all(names.map(async (name) => {
         const candidate = path.join(logosDirPath, name);
         if (candidate !== keepPath) await fsPromises.unlink(candidate).catch((error) => {
-          if (error?.code !== 'ENOENT') throw error;
+          if (!hasErrorCode(error) || error.code !== 'ENOENT') throw error;
         });
       }));
     } catch (error) {
-      if (error?.code !== 'ENOENT') console.warn('Failed to remove old provider logo files:', error);
+      if (!hasErrorCode(error) || error.code !== 'ENOENT') console.warn('Failed to remove old provider logo files:', error);
     }
   };
 
-  // One upload or removal per provider at a time: two clients saving at once
-  // would otherwise each delete the file the other's setting names.
-  const queues = new Map();
-  const serialize = (providerId, task) => {
+  const queues = new Map<string, Promise<ProviderLogo | void>>();
+  const serialize = <Result extends ProviderLogo | void>(providerId: string, task: () => Promise<Result>) => {
     const run = (queues.get(providerId) ?? Promise.resolve()).then(task);
     const tail = run.catch(() => { });
     queues.set(providerId, tail);
@@ -100,14 +145,13 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
     return run;
   };
 
-  const writeLogoSetting = async (providerId, logo) => {
+  const writeLogoSetting = async (providerId: string, logo: ProviderLogo | null) => {
     const settings = await persistResolvedSettings((current) => {
       const others = Object.entries(current.customProviderLogos ?? {}).filter(([id]) => id !== providerId);
       return { customProviderLogos: Object.fromEntries(logo ? [...others, [providerId, logo]] : others) };
     });
-    // The save resolves without profile keys while preferences.json is unreadable.
-    const stored = settings?.customProviderLogos?.[providerId];
-    if (logo ? stored?.updatedAt !== logo.updatedAt : stored) {
+    const stored = hasLogoEntries(settings?.customProviderLogos) ? settings.customProviderLogos[providerId] : undefined;
+    if (logo ? (hasLogoFields(stored) ? stored.updatedAt : undefined) !== logo.updatedAt : stored) {
       throw new Error('The provider logo setting was not saved');
     }
   };
@@ -120,27 +164,25 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
 
     try {
       const settings = await readSettingsFromDiskMigrated();
-      const logo = settings?.customProviderLogos?.[providerId];
+      const stored = hasLogoEntries(settings?.customProviderLogos) ? settings.customProviderLogos[providerId] : undefined;
+      const logo = hasLogoFields(stored) ? stored : undefined;
       const mime = logo?.mime;
-      // Both parts name the file; a hand-edited settings file must not point outside the folder.
-      if (!PROVIDER_LOGO_EXTENSIONS.has(mime) || !Number.isSafeInteger(logo.updatedAt) || logo.updatedAt <= 0) {
+      if (!isProviderLogoMime(mime) || !logo || !isSafeInteger(logo.updatedAt) || logo.updatedAt <= 0) {
         return res.status(404).json({ error: 'Provider logo not found' });
       }
 
       let data;
       try {
-        data = await fsPromises.readFile(logoPath(providerId, logo));
+        data = await fsPromises.readFile(logoPath(providerId, { mime, updatedAt: logo.updatedAt }));
       } catch (error) {
-        if (error?.code === 'ENOENT') {
+        if (hasErrorCode(error) && error.code === 'ENOENT') {
           return res.status(404).json({ error: 'Provider logo not found' });
         }
         throw error;
       }
 
-      // The bytes are whatever the user uploaded.
       res.setHeader('Content-Security-Policy', INERT_IMAGE_CSP);
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      // Clients version the URL with `v=<updatedAt>`.
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       if (mime !== 'image/svg+xml') {
         res.setHeader('Content-Type', mime);
@@ -161,7 +203,7 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
     if (!providerId) {
       return res.status(400).json({ error: 'providerId is required' });
     }
-    const parsed = parseLogoDataUrl(req.body?.dataUrl);
+    const parsed = parseLogoDataUrl(hasUploadBody(req.body) ? req.body.dataUrl : undefined);
     if (!parsed.ok) {
       return res.status(400).json({ error: parsed.error });
     }
@@ -175,8 +217,15 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
         try {
           await writeLogoSetting(providerId, next);
         } catch (error) {
+<<<<<<<< HEAD:packages/web/server/lib/host/provider-logo-routes.js
           // The setting still names the previous file, which stays served.
           await fsPromises.unlink(filePath).catch(() => { });
+|||||||| bc50ba56aa:packages/web/server/lib/opencode/provider-logo-routes.js
+          // The setting still names the previous file, which stays served.
+          await fsPromises.unlink(filePath).catch(() => {});
+========
+          await fsPromises.unlink(filePath).catch(() => {});
+>>>>>>>> upstream/main:packages/web/server/lib/appearance/provider-logo-routes.ts
           throw error;
         }
         await removeLogoFiles(providerId, filePath);

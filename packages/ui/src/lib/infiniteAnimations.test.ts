@@ -16,10 +16,16 @@ const ALLOWED = [
   { file: 'index.css', declaration: 'animation: webkit-spin 1s linear infinite !important;' },
   { file: 'index.css', declaration: 'animation: oc-trailing-expand-spin 0.8s linear infinite;' },
   { file: 'index.css', declaration: 'animation: marquee-scroll 5s linear infinite alternate;' },
+<<<<<<< HEAD
   { file: 'components/views/PierreDiffViewer.tsx', declaration: 'animation: oc-expand-spin 0.8s linear infinite;' },
   // The busy dots of a working agent: bounded by the run, and stepped to five
   // frames a second so an idle page pays nothing.
   { file: 'index.css', declaration: 'animation: oc-busy-pulse 1.2s steps(3, jump-none) infinite;' },
+||||||| bc50ba56aa
+  { file: 'components/views/PierreDiffViewer.tsx', declaration: 'animation: oc-expand-spin 0.8s linear infinite;' },
+=======
+  { file: 'components/views/pierreDiff/css.ts', declaration: 'animation: oc-expand-spin 0.8s linear infinite;' },
+>>>>>>> upstream/main
 ];
 
 const SOURCE_ROOT = fileURLToPath(new URL('..', import.meta.url));

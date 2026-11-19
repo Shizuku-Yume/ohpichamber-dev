@@ -1,8 +1,3 @@
-// Connection payload parsing + native QR scanning for the dedicated mobile app.
-//
-// Android uses the plugin's CameraX-backed startScan() flow. Unlike its ready-made
-// scan() activity, this path bundles the barcode model in the app and does not need
-// Google Play Services. iOS keeps the native ready-made scanner.
 
 import { parsePairingConnectionPayload, parsePairingConnectionPayloadString, type PairingConnectionPayload } from '@/lib/connectionPayload';
 
@@ -52,17 +47,25 @@ const isAndroid = (): boolean => {
   return capacitor?.getPlatform?.() === 'android';
 };
 
-/** Android's camera runs behind the WebView, so the app draws the scanner screen; iOS presents its own. */
 export const qrScanDrawsOwnScreen = (): boolean => isAndroid();
 
 export const parseConnectionPayload = (raw: string): MobileConnectionPayload | MobilePairingPayload | null => {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+<<<<<<< HEAD
   if (/^ohpichamber:\/\//i.test(trimmed)) {
     // Old Android WebViews resolve ohpichamber://… with hostname "" / pathname "//connect",
     // so the URL-based parse fails even though the string is intact. Retry with the
     // URL-API-free string parser before rejecting a scanned or pasted link.
+||||||| bc50ba56aa
+  if (/^openchamber:\/\//i.test(trimmed)) {
+    // Old Android WebViews resolve openchamber://… with hostname "" / pathname "//connect",
+    // so the URL-based parse fails even though the string is intact. Retry with the
+    // URL-API-free string parser before rejecting a scanned or pasted link.
+=======
+  if (/^openchamber:\/\//i.test(trimmed)) {
+>>>>>>> upstream/main
     const pairing = parsePairingConnectionPayload(trimmed) ?? parsePairingConnectionPayloadString(trimmed);
     return pairing ? { pairing } : null;
   }

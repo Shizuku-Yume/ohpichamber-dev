@@ -2,6 +2,7 @@ import React from 'react';
 import { selectSmallModelAvailability, useSmallModelStore, type SmallModelAvailability, type SmallModelAvailabilityScope } from '@/stores/useSmallModelStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 
+<<<<<<< HEAD
 /**
  * Whether the background model can run for `directory`. Fetches on mount and
  * whenever `active` flips to true (a menu opening, a dialog showing), so a
@@ -17,6 +18,16 @@ export function useSmallModelAvailability(directory: string | null | undefined, 
     workspaceId,
     preferred: providerId && modelId ? { providerId, modelId } : undefined,
   }), [workspaceId, providerId, modelId]);
+||||||| bc50ba56aa
+/**
+ * Whether the background model can run for `directory`. Fetches on mount and
+ * whenever `active` flips to true (a menu opening, a dialog showing), so a
+ * closed menu never polls.
+ */
+export function useSmallModelAvailability(directory: string | null | undefined, active = true): SmallModelAvailability {
+=======
+export function useSmallModelAvailability(directory: string | null | undefined, active = true): SmallModelAvailability {
+>>>>>>> upstream/main
   const availability = useSmallModelStore(
     React.useCallback((state) => selectSmallModelAvailability(state, directory, effectiveScope), [directory, effectiveScope]),
   );

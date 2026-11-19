@@ -32,36 +32,44 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ProjectEntry } from '@/lib/api/types';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
+<<<<<<< HEAD
+||||||| bc50ba56aa
+import { useBackgroundImagesStore } from '@/sync/background-images';
+import { usePrWatchStore } from '@/sync/pr-watch';
+=======
+import { useBackgroundImagesStore } from '@/sync/background-images';
+import { usePrWatchStore } from '@/sync/pr-watch';
+import { useExtensionWaitsStore } from '@/sync/extension-waits';
+>>>>>>> upstream/main
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { usePrWatchStore } from '@/sync/pr-watch';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
+<<<<<<< HEAD
 /** Subagents nest; a deeper chain than this is treated as unrelated, as the status index does. */
+||||||| bc50ba56aa
+/** Subagents nest; a deeper chain than this is treated as unrelated, as the status index does. */
+const MAX_SUBAGENT_DEPTH = 8;
+=======
+const MAX_SUBAGENT_DEPTH = 8;
+>>>>>>> upstream/main
 const GIT_READ_CONCURRENCY = 3;
 
-/** A linked worktree of a registered project, with what its branch's change request says. */
 export type OverviewWorktree = OverviewWorktreeTarget & { pr: OverviewWorktreeFacts['pr'] };
 
 export type OverviewData = {
-  /** The session list has loaded; before that an empty page would claim there is nothing. */
   ready: boolean;
   /** True when session loading failed; displayed as an error state instead of empty list. */
   error: boolean;
   sections: OverviewSessionSections;
-  /** Sessions with a done signal held back by a veto, for the bulk Done confirmation. */
   leftOut: OverviewSessionSections['working'];
   cleanup: OverviewCleanupRow[];
-  /** The linked worktree a session works in, when its project's worktrees are known. */
   worktreeOf: (session: Session) => OverviewWorktree | null;
-  /** What git last said about a worktree; null before it answered. */
   gitOf: (path: string) => OverviewWorktreeGit | null;
   sessionsIn: (path: string) => Session[];
-  /** A session there runs or is open, or the worktree is the directory on screen. */
   isWorktreeInUse: (path: string) => boolean;
-  /** The project a session belongs to: its name and its colour, when the user gave it one. */
   projectOf: (session: Session) => { label: string; color: string | null };
-  /** Reads git again for every worktree, e.g. after a removal. */
   refreshGit: () => void;
 };
 
@@ -74,11 +82,6 @@ const projectLabel = (project: ProjectEntry | null, directory: string): string =
   project ? project.label?.trim() || basename(project.path) : basename(directory)
 );
 
-/**
- * Git state of the given worktrees while the page is on screen: read when it
- * opens, when the set changes and when the window comes back. A failed read
- * leaves the worktree unknown, and an unknown worktree is never offered.
- */
 function useWorktreeGit(targets: readonly OverviewWorktree[]) {
   const [byPath, setByPath] = React.useState<ReadonlyMap<string, OverviewWorktreeGit>>(new Map());
   const [generation, setGeneration] = React.useState(0);
@@ -120,18 +123,58 @@ function useWorktreeGit(targets: readonly OverviewWorktree[]) {
 }
 
 type OverviewReviewRequest = { url: string; title: string; number: number; repo: string; directory: string };
+<<<<<<< HEAD
+||||||| bc50ba56aa
+
+const REVIEW_REQUESTED: RepositoryReferenceFilter = { state: 'open', people: 'reviewRequested' };
+
+/**
+ * Open change requests that ask for the user's review, in the registered
+ * projects: one search across them, asked of the first provider (by registry
+ * order) among the projects' providers whose descriptor has
+ * `features.referencesAcross`. Projects on other providers are not asked by
+ * this search.
+ */
+=======
+
+const REVIEW_REQUESTED: RepositoryReferenceFilter = { state: 'open', people: 'reviewRequested', labels: [] };
+
+>>>>>>> upstream/main
 type OverviewReviewRequests = { items: OverviewReviewRequest[]; hasMore: boolean };
 
 export function useOverviewReviewRequests(): OverviewReviewRequests {
+<<<<<<< HEAD
   return { items: [], hasMore: false };
+||||||| bc50ba56aa
+  const projects = useProjectsStore((state) => state.projects);
+  const directories = React.useMemo(() => projects.map((project) => project.path), [projects]);
+  const list = useRepositoryAcrossReferenceList({ enabled: true, directories, kind: 'pull', filter: REVIEW_REQUESTED, query: '' });
+  const items = React.useMemo(() => {
+    const seen = new Set<string>();
+    return list.items.flatMap((item) => {
+      if (item.kind !== 'pull' || seen.has(item.url)) return [];
+      seen.add(item.url);
+      return [{ url: item.url, title: item.title, number: item.number, repo: item.sourceRepo.repo, directory: item.directory }];
+    });
+  }, [list.items]);
+  // One page is read; past it the count reads as "30+".
+  return { items, hasMore: list.hasMore };
+=======
+  const projects = useProjectsStore((state) => state.projects);
+  const directories = React.useMemo(() => projects.map((project) => project.path), [projects]);
+  const list = useRepositoryAcrossReferenceList({ enabled: true, directories, kind: 'pull', filter: REVIEW_REQUESTED, query: '' });
+  const items = React.useMemo(() => {
+    const seen = new Set<string>();
+    return list.items.flatMap((item) => {
+      if (item.kind !== 'pull' || seen.has(item.url)) return [];
+      seen.add(item.url);
+      return [{ url: item.url, title: item.title, number: item.number, repo: item.sourceRepo.repo, directory: item.directory }];
+    });
+  }, [list.items]);
+  return { items, hasMore: list.hasMore };
+>>>>>>> upstream/main
 }
 
-/**
- * Every project's worktree list, read when the page opens and when the window
- * comes back. The sidebar fills its own map only for the projects its Tree view
- * expands, so the page cannot rely on it. A project that is not a repository,
- * or whose read fails, keeps whatever the sidebar knows.
- */
 function useProjectWorktrees(projects: readonly ProjectEntry[]): ReadonlyMap<string, readonly WorktreeMetadata[]> {
   const [byProject, setByProject] = React.useState<ReadonlyMap<string, readonly WorktreeMetadata[]>>(new Map());
   const [generation, setGeneration] = React.useState(0);
@@ -172,14 +215,35 @@ const rootOf = (sessionId: string, entityById: ReadonlyMap<string, Session>): st
   entityById.get(sessionId)?.rootSessionId ?? sessionId
 );
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+// Repository issues close as completed or not planned; tracker items settle
+// as done or canceled. Not planned and canceled are dropped work.
+const issueStateOf = (state: IssueLiveSummary | null): OverviewIssueState => {
+  if (!state) return null;
+  if (state.state === 'open') return 'open';
+  return state.state === 'completed' ? 'completed' : 'dropped';
+};
 
-/**
- * Everything the overview shows, derived from what the app already keeps live:
- * sessions and their status, requests, background commands, In work, the
- * branch PRs the sidebar discovered, linked items, and git for the linked
- * worktrees. While the page is on screen it follows the linked items and the
- * branch PRs of the sessions it shows, and reads git for the worktrees.
- */
+const trackerStateOf = (state: TrackerLiveSummary | null): OverviewIssueState => {
+  if (!state) return null;
+  const look = trackerIssueLook(state.state.category);
+  return look === 'not_planned' ? 'dropped' : look;
+};
+=======
+const issueStateOf = (state: IssueLiveSummary | null): OverviewIssueState => {
+  if (!state) return null;
+  if (state.state === 'open') return 'open';
+  return state.state === 'completed' ? 'completed' : 'dropped';
+};
+
+const trackerStateOf = (state: TrackerLiveSummary | null): OverviewIssueState => {
+  if (!state) return null;
+  const look = trackerIssueLook(state.state.category);
+  return look === 'not_planned' ? 'dropped' : look;
+};
+>>>>>>> upstream/main
+
 export function useOverviewData(): OverviewData {
   const sessions = useGlobalSessionsStore((state) => state.activeSessions);
   const entityById = useGlobalSessionsStore((state) => state.entityById);
@@ -190,6 +254,7 @@ export function useOverviewData(): OverviewData {
   // A session the user asked the host to watch a pull request for is waiting
   // on it, so its row says so while nothing else on it is running.
   const prWatches = usePrWatchStore((state) => state.bySession);
+  const extensionWaits = useExtensionWaitsStore((state) => state.bySession);
   const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
@@ -198,14 +263,10 @@ export function useOverviewData(): OverviewData {
   const workEnabled = useUIStore((state) => state.sessionWorkEnabled);
 
 
-  // Ages (stalled, stale) move by the minute, not on every render.
   const now = useMinuteTickerNow(true);
 
   const discoveredWorktrees = useProjectWorktrees(projects);
 
-  // Linked worktrees of registered projects, with the project they belong to.
-  // The page reads every project's list itself; the sidebar's map adds the
-  // worktrees it already knows, and a fresh read of a project wins.
   const linkedWorktrees = React.useMemo(() => {
     const byProject = new Map<string, readonly WorktreeMetadata[]>(worktreesByProject);
     for (const [projectPath, entries] of discoveredWorktrees) byProject.set(projectPath, entries);
@@ -215,7 +276,6 @@ export function useOverviewData(): OverviewData {
       if (!project) continue;
       for (const worktree of entries) {
         const path = normalizePath(worktree.path);
-        // A fresh list carries no status; one still being set up or gone says so.
         if (!path || path === projectPath || (worktree.worktreeStatus && worktree.worktreeStatus !== 'ready')) continue;
         list.push({ worktree, project: { id: project.id, path: project.path }, path, branch: worktree.branch?.trim() || null });
       }
@@ -248,7 +308,6 @@ export function useOverviewData(): OverviewData {
   const { byPath: gitByPath, refresh: refreshGit } = useWorktreeGit(worktrees);
   const gitOf = React.useCallback((path: string) => gitByPath.get(normalizePath(path) ?? path) ?? null, [gitByPath]);
 
-  // Running and waiting, rolled up to the top-level session the user sees.
   const activityByRoot = React.useMemo(() => {
     const map = new Map<string, OverviewActivity>();
     for (const id of activeSessionIds) {
@@ -263,8 +322,18 @@ export function useOverviewData(): OverviewData {
       const root = rootOf(id, entityById);
       if (!map.has(root)) map.set(root, 'pullRequest');
     }
+    for (const id of extensionWaits.keys()) {
+      const root = rootOf(id, entityById);
+      if (!map.has(root)) map.set(root, 'extensionWait');
+    }
     return map;
+<<<<<<< HEAD
   }, [activeSessionIds, entityById, prWatches, shellSessionIds]);
+||||||| bc50ba56aa
+  }, [activeSessionIds, entityById, imageSessionIds, prWatches, shellSessionIds]);
+=======
+  }, [activeSessionIds, entityById, extensionWaits, imageSessionIds, prWatches, shellSessionIds]);
+>>>>>>> upstream/main
 
   const blockingByRoot = React.useMemo(() => {
     const map = new Map<string, OverviewBlocking>();
@@ -276,7 +345,6 @@ export function useOverviewData(): OverviewData {
     return map;
   }, [blockingBySession, entityById]);
 
-  // Sessions whose PRs and issues matter: the ones in work, or recent ones when In work is off.
   const isFollowed = React.useCallback(
     (session: Session) => isOverviewFollowed(session, { workEnabled, now }),
     [now, workEnabled],
@@ -287,6 +355,43 @@ export function useOverviewData(): OverviewData {
     [sessions],
   );
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  const followed = React.useMemo(() => topLevel.filter(isFollowed), [isFollowed, topLevel]);
+
+  const urlMatcher = useRepositoryUrlMatcher();
+  // Keep the linked items and the worktree branches' open PRs live while on screen.
+  const branchPulls = useBranchTrackedPulls(changeRequests.keys);
+  const trackedItems = React.useMemo((): TrackedItem[] => {
+    const items: TrackedItem[] = [...branchPulls];
+    for (const session of followed) {
+      for (const change of getLinkedSidebarChanges(session, urlMatcher)) if (change.repository) items.push(repositoryThread('pull', change.repository));
+      for (const issue of getLinkedSidebarIssues(session, urlMatcher)) {
+        if (issue.source === 'repository') items.push(repositoryThread(issue.ref.thread, issue.ref));
+        else if (issue.source === 'tracker') items.push(workItem(issue.provider, issue.identifier));
+      }
+    }
+    return items;
+  }, [branchPulls, followed, urlMatcher]);
+  useTrackedItems(trackedItems);
+=======
+  const followed = React.useMemo(() => topLevel.filter(isFollowed), [isFollowed, topLevel]);
+
+  const urlMatcher = useRepositoryUrlMatcher();
+  const branchPulls = useBranchTrackedPulls(changeRequests.keys);
+  const trackedItems = React.useMemo((): TrackedItem[] => {
+    const items: TrackedItem[] = [...branchPulls];
+    for (const session of followed) {
+      for (const change of getLinkedSidebarChanges(session, urlMatcher)) if (change.repository) items.push(repositoryThread('pull', change.repository));
+      for (const issue of getLinkedSidebarIssues(session, urlMatcher)) {
+        if (issue.source === 'repository') items.push(repositoryThread(issue.ref.thread, issue.ref));
+        else if (issue.source === 'tracker') items.push(workItem(issue.provider, issue.identifier));
+      }
+    }
+    return items;
+  }, [branchPulls, followed, urlMatcher]);
+  useTrackedItems(trackedItems);
+>>>>>>> upstream/main
 
   const factsOf = React.useCallback((session: Session): OverviewSessionFacts => {
     const base: OverviewSessionFacts = {
@@ -322,7 +427,6 @@ export function useOverviewData(): OverviewData {
 
   const sessionsIn = React.useCallback((path: string): Session[] => sessionsInWorktree(sessions, path), [sessions]);
 
-  // The page's view of what the action checks again when it runs (`removeOverviewWorktree`).
   const isWorktreeInUse = React.useCallback((path: string): boolean => {
     const root = normalizePath(path) ?? path;
     const onScreen = normalizePath(currentDirectory ?? null);
@@ -348,6 +452,15 @@ export function useOverviewData(): OverviewData {
     return rows;
   }, [gitOf, isWorktreeInUse, now, sessionsIn, workEnabled, worktrees]);
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  // A space's session belongs to the project the space was made from, once the space list names it.
+  const spaceMarks = useSpacesStore((state) => state.spaces);
+  const spacesJourney = useSpacesStore((state) => state.journey);
+=======
+  const spaceMarks = useSpacesStore((state) => state.spaces);
+  const spacesJourney = useSpacesStore((state) => state.journey);
+>>>>>>> upstream/main
   const projectOf = React.useCallback((session: Session) => {
     const directory = resolveGlobalSessionDirectory(session) ?? session.displayPath;
     const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);

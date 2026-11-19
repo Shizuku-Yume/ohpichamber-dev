@@ -25,28 +25,24 @@ import { deriveBaseBranch } from './git/baseBranch';
 import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { useBranchPullRequestBase } from '@/hooks/useBranchComparisonBase';
 
-// Remotes rarely change; remembering the last fetched list per directory lets
-// a remount pick the same PR-status key immediately instead of flashing
-// through the remote-less "checking status" state while remotes reload.
-// Runtime-scoped so a backend switch never serves another runtime's remotes.
-/**
- * Standalone pull-request surface: resolves the same repository context
- * GitView does (branch, base branch, remotes) from the shared git stores and
- * renders the pull-request workflow full-size in the context panel.
- */
 export const PullRequestView: React.FC = () => {
   const { t } = useI18n();
   const { git, sourceControl } = useRuntimeAPIs();
   const currentDirectory = useEffectiveDirectory();
-  // The pull-request workflow operates on the picked repository, or the root
-  // when nothing is picked.
   const { rootIsGitRepo, gitDirectory, nestedRepos, repositoryOptions, unreadable } = useNestedGitDirectory(currentDirectory ?? null, { recheckOnOpen: true });
   const status = useGitStatus(gitDirectory ?? null);
   const branches = useGitBranches(gitDirectory ?? null);
   const isGitRepo = useIsGitRepo(gitDirectory ?? null);
+<<<<<<< HEAD
   // The binding follows the repository actually in view, and is asked only once
   // that directory proved to be a repository: the route answers 422 otherwise.
   const binding = useRepositoryBinding(gitDirectory, sourceControl, isGitRepo === true);
+||||||| bc50ba56aa
+  // The binding follows the repository actually in view.
+  const binding = useRepositoryBinding(gitDirectory, sourceControl);
+=======
+  const binding = useRepositoryBinding(gitDirectory, sourceControl);
+>>>>>>> upstream/main
   const { ensureAll, ensureNestedRepos, selectNestedRepo } = useGitStore(useShallow((state) => ({
     ensureAll: state.ensureAll,
     ensureNestedRepos: state.ensureNestedRepos,
@@ -139,9 +135,6 @@ export const PullRequestView: React.FC = () => {
 
   const currentBranch = status?.current ?? null;
 
-  // A pull request opened against a branch that does not exist is worse than a
-  // broken walkthrough, so this surface reads the repository's default branch
-  // too rather than guessing at main/master/develop.
   const defaultBranch = React.useMemo(() => {
     const primaryRemote = binding.contexts[0]?.primaryRemote;
     return primaryRemote ? branches?.defaultBranches?.[primaryRemote] : undefined;
@@ -165,11 +158,8 @@ export const PullRequestView: React.FC = () => {
     rootBranchHint,
     worktreeMetadata?.createdFromBranch,
   ]);
-  // The branch's own parent (a chosen base, its pull request's target, the
-  // layer below it in a stack) wins over the worktree's guess.
   const baseBranch = useBranchPullRequestBase(gitDirectory ?? null, currentBranch, true, binding, branches, derivedBaseBranch);
 
-  // Empty states name the host's own kind of change request.
   const changeRequestTerm = useChangeRequestTerm(useRepositoryHost(currentDirectory ?? null)?.provider);
 
   if (!currentDirectory) {
@@ -186,9 +176,6 @@ export const PullRequestView: React.FC = () => {
     return <GitRepositoryUnreadableState directory={unreadable.directory} message={unreadable.message} />;
   }
 
-  // Non-repo root: surface nested-repository resolution while the operating
-  // directory has not proven to be a repository (discovering, failed,
-  // unsupported, none found, or settling on the auto-selected one).
   if (rootIsGitRepo === false && isGitRepo !== true) {
     return (
       <NestedRepoResolutionStates
@@ -213,7 +200,6 @@ export const PullRequestView: React.FC = () => {
     );
   }
 
-  // Repository switcher; the pick is shared per root across git surfaces.
   return (
     <div className="flex h-full min-h-0 flex-col">
       {repositoryOptions ? (
@@ -231,7 +217,6 @@ export const PullRequestView: React.FC = () => {
       <ScrollableOverlay
         as={ScrollShadow}
         outerClassName="h-full min-h-0 flex-1"
-        // The section pads its own form; an open PR's preview fills the panel.
         className="h-full"
         disableHorizontal
         preventOverscroll

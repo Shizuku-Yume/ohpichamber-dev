@@ -6,7 +6,7 @@ import type { MobileAppActions } from '@/apps/mobileAppContext';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
-  window: browser, document: browser.document, navigator: browser.navigator,
+  window: browser, document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent, navigator: browser.navigator,
   localStorage: browser.localStorage, sessionStorage: browser.sessionStorage,
   HTMLElement: browser.HTMLElement, HTMLAnchorElement: browser.HTMLAnchorElement,
   Element: browser.Element, Node: browser.Node, Text: browser.Text,
@@ -48,7 +48,13 @@ const host = document.createElement('div');
 document.body.append(host);
 const root = createRoot(host);
 let drawerOpened = 0;
+<<<<<<< HEAD
 const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined };
+||||||| bc50ba56aa
+const actions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined };
+=======
+const actions = { openChanges: () => undefined, openFiles: () => { drawerOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined, openReceivedPage: () => undefined };
+>>>>>>> upstream/main
 const toastError = spyOn(toast, 'error').mockImplementation(() => 'test-toast');
 let toastsSeen = 0;
 const toasts = () => toastError.mock.calls.slice(toastsSeen).map(([message]) => message);

@@ -48,6 +48,7 @@ describe("native live aggregate", () => {
     expect(findLiveSession([state([older]), state([newer])], "session-1")).toBe(newer)
   })
 
+<<<<<<< HEAD
   test("prefers active statuses over stale idle snapshots and lets fresher idle win", () => {
     const old = session("session-1", "workspace-a", 10)
     const fresh = session("session-1", "workspace-a", 30)
@@ -58,6 +59,41 @@ describe("native live aggregate", () => {
     expect(statuses["session-1"]).toBe("running")
     expect(statuses["session-2"]).toBe("awaiting_input")
     expect(findLiveSessionStatus([state([old], { "session-1": "running" }), state([fresh], { "session-1": "idle" })], "session-1")).toBe("idle")
+||||||| bc50ba56aa
+  it('compares rebuilt session lists field by field', () => {
+    const list = [session('ses-1', '/a', 10), session('ses-2', '/b', 20, { parentID: 'ses-1' })]
+
+    expect(areSessionListsEquivalent(list, [...list])).toBe(true)
+    expect(areSessionListsEquivalent(list, list.map((item) => ({ ...item, time: { ...item.time } })))).toBe(true)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], time: { ...list[1].time, updated: 21 } }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], title: 'renamed' }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], parentID: undefined }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], directory: '/c' }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], time: { ...list[1].time, archived: 30 } }])).toBe(false)
+=======
+  it('detects a spend change, which leaves the timestamp alone', () => {
+    const tokens = { input: 100, output: 50, reasoning: 0, cache: { read: 10, write: 0 } }
+    const original = session('ses-1', '/a', 10, { cost: 0.5, tokens })
+    const withoutSpend = session('ses-1', '/a', 10)
+
+    expect(areSessionListsEquivalent([original], [{ ...original, tokens: { ...tokens, cache: { ...tokens.cache } } }])).toBe(true)
+    expect(areSessionListsEquivalent([withoutSpend], [original])).toBe(false)
+    expect(areSessionListsEquivalent([original], [{ ...original, cost: 0.75 }])).toBe(false)
+    expect(areSessionListsEquivalent([original], [{ ...original, tokens: { ...tokens, output: 80 } }])).toBe(false)
+    expect(areSessionListsEquivalent([original], [{ ...original, tokens: { ...tokens, cache: { read: 20, write: 0 } } }])).toBe(false)
+  })
+
+  it('compares rebuilt session lists field by field', () => {
+    const list = [session('ses-1', '/a', 10), session('ses-2', '/b', 20, { parentID: 'ses-1' })]
+
+    expect(areSessionListsEquivalent(list, [...list])).toBe(true)
+    expect(areSessionListsEquivalent(list, list.map((item) => ({ ...item, time: { ...item.time } })))).toBe(true)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], time: { ...list[1].time, updated: 21 } }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], title: 'renamed' }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], parentID: undefined }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], directory: '/c' }])).toBe(false)
+    expect(areSessionListsEquivalent(list, [list[0], { ...list[1], time: { ...list[1].time, archived: 30 } }])).toBe(false)
+>>>>>>> upstream/main
   })
 
   test("detects status map changes without relying on object identity", () => {

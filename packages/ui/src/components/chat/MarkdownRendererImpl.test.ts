@@ -8,8 +8,14 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import * as actualEffectiveDirectory from '@/hooks/useEffectiveDirectory';
 
 const browser = new Window({ url: 'http://localhost/' });
+<<<<<<< HEAD
 Object.assign(globalThis, {
   window: browser, document: browser.document, navigator: browser.navigator,
+||||||| bc50ba56aa
+Object.assign(globalThis, { window: browser, document: browser.document, navigator: browser.navigator,
+=======
+Object.assign(globalThis, { window: browser, document: browser.document, CustomEvent: browser.CustomEvent, navigator: browser.navigator,
+>>>>>>> upstream/main
   localStorage: browser.localStorage, sessionStorage: browser.sessionStorage, HTMLElement: browser.HTMLElement,
   HTMLAnchorElement: browser.HTMLAnchorElement, Element: browser.Element, Node: browser.Node, Text: browser.Text,
   SVGElement: browser.SVGElement, MutationObserver: browser.MutationObserver, DOMParser: browser.DOMParser,
@@ -23,9 +29,39 @@ Object.assign(globalThis, {
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, value: true });
 Object.defineProperty(globalThis, 'customElements', { configurable: true, value: browser.customElements });
 const state = { codeBlockLineWrap: false, tableCellWrap: true, copyMessagesAsPlainText: false, mermaidRenderingMode: 'svg', setCodeBlockLineWrap: () => undefined, setTableCellWrap: () => undefined, openContextFile: (_directory: string, _path: string) => undefined, openContextFileAtLine: (_directory: string, _path: string, _line: number, _column: number) => undefined };
+<<<<<<< HEAD
 mock.module('@/stores/useUIStore', () => ({ useUIStore: Object.assign((select: (value: typeof state) => never) => select(state), { getState: () => state, subscribe: () => () => undefined }) }));
 mock.module('@/lib/router/openSessionFromRoute', () => ({ openSessionLink: async () => undefined }));
 mock.module('@/hooks/useEffectiveDirectory', () => ({ ...actualEffectiveDirectory, useEffectiveDirectory: () => '/project' }));
+||||||| bc50ba56aa
+mock.module('@/stores/useUIStore', () => ({ useUIStore: Object.assign((select: (value: typeof state) => never) => select(state), { getState: () => state }), normalizeContextPanelDirectoryKey: (value: string) => value }));
+mock.module('@/lib/router/openSessionFromRoute', () => ({
+  openSession: async () => undefined,
+  openSessionLink: async () => undefined,
+}));
+mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () => '/project' }));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ runtime: { isVSCode: false }, editor: undefined }) }));
+=======
+mock.module('@/stores/useUIStore', () => ({ useUIStore: Object.assign((select: (value: typeof state) => never) => select(state), { getState: () => state, subscribe: () => () => undefined }), normalizeContextPanelDirectoryKey: (value: string) => value }));
+mock.module('@/lib/router/openSessionFromRoute', () => ({
+  openSession: async () => undefined,
+  openSessionLink: async () => undefined,
+}));
+mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () => '/project', resolveEffectiveDirectory: () => '/project' }));
+// Its hooks pull in the session side panel and the stores behind it; these tests draw no tracker chips.
+mock.module('@/components/sourceBoard/openTrackerItem', () => ({
+  trackerTargetOfUrl: () => null,
+  repositoryUrlOfItemLink: () => null,
+  isSameRepositoryItemLink: (left: string, right: string) => left === right,
+  trackerItemLabel: () => null,
+  wasTrackerItemRequested: () => false,
+  settleTrackerItemRequest: () => undefined,
+  useShowTrackerItem: () => null,
+  useOpenProjectOnBoard: () => null,
+  useOpenTrackerItem: () => () => undefined,
+}));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ runtime: { isVSCode: false }, editor: undefined }) }));
+>>>>>>> upstream/main
 const openedLinks: string[] = [];
 const actualUrlModule = await import('@/lib/url');
 mock.module('@/lib/url', () => ({
@@ -56,6 +92,14 @@ const render = async (content: string, isStreaming = false, allowRawHtml = false
   void isStreaming;
 };
 
+test('chat prose resolves each paragraph, list item and quote by most of its words', async () => {
+  await render('- **nao** — رخصة Apache 2.0 مفتوحة المصدر\n- Run the tests first\n- 42\n\n> Lightdash بيان مفتوح المصدر مبني على dbt\n\nThe Arabic label is مرحبا, and this paragraph is English.');
+  expect(Array.from(host.querySelectorAll('li'), (item) => item.getAttribute('dir'))).toEqual(['rtl', 'ltr', 'auto']);
+  expect(host.querySelector('ul')?.getAttribute('dir')).toBeNull();
+  expect(host.querySelector('blockquote')?.getAttribute('dir')).toBe('rtl');
+  expect(Array.from(host.querySelectorAll('p'), (paragraph) => paragraph.getAttribute('dir'))).toContain('ltr');
+});
+
 test('renders semantic Markdown through native Streamdown code and table components', async () => {
   await render('**bold**\n\n`inline`\n\n```text\nfirst\nsecond\n```\n\n| name | value |\n| --- | --- |\n| [link](https://example.com) | 2 |');
   expect(host.querySelector('[data-streamdown="code-block"]')).not.toBeNull();
@@ -71,6 +115,37 @@ test('renders semantic Markdown through native Streamdown code and table compone
   expect(host.querySelector('[data-oc-code-source]')?.getAttribute('data-oc-code-source')).toBe('first\nsecond');
 });
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+test('legacy quotes cross prose and fenced code in the application renderer', async () => {
+  for (const language of ['js', 'JS', '']) {
+    const markdown = `Before\n\n\`\`\`${language}\nconst x=1;\n\`\`\`\n\nAfter`;
+    await render(markdown);
+    const content = host.querySelector('[data-markdown-content]')!;
+    const anchor = legacyChatQuoteAnchor(markdown);
+    expect(anchor.text).toBe(content.textContent?.trim());
+    expect(resolveChatQuoteAnchor(content, anchor)?.toString()).toBe(anchor.text);
+  }
+});
+
+=======
+test('each table wrapper follows its content direction', async () => {
+  await render('| الاسم | القيمة |\n| --- | --- |\n| واحد | اثنان |\n\n| Name | Value |\n| --- | --- |\n| one | two |\n\n| 1 | 2 |\n| --- | --- |\n| 3 | 4 |');
+  expect(Array.from(host.querySelectorAll('[data-streamdown="table-wrapper"]'), (wrapper) => wrapper.getAttribute('dir'))).toEqual(['rtl', 'ltr', 'ltr']);
+});
+
+test('legacy quotes cross prose and fenced code in the application renderer', async () => {
+  for (const language of ['js', 'JS', '']) {
+    const markdown = `Before\n\n\`\`\`${language}\nconst x=1;\n\`\`\`\n\nAfter`;
+    await render(markdown);
+    const content = host.querySelector('[data-markdown-content]')!;
+    const anchor = legacyChatQuoteAnchor(markdown);
+    expect(anchor.text).toBe(content.textContent?.trim());
+    expect(resolveChatQuoteAnchor(content, anchor)?.toString()).toBe(anchor.text);
+  }
+});
+
+>>>>>>> upstream/main
 test('invisible-only blocks leave no paragraphs or arrival wrappers in either render mode', async () => {
   const visible = 'Family: 👨‍👩‍👧, Persian: می‌خواهم';
   for (const mode of ['streaming', 'static'] as const) {
@@ -167,9 +242,6 @@ test('file navigation respects disabling, stream settlement and selection-ending
       expect(open.mock.calls).toHaveLength(0);
     }
     await draw(true, true);
-    for (let i = 0; i < 50 && !host.querySelector('pre [data-openchamber-file-ref]'); i++) {
-      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
-    }
     const targets = host.querySelectorAll<HTMLElement>('a, code[data-openchamber-file-ref], pre [data-openchamber-file-ref]');
     expect(targets.length).toBe(3);
     for (const target of targets) {
@@ -193,12 +265,17 @@ test('on the phone a file link also opens the files drawer (#5486)', async () =>
   const open = spyOn(state, 'openContextFile');
   const { DedicatedMobileAppProvider } = await import('@/apps/mobileAppContext');
   let filesOpened = 0;
+<<<<<<< HEAD
   const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openPlan: () => undefined, openSourceBoard: () => undefined };
+||||||| bc50ba56aa
+  const actions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined };
+=======
+  const actions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined, openReceivedPage: () => undefined };
+>>>>>>> upstream/main
   try {
     const content = React.createElement(Renderer.MarkdownContent, { content: '[View README.md](README.md)', directory: '/project', enableFileReferences: true, settled: true });
     await act(() => root.render(React.createElement(I18nProvider, null, React.createElement(DedicatedMobileAppProvider, { actions, children: content }))));
-    host.querySelector<HTMLElement>('a')?.click();
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(() => { host.querySelector<HTMLElement>('a')?.click(); });
     expect(open.mock.calls).toEqual([['/project', '/project/README.md']]);
     expect(filesOpened).toBe(1);
   } finally {

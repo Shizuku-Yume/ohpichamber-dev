@@ -1,8 +1,21 @@
+<<<<<<< HEAD
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
+||||||| bc50ba56aa
+import React from 'react';
+import type { Session } from '@/lib/opencode/model';
+=======
+import type { Session } from '@/lib/opencode/model';
+>>>>>>> upstream/main
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
+<<<<<<< HEAD
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+||||||| bc50ba56aa
+import { matchSegments, type MatchRange } from '@/lib/search/matchSegments';
+import { MatchHighlight } from '@/components/ui/MatchHighlight';
+=======
+>>>>>>> upstream/main
 
 import { normalizePath } from '@/lib/pathNormalization';
 export { normalizePath };
@@ -130,12 +143,6 @@ export const isBranchDifferentFromLabel = (branch: string | null, label: string)
   return normalizeForBranchComparison(branch) !== normalizeForBranchComparison(label);
 };
 
-/**
- * A worktree group is named after its branch as it is now. A listing names a
- * worktree by the branch it had then, or by its folder when it had none (a
- * worktree created detached, given a branch later); either follows the live
- * branch. Only a label that names something else is kept.
- */
 export const resolveWorktreeGroupLabel = (
   meta: { label?: string | null; name?: string | null; branch?: string | null },
   currentBranch: string | null,
@@ -174,8 +181,8 @@ export const resolveArchivedFolderName = (session: Session, projectRoot: string 
   return segments[segments.length - 1] ?? 'unassigned';
 };
 
-// Folder names are shown exactly as they are on disk — no title-casing.
 export const formatProjectLabel = (label: string): string => label.trim();
+<<<<<<< HEAD
 
 export const renderHighlightedText = (text: string, query: string): React.ReactNode => {
   if (!query) {
@@ -216,3 +223,27 @@ export const renderHighlightedText = (text: string, query: string): React.ReactN
 
   return parts.length > 0 ? parts : text;
 };
+||||||| bc50ba56aa
+
+// The sidebar's filter marks every occurrence of the query.
+export const renderHighlightedText = (text: string, query: string): React.ReactNode => {
+  if (!query) {
+    return text;
+  }
+
+  const loweredText = text.toLowerCase();
+  const loweredQuery = query.toLowerCase();
+  const ranges: MatchRange[] = [];
+  let matchIndex = loweredText.indexOf(loweredQuery);
+  while (matchIndex !== -1) {
+    ranges.push([matchIndex, matchIndex + loweredQuery.length]);
+    matchIndex = loweredText.indexOf(loweredQuery, matchIndex + loweredQuery.length);
+  }
+  if (ranges.length === 0) {
+    return text;
+  }
+
+  return <MatchHighlight segments={matchSegments(text, ranges)} />;
+};
+=======
+>>>>>>> upstream/main

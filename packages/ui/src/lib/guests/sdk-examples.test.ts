@@ -1,10 +1,28 @@
+<<<<<<< HEAD
 import { afterEach, describe, expect, test } from 'bun:test';
+||||||| bc50ba56aa
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+=======
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
+>>>>>>> upstream/main
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
+<<<<<<< HEAD
 import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT, OPENCHAMBER_SDK_API_VERSION } from 'ohpichamber-sdk';
 import { guestMessageSchema } from 'ohpichamber-sdk/schemas';
 import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from 'ohpichamber-sdk';
+||||||| bc50ba56aa
+import { guestMessageSchema } from '@openchamber/sdk/schemas';
+import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
+=======
+import { guestMessageSchema } from '@openchamber/sdk/schemas';
+import * as sdk from '@openchamber/sdk';
+import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
+>>>>>>> upstream/main
+
+import { resolveGuestIconName } from './icon.ts';
 
 const examples = new URL('../../../../sdk/examples/', import.meta.url);
 const windows: Window[] = [];
@@ -378,5 +396,47 @@ describe('checked-in SDK examples', () => {
       messages: [{ id: 'm', role: 'assistant', text: '![private](https://example.com/image)', createdAt: 0 }] } });
     expect(app.window.document.body.textContent).toContain('![private](https://example.com/image)');
     expect(app.window.document.querySelector('img')).toBeNull();
+  });
+
+  test('the mark the agent desk sets names an icon the host draws', async () => {
+    type Request = { headers: { authorization: string }; url: string; on: (event: string, listener: (body?: string) => void) => void };
+    type Response = { writeHead: () => void; end: () => void; headersSent: boolean };
+    let handle: ((request: Request, response: Response) => void) | undefined;
+    let mark: { icon: string } | undefined;
+    let finishResponse: () => void = () => {};
+    const responded = new Promise<void>((resolve) => { finishResponse = resolve; });
+    const serviceHost = {
+      sessions: { start: async () => ({ sessionId: 'desk-session' }) },
+      setMark: async (_target: sdk.ServiceMarkTarget, value: { icon: string }) => { mark = value; },
+      setInstructions: async () => {},
+    };
+    const serviceHttp = {
+      createServer(listener: typeof handle) {
+        handle = listener;
+        return { listen: (_port: number, _address: string, ready: () => void) => ready() };
+      },
+    };
+    const source = execFileSync(process.execPath, ['build', new URL('agent-desk/service/main.ts', examples).pathname,
+      '--target=node', '--format=cjs', '--external=node:http', '--external=@openchamber/sdk'], { encoding: 'utf8' });
+    runInNewContext(source, {
+      process: { env: { OPENCHAMBER_SERVICE_PORT: '12345', OPENCHAMBER_SERVICE_TOKEN: 'fixture-token' } },
+      console,
+      require(name: string) {
+        if (name === 'node:http') return serviceHttp;
+        if (name === '@openchamber/sdk') return { ...sdk, createServiceHost: () => serviceHost };
+        throw new Error(`Unexpected service dependency: ${name}`);
+      },
+      URL,
+    });
+    if (!handle) throw new Error('Service did not register its request handler');
+    const events = new Map<string, (body?: string) => void>();
+    handle({ headers: { authorization: 'Bearer fixture-token' }, url: '/start', on: (event, listener) => { events.set(event, listener); } },
+      { writeHead: () => {}, end: finishResponse, headersSent: false });
+    events.get('data')?.(JSON.stringify({ directory: '/repo' }));
+    events.get('end')?.();
+    await responded;
+    if (!mark) throw new Error('Service did not publish its mark');
+    expect(mark.icon).toBe('robot-2');
+    expect(resolveGuestIconName(mark.icon)).toBe(mark.icon);
   });
 });

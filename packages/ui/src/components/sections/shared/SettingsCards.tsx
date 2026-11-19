@@ -13,12 +13,6 @@ import type { IconName } from '@/components/icon/icons';
 import { cn } from '@/lib/utils';
 import { SETTINGS_WIDTH_LONG_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
 
-/**
- * Card grid for Settings pages that browse a set of things with a glanceable
- * state (providers, MCP servers, plugins): a grid of cards, each opening a
- * detail screen with a back arrow. Pages that edit long text keep the
- * list-plus-editor layout instead.
- */
 
 export const SETTINGS_CARD_GRID_CLASS = 'grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3';
 
@@ -43,6 +37,7 @@ export const SettingsCardPill: React.FC<{ tone: SettingsCardTone; children: Reac
   </span>
 );
 
+<<<<<<< HEAD
 /** Small outlined chip for the card footer (scope, source). */
 export const SettingsCardChip: React.FC<{ children: React.ReactNode; className?: string; title?: string }> = ({
   children,
@@ -50,6 +45,14 @@ export const SettingsCardChip: React.FC<{ children: React.ReactNode; className?:
   title,
 }) => (
   <span title={title} className={cn('oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium', className)}>
+||||||| bc50ba56aa
+/** Small outlined chip for the card footer (scope, source). */
+export const SettingsCardChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
+=======
+export const SettingsCardChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="oc-tile-inset shrink-0 rounded-full px-2 py-px text-[0.625rem] font-medium">
+>>>>>>> upstream/main
     {children}
   </span>
 );
@@ -64,23 +67,14 @@ export interface SettingsCardAction {
 interface SettingsCardProps {
   icon: React.ReactNode;
   title: string;
-  /** Monospace second line: an id, command or URL. */
   subtitle?: string;
-  /** Plain text under the title saying what the item is; up to two lines. */
   description?: string;
-  /** Top-right pills (status, update available). */
   badges?: React.ReactNode;
-  /** Bottom row content: counts and chips. */
   footer?: React.ReactNode;
-  /** Dims the card for things that are present but switched off. */
   muted?: boolean;
-  /** Omitted for display-only items, which render as a plain card. */
   onOpen?: () => void;
-  /** Row actions, offered from the card's ⋯ button and on right-click. */
   actions?: readonly SettingsCardAction[];
-  /** Accessible name for the ⋯ button. */
   actionsLabel?: string;
-  /** A control that belongs to the item itself, such as an on/off switch. Rendered beside the card as a sibling so it is never nested in the card button. */
   control?: React.ReactNode;
 }
 
@@ -111,9 +105,17 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
           <div className="mt-1 line-clamp-2 typography-micro text-muted-foreground">{description}</div>
         ) : null}
       </div>
+<<<<<<< HEAD
       {/* The ⋯ button shows on touch screens only; with a mouse the card's
           menu is its right click, so the footer keeps no room for it there. */}
       <div className={cn('mt-auto flex min-w-0 shrink-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', (hasControl || hasActions) && 'min-h-10 @xl:min-h-0', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
+||||||| bc50ba56aa
+      {/* The ⋯ button shows on touch screens only; with a mouse the card's
+          menu is its right click, so the footer keeps no room for it there. */}
+      <div className={cn('mt-auto flex min-w-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
+=======
+      <div className={cn('mt-auto flex min-w-0 items-center gap-2 pt-3 typography-micro text-muted-foreground', hasControl ? 'pe-24' : hasActions && 'pe-8 pointer-fine:pe-0')}>
+>>>>>>> upstream/main
         {footer}
         {onOpen ? (
           <Icon
@@ -147,8 +149,6 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
 
   if (!hasActions && !hasControl) return card;
 
-  // The ⋯ button and the item's own control sit over the card as siblings of
-  // the card button, never inside it, so they stay separate controls.
   return (
     <ContextMenu>
       <ContextMenuTrigger render={<div className="group relative min-w-0" />}>
@@ -196,7 +196,6 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({ icon, title, subtitl
   );
 };
 
-/** Dashed leading card that starts adding a new item. */
 export const SettingsAddCard: React.FC<{
   label: string;
   hint?: string;
@@ -209,7 +208,6 @@ export const SettingsAddCard: React.FC<{
     data-settings-item={settingsItem}
     className={cn(
       CARD_CLASS,
-      // The one card drawn with a line: an empty slot reads as a dashed outline.
       'oc-tile-hover items-center justify-center gap-2 text-center border border-dashed border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] text-muted-foreground hover:text-foreground',
     )}
   >
@@ -226,13 +224,18 @@ export const SettingsCardSearch: React.FC<{
   onChange: (value: string) => void;
   placeholder: string;
   className?: string;
+<<<<<<< HEAD
   /** 28px, matching toolbar dropdowns and buttons; defaults true in settings. */
+||||||| bc50ba56aa
+  /** 28px, to match the dropdowns and buttons of a toolbar row. */
+=======
+>>>>>>> upstream/main
   compact?: boolean;
 }> = ({ value, onChange, placeholder, className, compact = true }) => (
   <div className={cn('relative mb-4', SETTINGS_WIDTH_LONG_TEXT_CLASS, className)}>
     <Icon
       name="search"
-      className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+      className="pointer-events-none absolute inset-s-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
       aria-hidden
     />
     <Input
@@ -241,16 +244,11 @@ export const SettingsCardSearch: React.FC<{
       placeholder={placeholder}
       aria-label={placeholder}
       inputSize={compact ? 'compact' : 'default'}
-      className="ps-8"
+      className="ps-7"
     />
   </div>
 );
 
-/**
- * The row above a card grid: the search on the start side, the page's actions
- * (project picker, refresh) on the end side. Without cards there is nothing
- * to search, and the actions keep their place.
- */
 export const SettingsCardToolbar: React.FC<{
   search: { value: string; onChange: (value: string) => void; placeholder: string } | null;
   actions: React.ReactNode;
@@ -262,7 +260,6 @@ export const SettingsCardToolbar: React.FC<{
   </div>
 );
 
-/** Back arrow placed before a detail screen's title. */
 export const SettingsBackButton: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
   <Button
     variant="ghost"
@@ -276,7 +273,6 @@ export const SettingsBackButton: React.FC<{ label: string; onClick: () => void }
   </Button>
 );
 
-/** Icon tile content for cards without a logo of their own. */
 export const SettingsCardIcon: React.FC<{ name: IconName }> = ({ name }) => (
   <Icon name={name} className="size-5 text-muted-foreground" />
 );

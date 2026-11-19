@@ -44,8 +44,8 @@ const modelLabelFor = (member: MultiRunMember, providers: readonly { providerId:
  return member.identity.index && member.identity.index > 1 ? `${name} #${member.identity.index}` : name;
 };
 
-/** The first prompt of each variant, read once, as the caption over its cards. */
 function useVariantPrompts(run: MultiRunSummary | null, sessionById: ReadonlyMap<string, Session>): ReadonlyMap<string, string> {
+<<<<<<< HEAD
  const [prompts, setPrompts] = React.useState<ReadonlyMap<string, string>>(new Map());
  const firstLaneByVariant = React.useMemo(() => {
   const map = new Map<string, string>();
@@ -67,16 +67,55 @@ function useVariantPrompts(run: MultiRunSummary | null, sessionById: ReadonlyMap
   }
   return () => { cancelled = true; };
   // Captions are fixed once read; a session update never changes the first prompt.
+||||||| bc50ba56aa
+  const [prompts, setPrompts] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const firstLaneByVariant = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const lane of run?.lanes ?? []) {
+      const variant = multiRunVariantLabel(lane.identity.runGroup);
+      if (!map.has(variant)) map.set(variant, lane.sessionId);
+    }
+    return map;
+  }, [run?.lanes]);
+  React.useEffect(() => {
+    let cancelled = false;
+    for (const [variant, sessionId] of firstLaneByVariant) {
+      const session = sessionById.get(sessionId);
+      if (!session || prompts.has(variant)) continue;
+      loadLaneFirstPrompt(sessionId, session.directory).then((prompt) => {
+        if (cancelled || !prompt?.text) return;
+        setPrompts((current) => new Map(current).set(variant, prompt.text));
+      }, () => undefined);
+    }
+    return () => { cancelled = true; };
+  // Captions are fixed once read; a session update never changes the first prompt.
+=======
+  const [prompts, setPrompts] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const firstLaneByVariant = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const lane of run?.lanes ?? []) {
+      const variant = multiRunVariantLabel(lane.identity.runGroup);
+      if (!map.has(variant)) map.set(variant, lane.sessionId);
+    }
+    return map;
+  }, [run?.lanes]);
+  React.useEffect(() => {
+    let cancelled = false;
+    for (const [variant, sessionId] of firstLaneByVariant) {
+      const session = sessionById.get(sessionId);
+      if (!session || prompts.has(variant)) continue;
+      loadLaneFirstPrompt(sessionId, session.directory).then((prompt) => {
+        if (cancelled || !prompt?.text) return;
+        setPrompts((current) => new Map(current).set(variant, prompt.text));
+      }, () => undefined);
+    }
+    return () => { cancelled = true; };
+>>>>>>> upstream/main
   // oxlint-disable-next-line react-hooks/exhaustive-deps
  }, [firstLaneByVariant]);
  return prompts;
 }
 
-/**
- * The prompt a variant's lanes received: one line until expanded, then the
- * whole text in a bounded, scrollable block. The toggle shows only when the
- * line is actually cut or the prompt has several lines.
- */
 function PromptCaption({ prompt, expanded, onToggle }: { prompt: string; expanded: boolean; onToggle: () => void }): React.ReactNode {
  const { t } = useI18n();
  const lineRef = React.useRef<HTMLSpanElement>(null);
@@ -116,6 +155,7 @@ function PromptCaption({ prompt, expanded, onToggle }: { prompt: string; expande
 }
 
 function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
+<<<<<<< HEAD
  const { t } = useI18n();
  const { run, sessionById } = useMultiRun(runKey);
  const providers = useConfigStore((state) => state.providers);
@@ -133,6 +173,46 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
  const [renaming, setRenaming] = React.useState<string | null>(null);
  const [expandedPrompts, setExpandedPrompts] = React.useState<ReadonlySet<string>>(() => new Set());
  const [pendingModel, setPendingModel] = React.useState<{ runGroup: string | undefined; model: ModelSelectionWithId } | null>(null);
+||||||| bc50ba56aa
+  const { t } = useI18n();
+  const { run, sessionById } = useMultiRun(runKey);
+  const providers = useConfigStore((state) => state.providers);
+  const currentProviderId = useConfigStore((state) => state.currentProviderId);
+  const currentModelId = useConfigStore((state) => state.currentModelId);
+  const currentAgentName = useConfigStore((state) => state.currentAgentName);
+  const projects = useProjectsStore((state) => state.projects);
+  const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
+  const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
+  const globalSessionById = useGlobalSessionsStore((state) => state.entityById);
+  // Phones get the overview, fusion and Keep, but never launch lanes (no header back arrow either).
+  const isMobile = useUIStore((state) => state.isMobile);
+  const [bar, setBar] = React.useState<BarMode>({ kind: 'idle' });
+  const [busyAction, setBusyAction] = React.useState<'keep' | 'fuse' | 'ask' | 'archive' | 'member' | null>(null);
+  const [judge, setJudge] = React.useState<ModelSelectionWithId[]>([]);
+  const [judgeAgent, setJudgeAgent] = React.useState(currentAgentName ?? '');
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  const [expandedPrompts, setExpandedPrompts] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [pendingModel, setPendingModel] = React.useState<{ runGroup: string | undefined; model: ModelSelectionWithId } | null>(null);
+=======
+  const { t } = useI18n();
+  const { run, sessionById } = useMultiRun(runKey);
+  const providers = useConfigStore((state) => state.providers);
+  const currentProviderId = useConfigStore((state) => state.currentProviderId);
+  const currentModelId = useConfigStore((state) => state.currentModelId);
+  const currentAgentName = useConfigStore((state) => state.currentAgentName);
+  const projects = useProjectsStore((state) => state.projects);
+  const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
+  const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
+  const globalSessionById = useGlobalSessionsStore((state) => state.entityById);
+  const isMobile = useUIStore((state) => state.isMobile);
+  const [bar, setBar] = React.useState<BarMode>({ kind: 'idle' });
+  const [busyAction, setBusyAction] = React.useState<'keep' | 'fuse' | 'ask' | 'archive' | 'member' | null>(null);
+  const [judge, setJudge] = React.useState<ModelSelectionWithId[]>([]);
+  const [judgeAgent, setJudgeAgent] = React.useState(currentAgentName ?? '');
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  const [expandedPrompts, setExpandedPrompts] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [pendingModel, setPendingModel] = React.useState<{ runGroup: string | undefined; model: ModelSelectionWithId } | null>(null);
+>>>>>>> upstream/main
 
  const projectRoots = React.useMemo(
   () => new Set(projects.map((project) => normalizePath(project.path)).filter((path): path is string => Boolean(path))),
@@ -155,6 +235,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   if (providerId && modelId) setJudge([{ providerId, modelId, variant: auto?.variant, instanceId: generateInstanceId() }]);
  }, [currentModelId, currentProviderId, judge.length, run?.autoFusion]);
 
+<<<<<<< HEAD
  // A fusion that starts while the overview is shown opens at once, manual or
  // automatic: the fused answer is what the user waits for. Fusions that were
  // there when the overview opened stay put.
@@ -172,6 +253,554 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const session = useGlobalSessionsStore.getState().entityById.get(started);
   useSessionUIStore.getState().setCurrentSession(started, session ? resolveGlobalSessionDirectory(session) : null);
  }, [fusionIds, runKey]);
+||||||| bc50ba56aa
+  // A fusion that starts while the overview is shown opens at once, manual or
+  // automatic: the fused answer is what the user waits for. Fusions that were
+  // there when the overview opened stay put.
+  const seenFusionsRef = React.useRef<{ runKey: string; ids: ReadonlySet<string> } | null>(null);
+  const fusionIds = run?.fusions.map((fusion) => fusion.sessionId).join('\n') ?? null;
+  React.useEffect(() => {
+    if (fusionIds === null) return;
+    const ids = new Set(fusionIds ? fusionIds.split('\n') : []);
+    const seen = seenFusionsRef.current;
+    seenFusionsRef.current = { runKey, ids };
+    if (!seen || seen.runKey !== runKey) return;
+    const started = [...ids].find((id) => !seen.ids.has(id));
+    if (!started || useUIStore.getState().runOverviewKey !== runKey) return;
+    useUIStore.getState().closeMainSurfaces();
+    useSessionUIStore.getState().setCurrentSession(started, useGlobalSessionsStore.getState().entityById.get(started)?.directory ?? null);
+  }, [fusionIds, runKey]);
+
+  if (!run) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center typography-meta text-muted-foreground">
+        {t('multirun.overview.missing')}
+        <Button variant="outline" size="sm" onClick={() => useUIStore.getState().closeMainSurfaces()}>
+          {t('header.mainSurface.backToChat')}
+        </Button>
+      </div>
+    );
+  }
+
+  const laneIds = run.lanes.map((lane) => lane.sessionId);
+  const finishedLaneIds = laneIds.filter((id) => (
+    !activeSessionIds.has(id) && sessionById.get(id)?.time.idle && !hasRunningGoal(sessionById.get(id))
+  ));
+  const busyLaneCount = laneIds.filter((id) => activeSessionIds.has(id) || hasRunningGoal(sessionById.get(id))).length;
+  const isolated = run.lanes.some((lane) => worktreeById.get(lane.sessionId));
+  const memberById = new Map([...run.lanes, ...run.fusions].map((member) => [member.sessionId, member]));
+  const nameOf = (sessionId: string): string => {
+    const member = memberById.get(sessionId);
+    return member ? modelLabelFor(member, providers) : '';
+  };
+  const autoFusionHere = run.autoFusion?.launcherId === RUN_LAUNCHER_ID && run.fusions.length === 0;
+  const statusOf = (sessionId: string): LaneStatus | null => {
+    const session = sessionById.get(sessionId);
+    if (!session) return null;
+    const pending = blockingBySession.get(sessionId);
+    return resolveLaneStatus({
+      session,
+      busy: activeSessionIds.has(sessionId),
+      blocking: pending?.permissions.length ? 'permission' : pending?.forms.length || pending?.pages.length ? 'question' : null,
+      reply: summaries.get(sessionId)?.reply,
+    });
+  };
+  const laneStatusCounts = new Map<LaneStatus, number>();
+  for (const id of laneIds) {
+    const status = statusOf(id);
+    if (status) laneStatusCounts.set(status, (laneStatusCounts.get(status) ?? 0) + 1);
+  }
+  const waitingLaneCount = (laneStatusCounts.get('permission') ?? 0) + (laneStatusCounts.get('question') ?? 0);
+
+  const openChat = (sessionId: string) => {
+    const session = sessionById.get(sessionId);
+    useUIStore.getState().closeMainSurfaces();
+    useSessionUIStore.getState().setCurrentSession(sessionId, session?.directory ?? null);
+  };
+  const openDiff = (sessionId: string) => {
+    const directory = worktreeById.get(sessionId);
+    openChat(sessionId);
+    if (directory) useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
+  };
+
+  const fuseSources = bar.kind === 'fuse' ? finishedLaneIds.filter((id) => !bar.excluded.has(id)) : [];
+  const fuseMode = fusionModeFor(fuseSources.map((id) => {
+    const diff = summaries.get(id)?.diff;
+    return { hasWorktree: Boolean(worktreeById.get(id)), diff: diff?.state === 'ready' ? diff.stat : null };
+  }));
+
+  // Cards are only selectable while choosing fusion sources.
+  const toggleFuseSource = (sessionId: string) => {
+    if (bar.kind !== 'fuse' || !finishedLaneIds.includes(sessionId)) return;
+    const excluded = new Set(bar.excluded);
+    if (excluded.has(sessionId)) excluded.delete(sessionId); else excluded.add(sessionId);
+    setBar({ kind: 'fuse', excluded });
+  };
+
+  const handleKeep = async (sessionId: string) => {
+    setBusyAction('keep');
+    try {
+      const keptLabel = nameOf(sessionId);
+      const result = await keepRunMember(run, sessionId, sessionById);
+      if (result.failures.length > 0) {
+        toast.error(result.failures.length === 1
+          ? t('multirun.overview.keep.partialSingle', { name: keptLabel, count: result.failures.length })
+          : t('multirun.overview.keep.partialPlural', { name: keptLabel, count: result.failures.length }));
+      } else {
+        toast.success(t('multirun.overview.keep.done', { name: keptLabel }));
+      }
+      openChat(sessionId);
+    } catch (error) {
+      console.error('[MultiRun] Keep failed', error);
+      toast.error(t('multirun.overview.keep.failed'));
+    } finally {
+      setBusyAction(null);
+      setBar({ kind: 'idle' });
+    }
+  };
+
+  const handleFuse = async () => {
+    const selection = judge[0];
+    if (!selection || fuseSources.length < 2) return;
+    setBusyAction('fuse');
+    try {
+      await startRunFusion({
+        run,
+        sourceIds: fuseSources,
+        judge: resolveFusionJudge({ providerID: selection.providerID, modelID: selection.modelID, variant: selection.variant, agent: judgeAgent || undefined }),
+        sessionById,
+      });
+      setBar({ kind: 'idle' });
+    } catch (error) {
+      console.error('[MultiRun] Fusion failed to start', error);
+      toast.error(error instanceof NoFusionOutputsError ? t('multirun.fusion.toast.noOutputs') : t('multirun.fusion.toast.failed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleAddModel = async (model: ModelSelectionWithId, runGroup: string | undefined) => {
+    setBusyAction('ask');
+    try {
+      await addLaneToRun({
+        run,
+        runGroup,
+        model,
+        sessionById,
+      });
+    } catch (error) {
+      console.error('[MultiRun] Could not add a lane', error);
+      toast.error(t('multirun.overview.ask.failed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleRename = async (title: string) => {
+    setRenaming(null);
+    if (!title.trim() || title.trim() === run.title) return;
+    const failed = await renameRun(run, title, sessionById);
+    if (failed.length > 0) toast.error(t('multirun.overview.rename.failed'));
+  };
+
+  const handleDetach = async (sessionId: string) => {
+    const session = sessionById.get(sessionId);
+    if (!session) return;
+    setBusyAction('member');
+    try {
+      await detachFromRun(session, run.title);
+      toast.success(t('multirun.overview.card.detachDone', { name: nameOf(sessionId) }));
+    } catch (error) {
+      console.error('[MultiRun] Could not detach a session', error);
+      toast.error(t('multirun.overview.card.detachFailed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleArchiveMember = async (sessionId: string) => {
+    setBusyAction('member');
+    try {
+      const result = await useSessionUIStore.getState().archiveSessions([sessionId]);
+      if (result.failedIds.length > 0) toast.error(t('multirun.overview.archive.failed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleArchive = async () => {
+    setBusyAction('archive');
+    try {
+      const result = await archiveRun(run);
+      if (result.failedIds.length > 0) toast.error(t('multirun.overview.archive.failed'));
+      else useUIStore.getState().closeMainSurfaces();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const renderCard = (member: MultiRunMember) => {
+    const session = sessionById.get(member.sessionId);
+    if (!session) return null;
+    const isFusion = member.identity.role === 'fusion';
+    const finished = finishedLaneIds.includes(member.sessionId);
+    return (
+      <RunLaneCard
+        key={member.sessionId}
+        session={session}
+        providerID={member.identity.providerID}
+        modelLabel={modelLabelFor(member, providers)}
+        variantLabel={!isFusion && run.variants.length > 1 ? multiRunVariantLabel(member.identity.runGroup) : null}
+        isFusion={isFusion}
+        busy={activeSessionIds.has(member.sessionId)}
+        status={statusOf(member.sessionId) ?? 'notStarted'}
+        unread={isSessionUnread(globalSessionById.get(member.sessionId))}
+        summary={summaries.get(member.sessionId)}
+        fuseSource={bar.kind === 'fuse' && !isFusion
+          ? { checked: finished && !bar.excluded.has(member.sessionId), selectable: finished }
+          : null}
+        hasWorktree={Boolean(worktreeById.get(member.sessionId))}
+        onToggleFuseSource={() => toggleFuseSource(member.sessionId)}
+        onKeep={isolated && finished && bar.kind === 'idle' && (isFusion ? Boolean(worktreeById.get(member.sessionId)) : true)
+          ? () => setBar({ kind: 'keep', sessionId: member.sessionId })
+          : undefined}
+        onDetach={() => void handleDetach(member.sessionId)}
+        onArchive={() => void handleArchiveMember(member.sessionId)}
+        actionsDisabled={busyAction !== null || bar.kind !== 'idle'}
+        onOpenChat={() => openChat(member.sessionId)}
+        onOpenDiff={() => openDiff(member.sessionId)}
+      />
+    );
+  };
+
+  // Two steps: pick the model, then its thinking effort, then run it.
+  const renderAddModel = (runGroup: string | undefined) => {
+    const pending = pendingModel && pendingModel.runGroup === runGroup ? pendingModel.model : null;
+    if (pending) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-border px-2.5 typography-meta text-foreground">
+            <ProviderLogo providerId={pending.providerID} className="size-3.5" />
+            {pending.displayName || pending.modelID}
+          </span>
+          <ModelEffortMenu
+            appearance="trigger"
+            providerID={pending.providerID}
+            modelID={pending.modelID}
+            variant={pending.variant}
+            onChange={(variant) => setPendingModel({ runGroup, model: { ...pending, variant } })}
+          />
+          <Button
+            size="sm"
+            disabled={busyAction !== null}
+            onClick={() => {
+              setPendingModel(null);
+              void handleAddModel(pending, runGroup);
+            }}
+          >
+            {t('multirun.overview.addModel.confirm')}
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8" aria-label={t('multirun.overview.cancel')} onClick={() => setPendingModel(null)}>
+            <Icon name="close" className="size-3.5" />
+          </Button>
+        </span>
+      );
+    }
+    return (
+      <span title={t('multirun.overview.addModel.hint')}>
+        <ModelMultiSelect
+          selectedModels={[]}
+          onAdd={(model) => setPendingModel({ runGroup, model })}
+          onRemove={() => undefined}
+          maxModels={1}
+          showChips={false}
+          dropdownSide="bottom"
+          portal
+          addButtonClassName="h-8 min-h-8 px-2.5 typography-meta"
+          addButtonLabel={busyAction === 'ask' ? t('multirun.overview.ask.working') : t('multirun.overview.addModel.action')}
+        />
+      </span>
+    );
+  };
+
+  // One card per row on a phone: two 280px columns never fit, and a single
+  // card squeezed below that clips its actions.
+  const cardGridClassName = isMobile
+    ? 'grid grid-cols-1 gap-2.5'
+    : 'grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2.5';
+  const keepTarget = bar.kind === 'keep' ? bar.sessionId : null;
+  const othersCount = run.memberIds.length - 1;
+=======
+  const seenFusionsRef = React.useRef<{ runKey: string; ids: ReadonlySet<string> } | null>(null);
+  const fusionIds = run?.fusions.map((fusion) => fusion.sessionId).join('\n') ?? null;
+  React.useEffect(() => {
+    if (fusionIds === null) return;
+    const ids = new Set(fusionIds ? fusionIds.split('\n') : []);
+    const seen = seenFusionsRef.current;
+    seenFusionsRef.current = { runKey, ids };
+    if (!seen || seen.runKey !== runKey) return;
+    const started = [...ids].find((id) => !seen.ids.has(id));
+    if (!started || useUIStore.getState().runOverviewKey !== runKey) return;
+    useUIStore.getState().closeMainSurfaces();
+    useSessionUIStore.getState().setCurrentSession(started, useGlobalSessionsStore.getState().entityById.get(started)?.directory ?? null);
+  }, [fusionIds, runKey]);
+
+  if (!run) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center typography-meta text-muted-foreground">
+        {t('multirun.overview.missing')}
+        <Button variant="outline" size="sm" onClick={() => useUIStore.getState().closeMainSurfaces()}>
+          {t('header.mainSurface.backToChat')}
+        </Button>
+      </div>
+    );
+  }
+
+  const laneIds = run.lanes.map((lane) => lane.sessionId);
+  const finishedLaneIds = laneIds.filter((id) => (
+    !activeSessionIds.has(id) && sessionById.get(id)?.time.idle && !hasRunningGoal(sessionById.get(id))
+  ));
+  const busyLaneCount = laneIds.filter((id) => activeSessionIds.has(id) || hasRunningGoal(sessionById.get(id))).length;
+  const isolated = run.lanes.some((lane) => worktreeById.get(lane.sessionId));
+  const memberById = new Map([...run.lanes, ...run.fusions].map((member) => [member.sessionId, member]));
+  const nameOf = (sessionId: string): string => {
+    const member = memberById.get(sessionId);
+    return member ? modelLabelFor(member, providers) : '';
+  };
+  const autoFusionHere = run.autoFusion?.launcherId === RUN_LAUNCHER_ID && run.fusions.length === 0;
+  const statusOf = (sessionId: string): LaneStatus | null => {
+    const session = sessionById.get(sessionId);
+    if (!session) return null;
+    const pending = blockingBySession.get(sessionId);
+    return resolveLaneStatus({
+      session,
+      busy: activeSessionIds.has(sessionId),
+      blocking: pending?.permissions.length ? 'permission' : pending?.forms.length || pending?.pages.length ? 'question' : null,
+      reply: summaries.get(sessionId)?.reply,
+    });
+  };
+  const laneStatusCounts = new Map<LaneStatus, number>();
+  for (const id of laneIds) {
+    const status = statusOf(id);
+    if (status) laneStatusCounts.set(status, (laneStatusCounts.get(status) ?? 0) + 1);
+  }
+  const waitingLaneCount = (laneStatusCounts.get('permission') ?? 0) + (laneStatusCounts.get('question') ?? 0);
+
+  const openChat = (sessionId: string) => {
+    const session = sessionById.get(sessionId);
+    useUIStore.getState().closeMainSurfaces();
+    useSessionUIStore.getState().setCurrentSession(sessionId, session?.directory ?? null);
+  };
+  const openDiff = (sessionId: string) => {
+    const directory = worktreeById.get(sessionId);
+    openChat(sessionId);
+    if (directory) useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
+  };
+
+  const fuseSources = bar.kind === 'fuse' ? finishedLaneIds.filter((id) => !bar.excluded.has(id)) : [];
+  const fuseMode = fusionModeFor(fuseSources.map((id) => {
+    const diff = summaries.get(id)?.diff;
+    return { hasWorktree: Boolean(worktreeById.get(id)), diff: diff?.state === 'ready' ? diff.stat : null };
+  }));
+
+  const toggleFuseSource = (sessionId: string) => {
+    if (bar.kind !== 'fuse' || !finishedLaneIds.includes(sessionId)) return;
+    const excluded = new Set(bar.excluded);
+    if (excluded.has(sessionId)) excluded.delete(sessionId); else excluded.add(sessionId);
+    setBar({ kind: 'fuse', excluded });
+  };
+
+  const handleKeep = async (sessionId: string) => {
+    setBusyAction('keep');
+    try {
+      const keptLabel = nameOf(sessionId);
+      const result = await keepRunMember(run, sessionId, sessionById);
+      if (result.failures.length > 0) {
+        toast.error(result.failures.length === 1
+          ? t('multirun.overview.keep.partialSingle', { name: keptLabel, count: result.failures.length })
+          : t('multirun.overview.keep.partialPlural', { name: keptLabel, count: result.failures.length }));
+      } else {
+        toast.success(t('multirun.overview.keep.done', { name: keptLabel }));
+      }
+      openChat(sessionId);
+    } catch (error) {
+      console.error('[MultiRun] Keep failed', error);
+      toast.error(t('multirun.overview.keep.failed'));
+    } finally {
+      setBusyAction(null);
+      setBar({ kind: 'idle' });
+    }
+  };
+
+  const handleFuse = async () => {
+    const selection = judge[0];
+    if (!selection || fuseSources.length < 2) return;
+    setBusyAction('fuse');
+    try {
+      await startRunFusion({
+        run,
+        sourceIds: fuseSources,
+        judge: resolveFusionJudge({ providerID: selection.providerID, modelID: selection.modelID, variant: selection.variant, agent: judgeAgent || undefined }),
+        sessionById,
+      });
+      setBar({ kind: 'idle' });
+    } catch (error) {
+      console.error('[MultiRun] Fusion failed to start', error);
+      toast.error(error instanceof NoFusionOutputsError ? t('multirun.fusion.toast.noOutputs') : t('multirun.fusion.toast.failed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleAddModel = async (model: ModelSelectionWithId, runGroup: string | undefined) => {
+    setBusyAction('ask');
+    try {
+      await addLaneToRun({
+        run,
+        runGroup,
+        model,
+        sessionById,
+      });
+    } catch (error) {
+      console.error('[MultiRun] Could not add a lane', error);
+      toast.error(t('multirun.overview.ask.failed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleRename = async (title: string) => {
+    setRenaming(null);
+    if (!title.trim() || title.trim() === run.title) return;
+    const failed = await renameRun(run, title, sessionById);
+    if (failed.length > 0) toast.error(t('multirun.overview.rename.failed'));
+  };
+
+  const handleDetach = async (sessionId: string) => {
+    const session = sessionById.get(sessionId);
+    if (!session) return;
+    setBusyAction('member');
+    try {
+      await detachFromRun(session, run.title);
+      toast.success(t('multirun.overview.card.detachDone', { name: nameOf(sessionId) }));
+    } catch (error) {
+      console.error('[MultiRun] Could not detach a session', error);
+      toast.error(t('multirun.overview.card.detachFailed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleArchiveMember = async (sessionId: string) => {
+    setBusyAction('member');
+    try {
+      const result = await useSessionUIStore.getState().archiveSessions([sessionId]);
+      if (result.failedIds.length > 0) toast.error(t('multirun.overview.archive.failed'));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleArchive = async () => {
+    setBusyAction('archive');
+    try {
+      const result = await archiveRun(run);
+      if (result.failedIds.length > 0) toast.error(t('multirun.overview.archive.failed'));
+      else useUIStore.getState().closeMainSurfaces();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const renderCard = (member: MultiRunMember) => {
+    const session = sessionById.get(member.sessionId);
+    if (!session) return null;
+    const isFusion = member.identity.role === 'fusion';
+    const finished = finishedLaneIds.includes(member.sessionId);
+    return (
+      <RunLaneCard
+        key={member.sessionId}
+        session={session}
+        providerID={member.identity.providerID}
+        modelLabel={modelLabelFor(member, providers)}
+        variantLabel={!isFusion && run.variants.length > 1 ? multiRunVariantLabel(member.identity.runGroup) : null}
+        isFusion={isFusion}
+        busy={activeSessionIds.has(member.sessionId)}
+        status={statusOf(member.sessionId) ?? 'notStarted'}
+        unread={isSessionUnread(globalSessionById.get(member.sessionId))}
+        summary={summaries.get(member.sessionId)}
+        fuseSource={bar.kind === 'fuse' && !isFusion
+          ? { checked: finished && !bar.excluded.has(member.sessionId), selectable: finished }
+          : null}
+        hasWorktree={Boolean(worktreeById.get(member.sessionId))}
+        onToggleFuseSource={() => toggleFuseSource(member.sessionId)}
+        onKeep={isolated && finished && bar.kind === 'idle' && (isFusion ? Boolean(worktreeById.get(member.sessionId)) : true)
+          ? () => setBar({ kind: 'keep', sessionId: member.sessionId })
+          : undefined}
+        onDetach={() => void handleDetach(member.sessionId)}
+        onArchive={() => void handleArchiveMember(member.sessionId)}
+        actionsDisabled={busyAction !== null || bar.kind !== 'idle'}
+        onOpenChat={() => openChat(member.sessionId)}
+        onOpenDiff={() => openDiff(member.sessionId)}
+      />
+    );
+  };
+
+  const renderAddModel = (runGroup: string | undefined) => {
+    const pending = pendingModel && pendingModel.runGroup === runGroup ? pendingModel.model : null;
+    if (pending) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-border px-2.5 typography-meta text-foreground">
+            <ProviderLogo providerId={pending.providerID} className="size-3.5" />
+            {pending.displayName || pending.modelID}
+          </span>
+          <ModelEffortMenu
+            appearance="trigger"
+            providerID={pending.providerID}
+            modelID={pending.modelID}
+            variant={pending.variant}
+            onChange={(variant) => setPendingModel({ runGroup, model: { ...pending, variant } })}
+          />
+          <Button
+            size="sm"
+            disabled={busyAction !== null}
+            onClick={() => {
+              setPendingModel(null);
+              void handleAddModel(pending, runGroup);
+            }}
+          >
+            {t('multirun.overview.addModel.confirm')}
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8" aria-label={t('multirun.overview.cancel')} onClick={() => setPendingModel(null)}>
+            <Icon name="close" className="size-3.5" />
+          </Button>
+        </span>
+      );
+    }
+    return (
+      <span title={t('multirun.overview.addModel.hint')}>
+        <ModelMultiSelect
+          selectedModels={[]}
+          onAdd={(model) => setPendingModel({ runGroup, model })}
+          onRemove={() => undefined}
+          maxModels={1}
+          showChips={false}
+          dropdownSide="bottom"
+          portal
+          addButtonClassName="h-8 min-h-8 px-2.5 typography-meta"
+          addButtonLabel={busyAction === 'ask' ? t('multirun.overview.ask.working') : t('multirun.overview.addModel.action')}
+        />
+      </span>
+    );
+  };
+
+  const cardGridClassName = isMobile
+    ? 'grid grid-cols-1 gap-2.5'
+    : 'grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2.5';
+  const keepTarget = bar.kind === 'keep' ? bar.sessionId : null;
+  const othersCount = run.memberIds.length - 1;
+>>>>>>> upstream/main
 
  if (!run) {
   return (
@@ -642,7 +1271,6 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
  );
 }
 
-/** Replaces the chat area while a run overview is open. */
 export function RunOverview(): React.ReactNode {
  const runKey = useUIStore((state) => state.runOverviewKey);
  if (!runKey) return null;

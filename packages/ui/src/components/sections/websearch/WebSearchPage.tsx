@@ -36,6 +36,7 @@ import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from 
 import { getWebSearchProviderName } from './websearchProviderName';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 
+<<<<<<< HEAD
 /**
  * Settings → Web search: which native search provider the agent uses, the
  * fallback chain, the request timeout, and the write-only credential each
@@ -45,14 +46,56 @@ import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
  * The page opens on the mode (default, off) and a card per provider; a card
  * opens the provider, where its key is added and it is chosen for search.
  */
+||||||| bc50ba56aa
+/**
+ * Settings → Web search: which provider OpenCode's `websearch` tool uses, and
+ * the API key (or, for a server the user runs, the address) each provider
+ * takes. Both belong to OpenCode: the choice is the `websearch` key of its
+ * config, the keys are integration credentials, so the page reads them from
+ * OpenCode and writes them back.
+ *
+ * The page opens on the mode (default, any provider, off) and a card per
+ * provider; a card opens the provider, where its key is added and it is
+ * chosen for search. A plugin provider OpenCode offers only once connected
+ * has a card too, so its key goes in where it is chosen.
+ */
+=======
+>>>>>>> upstream/main
 
 /** OMP's native `providers.webSearchTimeoutSeconds` default, used by the reset action. */
 const DEFAULT_TIMEOUT_SECONDS = 60;
 
+<<<<<<< HEAD
 type ModeValue = 'default' | 'off';
+||||||| bc50ba56aa
+/** One provider as the page shows it: offered for search, or waiting for its key. */
+type ProviderEntry = {
+  provider: WebSearchProvider;
+  access: WebSearchProviderAccess | null;
+  /** False for a plugin provider OpenCode offers only once connected. */
+  usable: boolean;
+};
+
+const providerEntries = (snapshot: WebSearchSnapshot): ProviderEntry[] => [
+  ...snapshot.providers.map((provider) => ({ provider, access: snapshot.access?.[provider.id] ?? null, usable: true })),
+  ...snapshot.connectable.map((provider) => ({ provider, access: snapshot.access?.[provider.id] ?? null, usable: false })),
+].sort((a, b) => a.provider.name.localeCompare(b.provider.name, undefined, { sensitivity: 'base' }));
+=======
+type ProviderEntry = {
+  provider: WebSearchProvider;
+  access: WebSearchProviderAccess | null;
+  usable: boolean;
+};
+
+const providerEntries = (snapshot: WebSearchSnapshot): ProviderEntry[] => [
+  ...snapshot.providers.map((provider) => ({ provider, access: snapshot.access?.[provider.id] ?? null, usable: true })),
+  ...snapshot.connectable.map((provider) => ({ provider, access: snapshot.access?.[provider.id] ?? null, usable: false })),
+].sort((a, b) => a.provider.name.localeCompare(b.provider.name, undefined, { sensitivity: 'base' }));
+>>>>>>> upstream/main
 
 const useChoose = (snapshot: WebSearchSnapshot) => {
   const { t } = useI18n();
+<<<<<<< HEAD
   const update = useWebSearchStore((store) => store.update);
   const busy = useWebSearchStore((store) => store.busy);
 
@@ -85,6 +128,23 @@ const useChoose = (snapshot: WebSearchSnapshot) => {
       enabled: true,
       selectedProviderId: providerId,
       fallbackProviderIds: snapshot.fallbackProviderIds.filter((id) => id !== providerId),
+||||||| bc50ba56aa
+  const setSelection = useWebSearchStore((store) => store.setSelection);
+  // A project config's `websearch` wins over the file Settings writes, so a
+  // choice here would snap back.
+  const locked = snapshot.projectOverride !== null;
+  const choose = (selection: WebSearchSelection) => {
+    if (locked || sameSelection(selection, snapshot.selection)) return;
+    void setSelection(selection).then((ok) => {
+      if (!ok) toast.error(t('settings.webSearch.toast.saveFailed'));
+=======
+  const setSelection = useWebSearchStore((store) => store.setSelection);
+  const locked = snapshot.projectOverride !== null;
+  const choose = (selection: WebSearchSelection) => {
+    if (locked || sameSelection(selection, snapshot.selection)) return;
+    void setSelection(selection).then((ok) => {
+      if (!ok) toast.error(t('settings.webSearch.toast.saveFailed'));
+>>>>>>> upstream/main
     });
   };
 
@@ -103,6 +163,7 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
     ? 'off'
     : snapshot.selectedProviderId === null ? 'default' : 'provider';
 
+<<<<<<< HEAD
   const status = !snapshot.enabled
     ? t('settings.webSearch.mode.offDescription')
     : snapshot.selectedProviderId === null
@@ -110,12 +171,58 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
       : selectedProvider
         ? t('settings.webSearch.mode.providerDescription', { provider: getWebSearchProviderName(selectedProvider, t) })
         : t('settings.webSearch.mode.missingDescription', { provider: snapshot.selectedProviderId });
+||||||| bc50ba56aa
+  const options: Array<{ value: ModeValue; label: string; disabled?: boolean }> = [
+    { value: 'default', label: t('settings.webSearch.option.default'), disabled: locked },
+    ...(snapshot.providers.length > 0
+      ? [{ value: 'random' as const, label: t('settings.webSearch.option.random'), disabled: locked }]
+      : []),
+    { value: 'off', label: t('settings.webSearch.option.off'), disabled: locked },
+  ];
+
+  const status = selected.kind === 'default'
+    ? t('settings.webSearch.option.defaultDescription')
+    : selected.kind === 'random'
+      ? t('settings.webSearch.option.randomDescription')
+      : selected.kind === 'off'
+        ? t('settings.webSearch.mode.offDescription')
+        : providerName
+          // A configured provider OpenCode no longer offers (plugin removed,
+          // typo in the file) is named, so the user can see why search fails.
+          ? t('settings.webSearch.mode.providerDescription', { provider: providerName })
+          : t('settings.webSearch.mode.missingDescription', { provider: selected.id });
+=======
+  const options: Array<{ value: ModeValue; label: string; disabled?: boolean }> = [
+    { value: 'default', label: t('settings.webSearch.option.default'), disabled: locked },
+    ...(snapshot.providers.length > 0
+      ? [{ value: 'random' as const, label: t('settings.webSearch.option.random'), disabled: locked }]
+      : []),
+    { value: 'off', label: t('settings.webSearch.option.off'), disabled: locked },
+  ];
+
+  const status = selected.kind === 'default'
+    ? t('settings.webSearch.option.defaultDescription')
+    : selected.kind === 'random'
+      ? t('settings.webSearch.option.randomDescription')
+      : selected.kind === 'off'
+        ? t('settings.webSearch.mode.offDescription')
+        : providerName
+          ? t('settings.webSearch.mode.providerDescription', { provider: providerName })
+          : t('settings.webSearch.mode.missingDescription', { provider: selected.id });
+>>>>>>> upstream/main
 
   return (
     <SettingsSection
       title={t('settings.webSearch.section.provider')}
+<<<<<<< HEAD
       info={t('settings.webSearch.native.info')}
       divider={false}
+||||||| bc50ba56aa
+      info={t('settings.webSearch.section.providerInfo')}
+      divider={false}
+=======
+      info={t('settings.webSearch.section.providerInfo')}
+>>>>>>> upstream/main
       settingsItem="web-search.provider"
     >
       <div className={SETTINGS_SPACE_ROW_CLASS}>
@@ -179,9 +286,62 @@ const ProviderCard: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSe
 
 const TimeoutRow: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
   const { t } = useI18n();
+<<<<<<< HEAD
   const { busy, commit } = useChoose(snapshot);
+||||||| bc50ba56aa
+  const saveKey = useWebSearchStore((store) => store.saveKey);
+  const removeKey = useWebSearchStore((store) => store.removeKey);
+  const [draft, setDraft] = React.useState('');
+  const [answer, setAnswer] = React.useState<WebSearchConnectAnswer>({});
+  const [busy, setBusy] = React.useState(false);
+  const takesKey = connect.kind === 'key';
+  const names = access.envNames.join(', ');
+  // Field explanations and examples live behind the info icon: a URL example
+  // does not fit in the field, so the field shows only its label.
+  const hintLines = [
+    ...connect.fields.flatMap((field) => [
+      field.description,
+      field.placeholder ? t('settings.webSearch.keys.fieldExample', { example: field.placeholder }) : null,
+    ]),
+    access.envNames.length === 0
+      ? null
+      : takesKey ? t('settings.webSearch.keys.envHint', { names }) : t('settings.webSearch.keys.envHintForm', { names }),
+  ].filter((line): line is string => Boolean(line));
+  const info = hintLines.length > 0
+    ? hintLines.map((line) => <span key={line} className="block">{line}</span>)
+    : undefined;
+  const filledAnswer = Object.fromEntries(
+    Object.entries(answer).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value !== ''),
+  );
+  const complete = (!takesKey || draft.trim() !== '') && connect.fields.every((field) => !field.required || filledAnswer[field.key] !== undefined);
+=======
+  const saveKey = useWebSearchStore((store) => store.saveKey);
+  const removeKey = useWebSearchStore((store) => store.removeKey);
+  const [draft, setDraft] = React.useState('');
+  const [answer, setAnswer] = React.useState<WebSearchConnectAnswer>({});
+  const [busy, setBusy] = React.useState(false);
+  const takesKey = connect.kind === 'key';
+  const names = access.envNames.join(', ');
+  const hintLines = [
+    ...connect.fields.flatMap((field) => [
+      field.description,
+      field.placeholder ? t('settings.webSearch.keys.fieldExample', { example: field.placeholder }) : null,
+    ]),
+    access.envNames.length === 0
+      ? null
+      : takesKey ? t('settings.webSearch.keys.envHint', { names }) : t('settings.webSearch.keys.envHintForm', { names }),
+  ].filter((line): line is string => Boolean(line));
+  const info = hintLines.length > 0
+    ? hintLines.map((line) => <span key={line} className="block">{line}</span>)
+    : undefined;
+  const filledAnswer = Object.fromEntries(
+    Object.entries(answer).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value !== ''),
+  );
+  const complete = (!takesKey || draft.trim() !== '') && connect.fields.every((field) => !field.required || filledAnswer[field.key] !== undefined);
+>>>>>>> upstream/main
 
   return (
+<<<<<<< HEAD
     <SettingsFieldRow label={t('settings.webSearch.native.timeout')} settingsItem="web-search.timeout">
       <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
         <NumberInput
@@ -210,6 +370,70 @@ const TimeoutRow: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => 
           <Icon name="restart" className="size-3.5" />
         </Button>
       </div>
+||||||| bc50ba56aa
+    <SettingsFieldRow label={rowLabel} info={info}>
+      {status.kind === 'stored' ? (
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center justify-end gap-2`}>
+          <span className="typography-meta text-muted-foreground">
+            {takesKey ? t('settings.webSearch.keys.saved') : t('settings.webSearch.keys.connected')}
+          </span>
+          <Button variant="outline" size="xs" disabled={busy} onClick={() => void handleRemove()}>
+            {t('settings.webSearch.keys.remove')}
+          </Button>
+        </div>
+      ) : status.kind === 'env' ? (
+        <span className="typography-meta text-muted-foreground">
+          {t('settings.webSearch.keys.fromEnv', { name: status.name })}
+        </span>
+      ) : locked ? null : inputs.length === 1 ? (
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center gap-2`}>
+          {inputs}
+          {saveButton}
+        </div>
+      ) : (
+        // Several fields stack, with Save after the last one.
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2`}>
+          {inputs.slice(0, -1).map((input, index) => (
+            <div key={index} className="flex">{input}</div>
+          ))}
+          <div className="flex items-center gap-2">
+            {inputs.at(-1)}
+            {saveButton}
+          </div>
+        </div>
+      )}
+=======
+    <SettingsFieldRow label={rowLabel} info={info}>
+      {status.kind === 'stored' ? (
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center justify-end gap-2`}>
+          <span className="typography-meta text-muted-foreground">
+            {takesKey ? t('settings.webSearch.keys.saved') : t('settings.webSearch.keys.connected')}
+          </span>
+          <Button variant="outline" size="xs" disabled={busy} onClick={() => void handleRemove()}>
+            {t('settings.webSearch.keys.remove')}
+          </Button>
+        </div>
+      ) : status.kind === 'env' ? (
+        <span className="typography-meta text-muted-foreground">
+          {t('settings.webSearch.keys.fromEnv', { name: status.name })}
+        </span>
+      ) : locked ? null : inputs.length === 1 ? (
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center gap-2`}>
+          {inputs}
+          {saveButton}
+        </div>
+      ) : (
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2`}>
+          {inputs.slice(0, -1).map((input, index) => (
+            <div key={index} className="flex">{input}</div>
+          ))}
+          <div className="flex items-center gap-2">
+            {inputs.at(-1)}
+            {saveButton}
+          </div>
+        </div>
+      )}
+>>>>>>> upstream/main
     </SettingsFieldRow>
   );
 };
@@ -221,6 +445,7 @@ const FallbackStatus: React.FC<{
   onOpen: () => void;
 }> = ({ provider, label, busy, onOpen }) => {
   const { t } = useI18n();
+<<<<<<< HEAD
   if (!provider) {
     return <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsSetup')}</SettingsCardPill>;
   }
@@ -383,6 +608,21 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
     reportSettingsSaveState(ok ? 'saved' : 'error');
     if (!ok) toast.error(t('settings.webSearch.toast.keyRemoveFailed'));
   };
+||||||| bc50ba56aa
+  const { choose, locked } = useChoose(snapshot);
+  // Enterprise mode: the server refuses new keys (they connect through the
+  // same OpenCode route as model providers); saved ones can still be removed.
+  const keysLocked = useEnterpriseMode();
+  const { provider, access, usable } = entry;
+  const inUse = snapshot.selection.kind === 'provider' && snapshot.selection.id === provider.id;
+  const connect = access?.connect ?? null;
+=======
+  const { choose, locked } = useChoose(snapshot);
+  const keysLocked = useEnterpriseMode();
+  const { provider, access, usable } = entry;
+  const inUse = snapshot.selection.kind === 'provider' && snapshot.selection.id === provider.id;
+  const connect = access?.connect ?? null;
+>>>>>>> upstream/main
 
   const useLine = inUse
     ? t('settings.webSearch.mode.providerDescription', { provider: getWebSearchProviderName(provider, t) })
@@ -396,7 +636,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
       titleLeading={<SettingsBackButton label={t('settings.webSearch.detail.back')} onClick={onBack} />}
       showSaveStatus
     >
-      <SettingsSection divider={false}>
+      <SettingsSection>
         <div className="space-y-2">
           {useLine ? <p className="typography-meta text-foreground">{useLine}</p> : null}
           {provider.configured && !inUse ? (
@@ -480,6 +720,7 @@ export const WebSearchPage: React.FC = () => {
   const load = useWebSearchStore((store) => store.load);
   const [openId, setOpenId] = React.useState<string | null>(null);
 
+<<<<<<< HEAD
   // The boot registry read the snapshot; this only re-reads when the page is
   // opened for another project or runtime (the snapshot is scoped to both).
   //
@@ -489,6 +730,11 @@ export const WebSearchPage: React.FC = () => {
   // resolved the workspace thousands of times without ever reading the
   // snapshot. A kind that is already loading or failed is left alone; the
   // store's own retry button owns the failed case.
+||||||| bc50ba56aa
+  // Read on open, and again when the page is opened for another project or
+  // runtime (the snapshot is scoped to both).
+=======
+>>>>>>> upstream/main
   const scope = getWebSearchScopeKey();
   const stateKind = state.kind;
   // A read is only "already running" for the scope it started in. A scope
@@ -507,11 +753,20 @@ export const WebSearchPage: React.FC = () => {
   }, [load, scope, stateKind, loadingScope, readyScope]);
 
   const snapshot = state.kind === 'ready' && state.snapshot.scope === scope ? state.snapshot : null;
+<<<<<<< HEAD
   const failed = state.kind === 'failed';
   const partial = outcome !== null
     && (outcome.status !== 'applied'
       || outcome.persistence !== 'persisted'
       || outcome.workers.some((worker) => worker.status === 'failed'));
+||||||| bc50ba56aa
+  const entries = snapshot ? providerEntries(snapshot) : [];
+  // A provider that went away (plugin removed) closes its screen.
+  const open = openId ? entries.find((entry) => entry.provider.id === openId) ?? null : null;
+=======
+  const entries = snapshot ? providerEntries(snapshot) : [];
+  const open = openId ? entries.find((entry) => entry.provider.id === openId) ?? null : null;
+>>>>>>> upstream/main
 
   // A provider that went away closes its screen.
   const open = snapshot && openId ? snapshot.providers.find((entry) => entry.providerId === openId) ?? null : null;
@@ -565,9 +820,35 @@ export const WebSearchPage: React.FC = () => {
           </SettingsSection>
           <FallbacksSection snapshot={snapshot} onOpenProvider={(providerId) => setOpenId(providerId)} />
         </>
+<<<<<<< HEAD
       ) : failed || error !== null ? null : (
         <SettingsSection divider={false}>
           {/* Never read yet, or a read is in flight: both are "not answered". */}
+||||||| bc50ba56aa
+      ) : state.kind === 'failed' ? (
+        <SettingsSection divider={false}>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="typography-meta text-[var(--status-error)]">{t('settings.webSearch.state.loadFailed')}</p>
+            <Button variant="outline" size="xs" onClick={() => void load()}>
+              {t('settings.webSearch.actions.retry')}
+            </Button>
+          </div>
+        </SettingsSection>
+      ) : (
+        <SettingsSection divider={false}>
+=======
+      ) : state.kind === 'failed' ? (
+        <SettingsSection>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="typography-meta text-[var(--status-error)]">{t('settings.webSearch.state.loadFailed')}</p>
+            <Button variant="outline" size="xs" onClick={() => void load()}>
+              {t('settings.webSearch.actions.retry')}
+            </Button>
+          </div>
+        </SettingsSection>
+      ) : (
+        <SettingsSection>
+>>>>>>> upstream/main
           <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.loading')}</p>
         </SettingsSection>
       )}

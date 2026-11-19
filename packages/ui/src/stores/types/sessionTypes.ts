@@ -11,6 +11,7 @@ export type SessionWorktreeAttachment = {
 };
 
 export interface AttachedFile {
+<<<<<<< HEAD
  id: string;
  file: File;
  dataUrl: string;
@@ -24,6 +25,36 @@ export interface AttachedFile {
  /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
   *  Removing any entry with this ID cascades to all entries in the group. */
  sourceDocumentId?: string;
+||||||| bc50ba56aa
+    id: string;
+    file: File;
+    dataUrl: string;
+    mimeType: string;
+    filename: string;
+    size: number;
+    source: "local" | "server" | "vscode";
+    serverPath?: string;
+    vscodePath?: string;
+    vscodeSource?: 'file' | 'selection';
+    /** Original desktop file path used as the model-facing name. */
+    agentPath?: string;
+    /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
+     *  Removing any entry with this ID cascades to all entries in the group. */
+    sourceDocumentId?: string;
+=======
+    id: string;
+    file: File;
+    dataUrl: string;
+    mimeType: string;
+    filename: string;
+    size: number;
+    source: "local" | "server" | "vscode";
+    serverPath?: string;
+    vscodePath?: string;
+    vscodeSource?: 'file' | 'selection';
+    agentPath?: string;
+    sourceDocumentId?: string;
+>>>>>>> upstream/main
 }
 
 export type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
@@ -42,6 +73,7 @@ interface SessionContextLimits {
 }
 
 export type SessionContextUsage =
+<<<<<<< HEAD
  | (SessionContextLimits & {
   state: 'measured';
   totalTokens: number;
@@ -50,26 +82,38 @@ export type SessionContextUsage =
  })
  /** Compacted and no response has reported tokens since: the size is unknown, not zero. */
  | (SessionContextLimits & { state: 'compacted' });
+||||||| bc50ba56aa
+    | (SessionContextLimits & {
+        state: 'measured';
+        totalTokens: number;
+        percentage: number;
+        normalizedOutput?: number;
+    })
+    /** Compacted and no response has reported tokens since: the size is unknown, not zero. */
+    | (SessionContextLimits & { state: 'compacted' });
+=======
+    | (SessionContextLimits & {
+        state: 'measured';
+        totalTokens: number;
+        percentage: number;
+        normalizedOutput?: number;
+    })
+    | (SessionContextLimits & { state: 'compacted' });
+>>>>>>> upstream/main
 
-// Default message limit (can be overridden via settings).
-// Single value controls: fetch from server, active session ceiling, Load More chunk.
-// Background trim is derived automatically as Math.round(limit * 0.6).
 const DEFAULT_MESSAGE_LIMIT = 200;
 const MEMORY_CONSTANTS = {
  MAX_SESSIONS: 3,
  ZOMBIE_TIMEOUT: 10 * 60 * 1000,
 } as const;
 
-/** OpenCode parity: fixed page/window size for message history. */
 const getMessageLimit = (): number => {
  return DEFAULT_MESSAGE_LIMIT;
 };
 
-/** Background trim target — automatic, not user-facing. */
 export const getBackgroundTrimLimit = (): number =>
  Math.round(getMessageLimit() * 0.6);
 
-// --- Backward-compat shims (avoid mass refactor of non-critical callers) ---
 const DEFAULT_MEMORY_LIMITS = {
  MAX_SESSIONS: MEMORY_CONSTANTS.MAX_SESSIONS,
  VIEWPORT_MESSAGES: Math.round(DEFAULT_MESSAGE_LIMIT * 0.6),

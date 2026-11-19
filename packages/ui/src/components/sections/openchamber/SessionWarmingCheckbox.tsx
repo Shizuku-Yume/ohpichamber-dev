@@ -9,6 +9,7 @@ import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 
+<<<<<<< HEAD
 const modeKeys = {
   off: 'settings.openchamber.defaults.warming.off',
   idle: 'settings.openchamber.defaults.warming.idle',
@@ -22,6 +23,17 @@ const outcomeKeys = {
 } as const;
 
 const WorkspaceWarming: React.FC<{ directory: string | null }> = ({ directory }) => {
+||||||| bc50ba56aa
+/**
+ * OpenCode's `warming` config key: keeps an idle session's prompt cache alive
+ * with small keep-alive requests. The checkbox shows the effective value
+ * OpenCode reports and writes through `PUT /api/config/warming`. Shown in VS
+ * Code only; elsewhere `SessionWarmingModeField` also offers per-session warming.
+ */
+export const SessionWarmingCheckbox: React.FC = () => {
+=======
+export const SessionWarmingCheckbox: React.FC = () => {
+>>>>>>> upstream/main
   const { t } = useI18n();
   const [persisted, setPersisted] = React.useState<CacheWarmingState | null>(null);
   const [outcome, setOutcome] = React.useState<CacheWarmingApplyResult['status'] | null>(null);

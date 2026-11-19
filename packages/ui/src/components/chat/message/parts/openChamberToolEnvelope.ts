@@ -5,17 +5,8 @@ import type { JsonValue } from '@openchamber/agent-contract';
 /** Tool arguments as the model produced them. */
 type ToolInput = Record<string, JsonValue>;
 import { workflowRunSchema, workflowRunStateSchema } from '@/lib/workflows/model';
+import { waitArgsSchema } from '@/sync/extension-waits';
 
-/**
- * Reading what OpenChamber's own agent tools answered, for the chat to show
- * it in their own words. The tools answer one envelope
- * (`packages/web/server/lib/agent-tool/runtime.js`): `{ schemaVersion, ok,
- * action, data }` on success, `error.message` on failure. Behind Code Mode the
- * envelope is what the `execute` script returned, which is usually that text
- * as is, sometimes the same JSON quoted once more, and sometimes something
- * else the script made of it; anything that is not an envelope reads as
- * `null`, and the row shows its plain output.
- */
 
 const envelopeSchema = z.object({
   ok: z.boolean(),
@@ -43,7 +34,6 @@ const jsonText = z.string().transform((text, context) => {
 export const parseOpenChamberEnvelope = (output: string | undefined): OpenChamberEnvelope | null => {
   const outer = jsonText.safeParse(output?.trim() ?? '');
   if (!outer.success) return null;
-  // The envelope as text, or that text quoted once more.
   const inner = jsonText.safeParse(outer.data);
   const parsed = envelopeSchema.safeParse(inner.success ? inner.data : outer.data);
   if (!parsed.success) return null;
@@ -57,15 +47,16 @@ export const parseOpenChamberEnvelope = (output: string | undefined): OpenChambe
 
 const text = z.string().trim().min(1).optional().catch(undefined);
 
-export const linkedSchema = z.object({
-  linked: z.object({
-    id: text,
-    number: z.number().optional().catch(undefined),
-    title: text,
-    url: z.string().url(),
-    kind: text,
-  }),
+const linkedEntrySchema = z.object({
+  id: text,
+  number: z.number().optional().catch(undefined),
+  title: text,
+  url: z.string().url(),
+  kind: text,
 });
+
+export const linkedSchema = z.object({ linked: linkedEntrySchema });
+export const unlinkedSchema = z.object({ unlinked: z.array(linkedEntrySchema).min(1) });
 
 export const dispatchedSchema = z.object({
   sessionId: z.string().min(1),
@@ -81,11 +72,35 @@ export const movedSchema = z.object({
   worktree: z.object({ name: text, branch: text, path: text }).optional().catch(undefined),
 });
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+export const memorySavedSchema = z.object({
+  memory: z.object({
+    title: text,
+    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
+    scope: z.enum(['global', 'project']).optional().catch(undefined),
+  }),
+  replaced: z.boolean().optional().catch(undefined),
+  // Stored, but held back from future sessions.
+  warning: text,
+});
+
+=======
+export const memorySavedSchema = z.object({
+  memory: z.object({
+    title: text,
+    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
+    scope: z.enum(['global', 'project']).optional().catch(undefined),
+  }),
+  replaced: z.boolean().optional().catch(undefined),
+  warning: text,
+});
+
+>>>>>>> upstream/main
 export const knowledgeSavedSchema = z.object({
   todo: z.object({ text: text, completed: z.boolean().optional().catch(undefined) }).optional().catch(undefined),
   note: z.object({ body: text }).optional().catch(undefined),
   plan: z.object({ title: text, path: text }).optional().catch(undefined),
-  // A plan saved without its steps checklist.
   warning: text,
 }).refine((saved) => Boolean(saved.todo?.text || saved.note?.body || saved.plan?.path), 'nothing to show');
 
@@ -117,7 +132,6 @@ export const sessionsListedSchema = z.object({
     title: text,
     parentID: text,
     directory: text,
-    // Calls stored before the server trimmed each session to its listed fields.
     location: z.object({ directory: text }).optional().catch(undefined),
   }).transform(({ location, ...session }) => ({ ...session, directory: session.directory ?? location?.directory }))),
 });
@@ -134,10 +148,36 @@ export const modelPreferencesSchema = z.object({
 export const modelsFoundSchema = z.object({
   models: z.array(z.object({ id: z.string().min(1), name: text, provider: text })),
   total: z.number().optional().catch(undefined),
-  // Where the next page starts; null on the last page.
   next: z.number().nullable().optional().catch(undefined),
 });
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+export const memoriesListedSchema = z.object({
+  memories: z.array(z.object({
+    memoryId: z.string(),
+    title: text,
+    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
+    scope: z.enum(['global', 'project']).optional().catch(undefined),
+  })),
+  // A scope that failed to load: its entries are missing from the list.
+  globalUnavailable: z.boolean().optional().catch(undefined),
+  projectUnavailable: z.boolean().optional().catch(undefined),
+});
+
+=======
+export const memoriesListedSchema = z.object({
+  memories: z.array(z.object({
+    memoryId: z.string(),
+    title: text,
+    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
+    scope: z.enum(['global', 'project']).optional().catch(undefined),
+  })),
+  globalUnavailable: z.boolean().optional().catch(undefined),
+  projectUnavailable: z.boolean().optional().catch(undefined),
+});
+
+>>>>>>> upstream/main
 export const knowledgeListedSchema = z.object({
   notes: z.array(z.object({ id: z.string(), body: text })).catch([]),
   todos: z.array(z.object({ id: z.string(), text: text, completed: z.boolean().optional().catch(undefined) })).catch([]),
@@ -182,11 +222,6 @@ export const usageSchema = z.object({
 type UsageProviderRow = z.infer<typeof usageSchema>['providers'][number];
 type UsageWindowRow = z.infer<typeof windowSchema>;
 
-/**
- * The window of a provider that is closest to its limit: the one a person
- * glancing at the row needs. Windows without a share (a credit balance) are
- * skipped; a provider with none of them has nothing to draw.
- */
 export const tightestWindow = (provider: UsageProviderRow): { key: string; window: UsageWindowRow } | null => {
   let best: { key: string; window: UsageWindowRow } | null = null;
   for (const [key, window] of Object.entries(provider.usage?.windows ?? {})) {
@@ -226,7 +261,31 @@ export const prWatchedSchema = z.object({
   }),
 });
 
-const prUnwatchedSchema = z.object({ watching: z.literal(false), stopped: z.boolean() });
+const waitEntrySchema = z.object({
+  waitId: z.string().min(1),
+  source: z.string().min(1),
+  extension: z.string().nullable().optional().catch(undefined),
+  title: z.string().min(1),
+  label: z.string().nullable().optional().catch(undefined),
+  args: waitArgsSchema.optional().catch(undefined),
+  status: z.enum(['waiting', 'waking']).optional().catch(undefined),
+});
+export type WaitEntry = z.infer<typeof waitEntrySchema>;
+
+export const waitStartedSchema = z.union([prWatchedSchema, z.object({ waiting: waitEntrySchema })]);
+
+export const waitListedSchema = z.object({
+  waiting: z.array(waitEntrySchema),
+  sources: z.array(z.object({
+    source: z.string().min(1),
+    extension: z.string().nullable().optional().catch(undefined),
+    title: z.string().min(1),
+  })),
+});
+
+const waitStoppedSchema = z.object({ stopped: z.number() });
+
+const prUnwatchedSchema = z.object({ watching: z.union([z.literal(false), z.array(z.unknown())]), stopped: z.boolean() });
 
 export const workNamedSchema = z.object({
   title: text,
@@ -241,7 +300,6 @@ export const scheduleRanSchema = z.object({
   task: scheduledTaskSchema,
   sessionId: z.string().min(1),
   directory: text,
-  // The run started but its record was not saved.
   persistError: text,
 });
 
@@ -298,6 +356,7 @@ export const workflowSavedSchema = z.object({ name: z.string(), path: z.string()
 
 const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>([
   ['session.link', linkedSchema],
+  ['session.unlink', unlinkedSchema],
   ['session.create', dispatchedSchema],
   ['session.send', dispatchedSchema],
   ['session.fork', dispatchedSchema],
@@ -323,6 +382,9 @@ const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>(
   ['session.messages', sessionMessagesSchema],
   ['pr.watch', prWatchedSchema],
   ['pr.unwatch', prUnwatchedSchema],
+  ['wait.start', waitStartedSchema],
+  ['wait.list', waitListedSchema],
+  ['wait.stop', waitStoppedSchema],
   ['work.name', workNamedSchema],
   ['file.open', fileOpenedSchema],
   ['schedule.run', scheduleRanSchema],
@@ -347,17 +409,146 @@ const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>(
   ['workflow.save', workflowSavedSchema],
 ]);
 
-/**
- * Whether the chat has a view of its own for this answer: a successful action
- * it knows, with the data that view reads. Anything else keeps the plain
- * output, so a changed answer never leaves the row empty.
- */
 export const hasOpenChamberView = (envelope: OpenChamberEnvelope): boolean => {
   if (!envelope.ok) return false;
   const schema = VIEW_SCHEMAS.get(envelope.action);
   return schema ? schema.safeParse(envelope.data).success : false;
 };
+<<<<<<< HEAD
 /** The verb key of each OpenChamber tool action, for the row's subtitle once the action succeeded. */
+||||||| bc50ba56aa
+const secretRunSchema = z.object({
+  answer: z.union([
+    z.object({
+      status: z.literal('ran'),
+      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
+      exitCode: z.number().int().nullable().catch(null),
+    }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+  stdout: z.string().optional().catch(undefined),
+  stderr: z.string().optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+});
+
+type SecretRunVerbKey =
+  | 'chat.toolPart.openchamber.action.secretRun'
+  | 'chat.toolPart.openchamber.action.secretRunFailed'
+  | 'chat.toolPart.openchamber.action.secretRunTimedOut'
+  | 'chat.toolPart.openchamber.action.secretRunNotStarted'
+  | 'chat.toolPart.openchamber.action.secretRunStopped'
+  | 'chat.toolPart.openchamber.action.secretRunDeclined'
+  | 'chat.toolPart.openchamber.action.secretRunNotRun'
+  | 'chat.toolPart.openchamber.action.secretRequestSaved'
+  | 'chat.toolPart.openchamber.action.secretRequestDeclined'
+  | 'chat.toolPart.openchamber.action.secretRequestNotGiven';
+
+const secretRequestSchema = z.object({
+  answer: z.union([
+    z.object({ status: z.literal('saved'), file: z.string().optional().catch(undefined) }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+});
+
+/**
+ * How a finished secret tool call reads in its row. For `secret.run`: the
+ * verb (with the exit code when it was not 0) and what the command printed as
+ * the agent got it, stdout, stderr, then why it did not finish, values
+ * already replaced by the server. For `secret.request`: the verb, and the file
+ * a saved value went to. `null` for any other answer.
+ */
+export const secretRowView = (
+  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
+): { key: SecretRunVerbKey; code?: number; output?: string; file?: string } | null => {
+  if (envelope?.ok !== true) return null;
+  if (envelope.action === 'secret.request') {
+    const request = secretRequestSchema.safeParse(envelope.data);
+    if (!request.success) return null;
+    const { answer } = request.data;
+    if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRequestNotGiven' };
+    if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRequestDeclined' };
+    return { key: 'chat.toolPart.openchamber.action.secretRequestSaved', file: answer.file };
+  }
+  if (envelope.action !== 'secret.run') return null;
+  const parsed = secretRunSchema.safeParse(envelope.data);
+  if (!parsed.success) return null;
+  const { answer, stdout = '', stderr = '', error = '' } = parsed.data;
+  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
+  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
+  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
+  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output };
+  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output };
+  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output };
+  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output };
+  return { key: 'chat.toolPart.openchamber.action.secretRun', output };
+};
+
+/** The verb key of each OpenChamber tool action, for the row's subtitle once the action succeeded. */
+=======
+const secretRunSchema = z.object({
+  answer: z.union([
+    z.object({
+      status: z.literal('ran'),
+      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
+      exitCode: z.number().int().nullable().catch(null),
+    }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+  stdout: z.string().optional().catch(undefined),
+  stderr: z.string().optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+});
+
+type SecretRunVerbKey =
+  | 'chat.toolPart.openchamber.action.secretRun'
+  | 'chat.toolPart.openchamber.action.secretRunFailed'
+  | 'chat.toolPart.openchamber.action.secretRunTimedOut'
+  | 'chat.toolPart.openchamber.action.secretRunNotStarted'
+  | 'chat.toolPart.openchamber.action.secretRunStopped'
+  | 'chat.toolPart.openchamber.action.secretRunDeclined'
+  | 'chat.toolPart.openchamber.action.secretRunNotRun'
+  | 'chat.toolPart.openchamber.action.secretRequestSaved'
+  | 'chat.toolPart.openchamber.action.secretRequestDeclined'
+  | 'chat.toolPart.openchamber.action.secretRequestNotGiven';
+
+const secretRequestSchema = z.object({
+  answer: z.union([
+    z.object({ status: z.literal('saved'), file: z.string().optional().catch(undefined) }),
+    z.object({ status: z.literal('declined') }),
+    z.object({ answered: z.literal(false) }),
+  ]),
+});
+
+export const secretRowView = (
+  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
+): { key: SecretRunVerbKey; code?: number; output?: string; file?: string } | null => {
+  if (envelope?.ok !== true) return null;
+  if (envelope.action === 'secret.request') {
+    const request = secretRequestSchema.safeParse(envelope.data);
+    if (!request.success) return null;
+    const { answer } = request.data;
+    if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRequestNotGiven' };
+    if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRequestDeclined' };
+    return { key: 'chat.toolPart.openchamber.action.secretRequestSaved', file: answer.file };
+  }
+  if (envelope.action !== 'secret.run') return null;
+  const parsed = secretRunSchema.safeParse(envelope.data);
+  if (!parsed.success) return null;
+  const { answer, stdout = '', stderr = '', error = '' } = parsed.data;
+  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
+  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
+  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
+  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output };
+  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output };
+  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output };
+  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output };
+  return { key: 'chat.toolPart.openchamber.action.secretRun', output };
+};
+
+>>>>>>> upstream/main
 export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'projects.list': 'chat.toolPart.openchamber.action.projectsList',
   'models.list': 'chat.toolPart.openchamber.action.modelsList',
@@ -370,10 +561,14 @@ export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'session.messages': 'chat.toolPart.openchamber.action.sessionMessages',
   'session.moveToWorktree': 'chat.toolPart.openchamber.action.sessionMoveToWorktree',
   'session.link': 'chat.toolPart.openchamber.action.sessionLink',
+  'session.unlink': 'chat.toolPart.openchamber.action.sessionUnlink',
   'session.markDone': 'chat.toolPart.openchamber.action.sessionMarkDone',
   'session.track': 'chat.toolPart.openchamber.action.sessionTrack',
   'pr.watch': 'chat.toolPart.openchamber.action.prWatch',
   'pr.unwatch': 'chat.toolPart.openchamber.action.prUnwatch',
+  'wait.list': 'chat.toolPart.openchamber.action.waitList',
+  'wait.start': 'chat.toolPart.openchamber.action.waitStart',
+  'wait.stop': 'chat.toolPart.openchamber.action.waitStop',
   'work.name': 'chat.toolPart.openchamber.action.workName',
   'file.open': 'chat.toolPart.openchamber.action.fileOpen',
   'schedule.list': 'chat.toolPart.openchamber.action.scheduleList',
@@ -413,14 +608,29 @@ export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'workflow.save': 'chat.toolPart.openchamber.action.workflowSave',
   'workflow.list': 'chat.toolPart.openchamber.action.workflowList',
 } as const;
+<<<<<<< HEAD
 /** What the views read from a call's input, inside `parameters` or beside `action`, as the plugin reads it. */
+||||||| bc50ba56aa
+
+const VERB_KEYS = new Map(Object.entries(OPENCHAMBER_ACTION_VERB_KEYS));
+
+/** The verb key of an action, or `undefined` for one without a verb. */
+export const openChamberVerbKey = (action: string | undefined) => (action ? VERB_KEYS.get(action) : undefined);
+
+/** What the views read from a call's input, inside `parameters` or beside `action`, as the plugin reads it. */
+=======
+
+const VERB_KEYS = new Map(Object.entries(OPENCHAMBER_ACTION_VERB_KEYS));
+
+export const openChamberVerbKey = (action: string | undefined) => (action ? VERB_KEYS.get(action) : undefined);
+
+>>>>>>> upstream/main
 const callFields = z.object({
   projectId: text,
   directory: text,
   title: text,
   body: text,
   carry: z.array(z.string()).optional().catch(undefined),
-  // What `knowledge.delete` removed.
   kind: z.enum(['note', 'todo', 'plan']).optional().catch(undefined),
 });
 const callInputSchema = callFields.extend({ parameters: callFields.optional().catch(undefined) }).catch({});

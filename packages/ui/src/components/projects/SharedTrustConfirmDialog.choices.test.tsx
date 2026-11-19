@@ -34,11 +34,13 @@ const setup: ProjectSetup = {
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
     teardownWorktree: [],
+    createWorktreeCommand: '',
     projectActions: [],
     projectActionsPrimaryId: null,
     draftStarters: [],
     hiddenSharedActionIds: [],
     sharedTrust: null,
+    notesTodosInRepository: false,
   },
 };
 

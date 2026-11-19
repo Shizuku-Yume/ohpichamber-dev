@@ -1,29 +1,53 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
-import { selectInputHistoryEntries, useInputHistoryStore } from "./useInputHistoryStore"
+import { beforeEach, describe, expect, test } from "bun:test"
+import { directoryEnvironment } from './test-support/directoryEnvironment'
+import { switchRuntimeEndpoint } from '@/lib/runtime-switch'
 import type { AttachedFile } from "./types/sessionTypes"
 import type { MessageQueueUpdatedEvent } from "./messageQueueStore"
 import type { QueueItem, QueueState } from "@openchamber/agent-contract"
 
+<<<<<<< HEAD
 type FetchCall = { path: string; method: string; body: unknown; directory?: string }
+||||||| bc50ba56aa
+type FetchCall = { path: string; method: string; body: ReturnType<typeof JSON.parse>; directory?: string }
+=======
+const environment = directoryEnvironment({ home: '/home/test' })
+type FetchCall = { path: string; method: string; body: ReturnType<typeof JSON.parse>; directory?: string }
+>>>>>>> upstream/main
 let calls: FetchCall[] = []
 let activeRuntimeKey = "runtime-a"
 let respond: (call: FetchCall) => Response | Promise<Response> = () => new Response("{}", { status: 200 })
 
-mock.module("@/lib/runtime-fetch", () => ({
-  runtimeFetch: async (path: string, init?: RequestInit & { directory?: string | null }) => {
+environment.respond(async (url, init) => {
+    if (!url.pathname.startsWith('/api/message-queue')) throw new Error(`Unexpected request: ${url}`)
     const call: FetchCall = {
-      path,
+      path: `${url.pathname}${url.search}`,
       method: init?.method ?? "GET",
       body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
     }
-    // The directory that picks the server: a space's own for a directory of that space.
-    if (init?.directory) call.directory = init.directory
+    const directory = new Headers(init?.headers).get('x-opencode-directory')
+    if (directory) call.directory = decodeURIComponent(directory)
     calls.push(call)
     return respond(call)
+<<<<<<< HEAD
   },
 }))
 mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => activeRuntimeKey }))
 mock.module("@/lib/persistence", () => ({ updateDesktopSettings: async () => undefined }))
+||||||| bc50ba56aa
+  },
+}))
+const desktop = await import("@/lib/desktop")
+mock.module("@/lib/desktop", () => ({ ...desktop, isVSCodeRuntime: () => false }))
+mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => activeRuntimeKey }))
+mock.module("@/lib/persistence", () => ({ updateDesktopSettings: async () => undefined }))
+=======
+})
+const activateRuntime = (key: string) => {
+  activeRuntimeKey = key
+  switchRuntimeEndpoint({ apiBaseUrl: 'https://local.test', runtimeKey: key })
+}
+const { selectInputHistoryEntries, useInputHistoryStore } = await import("./useInputHistoryStore")
+>>>>>>> upstream/main
 
 const {
   applyMessageQueueUpdatedEvent,
@@ -103,7 +127,7 @@ const attachment: AttachedFile = {
 
 beforeEach(() => {
   useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
-  activeRuntimeKey = "runtime-a"
+  activateRuntime("runtime-a")
   useInputHistoryStore.setState({ globalBuckets: {}, sessionBuckets: {} })
   calls = []
   respond = () => json(snapshot([queueState([])]))
@@ -127,6 +151,7 @@ describe("server-owned message queue", () => {
     expect(calls[0]).toEqual({
       method: "POST",
       path: "/api/message-queue/sessions/session-1/items",
+<<<<<<< HEAD
       directory: "/repo",
       body: {
         expectedRevision: "0",
@@ -146,6 +171,12 @@ describe("server-owned message queue", () => {
           },
         },
       },
+||||||| bc50ba56aa
+      directory: "/repo",
+      body: { directory: "/repo", item: { content: "from before", text: "from before", attachments: [], context: [], sendConfig: { providerID: "p", modelID: "m" } } },
+=======
+      body: { directory: "/repo", item: { content: "from before", text: "from before", attachments: [], context: [], sendConfig: { providerID: "p", modelID: "m" } } },
+>>>>>>> upstream/main
     })
     expect(calls[1]?.path).toBe("/api/message-queue")
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q1"])
@@ -178,8 +209,16 @@ describe("server-owned message queue", () => {
   })
 
   test("resync can establish the initial snapshot before bootstrap", async () => {
+<<<<<<< HEAD
     activeRuntimeKey = "runtime-never-hydrated"
     respond = () => json(snapshot([]))
+||||||| bc50ba56aa
+    activeRuntimeKey = "runtime-never-hydrated"
+    respond = () => json({ revision: 1, sessions: [] })
+=======
+    activateRuntime("runtime-never-hydrated")
+    respond = () => json({ revision: 1, sessions: [] })
+>>>>>>> upstream/main
     await useMessageQueueStore.getState().resync()
     expect(calls).toHaveLength(1)
   })
@@ -190,6 +229,7 @@ describe("server-owned message queue", () => {
     const bootstrap = useMessageQueueStore.getState().hydrate()
     const reconnect = useMessageQueueStore.getState().resync()
     const secondReconnect = useMessageQueueStore.getState().resync()
+    await environment.settle()
     expect(calls).toHaveLength(1)
     first.resolve(json(snapshot([queueState([serverItem("q1", "delivered after snapshot")], "10")])))
     await Promise.all([bootstrap, reconnect, secondReconnect])
@@ -198,7 +238,7 @@ describe("server-owned message queue", () => {
   })
 
   test("concurrent bootstrap and recovery migrate a legacy message only once", async () => {
-    activeRuntimeKey = "runtime-legacy-recovery"
+    activateRuntime("runtime-legacy-recovery")
     const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
     if (!legacyTarget) throw new Error("Missing test target")
     const legacyKey = getMessageQueueKey(legacyTarget)
@@ -234,6 +274,51 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
   })
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  test("returning to a runtime migrates its unattempted legacy messages without repeating the first upload", async () => {
+    activeRuntimeKey = "runtime-partial-migration"
+    const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
+    if (!legacyTarget) throw new Error("Missing test target")
+    const legacyKey = getMessageQueueKey(legacyTarget)
+    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: ["first", "second"].map((id) => ({ id, content: id, text: id, createdAt: 1, sendConfig: { providerID: "p", modelID: "m" } })) } })
+    const first = deferredResponse()
+    respond = (call) => call.method === "POST"
+      ? calls.length === 1 ? first.promise : json({ revision: 2, session: session([]) })
+      : json({ revision: 3, sessions: [] })
+    const initial = useMessageQueueStore.getState().hydrate()
+    useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
+    activeRuntimeKey = "runtime-other"
+    first.resolve(json({ revision: 1, session: session([]) }))
+    await initial
+    activeRuntimeKey = "runtime-partial-migration"
+    await useMessageQueueStore.getState().hydrate()
+    expect(calls.filter((call) => call.method === "POST").map((call) => call.body.item.content)).toEqual(["first", "second"])
+  })
+
+=======
+  test("returning to a runtime migrates its unattempted legacy messages without repeating the first upload", async () => {
+    activateRuntime("runtime-partial-migration")
+    const legacyTarget = createMessageQueueTarget("session-1", "/repo", activeRuntimeKey)
+    if (!legacyTarget) throw new Error("Missing test target")
+    const legacyKey = getMessageQueueKey(legacyTarget)
+    useMessageQueueStore.setState({ queuedMessages: { [legacyKey]: ["first", "second"].map((id) => ({ id, content: id, text: id, createdAt: 1, sendConfig: { providerID: "p", modelID: "m" } })) } })
+    const first = deferredResponse()
+    respond = (call) => call.method === "POST"
+      ? calls.length === 1 ? first.promise : json({ revision: 2, session: session([]) })
+      : json({ revision: 3, sessions: [] })
+    const initial = useMessageQueueStore.getState().hydrate()
+    useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
+    await environment.settle()
+    activateRuntime("runtime-other")
+    first.resolve(json({ revision: 1, session: session([]) }))
+    await initial
+    activateRuntime("runtime-partial-migration")
+    await useMessageQueueStore.getState().hydrate()
+    expect(calls.filter((call) => call.method === "POST").map((call) => call.body.item.content)).toEqual(["first", "second"])
+  })
+
+>>>>>>> upstream/main
   test("a failed refresh preserves the projection and a later recovery retries", async () => {
     applyMessageQueueUpdatedEvent(updated("10", queueState([serverItem("q1", "queued")], "10")), "runtime-a")
     respond = () => new Response(null, { status: 503 })
@@ -244,6 +329,41 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
   })
 
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  test("a runtime switch rejects an old snapshot and its pending recovery", async () => {
+    const old = deferredResponse()
+    respond = () => old.promise
+    const bootstrap = useMessageQueueStore.getState().hydrate()
+    const recovery = useMessageQueueStore.getState().resync()
+    useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
+    activeRuntimeKey = "runtime-b"
+    respond = () => json({ revision: 1, sessions: [] })
+    await useMessageQueueStore.getState().hydrate()
+    old.resolve(json({ revision: 99, sessions: [session([serverItem("q1", "old runtime")])] }))
+    await Promise.all([bootstrap, recovery])
+    expect(Object.keys(useMessageQueueStore.getState().queuedMessages)).toHaveLength(0)
+    expect(calls).toHaveLength(2)
+  })
+
+=======
+  test("a runtime switch rejects an old snapshot and its pending recovery", async () => {
+    const old = deferredResponse()
+    respond = () => old.promise
+    const bootstrap = useMessageQueueStore.getState().hydrate()
+    const recovery = useMessageQueueStore.getState().resync()
+    useMessageQueueStore.getState().resetForRuntimeSwitch(activeRuntimeKey)
+    await environment.settle()
+    activateRuntime("runtime-b")
+    respond = () => json({ revision: 1, sessions: [] })
+    await useMessageQueueStore.getState().hydrate()
+    old.resolve(json({ revision: 99, sessions: [session([serverItem("q1", "old runtime")])] }))
+    await Promise.all([bootstrap, recovery])
+    expect(Object.keys(useMessageQueueStore.getState().queuedMessages)).toHaveLength(0)
+    expect(calls).toHaveLength(2)
+  })
+
+>>>>>>> upstream/main
   test("resync drops a queue the server no longer lists", async () => {
     useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "dropped", text: "dropped", createdAt: 1 }] } })
     respond = () => json(snapshot([]))
@@ -266,7 +386,6 @@ describe("server-owned message queue", () => {
     expect(calls[0]).toEqual({
       method: "POST",
       path: "/api/message-queue/sessions/session-1/items",
-      directory: "/repo",
       body: {
         expectedRevision: "0",
         content: "hi @reviewer",
@@ -313,8 +432,16 @@ describe("server-owned message queue", () => {
   test("queue acceptance records the captured owner after the active runtime changes", async () => {
     const historyTarget = { runtimeKey: 'runtime-a', directory: '/original', sessionId: 'history-runtime-switch' };
     respond = () => {
+<<<<<<< HEAD
       activeRuntimeKey = 'runtime-b';
       return json(queueState([], "110", historyTarget.sessionId));
+||||||| bc50ba56aa
+      activeRuntimeKey = 'runtime-b';
+      return json({ revision: 110, session: { ...session([]), sessionId: historyTarget.sessionId, directory: historyTarget.directory } });
+=======
+      activateRuntime('runtime-b');
+      return json({ revision: 110, session: { ...session([]), sessionId: historyTarget.sessionId, directory: historyTarget.directory } });
+>>>>>>> upstream/main
     };
     await useMessageQueueStore.getState().addToQueue(historyTarget, {
       content: 'for original runtime', sendConfig: { providerID: 'p', modelID: 'm' },
@@ -446,6 +573,71 @@ describe("server-owned message queue", () => {
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.content)).toEqual(["newer"])
   })
 
+  test("a session move moves its queue projection instead of copying it", () => {
+    applyMessageQueueUpdatedEvent(updated(4, session([serverItem("q1", "queued")])), "runtime-a")
+    applyMessageQueueUpdatedEvent(updated(5, { ...session([serverItem("q1", "queued")]), directory: "/repo/moved" }), "runtime-a")
+
+    const movedTarget = createMessageQueueTarget("session-1", "/repo/moved", "runtime-a")
+    if (!movedTarget) throw new Error("moved target must be valid")
+    expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined()
+    expect(useMessageQueueStore.getState().queuedMessages[getMessageQueueKey(movedTarget)]?.map((m) => m.id)).toEqual(["q1"])
+  })
+
+  test("an old-directory response that arrives after the move event cannot bring the old row back", async () => {
+    const movedTarget = createMessageQueueTarget("session-1", "/repo/moved", "runtime-a")
+    if (!movedTarget) throw new Error("moved target must be valid")
+    const movedKey = getMessageQueueKey(movedTarget)
+    const enqueue = deferredResponse()
+    respond = () => enqueue.promise
+    const pending = useMessageQueueStore.getState().addToQueue(target, {
+      content: "first",
+      text: "first",
+      sendConfig: { providerID: "p", modelID: "m" },
+    })
+
+    applyMessageQueueUpdatedEvent(updated(5, {
+      ...session([serverItem("q1", "first"), serverItem("q2", "second")], "q1"),
+      directory: "/repo/moved",
+    }), "runtime-a")
+    enqueue.resolve(json({ revision: 4, session: session([serverItem("q1", "first")]) }))
+    await pending
+
+    const state = useMessageQueueStore.getState()
+    expect(Object.keys(state.queuedMessages)).toEqual([movedKey])
+    expect(state.queuedMessages[movedKey]?.map((m) => m.id)).toEqual(["q1", "q2"])
+    expect(state.sendingIds).toEqual({ [movedKey]: ["q1"] })
+  })
+
+  test("a first snapshot older than a move cannot restore the old directory, delivered or not", async () => {
+    const movedTarget = createMessageQueueTarget("session-1", "/repo/moved", "runtime-a")
+    if (!movedTarget) throw new Error("moved target must be valid")
+    const movedKey = getMessageQueueKey(movedTarget)
+    for (const delivered of [false, true]) {
+      useMessageQueueStore.getState().resetForRuntimeSwitch("runtime-a")
+      useMessageQueueStore.setState({ queuedMessages: {}, sendingIds: {} })
+      const snapshot = deferredResponse()
+      respond = () => snapshot.promise
+      const bootstrap = useMessageQueueStore.getState().hydrate()
+      applyMessageQueueUpdatedEvent(updated(5, { ...session([serverItem("q1", "queued")], "q1"), directory: "/repo/moved" }), "runtime-a")
+      if (delivered) applyMessageQueueUpdatedEvent(updated(6, { ...session([]), directory: "/repo/moved" }), "runtime-a")
+      snapshot.resolve(json({ revision: 4, sessions: [session([serverItem("q1", "queued")], "q1")] }))
+      await bootstrap
+
+      const state = useMessageQueueStore.getState()
+      expect(Object.keys(state.queuedMessages)).toEqual(delivered ? [] : [movedKey])
+      expect(state.sendingIds).toEqual(delivered ? {} : { [movedKey]: ["q1"] })
+    }
+  })
+
+  test("an older broadcast for a directory the session never showed under is ignored after a move", () => {
+    const movedTarget = createMessageQueueTarget("session-1", "/repo/moved", "runtime-a")
+    if (!movedTarget) throw new Error("moved target must be valid")
+    applyMessageQueueUpdatedEvent(updated(5, { ...session([serverItem("q1", "moved")]), directory: "/repo/moved" }), "runtime-a")
+    applyMessageQueueUpdatedEvent(updated(4, session([serverItem("q0", "before the move")])), "runtime-a")
+
+    expect(Object.keys(useMessageQueueStore.getState().queuedMessages)).toEqual([getMessageQueueKey(movedTarget)])
+  })
+
   test("an empty session without a directory still clears the projection it was keyed under", () => {
     applyMessageQueueUpdatedEvent(updated("4", queueState([serverItem("q1", "queued", { status: "leased", lease: { leaseId: "l1", expiresAt: 1000 } })], "4")), "runtime-a")
     expect(useMessageQueueStore.getState().queuedMessages[key]).toHaveLength(1)
@@ -462,6 +654,7 @@ describe("server-owned message queue", () => {
     respond = () => json(queueState([serverItem("q2", "b")], "10"))
     useMessageQueueStore.getState().removeFromQueue(target, "q1")
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["q2"])
+<<<<<<< HEAD
     await Promise.resolve()
     await Promise.resolve()
     expect(calls[0]).toEqual({
@@ -470,16 +663,33 @@ describe("server-owned message queue", () => {
       body: { expectedRevision: "0", queueItemId: "q1" },
       directory: "/repo",
     })
+||||||| bc50ba56aa
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(calls[0]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1/items/q1", body: undefined, directory: "/repo" })
+=======
+    await environment.settle()
+    expect(calls[0]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1/items/q1", body: undefined })
+>>>>>>> upstream/main
 
     respond = () => json(queueState([], "11"))
     useMessageQueueStore.getState().clearQueue(target)
     expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
+<<<<<<< HEAD
+||||||| bc50ba56aa
+    await Promise.resolve()
+    expect(calls[1]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1", body: undefined, directory: "/repo" })
+=======
+    await environment.settle()
+    expect(calls[1]).toEqual({ method: "DELETE", path: "/api/message-queue/sessions/session-1", body: undefined })
+>>>>>>> upstream/main
   })
 
   test("reorderQueue sends the complete new order", async () => {
     useMessageQueueStore.setState({ queuedMessages: { [key]: [{ id: "q1", content: "a", text: "a", createdAt: 1 }, { id: "q2", content: "b", text: "b", createdAt: 2 }] } })
     respond = () => json(queueState([serverItem("q2", "b"), serverItem("q1", "a")], "12"))
     useMessageQueueStore.getState().reorderQueue(target, "q2", "q1")
+<<<<<<< HEAD
     await Promise.resolve()
     expect(calls[0]).toEqual({
       method: "PUT",
@@ -510,6 +720,13 @@ describe("server-owned message queue", () => {
     expect(conflictEncountered).toBe(true)
     // The store must refetch and apply authoritative state, not treat as empty
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.content)).toEqual(["authoritative"])
+||||||| bc50ba56aa
+    await Promise.resolve()
+    expect(calls[0]).toEqual({ method: "PUT", path: "/api/message-queue/sessions/session-1/order", body: { itemIds: ["q2", "q1"] }, directory: "/repo" })
+=======
+    await environment.settle()
+    expect(calls[0]).toEqual({ method: "PUT", path: "/api/message-queue/sessions/session-1/order", body: { itemIds: ["q2", "q1"] } })
+>>>>>>> upstream/main
   })
 })
 
@@ -528,7 +745,7 @@ describe("a session in an isolated space", () => {
     respond = () => json(spaceQueue([serverItem("s1", "later")], "1"))
     await useMessageQueueStore.getState().addToQueue(spaceTarget, { content: "later", sendConfig: { providerID: "p", modelID: "m" } })
     useMessageQueueStore.getState().removeFromQueue(spaceTarget, "s1")
-    await Promise.resolve()
+    await environment.settle()
 
     expect(calls.map((call) => [call.method, call.path, call.directory])).toEqual([
       ["POST", "/api/message-queue/sessions/space-session/items", spaceDirectory],

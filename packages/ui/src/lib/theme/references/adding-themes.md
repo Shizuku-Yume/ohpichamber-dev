@@ -40,9 +40,25 @@ export const presetThemes: Theme[] = [
 
 ### 3. Validate
 
+<<<<<<< HEAD:packages/ui/src/lib/theme/references/adding-themes.md
 ```bash
 bun run type-check && bun run lint && bun run build
 ```
+||||||| bc50ba56aa:.agents/skills/theme-system/references/adding-themes.md
+Run `bun run build`; the JSON is imported at build time.
+
+### Judging a palette
+
+- Status colours keep their everyday meaning in light and dark variants: success green, info blue, error red, warning amber. Tune the shade to its background, not the hue family.
+- Contrast numbers only point at candidates; the verdict comes from the real UI: body text, bold chat text and borders on the canvas, the sidebar and elevated surfaces. Dark built-ins share one band: body text about 13.3 to 13.6:1 and secondary text about 6:1, reached by raising OKLab lightness only so hue holds. Too low reads dim on external monitors; too high reads harsh. Catppuccin stays on its official palette.
+=======
+Run `bun run build`; the JSON is imported at build time.
+
+### Judging a palette
+
+- Status colours keep their everyday meaning in light and dark variants: success green, info blue, error red, warning amber. Tune the shade to its background, not the hue family.
+- Contrast numbers only point at candidates; the verdict comes from the real UI: body text, bold chat text and borders on the canvas, the sidebar and elevated surfaces. Built-ins share one target: body text about 15.4:1 in dark and 13:1 in light, secondary text about 6:1, reached by moving OKLab lightness only so hue holds. Bold uses the body color, so leave `markdown.bold` out. Catppuccin stays on its official palette.
+>>>>>>> upstream/main:.agents/skills/theme-system/references/adding-themes.md
 
 ## Authoring Tools
 

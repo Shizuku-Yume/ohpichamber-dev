@@ -193,6 +193,7 @@ describe('Z.ai quota provider', () => {
     expect(windows['5h'].giftReset).toBeUndefined();
     expect(windows.weekly.giftReset).toBeUndefined();
   });
+<<<<<<< HEAD
 
   it('attaches no gift reset for an expired unavailable record', async () => {
     vi.stubGlobal('fetch', vi.fn()
@@ -221,6 +222,37 @@ describe('Z.ai quota provider', () => {
     expect(result.ok).toBe(true);
     expect(windows['5h'].giftReset).toBeUndefined();
   });
+||||||| bc50ba56aa
+
+  it('attaches no gift reset for an expired unavailable record', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(mockResponse({
+        data: {
+          limits: [
+            { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 42 },
+          ],
+        },
+      }))
+      .mockResolvedValueOnce(mockResponse({
+        code: 200,
+        success: true,
+        data: {
+          // z.ai flips `available` to false once a record expires.
+          fiveHourResets: [
+            { recordId: 387233, expireTime: '2026-09-04 22:25:19', available: false },
+          ],
+          weekResets: [],
+        },
+      })));
+
+    const result = await fetchQuota();
+    const windows = result.usage.windows;
+
+    expect(result.ok).toBe(true);
+    expect(windows['5h'].giftReset).toBeUndefined();
+  });
+=======
+>>>>>>> upstream/main
 });
 
 describe('Z.ai gift reset activation', () => {

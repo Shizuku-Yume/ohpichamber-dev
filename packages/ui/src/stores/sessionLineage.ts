@@ -2,6 +2,7 @@ import type { Session } from '@openchamber/agent-contract';
 import { getOriginalSessionID, isReviewSession } from '@/lib/sessionReviewMetadata';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 
+<<<<<<< HEAD
 /**
  * Which descendants an action reaches below a session.
  *
@@ -18,10 +19,26 @@ import { useGlobalSessionsStore } from './useGlobalSessionsStore';
  * policy keeps the subagent graph alone: move, export and activity read what a
  * row renders.
  */
+||||||| bc50ba56aa
+/**
+ * Which descendants an action reaches below a session.
+ *
+ * - `active`: active sessions, stopping at an archived one and everything
+ *   under it, the tree the project sidebar renders. Move and export.
+ * - `activeThroughArchived`: active sessions at any depth, also under an
+ *   archived intermediate. Archive, which must not restamp an archived one.
+ * - `all`: every session at any depth, archived ones included. Delete.
+ * - `archived`: archived sessions, stopping at an active one. Restore, which
+ *   brings back the archived subsessions of a root.
+ *
+ * Archive, delete and restore also follow review metadata. The `active`
+ * policy keeps OpenCode's parentID graph for move, export and activity.
+ */
+=======
+>>>>>>> upstream/main
 type SessionLineagePolicy = 'active' | 'activeThroughArchived' | 'all' | 'archived';
 
 type SessionLineage = {
-  /** The descendants of `rootId` under `policy`, each parent before its children. */
   descendantsOf: (rootId: string, policy: SessionLineagePolicy) => Session[];
 };
 
@@ -41,10 +58,6 @@ const keeps = {
   archived: isArchived,
 } satisfies Record<SessionLineagePolicy, (session: Session) => boolean>;
 
-/**
- * The parent-child graph of `sessions`, indexed once. Build it once per
- * action, or once per pass over many roots.
- */
 export const createSessionLineage = (sessions: readonly Session[]): SessionLineage => {
   const childrenByParentId = new Map<string, Session[]>();
   const reviewsByOriginalId = new Map<string, Session[]>();
@@ -78,12 +91,6 @@ export const createSessionLineage = (sessions: readonly Session[]): SessionLinea
   };
 };
 
-/**
- * The lineage of every session the client knows, active and archived, read
- * from the global cache when the user acts. A sidebar row may render its
- * session with no children (In work, Pinned, the List view), so an action
- * never takes its descendants from the row.
- */
 export const readGlobalSessionLineage = (): SessionLineage => {
   const { activeSessions, archivedSessions } = useGlobalSessionsStore.getState();
   return createSessionLineage([...activeSessions, ...archivedSessions]);

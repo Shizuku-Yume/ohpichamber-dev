@@ -18,6 +18,14 @@ const normalizePath = (path: string): string => path.replace(/\\/g, '/');
 interface WebFilesAPIOptions {
   urls?: unknown;
   getDirectory?: () => string | undefined;
+<<<<<<< HEAD
+||||||| bc50ba56aa
+  /** File search; defaults to OpenCode's `file.find` through the shared client. */
+  searchFiles?: SearchFiles;
+=======
+
+  searchFiles?: SearchFiles;
+>>>>>>> upstream/main
 }
 
 type WebDirectoryEntry = {
@@ -64,6 +72,7 @@ const toDirectoryListResult = (fallbackDirectory: string, payload: WebDirectoryL
   };
 };
 
+<<<<<<< HEAD
 const requestDirectory = (getDirectory?: () => string | undefined, override?: string): string | undefined =>
   override || getDirectory?.();
 
@@ -72,6 +81,27 @@ const withDirectoryQuery = (query: URLSearchParams, directory: string | undefine
     query.set('directory', directory);
   }
   return query;
+||||||| bc50ba56aa
+/**
+ * The directory a request names: the caller's, else the folder open in the app. A path inside an
+ * isolated space is served by that space only, so a request for one names the space when the open
+ * folder is elsewhere: a draft waiting for a space shows the space's files from the project's.
+ */
+const directoryHeaders = (getDirectory?: () => string | undefined, override?: string, path?: string): Record<string, string> | undefined => {
+  const current = getDirectory?.();
+  const pathSpace = spaceIdOfDirectory(path);
+  const directory = override
+    || (pathSpace !== null && spaceIdOfDirectory(current) !== pathSpace ? spaceRootDirectory(pathSpace) : current);
+  return directory ? { 'x-opencode-directory': directory } : undefined;
+=======
+
+const directoryHeaders = (getDirectory?: () => string | undefined, override?: string, path?: string): Record<string, string> | undefined => {
+  const current = getDirectory?.();
+  const pathSpace = spaceIdOfDirectory(path);
+  const directory = override
+    || (pathSpace !== null && spaceIdOfDirectory(current) !== pathSpace ? spaceRootDirectory(pathSpace) : current);
+  return directory ? { 'x-opencode-directory': directory } : undefined;
+>>>>>>> upstream/main
 };
 
 export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAPI => ({
@@ -108,9 +138,93 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {
+<<<<<<< HEAD
     const hits = await hostFilesystem.searchFiles(payload.query, {
       directory: normalizePath(payload.directory),
       limit: payload.maxResults,
+||||||| bc50ba56aa
+    const directory = normalizePath(payload.directory);
+    const includeHidden = Boolean(payload.includeHidden);
+    const respectGitignore = payload.respectGitignore !== false;
+
+    if (includeHidden || !respectGitignore) {
+      const params = new URLSearchParams();
+      params.set('query', payload.query);
+      if (directory) params.set('directory', directory);
+      if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
+        params.set('limit', String(payload.maxResults));
+      }
+      if (includeHidden) params.set('includeHidden', 'true');
+      if (!respectGitignore) params.set('respectGitignore', 'false');
+
+      const response = await runtimeFetch('/api/fs/search', {
+        query: params,
+        signal: payload.signal,
+        headers: directoryHeaders(getDirectory, directory),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: response.statusText })) as { error?: string };
+        throw new Error(error.error || 'Failed to search files');
+      }
+      const result = fileSearchResponseSchema.safeParse(await response.json().catch(() => null));
+      if (!result.success) {
+        throw new FilesystemError('File search returned an invalid response', { reason: 'invalid-response' });
+      }
+      return result.data.files.map((file) => ({
+        path: normalizePath(file.path),
+        preview: [normalizePath(file.relativePath)],
+      }));
+    }
+
+    // file.find answers file search on OpenCode 2.x; /api/find/file has no
+    // route there and falls through the generic proxy to a 404.
+    const hits = await searchFiles(payload.query, {
+      directory,
+      limit: typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)
+        ? payload.maxResults
+        : undefined,
+=======
+    const directory = normalizePath(payload.directory);
+    const includeHidden = Boolean(payload.includeHidden);
+    const respectGitignore = payload.respectGitignore !== false;
+
+    if (includeHidden || !respectGitignore) {
+      const params = new URLSearchParams();
+      params.set('query', payload.query);
+      if (directory) params.set('directory', directory);
+      if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
+        params.set('limit', String(payload.maxResults));
+      }
+      if (includeHidden) params.set('includeHidden', 'true');
+      if (!respectGitignore) params.set('respectGitignore', 'false');
+
+      const response = await runtimeFetch('/api/fs/search', {
+        query: params,
+        signal: payload.signal,
+        headers: directoryHeaders(getDirectory, directory),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: response.statusText })) as { error?: string };
+        throw new Error(error.error || 'Failed to search files');
+      }
+      const result = fileSearchResponseSchema.safeParse(await response.json().catch(() => null));
+      if (!result.success) {
+        throw new FilesystemError('File search returned an invalid response', { reason: 'invalid-response' });
+      }
+      return result.data.files.map((file) => ({
+        path: normalizePath(file.path),
+        preview: [normalizePath(file.relativePath)],
+      }));
+    }
+
+
+
+    const hits = await searchFiles(payload.query, {
+      directory,
+      limit: typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)
+        ? payload.maxResults
+        : undefined,
+>>>>>>> upstream/main
       type: 'file',
       includeHidden: payload.includeHidden,
       respectGitignore: payload.respectGitignore,

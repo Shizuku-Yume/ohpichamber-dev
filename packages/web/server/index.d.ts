@@ -29,6 +29,7 @@ export interface WebUiServerController {
   stop: (options?: { exitProcess?: boolean }) => Promise<void>;
 }
 
+<<<<<<< HEAD
 export interface DesktopNotificationPayload {
   title?: string;
   body?: string;
@@ -40,6 +41,22 @@ export interface DesktopNotificationPayload {
   directory?: string;
   requireHidden?: boolean;
   showWhenFocused?: boolean;
+||||||| bc50ba56aa
+export interface DesktopUpdateInfo {
+  available: boolean;
+  currentVersion?: string;
+  version?: string | null;
+  body?: string | null;
+  date?: string | null;
+=======
+export interface DesktopUpdateInfo {
+  available: boolean;
+  currentVersion?: string;
+  version?: string | null;
+  body?: string | null;
+  date?: string | null;
+  installBlocked?: 'desktop-host';
+>>>>>>> upstream/main
 }
 
 export interface DesktopRuntimeConfig {

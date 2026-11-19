@@ -41,8 +41,6 @@ const splitPatch = (patch: string, snippet: boolean): DiffSection[] => {
   return sections.every((section) => fileNames(section.patch).length > 0) ? sections : [];
 };
 export default function MarkdownDiffPreview({ source }: { source: string }) {
-  // Models also propose +/- snippets without file or hunk headers. Supply
-  // parser-only coordinates; copying always uses the unmodified fence source.
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const snippet = lines.some((line) => /^[+-]/.test(line))
     && lines.every((line) => /^[ +-]/.test(line))

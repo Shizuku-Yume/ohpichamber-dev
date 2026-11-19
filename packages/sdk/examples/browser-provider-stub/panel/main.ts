@@ -1,9 +1,21 @@
+<<<<<<< HEAD
 // The extension's page docked above the shared surface: an address field and
 // a Go button. It
 // talks to the stub service through the host (`host.serviceRequest`), the
 // same way any panel reaches its service; the surface below it is the host's.
 import { connectHost } from 'ohpichamber-sdk';
 import { applyHostReady, mountButton, mountTextField } from 'ohpichamber-sdk/ui';
+||||||| bc50ba56aa
+// The extension's page docked above the shared surface: an address field and
+// a Go button. It
+// talks to the stub service through the host (`host.serviceRequest`), the
+// same way any panel reaches its service; the surface below it is the host's.
+import { connectHost } from '@openchamber/sdk';
+import { applyHostReady, mountButton, mountTextField } from '@openchamber/sdk/ui';
+=======
+import { connectHost } from '@openchamber/sdk';
+import { applyHostReady, mountButton, mountTextField } from '@openchamber/sdk/ui';
+>>>>>>> upstream/main
 
 const host = connectHost();
 const root = document.querySelector('#root');
@@ -41,7 +53,6 @@ host.onReady((context) => {
     },
   });
 
-  // Mirror what the agent did: the address follows the page.
   const refresh = async () => {
     try {
       const result = await host.serviceRequest({ method: 'GET', path: '/state' });

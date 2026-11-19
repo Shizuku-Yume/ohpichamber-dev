@@ -40,11 +40,21 @@ const linuxAndroidCandidates = (homeDir) => [
 
 const nonEmpty = (value) => (value && value.trim().length > 0 ? value : null);
 
+<<<<<<< HEAD
 // Respect an explicit DEVELOPER_DIR, then fall back to whatever the user selected via
 // `xcode-select` (so an Xcode beta / non-default install is honoured). Hardcoding
 // /Applications/Xcode.app overrode `xcode-select` and forced builds onto the wrong Xcode,
 // whose simulator runtimes may not match — xcodebuild then can't find the chosen simulator.
 const defaultSelectDeveloperDir = () => {
+||||||| bc50ba56aa
+// Respect an explicit DEVELOPER_DIR, then fall back to whatever the user selected via
+// `xcode-select` (so an Xcode beta / non-default install is honoured). Hardcoding
+// /Applications/Xcode.app overrode `xcode-select` and forced builds onto the wrong Xcode,
+// whose simulator runtimes may not match — xcodebuild then can't find the chosen simulator.
+const selectedDeveloperDir = () => {
+=======
+const selectedDeveloperDir = () => {
+>>>>>>> upstream/main
   try {
     const result = spawnSync('xcode-select', ['-p'], { encoding: 'utf8' });
     const selectedPath = result.status === 0 ? result.stdout.trim() : '';

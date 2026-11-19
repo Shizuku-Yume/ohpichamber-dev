@@ -1,12 +1,9 @@
 import type { Snippet } from '@/types/snippet';
 
-// The server's own pattern (`lib/opencode/snippets.js`), names compared lowercase.
 const SNIPPET_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
 const SUGGESTED_NAME_WORDS = 3;
 const SUGGESTED_NAME_MAX_LENGTH = 32;
 
-// Names are ASCII on disk; a prompt written in Cyrillic still gets a
-// readable suggestion rather than the bare fallback.
 const CYRILLIC_TO_LATIN = new Map(Object.entries({
   а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'ie', ж: 'zh', з: 'z', и: 'y', і: 'i', ї: 'i', й: 'i',
   к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts',
@@ -15,16 +12,42 @@ const CYRILLIC_TO_LATIN = new Map(Object.entries({
 
 const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
 
+<<<<<<< HEAD
 /** The snippet that `#name` already triggers. */
 const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
+||||||| bc50ba56aa
+/** What a name field keeps of typed text: spaces become dashes, other characters drop. */
+export const normalizeSnippetNameInput = (value: string): string => value
+  .replace(/\s+/g, '-')
+  .replace(/[^a-z0-9_-]/gi, '')
+  .slice(0, 80);
+
+/** The snippet that `#name` already triggers, by its name or an alias. */
+export const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
+=======
+export const normalizeSnippetNameInput = (value: string): string => value
+  .replace(/\s+/g, '-')
+  .replace(/[^a-z0-9_-]/gi, '')
+  .slice(0, 80);
+
+export const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
+>>>>>>> upstream/main
   const key = name.toLowerCase();
   return snippets.find((snippet) => snippet.name.toLowerCase() === key);
 };
 
+<<<<<<< HEAD
 /**
  * Why `name` cannot be saved, or null when it can; `own` is the snippet being
  * renamed, whose own name stays free for it.
  */
+||||||| bc50ba56aa
+/**
+ * Why `name` cannot be saved, or null when it can; `own` is the snippet being
+ * renamed, whose own name and aliases stay free for it.
+ */
+=======
+>>>>>>> upstream/main
 export const snippetNameProblem = (name: string, snippets: readonly Snippet[], own?: Snippet): 'invalid' | 'taken' | null => {
   if (!isValidSnippetName(name)) return 'invalid';
   const owner = findSnippetByTrigger(snippets, name);
@@ -39,7 +62,6 @@ export const uniqueSnippetName = (base: string, snippets: readonly Snippet[]): s
   return name;
 };
 
-/** The text with its last `#name` token, and the space after it, cut out. */
 export const withoutSnippetToken = (text: string, name: string): string => {
   if (!isValidSnippetName(name)) return text;
   const pattern = new RegExp(`#${name}(?![a-z0-9_-]) ?`, 'gi');
@@ -48,7 +70,6 @@ export const withoutSnippetToken = (text: string, name: string): string => {
   return text.slice(0, last.index) + text.slice(last.index + last[0].length);
 };
 
-/** A free name from the first words of the text, or `snippet` when none of them spell one. */
 export const suggestSnippetName = (text: string, snippets: readonly Snippet[]): string => {
   const words = text
     .toLowerCase()
