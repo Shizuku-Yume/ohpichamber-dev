@@ -7,7 +7,7 @@ interface DiagramEditorHandle {
 }
 
 interface DiagramEditorProps {
-  xml: string;
+  initialXml: string;
   readOnly?: boolean;
   className?: string;
   onChange?: (xml: string) => void;
@@ -22,29 +22,18 @@ function detectDark(): boolean {
 }
 
 export const DiagramEditor = React.forwardRef<DiagramEditorHandle, DiagramEditorProps>(
-  function DiagramEditor({ xml, readOnly, className, onChange }, ref) {
-    const latestXmlRef = React.useRef(xml);
+  function DiagramEditor({ initialXml, readOnly, className, onChange }, ref) {
+    const latestXmlRef = React.useRef(initialXml);
     const drawioRef = React.useRef<React.ComponentRef<typeof DrawIoEmbed>>(null);
     const hasShownTemplate = React.useRef(false);
     const [isDark, setIsDark] = React.useState(detectDark);
-    const stableXmlRef = React.useRef(xml);
-
-    // When the parent switches files (xml prop changes), reset the stable
-    // reference so the new content renders instead of the first file's content.
-    const prevXmlRef = React.useRef(xml);
-    if (prevXmlRef.current !== xml) {
-      prevXmlRef.current = xml;
-      stableXmlRef.current = xml;
-      latestXmlRef.current = xml;
-    }
+    const stableXmlRef = React.useRef(initialXml);
 
     const prevIsDark = React.useRef(isDark);
     if (prevIsDark.current !== isDark) {
       prevIsDark.current = isDark;
       stableXmlRef.current = latestXmlRef.current;
     }
-
-    const containerRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
       const check = () => setIsDark(detectDark());
@@ -54,36 +43,27 @@ export const DiagramEditor = React.forwardRef<DiagramEditorHandle, DiagramEditor
       return () => observer.disconnect();
     }, []);
 
-    // Focus the iframe once on mount so keyboard shortcuts work without
-    // clicking the canvas. Intentionally not keyed on isDark — re-focusing
-    // on every theme toggle would steal keyboard focus from the user.
-    React.useEffect(() => {
-      const id = setTimeout(() => {
-        containerRef.current?.querySelector<HTMLIFrameElement>('.diagrams-iframe')?.focus();
-      }, 600);
-      return () => clearTimeout(id);
-    }, []);
-
     React.useImperativeHandle(ref, () => ({
       getXml: () => latestXmlRef.current,
     }));
 
     const handleLoad = React.useCallback(() => {
-      if (!xml && !hasShownTemplate.current) {
+      if (!stableXmlRef.current && !hasShownTemplate.current) {
         hasShownTemplate.current = true;
         setTimeout(() => {
           drawioRef.current?.template({});
         }, 500);
       }
-    }, [xml]);
+    }, []);
 
     const handleAutoSave = React.useCallback((data: { xml: string }) => {
+      if (data.xml === latestXmlRef.current) return;
       latestXmlRef.current = data.xml;
       onChange?.(data.xml);
     }, [onChange]);
 
     return (
-      <div ref={containerRef} className={cn('h-full w-full', className)}>
+      <div className={cn('h-full w-full', className)}>
         <DrawIoEmbed
           key={isDark ? 'dark' : 'light'}
           ref={drawioRef}

@@ -5,6 +5,7 @@ import { SidebarTopBar } from './SidebarTopBar';
 import { TitlebarLeftControls } from './TitlebarLeftControls';
 import { ContextPanel } from './ContextPanel';
 import { ContextSurfacePanes } from './ContextSurfacePanes';
+import type { FileTabCloseGuard } from '@/components/views/FilesView';
 import { ZoneDropOverlay } from './ZoneDropOverlay';
 import { ZoneFitArbiter } from './ZoneFitArbiter';
 import { followZonePlacementOfOtherWindows } from './zoneSync';
@@ -100,6 +101,7 @@ LeftSidebar.displayName = 'LeftSidebar';
  * crossing the threshold reloads into it (see watchHostedSurfaceViewport).
  */
 export const MainLayout: React.FC = () => {
+ const fileTabCloseGuard = React.useRef<FileTabCloseGuard | null>(null);
  useSessionListSync({ isVSCode: false });
  useTerminalSessionKeepalive();
  // The grant dialog of isolated spaces.
@@ -212,7 +214,7 @@ export const MainLayout: React.FC = () => {
          <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true" data-workspace-row="true">
           {/* The left zone: surfaces the user moved beside the
                                         sidebar. Empty and closed, it takes no width. */}
-          <ContextPanel zone="left" />
+          <ContextPanel zone="left" fileTabCloseGuard={fileTabCloseGuard} />
           {/* Holds the chat and the right zone together, so its
                                         width does not move when the right zone opens. The
                                         work-status panel measures this rather than the chat,
@@ -241,12 +243,12 @@ export const MainLayout: React.FC = () => {
                onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>
              </div>}
             </main>
-            <ContextPanel zone="bottom" />
+            <ContextPanel zone="bottom" fileTabCloseGuard={fileTabCloseGuard} />
            </div>
-           <ContextPanel zone="right" />
+           <ContextPanel zone="right" fileTabCloseGuard={fileTabCloseGuard} />
            {/* After every zone: the panes attach to the bodies the
                                             zones register, behind their layout animation. */}
-           <ContextSurfacePanes />
+           <ContextSurfacePanes fileTabCloseGuard={fileTabCloseGuard} />
            <ZoneDropOverlay />
            <ZoneFitArbiter />
           </div>
