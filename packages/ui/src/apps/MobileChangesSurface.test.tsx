@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import type { GitLogEntry, GitStatus } from '@/lib/api/types';
 import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-switch';
 import type { SourceControlAuthStatus, SourceControlUser } from '@/lib/source-control/types';
+import { closeTopmostBackLayer, registerBackLayer } from '@/lib/mobileBackLayers';
 
 // These cases cover the repository panes, not the transcript: the turn scope's
 // sync read is answered empty rather than standing up a provider for it.
@@ -61,7 +62,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     Element: dom.Element, HTMLElement: dom.HTMLElement, HTMLInputElement: dom.HTMLInputElement, Node: dom.Node,
     customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
     Event: dom.Event, CustomEvent: dom.CustomEvent, KeyboardEvent: dom.KeyboardEvent, MouseEvent: dom.MouseEvent,
-    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,
+    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver, IntersectionObserver: dom.IntersectionObserver,
     getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
     cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true,
   };
@@ -77,6 +78,8 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const requests: URL[] = [];
   const originalFetch = globalThis.fetch;
   let failBranchDiff = true;
+  let statusFailure: 'host' | 'timeout' | null = null;
+  let refreshedStatus: GitStatus | null = null;
   let nestedIsRepository = true;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
@@ -84,6 +87,20 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     requests.push(url);
     switch (url.pathname) {
       case '/api/git/remotes': return Response.json([]);
+      case '/api/git/projects': return Response.json({ projects: [{ directory: '/repo', isGitRepository: true }] });
+      case '/api/git/status': return statusFailure
+        ? Response.json(statusFailure === 'timeout'
+          ? { error: 'Git did not answer within 30 seconds.', code: 'GIT_REPOSITORY_UNREADABLE' }
+          : { error: 'Host unavailable' }, { status: 500 })
+        : Response.json(refreshedStatus ?? status);
+      case '/api/walkthrough': return Response.json({
+        source: { kind: 'working-tree', scope: 'all' }, generatedAt: '2026-11-19T12:00:00Z',
+        hunks: [], hunkCount: 0,
+        walkthrough: { title: 'Working changes tour', focus: 'Review this change', chapters: [{
+          id: 'chapter', title: 'Implementation', icon: 'wrench', blurb: '',
+          stops: [{ id: 'step', title: 'Inspect the change', hunkIds: [], importance: 'normal', prose: 'Step explanation' }],
+        }] },
+      });
       // The identity strip beside the branch reads these on mount.
       case '/api/git/identities': return Response.json([]);
       case '/api/git/global-identity': return Response.json(null);
@@ -172,6 +189,8 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   let directory = '/repo';
   let visible = true;
   let initialDiff: { path: string; staged: boolean } | null = null;
+  let backHandler: (() => boolean) | null = null;
+  const registerBackHandler = (handler: (() => boolean) | null) => { backHandler = handler; };
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -179,7 +198,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
       <MobileChangesPane rootDirectory={directory}
         repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true, unreadable: null }}
-        visible={visible} initialDiff={initialDiff} />
+        visible={visible} initialDiff={initialDiff} registerBackHandler={registerBackHandler} />
     </RuntimeAPIContext.Provider></I18nProvider>);
   });
   const click = async (selector: string) => {
@@ -203,6 +222,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
 
   try {
     await render();
+    expect(backHandler).toBeNull();
     const modeTrigger = container.querySelector('[aria-label="Select change mode"]');
     const syncButton = container.querySelector('[aria-label="Publish"]');
     if (!modeTrigger || !syncButton) throw new Error('Missing Changes controls');
@@ -221,6 +241,11 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[title="branch.png"]')).not.toBeNull();
     await openFile('branch.png');
     expect(container.textContent).toContain('Branch diff failed');
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.querySelector('h2')).toBeNull();
+    expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Branch');
+    expect(backHandler).toBeNull();
+    await openFile('branch.png');
     expect(requests.filter((url) => url.pathname === '/api/git/file-diff')).toHaveLength(0);
     failBranchDiff = false;
     const retry = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Retry');
@@ -232,12 +257,15 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     const beforeHide = comparisonRequests().length;
     visible = false;
     await render();
+    expect(backHandler).toBeNull();
     await act(async () => { seed('/repo'); });
     expect(comparisonRequests()).toHaveLength(beforeHide);
     visible = true;
     await render();
     expect(container.querySelector('h2')?.textContent).toBe('branch.png');
+    expect(backHandler).not.toBeNull();
     await click('[aria-label="Back"]');
+    expect(backHandler).toBeNull();
     await click('[aria-label="Base branch"]');
     await click('[data-value="refs/heads/parent"]');
     expect(container.querySelector('[title="branch.png"]')).toBeNull();
@@ -321,10 +349,118 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('h2')?.textContent).toBe('working.png');
     const workingRequest = [...requests].reverse().find((url) => url.pathname === '/api/git/file-diff');
     expect(workingRequest?.searchParams.get('staged')).toBe('true');
-    await click('[aria-label="Back"]');
+    let workspaceOpen = true;
+    const back = () => {
+      if (closeTopmostBackLayer()) return;
+      if (backHandler?.()) return;
+      workspaceOpen = false;
+    };
+    let overlayOpen = true;
+    const releaseOverlay = registerBackLayer(() => { overlayOpen = false; releaseOverlay(); });
+    try {
+      await act(async () => back());
+      expect(overlayOpen).toBe(false);
+      expect(workspaceOpen).toBe(true);
+      expect(container.querySelector('h2')?.textContent).toBe('working.png');
+    } finally {
+      releaseOverlay();
+    }
+    await act(async () => back());
+    expect(workspaceOpen).toBe(true);
+    expect(backHandler).toBeNull();
+    expect(container.querySelector('h2')).toBeNull();
+    back();
+    expect(workspaceOpen).toBe(false);
+    visible = false;
+    await render();
+    visible = true;
+    await render();
+    expect(container.querySelector('h2')).toBeNull();
+    expect(backHandler).toBeNull();
     expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Changes');
     expect(container.querySelector('[aria-label="Publish"]')).not.toBeNull();
     expect(checkoutControl()).toBeDefined();
+
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
+    const openWalkthrough = [...container.querySelectorAll('button')].find((button) => button.getAttribute('aria-label')?.toLowerCase().includes('walkthrough'));
+    if (!openWalkthrough) throw new Error('Missing walkthrough action');
+    await act(async () => { openWalkthrough.click(); });
+    const step = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Inspect the change'));
+    if (!step) throw new Error('Missing walkthrough step');
+    await act(async () => { step.click(); });
+    expect(container.textContent).toContain('Step explanation');
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.textContent).toContain('Review this change');
+    expect(container.textContent).not.toContain('Step explanation');
+    expect(backHandler).not.toBeNull();
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    expect(container.textContent).toContain('Review this change');
+    await act(async () => { seed('/repo'); });
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+    workspaceOpen = true;
+    back();
+    expect(workspaceOpen).toBe(false);
+
+    visible = false;
+    await render();
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
+    visible = true;
+    await render();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Review this change');
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    expect(container.textContent).toContain('Review this change');
+    visible = false;
+    await render();
+    await act(async () => { seed('/repo'); });
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
+    visible = true;
+    await render();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    const knownStatus = useGitStore.getState().getDirectoryState('/repo')?.status;
+    if (!knownStatus) throw new Error('Missing working-tree status');
+    const refreshStatus = () => act(async () => {
+      await useGitStore.getState().fetchStatus('/repo', apis.git, { force: true, silent: true });
+    });
+    statusFailure = 'host';
+    await refreshStatus();
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(knownStatus);
+    expect(container.textContent).toContain('Review this change');
+    expect(backHandler).not.toBeNull();
+    statusFailure = 'timeout';
+    await refreshStatus();
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(knownStatus);
+    expect(container.textContent).toContain('Review this change');
+    await refreshStatus();
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBeNull();
+    expect(backHandler).toBeNull();
+    statusFailure = null;
+    refreshedStatus = knownStatus;
+    await refreshStatus();
+    expect(container.textContent).toContain('Review this change');
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    refreshedStatus = status;
+    await refreshStatus();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+    refreshedStatus = knownStatus;
+    await refreshStatus();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
 
     // A nested-repository answer must not outlive the read that produced it.
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'nested/', index: '?', working_dir: '?' }] }); });
@@ -352,8 +488,18 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Changes');
     expect(container.querySelector('h2')).toBeNull();
     expect(requests.some((url) => url.pathname === '/api/git/file-diff' && url.searchParams.get('directory') === '/repo-two')).toBe(false);
+    expect(backHandler).toBeNull();
+    initialDiff = { path: 'missing.png', staged: false };
+    await render();
+    expect(backHandler).not.toBeNull();
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(backHandler).toBeNull();
+    initialDiff = { path: 'missing.png', staged: false };
+    await render();
+    expect(backHandler).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
+    expect(backHandler).toBeNull();
     globalThis.fetch = originalFetch;
     await dom.happyDOM.abort();
     for (const [name, descriptor] of originals) {

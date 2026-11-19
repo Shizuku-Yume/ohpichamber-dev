@@ -33,8 +33,8 @@ import type { ProjectRef } from '@/lib/projectContextApi';
 import { readTabletLayout, useOrientation, useTabletLayout } from '@/lib/device';
 import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { useI18n } from '@/lib/i18n';
-import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
+import { isOpenchamberEventsReconnecting, markOpenchamberEventsUnreachable, retryOpenchamberEventsNow, subscribeOpenchamberEvents, subscribeOpenchamberEventsConnection } from '@/lib/openchamberEvents';
+import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAuthoritativeSessionCleanup } from '@/components/session/sidebar/list/useAuthoritativeSessionCleanup';
 import { restoreLastActiveSession } from '@/sync/last-session-restore';
@@ -81,9 +81,11 @@ import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
 import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
 import { isCapacitorMobileApp, useMobileWebBackButton, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
+import { retryNativeResumeConnection } from './mobileResumeRetry';
 import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
+import { useMobilePairingConfirmation } from './useMobilePairingConfirmation';
 import { useEdgeSwipe } from './useEdgeSwipe';
 import { useNativePushRegistration } from './useNativePushRegistration';
 import { IpadSidebarResizeHandle } from './IpadSidebarResizeHandle';
@@ -106,7 +108,7 @@ const NATIVE_RESUME_SYNC_EVENT_THROTTLE_MS = 1_000;
     (Changes / Files / Terminal / Notes / MCP) are separate layers. */
 type MobileSurface = 'archive' | 'board' | 'instances' | 'scheduled' | 'settings' | 'usage';
 
-const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
+const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: () => void }> = ({ reconnecting, onActiveConnectionDeleted }) => {
   const { t } = useI18n();
   // The mobile root does not mount MainLayout, so it owns its own terminal
   // keepalive: without it, background PTYs (running project actions included)
@@ -455,6 +457,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     if (isTabletLayout && !roomyForPanels) setSidebarOpen(false);
   }, [closeSurface, isTabletLayout, roomyForPanels]);
 
+  const reconnectBanner = reconnecting ? (
+    <p role="status" className="shrink-0 border-b border-border/60 bg-muted/40 px-3 py-2 text-center typography-ui-label text-status-warning">
+      {t('contextPanel.surface.status.reconnecting')}
+    </p>
+  ) : null;
+  const workspaceCoversChat = workspaceOpen && !workspaceAsPanel;
+
   return (
     <DedicatedMobileAppProvider actions={mobileActions}>
       <div
@@ -533,6 +542,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             onOpenWorkspace={() => setWorkspaceOpen(true)}
             compactTitle={isTabletLayout}
           />
+          {workspaceCoversChat ? null : reconnectBanner}
           <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
             <div className="h-full w-full">
               <ErrorBoundary>
@@ -596,6 +606,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 pendingChangesDiff={pendingChangesDiff}
                 onOpenPlan={setOpenPlan}
                 variant={workspaceAsPanel ? 'panel' : 'drawer'}
+                reconnectBanner={workspaceCoversChat ? reconnectBanner : null}
               />
             </ErrorBoundary>
           </div>
@@ -733,7 +744,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   );
 };
 
-function MobileAppContent({ apis }: MobileAppProps) {
+type MobileAppContentProps = MobileAppProps & {
+  connectionEpoch: number;
+  setConnectionEpoch: React.Dispatch<React.SetStateAction<number>>;
+  onPairing?: Parameters<typeof useDeepLinkSource>[0]['onPairing'];
+};
+
+function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing }: MobileAppContentProps) {
   const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
   const { t } = useI18n();
   const initializeApp = useConfigStore((state) => state.initializeApp);
@@ -761,7 +778,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
     [globalActiveSessions, globalArchivedSessions],
   );
   useAuthoritativeSessionCleanup({ hasAuthoritativeGlobalSessions, sessions: cleanupSessions });
-  const [connectionEpoch, setConnectionEpoch] = React.useState(0);
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
   const [showConnectionRecovery, setShowConnectionRecovery] = React.useState(false);
   // Cold-launch auto-connect to the last instance: 'pending'/'attempting' hold the
@@ -777,21 +793,20 @@ function MobileAppContent({ apis }: MobileAppProps) {
   // sync layer can reconnect without remounting.
   const [, bumpTransportSwitch] = React.useReducer((count: number) => count + 1, 0);
   const isNativeMobileApp = React.useMemo(() => isCapacitorMobileApp(), []);
+  const eventStreamReconnecting = React.useSyncExternalStore(subscribeOpenchamberEventsConnection, isOpenchamberEventsReconnecting, () => false);
   const lastNativeResumeSyncEventAtRef = React.useRef(0);
   const nativeResumeValidationSeqRef = React.useRef(0);
 
   const handleNativeResume = React.useCallback(() => {
     const apiBaseUrl = getRuntimeApiBaseUrl();
+    const runtimeKey = getRuntimeKey();
     const validationSeq = nativeResumeValidationSeqRef.current + 1;
     nativeResumeValidationSeqRef.current = validationSeq;
+    const isCurrentValidation = () => nativeResumeValidationSeqRef.current === validationSeq
+      && getRuntimeKey() === runtimeKey && getRuntimeApiBaseUrl() === apiBaseUrl;
 
     if (!apiBaseUrl) {
-      // Already disconnected — e.g. a previous re-probe ran mid network flux
-      // (Android Wi-Fi switch with no cellular fallback) and found nothing
-      // reachable. When a resume/online signal arrives, silently retry the last
-      // saved instance instead of dead-ending on the connect screen until the
-      // user restarts the app. Success fires runtime-endpoint-changed, which
-      // re-bootstraps everything.
+      // With no runtime selected, resume/online can retry the last saved instance.
       logMobileConnectEvent('resume:auto-connect', {});
       void autoConnectLastInstance();
       return;
@@ -804,6 +819,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
     // runtime-endpoint-changed subscription (which re-bootstraps the app), so we
     // only refresh in place when the transport is 'unchanged'.
     const refreshInPlace = () => {
+      retryOpenchamberEventsNow();
       void initializeApp();
       void refreshSourceControlProviders(apis.sourceControl);
       void refreshSourceControlAuth(apis.sourceControl, { force: true });
@@ -811,14 +827,15 @@ function MobileAppContent({ apis }: MobileAppProps) {
       if (!providersLoaded) void loadProviders({ source: 'mobileApp:nativeResume' });
       void loadAgents(useDirectoryStore.getState().currentDirectory);
     };
-    const disconnect = (reason: string) => {
+    const disconnect = (reason: string, noticeKind?: MobileConnectionNotice['kind']) => {
+      if (noticeKind) setAutoConnectNotice({ kind: noticeKind, label: getAutoConnectTargetLabel() ?? '' });
       logMobileConnectEvent('resume:disconnect', { reason });
       switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: MOBILE_DISCONNECTED_RUNTIME_KEY });
       setConnectionEpoch((value) => value + 1);
     };
 
     void reprobeActiveConnection().then((outcome) => {
-      if (nativeResumeValidationSeqRef.current !== validationSeq) return;
+      if (!isCurrentValidation()) return;
       if (outcome === 'no-connection') {
         disconnect('no-connection');
         return;
@@ -826,8 +843,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
       if (outcome === 'needs-login') {
         // Token explicitly rejected (revoked/expired) — tell the user why they
         // land back on the connect screen instead of silently bouncing them.
-        setAutoConnectNotice({ kind: 'auth-expired', label: getAutoConnectTargetLabel() ?? '' });
-        disconnect('needs-login');
+        disconnect('needs-login', 'auth-expired');
         return;
       }
       if (outcome === 'relay-limit') {
@@ -835,49 +851,12 @@ function MobileAppContent({ apis }: MobileAppProps) {
         // makes no attempt of its own, so the grace ladder below would only
         // keep the user on a frozen session. The connect screen says why;
         // tapping the instance, or the next resume/online, tries again.
-        setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
-        disconnect('relay-limit');
+        disconnect('relay-limit', 'relay-limit');
         return;
       }
       if (outcome === 'unreachable') {
-        // Right after a resume or Wi-Fi switch the network is often still
-        // settling (Android without a SIM has NO connectivity for a few
-        // seconds; a WireGuard tunnel re-handshakes; a relay cold start pays
-        // TLS + WS + E2EE before it can answer), so a single fast probe races
-        // the network coming up. Retry on a widening grace ladder before
-        // tearing the connection down — the last attempt runs with the full
-        // connect budget so slow-but-alive transports get a real chance.
-        const retryDelaysMs = [4000, 10000];
-        const retryAt = (attempt: number) => {
-          window.setTimeout(() => {
-            if (nativeResumeValidationSeqRef.current !== validationSeq) return;
-            const lastAttempt = attempt === retryDelaysMs.length - 1;
-            void reprobeActiveConnection({ fast: !lastAttempt }).then((retry) => {
-              if (nativeResumeValidationSeqRef.current !== validationSeq) return;
-              if (retry === 'switched') return;
-              if (retry === 'unchanged') {
-                refreshInPlace();
-                return;
-              }
-              if (retry === 'needs-login') {
-                setAutoConnectNotice({ kind: 'auth-expired', label: getAutoConnectTargetLabel() ?? '' });
-                disconnect('retry-needs-login');
-                return;
-              }
-              if (retry === 'relay-limit') {
-                setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
-                disconnect('retry-relay-limit');
-                return;
-              }
-              if (!lastAttempt) {
-                retryAt(attempt + 1);
-                return;
-              }
-              disconnect(`retry-${retry}`);
-            });
-          }, retryDelaysMs[attempt]);
-        };
-        retryAt(0);
+        markOpenchamberEventsUnreachable();
+        void retryNativeResumeConnection({ reprobe: reprobeActiveConnection, isCurrent: isCurrentValidation, refreshInPlace, disconnect });
         return;
       }
       if (outcome === 'switched') return;
@@ -1116,6 +1095,29 @@ function MobileAppContent({ apis }: MobileAppProps) {
   }, [connectionEpoch, initializeApp, isNativeMobileApp]);
 
   React.useEffect(() => {
+    if (!isNativeMobileApp) return;
+    let cancelled = false;
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type !== 'event-stream-ready') return;
+      const { isConnected, isInitialized, lastInitFailure } = useConfigStore.getState();
+      if (isConnected && isInitialized) return;
+      const runtimeKey = getRuntimeKey();
+      const apiBaseUrl = getRuntimeApiBaseUrl();
+      if (!apiBaseUrl) return;
+      void initializeApp().then(() => {
+        if (cancelled || runtimeKey !== getRuntimeKey() || apiBaseUrl !== getRuntimeApiBaseUrl()) return;
+        const failure = useConfigStore.getState().lastInitFailure;
+        // A ready stream can arrive while an earlier startup attempt is still failing.
+        if (failure !== lastInitFailure && failure?.step === 'serverUnreachable') void initializeApp();
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [initializeApp, isNativeMobileApp]);
+
+  React.useEffect(() => {
     if (!isConnected) return;
     if (!providersLoaded) void loadProviders({ source: 'mobileApp:recovery' });
     void loadAgents(currentDirectory);
@@ -1286,15 +1288,13 @@ function MobileAppContent({ apis }: MobileAppProps) {
   // scheme (widgets, Live Activities, external links). Registered unconditionally so a
   // cold-launch tap/open isn't lost on the connect/splash screen; intents stash until
   // the app is ready (connected + initialized) and shell handlers are registered.
-  useDeepLinkSource({ ready: isNativeMobileApp && isConnected && isInitialized });
+  useDeepLinkSource({ ready: isNativeMobileApp && isConnected && isInitialized, onPairing });
   const fontsReady = useFontsReady();
 
-  // `isConnected` is a LIVE flag that flips false on every transient SSE/WS drop and
-  // back true on reconnect. We must NOT blank the whole app to a loader on those —
-  // only on the initial connect / instance switch (connectionPhase 'connecting').
-  // While 'reconnecting' (we were connected before), keep MobileShell mounted so the
-  // UI doesn't reload on every network blip.
+  // Keep an existing shell mounted on bootstrap health failures. The Host
+  // control stream also detects live drops independently of bootstrap.
   const isReconnecting = !isConnected && connectionPhase === 'reconnecting';
+  const showReconnectBanner = isNativeMobileApp && (isReconnecting || eventStreamReconnecting);
 
   // Hold a logo splash until the UI web font is loaded, so the first UI the user sees
   // already uses the real font instead of flashing the fallback and reflowing (FOUT).
@@ -1406,9 +1406,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
                   until the last-session restore decides between session and
                   draft — otherwise the auto-opened draft flashes first. The
                   shell (and sync) still mounts and warms up underneath. */}
-              <AppStartupOverlay ready={!isNativeMobileApp || !lastSessionRestorePending} animated />
+              <AppStartupOverlay ready={!isNativeMobileApp || !lastSessionRestorePending || showReconnectBanner} animated />
               <SyncAppEffects backgroundWorkEnabled={isInitialized} />
-              <MobileShell onActiveConnectionDeleted={() => {
+              <MobileShell reconnecting={showReconnectBanner} onActiveConnectionDeleted={() => {
                 suppressAutoConnectUntilManualConnect();
                 switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: MOBILE_DISCONNECTED_RUNTIME_KEY });
                 setConnectionEpoch((value) => value + 1);
@@ -1416,7 +1416,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
               <AppLinkConfirmDialog />
               <SharedTrustConfirmDialog />
               {isolatedSpacesEnabled ? <><SpaceAccessDialog /><SpaceActionsSheet /><SpaceApplyDialog /><SpaceDeleteDialog /><SpaceSetupOutputDialog /></> : null}
-              <MobileToaster />
             </div>
           </TooltipProvider>
         </RuntimeAPIProvider>
@@ -1425,6 +1424,21 @@ function MobileAppContent({ apis }: MobileAppProps) {
   );
 }
 
+function NativeMobileApp(props: MobileAppContentProps) {
+  const { setConnectionEpoch } = props;
+  const onConnected = React.useCallback(() => setConnectionEpoch((epoch) => epoch + 1), [setConnectionEpoch]);
+  const { onPairing, pairingConfirmation } = useMobilePairingConfirmation(onConnected);
+  return <>
+    <MobileAppContent {...props} onPairing={onPairing} />
+    {pairingConfirmation}
+  </>;
+}
+
 export function MobileApp(props: MobileAppProps) {
-  return <MobileAppContent {...props} />;
+  const [connectionEpoch, setConnectionEpoch] = React.useState(0);
+  const Root = isCapacitorMobileApp() ? NativeMobileApp : MobileAppContent;
+  return <>
+    <Root {...props} connectionEpoch={connectionEpoch} setConnectionEpoch={setConnectionEpoch} />
+    <MobileToaster />
+  </>;
 }

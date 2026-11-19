@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.complete': '목표 완료됨',
   'chat.goal.toast.distillFallback': '목표가 제한을 초과했고 요약도 실패했습니다 — 감사에는 발췌본을 사용합니다',
   'terminalView.error.cannotConnect': '터미널에 연결할 수 없습니다',
+  'terminalView.status.inputPaused': "다시 연결되었습니다. 입력을 시작하기 전에 명령줄을 확인하세요.",
+  'terminalView.actions.resumeInput': "입력 재개",
   'terminalView.actions.tryAgain': '다시 시도',
   'directoryExplorerDialog.actions.addNamed': "\"{name}\" 추가",
   'directoryExplorerDialog.actions.createNamed': "\"{name}\" 만들고 추가",

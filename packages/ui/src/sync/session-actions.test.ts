@@ -473,6 +473,36 @@ describe("native delivery and execution controls", () => {
   }
   const run: Run = { runId: "run-a", sessionId: "session-a", status: "running", origin: "host", createdAt: 1 }
 
+  test.each(["unavailable", "idle", "missing"] as const)("accepted send requests snapshot recovery only for a cold or missing snapshot (%s)", async status => {
+    const store = seed()
+    if (status !== "missing") {
+      const snapshot = nativeSnapshot()
+      snapshot.session.runtimeStatus = status
+      store.setState({ snapshot: { "session-a": snapshot } })
+    }
+    const ensure = mock(() => {})
+    setActionRefs(manager, () => directory, undefined, ensure)
+    const pending = deferred<{ run: Run }>()
+    const create = spyOn(canonicalClient, "createRun").mockImplementation(() => pending.promise)
+    const sending = sendMessage({ sessionId: "session-a", directory, request })
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
+    expect(ensure).toHaveBeenCalledTimes(1)
+    pending.resolve({ run })
+    await sending
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(ensure).toHaveBeenCalledTimes(status === "idle" ? 1 : 2)
+    if (status !== "idle") expect(ensure).toHaveBeenLastCalledWith("session-a", directory, { refreshSnapshot: true })
+  })
+
+  test.each(["failure", "runtime-switch"])("an unaccepted or stale cold send does not request recovery (%s)", async outcome => {
+    seed()
+    const ensure = mock(() => {})
+    setActionRefs(manager, () => directory, undefined, ensure)
+    spyOn(canonicalClient, "createRun").mockImplementation(async () => { if (outcome === "failure") throw new Error("Refused"); changeRuntime(); return { run } })
+    await expect(sendMessage({ sessionId: "session-a", directory, request })).rejects.toThrow()
+    expect(ensure).toHaveBeenCalledTimes(1)
+  })
+
   test("submits a native prompt and command identity without inventing transcript records", async () => {
     const store = seed()
     const create = spyOn(canonicalClient, "createRun").mockResolvedValue({ run })

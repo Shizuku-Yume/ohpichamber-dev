@@ -1624,6 +1624,30 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
 
+## 2026-11-19 - Mobile Git detail Back belongs to the workspace navigation owner
+
+- **Decided:** register visible Git detail routes through the workspace Back callback already used by Files, and reuse the header's return-to-list action. Keep the drawer's existing terminal lifecycle and the fork health/sync test harness.
+- **Instead of:** closing the workspace while retaining a hidden diff, registering Git in the higher-priority global overlay stack, or leaving hidden tabs in charge of Back.
+- **Because:** the Git pane owns its list/detail route and visited panes remain mounted. Only that pane can consume one Back to clear the detail, while the shell keeps popups, plans and fullscreen surfaces ahead of workspace navigation. Visibility and owner-key cleanup prevent stale handlers during tab, repository and runtime changes.
+- **Mine:** yes
+- **Revisit when:** upstream wires Git detail navigation into the same workspace Back contract.
+
+## 2026-11-19 - Walkthrough Back follows its reading depth
+
+- **Decided:** the Git workspace Back callback delegates to the visible walkthrough's own header action before returning to Changes.
+- **Instead of:** discarding an open step and its contents in one hardware Back.
+- **Because:** the walkthrough owns its reading depth; step, contents and Changes must follow the same ladder for header and hardware Back. Global overlays retain their shell priority.
+- **Mine:** yes
+- **Revisit when:** upstream shares walkthrough navigation through the workspace Back contract.
+
+## 2026-11-19 - Git Back ownership follows the rendered screen
+
+- **Decided:** register workspace Back only while Git renders a diff or walkthrough, including its repository and source availability gates. Reset a walkthrough route only when a successful file-list read is empty.
+- **Instead of:** treating every retained non-list route as a visible detail screen.
+- **Because:** refresh can remove the last walkthrough target or change a comparison source while retaining its route. The resulting Changes list must let Back close the workspace immediately. Two consecutive typed unreadable status errors clear the store's status to unknown, not an authoritative empty list; the walkthrough route must survive that failure and return on retry.
+- **Mine:** yes
+- **Revisit when:** Git navigation normalizes unavailable detail routes before rendering.
+
 ## 2026-11-19 - Replay terminal history at its recorded PTY sizes
 
 - **Decided:** retain PTY resize boundaries in bounded terminal history and replay them in output order before fitting the viewport.
@@ -1638,6 +1662,36 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Confirm external mobile pairing links before connecting
+
+- **Decided:** deliver validated native URL pairing offers to the shared confirmation UI before probing, redeeming or changing Hosts. Reuse the mobile pairing controller after confirmation.
+- **Instead of:** treating a URL handoff as consent or waiting for a connected workspace before showing the offer.
+- **Because:** Safari and other apps can launch the URL scheme. Opening an offer is not consent to store its credentials or switch the active Host, and first-time onboarding must also receive it. Existing mobile authentication regressions and fork deep-link behavior remain in force.
+- **Revisit when:** upstream provides a native consent flow for external Host pairing links.
+
+## 2026-11-19 - Keep native mobile visible through Host outages
+
+- **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.
+- **Instead of:** treating a reachable network or a successful startup probe as proof the Host is still live, or clearing the runtime when a resume probe times out.
+- **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and its ready event confirms recovery and lets stalled startup retry without a separate poll. Native direct connections use the header-aware stream reader because EventSource cannot send saved proxy headers; when configured, those headers stay on the selected endpoint by rejecting redirects.
+- **Mine:** yes
+- **Revisit when:** upstream provides a native, authenticated Host connectivity signal independent of its session streams.
+
+## 2026-11-19 - Keep interactive terminal input bound to its attachment
+
+- **Decided:** interactive input requires the current socket's terminal snapshot and an explicit resume after reconnect. Project-action interrupts can still use a socket without attaching a viewport.
+- **Instead of:** automatically accepting input as soon as the next socket opens or replaying keys typed during a disconnect.
+- **Because:** forwarding an arbitrary suffix of a command can change what the shell executes. After reattachment, the user can inspect the recovered command line before typing again.
+- **Revisit when:** interactive terminal transport can acknowledge command input across a connection change without ambiguity.
+
+## 2026-11-19 - Keep composer image removal from sending drafts
+
+- **Decided:** mark the shared composer's image removal control as a non-submit button.
+- **Instead of:** preventing the click's default action in the removal handler.
+- **Because:** the button has no submission role; native button semantics keep removal separate from sending without changing the form.
+- **Mine:** no
+- **Revisit when:** upstream marks the same control as non-submit.
 
 ## 2026-11-19 - Compact draft welcomes scroll before clipping large text
 
@@ -1685,6 +1739,15 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** electron-builder rewrites relative links during copying, and NSIS extracts through Nsis7z and CopyFiles. An archive containing only ordinary files avoids symlink privilege and preservation requirements; per-user installation permits junction creation without administrator privileges.
 - **Mine:** yes
 - **Revisit when:** Windows packaging offers a verified relocatable dependency graph without runtime junction creation.
+## 2026-11-19 - Preserve file descriptor identity in code previews
+
+- **Decided:** memoize the complete Pierre file descriptor by its contents and metadata at the preview component boundary.
+- **Instead of:** recreating equivalent file objects on each FilesView render, disabling large-file previews or replacing the virtualizer.
+- **Because:** the iOS simulator reproduced a blank large-text preview while edit mode displayed the same contents and narrow Chrome rendered it. Native console instrumentation exposed `VirtualizedFile.render: rendered a different file than its prepared layout`; Pierre compares prepared and rendered descriptors by reference. Keeping the descriptor stable restored the native preview without truncating the file or changing its worker-backed virtualization.
+- **Mine:** yes
+- **Revisit when:** Pierre no longer requires stable descriptor identity across virtualized renders.
+
+Small-file acceptance also exposed `No valid theme loader registered for "openchamber-dark"`: FilesView requested raw theme IDs even though the registry returns content-hashed render names. Resolve and register the light/dark pair synchronously before rendering, and memoize by theme objects so custom-theme edits under the same ID are respected. Both inline and fullscreen previews share these descriptors and theme names.
 
 ## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
 
@@ -1693,3 +1756,73 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
 - **Mine:** yes
 - **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
+
+## 2026-11-19 - Empty GitHub release feeds mean no desktop update
+
+Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
+
+## 2026-11-19 - Refresh desktop login items only when enabled
+
+The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup re-registers an enabled login item so its path and background-start args stay current after updates or moves, and skips the write when the item is disabled, unregistered, or unreadable (macOS can reject that no-op write with `Operation not permitted`). Explicit settings-change IPC remains authoritative and unchanged.
+
+## 2026-11-19 - Retry native session and command discovery during Agent Service startup
+
+Global sessions and native command catalogs use the existing bounded `STARTUP_RETRY` policy in their owning stores, including command workspace resolution. A successful native read establishes authority; readiness does not manufacture an empty snapshot. Session workspace binding follows successful discovery so it cannot exhaust its own retry window before the service is ready. Non-retryable or exhausted failures retain the existing error and cached-data behavior. Runtime generation changes retire retries before another request. This shared behavior applies to Web/PWA, Electron, hosted mobile, and Capacitor; the Guest SDK contract is unchanged.
+
+## 2026-11-19 - Refresh composer catalogs after provider settings mutations
+
+- **Decided:** Explicit provider-settings refreshes emit the existing `providers` config-change notification before rereading their page-owned catalog. The existing config-store subscriber invalidates and freshly loads known-directory catalogs for the composer.
+- **Because:** Custom provider save and credential/account changes refreshed only the settings page, leaving the composer's separate catalog stale until reload. A failed page reread must not suppress notification of a completed write. Ordinary loads and stale-runtime refreshes do not emit.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the same store and notification path. Guest SDK is unchanged.
+- **Instead of:** Directly mutating composer catalogs from Settings or adding another event channel.
+
+## 2026-11-19 - Retry transient partial session discovery without losing complete scopes
+
+The global sessions store owns bounded startup recovery for successful HTTP 200 discovery pages containing `SERVICE_UNAVAILABLE` errors. Retry whole listings within the same eight-attempt budget as thrown retryable failures. Reconcile healthy scopes on every page, retain failed scopes, defer transient sidebar errors until exhaustion, and expose non-transient errors immediately. An initial retrying partial page does not establish global completeness; runtime changes retire the retry loop.
+
+Keep the Host's explicit partial `items`/`errors` contract, including all-unavailable pages, rather than replacing it with a top-level 503 that loses scoped information. Discovery errors carry codes, not retryable flags; only `SERVICE_UNAVAILABLE` is classified transient here. Web/PWA, Electron, hosted mobile and Capacitor share this store; Guest SDK and session admission are unchanged.
+
+Later successful listings also retire stale failures: global head polls replace the discovery error map, and successful workspace lists clear only that workspace and its known session errors through the global store owner. This applies even when no session record changes; an unrelated workspace's failure is not cleared by a scoped success.
+
+## 2026-11-19 - Recover startup snapshots and cold-send streams without opening cold workers
+
+- **Decided:** SessionMessageLoader retries retryable snapshot/workspace failures within `STARTUP_RETRY`, preserving authoritative state and stopping retired loads. After accepted native delivery, sends starting from a cold or absent snapshot request a queued recovery snapshot; only that recovery waits for an available worker within the bounded budget. Successful snapshots attach the existing event pipeline from the returned cursor.
+- **Because:** A startup snapshot failure was terminal. Manual retry could read a worker-free cold snapshot, which correctly skipped SSE; the pre-send stream request still saw that cold snapshot and never retried after the worker opened.
+- **Instead of:** Removing the cold-session stream guard, retaining cold journals in the service, opening workers just to read history, or replaying accepted prompts. Recovery failure stays a loader error, never a failed-send rollback.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor use the shared loader/actions/provider. Guest SDK, Host admission and transport/auth behavior are unchanged. Earlier scoped discovery-error clearing remains in the same SyncProvider paths.
+
+## 2026-11-19 - Preserve sanitized native provider failure details
+
+- **Decided:** project the last unrecovered assistant error message into canonical run failure and turn history after removing resolved provider credentials and credential-shaped text. Preserve generic detail only when OMP supplies none.
+- **Instead of:** replacing every provider failure with a generic service failure or teaching the UI to read native transcripts.
+- **Because:** OMP owns the provider outcome and the existing canonical failure string already reaches the chat error notice. Credential values must not cross that boundary even when a provider echoes them.
+- **Mine:** yes
+- **Revisit when:** the canonical API introduces a structured provider-error contract.
+
+## 2026-11-19 - Complete repository dialog dismissal before opening Git Settings
+
+- **Decided:** retain the repository popup through dismissal and open Git Settings on close completion. Recheck the draft warning when its directory's Git index revision changes and use action names for commit accessible labels.
+- **Instead of:** opening sibling modals during dismissal or keeping a one-shot dirty snapshot after a commit.
+- **Because:** closing modal focus cleanup must complete before the next surface opens, and a successful Git mutation invalidates the earlier dirty answer.
+- **Revisit when:** the shared dialog supports an atomic modal handoff or the draft target reads its dirty answer from the shared Git store.
+
+## 2026-11-19 - Restore chat failure notices from canonical turns
+
+- **Decided:** use the latest canonical failed turn when no equally recent live notification explains the failure.
+- **Instead of:** persisting the notification cache or relying on replay of a terminal event after a reload.
+- **Because:** snapshots already own sanitized terminal outcomes; transient notification state is not a complete history source. Completed, cancelled and superseded turns must not become current failures.
+- **Revisit when:** the chat renders terminal explanations inline with each canonical turn.
+
+## 2026-11-19 - Recheck draft dirtiness on working-tree status updates
+
+- **Decided:** subscribe the draft dirty probe to its selected directory's shared Git status in addition to index revision changes.
+- **Instead of:** waiting for staging to change the index or introducing another status poller.
+- **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
+- **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
+
+## 2026-11-19 - Keep child discovery failures distinct from healthy root listings
+
+- **Decided:** Track failed child-discovery parents separately from root-listing failures. Root-only head and workspace listings cannot retire them. A head poll with pending child failures reuses full discovery to retry child reads; full and directory refreshes clear a pending parent only after successful child discovery, including empty results.
+- **Instead of:** Clearing every session-keyed error after a healthy root listing, or adding another child polling owner.
+- **Because:** Canonical session lists contain roots, not the result of `listSubagents(parentId)`. Root success cannot establish that a missing child tree recovered. Known children and unrelated scope failures must survive unsuccessful retries and runtime changes must retire old completions.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the global store. Guest SDK and native admission are unchanged. Existing bounded root-listing startup retries and scoped root-error clearing remain in place.

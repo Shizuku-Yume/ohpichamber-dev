@@ -104,6 +104,7 @@ type Props = {
   sessionKey: string;
   chunks: TerminalChunk[];
   onInput: (data: string) => void;
+  onReply: (data: string) => void;
   /** Fitted size: the emulator has this size, so the PTY should follow. */
   onResize: (cols: number, rows: number) => void;
   /**
@@ -127,13 +128,14 @@ type Props = {
 };
 
 const TerminalViewport = React.forwardRef<TerminalController, Props>(({
-  sessionKey, chunks, onInput, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, className,
+  sessionKey, chunks, onInput, onReply, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, className,
   enableTouchScroll = false, autoFocus = true, isVisible = true, clipboard, createSurface = createGhosttySurface,
 }, ref) => {
   const { t } = useI18n();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const surfaceRef = React.useRef<TerminalSurface | null>(null);
   const inputRef = React.useRef(onInput);
+  const replyRef = React.useRef(onReply);
   const resizeRef = React.useRef(onResize);
   const provisionalSizeCallbackRef = React.useRef(onProvisionalSize);
   const lastChunkRef = React.useRef<number | null>(null);
@@ -150,6 +152,7 @@ const TerminalViewport = React.forwardRef<TerminalController, Props>(({
   const pendingSelectionClipboardRef = React.useRef<string | null>(null);
   const selectionClipboardWriteRef = React.useRef<Promise<void> | null>(null);
   inputRef.current = onInput;
+  replyRef.current = onReply;
   resizeRef.current = onResize;
   provisionalSizeCallbackRef.current = onProvisionalSize;
   visibleRef.current = isVisible;
@@ -241,6 +244,7 @@ const TerminalViewport = React.forwardRef<TerminalController, Props>(({
           labels: labelsRef.current,
           handleTouchPointer: ownsTouch,
           onData: (data) => inputRef.current(data),
+          onReply: (data) => replyRef.current(data),
           onResize: (cols, rows) => resizeRef.current(cols, rows),
           onSelectionChange: clipboard?.selection ? writeLatestSelectionClipboard : undefined,
           onMiddleClickPaste: clipboard?.selection ? pasteSelectionClipboard : undefined,

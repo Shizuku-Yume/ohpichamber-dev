@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 import { CommandCreateRequestSchema, CommandUpdateRequestSchema, type CommandCatalogState, type CommandEntry } from '@openchamber/agent-contract';
 import { useCommandsStore, invalidateCommandsLoadCache, selectCommandsForDirectory } from './useCommandsStore';
 
@@ -15,16 +15,26 @@ let conflict = false;
 let delayedRead: Promise<CommandCatalogState> | null = null;
 let restoreFetch: () => void = () => { };
 let onRead: () => void = () => { };
+let readyAt = 0;
+
+const advanceStartup = async () => {
+  for (let second = 0; second < 45; second += 1) {
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+    jest.advanceTimersByTime(1000);
+  }
+};
 
 beforeEach(() => {
   useCommandsStore.getState().resetForRuntimeSwitch();
   catalog = { workspaceId: 'workspace_1', revision: '1', commands: [command], builtinCommands: ['context', 'compact'] };
   requests = []; failRead = false; conflict = false; delayedRead = null; onRead = () => { };
   lastUpdateRequest = undefined;
+  readyAt = 0;
   const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const request = new Request(input instanceof Request ? input : new URL(input.toString(), 'http://localhost'), init);
     requests.push(request.clone());
     const path = new URL(request.url).pathname;
+    if (Date.now() < readyAt) return Response.json({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true }, { status: 503 });
     if (path === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'Workspace' });
     if (path === '/api/agent/v1/workspaces/workspace_1/commands' && request.method === 'GET') {
       onRead();
@@ -60,9 +70,38 @@ beforeEach(() => {
   });
   restoreFetch = () => fetchSpy.mockRestore();
 });
-afterEach(() => { restoreFetch(); useCommandsStore.getState().resetForRuntimeSwitch(); });
+afterEach(() => { jest.useRealTimers(); restoreFetch(); useCommandsStore.getState().resetForRuntimeSwitch(); });
 
 describe('native command consumers', () => {
+  test('loads commands automatically after delayed Agent Service readiness', async () => {
+    jest.useFakeTimers();
+    readyAt = Date.now() + 25000;
+    const loading = useCommandsStore.getState().loadCommands('/repo');
+    await advanceStartup();
+    expect(await loading).toBe(true);
+    expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')).toEqual([command]);
+    expect(requests.filter(request => new URL(request.url).pathname.endsWith('/commands'))).toHaveLength(1);
+  });
+  test('an empty command catalog after readiness is authoritative', async () => {
+    jest.useFakeTimers();
+    readyAt = Date.now() + 1000;
+    catalog = { ...catalog, commands: [], builtinCommands: [] };
+    const loading = useCommandsStore.getState().loadCommands('/repo');
+    await advanceStartup();
+    expect(await loading).toBe(true);
+    expect(useCommandsStore.getState().catalogsByDirectory['/repo']).toEqual(catalog);
+  });
+  test('runtime reset cancels startup retries before resolving another workspace', async () => {
+    jest.useFakeTimers();
+    readyAt = Date.now() + 25000;
+    const loading = useCommandsStore.getState().loadCommands('/repo');
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+    useCommandsStore.getState().resetForRuntimeSwitch();
+    await advanceStartup();
+    expect(await loading).toBe(false);
+    expect(requests).toHaveLength(1);
+    expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')).toEqual([]);
+  });
   test('loads one authoritative catalog with native grouping, source and bindings', async () => {
     expect(await useCommandsStore.getState().loadCommands('/repo')).toBe(true);
     expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')).toEqual([command]);
@@ -81,10 +120,14 @@ describe('native command consumers', () => {
     expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')[0].modelSelection).toBeUndefined();
   });
   test('read and CAS failures preserve previously published data', async () => {
+    jest.useFakeTimers();
     await useCommandsStore.getState().loadCommands('/repo');
     failRead = true;
     invalidateCommandsLoadCache('/repo');
-    expect(await useCommandsStore.getState().loadCommands('/repo')).toBe(false);
+    const loading = useCommandsStore.getState().loadCommands('/repo');
+    await advanceStartup();
+    expect(await loading).toBe(false);
+    expect(requests.filter(request => new URL(request.url).pathname.endsWith('/commands'))).toHaveLength(9);
     expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')).toEqual([command]);
     conflict = true;
     expect(await useCommandsStore.getState().updateCommand(command.name, { content: 'not committed' }, '/repo')).toBe(false);

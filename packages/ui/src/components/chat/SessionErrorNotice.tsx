@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { ErrorResponseDetails } from '@/components/chat/ErrorResponseDetails';
 import { useI18n } from '@/lib/i18n';
 import { showRuntimeStatus } from '@/lib/runtimeStatus';
-import { useLatestSessionError } from '@/sync/notification-store';
-import { useDirectoryStore, useSessionStatus, useSessionStatusSnapshotReady } from '@/sync/sync-context';
+import { useLatestSessionError, type ErrorNotification } from '@/sync/notification-store';
+import { useDirectoryStore, useDirectorySync, useSessionStatus, useSessionStatusSnapshotReady } from '@/sync/sync-context';
+import { summarizeSessionError } from '@/sync/session-error-log';
 import { refetchSessionMessages } from '@/sync/session-actions';
 import { LongErrorText } from './LongErrorText';
 import { scheduleUnansweredRechecks } from './sessionErrorNoticeState';
@@ -26,8 +27,6 @@ type LastMessageState = {
 // notice calls it a reply that never began.
 const UNANSWERED_AFTER_MS = 5_000;
 
-// Canonical sessions do not carry OpenCode outcome or parent tool metadata.
-// Report live errors and canonical tool-result errors without guessing them.
 const useLastMessageState = (sessionId: string, directory?: string): LastMessageState => {
   const store = useDirectoryStore(directory);
   const cacheRef = React.useRef<LastMessageState>(null);
@@ -65,12 +64,17 @@ const useLastMessageState = (sessionId: string, directory?: string): LastMessage
  * Shows what the canonical runtime reported when it stopped a turn without
  * producing a reply. Rendered under the last message, only while that turn is
  * the latest one: sending again moves the last message past the error and
- * hides it. Canonical sessions do not expose legacy stored outcome or parent
- * tool metadata, so those details are intentionally not reconstructed here.
+ * hides it. Canonical turn failures survive reloads without replaying live
+ * notifications or reconstructing legacy outcome metadata.
  */
 export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionId, directory }) => {
   const { t } = useI18n();
-  const latestError = useLatestSessionError(sessionId);
+  const liveError = useLatestSessionError(sessionId);
+  const latestTurn = useDirectorySync(React.useCallback((state) => state.snapshot[sessionId]?.turns.at(-1) ?? null, [sessionId]), directory);
+  const storedError = React.useMemo<ErrorNotification | null>(() => latestTurn?.status === 'failed'
+    ? { time: latestTurn.finishedAt ?? latestTurn.startedAt, error: summarizeSessionError(latestTurn.error) }
+    : null, [latestTurn]);
+  const latestError = liveError && (!storedError || liveError.time >= storedError.time) ? liveError : storedError;
   const status = useSessionStatus(sessionId, directory);
   const statusSnapshotReady = useSessionStatusSnapshotReady(directory, sessionId);
   const lastMessage = useLastMessageState(sessionId, directory);

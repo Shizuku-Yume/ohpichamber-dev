@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.complete': 'היעד הושלם',
   'chat.goal.toast.distillFallback': 'המטרה חרגה מהמגבלה ולא ניתן היה לתמצת אותה — המבקר משתמש בגרסה מקוצרת',
   'terminalView.error.cannotConnect': 'המסוף לא הצליח להתחבר',
+  'terminalView.status.inputPaused': "החיבור שוחזר. בדקו את שורת הפקודה לפני שתמשיכו להקליד.",
+  'terminalView.actions.resumeInput': "המשך הקלדה",
   'terminalView.actions.tryAgain': 'נסה שוב',
   'directoryExplorerDialog.actions.addNamed': "הוספת \"{name}\"",
   'directoryExplorerDialog.actions.createNamed': "יצירת \"{name}\" והוספה",
