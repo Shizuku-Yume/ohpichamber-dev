@@ -1,10 +1,4 @@
-<<<<<<< HEAD
 import type { ApnsTokenPayload, NativePushStatus, PushAPI, PushSubscribePayload, PushUnsubscribePayload } from '@openchamber/ui/lib/api/types';
-||||||| bc50ba56aa
-import type { ApnsTokenPayload, PushAPI, PushSubscribePayload, PushUnsubscribePayload } from '@openchamber/ui/lib/api/types';
-=======
-import type { ApnsTokenPayload, PushAPI, PushSubscribePayload, PushUnsubscribePayload } from '@openchamber/ui/lib/api/push';
->>>>>>> upstream/main
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
 
 const fetchJson = async <T>(input: string | URL | Request, init?: RequestInit): Promise<T | null> => {
@@ -101,9 +95,5 @@ export const createWebPushAPI = (): PushAPI => ({
       },
       body: JSON.stringify(payload),
     });
-  },
-
-  async getDeliveryStatus() {
-    return fetchJson<{ localOnly: boolean }>('/api/push/delivery');
   },
 });

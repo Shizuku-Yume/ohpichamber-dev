@@ -49,6 +49,8 @@ const PROVIDER_LOGO_EXTENSIONS = new Map([
   ['image/svg+xml', 'svg'],
 ]);
 
+export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
+
 // A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
 export const PROVIDER_LOGO_MAX_BYTES = 1024 * 1024;
 const SVG_THEME_COLORS = new Map<QueryValue | undefined, string>([['light', '#111111'], ['dark', '#f5f5f5']]);

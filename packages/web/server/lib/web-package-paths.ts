@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 interface PackageManifest {
   name: string;
   main: string;
-  bin: { openchamber: string };
+  bin: { ohpichamber: string };
 }
 
 interface WebPackagePaths {
@@ -36,12 +36,12 @@ export function getWebPackagePaths(moduleUrl: string | URL = import.meta.url) {
     } catch (error) {
       if (!isMissingFileError(error)) throw error;
     }
-    if (manifest?.name === '@openchamber/web') {
+    if (manifest?.name === 'ohpichamber') {
       const paths = Object.freeze({
         root: directory,
         packageJson,
         dist: path.join(directory, 'dist'),
-        cliEntry: path.resolve(directory, manifest.bin.openchamber),
+        cliEntry: path.resolve(directory, manifest.bin.ohpichamber),
         serverEntry: path.resolve(directory, manifest.main),
       });
       pathsByDirectory.set(start, paths);
@@ -49,7 +49,7 @@ export function getWebPackagePaths(moduleUrl: string | URL = import.meta.url) {
     }
     const parent = path.dirname(directory);
     if (parent === directory) {
-      throw new Error(`Could not find @openchamber/web package.json above ${fileURLToPath(moduleUrl)}`);
+      throw new Error(`Could not find ohpichamber package.json above ${fileURLToPath(moduleUrl)}`);
     }
     directory = parent;
   }
