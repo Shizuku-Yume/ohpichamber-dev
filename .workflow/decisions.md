@@ -1663,6 +1663,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Confirm external mobile pairing links before connecting
+
+- **Decided:** deliver validated native URL pairing offers to the shared confirmation UI before probing, redeeming or changing Hosts. Reuse the mobile pairing controller after confirmation.
+- **Instead of:** treating a URL handoff as consent or waiting for a connected workspace before showing the offer.
+- **Because:** Safari and other apps can launch the URL scheme. Opening an offer is not consent to store its credentials or switch the active Host, and first-time onboarding must also receive it. Existing mobile authentication regressions and fork deep-link behavior remain in force.
+- **Revisit when:** upstream provides a native consent flow for external Host pairing links.
+
 ## 2026-11-19 - Keep native mobile visible through Host outages
 
 - **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.

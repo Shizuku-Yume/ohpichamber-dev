@@ -11,6 +11,7 @@
  */
 
 import { isLinkIdentifier } from '@/lib/router/messageFocus';
+import { parsePairingConnectionPayload, parsePairingConnectionPayloadString, type PairingConnectionPayload } from '@/lib/connectionPayload';
 
 const DEEP_LINK_SCHEME = 'ohpichamber';
 
@@ -23,6 +24,7 @@ export type ViewTarget = 'files' | 'mcp' | 'instances';
  * that keeps the "blocks" composable without leaking ad-hoc URL parsing into features.
  */
 export type DeepLinkIntent =
+  | { type: 'pairing'; payload: PairingConnectionPayload }
   | { type: 'session'; sessionId: string; directory?: string; messageId?: string }
   | { type: 'new-session'; directory?: string; projectId?: string; agent?: string; model?: string }
   | { type: 'sessions'; filter?: SessionsFilter }
@@ -52,6 +54,11 @@ const segmentsOf = (url: URL): string[] => {
 export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | null {
   if (typeof raw !== 'string' || raw.length === 0) {
     return null;
+  }
+
+  if (/^ohpichamber:\/\/connect[/?]/i.test(raw.trim())) {
+    const payload = parsePairingConnectionPayload(raw) ?? parsePairingConnectionPayloadString(raw);
+    return payload ? { type: 'pairing', payload } : null;
   }
 
   let url: URL;
