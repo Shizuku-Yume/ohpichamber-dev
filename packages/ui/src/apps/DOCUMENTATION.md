@@ -6,6 +6,13 @@
 
 `MobileShell` in `MobileApp` owns the phone and tablet surfaces, Settings among them.
 
+`mobileNativeChrome` delegates Android status-bar background ownership to
+`WindowLayoutPlugin`: native inset padding uses native-background contrast,
+while edge-to-edge WebView content uses the app theme. It does not write an
+unsupported background color on API 35+, and rechecks on app/system theme
+changes and resume. iOS overlay behavior is unchanged; web, hosted mobile and
+Electron do not invoke this Android bridge.
+
 `mobileConnections` owns saved mobile instances and their connect, password and reconnect flows. The welcome screen and Instances are one view (`MobileConnectionsView`) over its controller. Runtime HTTP authentication remains in `lib/runtime-auth` and `lib/runtime-fetch`.
 
 ## Invariants
@@ -25,7 +32,7 @@
 - On mobile web, Back runs the same close ladder as the Android back button, one step per press, and the app is left only when nothing is open. Forward and traversals between routes never run the ladder. Layers closed through the UI leave no empty Back presses (`useMobileWebBackButton`, `lib/router/backGuard.ts`).
 - Every route entry written while a layer is open goes through `pushRouteEntry` or `updateBrowserURL`, so it lands under the back guard. A direct `pushState` would bury the guard between two routes. A replacement keeps the guard and changes its URL; the route under it normalizes to the same place when Back reaches it.
 - Inside the mobile shell the Settings stages write no history. A `SettingsView` given `registerBackHandler` steps through its stages in state only.
-- The visible Files viewer registers its return-to-browser action through the workspace drawer. The shell asks it at the workspace step, after popups, plans and fullscreen surfaces; one Back restores the viewer's folder, and the next closes the workspace. Hidden viewers, browser routes, root changes and unmounted viewers release that handler. The header arrow uses the same action. Android and hosted mobile share this ladder; desktop web and Electron do not mount the mobile Files surface.
+- The visible Files viewer registers its return-to-browser action through the workspace drawer. The shell asks it at the workspace step, after popups, plans and fullscreen surfaces. The header arrow uses the same action: a dirty editor asks before leaving; a clean editor returns to its folder immediately. Once at the folder, the next Back closes the workspace. Hidden viewers, browser routes, root changes and unmounted viewers release the handler. Android and hosted mobile share this ladder; desktop web and Electron do not mount the mobile Files surface.
 - Settings uses the existing persistence and broadcast protocol. Moving its host changes no stored format, registry key or runtime availability.
 - Notification commands and initial session tabs in VS Code use the shared session opener, so a `/btw` fork opens its parent and expands the panel mounted in the shared composer. Notification commands also reveal the chat view.
 

@@ -1,4 +1,5 @@
 import { registerPlugin } from '@capacitor/core';
+import type { Style as StatusBarStyle } from '@capacitor/status-bar';
 import React from 'react';
 
 import { observeNativeKeyboardHeight, resetHardwareKeyboardDetection, startHardwareKeyboardBridge } from '@/lib/hardwareKeyboard';
@@ -18,7 +19,7 @@ export const isCapacitorMobileApp = (): boolean => {
 };
 
 interface WindowLayoutPlugin {
-  get(): Promise<{ edgeToEdge: boolean }>;
+  get(): Promise<{ edgeToEdge: boolean; statusBarStyle?: StatusBarStyle }>;
 }
 
 /**
@@ -62,10 +63,8 @@ export const useNativeMobileChrome = (): void => {
       const platform = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.();
       const applyStatusBar = async () => {
         if (platform === 'android') {
-          // Inset the WebView below the bar and paint it with the resolved theme background
-          // (the splash colours the theme system persists). On Android 15+ edge-to-edge is
-          // enforced and both calls are no-ops — there the app pads itself via the
-          // Capacitor-injected --safe-area-inset-* CSS vars (see mobile.css, oc-platform-android).
+          // Android 15 ignores status-bar background writes. SystemBars may instead pad
+          // the native view on older WebViews, exposing the native rather than app theme.
           const isDark = document.documentElement.classList.contains('dark');
           const themeBg =
             (isDark ? localStorage.getItem('splashBgDark') : localStorage.getItem('splashBgLight')) ||
@@ -74,14 +73,18 @@ export const useNativeMobileChrome = (): void => {
           // Before Android 15 that call moves the WebView below the status bar natively, so
           // the page must not reserve the strip again. Marked only once the call succeeded:
           // until then the WebView still sits under the bar and needs the injected inset.
-          const edgeToEdge = await WindowLayout.get().then(({ edgeToEdge }) => edgeToEdge, () => true);
+          const layout = await WindowLayout.get().catch(() => null);
+          const edgeToEdge = layout?.edgeToEdge ?? true;
           if (overlayOff && !edgeToEdge) {
             root.classList.add('oc-android-below-status-bar');
           }
-          await StatusBar.setBackgroundColor({ color: themeBg }).catch(() => undefined);
+          if (!edgeToEdge) {
+            await StatusBar.setBackgroundColor({ color: themeBg }).catch(() => undefined);
+          }
           // Capacitor Style is named for the CONTENT: Style.Light = dark text (light bg),
           // Style.Dark = light text (dark bg). So dark theme → Style.Dark, light theme → Style.Light.
-          await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => undefined);
+          const style = layout ? layout.statusBarStyle ?? (isDark ? Style.Dark : Style.Light) : Style.Default;
+          await StatusBar.setStyle({ style }).catch(() => undefined);
           await StatusBar.show().catch(() => undefined);
           return;
         }
@@ -112,6 +115,11 @@ export const useNativeMobileChrome = (): void => {
           return;
         }
         cleanup.push(() => themeClassObserver.disconnect());
+
+        const systemAppearance = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleSystemAppearance = () => void applyStatusBar();
+        systemAppearance.addEventListener('change', handleSystemAppearance);
+        cleanup.push(() => systemAppearance.removeEventListener('change', handleSystemAppearance));
       }
 
       const { App } = await import('@capacitor/app');

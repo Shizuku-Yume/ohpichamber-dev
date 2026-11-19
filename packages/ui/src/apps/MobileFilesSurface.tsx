@@ -7,13 +7,14 @@ import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { useFileTreeUpload } from '@/components/views/files/useFileTreeUpload';
 import { AUTO_RELIST_MAX_ENTRIES, useFileTreeChanges, type FileTreeChangeBatch } from '@/components/views/files/useFileTreeChanges';
+import type { FileTabCloseGuard } from '@/components/views/FilesView';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import type { FileListEntry, FileSearchResult } from '@/lib/api/types';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
-import { useUIStore } from '@/stores/useUIStore';
+import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import { normalizePath as normalizePathImpl } from '@/lib/pathNormalization';
 
@@ -94,12 +95,19 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const currentDirectory = route.type === 'browser' ? route.directory : route.returnDirectory;
   const currentDirectoryRef = React.useRef(currentDirectory);
   currentDirectoryRef.current = currentDirectory;
+  const fileTabCloseGuard = React.useRef<FileTabCloseGuard | null>(null);
 
   const returnToBrowser = React.useCallback(() => {
     if (route.type !== 'file') return false;
-    setRoute({ type: 'browser', directory: route.returnDirectory });
+    const leave = () => setRoute({ type: 'browser', directory: route.returnDirectory });
+    const guard = fileTabCloseGuard.current;
+    if (guard) {
+      guard(normalizeContextPanelDirectoryKey(root), 'all', leave);
+    } else {
+      leave();
+    }
     return true;
-  }, [route]);
+  }, [root, route]);
 
   React.useEffect(() => {
     if (!visible || route.type !== 'file' || !registerBackHandler) return;
@@ -246,7 +254,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
         <div className="min-h-0 flex-1 overflow-hidden">
           <ErrorBoundary>
             <React.Suspense fallback={<MobileFilesState loading message={t('filesView.state.loading')} />}>
-              <LazyFilesEditor mode="editor-only" />
+              <LazyFilesEditor mode="editor-only" fileTabCloseGuard={fileTabCloseGuard} />
             </React.Suspense>
           </ErrorBoundary>
         </div>

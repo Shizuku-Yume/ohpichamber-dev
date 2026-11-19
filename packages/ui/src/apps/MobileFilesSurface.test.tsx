@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Root } from 'react-dom/client';
 import type { FilesAPI, FileSearchResult } from '@/lib/api/types';
+import type { FileTabCloseGuard } from '@/components/views/FilesView';
 
 const dom = new Window({ url: 'http://localhost' });
 Object.assign(globalThis, {
@@ -33,8 +34,15 @@ afterAll(() => { globalThis.fetch = originalFetch; });
 
 const search = mock<FilesAPI['search']>();
 const listDirectory = mock<FilesAPI['listDirectory']>();
+const guardClose = mock<FileTabCloseGuard>();
 mock.module('@/components/views/FilesView', () => ({
-  FilesView: () => <div data-testid="file-editor" />,
+  FilesView: ({ fileTabCloseGuard }: { fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null> }) => {
+    React.useLayoutEffect(() => {
+      fileTabCloseGuard.current = guardClose;
+      return () => { fileTabCloseGuard.current = null; };
+    }, [fileTabCloseGuard]);
+    return <div data-testid="file-editor" />;
+  },
 }));
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
@@ -59,6 +67,8 @@ beforeEach(async () => {
   search.mockReset();
   listDirectory.mockReset();
   listDirectory.mockResolvedValue({ directory: '/workspace', entries: [] });
+  guardClose.mockReset();
+  guardClose.mockImplementation((_directory, _paths, close) => close());
   fileBackHandler = null;
   useDirectoryStore.setState({ currentDirectory: '/workspace' });
   container = document.createElement('div');
@@ -191,6 +201,31 @@ test('hidden viewers release Back and the header arrow clears the registration',
   await act(async () => container.querySelector<HTMLButtonElement>('header button')!.click());
   expect(fileBackHandler).toBeNull();
   expect(button('README.md')).toBeDefined();
+});
+
+test.each(['header arrow', 'shell Back'])('%s leaves the file viewer mounted until the editor permits leaving', async (source) => {
+  await showFileInBrowser();
+  guardClose.mockImplementation(() => {});
+
+  await act(async () => {
+    if (source === 'header arrow') {
+      container.querySelector<HTMLButtonElement>('header button')!.click();
+    } else {
+      expect(fileBackHandler?.()).toBe(true);
+    }
+  });
+
+  expect(container.querySelector('[data-testid="file-editor"]')).not.toBeNull();
+  expect(fileBackHandler).not.toBeNull();
+  expect(guardClose).toHaveBeenCalledTimes(1);
+  const [directory, paths, leave] = guardClose.mock.calls[0]!;
+  expect(directory).toBe('/workspace');
+  expect(paths).toBe('all');
+
+  await act(async () => leave());
+  expect(container.querySelector('[data-testid="file-editor"]')).toBeNull();
+  expect(button('README.md')).toBeDefined();
+  expect(fileBackHandler).toBeNull();
 });
 
 test('a failed folder reload after Back does not leave a viewer handler registered', async () => {
