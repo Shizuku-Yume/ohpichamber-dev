@@ -78,7 +78,7 @@ describe('VoiceSettings endpoint paths', () => {
     (element) => element.textContent === enDict['settings.voice.page.field.voice'],
   );
   const renderPlayback = async (voiceProvider: 'browser' | 'openai' | 'say' | 'local') => {
-    useConfigStore.setState({ voiceProvider, showMessageTTSButtons: true, voiceApiKeys: { openai: false, openaiCompatible: false, stt: false } });
+    useConfigStore.setState({ voiceProvider, showMessageTTSButtons: true, voiceApiKeys: { stt: false } });
     await act(async () => root.render(<I18nProvider><VoiceSettings /></I18nProvider>));
   };
   const setFetch = (request: () => Promise<Response>) => { globalThis.fetch = Object.assign(request, globalThis.fetch); };
