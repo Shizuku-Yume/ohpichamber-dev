@@ -36,7 +36,7 @@ The state of the post-audit bug hunt on `Shizuku-Yume/ohpichamber-dev`, so a new
 
 ## PR queue (2026-11-19)
 
-All fixes listed above are merged. [#50](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/50), the daemon broker private-field receiver fix, is pending merge. [#28](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/28), the iOS resume disconnect notice, is closed as superseded by #35. This records the maintainer's latest status; recheck GitHub before starting a new PR follow-up.
+All fixes listed above are merged, including [#50](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/50), the daemon broker private-field receiver fix. [#28](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/28), the iOS resume disconnect notice, is closed as superseded by #35. This records the maintainer's latest status; recheck GitHub before starting a new PR follow-up.
 
 ## iOS round 3 observations
 - Fixed by merged #48: a 9.3 MiB text file opened to a blank preview on iOS, though edit mode showed the content.
@@ -76,7 +76,7 @@ All fixes listed above are merged. [#50](https://github.com/Shizuku-Yume/ohpicha
 - The mobile prompt fragment after resize is normal bash redraw (it reproduces in plain tmux). Not a bug.
 
 ## Not covered yet (next steps)
-1. Follow pending #50 through merge and browser retest; complete the provider-echo redaction and native iOS pairing cold-launch checks above. Resume admission-fence investigation only if it recurs, capturing the first failed create/prepare/reopen. The startup GitHub 403 is an environment artifact, not a fix task.
+1. Browser-retest #50's daemon broker fix; complete the provider-echo redaction and native iOS pairing cold-launch checks above. Resume admission-fence investigation only if it recurs, capturing the first failed create/prepare/reopen. The startup GitHub 403 is an environment artifact, not a fix task.
 2. Electron packaged builds: installer, auto-updater, and the chooser on macOS and Windows. Mini-chat mouse-menu Undo/Redo.
 3. Actual mobile PWA installation, removed or disabled model fallback, the unconfirmed multi-tab Files search, and terminal clipboard paste and background project-action Stop after reconnect.
 4. iOS airplane mode (only a blocked route was tested).
