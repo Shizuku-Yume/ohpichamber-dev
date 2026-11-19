@@ -85,6 +85,7 @@ import { retryNativeResumeConnection } from './mobileResumeRetry';
 import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
 import { useDeepLinkHandlers, useDeepLinkSource } from './deepLinkNavigation';
+import { useMobilePairingConfirmation } from './useMobilePairingConfirmation';
 import { useEdgeSwipe } from './useEdgeSwipe';
 import { useNativePushRegistration } from './useNativePushRegistration';
 import { IpadSidebarResizeHandle } from './IpadSidebarResizeHandle';
@@ -743,7 +744,13 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
   );
 };
 
-function MobileAppContent({ apis }: MobileAppProps) {
+type MobileAppContentProps = MobileAppProps & {
+  connectionEpoch: number;
+  setConnectionEpoch: React.Dispatch<React.SetStateAction<number>>;
+  onPairing?: Parameters<typeof useDeepLinkSource>[0]['onPairing'];
+};
+
+function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing }: MobileAppContentProps) {
   const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
   const { t } = useI18n();
   const initializeApp = useConfigStore((state) => state.initializeApp);
@@ -771,7 +778,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
     [globalActiveSessions, globalArchivedSessions],
   );
   useAuthoritativeSessionCleanup({ hasAuthoritativeGlobalSessions, sessions: cleanupSessions });
-  const [connectionEpoch, setConnectionEpoch] = React.useState(0);
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
   const [showConnectionRecovery, setShowConnectionRecovery] = React.useState(false);
   // Cold-launch auto-connect to the last instance: 'pending'/'attempting' hold the
@@ -1282,7 +1288,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
   // scheme (widgets, Live Activities, external links). Registered unconditionally so a
   // cold-launch tap/open isn't lost on the connect/splash screen; intents stash until
   // the app is ready (connected + initialized) and shell handlers are registered.
-  useDeepLinkSource({ ready: isNativeMobileApp && isConnected && isInitialized });
+  useDeepLinkSource({ ready: isNativeMobileApp && isConnected && isInitialized, onPairing });
   const fontsReady = useFontsReady();
 
   // Keep an existing shell mounted on bootstrap health failures. The Host
@@ -1410,7 +1416,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
               <AppLinkConfirmDialog />
               <SharedTrustConfirmDialog />
               {isolatedSpacesEnabled ? <><SpaceAccessDialog /><SpaceActionsSheet /><SpaceApplyDialog /><SpaceDeleteDialog /><SpaceSetupOutputDialog /></> : null}
-              <MobileToaster />
             </div>
           </TooltipProvider>
         </RuntimeAPIProvider>
@@ -1419,6 +1424,21 @@ function MobileAppContent({ apis }: MobileAppProps) {
   );
 }
 
+function NativeMobileApp(props: MobileAppContentProps) {
+  const { setConnectionEpoch } = props;
+  const onConnected = React.useCallback(() => setConnectionEpoch((epoch) => epoch + 1), [setConnectionEpoch]);
+  const { onPairing, pairingConfirmation } = useMobilePairingConfirmation(onConnected);
+  return <>
+    <MobileAppContent {...props} onPairing={onPairing} />
+    {pairingConfirmation}
+  </>;
+}
+
 export function MobileApp(props: MobileAppProps) {
-  return <MobileAppContent {...props} />;
+  const [connectionEpoch, setConnectionEpoch] = React.useState(0);
+  const Root = isCapacitorMobileApp() ? NativeMobileApp : MobileAppContent;
+  return <>
+    <Root {...props} connectionEpoch={connectionEpoch} setConnectionEpoch={setConnectionEpoch} />
+    <MobileToaster />
+  </>;
 }
