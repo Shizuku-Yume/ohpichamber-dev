@@ -1,3 +1,5 @@
+
+
 /** Compaction settings strings (Settings > Sessions), merged into each locale's main dictionary. */
 export const compactionSettingsI18n = {
   en: {
@@ -151,47 +153,35 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.backgroundInfo': 'Gdy sesja zbliża się do kompaktowania, OpenCode pisze podsumowanie z wyprzedzeniem i podmienia je, gdy przychodzi pora, więc sesja na nie nie czeka. Podsumowanie, które nie zostanie użyte, i tak kosztuje tokeny.',
   },
   'zh-CN': {
-    'settings.openchamber.defaults.compaction.title': '压缩',
-    'settings.openchamber.defaults.compaction.auto': "自动压缩",
-    'settings.openchamber.defaults.compaction.autoInfo': "会话接近模型的上下文上限时，OpenCode 会自动总结；提供商以请求过长为由拒绝时，还会再总结一次。关闭后只有 /compact 会压缩，达到上限的会话会报错停止。",
-    'settings.openchamber.defaults.compaction.projectNote': "对所有项目生效。项目自己的 OpenCode 配置若设置了这些项，则保留其自己的值。",
-    'settings.openchamber.defaults.compaction.buffer': '距上限的余量',
-    'settings.openchamber.defaults.compaction.bufferInfo': '模型上下文窗口中保留空闲的比例。其余部分填满时开始压缩，所以 20% 会在用到 80% 时压缩。默认情况下 OpenCode 留出 15%，至少 16K。',
-    'settings.openchamber.defaults.compaction.bufferDefault': '默认（15%）',
-    'settings.openchamber.defaults.compaction.keep': '保留的近期上下文',
-    'settings.openchamber.defaults.compaction.keepInfo': '压缩后在摘要旁原样保留的最近对话量。越多越能保留准确细节，但留给新工作的空间越少。',
-    'settings.openchamber.defaults.compaction.keepDefault': '默认（{count}）',
-    'settings.openchamber.defaults.compaction.tokens': '{count} Token',
-    'settings.openchamber.defaults.compaction.background': '在后台压缩',
-<<<<<<< HEAD
-    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的实验性功能。会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 Token。约 64K Token 以下的会话不会使用。',
-||||||| bc50ba56aa
-    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的实验性功能。会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 token。约 64K token 以下的会话不会使用。',
-=======
-    'settings.openchamber.defaults.compaction.backgroundInfo': '会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 token。',
->>>>>>> upstream/main
-  },
+  'settings.openchamber.defaults.compaction.title': '压缩',
+  'settings.openchamber.defaults.compaction.auto': "自动压缩",
+  'settings.openchamber.defaults.compaction.autoInfo': "会话接近模型的上下文上限时，OpenCode 会自动总结；提供商以请求过长为由拒绝时，还会再总结一次。关闭后只有 /compact 会压缩，达到上限的会话会报错停止。",
+  'settings.openchamber.defaults.compaction.projectNote': "对所有项目生效。项目自己的 OpenCode 配置若设置了这些项，则保留其自己的值。",
+  'settings.openchamber.defaults.compaction.buffer': '距上限的余量',
+  'settings.openchamber.defaults.compaction.bufferInfo': '模型上下文窗口中保留空闲的比例。其余部分填满时开始压缩，所以 20% 会在用到 80% 时压缩。默认情况下 OpenCode 留出 15%，至少 16K。',
+  'settings.openchamber.defaults.compaction.bufferDefault': '默认（15%）',
+  'settings.openchamber.defaults.compaction.keep': '保留的近期上下文',
+  'settings.openchamber.defaults.compaction.keepInfo': '压缩后在摘要旁原样保留的最近对话量。越多越能保留准确细节，但留给新工作的空间越少。',
+  'settings.openchamber.defaults.compaction.keepDefault': '默认（{count}）',
+  'settings.openchamber.defaults.compaction.tokens': '{count} Token',
+  'settings.openchamber.defaults.compaction.background': '在后台压缩',
+  'settings.openchamber.defaults.compaction.backgroundInfo': '会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 token。'
+},
   'zh-TW': {
-    'settings.openchamber.defaults.compaction.title': '壓縮',
-    'settings.openchamber.defaults.compaction.auto': "自動壓縮",
-    'settings.openchamber.defaults.compaction.autoInfo': "工作階段接近模型的上下文上限時，OpenCode 會自動摘要；供應商以請求過長為由拒絕時，還會再摘要一次。關閉後只有 /compact 會壓縮，達到上限的工作階段會報錯停止。",
-    'settings.openchamber.defaults.compaction.projectNote': "對所有專案生效。專案自己的 OpenCode 設定若指定了這些項目，則保留其自己的值。",
-    'settings.openchamber.defaults.compaction.buffer': '距上限的餘量',
-    'settings.openchamber.defaults.compaction.bufferInfo': '模型上下文視窗中保留空閒的比例。其餘部分填滿時開始壓縮，所以 20% 會在用到 80% 時壓縮。預設情況下 OpenCode 會留出 15%，至少 16K。',
-    'settings.openchamber.defaults.compaction.bufferDefault': '預設（15%）',
-    'settings.openchamber.defaults.compaction.keep': '保留的近期上下文',
-    'settings.openchamber.defaults.compaction.keepInfo': '壓縮後在摘要旁原樣保留的最近對話量。越多越能保留準確細節，但留給新工作的空間越少。',
-    'settings.openchamber.defaults.compaction.keepDefault': '預設（{count}）',
-    'settings.openchamber.defaults.compaction.tokens': '{count} Token',
-    'settings.openchamber.defaults.compaction.background': '在背景壓縮',
-<<<<<<< HEAD
-    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的實驗性功能。工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 Token。約 64K Token 以下的工作階段不會使用。',
-||||||| bc50ba56aa
-    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的實驗性功能。工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 token。約 64K token 以下的工作階段不會使用。',
-=======
-    'settings.openchamber.defaults.compaction.backgroundInfo': '工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 token。',
->>>>>>> upstream/main
-  },
+  'settings.openchamber.defaults.compaction.title': '壓縮',
+  'settings.openchamber.defaults.compaction.auto': "自動壓縮",
+  'settings.openchamber.defaults.compaction.autoInfo': "工作階段接近模型的上下文上限時，OpenCode 會自動摘要；供應商以請求過長為由拒絕時，還會再摘要一次。關閉後只有 /compact 會壓縮，達到上限的工作階段會報錯停止。",
+  'settings.openchamber.defaults.compaction.projectNote': "對所有專案生效。專案自己的 OpenCode 設定若指定了這些項目，則保留其自己的值。",
+  'settings.openchamber.defaults.compaction.buffer': '距上限的餘量',
+  'settings.openchamber.defaults.compaction.bufferInfo': '模型上下文視窗中保留空閒的比例。其餘部分填滿時開始壓縮，所以 20% 會在用到 80% 時壓縮。預設情況下 OpenCode 會留出 15%，至少 16K。',
+  'settings.openchamber.defaults.compaction.bufferDefault': '預設（15%）',
+  'settings.openchamber.defaults.compaction.keep': '保留的近期上下文',
+  'settings.openchamber.defaults.compaction.keepInfo': '壓縮後在摘要旁原樣保留的最近對話量。越多越能保留準確細節，但留給新工作的空間越少。',
+  'settings.openchamber.defaults.compaction.keepDefault': '預設（{count}）',
+  'settings.openchamber.defaults.compaction.tokens': '{count} Token',
+  'settings.openchamber.defaults.compaction.background': '在背景壓縮',
+  'settings.openchamber.defaults.compaction.backgroundInfo': '工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 token。'
+},
   tr: {
     'settings.openchamber.defaults.compaction.title': 'Sıkıştırma',
     'settings.openchamber.defaults.compaction.auto': "Otomatik sıkıştır",
@@ -236,5 +226,5 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.tokens': '{count} טוקנים',
     'settings.openchamber.defaults.compaction.background': 'דחיסה ברקע',
     'settings.openchamber.defaults.compaction.backgroundInfo': 'כשהפעלה מתקרבת לדחיסה, OpenCode כותב את הסיכום מראש ומחליף אליו כשמגיע הזמן, כך שההפעלה לא נעצרת לחכות לו. סיכום שלא נוצל עדיין עולה טוקנים.',
-  },
+  }
 } as const;
