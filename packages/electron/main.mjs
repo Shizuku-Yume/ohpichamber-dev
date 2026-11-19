@@ -3728,6 +3728,9 @@ const setupAutoUpdater = () => {
 // 'error' event, long after the call returns. Give the install that long to
 // either take the app down or report why it did not.
 const UPDATE_INSTALL_GRACE_MS = 15_000;
+// On macOS the cached ZIP still needs to be unpacked and signature-checked
+// by Squirrel before it can take over the exit.
+const MAC_AUTOMATIC_UPDATE_INSTALL_GRACE_MS = 120_000;
 
 // Releasing terminals, the supervised Agent Service, and SSH sessions must not
 // hold the installer hostage: a stuck session would otherwise keep the app on
@@ -3826,7 +3829,9 @@ const installDownloadedUpdate = ({ automatic = false, relaunch = true } = {}) =>
         settled = true;
         autoUpdater.off('error', fail);
         resolve(null);
-      }, UPDATE_INSTALL_GRACE_MS);
+      }, automatic && process.platform === 'darwin'
+        ? MAC_AUTOMATIC_UPDATE_INSTALL_GRACE_MS
+        : UPDATE_INSTALL_GRACE_MS);
       state.quitRequested = true;
       state.installingUpdate = true;
       state.quitConfirmationPending = false;
