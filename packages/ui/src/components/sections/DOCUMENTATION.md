@@ -4,6 +4,16 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+## Voice credentials
+
+Voice Settings edits only the custom transcription key through the Host's
+`/api/voice/keys` endpoint. Its read and write responses require `{ stt: boolean }`;
+the saved placeholder and remove button follow that authoritative state. Legacy
+browser migration sends only `stt`, and keeps it locally if the write fails.
+Speech credentials are SDK-owned selected provider credentials, not Voice key
+fields. Web/PWA, Electron, hosted mobile and Capacitor use the same shared page
+and runtime transport contract.
+
 ## The OMP page
 
 `openchamber/OmpSettingsPage.tsx` draws the agent settings whose placement is
