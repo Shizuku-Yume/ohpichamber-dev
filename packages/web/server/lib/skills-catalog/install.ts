@@ -5,124 +5,17 @@ import path from 'path';
 import { assertGitAvailable, looksLikeAuthError, runGit } from './git.js';
 import { parseSkillRepoSource } from './source.js';
 import { removeDirectory, removeStaleCatalogFolders } from './remove-directory.js';
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-import { OPENCODE_CONFIG_DIR } from '../opencode/shared.js';
-=======
-import { OPENCODE_CONFIG_DIR } from '../opencode/config-files.js';
-import type { CatalogGitOptions, GitResult } from './git.js';
-import type { JsonObject, JsonValue } from '../shared/json-values.js';
-
-interface CatalogCloneOptions extends Pick<CatalogGitOptions, 'identity' | 'credentialResolver'> {
-  cloneUrl: string;
-  tempDir: string;
-  ref?: string | null;
-}
-
-type CatalogCloneResult = { ok: true } | { ok: false; error: GitResult };
-
-export interface SkillsInstallOptions extends Pick<CatalogGitOptions, 'identity' | 'credentialResolver'> {
-  source?: JsonValue | undefined;
-  subpath?: JsonValue | undefined;
-  defaultSubpath?: string;
-  scope?: JsonValue | undefined;
-  targetSource?: JsonValue | undefined;
-  workingDirectory?: string | null;
-  userSkillDir?: string | null;
-  selections?: { skillDir?: JsonValue }[] | null | undefined;
-  conflictPolicy?: JsonValue | undefined;
-  conflictDecisions?: JsonObject | null | undefined;
-}
-
-export interface SkillInstallConflict {
-  skillName: string;
-  scope: 'user' | 'project';
-  source: 'agents' | 'opencode';
-}
-
-export interface InstalledSkill extends SkillInstallConflict {
-  skillDir: string;
-}
-
-export interface SkippedSkill {
-  skillName: string;
-  reason: string;
-}
-
-export type SkillsInstallResult = {
-  ok: true;
-  installed: InstalledSkill[];
-  skipped: SkippedSkill[];
-} | {
-  ok: false;
-  error: {
-    kind: 'gitUnavailable' | 'unknown' | 'invalidSource' | 'conflicts' | 'authRequired' | 'networkError';
-    message: string;
-    conflicts?: SkillInstallConflict[];
-  };
-};
-
-interface TargetSkillOptions {
-  scope: 'user' | 'project';
-  targetSource: string | undefined;
-  workingDirectory: string | null | undefined;
-  userSkillDir: string;
-  skillName: string;
-}
-
-const isDefaultSubpath = (value: unknown): value is string => typeof value === 'string';
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
 
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
 
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-function normalizeUserSkillDir(userSkillDir) {
-  if (!userSkillDir) return null;
-  const legacySkillDir = path.join(OPENCODE_CONFIG_DIR, 'skill');
-  const pluralSkillDir = path.join(OPENCODE_CONFIG_DIR, 'skills');
-  if (userSkillDir === legacySkillDir) {
-    if (fs.existsSync(legacySkillDir) && !fs.existsSync(pluralSkillDir)) return legacySkillDir;
-    return pluralSkillDir;
-  }
-  return userSkillDir;
-}
-=======
-function normalizeUserSkillDir(userSkillDir: string | null | undefined) {
-  if (!userSkillDir) return null;
-  const legacySkillDir = path.join(OPENCODE_CONFIG_DIR, 'skill');
-  const pluralSkillDir = path.join(OPENCODE_CONFIG_DIR, 'skills');
-  if (userSkillDir === legacySkillDir) {
-    if (fs.existsSync(legacySkillDir) && !fs.existsSync(pluralSkillDir)) return legacySkillDir;
-    return pluralSkillDir;
-  }
-  return userSkillDir;
-}
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
 
 function validateSkillName(skillName: string) {
   if (skillName.length < 1 || skillName.length > 64) return false;
   return SKILL_NAME_PATTERN.test(skillName);
 }
 
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
 function toFsPath(repoDir, repoRelPosixPath) {
   return path.join(repoDir, ...repoRelPosixPath.split('/'));
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-function toFsPath(repoDir, repoRelPosixPath) {
-  const parts = String(repoRelPosixPath || '')
-    .split('/')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return path.join(repoDir, ...parts);
-=======
-function toFsPath(repoDir: string, repoRelPosixPath: string) {
-  const parts = String(repoRelPosixPath || '')
-    .split('/')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return path.join(repoDir, ...parts);
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
 }
 
 async function ensureDir(dirPath: string) {
@@ -192,82 +85,8 @@ async function cloneRepo({ cloneUrl, identity, credentialResolver, tempDir, ref 
   };
 }
 
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
 /** Prepare untrusted repository files; only the Host source owner may commit them. */
 export async function prepareSkillsFromRepository({ source, subpath, identity, credentialResolver, selections }, consume) {
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-function getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName }) {
-  const source = targetSource === 'agents' ? 'agents' : 'opencode';
-
-  if (scope === 'user') {
-    if (source === 'agents') {
-      return path.join(os.homedir(), '.agents', 'skills', skillName);
-    }
-    return path.join(userSkillDir, skillName);
-  }
-
-  if (!workingDirectory) {
-    throw new Error('workingDirectory is required for project installs');
-  }
-
-  if (source === 'agents') {
-    return path.join(workingDirectory, '.agents', 'skills', skillName);
-  }
-
-  return path.join(workingDirectory, '.opencode', 'skills', skillName);
-}
-
-export async function installSkillsFromRepository({
-  source,
-  subpath,
-  defaultSubpath,
-  identity,
-  credentialResolver,
-  scope,
-  targetSource,
-  workingDirectory,
-  userSkillDir,
-  selections,
-  conflictPolicy,
-  conflictDecisions,
-} = {}) {
-=======
-function getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName }: TargetSkillOptions) {
-  const source = targetSource === 'agents' ? 'agents' : 'opencode';
-
-  if (scope === 'user') {
-    if (source === 'agents') {
-      return path.join(os.homedir(), '.agents', 'skills', skillName);
-    }
-    return path.join(userSkillDir, skillName);
-  }
-
-  if (!workingDirectory) {
-    throw new Error('workingDirectory is required for project installs');
-  }
-
-  if (source === 'agents') {
-    return path.join(workingDirectory, '.agents', 'skills', skillName);
-  }
-
-  return path.join(workingDirectory, '.opencode', 'skills', skillName);
-}
-
-export async function installSkillsFromRepository({
-  source,
-  subpath,
-  defaultSubpath,
-  identity,
-  credentialResolver,
-  scope,
-  targetSource,
-  workingDirectory,
-  userSkillDir,
-  selections,
-  conflictPolicy,
-  conflictDecisions,
-}: SkillsInstallOptions = {}): Promise<SkillsInstallResult> {
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
   const gitCheck = await assertGitAvailable();
   if (!gitCheck.ok) return { ok: false, error: gitCheck.error };
   const parsed = parseSkillRepoSource(source, { subpath });
@@ -283,100 +102,7 @@ export async function installSkillsFromRepository({
   if (skillPlans.some(plan => !validateSkillName(plan.skillName)) || new Set(skillPlans.map(plan => plan.skillName)).size !== skillPlans.length) {
     return { ok: false, error: { kind: 'invalidSource', message: 'Invalid or duplicate skill name' } };
   }
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-
-  const effectiveSubpath = parsed.effectiveSubpath || (typeof defaultSubpath === 'string' && defaultSubpath.trim() ? defaultSubpath.trim() : null);
-  void effectiveSubpath;
-
-=======
-
-  const effectiveSubpath = parsed.effectiveSubpath || (isDefaultSubpath(defaultSubpath) && defaultSubpath.trim() ? defaultSubpath.trim() : null);
-  void effectiveSubpath;
-
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
   const cloneUrl = identity?.transport === 'ssh' ? parsed.cloneUrlSsh : parsed.cloneUrlHttps;
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-
-  const requestedDirs = Array.isArray(selections) ? selections.map((s) => String(s?.skillDir || '').trim()).filter(Boolean) : [];
-  if (requestedDirs.length === 0) {
-    return { ok: false, error: { kind: 'invalidSource', message: 'No skills selected for installation' } };
-  }
-
-  // Validate names early and compute conflicts without mutating.
-  const skillPlans = requestedDirs.map((skillDirPosix) => {
-    const skillName = path.posix.basename(skillDirPosix);
-    return { skillDirPosix, skillName, installable: validateSkillName(skillName) };
-  });
-
-  const conflicts = [];
-  for (const plan of skillPlans) {
-    if (!plan.installable) {
-      continue;
-    }
-
-    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
-    if (fs.existsSync(targetDir)) {
-      const decision = conflictDecisions?.[plan.skillName];
-      const hasAutoPolicy = conflictPolicy === 'skipAll' || conflictPolicy === 'overwriteAll';
-      if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.skillName, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
-      }
-    }
-  }
-
-  if (conflicts.length > 0) {
-    return {
-      ok: false,
-      error: {
-        kind: 'conflicts',
-        message: 'Some skills already exist in the selected scope',
-        conflicts,
-      },
-    };
-  }
-
-=======
-
-  const requestedDirs = Array.isArray(selections) ? selections.map((s) => String(s?.skillDir || '').trim()).filter(Boolean) : [];
-  if (requestedDirs.length === 0) {
-    return { ok: false, error: { kind: 'invalidSource', message: 'No skills selected for installation' } };
-  }
-
-  const skillPlans = requestedDirs.map((skillDirPosix) => {
-    const skillName = path.posix.basename(skillDirPosix);
-    return { skillDirPosix, skillName, installable: validateSkillName(skillName) };
-  });
-
-  const conflicts: SkillInstallConflict[] = [];
-  for (const plan of skillPlans) {
-    if (!plan.installable) {
-      continue;
-    }
-
-    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
-    if (fs.existsSync(targetDir)) {
-      const decision = conflictDecisions?.[plan.skillName];
-      const hasAutoPolicy = conflictPolicy === 'skipAll' || conflictPolicy === 'overwriteAll';
-      if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.skillName, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
-      }
-    }
-  }
-
-  if (conflicts.length > 0) {
-    return {
-      ok: false,
-      error: {
-        kind: 'conflicts',
-        message: 'Some skills already exist in the selected scope',
-        conflicts,
-      },
-    };
-  }
-
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
   void removeStaleCatalogFolders();
   const tempBase = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'openchamber-skills-install-'));
 
@@ -401,7 +127,6 @@ export async function installSkillsFromRepository({
       return { ok: false, error: { kind: 'unknown', message: checkoutResult.stderr || checkoutResult.message || 'Failed to checkout repository' } };
     }
 
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/install.js
     const stagingRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'openchamber-skills-stage-'));
     try {
       const installations = [];
@@ -419,102 +144,6 @@ export async function installSkillsFromRepository({
         const stagingDirectory = path.join(stagingRoot, plan.skillName);
         await copyDirectoryNoSymlinks(srcDir, stagingDirectory);
         installations.push({ name: plan.skillName, stagingDirectory });
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/install.js
-    const installed = [];
-    const skipped = [];
-
-    for (const plan of skillPlans) {
-      if (!plan.installable) {
-        skipped.push({ skillName: plan.skillName, reason: 'Invalid skill name (directory basename)' });
-        continue;
-      }
-
-      const srcDir = toFsPath(tempBase, plan.skillDirPosix);
-      const skillMdPath = path.join(srcDir, 'SKILL.md');
-      if (!fs.existsSync(skillMdPath)) {
-        skipped.push({ skillName: plan.skillName, reason: 'SKILL.md not found in selected directory' });
-        continue;
-      }
-
-      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
-      const exists = fs.existsSync(targetDir);
-
-      let decision = conflictDecisions?.[plan.skillName] || null;
-      if (!decision) {
-        if (exists && conflictPolicy === 'skipAll') decision = 'skip';
-        if (exists && conflictPolicy === 'overwriteAll') decision = 'overwrite';
-        if (!exists) decision = 'overwrite'; // no conflict, proceed
-      }
-
-      if (exists && decision === 'skip') {
-        skipped.push({ skillName: plan.skillName, reason: 'Already installed (skipped)' });
-        continue;
-      }
-
-      if (exists && decision === 'overwrite') {
-        await removeDirectory(targetDir);
-      }
-
-      // Ensure project parent directories exist
-      await ensureDir(path.dirname(targetDir));
-
-      try {
-        await copyDirectoryNoSymlinks(srcDir, targetDir);
-        installed.push({ skillName: plan.skillName, skillDir: plan.skillDirPosix, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
-      } catch (error) {
-        await removeDirectory(targetDir);
-        skipped.push({
-          skillName: plan.skillName,
-          reason: error instanceof Error ? error.message : 'Failed to copy skill files',
-        });
-=======
-    const installed: InstalledSkill[] = [];
-    const skipped: SkippedSkill[] = [];
-
-    for (const plan of skillPlans) {
-      if (!plan.installable) {
-        skipped.push({ skillName: plan.skillName, reason: 'Invalid skill name (directory basename)' });
-        continue;
-      }
-
-      const srcDir = toFsPath(tempBase, plan.skillDirPosix);
-      const skillMdPath = path.join(srcDir, 'SKILL.md');
-      if (!fs.existsSync(skillMdPath)) {
-        skipped.push({ skillName: plan.skillName, reason: 'SKILL.md not found in selected directory' });
-        continue;
-      }
-
-      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
-      const exists = fs.existsSync(targetDir);
-
-      let decision = conflictDecisions?.[plan.skillName] || null;
-      if (!decision) {
-        if (exists && conflictPolicy === 'skipAll') decision = 'skip';
-        if (exists && conflictPolicy === 'overwriteAll') decision = 'overwrite';
-        if (!exists) decision = 'overwrite';
-      }
-
-      if (exists && decision === 'skip') {
-        skipped.push({ skillName: plan.skillName, reason: 'Already installed (skipped)' });
-        continue;
-      }
-
-      if (exists && decision === 'overwrite') {
-        await removeDirectory(targetDir);
-      }
-
-      await ensureDir(path.dirname(targetDir));
-
-      try {
-        await copyDirectoryNoSymlinks(srcDir, targetDir);
-        installed.push({ skillName: plan.skillName, skillDir: plan.skillDirPosix, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
-      } catch (error) {
-        await removeDirectory(targetDir);
-        skipped.push({
-          skillName: plan.skillName,
-          reason: error instanceof Error ? error.message : 'Failed to copy skill files',
-        });
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/install.ts
       }
       return await consume(installations);
     } finally {

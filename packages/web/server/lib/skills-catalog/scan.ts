@@ -187,12 +187,6 @@ export async function scanSkillsRepository({
         .filter((p) => p.endsWith('/SKILL.md') || p === 'SKILL.md');
     }
 
-<<<<<<< HEAD:packages/web/server/lib/skills-catalog/scan.js
-    // Repository-root SKILL.md has no installable destination directory basename.
-||||||| bc50ba56aa:packages/web/server/lib/skills-catalog/scan.js
-    // Root-level SKILL.md doesn't map cleanly to OpenCode's "skill name == folder name" convention.
-=======
->>>>>>> upstream/main:packages/web/server/lib/skills-catalog/scan.ts
     const uniqueSkillDirs = Array.from(
       new Set(
         skillMdPaths
