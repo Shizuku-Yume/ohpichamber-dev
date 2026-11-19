@@ -47,6 +47,7 @@ import { getComposerHeightLimit, isComposerContentCapped } from './heightLimit';
 import { imeNewlineCleanup } from './imeNewline';
 import { restoreDeferredEnterModifiers } from '../keyboardPolicy';
 import { timerCaretBlink } from '@/lib/codemirror/caretBlink';
+import { focusedHistory } from '@/lib/codemirror/focusedHistory';
 
 export interface ComposerSelection {
     start: number;
@@ -325,6 +326,7 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                     doc: handlersRef.current.value,
                     extensions: [
                         history(),
+                        focusedHistory,
                         // `drawSelection()` must stay on every platform.
                         // `composerSelectionExtension()` changes only who
                         // paints the selection; removing `drawSelection()`

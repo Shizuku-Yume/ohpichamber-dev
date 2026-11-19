@@ -120,6 +120,7 @@ export const TitlebarLeftControls: React.FC = () => {
       <TooltipTrigger asChild>
        <button
         type="button"
+        onMouseDown={(event) => event.preventDefault()}
         onClick={handleOpenWindowsAppMenu}
         aria-label={t('header.actions.openAppMenuAria')}
         className={cn(ICON_BUTTON_CLASS, 'shrink-0')}

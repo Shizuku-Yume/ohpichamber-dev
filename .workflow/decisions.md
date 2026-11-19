@@ -1592,3 +1592,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** Treating malformed pairing links as server addresses.
 - **Because:** A network error does not tell the user to generate a new pairing link.
 - **Revisit when:** Mobile onboarding no longer accepts both pairing links and server addresses in the same field.
+
+## 2026-11-19 - Route native history to the focused editor
+
+- **Decided:** retain focus-scoped CodeMirror Undo/Redo, its regression tests, and the editor documentation in the fork.
+- **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
+- **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
+- **Revisit when:** upstream ports the same focused-editor history routing and tests.
