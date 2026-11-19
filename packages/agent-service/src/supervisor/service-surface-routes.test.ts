@@ -14,7 +14,6 @@ import {
  SessionControlAckSchema,
  SessionToolsCatalogSchema,
 } from '@openchamber/agent-contract';
-import type { ServiceResponse } from './service.ts';
 import { AgentService } from './service.ts';
 
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';

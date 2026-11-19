@@ -15,8 +15,6 @@ import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolv
 import { setRuntimeExtraHeaders } from '../../../ui/src/lib/runtime-auth.ts';
 import { WorkerReplySchema } from '../protocol.ts';
 import { AgentService } from './service.ts';
-import type { ServiceResponse } from './service.ts';
-import type { ProblemDetails } from '@openchamber/agent-contract';
 
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
 
