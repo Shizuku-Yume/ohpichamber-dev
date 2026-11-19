@@ -1578,6 +1578,22 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** upstream gates its binding reads on a repository probe itself, or its router already keeps `general` distinct from the settings root.
 - **Effort:** final-main-audit
 
+## 2026-11-19 - Confirm before closing a dirty file tab
+
+- **Decided:** the desktop tab strip defers single and bulk closes that include the dirty file until the editor confirms the close.
+- **Instead of:** closing directly from the strip and leaving confirmation to the editor's own close shortcut.
+- **Because:** the editor owns the draft, and a direct strip close silently loses it in Manual save mode.
+- **Mine:** yes
+- **Revisit when:** upstream routes all tab-close actions through its editor's unsaved-changes guard.
+
+## 2026-11-19 - One draft for draw.io source and preview
+
+- **Decided:** visual draw.io writes update the same draft as the source editor. The iframe receives the draft at mount and remounts when the host adopts an external write or discards the draft.
+- **Instead of:** keeping separate source and visual buffers and reconciling them at close and on every preview toggle.
+- **Because:** one draft makes close, save, and reload see the same edits without reloading the iframe on every visual change.
+- **Mine:** yes
+- **Revisit when:** upstream shares its draw.io source and visual draft and handles external file updates.
+
 ## 2026-11-19 - Preserve mobile Host authentication regression coverage
 
 - **Decided:** retain the fork versions of `packages/ui/src/apps/mobileNativeHttp.test.ts` and `packages/ui/src/apps/mobileReconnectForm.test.tsx` and classify their upstream differences with explicit decision rows in the drift ledger.

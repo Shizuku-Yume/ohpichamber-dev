@@ -90,6 +90,8 @@ import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 import { DirectoryRequests } from './files/directoryRequests';
 import { useFileTreeUpload } from './files/useFileTreeUpload';
+import { useFileDraftConfirmation } from './files/useFileDraftConfirmation';
+import { useFileAutosave } from './files/useFileAutosave';
 import { moveWorkspacePath } from './files/moveWorkspacePath';
 import { areDirectoryNodesEqual, buildFileTreeStatusIndex } from './files/fileTreeStatus';
 import { BinaryArtifact } from './files/previews/BinaryArtifact';
@@ -692,9 +694,12 @@ const Dialogs: React.FC<DialogsProps> = ({
     );
 };
 
+export type FileTabCloseGuard = (directoryKey: string, paths: readonly string[], close: () => void) => void;
+
 interface FilesViewProps {
   visible?: boolean;
   mode?: 'full' | 'editor-only';
+  fileTabCloseGuard?: React.RefObject<FileTabCloseGuard | null>;
   /**
    * For a host whose tab strip owns the open files (the context panel):
    * closing a file here, by Cmd/Ctrl+W or after the unsaved-changes prompt,
@@ -757,7 +762,7 @@ const FilePositionEditor = ({
   );
 };
 
-export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = true, onCloseFile }) => {
+export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = true, onCloseFile, fileTabCloseGuard }) => {
   const { t } = useI18n();
   const { files, runtime, git } = useRuntimeAPIs();
   const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
@@ -1058,13 +1063,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const [isSaving, setIsSaving] = React.useState(false);
   const [loadedFileLineEnding, setLoadedFileLineEnding] = React.useState<FileLineEnding>('\n');
   const dialogInputRef = React.useRef<HTMLInputElement>(null);
-  const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const diagramAutoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const diagramXmlRef = React.useRef('');
-  const diagramSavedXmlRef = React.useRef('');
-  const pendingDrawioPreviewFrameRef = React.useRef<number | null>(null);
   const pendingCanvasPreviewFrameRef = React.useRef<number | null>(null);
-  const diagramEditorRef = React.useRef<React.ComponentRef<typeof DiagramEditor>>(null);
   const canvasEditorRef = React.useRef<FileCanvasHandle | null>(null);
   const [canvasDirty, setCanvasDirty] = React.useState(false);
   const canvasDirtyRef = React.useRef(false);
@@ -1080,25 +1079,17 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const loadingFilePathRef = React.useRef<string | null>(null);
   const [fileContentRevision, setFileContentRevision] = React.useState(0);
   const [autoSaveStatus, setAutoSaveStatus] = React.useState<'idle' | 'saved'>('idle');
-  const [diagramSaved, setDiagramSaved] = React.useState(false);
   const [canvasSaved, setCanvasSaved] = React.useState(false);
   const [contentDetectedBinary, setContentDetectedBinary] = React.useState(false);
   const autoSaveEnabled = useUIStore((state) => state.autoSaveEnabled);
   const setAutoSaveEnabled = useUIStore((state) => state.setAutoSaveEnabled);
 
-  const [confirmDiscardOpen, setConfirmDiscardOpen] = React.useState(false);
-  const pendingSelectFileRef = React.useRef<FileNode | null>(null);
-  const pendingClosePathRef = React.useRef<string | null>(null);
-  const skipDirtyOnceRef = React.useRef(false);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
   // The canvas has no CodeMirror wrapper; Cmd/Ctrl+S must reach it too.
   const canvasWrapperRef = React.useRef<HTMLDivElement | null>(null);
-  // Last drawing change, so autosave waits until the user stops drawing. A ref:
-  // strokes arrive every frame and must not re-render this view.
-  const canvasLastEditAtRef = React.useRef(0);
   const [editorViewReadyNonce, setEditorViewReadyNonce] = React.useState(0);
   const pendingNavigationRafRef = React.useRef<number | null>(null);
   const pendingNavigationCycleRef = React.useRef<{ key: string; attempts: number; targetShown: boolean }>({ key: '', attempts: 0, targetShown: false });
@@ -1816,8 +1807,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     lastLoadedFileRevisionRef.current += 1;
     setLoadedFileLineEnding(lineEnding);
     setFileContent(editorContent);
-    diagramXmlRef.current = editorContent;
-    diagramSavedXmlRef.current = editorContent;
+    if (isDrawioFile(selectedFilePathRef.current)) setDrawioRemountNonce((nonce) => nonce + 1);
     setDraftContent(editorContent);
     return editorContent;
   }, []);
@@ -1926,10 +1916,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
           }
         }
       }
-      if (selectedFile?.path && isDrawioFile(selectedFile.path)) {
-        diagramXmlRef.current = draftContent;
-        diagramSavedXmlRef.current = draftContent;
-      }
       // Refresh stat after write so polling doesn't see a stale metadata change.
       void readFileStat(selectedFile.path)
         .then((stat) => {
@@ -1948,84 +1934,70 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   }, [applyLoadedTextContent, contentDetectedBinary, draftContent, canvasDirty, fileContent, fileLoading, files, isDirty, loadedFileLineEnding, loadedFilePath, readFileStat, root, selectedFile, t]);
   saveDraftRef.current = saveDraft;
 
-  React.useEffect(() => {
-    if (autoSaveEnabled) {
-      return;
-    }
+  const discardDraft = React.useCallback(() => {
+    setCanvasDirty(false);
+    setCanvasRemountNonce((nonce) => nonce + 1);
+    if (isDrawioFile(selectedFilePath)) setDrawioRemountNonce((nonce) => nonce + 1);
+    setDraftContent(fileContent);
+  }, [fileContent, selectedFilePath]);
 
-    setAutoSaveStatus('idle');
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
-  }, [autoSaveEnabled]);
+  const {
+    open: confirmDiscardOpen,
+    confirm: confirmDraftAction,
+    isPending: isDraftActionPending,
+    cancel: cancelConfirmation,
+    discard: discardAndContinue,
+    save: saveAndContinue,
+  } = useFileDraftConfirmation({
+    scope: fileScope,
+    path: selectedFilePath,
+    isDirty,
+    isSaving,
+    saveDraft,
+    discardDraft,
+  });
 
-  // Auto-save: debounce 1.5s after user stops typing
-  const AUTO_SAVE_DELAY = 1500;
+  const cancelDraftAction = React.useCallback(() => {
+    if (cancelConfirmation()) setPendingFileNavigation(null);
+  }, [cancelConfirmation, setPendingFileNavigation]);
 
-  React.useEffect(() => {
-    const canWrite = Boolean(selectedFile && files.writeFile);
-    const selectedIsBinary = Boolean(selectedFile?.path && (isBinaryFile(selectedFile.path) || contentDetectedBinary)) && !binaryCanvasRef.current;
-    if (!shouldScheduleFileAutosave({
+  const saveWithStatus = React.useCallback(() => {
+    void saveDraft().then((saved) => {
+      if (!saved) return;
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    });
+  }, [saveDraft]);
+  const { cancel: cancelAutosave, noteCanvasEdit } = useFileAutosave({
+    eligible: shouldScheduleFileAutosave({
       autoSaveEnabled,
       isDirty,
-      canWrite,
+      canWrite: Boolean(files.writeFile),
       isSaving,
       fileLoading,
-      selectedFilePath: selectedFile?.path,
+      selectedFilePath,
       loadedFilePath,
-      isNonEditableBinary: selectedIsBinary,
+      isNonEditableBinary: (isBinaryFile(selectedFilePath) || contentDetectedBinary) && !binaryCanvasRef.current,
       wouldEmptyFile: draftContent === '' && fileContent !== '',
-    })) {
-      return;
-    }
+    }),
+    scope: JSON.stringify([fileScope, selectedFilePath]),
+    draft: draftContent,
+    baseline: fileContent,
+    canvasDirty,
+    isPaused: confirmDiscardOpen,
+    isPauseRequested: isDraftActionPending,
+    save: saveWithStatus,
+  });
 
-    // Drawing changes no dependency here (the draft stays put while the canvas
-    // is dirty), so the timer re-arms itself until the canvas has been quiet
-    // for the full delay, like typing does.
-    const schedule = (delay: number) => {
-      autoSaveTimerRef.current = setTimeout(() => {
-        const quietFor = Date.now() - canvasLastEditAtRef.current;
-        if (quietFor < AUTO_SAVE_DELAY) {
-          schedule(AUTO_SAVE_DELAY - quietFor);
-          return;
-        }
-        void saveDraft().then((saved) => {
-          if (!saved) return;
-          setAutoSaveStatus('saved');
-          setTimeout(() => setAutoSaveStatus('idle'), 2000);
-        });
-      }, delay);
-    };
-    schedule(AUTO_SAVE_DELAY);
-
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = null;
-      }
-    };
-  }, [autoSaveEnabled, contentDetectedBinary, draftContent, fileContent, fileLoading, isDirty, loadedFilePath, selectedFile, files.writeFile, isSaving, saveDraft]);
-
-  // Reset auto-save status when switching files
   React.useEffect(() => {
     setAutoSaveStatus('idle');
-  }, [selectedFile?.path]);
+  }, [autoSaveEnabled, selectedFilePath]);
 
   const saveNow = React.useCallback(() => {
-    // Cancel pending auto-save because the explicit save should run immediately.
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
-    if (!isSaving) {
-      void saveDraft().then((saved) => {
-        if (!saved) return;
-        setAutoSaveStatus('saved');
-        setTimeout(() => setAutoSaveStatus('idle'), 2000);
-      });
-    }
-  }, [isSaving, saveDraft]);
+    if (isSaving || isDraftActionPending()) return;
+    cancelAutosave();
+    saveWithStatus();
+  }, [cancelAutosave, isDraftActionPending, isSaving, saveWithStatus]);
 
   useKeybinds({
     // An extension editor's frame never forwards key events here; it sends
@@ -2247,15 +2219,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     return filesList[index + 1] ?? filesList[index - 1] ?? null;
   }, []);
 
-  const handleSelectFile = React.useCallback(async (node: FileNode) => {
-    if (skipDirtyOnceRef.current) {
-      skipDirtyOnceRef.current = false;
-    } else if (isDirty) {
-      setConfirmDiscardOpen(true);
-      pendingSelectFileRef.current = node;
-      return;
-    }
-
+  const selectFile = React.useCallback((node: FileNode) => {
     if (root) {
       setSelectedPath(root, node.path);
       void ensurePathVisible(node.path, false);
@@ -2264,15 +2228,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     setFileError(null);
     setDesktopImageSrc('');
     setFileContent('');
-    diagramXmlRef.current = '';
-    diagramSavedXmlRef.current = '';
     setCanvasDirty(false);
     setDraftContent('');
     setLoadedFilePath(null);
     if (isMobile) {
       setShowMobilePageContent(true);
     }
-  }, [ensurePathVisible, isDirty, isMobile, root, setSelectedPath]);
+  }, [ensurePathVisible, isMobile, root, setSelectedPath]);
+
+  const handleSelectFile = React.useCallback((node: FileNode) => {
+    if (isDirty) {
+      confirmDraftAction(() => selectFile(node));
+    } else {
+      selectFile(node);
+    }
+  }, [confirmDraftAction, isDirty, selectFile]);
 
   React.useEffect(() => {
     if (!selectedFile?.path) {
@@ -2379,11 +2349,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     const showsFailure = failedFilePath === selectedPath;
     const requestRuntime = getRuntimeKey();
     const requestScope = fileScopeRef.current;
-    // draw.io preview edits live in the XML refs, not the draft buffer, so an
-    // in-place content swap has to treat them as unsaved too.
-    const hasUnsavedChanges = () => isDirtyRef.current || (
-      isDrawioFile(selectedPath) && diagramXmlRef.current !== diagramSavedXmlRef.current
-    );
+    const hasUnsavedChanges = () => isDirtyRef.current;
     // Same exclusions as `isTextFile`: `isBinaryFile` covers PDFs, `isImageFile` covers SVG.
     const contentPoller = !isBinaryFile(selectedPath) && !isImageFile(selectedPath) && !contentDetectedBinary
       ? createFileContentPoller({
@@ -2508,7 +2474,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     }
 
     if (nextFile) {
-      void handleSelectFile(nextFile);
+      selectFile(nextFile);
       return;
     }
 
@@ -2522,80 +2488,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (isMobile) {
       setShowMobilePageContent(false);
     }
-  }, [handleSelectFile, isMobile, onCloseFile, removeOpenPath, root, selectedFile?.path, setSelectedPath]);
+  }, [isMobile, onCloseFile, removeOpenPath, root, selectFile, selectedFile?.path, setSelectedPath]);
 
-  const discardAndContinue = React.useCallback(() => {
-    const nextFile = pendingSelectFileRef.current;
-    const closePath = pendingClosePathRef.current;
-
-    pendingSelectFileRef.current = null;
-    pendingClosePathRef.current = null;
-
-    // Allow one guarded navigation (tab/file) without re-opening dialog.
-    skipDirtyOnceRef.current = true;
-
-    setConfirmDiscardOpen(false);
-
-    // Discard draft by reverting back to last loaded content
-    setCanvasDirty(false);
-    setCanvasRemountNonce((nonce) => nonce + 1);
-    setDraftContent(fileContent);
-
-    if (closePath) {
-      closeOpenFile(closePath, nextFile);
-      return;
-    }
-
-    if (nextFile) {
-      void handleSelectFile(nextFile);
-      return;
-    }
-
-  }, [closeOpenFile, fileContent, handleSelectFile]);
-
-  const saveAndContinue = React.useCallback(async () => {
-    const nextFile = pendingSelectFileRef.current;
-    const closePath = pendingClosePathRef.current;
-
-    const saved = await saveDraft();
-    if (!saved) {
-      skipDirtyOnceRef.current = false;
-      return;
-    }
-
-    pendingSelectFileRef.current = null;
-    pendingClosePathRef.current = null;
-
-    // We'll proceed after saving; suppress guard reopening.
-    skipDirtyOnceRef.current = true;
-
-    setConfirmDiscardOpen(false);
-
-    if (closePath) {
-      closeOpenFile(closePath, nextFile);
-      return;
-    }
-
-    if (nextFile) {
-      await handleSelectFile(nextFile);
-      return;
-    }
-
-  }, [closeOpenFile, handleSelectFile, saveDraft]);
+  React.useLayoutEffect(() => {
+    if (!fileTabCloseGuard) return;
+    const guard: FileTabCloseGuard = (directoryKey, paths, close) => {
+      if (directoryKey === normalizeContextPanelDirectoryKey(panelRoot)
+        && selectedFile && isDirty && paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path))) {
+        confirmDraftAction(close);
+      } else {
+        close();
+      }
+    };
+    fileTabCloseGuard.current = guard;
+    return () => {
+      if (fileTabCloseGuard.current === guard) fileTabCloseGuard.current = null;
+    };
+  }, [confirmDraftAction, fileTabCloseGuard, isDirty, panelRoot, selectedFile]);
 
   const handleCloseFile = React.useCallback((path: string) => {
-    const isActive = selectedFile?.path === path;
-    const nextFile = getNextOpenFile(path, openFiles);
-
-    if (isActive && isDirty) {
-      setConfirmDiscardOpen(true);
-      pendingSelectFileRef.current = nextFile;
-      pendingClosePathRef.current = path;
-      return;
+    const close = () => closeOpenFile(path, getNextOpenFile(path, openFiles));
+    if (selectedFile?.path === path && isDirty) {
+      confirmDraftAction(close);
+    } else {
+      close();
     }
-
-    closeOpenFile(path, nextFile);
-  }, [closeOpenFile, getNextOpenFile, isDirty, openFiles, selectedFile?.path]);
+  }, [closeOpenFile, confirmDraftAction, getNextOpenFile, isDirty, openFiles, selectedFile?.path]);
 
   // While a file is open here, Cmd/Ctrl+W closes its tab (asking first when
   // it has unsaved edits) instead of the whole window.
@@ -3000,34 +2918,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (selectedPath) {
       drawioViewModeByPathRef.current[selectedPath] = mode;
     }
-    if (diagramAutoSaveTimerRef.current) {
-      clearTimeout(diagramAutoSaveTimerRef.current);
-      diagramAutoSaveTimerRef.current = null;
-    }
-    if (pendingDrawioPreviewFrameRef.current !== null) {
-      cancelAnimationFrame(pendingDrawioPreviewFrameRef.current);
-      pendingDrawioPreviewFrameRef.current = null;
-    }
-    if (mode === 'edit') {
-      setDraftContent(diagramXmlRef.current || fileContent);
-      setDrawioViewMode(mode);
-    } else {
-      diagramXmlRef.current = draftContent;
-      const pathAtToggle = selectedPath;
-      setDrawioViewMode('edit');
-      pendingDrawioPreviewFrameRef.current = requestAnimationFrame(() => {
-        pendingDrawioPreviewFrameRef.current = requestAnimationFrame(() => {
-          pendingDrawioPreviewFrameRef.current = null;
-          if (root && pathAtToggle && useFilesViewTabsStore.getState().byRoot[root]?.selectedPath !== pathAtToggle) {
-            return;
-          }
-          setDrawioRemountNonce((value) => value + 1);
-          setDrawioViewMode('preview');
-        });
-      });
-      return;
-    }
-  }, [draftContent, fileContent, root, selectedFile?.path]);
+    setDrawioViewMode(mode);
+  }, [selectedFile?.path]);
 
   const saveCanvasViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -3075,71 +2967,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       setCanvasViewMode('preview');
     });
   }, [canMountCanvas, fileContent, guestFileEditor, root, selectedFile?.path, t]);
-
-  const saveDiagramXml = React.useCallback(async (path: string, xml: string) => {
-    if (!files.writeFile || xml === diagramSavedXmlRef.current) {
-      return false;
-    }
-    if (pendingPathMoveRef.current || isFilePathMoveInFlight(path)) {
-      return false;
-    }
-
-    const result = await files.writeFile(path, xml);
-    if (!result?.success) {
-      toast.error(t('filesView.toast.writeFileFailed'));
-      return false;
-    }
-
-    applyLoadedTextContent(xml);
-    const stat = await readFileStat(path).catch(() => null);
-    if (stat) {
-      lastLoadedFileStatRef.current = stat;
-    }
-    return true;
-  }, [applyLoadedTextContent, files, readFileStat, t]);
-
-  React.useEffect(() => {
-    return () => {
-      if (diagramAutoSaveTimerRef.current) {
-        clearTimeout(diagramAutoSaveTimerRef.current);
-        diagramAutoSaveTimerRef.current = null;
-      }
-      if (pendingDrawioPreviewFrameRef.current !== null) {
-        cancelAnimationFrame(pendingDrawioPreviewFrameRef.current);
-        pendingDrawioPreviewFrameRef.current = null;
-      }
-    };
-  }, [drawioViewMode, selectedFile?.path]);
-
-  const handleDiagramChange = React.useCallback((xml: string) => {
-    diagramXmlRef.current = xml;
-    if (!autoSaveEnabled || !selectedFile?.path || drawioViewMode !== 'preview' || !files.writeFile) {
-      return;
-    }
-
-    if (diagramAutoSaveTimerRef.current) {
-      clearTimeout(diagramAutoSaveTimerRef.current);
-    }
-
-    const path = selectedFile.path;
-    diagramAutoSaveTimerRef.current = setTimeout(() => {
-      diagramAutoSaveTimerRef.current = null;
-      void saveDiagramXml(path, xml).then((saved) => {
-        if (!saved) return;
-        setDiagramSaved(true);
-        setTimeout(() => setDiagramSaved(false), 1500);
-      }).catch((error) => {
-        toast.error(error instanceof Error ? error.message : t('filesView.toast.saveFailed'));
-      });
-    }, AUTO_SAVE_DELAY);
-  }, [autoSaveEnabled, drawioViewMode, files.writeFile, saveDiagramXml, selectedFile?.path, t]);
-
-  const diagramEditorXml = React.useMemo(() => {
-    if (!isDrawio) {
-      return fileContent;
-    }
-    return diagramXmlRef.current || draftContent || fileContent;
-  }, [draftContent, fileContent, isDrawio]);
 
   const handleCanvasUnsupported = React.useCallback(() => {
     const path = selectedFilePathRef.current;
@@ -3590,6 +3417,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       .find((tab) => tab.preview && tab.targetPath === selectedFile.path);
     if (previewTab) state.pinContextPanelTab(directoryKey, previewTab.id);
   };
+  const handleDiagramChange = React.useCallback((xml: string) => {
+    setDraftContent(prepareFileEditorContent(xml).content);
+    pinPreviewOnEditRef.current();
+  }, []);
   const pinPreviewOnEditExtension = React.useMemo(() => EditorView.updateListener.of((update) => {
     if (!update.docChanged) return;
     const edited = update.transactions.some((transaction) => (
@@ -4602,23 +4433,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={async () => {
-                  const xml = diagramEditorRef.current?.getXml();
-                  if (diagramAutoSaveTimerRef.current) {
-                    clearTimeout(diagramAutoSaveTimerRef.current);
-                    diagramAutoSaveTimerRef.current = null;
-                  }
-                  if (selectedFile?.path && xml) {
-                    const saved = await saveDiagramXml(selectedFile.path, xml);
-                    if (!saved) return;
-                    setDiagramSaved(true);
-                    setTimeout(() => setDiagramSaved(false), 1500);
-                  }
-                }}
+                onClick={saveNow}
+                disabled={isSaving}
                 className="size-6 p-0 text-foreground hover:bg-transparent focus-visible:bg-transparent active:bg-transparent"
                 title={t('filesView.diagram.saveDiagram')}
               >
-                {diagramSaved ? (
+                {autoSaveStatus === 'saved' ? (
                   <Icon name="check" className="size-4 text-[color:var(--status-success)]" />
                 ) : (
                   <Icon name="save-3" className="size-4" />
@@ -4799,7 +4619,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         loadBytes={loadCanvasBytes}
         readOnly={!selectedFile || selectedFileIsOutsideWorkspace || !files.writeFile || (binaryCanvas && !files.uploadFile)}
         onDirtyChange={setCanvasDirty}
-        onEdit={() => { canvasLastEditAtRef.current = Date.now(); }}
+        onEdit={noteCanvasEdit}
         onSaveRequest={saveNow}
         onUnsupported={handleCanvasUnsupported}
         onTooLarge={() => handleCanvasLoadProblem(t('filesView.fileEditor.tooLarge', { editor: guestFileEditor.editor.title }))}
@@ -4819,10 +4639,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
     >
       <Dialog open={confirmDiscardOpen} onOpenChange={(open) => {
-        // Intentionally no "cancel" action. Keep dialog modal.
-        if (!open) {
-          setConfirmDiscardOpen(true);
-        }
+        if (!open) cancelDraftAction();
       }}>
         <DialogContent showCloseButton={false} className="max-w-md">
           <DialogHeader>
@@ -4832,6 +4649,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            <Button variant="outline" onClick={cancelDraftAction} disabled={isSaving}>{t('filesView.dialog.cancel')}</Button>
             <Button
               variant="outline"
               onClick={() => void saveAndContinue()}
@@ -4840,7 +4658,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             >
               {t('filesView.unsaved.saveChanges')}
             </Button>
-            <Button variant="destructive" onClick={discardAndContinue}>{t('filesView.unsaved.discard')}</Button>
+            <Button variant="destructive" onClick={discardAndContinue} disabled={isSaving}>{t('filesView.unsaved.discard')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5045,8 +4863,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             <div className="h-full overflow-hidden" style={{ minHeight: '400px' }}>
               <DiagramEditor
                 key={`${editorDocumentPath ?? selectedFile.path}:${drawioRemountNonce}`}
-                ref={diagramEditorRef}
-                xml={diagramEditorXml}
+                initialXml={draftContent}
                 onChange={handleDiagramChange}
               />
             </div>

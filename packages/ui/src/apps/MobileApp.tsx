@@ -371,6 +371,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const registerSettingsBackHandler = React.useCallback((handler: (() => boolean) | null) => {
     settingsBackRef.current = handler;
   }, []);
+  const workspaceBackRef = React.useRef<(() => boolean) | null>(null);
+  const registerWorkspaceBackHandler = React.useCallback((handler: (() => boolean) | null) => {
+    workspaceBackRef.current = handler;
+  }, []);
 
   // Top-most layer first: a plan or fullscreen surface can sit ABOVE a drawer
   // (opened from the drawer footer / workspace tabs), so they close before the
@@ -393,6 +397,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return true;
     }
     if (workspaceOpen) {
+      if (workspaceBackRef.current?.()) return true;
       closeWorkspace();
       return true;
     }
@@ -585,6 +590,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
               <MobileWorkspaceDrawer
                 open={workspaceOpen}
                 onClose={closeWorkspace}
+                registerBackHandler={registerWorkspaceBackHandler}
                 tab={workspaceTab}
                 onTabChange={setWorkspaceTab}
                 pendingChangesDiff={pendingChangesDiff}
