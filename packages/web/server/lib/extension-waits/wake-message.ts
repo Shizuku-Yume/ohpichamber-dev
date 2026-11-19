@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { waitArgsSchema } from '@openchamber/sdk/schemas';
+import type { waitArgsSchema } from 'ohpichamber-sdk/schemas';
 
 import { escapeAttribute } from '../dispatch-results/runtime.js';
 
