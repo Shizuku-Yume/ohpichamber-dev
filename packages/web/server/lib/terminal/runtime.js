@@ -17,6 +17,7 @@ import { isOpaqueOriginRequest, isPasswordlessSocketOriginAllowed } from '../sec
 
 const MAX_SESSIONS = 20;
 const MAX_HISTORY_BYTES = 512 * 1024;
+const MAX_HISTORY_RESIZES = 256;
 const HISTORY_SEGMENT_BYTES = 8 * 1024;
 const MAX_SOCKET_BUFFER_BYTES = 4 * 1024 * 1024;
 const OUTPUT_BATCH_MS = 12;
@@ -87,10 +88,30 @@ const findPendingActionCreate = (pendingSessionCreates, resolvedCwd, purpose) =>
   }
   return null;
 };
-const newHistory = () => ({ chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '' });
+const newHistory = (cols, rows) => ({
+  chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '',
+  units: 0, sizes: [{ offset: 0, cols, rows }],
+});
 const historyText = (history) => history.original
   ? history.original.join('') + history.originalTail
   : Buffer.concat(history.chunks.slice(history.head).map((chunk, index) => chunk.buffer.subarray(index === 0 ? history.offset : 0, chunk.length))).toString('utf8');
+const recordHistoryResize = (history, cols, rows) => {
+  const offset = history.units;
+  const sizes = history.sizes;
+  if (sizes.at(-1).offset === offset) sizes.pop();
+  sizes.push({ offset, cols, rows });
+  if (sizes.length > MAX_HISTORY_RESIZES) sizes.shift();
+};
+const snapshotHistory = (history) => {
+  let text = historyText(history);
+  const retainedStart = history.units - text.length;
+  const start = Math.max(retainedStart, history.sizes[0].offset);
+  if (start > retainedStart) text = text.slice(start - retainedStart);
+  const nextSize = history.sizes.findIndex((size) => size.offset > start);
+  const sizes = history.sizes.slice(nextSize < 0 ? -1 : nextSize - 1)
+    .map((size) => ({ ...size, offset: Math.max(0, size.offset - start) }));
+  return sizes.length > 1 ? { history: text, sizes } : { history: text };
+};
 const appendHistoryBytes = (history, bytes) => {
   let offset = 0;
   while (offset < bytes.length) {
@@ -131,6 +152,7 @@ const appendOriginal = (history, text) => {
 };
 const appendHistory = (history, text) => {
   if (!text) return;
+  history.units += text.length;
   // Buffer.from encodes an unmatched high surrogate as U+FFFD. Until the first
   // trim, the next chunk can still complete that UTF-16 pair.
   let encoded = text;
@@ -335,10 +357,7 @@ export function createTerminalRuntime({
   };
 
   const snapshot = (session) => ({
-    t: 'snapshot', v: 3, s: session.id, q: session.sequence, history: historyText(session.history),
-    // The PTY size the history was drawn for: a client replays history at this
-    // size before fitting its own viewport, so shell output wrapped for one
-    // width never gets re-laid-out at another.
+    t: 'snapshot', v: 3, s: session.id, q: session.sequence, ...snapshotHistory(session.history),
     cols: session.cols, rows: session.rows,
     status: session.status, exitCode: session.exitCode, signal: session.signal,
     mode: session.mode ?? INTERACTIVE_TERMINAL_MODE, purpose: getSessionPurpose(session),
@@ -428,7 +447,7 @@ export function createTerminalRuntime({
   const startSession = async (session, { cwd, cols, rows, themeMode = 'dark', terminalBackground, terminalForeground, shell, loginShell, mode = INTERACTIVE_TERMINAL_MODE, command = null, purpose = TERMINAL_PURPOSE }, clear = true) => {
     await validateCwd(cwd);
     const spawned = await spawnPty({ cwd, cols, rows, themeMode, shell, loginShell, mode, command });
-    if (clear) { discardOutput(session); session.history = newHistory(); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; }
+    if (clear) { discardOutput(session); session.history = newHistory(cols, rows); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; }
     session.retired = false;
     session.cwd = cwd; session.cols = cols; session.rows = rows; session.process = spawned.process;
     session.backend = spawned.backend; session.shell = spawned.shell; session.loginShell = spawned.loginShell; session.status = 'running'; session.exitCode = null; session.signal = null;
@@ -493,7 +512,7 @@ export function createTerminalRuntime({
     if (!existing && sessions.size - superseded.length + pendingSessionCreates.size >= MAX_SESSIONS) throw new Error('Maximum terminal sessions reached');
     const pendingEntry = { cwd: resolvedCwd, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose, cancelled: false, promise: null };
     const creation = (async () => {
-      const session = existing ?? { id, sequence: 0, history: newHistory(), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
+      const session = existing ?? { id, sequence: 0, history: newHistory(cols, rows), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
       const ptyProcess = await startSession(session, { cwd, cols, rows, themeMode, terminalBackground, terminalForeground, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose });
       if (pendingEntry.cancelled) {
         session.retired = true;
@@ -668,7 +687,16 @@ export function createTerminalRuntime({
     if (!session) return res.status(404).json({ error: 'Terminal session not found' });
     const { cols, rows } = req.body ?? {};
     if (!validateSize(cols, 1000) || !validateSize(rows, 500)) return res.status(400).json({ error: 'Invalid terminal dimensions' });
-    try { if (session.status === 'running') session.process?.resize(cols, rows); session.cols = cols; session.rows = rows; res.json({ success: true, cols, rows }); }
+    try {
+      if (session.status === 'running' && (cols !== session.cols || rows !== session.rows)) {
+        flushOutput(session);
+        session.process?.resize(cols, rows);
+        session.cols = cols; session.rows = rows;
+        recordHistoryResize(session.history, cols, rows);
+        publish(session, { t: 'resize', cols, rows });
+      }
+      res.json({ success: true, cols: session.cols, rows: session.rows });
+    }
     catch (error) { res.status(500).json({ error: error?.message || 'Failed to resize terminal' }); }
   });
   app.post('/api/terminal/:sessionId/appearance', (req, res) => {
@@ -704,9 +732,9 @@ export function createTerminalRuntime({
       session.process = spawned.process; session.backend = spawned.backend; session.shell = spawned.shell; session.loginShell = spawned.loginShell; session.cwd = cwd; session.cols = cols; session.rows = rows;
       session.shellExecutable = spawned.shellExecutable;
       flushOutput(session);
-      session.history = newHistory(); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; session.status = 'running'; session.exitCode = null; session.signal = null; session.eventQueue.length = 0;
+      session.history = newHistory(cols, rows); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; session.status = 'running'; session.exitCode = null; session.signal = null; session.eventQueue.length = 0;
       session.themeMode = themeMode === 'light' ? 'light' : 'dark'; session.terminalBackground = terminalBackground; session.terminalForeground = terminalForeground;
-      wire(session, spawned.process); void terminateProcess(oldProcess); publish(session, { t: 'restarted', history: '' });
+      wire(session, spawned.process); void terminateProcess(oldProcess); publish(session, { t: 'restarted', history: '', cols, rows });
       announceSessionsChanged();
     });
     pendingSessionRestarts.set(session.id, restart);

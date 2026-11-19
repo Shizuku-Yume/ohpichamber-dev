@@ -149,14 +149,17 @@ export interface TerminalShellOption {
   supportsLogin: boolean;
 }
 
+export type TerminalReplaySize = { offset: number; cols: number; rows: number };
+
 export interface TerminalStreamEvent {
-  type: 'snapshot' | 'data' | 'exit' | 'reconnecting';
+  type: 'snapshot' | 'data' | 'resize' | 'exit' | 'reconnecting';
   sequence?: number;
   data?: string;
   replayData?: string;
-  /** PTY size the snapshot history was drawn for; only `snapshot` events carry it. */
+  /** Current PTY size. Snapshot sizes describe how the history reached it. */
   cols?: number;
   rows?: number;
+  sizes?: readonly TerminalReplaySize[];
   status?: 'running' | 'exited' | 'error';
   exitCode?: number;
   signal?: number | null;

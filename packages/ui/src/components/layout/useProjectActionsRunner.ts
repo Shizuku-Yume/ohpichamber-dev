@@ -666,7 +666,7 @@ export const useProjectActionsRunner = ({
           onEvent: (event) => {
             if (!matchesActionExecution(tabDirectory, tab.id, currentExecutionId)) return;
             if (event.type === 'snapshot') {
-              useTerminalStore.getState().replaceBuffer(tabDirectory, tab.id, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event));
+              useTerminalStore.getState().replaceBuffer(tabDirectory, tab.id, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event), event.sizes);
               if (event.status === 'running') {
                 useTerminalStore.getState().setTabLifecycle(tabDirectory, tab.id, 'running', { expectedExecutionId: currentExecutionId });
               }
@@ -677,8 +677,8 @@ export const useProjectActionsRunner = ({
               }
             }
             const output = event.type === 'data' ? (event.data ?? '') : '';
-            if (output) {
-              useTerminalStore.getState().appendToBuffer(tabDirectory, tab.id, output, event.sequence, event.replayData);
+            if (output || event.type === 'resize') {
+              useTerminalStore.getState().appendToBuffer(tabDirectory, tab.id, output, event.sequence, event.replayData, event.type === 'resize' ? terminalSnapshotSize(event) : undefined);
             }
             if (event.type === 'exit') {
               useTerminalStore.getState().setTabLifecycle(tabDirectory, tab.id, 'exited', { expectedExecutionId: currentExecutionId });
@@ -896,7 +896,7 @@ export const useProjectActionsRunner = ({
             if (!matchesActionExecution(executionDirectory, tabId, adoptedExecutionId)) return;
             if (event.purpose?.type === 'project-action' && event.purpose.executionId !== adoptedExecutionId) return;
             if (event.type === 'snapshot') {
-              useTerminalStore.getState().replaceBuffer(executionDirectory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event));
+              useTerminalStore.getState().replaceBuffer(executionDirectory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event), event.sizes);
               useTerminalStore.getState().setConnecting(executionDirectory, tabId, false, { expectedExecutionId: adoptedExecutionId });
               if (event.purpose?.type === 'project-action') {
                 useTerminalStore.getState().setTabPurpose(executionDirectory, tabId, { type: 'project-action', actionId: event.purpose.actionId, executionId: event.purpose.executionId });
@@ -911,8 +911,8 @@ export const useProjectActionsRunner = ({
               }
             }
             const output = event.type === 'data' ? (event.data ?? '') : '';
-            if (output) {
-              useTerminalStore.getState().appendToBuffer(executionDirectory, tabId, output, event.sequence, event.replayData);
+            if (output || event.type === 'resize') {
+              useTerminalStore.getState().appendToBuffer(executionDirectory, tabId, output, event.sequence, event.replayData, event.type === 'resize' ? terminalSnapshotSize(event) : undefined);
             }
             if (event.type === 'exit') {
               useTerminalStore.getState().setTabLifecycle(executionDirectory, tabId, 'exited', { expectedExecutionId: adoptedExecutionId });

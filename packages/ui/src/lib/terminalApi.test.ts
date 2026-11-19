@@ -123,7 +123,7 @@ describe('terminal transport', () => {
     }
   });
 
-  test('carries the PTY size through snapshots, projection replays, and accepted resizes', async () => {
+  test('preserves drawing sizes across snapshots and ordered resize events for late subscribers', async () => {
     const socket = new FakeSocket();
     const transport = new TerminalTransport({ refreshAuth: async () => '', openSocket: () => socket });
     const sizes: Array<[number | undefined, number | undefined]> = [];
@@ -140,10 +140,17 @@ describe('terminal transport', () => {
     transport.subscribe('term-1', { onEvent: (event) => { if (event.type === 'snapshot') lateSizes.push([event.cols, event.rows]); } });
     expect(lateSizes).toEqual([[94, 56]]);
 
-    transport.noteResize('term-1', 80, 24);
-    const afterResize: Array<[number | undefined, number | undefined]> = [];
-    transport.subscribe('term-1', { onEvent: (event) => { if (event.type === 'snapshot') afterResize.push([event.cols, event.rows]); } });
-    expect(afterResize).toEqual([[80, 24]]);
+    socket.emit({ t: 'resize', v: 3, s: 'term-1', q: 2, cols: 80, rows: 24 });
+    socket.emit({ t: 'output', v: 3, s: 'term-1', q: 3, d: '\x1b[6nnew', r: 'new' });
+    socket.emit({ t: 'resize', v: 3, s: 'term-1', q: 4, cols: 60, rows: 24 });
+    socket.emit({ t: 'resize', v: 3, s: 'term-1', q: 5, cols: 100, rows: 36 });
+    await tick();
+    const onLateEvent = mock(() => {});
+    transport.subscribe('term-1', { onEvent: onLateEvent });
+    expect(onLateEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'snapshot', sequence: 5, cols: 100, rows: 36, data: 'promptnew',
+      sizes: [{ offset: 0, cols: 94, rows: 56 }, { offset: 6, cols: 80, rows: 24 }, { offset: 9, cols: 100, rows: 36 }],
+    }));
 
     socket.emit({ t: 'snapshot', v: 3, s: 'term-2', q: 0, history: '', status: 'running' });
     const legacy: Array<[number | undefined, number | undefined]> = [];
