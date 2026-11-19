@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { createHistoryMenuAction, createHistoryMenuItems } from './menu-history-action.mjs';
+import { createHistoryMenuAction, createHistoryMenuItems, createHistoryContextMenuItems } from './menu-history-action.mjs';
 import { menuLabel, MENU_LOCALE_DICTIONARIES } from './menu-locales.mjs';
 
 const pageContents = (hostWebContents = null) => {
@@ -99,3 +99,87 @@ test('history menu items preserve localized labels and platform accelerators wit
     }
   }
 });
+
+test('editable context menus offer localized history even when native history is empty', () => {
+  for (const locale of Object.keys(MENU_LOCALE_DICTIONARIES)) {
+    for (const platform of ['darwin', 'win32', 'linux']) {
+      const calls = [];
+      const items = createHistoryContextMenuItems({ isEditable: true, editFlags: { canUndo: false, canRedo: false } }, locale, platform, action => calls.push(action));
+      assert.deepEqual(items.slice(0, 2).map(item => item.label), [menuLabel(locale, 'undo'), menuLabel(locale, 'redo')]);
+      assert.deepEqual(items[2], { type: 'separator' });
+      for (const item of items.slice(0, 2)) {
+        assert.equal(item.role, undefined);
+        assert.notEqual(item.enabled, false);
+        item.click();
+      }
+      assert.deepEqual(calls, ['undo', 'redo']);
+    }
+  }
+});
+
+test('non-editable context menus do not add history commands', () => {
+  for (const properties of [{}, { isEditable: false }]) {
+    assert.deepEqual(createHistoryContextMenuItems(properties, 'en', 'win32', () => assert.fail('unexpected action')), []);
+  }
+});
+
+test('Mini Chat context Undo/Redo reaches only its focused composer document', async () => {
+  const main = { webContents: pageContents() };
+  const mini = { webContents: pageContents() };
+  const received = [];
+  const renderer = new EventTarget();
+  renderer.addEventListener('openchamber:history-action', event => {
+    received.push(event.detail);
+    event.preventDefault();
+  });
+  main.webContents.executeJavaScript = () => assert.fail('must not change the main editor');
+  mini.webContents.executeJavaScript = script => Promise.resolve(runInNewContext(script, { window: renderer, CustomEvent }));
+  const handle = createHistoryMenuAction({ getFocusedWebContents: () => mini.webContents, getAppWindows: () => [main, mini] });
+  const pending = [];
+  const items = createHistoryContextMenuItems({ isEditable: true }, 'en', 'win32', action => pending.push(handle(action)));
+  items[0].click();
+  items[1].click();
+  await Promise.all(pending);
+  assert.deepEqual(received, ['undo', 'redo']);
+  assert.deepEqual(main.webContents.calls, []);
+  assert.deepEqual(mini.webContents.calls, []);
+});
+
+test('ordinary settings inputs keep native history through the shared context menu', async () => {
+  const focused = pageContents();
+  focused.executeJavaScript = script => Promise.resolve(runInNewContext(script, { window: new EventTarget(), CustomEvent }));
+  const handle = createHistoryMenuAction({ getFocusedWebContents: () => focused, getAppWindows: () => [{ webContents: focused }] });
+  const pending = [];
+  const items = createHistoryContextMenuItems({ isEditable: true }, 'en', 'darwin', action => pending.push(handle(action)));
+  items[0].click();
+  items[1].click();
+  await Promise.all(pending);
+  assert.deepEqual(focused.calls, ['undo', 'redo']);
+});
+
+for (const native of [false, true]) {
+  test(`context history targets the clicked inactive Mini Chat, not the focused main window (${native ? 'native input' : 'composer'})`, async () => {
+    const main = { webContents: pageContents() };
+    const mini = { webContents: pageContents() };
+    const received = [];
+    const renderer = new EventTarget();
+    renderer.addEventListener('openchamber:history-action', event => {
+      received.push(event.detail);
+      if (!native) event.preventDefault();
+    });
+    main.webContents.executeJavaScript = () => assert.fail('must not change the focused main editor');
+    mini.webContents.executeJavaScript = script => Promise.resolve(runInNewContext(script, { window: renderer, CustomEvent }));
+    const handle = createHistoryMenuAction({ getFocusedWebContents: () => main.webContents, getAppWindows: () => [main, mini] });
+    const pending = [];
+    const items = createHistoryContextMenuItems({ isEditable: true }, 'en', 'darwin', action => pending.push(handle(action, mini.webContents)));
+    items[0].click();
+    items[1].click();
+    await Promise.all(pending);
+    assert.deepEqual(received, ['undo', 'redo']);
+    assert.deepEqual(main.webContents.calls, []);
+    assert.deepEqual(mini.webContents.calls, native ? ['undo', 'redo'] : []);
+    mini.webContents.isDestroyed = () => true;
+    await handle('undo', mini.webContents);
+    assert.deepEqual(received, ['undo', 'redo']);
+  });
+}
