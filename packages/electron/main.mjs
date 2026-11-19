@@ -112,7 +112,7 @@ import { createContextMenuLabels, menuLabel, normalizeMenuLocale, roleMenuItem }
 import { menuAccelerator, normalizeMenuShortcuts } from './menu-shortcuts.mjs';
 import { createCopyLinkMenuHook } from './context-menu-clipboard.mjs';
 import { createCopyMenuAction } from './menu-copy-action.mjs';
-import { createHistoryMenuAction, createHistoryMenuItems } from './menu-history-action.mjs';
+import { createHistoryMenuAction, createHistoryMenuItems, createHistoryContextMenuItems } from './menu-history-action.mjs';
 import {
   PRODUCTION_UPDATER_FEED,
   resolveUpdaterFeed,
@@ -5319,6 +5319,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 
     case 'desktop_set_locale': {
       if (typeof args.locale === 'string') {
+        contextMenuLocale = normalizeMenuLocale(args.locale);
         setContextMenuLocale(args.locale);
         if (process.platform === 'darwin') {
           appMenuLocale = normalizeMenuLocale(args.locale);
@@ -5609,14 +5610,19 @@ const buildAutoHiddenMenu = (locale = 'en') => {
 };
 
 const { labels: contextMenuLabels, apply: setContextMenuLocale } = createContextMenuLabels();
+let contextMenuLocale = 'en';
+const prependCopyLinkMenuItems = createCopyLinkMenuHook({
+  clipboard,
+  ClipboardItem,
+  onError: () => log.warn('[context-menu] Failed to copy link to clipboard'),
+});
 
 contextMenu({
   labels: contextMenuLabels,
-  prepend: createCopyLinkMenuHook({
-    clipboard,
-    ClipboardItem,
-    onError: () => log.warn('[context-menu] Failed to copy link to clipboard'),
-  }),
+  prepend: (defaultActions, properties) => [
+    ...prependCopyLinkMenuItems(defaultActions, properties),
+    ...createHistoryContextMenuItems(properties, contextMenuLocale, process.platform, handleHistoryAction),
+  ],
   showInspectElement: isDev,
   showSaveImageAs: true,
   showCopyImage: true,

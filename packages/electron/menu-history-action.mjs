@@ -32,3 +32,9 @@ export const createHistoryMenuItems = (locale, platform, onAction) => [
     click: () => { void onAction('redo'); },
   },
 ];
+
+export const createHistoryContextMenuItems = (properties, locale, platform, onAction) => (
+  properties.isEditable
+    ? [...createHistoryMenuItems(locale, platform, onAction), { type: 'separator' }]
+    : []
+);
