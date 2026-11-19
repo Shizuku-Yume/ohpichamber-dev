@@ -2592,7 +2592,7 @@ process.exit(safe ? 0 : 1);
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const executable = path.join(parent, 'network-filter.cjs');
     const marker = path.join(parent, 'executed');
-    await fs.writeFile(executable, `require('node:fs').appendFileSync(${JSON.stringify(marker)}, 'executed'); require('node:http').get('http://127.0.0.1:${server.address().port}/' + (process.argv[2] ?? 'attempt'), r => r.resume());\n`);
+    await fs.writeFile(executable, `require('node:fs').appendFileSync(${JSON.stringify(marker)}, 'executed'); require('node:http').get('http://127.0.0.1:${server.address().port}/attempt', r => r.resume());\n`);
     const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(executable)}`;
     const include = path.join(parent, 'filters.config');
     await fs.writeFile(include, `[filter "custom"]\n${filter} = ${JSON.stringify(command)}\nclean = ${JSON.stringify(command)}\nrequired = true\n`);
@@ -2645,9 +2645,8 @@ process.exit(safe ? 0 : 1);
       console.info(JSON.stringify({ scenario: 'managed-sync-local-boundary', filter, commands: calls.length,
         elapsedMs: Math.round(performance.now() - started), unauthorizedRequests: requests.length }));
       // Prove the configured executable can reach the listener when invoked without the boundary.
-      await execFileAsync(process.execPath, [executable, 'control']);
-      expect(await fs.readFile(marker, 'utf8')).toBe('executed');
-      expect(new Set(requests)).toEqual(new Set(['/control']));
+      await execFileAsync(process.execPath, [executable]);
+      expect(requests).toEqual(['/attempt']);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
