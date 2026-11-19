@@ -1624,6 +1624,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
 
+## 2026-11-19 - Replay terminal history at its recorded PTY sizes
+
+- **Decided:** retain PTY resize boundaries in bounded terminal history and replay them in output order before fitting the viewport.
+- **Instead of:** replaying the entire snapshot at the latest dimensions.
+- **Because:** shell cursor movements and wrapping depend on the grid where they were produced. Resizing and reloading otherwise leaves scrambled command echoes.
+- **Revisit when:** upstream records ordered resize boundaries or snapshots terminal emulator state directly.
+
 ## 2026-11-19 - Refuse editor saves to externally missing paths
 
 - **Decided:** text editor saves send an optional `mustExist` condition through the shared Files API and content cache to the Host. Missing paths return `409`; the editor displays the error and retains its dirty draft. New-file writes and binary canvas uploads keep their existing behavior.
@@ -1631,3 +1638,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Confirm before replacing a dirty file through the tab strip
+
+- **Decided:** the desktop strip consults a file-editor selection guard before selecting a different file path. Reuse Save/Discard/Cancel and pause autosave through the existing confirmation hook; failed saves and Cancel leave the active tab and dirty draft unchanged. Clean drafts, the same path, and non-file surfaces select immediately.
+- **Instead of:** clearing a dirty draft on strip selection or adding a per-tab draft cache.
+- **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
+- **Mine:** yes
+- **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.

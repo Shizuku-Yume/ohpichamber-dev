@@ -3,6 +3,7 @@
 
 import { collectWrappedTerminalLinkLine, extractTerminalLinks } from './terminalLinks';
 import { canvasFontFamilies, isMonospaceFamily } from './fonts';
+import type { TerminalReplaySize } from '@/lib/api/types';
 import {
   GhosttyTerminalCore,
   type GhosttyScrollbar,
@@ -956,25 +957,33 @@ export class GhosttyTerminalSurface {
   }
 
   /**
-   * Replaces the screen with replayed history. History was laid out by the
-   * shell for the PTY size it had at the time; when that differs from the
-   * fitted grid the replay runs at the drawn size and Ghostty reflows to the
-   * fitted grid afterwards, so lines wrap where the shell wrapped them.
+   * Replays shell output at each historical PTY size before fitting the view.
    */
-  resetAndWrite(data: string, drawnSize?: { readonly cols: number; readonly rows: number }): void {
+  resetAndWrite(data: string, sizes: readonly TerminalReplaySize[] = []): void {
     if (this.disposed) return;
     this.lastMouseMotionData = '';
-    const replayAtDrawnSize =
-      drawnSize !== undefined && (drawnSize.cols !== this.cols || drawnSize.rows !== this.rows);
-    if (replayAtDrawnSize) {
-      this.core.resize(drawnSize.cols, drawnSize.rows, this.metrics.width, this.metrics.height);
-    }
+    let cols = this.cols;
+    let rows = this.rows;
+    const resize = (size: { readonly cols: number; readonly rows: number }) => {
+      if (size.cols === cols && size.rows === rows) return;
+      this.core.resize(size.cols, size.rows, this.metrics.width, this.metrics.height);
+      cols = size.cols;
+      rows = size.rows;
+    };
     try {
-      this.core.resetAndWrite(data);
+      const firstSize = sizes[0]?.offset === 0 ? sizes[0] : undefined;
+      if (firstSize) resize(firstSize);
+      this.core.resetAndReplay(() => {
+        let offset = 0;
+        for (const size of sizes) {
+          if (size.offset > offset) this.core.write(data.slice(offset, size.offset));
+          resize(size);
+          offset = size.offset;
+        }
+        this.core.write(data.slice(offset));
+      });
     } finally {
-      if (replayAtDrawnSize) {
-        this.core.resize(this.cols, this.rows, this.metrics.width, this.metrics.height);
-      }
+      resize({ cols: this.cols, rows: this.rows });
     }
     this.synchronizeMouseTrackingState();
     // A replayed session starts from the visible phase like any other write:

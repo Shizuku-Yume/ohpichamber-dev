@@ -1,4 +1,26 @@
 import type { TerminalChunk } from '@/stores/useTerminalStore';
+import type { TerminalReplaySize } from '@/lib/api/types';
+
+export function composeTerminalReplay(chunks: readonly TerminalChunk[]) {
+  const parts: string[] = [];
+  const sizes: TerminalReplaySize[] = [];
+  let offset = 0;
+  const record = (size: TerminalReplaySize) => {
+    if (sizes.at(-1)?.offset === size.offset) sizes.pop();
+    sizes.push(size);
+  };
+  for (const chunk of chunks) {
+    if (chunk.sizes) {
+      for (const size of chunk.sizes) record({ ...size, offset: offset + size.offset });
+    } else if (chunk.size) {
+      record({ offset, ...chunk.size });
+    }
+    const data = chunk.replayData ?? chunk.data;
+    parts.push(data);
+    offset += data.length;
+  }
+  return { data: parts.join(''), sizes };
+}
 
 export interface TerminalChunkReplaySelection {
   reset: boolean;

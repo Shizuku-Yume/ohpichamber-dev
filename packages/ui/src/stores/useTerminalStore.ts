@@ -4,7 +4,7 @@ import type { PersistStorage } from 'zustand/middleware';
 import { z } from 'zod';
 
 import { getSafeSessionStorage } from '@/stores/utils/safeStorage';
-import type { TerminalServerSession } from '@/lib/api/types';
+import type { TerminalReplaySize, TerminalServerSession } from '@/lib/api/types';
 import { normalizeTerminalDirectory } from '@/lib/pathNormalization';
 
 export type TerminalChunkSize = { cols: number; rows: number };
@@ -14,13 +14,9 @@ export interface TerminalChunk {
   data: string;
   replayData?: string;
   byteLength: number;
-  /**
-   * PTY size this chunk was drawn for. Only snapshot history carries it: the
-   * viewport replays such a chunk at this size and then re-fits, because
-   * shell output laid out for one width turns into stray fragments when it is
-   * written into an emulator of another width.
-   */
+  /** PTY size before this chunk's data. Empty live chunks can record a resize. */
   size?: TerminalChunkSize;
+  sizes?: readonly TerminalReplaySize[];
 }
 
 /**
@@ -110,8 +106,8 @@ interface TerminalStore {
   setTabSessionId: (directory: string, tabId: string, sessionId: string | null, options?: { expectedExecutionId?: string | null }) => void;
   setTabLifecycle: (directory: string, tabId: string, lifecycle: TerminalTabLifecycle, options?: { expectedExecutionId?: string | null }) => void;
   setConnecting: (directory: string, tabId: string, isConnecting: boolean, options?: { expectedExecutionId?: string | null }) => void;
-  replaceBuffer: (directory: string, tabId: string, content: string, sequence: number, size?: TerminalChunkSize) => void;
-  appendToBuffer: (directory: string, tabId: string, chunk: string, sequence?: number, replayData?: string) => void;
+  replaceBuffer: (directory: string, tabId: string, content: string, sequence: number, size?: TerminalChunkSize, sizes?: readonly TerminalReplaySize[]) => void;
+  appendToBuffer: (directory: string, tabId: string, chunk: string, sequence?: number, replayData?: string, size?: TerminalChunkSize) => void;
   setTabPreviewUrl: (directory: string, tabId: string, url: string | null, options?: { locked?: boolean; autoOpened?: boolean; expectedExecutionId?: string | null }) => void;
   markPreviewAutoOpened: (directory: string, tabId: string) => void;
 
@@ -1021,7 +1017,7 @@ export const useTerminalStore = create<TerminalStore>()(
           });
         },
 
-        replaceBuffer: (directory: string, tabId: string, content: string, sequence: number, size?: TerminalChunkSize) => {
+        replaceBuffer: (directory, tabId, content, sequence, size, sizes) => {
           const key = normalizeDirectory(directory);
           set((state) => {
             const existing = state.sessions.get(key);
@@ -1033,28 +1029,32 @@ export const useTerminalStore = create<TerminalStore>()(
             const previousSize = buffer.chunks[0]?.size;
             if (
               buffer.lastSequence === sequence &&
+              buffer.chunks.length <= 1 &&
               buffer.byteLength === retained.byteLength &&
               buffer.chunks.map((chunk) => chunk.data).join('') === retained.text &&
               previousSize?.cols === size?.cols &&
-              previousSize?.rows === size?.rows
+              previousSize?.rows === size?.rows &&
+              JSON.stringify(buffer.chunks[0]?.sizes) === JSON.stringify(sizes)
             ) {
               return state;
             }
             const chunkId = state.nextChunkId;
+            const hasChunk = Boolean(retained.text || size);
+            const chunk: TerminalChunk = { id: chunkId, data: retained.text, byteLength: retained.byteLength };
+            if (size) chunk.size = size;
+            if (sizes) chunk.sizes = sizes;
             const buffers = new Map(state.buffers);
             buffers.set(entryKey, {
-              chunks: retained.text
-                ? [{ id: chunkId, data: retained.text, byteLength: retained.byteLength, ...(size ? { size } : {}) }]
-                : [],
+              chunks: hasChunk ? [chunk] : [],
               byteLength: retained.byteLength,
               lastSequence: sequence,
             });
-            return { buffers, nextChunkId: retained.text ? chunkId + 1 : chunkId };
+            return { buffers, nextChunkId: hasChunk ? chunkId + 1 : chunkId };
           });
         },
 
-        appendToBuffer: (directory: string, tabId: string, chunk: string, sequence?: number, replayData?: string) => {
-          if (!chunk) {
+        appendToBuffer: (directory, tabId, chunk, sequence, replayData, size) => {
+          if (!chunk && !size) {
             return;
           }
 
@@ -1068,27 +1068,34 @@ export const useTerminalStore = create<TerminalStore>()(
             const entryKey = bufferKey(key, tabId);
             const buffer = state.buffers.get(entryKey) ?? EMPTY_TERMINAL_BUFFER;
             if (sequence !== undefined && sequence <= buffer.lastSequence) return state;
-            const chunkId = state.nextChunkId;
+            const tail = buffer.chunks.at(-1);
+            const mergeResize = size && !chunk && tail && !tail.data;
+            const chunkId = mergeResize ? tail.id : state.nextChunkId;
             const retainedChunk = trimToBufferLimit(chunk);
             const retainedReplayData = replayData !== undefined && replayData !== chunk
               ? trimToBufferLimit(replayData).text
               : undefined;
-            const chunkEntry: TerminalChunk = {
-              id: chunkId,
-              data: retainedChunk.text,
-              ...(retainedReplayData !== undefined ? { replayData: retainedReplayData } : {}),
-              byteLength: retainedChunk.byteLength,
-            };
+            const chunkEntry: TerminalChunk = { id: chunkId, data: retainedChunk.text, byteLength: retainedChunk.byteLength };
+            if (retainedReplayData !== undefined) chunkEntry.replayData = retainedReplayData;
+            if (size) chunkEntry.size = size;
 
-            const chunks = [...buffer.chunks, chunkEntry];
+            const chunks = [...buffer.chunks];
+            if (mergeResize) chunks.pop();
+            chunks.push(chunkEntry);
             let bufferLength = buffer.byteLength + chunkEntry.byteLength;
 
+            let startSize: TerminalChunkSize | undefined;
             while (bufferLength > TERMINAL_BUFFER_LIMIT && chunks.length > 1) {
               const removed = chunks.shift();
               if (!removed) {
                 break;
               }
+              startSize = removed.sizes?.at(-1) ?? removed.size ?? startSize;
               bufferLength -= removed.byteLength;
+            }
+            if (startSize && chunks[0] && !chunks[0].size) {
+              const { cols, rows } = startSize;
+              chunks[0] = { ...chunks[0], size: { cols, rows } };
             }
 
             const buffers = new Map(state.buffers);
@@ -1098,7 +1105,7 @@ export const useTerminalStore = create<TerminalStore>()(
               lastSequence: sequence ?? buffer.lastSequence,
             });
 
-            return { buffers, nextChunkId: chunkId + 1 };
+            return { buffers, nextChunkId: mergeResize ? state.nextChunkId : chunkId + 1 };
           });
         },
 
