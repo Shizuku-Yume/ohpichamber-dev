@@ -4,6 +4,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Final main audit (task 06):** The candidate includes sidebar admission PR #2. The stale archived base reference, Agent Service lint and dead-code issues, and an Oxlint test portability issue are fixed. The static gate and focused admission tests passed, but neither Linux environment produced a green aggregate: the host lacks the PIDFD libc symbols and the container lacks some Web test prerequisites. See [task 06](tasks/final-main-audit/06-final-main-convergence-and-signoff-gate.md) for evidence, remaining anti-slop findings, and review requirements. The audit is not signed off and M7 release verification remains proposed.
+
 **2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**
 **2026-11-18 Operator cutover (task rebrand/07, base `7e9251f0d9`):** Cut the operator files (`omp-m0-provider.env`, `chats/`) over to OhPiChamber's own data directory, making `~/.config/ohpichamber` the maintainer's real product data directory. Dev/test runs now isolate data from this directory and real-provider checks configure the provider through the app instead of sourcing an environment file.
 
