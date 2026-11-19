@@ -694,7 +694,7 @@ const Dialogs: React.FC<DialogsProps> = ({
     );
 };
 
-export type FileTabCloseGuard = (directoryKey: string, paths: readonly string[], close: () => void) => void;
+export type FileTabCloseGuard = (directoryKey: string, paths: readonly string[] | 'all', close: () => void) => void;
 
 interface FilesViewProps {
   visible?: boolean;
@@ -2494,7 +2494,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (!fileTabCloseGuard) return;
     const guard: FileTabCloseGuard = (directoryKey, paths, close) => {
       if (directoryKey === normalizeContextPanelDirectoryKey(panelRoot)
-        && selectedFile && isDirty && paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path))) {
+        && selectedFile && isDirty
+        && (paths === 'all' || paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path)))) {
         confirmDraftAction(close);
       } else {
         close();
