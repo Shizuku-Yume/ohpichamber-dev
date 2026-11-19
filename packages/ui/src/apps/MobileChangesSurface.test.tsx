@@ -398,6 +398,26 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     back();
     expect(workspaceOpen).toBe(false);
 
+    visible = false;
+    await render();
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
+    visible = true;
+    await render();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Review this change');
+    expect(backHandler).toBeNull();
+
+    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
+    expect(container.textContent).toContain('Review this change');
+    visible = false;
+    await render();
+    await act(async () => { seed('/repo'); });
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
+    visible = true;
+    await render();
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
+
     // A nested-repository answer must not outlive the read that produced it.
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'nested/', index: '?', working_dir: '?' }] }); });
     initialDiff = { path: 'nested/', staged: false };

@@ -615,6 +615,10 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   return { source: comparisonSource };
  }, [changeEntries.length, comparisonFiles, comparisonSource, mode, prComparison.readContext]);
 
+ React.useEffect(() => {
+  if (route.type === 'walkthrough' && !walkthroughTarget) setRoute(LIST_ROUTE);
+ }, [route.type, setRoute, walkthroughTarget]);
+
  const rendersDetail = Boolean(currentDirectory)
   && !(rootIsGitRepo === false && isGitRepo !== true)
   && !(isLoadingStatus && isGitRepo === null)
