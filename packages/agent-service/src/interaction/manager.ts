@@ -471,7 +471,7 @@ export class InteractionManager {
         await state.dispatch({ type: 'question.resolve', questionId, action: 'update', response });
         this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(questionId), 'question');
         this.assertCas(this.records.get(questionId)!.request, reply.version, 'question');
-        record.request = QuestionRequestSchema.parse({ ...request, timeoutResetAt: Date.now() });
+        record.request = QuestionRequestSchema.parse({ ...request, version: increment(request.version), timeoutResetAt: Date.now() });
         state.append({ timestamp: record.request.timeoutResetAt!, event: { type: 'question.requested', question: record.request } });
         return record.request;
       }

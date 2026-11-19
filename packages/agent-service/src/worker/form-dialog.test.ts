@@ -94,7 +94,7 @@ describe('native HTML forms', () => {
     } finally { worker.close(); }
   });
 
-  test('canonical draft updates reset inactivity without resolving CAS; expiry submits current worker values', async () => {
+  test('canonical draft updates reset inactivity with a new CAS version; expiry submits current worker values', async () => {
     vi.useFakeTimers();
     const manager = new InteractionManager(5);
     const worker = new WorkerInteraction({ request: request => manager.onRequest('session', 'worker', request), currentTurn: () => 'turn' });
@@ -107,7 +107,8 @@ describe('native HTML forms', () => {
       const cas = { version: request.version, epoch: request.epoch, workerGeneration: request.workerGeneration };
       vi.advanceTimersByTime(90);
       const updated = await manager.resolveQuestion('session', request.questionId, { ...cas, action: 'update', response: answer() as JsonValue });
-      expect(updated).toMatchObject({ status: 'pending', version: '1', timeoutResetAt: Date.now() });
+      expect(updated).toMatchObject({ status: 'pending', version: '2', timeoutResetAt: Date.now() });
+      await expect(manager.resolveQuestion('session', request.questionId, { ...cas, action: 'update', response: answer() as JsonValue })).rejects.toMatchObject({ code: 'QUESTION_CONFLICT' });
       vi.advanceTimersByTime(90);
       expect(manager.questions('session')).toHaveLength(1);
       vi.advanceTimersByTime(10);
