@@ -12,7 +12,7 @@ import { resolveGerritProjectsFromDirectory } from './repo.js';
 import type { BindingMutationTarget } from '../source-control/binding-service-contracts.js';
 import type { GerritChange, GerritComment, GerritFile, GerritIdentity, GerritJson, GerritProject, GerritQuery, GerritRevision, GerritSubmitRequirement, GerritVoteLabel } from './contracts.js';
 import type { ProviderReadContext } from '../source-control/provider-contract.js';
-import type { SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { reviewCommentPosition } from '../source-control/review-position.js';
 
 type Input = GerritJson | undefined;

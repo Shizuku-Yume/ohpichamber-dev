@@ -10,7 +10,7 @@ import type { createSourceControlAuthStore } from '../source-control/auth-storag
 import type { ProviderDescriptor, ProviderMutationContext, ProviderReadContext, ProviderSession } from '../source-control/provider-contract.js';
 import type { MutationRecord } from '../source-control/mutation-storage.js';
 import type { StandardMutationInput } from '../source-control/standard-mutations.js';
-import type { SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { BindingMutationTarget } from '../source-control/binding-service-contracts.js';
 
 type Service = ReturnType<typeof createGerritResourceService>;
@@ -141,7 +141,7 @@ export function createProvider(options: GerritProviderOptions) {
   const verify: PatAccountAuthOptions['verify'] = (origin, password, { username } = { username: undefined }) => verifyGerritCredentials({ origin, login: username, password, fetch: fetchImpl, timeoutMs });
   const probe: PatAccountAuthOptions['probe'] = async (origin, password, { username } = { username: undefined }) => {
     const { version, supported } = await probeGerritVersion({ origin, login: username, password, fetch: fetchImpl, timeoutMs });
-    return supported ? { version, supported } : { version, supported, message: `Gerrit ${version} is older than OpenChamber supports (3.8)` };
+    return supported ? { version, supported } : { version, supported, message: `Gerrit ${version} is older than OhPiChamber supports (3.8)` };
   };
   const identityFor = (origin: string, accountId: string) => ({ provider: descriptor.id, instance: origin, accountId });
   const accounts = createPatAccountAuth({ descriptor, store, events, verify, probe, classifyFailure: classifyGerritFailure });
