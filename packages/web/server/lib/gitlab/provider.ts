@@ -9,7 +9,7 @@ import { isString } from './validation.js';
 import { gitlabDescriptor } from './descriptor.js';
 import { digestMutationInput } from '../source-control/mutation-executor.js';
 import { ownedOriginInstance } from '../source-control/origin-instance.js';
-import type { SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlJsonObject, SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { AccountEvents, AccountIdentity, ProviderDescriptor, ProviderMutationContext, ProviderReadContext, ProviderSession } from '../source-control/provider-contract.js';
 import type { AuthCredential, createSourceControlAuthStore } from '../source-control/auth-storage.js';
 import type { MutationContextInput } from '../source-control/binding-service-contracts.js';

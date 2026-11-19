@@ -1,6 +1,6 @@
 import { isPlainObject, isString } from './validation.js';
 import { parseGitLabRemoteUrl, parseGitLabSshProjectPath } from './repo.js';
-import type { SourceControlProjectRef } from '@openchamber/sdk';
+import type { SourceControlProjectRef } from 'ohpichamber-sdk';
 import type { JsonValue } from '../shared/json-values.js';
 
 export interface GitLabIdentity { provider: string; instance: string }

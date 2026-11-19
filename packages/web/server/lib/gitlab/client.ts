@@ -1,6 +1,6 @@
 import { Gitlab } from '@gitbeaker/rest';
 import { isPlainObject, isString } from './validation.js';
-import type { SourceControlJson } from '@openchamber/sdk';
+import type { SourceControlJson } from 'ohpichamber-sdk';
 import type { JsonValue } from '../shared/json-values.js';
 
 type RequestValue = JsonValue | Date | undefined | RequestValue[] | RequestFields;

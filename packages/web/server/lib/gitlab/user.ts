@@ -1,5 +1,5 @@
 import { isPlainObject, isString } from './validation.js';
-import type { SourceControlJson } from '@openchamber/sdk';
+import type { SourceControlJson } from 'ohpichamber-sdk';
 
 export interface GitLabUser {
   id: number;
