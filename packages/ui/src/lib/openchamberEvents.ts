@@ -2,7 +2,8 @@ import { getRuntimeUrlResolver } from './runtime-url';
 import { runtimeFetch } from './runtime-fetch';
 import { useAuthSessionStore, waitForAuthSession } from './runtime-auth-expiry';
 import { isRelayModeActive } from './relay/runtime-tunnel';
-import { subscribeRuntimeEndpointChanged } from './runtime-switch';
+import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged } from './runtime-switch';
+import { isCapacitorApp } from './platform';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
@@ -266,16 +267,36 @@ const worktreeChangedPropertiesSchema = z.object({
 });
 
 let eventSource: EventSource | null = null;
-let relayAbortController: AbortController | null = null;
+let streamAbortController: AbortController | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let authSessionWait: AbortController | null = null;
 let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let runtimeChangeUnsubscribe: (() => void) | null = null;
 const listeners = new Set<Listener>();
+const connectionListeners = new Set<() => void>();
+let reconnecting = false;
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 45_000;
+
+export const isOpenchamberEventsReconnecting = () => reconnecting;
+
+export const subscribeOpenchamberEventsConnection = (listener: () => void): (() => void) => {
+ connectionListeners.add(listener);
+ return () => { connectionListeners.delete(listener); };
+};
+
+const setReconnecting = (next: boolean) => {
+ if (reconnecting === next) return;
+ reconnecting = next;
+ for (const listener of connectionListeners) listener();
+};
+
+const clearReconnectTimer = () => {
+ if (reconnectTimer) clearTimeout(reconnectTimer);
+ reconnectTimer = null;
+};
 
 const clearHeartbeatTimer = () => {
  if (!heartbeatTimer) {
@@ -291,7 +312,9 @@ const cancelAuthSessionWait = () => {
 };
 
 const scheduleReconnect = () => {
- if (reconnectTimer || authSessionWait || listeners.size === 0) {
+ if (listeners.size === 0) return;
+ setReconnecting(true);
+ if (reconnectTimer || authSessionWait) {
   return;
  }
  // An expired session answers every attempt with 401; wait for the login
@@ -317,17 +340,31 @@ const scheduleReconnect = () => {
 
 const cleanupSource = () => {
  clearHeartbeatTimer();
- relayAbortController?.abort();
- relayAbortController = null;
+ streamAbortController?.abort();
+ streamAbortController = null;
  if (eventSource) {
   eventSource.close();
  }
  eventSource = null;
 };
 
-const connectRelay = (canControlBrowser: boolean) => {
+// The native resume health probe may fail before a half-open stream notices.
+export const markOpenchamberEventsUnreachable = () => {
+ if (reconnecting || listeners.size === 0) return;
+ cleanupSource();
+ scheduleReconnect();
+};
+
+export const retryOpenchamberEventsNow = () => {
+ if (!reconnectTimer) return;
+ clearReconnectTimer();
+ connect();
+};
+
+const connectFetchStream = (canControlBrowser: boolean) => {
  const controller = new AbortController();
- relayAbortController = controller;
+ streamAbortController = controller;
+ resetHeartbeatTimer();
  void (async () => {
   try {
    const response = await runtimeFetch('/api/openchamber/events', {
@@ -339,7 +376,7 @@ const connectRelay = (canControlBrowser: boolean) => {
     await response.body?.cancel();
     return;
    }
-   if (!response.ok || !response.body) {
+   if (!response.ok || !response.body || !response.headers.get('content-type')?.startsWith('text/event-stream')) {
     await response.body?.cancel();
     throw new Error(`OhPiChamber events returned ${response.status}`);
    }
@@ -377,7 +414,7 @@ const connectRelay = (canControlBrowser: boolean) => {
   } catch {
    // A failed or ended stream follows the same reconnect path as EventSource.
   }
-  if (relayAbortController !== controller) return;
+  if (streamAbortController !== controller) return;
   cleanupSource();
   scheduleReconnect();
  })();
@@ -469,6 +506,7 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  }
  if (envelope.type === 'openchamber:event-stream-ready') {
   reconnectAttempt = 0;
+  setReconnecting(false);
   const ready = eventStreamReadySchema.safeParse(envelope.properties);
   const connectionId = ready.success ? ready.data.connectionId ?? null : null;
   for (const listener of listeners) listener({ type: 'event-stream-ready', connectionId });
@@ -701,7 +739,7 @@ const connect = () => {
  if (typeof window === 'undefined' || listeners.size === 0) {
   return;
  }
- if (relayAbortController || (eventSource && eventSource.readyState !== EventSource.CLOSED)) {
+ if (streamAbortController || (eventSource && eventSource.readyState !== EventSource.CLOSED)) {
   return;
  }
 
@@ -712,8 +750,12 @@ const connect = () => {
  // driven, and the agent tool needs to know which it is talking to without a
  // setting anyone has to remember to change.
  const canControlBrowser = canDriveBrowserPage();
- if (isRelayModeActive()) {
-  connectRelay(canControlBrowser);
+ const native = isCapacitorApp();
+ if (native && !getRuntimeApiBaseUrl()) return;
+ if (isRelayModeActive() || native) {
+  // Native direct connections can require both bearer auth and saved proxy
+  // headers, neither of which can be attached to an EventSource request.
+  connectFetchStream(canControlBrowser);
   return;
  }
  if (typeof EventSource !== 'function') return;
@@ -746,10 +788,12 @@ const connect = () => {
 
 const ensureRuntimeChangeSubscription = () => {
  if (runtimeChangeUnsubscribe || typeof window === 'undefined') return;
- runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged(() => {
+ runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged((detail) => {
   cleanupSource();
+  clearReconnectTimer();
   cancelAuthSessionWait();
   reconnectAttempt = 0;
+  if (detail.runtimeKey !== detail.previousRuntimeKey) setReconnecting(false);
   connect();
  });
 };
@@ -767,13 +811,11 @@ export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => 
  return () => {
   listeners.delete(listener);
   if (listeners.size === 0) {
-   if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-   }
+   clearReconnectTimer();
    cancelAuthSessionWait();
    reconnectAttempt = 0;
    cleanupSource();
+   setReconnecting(false);
    cleanupRuntimeChangeSubscription();
   }
  };

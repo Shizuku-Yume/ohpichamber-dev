@@ -1631,3 +1631,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
+
+## 2026-11-19 - Keep native mobile visible through Host outages
+
+- **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.
+- **Instead of:** treating a reachable network or a successful startup probe as proof the Host is still live, or clearing the runtime when a resume probe times out.
+- **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and a new stream-ready event confirms recovery without a separate poll. Native direct connections use the same header-aware stream reader as relay because EventSource cannot send saved proxy headers.
+- **Mine:** yes
+- **Revisit when:** upstream provides a native, authenticated Host connectivity signal independent of its session streams.
