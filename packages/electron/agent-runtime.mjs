@@ -99,7 +99,8 @@ export function resolveAgentRuntime(resourcesDirectory, {
   if (preference.reason === 'PREFER_BUNDLED') return { ...bundled, reason: preference.reason };
 
   const candidates = findSystemOmpCandidates({ env, platform, home });
-  const deadline = Date.now() + 2500;
+  const deadline = Date.now() + (platform === 'win32' ? 30000 : 2500);
+  let sdkRejection;
   if (localServiceDir && bundled.ompVersion) {
     for (const executable of candidates) {
       if (Date.now() >= deadline) break;
@@ -108,17 +109,29 @@ export function resolveAgentRuntime(resourcesDirectory, {
           const metadata = path.join(sdkRoot, 'package.json');
           if (!fs.existsSync(metadata)) continue;
           const manifest = readManifest(sdkRoot);
-          if (manifest.name !== CODING_AGENT || manifest.version !== bundled.ompVersion || manifest.bin?.omp !== 'dist/cli.js') continue;
+          if (manifest.name !== CODING_AGENT) continue;
+          if (manifest.version !== bundled.ompVersion) {
+            sdkRejection = 'LOCAL_SDK_VERSION_MISMATCH';
+            continue;
+          }
+          if (manifest.bin?.omp !== 'dist/cli.js') {
+            sdkRejection = 'LOCAL_SDK_LAYOUT_MISMATCH';
+            continue;
+          }
           const cli = path.join(sdkRoot, 'dist', 'cli.js');
           if (!fs.existsSync(cli) || (platform !== 'win32' && fs.realpathSync(executable) !== cli)) continue;
           const shippedSdk = path.join(path.dirname(bundled.entrypoint), '..', 'node_modules', CODING_AGENT);
           if (!PATCHED_SDK_FILES.every(file => fs.readFileSync(path.join(sdkRoot, file))
-            .equals(fs.readFileSync(path.join(shippedSdk, file))))) continue;
+            .equals(fs.readFileSync(path.join(shippedSdk, file))))) {
+            sdkRejection = 'LOCAL_SDK_PATCH_MISMATCH';
+            continue;
+          }
           fs.rmSync(localServiceDir, { recursive: true, force: true });
           const entrypoint = prepareLocalSdk(bundled, sdkRoot, localServiceDir, platform, Math.max(1, deadline - Date.now()), env);
           return { ...bundled, entrypoint, source: 'system', path: executable };
         }
-      } catch {
+      } catch (error) {
+        sdkRejection = error.code === 'ETIMEDOUT' ? 'LOCAL_SDK_PROBE_TIMEOUT' : 'LOCAL_SDK_PROBE_FAILED';
         try {
           fs.rmSync(localServiceDir, { recursive: true, force: true });
         } catch {
@@ -139,6 +152,6 @@ export function resolveAgentRuntime(resourcesDirectory, {
   }
   return {
     ...bundled,
-    reason: detected.source === 'system' ? 'NO_COMPATIBLE_SYSTEM_SDK' : detected.reason,
+    reason: sdkRejection || (detected.source === 'system' ? 'NO_COMPATIBLE_SYSTEM_SDK' : detected.reason),
   };
 }

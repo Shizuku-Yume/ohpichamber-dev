@@ -10,6 +10,15 @@ Electron is retained in OhPiChamber. It embeds the Node.js Host Gateway; the sha
 
 ## How It Runs
 
+Local OMP SDK selection validates package versions and required patch bytes, then
+imports the staged service and worker with bundled Bun. The shared selection
+budget is 30 seconds on Windows, where a fresh profile stages and first-loads
+the native addon, and 2.5 seconds elsewhere. A failed probe removes its overlay
+and uses the offline bundle; its `LOCAL_SDK_*` rejection reason is preserved
+instead of the later interpreter-only probe's reason. Successful compatibility
+verdicts are not persisted, so dependency or native changes are checked on every
+launch.
+
 Desktop starts the OhPiChamber web server in the same Electron main process. There is no separate sidecar subprocess for the OhPiChamber server.
 
 `main.mjs` imports `ohpichamber/server/index.js` and calls `startWebUiServer()`. The Electron window then loads the UI from the local server in development, or from packaged `resources/web-dist` assets in packaged builds.
