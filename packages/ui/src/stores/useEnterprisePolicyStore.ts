@@ -1,21 +1,3 @@
-<<<<<<< HEAD
-/**
- * Projection of the enterprise policy the connected runtime enforces
- * (`packages/web/server/lib/enterprise-mode.js`). The OpenChamber host is
- * authoritative and refuses
- * what the policy forbids; this store only lets Settings hide those ways in
- * and say who decided. Nothing here is persisted.
- */
-||||||| bc50ba56aa
-/**
- * Projection of the enterprise policy the connected runtime enforces
- * (`packages/web/server/lib/enterprise-mode.js`, read by the web server and by
- * the VS Code extension host alike). The runtime is authoritative and refuses
- * what the policy forbids; this store only lets Settings hide those ways in
- * and say who decided. Nothing here is persisted.
- */
-=======
->>>>>>> upstream/main
 import { z } from 'zod';
 import { create } from 'zustand';
 
@@ -28,13 +10,6 @@ const enterprisePolicySchema = z.object({
   organization: z.string().min(1).nullable(),
   policyError: z.string().min(1).nullable(),
   networkAccessBlocked: z.boolean().default(false),
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // OpenCode CLI path the administrator pinned; servers from before the pin have none.
-  opencodeBinary: z.string().min(1).nullable().default(null),
-=======
-  opencodeBinary: z.string().min(1).nullable().default(null),
->>>>>>> upstream/main
 });
 
 type EnterprisePolicy = z.infer<typeof enterprisePolicySchema>;

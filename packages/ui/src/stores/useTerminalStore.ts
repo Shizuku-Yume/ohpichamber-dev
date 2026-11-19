@@ -14,17 +14,6 @@ export interface TerminalChunk {
   data: string;
   replayData?: string;
   byteLength: number;
-<<<<<<< HEAD
-  /** PTY size before this chunk's data. Empty live chunks can record a resize. */
-||||||| bc50ba56aa
-  /**
-   * PTY size this chunk was drawn for. Only snapshot history carries it: the
-   * viewport replays such a chunk at this size and then re-fits, because
-   * shell output laid out for one width turns into stray fragments when it is
-   * written into an emulator of another width.
-   */
-=======
->>>>>>> upstream/main
   size?: TerminalChunkSize;
   sizes?: readonly TerminalReplaySize[];
 }

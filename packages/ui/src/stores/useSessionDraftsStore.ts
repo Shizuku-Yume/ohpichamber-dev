@@ -72,15 +72,8 @@ const unsyncedDraftKeys = new Set<string>();
 
 export const hasUnsyncedSessionDraft = (draftId: string): boolean => unsyncedDraftKeys.has(uploadKey(draftId));
 
-<<<<<<< HEAD
 /** A save the server refused because the draft's attachments are too large to keep. */
 class SessionDraftTooLargeError extends Error { }
-||||||| bc50ba56aa
-/** A save the server refused because the draft's attachments are too large to keep. */
-export class SessionDraftTooLargeError extends Error {}
-=======
-export class SessionDraftTooLargeError extends Error {}
->>>>>>> upstream/main
 
 const revisions = new Map<string, number>();
 const revisionOf = (runtimeKey: string): number => revisions.get(runtimeKey) ?? 0;

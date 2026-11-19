@@ -8,7 +8,6 @@ import { resolveGlobalSessionDirectory } from './globalSessionStructure';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 import { getDeferredSafeStorage } from './utils/safeStorage';
 
-<<<<<<< HEAD
 export { getPinnedSessionKey, isSessionPinned };
 
 type SessionPinnedTarget = { directory: string; sessionId: string };
@@ -22,19 +21,6 @@ type SessionPinnedStore = {
   toggle: (target: SessionPinnedTarget) => void;
   clearPinnedSession: (runtimeKey: string, directory: string, sessionId: string) => void;
 };
-||||||| bc50ba56aa
-/**
- * The pinned sessions of the current runtime, as keys (`getPinnedSessionKey`).
- * The authority is each session's metadata, which the server shares with every
- * client; this store derives the set from the global session list and overlays
- * two things on it: a pin or unpin the user just clicked, until the server
- * answers, and pins an older version kept on this device only, until they are
- * written to the server (`sync/session-pins.ts`).
- */
-type SessionPinnedStore = { ids: Set<string> };
-=======
-type SessionPinnedStore = { ids: Set<string> };
->>>>>>> upstream/main
 
 const STORAGE_KEY = 'oc.sessions.pinned.v2';
 const LEGACY_STORAGE_KEY = 'oc.sessions.pinned';

@@ -2,13 +2,6 @@ import type { Message, Part } from '@openchamber/agent-contract';
 import type { SessionContextUsage } from "../types/sessionTypes";
 
 type TokenBreakdown = {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    /** Server-reported window of the turn's final round-trip. Optional in the schema; absent on older servers. */
-    total?: number;
-=======
-    total?: number;
->>>>>>> upstream/main
     input?: number;
     cache?: {
         read?: number;
@@ -20,99 +13,7 @@ export type ContextFillMessage = Pick<Message, 'messageId' | 'role' | 'usage'>;
 
 type LatestContextFill = { state: 'measured'; index: number; totalTokens: number };
 
-<<<<<<< HEAD
 /** Canonical messages report measured usage; no compaction lifecycle is exposed. */
-||||||| bc50ba56aa
-    return inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens;
-};
-
-/**
- * Tokens the context window actually holds, from one message's token payload.
- *
- * The breakdown fields accumulate across every API round-trip inside a single
- * assistant turn: each tool call re-reads the whole (cached) prompt, so on a
- * multi-step turn `cache.read` alone can add up to several times the context
- * window (observed on opencode 1.18.18: cache.read 3,291,956 on a turn whose
- * 1M window really held 232,872 — rendered as a 330% context readout). The
- * server reports the final round-trip's window as `tokens.total` (optional in
- * the message schema, absent on older servers). Prefer it; fall back to
- * summing the fields only when the server did not send it.
- */
-export const contextTokensFromBreakdown = (breakdown: TokenBreakdown | null | undefined): number => {
-    if (!breakdown || typeof breakdown !== 'object') {
-        return 0;
-    }
-
-    const reportedTotal = breakdown.total;
-    if (typeof reportedTotal === 'number' && Number.isFinite(reportedTotal) && reportedTotal > 0) {
-        return reportedTotal;
-    }
-
-    return sumTokenBreakdown(breakdown);
-};
-
-export type ContextFillMessage = {
-    id?: string;
-    role?: string;
-    tokens?: TokenBreakdown;
-    /**
-     * Compaction records carry OpenCode's lifecycle for the summarizing turn
-     * here. Widened to `string` so a whole `Message` (a shell record reports its
-     * own statuses) still satisfies this reader.
-     */
-    status?: string;
-    error?: AssistantMessage['error'];
-};
-
-type LatestContextFill =
-    | { state: 'measured'; index: number; totalTokens: number }
-    /** Compacted since the last measured response; the current size is unknown. */
-    | { state: 'compacted'; index: number };
-
-/**
- * What the context window holds now, read from the newest message that can say.
- *
- * A compaction's own assistant record describes the summarizing request, not
- * the window left behind: its input is the pre-compaction history, and its
- * output leaves out the system prompt, the tools and the recent tail OpenCode
- * keeps. No number is right until the next response reports tokens, so a
- * finished compaction yields `compacted` instead of falling back to an older,
- * pre-compaction response. A compaction still running or one that failed has
- * not changed the window, so it is skipped and the previous reading stands.
- * OpenCode v2 records a compaction as its own `compaction` message carrying
- * that lifecycle in `status`, so "finished" is `status === 'completed'` with
- * no error rather than the v1 `summary && finish && !error` heuristic.
- */
-=======
-    return inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens;
-};
-
-export const contextTokensFromBreakdown = (breakdown: TokenBreakdown | null | undefined): number => {
-    if (!breakdown || typeof breakdown !== 'object') {
-        return 0;
-    }
-
-    const reportedTotal = breakdown.total;
-    if (typeof reportedTotal === 'number' && Number.isFinite(reportedTotal) && reportedTotal > 0) {
-        return reportedTotal;
-    }
-
-    return sumTokenBreakdown(breakdown);
-};
-
-export type ContextFillMessage = {
-    id?: string;
-    role?: string;
-    tokens?: TokenBreakdown;
-    status?: string;
-    error?: AssistantMessage['error'];
-};
-
-type LatestContextFill =
-    | { state: 'measured'; index: number; totalTokens: number }
-    | { state: 'compacted'; index: number };
-
->>>>>>> upstream/main
 export const findLatestContextFill = (messages: readonly ContextFillMessage[]): LatestContextFill | null => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];

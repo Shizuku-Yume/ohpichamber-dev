@@ -14,7 +14,6 @@ interface PullRequestSelection {
 
 interface PullRequestSelectionState {
   selections: Map<string, PullRequestSelection>;
-<<<<<<< HEAD
   /** A pull request another surface asked Changes to show, per directory. */
   diffRequests: Map<string, PullRequestDiffRequest>;
   /** Authority selected by the board, retained after the request is consumed. */
@@ -24,40 +23,15 @@ interface PullRequestSelectionState {
    * itself, in place of the Git selection: the one a requested PR belongs to,
    * until the next request for that folder or a repository picked there.
    */
-||||||| bc50ba56aa
-  /** A pull request another surface asked Changes to show, per directory. */
-  diffRequests: Map<string, PullRequestSource>;
-  /**
-   * The repository the phone's Changes shows, per folder that is not one
-   * itself, in place of the Git selection: the one a requested PR belongs to,
-   * until the next request for that folder or a repository picked there.
-   */
-=======
-  diffRequests: Map<string, PullRequestSource>;
->>>>>>> upstream/main
   changesRepositories: Map<string, string>;
   select: (key: string, source: PullRequestSource) => void;
   acceptHandoff: (key: string, source: PullRequestSource) => void;
-<<<<<<< HEAD
   /** Each call is a new request, so asking for the same PR again shows it again. */
   requestDiff: (directory: string, source: PullRequestSource, context: SourceControlReadContext, repository?: string | null) => void;
-||||||| bc50ba56aa
-  /** Each call is a new request, so asking for the same PR again shows it again. */
-  requestDiff: (directory: string, source: PullRequestSource, repository?: string | null) => void;
-=======
-  requestDiff: (directory: string, source: PullRequestSource, repository?: string | null) => void;
->>>>>>> upstream/main
   clearChangesRepository: (directory: string) => void;
-<<<<<<< HEAD
   /** Drops `source` once Changes has taken it, so it never comes back on another branch. */
   settleDiffRequest: (directory: string, request: PullRequestDiffRequest) => void;
   clearDiffContext: (directory: string, context: SourceControlReadContext) => void;
-||||||| bc50ba56aa
-  /** Drops `source` once Changes has taken it, so it never comes back on another branch. */
-  settleDiffRequest: (directory: string, source: PullRequestSource) => void;
-=======
-  settleDiffRequest: (directory: string, source: PullRequestSource) => void;
->>>>>>> upstream/main
 }
 
 const remember = (state: PullRequestSelectionState, key: string, selection: PullRequestSelection) => {

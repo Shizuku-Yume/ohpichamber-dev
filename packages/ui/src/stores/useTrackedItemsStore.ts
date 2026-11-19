@@ -98,34 +98,17 @@ export const readTrackedIssueState = (records: TrackedRecords, item: TrackedThre
   return record?.type === 'issue' ? record.state : null;
 };
 
-<<<<<<< HEAD
 /** Live state of a tracker work item; null until known. */
 const readTrackedWorkItemState = (records: TrackedRecords, item: TrackedWorkItem): TrackerLiveSummary | null => {
-||||||| bc50ba56aa
-/** Live state of a tracker work item; null until known. */
-export const readTrackedWorkItemState = (records: TrackedRecords, item: TrackedWorkItem): TrackerLiveSummary | null => {
-=======
-export const readTrackedWorkItemState = (records: TrackedRecords, item: TrackedWorkItem): TrackerLiveSummary | null => {
->>>>>>> upstream/main
   const record = records[storeKey(getRuntimeKey(), trackedItemKey(item))];
   return record?.type === 'work-item' ? record.state : null;
 };
 
-<<<<<<< HEAD
 /**
  * The badge of a linked pull or merge request: the same colour and status
  * rule as a branch's PR. Null while its state is not known.
  */
 const readTrackedPullVisualSummary = (
-||||||| bc50ba56aa
-/**
- * The badge of a linked pull or merge request: the same colour and status
- * rule as a branch's PR. Null while its state is not known.
- */
-export const readTrackedPullVisualSummary = (
-=======
-export const readTrackedPullVisualSummary = (
->>>>>>> upstream/main
   records: TrackedRecords,
   { item, url, title }: { item: TrackedThread<'pull'>; url: string; title: string },
 ): PrVisualSummary | null => {

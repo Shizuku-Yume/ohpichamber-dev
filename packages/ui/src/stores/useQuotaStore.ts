@@ -41,7 +41,6 @@ interface QuotaSettingsState {
 interface QuotaStore extends QuotaSettingsState {
   results: ProviderResult[];
   extensionProviders: ExtensionQuotaProvider[];
-<<<<<<< HEAD
   /**
    * How far the instance's usage read has got. `unknown` is not "no providers
    * configured": the settings and the provider list have not been read yet, so
@@ -49,10 +48,6 @@ interface QuotaStore extends QuotaSettingsState {
    */
   phase: LoadPhase;
   /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
-||||||| bc50ba56aa
-  /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
-=======
->>>>>>> upstream/main
   loadedRuntimeKey: string | null;
   /** Workspace whose quota results the loaded instance describes. */
   loadedWorkspaceId: string | null;
@@ -138,22 +133,11 @@ const applyExtensionProviders = (next: ExtensionQuotaProvider[]): void => {
   if (arrived.length > 0 && (loadedRuntimeKey !== null || results.length > 0)) void fetchQuotas(arrived);
 };
 
-<<<<<<< HEAD
 /** Overlapping loads share one list read, as they share one request per provider. */
 const readConfiguredProviders = (workspaceId: string) => {
   if (configuredProvidersRequest && configuredProvidersWorkspaceId === workspaceId) return configuredProvidersRequest;
   configuredProvidersWorkspaceId = workspaceId;
   const request: Promise<{ providers: ReadonlySet<string>; nativeToLogical: Record<string, string> } | null> = fetchConfiguredQuotaProviders({ workspaceId }).finally(() => {
-||||||| bc50ba56aa
-/** Overlapping loads share one list read, as they share one request per provider. */
-const readConfiguredProviders = () => {
-  if (configuredProvidersRequest) return configuredProvidersRequest;
-  const request: Promise<ReadonlySet<string> | null> = fetchConfiguredQuotaProviders().finally(() => {
-=======
-const readConfiguredProviders = () => {
-  if (configuredProvidersRequest) return configuredProvidersRequest;
-  const request: Promise<ReadonlySet<string> | null> = fetchConfiguredQuotaProviders().finally(() => {
->>>>>>> upstream/main
     if (configuredProvidersRequest === request) configuredProvidersRequest = null;
   });
   configuredProvidersRequest = request;
@@ -236,14 +220,8 @@ export const useQuotaStore = create<QuotaStore>()(
       fetchQuotas: async (providerIds, { invalidate = false } = {}) => {
         const generation = quotaGeneration;
         try {
-<<<<<<< HEAD
           const workspaceId = useConfigStore.getState().workspaceId;
           if (!workspaceId) return false;
-||||||| bc50ba56aa
-          // One read instead of a request per provider nobody has a credential
-          // for. An account switch names providers it knows are configured.
-=======
->>>>>>> upstream/main
           if (!invalidate) set({ isLoading: true });
           const listResult = invalidate ? null : await readConfiguredProviders(workspaceId);
           if (generation !== quotaGeneration) return false;
@@ -275,19 +253,10 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchProviderQuota: async (providerId, invalidate = false) => {
-<<<<<<< HEAD
         const workspaceId = useConfigStore.getState().workspaceId;
         if (!workspaceId) return false;
         const requestKey = quotaRequestKey(workspaceId, providerId);
         const existing = quotaRequests.get(requestKey);
-||||||| bc50ba56aa
-        // Concurrent callers share one request per provider. `invalidate` is how
-        // a provider-account switch says the shared request, and any sample it
-        // produces, describe the account being switched away from.
-        const existing = quotaRequests.get(providerId);
-=======
-        const existing = quotaRequests.get(providerId);
->>>>>>> upstream/main
         if (existing && !invalidate) return existing.promise;
         if (existing) {
           existing.controller.abort();
@@ -343,20 +312,11 @@ export const useQuotaStore = create<QuotaStore>()(
       ensureLoadedForRuntime: async ({ refresh = false, allProviders = false, visibleOnly = false } = {}) => {
         const runtimeKey = getRuntimeKey();
         if (isTransientRuntimeKey(runtimeKey)) return;
-<<<<<<< HEAD
         // Wait for the instance to report itself initialised. Asking earlier
         // gets an honest-looking "not configured" for every provider, which is
         // then cached as if it were the answer.
         const config = useConfigStore.getState();
         if (!config.isInitialized || !config.workspaceId) return;
-||||||| bc50ba56aa
-        // Wait for the instance to report itself initialised. Asking earlier
-        // gets an honest-looking "not configured" for every provider, which is
-        // then cached as if it were the answer.
-        if (!useConfigStore.getState().isInitialized) return;
-=======
-        if (!useConfigStore.getState().isInitialized) return;
->>>>>>> upstream/main
         if (visibleOnly && !hasVisibleQuotaReadout()) return;
         if (!refresh && get().loadedRuntimeKey === runtimeKey && get().loadedWorkspaceId === config.workspaceId) return;
         const generation = quotaGeneration;
@@ -391,7 +351,6 @@ export const useQuotaStore = create<QuotaStore>()(
             return;
           }
           const answered = await fetchQuotas(providerIds);
-<<<<<<< HEAD
           // Mark the instance loaded only once it actually answered. Claiming it
           // up front meant a load that failed on a cold or briefly unreachable
           // instance was never attempted again — Usage would stay empty until
@@ -401,15 +360,6 @@ export const useQuotaStore = create<QuotaStore>()(
           // a silent "never loaded", so a consumer can stop waiting on it.
           if (answered) set({ loadedRuntimeKey: runtimeKey, loadedWorkspaceId: config.workspaceId, phase: 'ready' });
           else if (get().phase === 'unknown') set({ phase: 'error' });
-||||||| bc50ba56aa
-          // Mark the instance loaded only once it actually answered. Claiming it
-          // up front meant a load that failed on a cold or briefly unreachable
-          // instance was never attempted again — Usage would stay empty until
-          // the three-minute refresh, or forever after a switch.
-          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey });
-=======
-          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey });
->>>>>>> upstream/main
         })().finally(() => { if (generation === quotaGeneration) inFlightRuntimeLoad = null; });
 
         return inFlightRuntimeLoad;

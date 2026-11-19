@@ -11,7 +11,6 @@ export type SessionWorktreeAttachment = {
 };
 
 export interface AttachedFile {
-<<<<<<< HEAD
  id: string;
  file: File;
  dataUrl: string;
@@ -25,36 +24,6 @@ export interface AttachedFile {
  /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
   *  Removing any entry with this ID cascades to all entries in the group. */
  sourceDocumentId?: string;
-||||||| bc50ba56aa
-    id: string;
-    file: File;
-    dataUrl: string;
-    mimeType: string;
-    filename: string;
-    size: number;
-    source: "local" | "server" | "vscode";
-    serverPath?: string;
-    vscodePath?: string;
-    vscodeSource?: 'file' | 'selection';
-    /** Original desktop file path used as the model-facing name. */
-    agentPath?: string;
-    /** Shared ID linking entries extracted from the same document (PPTX, DOCX, etc.).
-     *  Removing any entry with this ID cascades to all entries in the group. */
-    sourceDocumentId?: string;
-=======
-    id: string;
-    file: File;
-    dataUrl: string;
-    mimeType: string;
-    filename: string;
-    size: number;
-    source: "local" | "server" | "vscode";
-    serverPath?: string;
-    vscodePath?: string;
-    vscodeSource?: 'file' | 'selection';
-    agentPath?: string;
-    sourceDocumentId?: string;
->>>>>>> upstream/main
 }
 
 export type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
@@ -73,25 +42,6 @@ interface SessionContextLimits {
 }
 
 export type SessionContextUsage =
-<<<<<<< HEAD
- | (SessionContextLimits & {
-  state: 'measured';
-  totalTokens: number;
-  percentage: number;
-  normalizedOutput?: number;
- })
- /** Compacted and no response has reported tokens since: the size is unknown, not zero. */
- | (SessionContextLimits & { state: 'compacted' });
-||||||| bc50ba56aa
-    | (SessionContextLimits & {
-        state: 'measured';
-        totalTokens: number;
-        percentage: number;
-        normalizedOutput?: number;
-    })
-    /** Compacted and no response has reported tokens since: the size is unknown, not zero. */
-    | (SessionContextLimits & { state: 'compacted' });
-=======
     | (SessionContextLimits & {
         state: 'measured';
         totalTokens: number;
@@ -99,7 +49,6 @@ export type SessionContextUsage =
         normalizedOutput?: number;
     })
     | (SessionContextLimits & { state: 'compacted' });
->>>>>>> upstream/main
 
 const DEFAULT_MESSAGE_LIMIT = 200;
 const MEMORY_CONSTANTS = {

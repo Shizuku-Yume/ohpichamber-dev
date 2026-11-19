@@ -32,62 +32,13 @@ interface DirectoryStore {
 export const isDirectoryUnknown = (state: Pick<DirectoryStore, 'currentDirectory' | 'isHomeReady'>): boolean =>
   !state.isHomeReady && (state.currentDirectory === '/' || state.currentDirectory === '');
 
-<<<<<<< HEAD
-/**
- * The directory the app works in while no project is open: the managed chats
- * root, where a chat draft works anyway. Every OpenCode read names the app's
- * directory, and with the home there OpenCode started over the whole home
- * folder, file watcher and MCP servers included. The home stays the answer
- * only when the server cannot name the chats root.
- */
-||||||| bc50ba56aa
-/**
- * The directory the app works in while no project is open: the managed chats
- * root, where a chat draft works anyway. Every OpenCode read names the app's
- * directory, and with the home there OpenCode started over the whole home
- * folder, file watcher and MCP servers included. The home stays the answer
- * only when the server cannot name the chats root, or VS Code has a workspace.
- */
-=======
->>>>>>> upstream/main
 const noProjectDirectory = (home: string, chatsRoot: string | null | undefined): string =>
   chatsRoot || home;
 
-<<<<<<< HEAD
 /** The chats root the server names; null when it does not answer. */
 const resolveChatsRoot = (): Promise<string | null> => (
   resolveChatsRootDirectory().catch(() => null)
 );
-||||||| bc50ba56aa
-/** The chats root the host names; workspace windows keep their existing directory. */
-const resolveChatsRoot = async (): Promise<string | null> => {
-  if (isVSCodeRuntime() && !isVSCodeWithoutWorkspace()) return null;
-  const runtimeKey = getRuntimeKey();
-  try {
-    const root = await resolveChatsRootDirectory();
-    if (getRuntimeKey() !== runtimeKey) return null;
-    // The host's home lookup is read-only. Bootstrap owns making its working
-    // directory exist before any directory-scoped OpenCode reads can start.
-    if (isVSCodeWithoutWorkspace()) await opencodeClient.createDirectory(root);
-    return root;
-  } catch {
-    return null;
-  }
-};
-=======
-const resolveChatsRoot = async (): Promise<string | null> => {
-  if (isVSCodeRuntime() && !isVSCodeWithoutWorkspace()) return null;
-  const runtimeKey = getRuntimeKey();
-  try {
-    const root = await resolveChatsRootDirectory();
-    if (getRuntimeKey() !== runtimeKey) return null;
-    if (isVSCodeWithoutWorkspace()) await opencodeClient.createDirectory(root);
-    return root;
-  } catch {
-    return null;
-  }
-};
->>>>>>> upstream/main
 
 let cachedHomeDirectory: string | null = null;
 let homeResolveGeneration = 0;
@@ -202,7 +153,6 @@ const normalizeHomeCandidate = (value?: string | null) => {
   return normalized && normalized !== '/' ? normalized : null;
 };
 
-<<<<<<< HEAD
 const persistResolvedHome = (resolved: string) => {
   cachedHomeDirectory = resolved;
   if (typeof window !== 'undefined') {
@@ -212,11 +162,6 @@ const persistResolvedHome = (resolved: string) => {
   return resolved;
 };
 
-||||||| bc50ba56aa
-// Stores nothing: an answer can arrive after a runtime switch, and only the
-// generation-checked commit in resolveHomeDirectory may store a home.
-=======
->>>>>>> upstream/main
 const initializeHomeDirectory = async () => {
   const acceptCandidate = (candidate?: string | null) => {
     const normalized = normalizeHomeCandidate(candidate);
@@ -272,19 +217,10 @@ const initialCurrentDirectory = (() => {
   if (persisted) {
     return resolveDirectoryPath(persisted, initialHomeDirectory);
   }
-<<<<<<< HEAD
   // No project open: no directory until the server names the chats root
   // (noProjectDirectory). Nothing is read for an empty directory, and the app
   // stays unmounted until then because the home is not ready either.
   return '';
-||||||| bc50ba56aa
-  // No project open: no directory until the server names the chats root
-  // (noProjectDirectory). Nothing is read for an empty directory, and the app
-  // stays unmounted until then because the home is not ready either.
-  return isVSCodeRuntime() && !isVSCodeWithoutWorkspace() ? initialHomeDirectory : '';
-=======
-  return isVSCodeRuntime() && !isVSCodeWithoutWorkspace() ? initialHomeDirectory : '';
->>>>>>> upstream/main
 })();
 
 if (initialCurrentDirectory) {
@@ -451,21 +387,11 @@ export const useDirectoryStore = create<DirectoryStore>()(
         const historyChanged = resolvedHistory.some((entry, index) => entry !== state.directoryHistory[index]);
         const currentChanged = Boolean(resolvedCurrent && resolvedCurrent !== state.currentDirectory);
 
-<<<<<<< HEAD
         // No project and no chats root: the server did not answer, as before
         // login on a server with a UI password while the home is known from
         // storage. It stays not ready, so the session gate resolves again after
         // login; marked ready, the app would work in the home all session.
         const awaitingChatsRoot = shouldReplaceCurrent && !chatsRoot;
-||||||| bc50ba56aa
-        // No project and no chats root: the server did not answer, as before
-        // login on a server with a UI password while the home is known from
-        // storage. It stays not ready, so the session gate resolves again after
-        // login; marked ready, the app would work in the home all session.
-        const awaitingChatsRoot = shouldReplaceCurrent && (!isVSCodeRuntime() || isVSCodeWithoutWorkspace()) && !chatsRoot;
-=======
-        const awaitingChatsRoot = shouldReplaceCurrent && (!isVSCodeRuntime() || isVSCodeWithoutWorkspace()) && !chatsRoot;
->>>>>>> upstream/main
         const updates: Partial<DirectoryStore> = {
           homeDirectory: resolvedHome,
           hasPersistedDirectory: hasSavedLastDirectory,
@@ -500,17 +426,9 @@ export const useDirectoryStore = create<DirectoryStore>()(
       },
 
       resetForRuntimeSwitch: () => {
-<<<<<<< HEAD
         // Nothing is stored or sent: the stored last directory is the previous
         // host's to keep, and the new host's settings are not this path's.
         hostFilesystem.setDirectory(undefined);
-||||||| bc50ba56aa
-        // Nothing is stored or sent: the stored last directory is the previous
-        // host's to keep, and the new host's settings are not this path's.
-        opencodeClient.setDirectory(undefined);
-=======
-        opencodeClient.setDirectory(undefined);
->>>>>>> upstream/main
         invalidateFileSearchCache();
         set({
           currentDirectory: '/',

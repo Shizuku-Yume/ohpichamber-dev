@@ -17,47 +17,12 @@ export const nextPermissionMode = (mode: PermissionMode, safetyAvailable: boolea
   return "ask";
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The mode the UI writes onto a session it has just created: the user's own
- * choice, else, in an isolated space, the Settings default the composer showed.
- * The host's server writes that default itself when the session is created,
- * and so does the server inside a space from the file the host keeps there;
- * this write covers a space still running a server from before that file.
- * `undefined` writes nothing.
- */
-export const permissionModeForNewSession = (
-  choice: PermissionMode | undefined,
-  inSpace: boolean,
-  defaultMode: PermissionMode,
-): PermissionMode | undefined => choice ?? (inSpace && defaultMode !== "ask" ? defaultMode : undefined);
-=======
-export const permissionModeForNewSession = (
-  choice: PermissionMode | undefined,
-  inSpace: boolean,
-  defaultMode: PermissionMode,
-): PermissionMode | undefined => choice ?? (inSpace && defaultMode !== "ask" ? defaultMode : undefined);
->>>>>>> upstream/main
 
 export type PermissionPolicySnapshot = {
   modes: PermissionModeMap;
   revision?: number;
 };
 
-<<<<<<< HEAD
-/**
- * A server policy received over HTTP or as a broadcast. `modes` is the policy;
- * servers from before the modes send only `sessions` as on/off, where on means `auto`.
- */
-||||||| bc50ba56aa
-/**
- * A policy as the server or VS Code's bridge sends it, over HTTP or as a
- * broadcast. `modes` is the policy; servers from before the modes and VS Code
- * send only `sessions` as on/off, where on means `auto`.
- */
-=======
->>>>>>> upstream/main
 export const permissionPolicyWireSchema = z.object({
   sessions: z.record(z.string().min(1), z.boolean()),
   modes: z.record(z.string().min(1), permissionModeSchema).optional(),
@@ -100,17 +65,6 @@ const resolveLineage = (
   return result;
 };
 
-<<<<<<< HEAD
-/**
- * The nearest explicit mode up the session's lineage, or `null` when the
- * policy has not been read. `null` is not `ask`: a policy read that has not
- * answered must not be rendered as the user having chosen Ask, and callers
- * that need a concrete mode pass the configured default themselves.
- */
-||||||| bc50ba56aa
-/** The nearest explicit mode up the session's lineage, `ask` when there is none. */
-=======
->>>>>>> upstream/main
 export const resolvePermissionMode = (input: {
   modes: PermissionModeMap;
   sessions: readonly Session[];

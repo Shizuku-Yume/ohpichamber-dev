@@ -116,76 +116,14 @@ export async function dispatchRunPrompt(input: {
   const expanded = await expandNativeFileResource(input.prompt, input.directory);
   assertCurrent();
   if (input.goal) {
-<<<<<<< HEAD
     // Before the prompt, as on an ordinary send: a lane that cannot get its
     // goal stays unstarted instead of running as a plain session.
     await canonicalClient.goal(input.sessionId, {
       op: 'create',
       objective: (expanded?.content ?? input.prompt).trim(),
       tokenBudget: input.goal.tokenBudget,
-||||||| bc50ba56aa
-    // Before the prompt, as on an ordinary send: a lane that cannot get its
-    // goal stays unstarted instead of running as a plain session.
-    await setSessionGoal(
-      input.sessionId,
-      input.directory,
-      { objective: resolveGoalObjective(text, input.directory), tokenBudget: input.goal.tokenBudget },
-      null,
-      input.runtimeKey,
-    );
-    input.assertCurrent();
-  }
-  try {
-    await routeMessage({
-      runtimeKey: input.runtimeKey,
-      sessionId: input.sessionId,
-      directory: input.directory,
-      content: text,
-      providerID: input.providerID,
-      modelID: input.modelID,
-      variant: input.variant,
-      agent: input.agent,
-      files: input.files,
-      additionalParts: input.goal ? [{ text: sessionGoalIntro(input.goal.tokenBudget), synthetic: true }] : undefined,
-      ready: knowledgeSync,
-=======
-    await setSessionGoal(
-      input.sessionId,
-      input.directory,
-      { objective: resolveGoalObjective(text, input.directory), tokenBudget: input.goal.tokenBudget },
-      null,
-      input.runtimeKey,
-    );
-    input.assertCurrent();
-  }
-  try {
-    await routeMessage({
-      runtimeKey: input.runtimeKey,
-      sessionId: input.sessionId,
-      directory: input.directory,
-      content: text,
-      providerID: input.providerID,
-      modelID: input.modelID,
-      variant: input.variant,
-      agent: input.agent,
-      files: input.files,
-      additionalParts: input.goal ? [{ text: sessionGoalIntro(input.goal.tokenBudget), synthetic: true }] : undefined,
-      ready: knowledgeSync,
->>>>>>> upstream/main
     });
-<<<<<<< HEAD
     assertCurrent();
-||||||| bc50ba56aa
-  } catch (error) {
-    // With no turn the server never settles the goal, and an active goal
-    // keeps the lane working and holds auto-fusion for good.
-    if (input.goal) await clearSessionGoal(input.sessionId, input.directory).catch(() => undefined);
-    throw error;
-=======
-  } catch (error) {
-    if (input.goal) await clearSessionGoal(input.sessionId, input.directory).catch(() => undefined);
-    throw error;
->>>>>>> upstream/main
   }
   const model = expanded?.modelSelection ?? { providerId: input.providerId, modelId: input.modelId };
   useSelectionStore.getState().saveSessionModelSelection(input.sessionId, model.providerId, model.modelId);
@@ -291,12 +229,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
 
           const createdRuns: Array<{
             sessionId: string;
-<<<<<<< HEAD
             workspaceId: string;
-||||||| bc50ba56aa
-            /** Where the run's session starts: the worktree root, or the project's folder inside it. */
-=======
->>>>>>> upstream/main
             directory: string;
             providerID: string;
             modelID: string;
