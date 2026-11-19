@@ -311,7 +311,9 @@ and the send path reading the same grammar.
 - `state/useDraftTarget.ts` presents project and worktree choices. The list can
   omit a restored or bootstrapping worktree, so it must not reset the draft
   destination. The session UI store owns recovery when the host confirms a
-  directory is missing. The hook owns advisory dirty state and clears it
+  directory is missing. On cold launch, the store keeps the saved project
+  binding for a matching directory even before worktree discovery completes.
+  The hook owns advisory dirty state and clears it
   when the target changes so a warning never names a previous branch.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
   state and registers its application shortcuts locally. The desktop project

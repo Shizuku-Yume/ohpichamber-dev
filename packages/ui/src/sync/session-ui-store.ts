@@ -1531,7 +1531,12 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       // A chat session leaves a managed scratch directory behind as the current
       // one; it owns no project, so it must not decide this draft's project —
       // the recorded target below knows which project the user last chose.
-      if (currentDirectory && !isChatDirectoryPath(currentDirectory)) return currentDirProject
+      if (currentDirectory && !isChatDirectoryPath(currentDirectory)) {
+        // Worktree discovery may not have run yet. If the live path matches
+        // the recorded target, keep its registered project across launches.
+        return currentDirProject
+          ?? (restoresProjectTarget && currentDirectory === persistedTarget?.directory ? persistedProject : null)
+      }
       return persistedProject ?? fallbackProject
     })()
 

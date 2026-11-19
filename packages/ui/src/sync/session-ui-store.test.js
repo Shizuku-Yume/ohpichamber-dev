@@ -751,7 +751,7 @@ describe('openNewSessionDraft project binding', () => {
     }
   });
 
-  test('leaves an automatic draft on the recorded project when the live directory is unmatched', () => {
+  test('keeps an unmatched live directory when it differs from the recorded project target', () => {
     getDeferredSafeStorage().setItem(
       DRAFT_TARGET_KEY,
       JSON.stringify({ projectId: projectA.id, directory: projectA.path, target: 'project' }),
@@ -764,6 +764,26 @@ describe('openNewSessionDraft project binding', () => {
     expect(draft.target).toBe('project');
     expect(draft.selectedProjectId).toBeNull();
     expect(draft.directoryOverride).toBe('/external/worktree');
+  });
+
+  test('preserves the recorded project for an undiscovered worktree across consecutive cold draft opens', () => {
+    const worktree = '/external/linked-worktree';
+    getDeferredSafeStorage().setItem(
+      DRAFT_TARGET_KEY,
+      JSON.stringify({ projectId: projectA.id, directory: worktree, target: 'project' }),
+    );
+    useDirectoryStore.setState({ currentDirectory: worktree });
+
+    for (let launch = 0; launch < 2; launch += 1) {
+      useSessionUIStore.setState({ availableWorktreesByProject: new Map() });
+      useSessionUIStore.getState().openNewSessionDraft({ automatic: true });
+      expect(useSessionUIStore.getState().newSessionDraft).toMatchObject({
+        target: 'project',
+        selectedProjectId: projectA.id,
+        directoryOverride: worktree,
+      });
+      useSessionUIStore.getState().closeNewSessionDraft();
+    }
   });
 
   test('respects explicit directoryOverride over active project', () => {
