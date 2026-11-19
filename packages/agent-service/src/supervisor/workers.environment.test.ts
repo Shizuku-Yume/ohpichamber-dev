@@ -50,6 +50,7 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     OMP_PROFILE: 'allowlisted-profile',
     PI_PROFILE: 'allowlisted-pi-profile',
     OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
+    BUN_BE_BUN: '1',
     SystemRoot: 'C:\\Windows',
     PATHEXT: '.COM;.EXE;.BAT;.CMD',
   };
@@ -59,6 +60,7 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     OMP_PROFILE: 'allowlisted-profile',
     PI_PROFILE: 'allowlisted-pi-profile',
     OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
+    BUN_BE_BUN: '1',
     SystemRoot: 'C:\\Windows',
     PATHEXT: '.COM;.EXE;.BAT;.CMD',
   });
@@ -78,6 +80,8 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
         OPENAI_API_KEY: 'overlay-key',
         OHPICHAMBER_INTERNAL_SECRET: 'overlay-secret',
         OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'overlay-token',
+        BUN_BE_BUN: '0',
+        bun_be_bun: '0',
         PI_CODING_AGENT_DIR: '/overlay-agent-directory',
         pi_coding_agent_dir: '/lowercase-overlay-directory',
         OMP_PROFILE: 'overlay-profile',
@@ -94,6 +98,8 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     expect(observed).toContain('OPENAI_API_KEY=overlay-key');
     expect(observed).toContain(`PI_CODING_AGENT_DIR=${agentDirectory}`);
     expect(observed).toContain('OPENCHAMBER_MANAGED_PROCESS_TOKEN=tree-token');
+    expect(observed).toContain('BUN_BE_BUN=1');
+    expect(observed.toLowerCase()).not.toContain('bun_be_bun=0');
 
     expect(observed).toContain('SystemRoot=');
     expect(observed).toContain('PATHEXT=');

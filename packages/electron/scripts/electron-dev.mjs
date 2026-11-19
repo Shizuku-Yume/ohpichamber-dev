@@ -211,6 +211,7 @@ async function main() {
   const agentEnvironment = {
     OHPICHAMBER_BUN: agentRuntime.bunPath,
     OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: agentRuntime.entrypoint,
+    ...agentRuntime.env,
   };
   await runProcess('bun', ['run', '--cwd', 'packages/electron', 'bundle:main']);
 

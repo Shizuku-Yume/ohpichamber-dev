@@ -81,6 +81,25 @@ test('detectSystemOmpRuntime honors explicit operator path override', () => {
     });
     assert.equal(result.source, 'operator');
     assert.equal(result.bunPath, customBun);
+    assert.equal(result.env, undefined);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('detectSystemOmpRuntime preserves Bun mode for an already-selected OMP binary', () => {
+  const fixture = createMockRuntimeFixture();
+  try {
+    const result = detectSystemOmpRuntime({
+      bundledRuntime: { bunPath: fixture.bunPath, entrypoint: fixture.entrypoint },
+      env: {
+        OHPICHAMBER_BUN: path.join(fixture.root, process.platform === 'win32' ? 'omp.exe' : 'omp'),
+        OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: fixture.entrypoint,
+        BUN_BE_BUN: '1',
+      },
+    });
+    assert.equal(result.source, 'operator');
+    assert.deepEqual(result.env, { BUN_BE_BUN: '1' });
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -151,7 +170,7 @@ test('probeSystemOmp rejects identity output that does not contain omp identifie
   }
 });
 
-test('detectSystemOmpRuntime selects compatible system candidate and assigns BUN_BE_BUN when needed', () => {
+test('probeSystemOmp assigns BUN_BE_BUN when only the OMP interpreter is available', { skip: process.platform === 'win32' }, () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'system-omp-success-'));
   const fakeOmp = path.join(tempDir, 'omp');
   const scriptContent = `#!/bin/sh
@@ -174,14 +193,12 @@ exit 0
   try {
     const fixture = createMockRuntimeFixture();
     try {
-      const bundled = { bunPath: fixture.bunPath, entrypoint: fixture.entrypoint };
-      const result = detectSystemOmpRuntime({
-        bundledRuntime: bundled,
-        candidatePaths: [fakeOmp],
+      const result = probeSystemOmp(fakeOmp, {
+        bundledServiceDir: path.dirname(path.dirname(fixture.entrypoint)),
         env: { PATH: '' },
-        home: tempDir,
       });
-      assert.equal(result.source, 'system');
+      assert.equal(result.ok, true);
+      assert.equal(result.bunPath, fakeOmp);
       assert.equal(result.ompVersion, '18.16.0');
       assert.equal(result.bunVersion, '1.2.0');
       assert.equal(result.env?.BUN_BE_BUN, '1');

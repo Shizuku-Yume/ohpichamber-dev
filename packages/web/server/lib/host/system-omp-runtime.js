@@ -400,6 +400,7 @@ export function detectSystemOmpRuntime({
       bunPath: envBun,
       entrypoint: envEntry || bundledEntrypoint || '',
       path: envBun,
+      ...(env.BUN_BE_BUN === '1' ? { env: { BUN_BE_BUN: '1' } } : {}),
     };
   }
 
