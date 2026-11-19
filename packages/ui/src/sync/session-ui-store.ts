@@ -37,6 +37,7 @@ import { expandNativeFileResource } from '@/api/fileResourceExpansion'
 import { selectAvailableSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
+import { getMultiRunMembership, withMultiRunMembership } from "@/lib/multirun/identity"
 import { normalizePath } from "@/lib/pathNormalization"
 import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getChatsRootFromDirectory, isChatDirectoryPath, warmChatsRootDirectory } from "@/lib/chatDirectories"
 import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
@@ -2496,15 +2497,21 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     const ownedDirectory = normalizePath(directory ?? get().getDirectoryForSession(previousSessionId))
     const globalStore = useGlobalSessionsStore.getState()
     const previousRow = globalStore.entityById.get(previousSessionId)
-    if (previousRow) globalStore.removeSessions([previousSessionId])
     // The service rekeys a root to a self-rooted session whose branch carries
     // the pre-branch conversation, so the projection keeps the same owner and
     // only the identity changes.
     if (previousRow && ownedDirectory) {
-      useGlobalSessionsStore.getState().upsertSession({
-        ...previousRow, sessionId, rootSessionId: sessionId, parentSessionId: undefined,
-      })
+      const membership = getMultiRunMembership(previousRow)
+      const metadata = membership
+        ? withMultiRunMembership(previousRow, { ...membership, sessionID: sessionId })
+        : previousRow.metadata
+      globalStore.applySessionMutations([
+        { type: "remove", sessionId: previousSessionId },
+        { type: "upsert", session: { ...previousRow, sessionId, rootSessionId: sessionId, parentSessionId: undefined, metadata } },
+      ])
       registerSessionDirectory(sessionId, ownedDirectory)
+    } else if (previousRow) {
+      globalStore.removeSessions([previousSessionId])
     }
     // Retire the pre-branch identity in one pass: its cached loads, child-store
     // projection and live recovery stream all address an id both authorities
