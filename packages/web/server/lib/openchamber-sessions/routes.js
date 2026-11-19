@@ -27,6 +27,7 @@ const SessionReopenScopeSchema = z.strictObject({
   env: z.record(z.string(), z.string()).optional(),
   hostTools: z.record(z.string(), z.boolean()).optional(),
 });
+const NativeSessionListSchema = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) });
 const COLD_REFUSAL_CODES = new Set(['SESSION_NOT_FOUND', 'SERVICE_UNAVAILABLE', 'SESSION_RESTORE_FAILED']);
 /**
  * A verified refusal that means the addressed root has no live worker, so a
@@ -172,8 +173,31 @@ const createCanonicalSessionService = (dependencies) => {
       return result;
     }
   };
+  const admissionRecoveries = new Map();
+  // A create admission stranded by an earlier Host process is settled by the
+  // Agent Service's complete listing of its workspace: the Host chose the root
+  // id, so a listed root is registered and an absent one was never admitted.
+  const recoverPriorCreateAdmissions = (scope) => {
+    const running = admissionRecoveries.get(scope.workspaceId);
+    if (running) return running;
+    const recovery = (async () => {
+      for (const admission of await agentScopeStore.listPriorCreateAdmissions(scope.workspaceId)) {
+        const owner = await resolveWorkspaceScope(admission.workspaceId);
+        if (!owner) continue;
+        const listed = NativeSessionListSchema.safeParse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(owner.workspaceId)}`).catch(() => null));
+        if (!listed.success || listed.data.errors.length) continue;
+        const roots = listed.data.items.filter((session) => session.rootSessionId === admission.rootSessionId);
+        if (roots.some((session) => session.projectId !== owner.projectId || session.workspaceId !== owner.workspaceId)) continue;
+        if (!(await Promise.all(roots.map(registerSessionScope))).every(Boolean)) continue;
+        await agentScopeStore.releaseSessionAdmission(admission.id);
+      }
+    })().catch(() => {}).finally(() => admissionRecoveries.delete(scope.workspaceId));
+    admissionRecoveries.set(scope.workspaceId, recovery);
+    return recovery;
+  };
   const withSessionAdmission = async (scope, operation, rootSessionId, work, readOnly = false) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host session admission authority is unavailable', 503);
+    await recoverPriorCreateAdmissions(scope);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
     let complete = false;
     try {
@@ -492,7 +516,7 @@ const createCanonicalSessionService = (dependencies) => {
         const workspace = await resolveWorkspaceScope(id);
         if (!workspace) throw new OpenChamberControlError('Workspace scope is unavailable during global session listing', workspaceId ? 404 : 503, { code: workspaceId ? 'SESSION_NOT_FOUND' : 'SERVICE_UNAVAILABLE' });
         return await withSessionAdmission(workspace, 'discovery', id, async () => {
-          const raw = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
+          const raw = NativeSessionListSchema.parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
           const sessionResults = await Promise.all(raw.items.map(async session => {
             try {
               if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });
