@@ -27,10 +27,16 @@ export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDial
   const { t } = useI18n();
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+  const pendingSettings = React.useRef(false);
 
   return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        {open ? <DialogContent className="@container min-w-0 max-h-[85dvh] overflow-y-auto">
+      <Dialog open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => {
+        if (next || !pendingSettings.current) return;
+        pendingSettings.current = false;
+        setSettingsPage('git');
+        setSettingsDialogOpen(true);
+      }}>
+        <DialogContent className="@container min-w-0 max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('gitView.context.configure')}</DialogTitle>
             <DialogDescription>{t('gitView.context.description')}</DialogDescription>
@@ -39,13 +45,12 @@ export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDial
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
           <DialogFooter className={DIALOG_DIVIDER_CLASS}>
             <Button size="sm" variant="ghost" onClick={() => {
+              pendingSettings.current = true;
               onOpenChange(false);
-              setSettingsPage('git');
-              setSettingsDialogOpen(true);
             }}>{t('gitView.context.settings')}</Button>
             <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>{t('dialog.common.actions.close')}</Button>
           </DialogFooter>
-        </DialogContent> : null}
+        </DialogContent>
       </Dialog>
   );
 };
