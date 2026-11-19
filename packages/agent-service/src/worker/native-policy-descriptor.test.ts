@@ -70,7 +70,7 @@ describe('trusted execution-free first-party target inspection', () => {
   });
   test('passes only allowlisted OMP internal URL reads through to the SDK grammar', async () => {
     const cwd = await workspace();
-    for (const url of ['agent://native', 'history://native', 'artifact://3', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'xd://memory', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
+    for (const url of ['agent://native', 'history://native', 'local://3.log', 'local://3.log:1-2', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'xd://memory', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
       const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: url } });
       expect(descriptor?.sourcePaths).toEqual([]);
       expect(descriptor?.internalReadUrls).toEqual([url]);

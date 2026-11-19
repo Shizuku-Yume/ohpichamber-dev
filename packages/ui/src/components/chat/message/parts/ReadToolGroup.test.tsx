@@ -27,13 +27,17 @@ describe('ReadToolGroup component', () => {
     expect(html).toContain('src/a.ts');
   });
 
-  test('internal URIs like proc:// and agent:// are rendered as non-interactive labels', () => {
+  test('internal URIs including local://N.log are rendered as non-interactive labels', () => {
     const items: ReadToolGroupItem[] = [
       {
         part: { type: 'tool_call', partId: 'p1', toolCallId: 'c1', toolName: 'read', input: { path: 'proc://bg_1' }, status: 'completed' },
         path: 'proc://bg_1',
         isError: false,
         isRunning: false,
+      },
+      {
+        part: { type: 'tool_call', partId: 'p3', toolCallId: 'c3', toolName: 'read', input: { path: 'local://3.log' }, status: 'completed' },
+        path: 'local://3.log', isError: false, isRunning: false,
       },
       {
         part: { type: 'tool_result', partId: 'p2', toolCallId: 'c2', toolName: 'read', isError: true, error: 'Permission denied', output: {} },
@@ -45,9 +49,11 @@ describe('ReadToolGroup component', () => {
     ];
 
     const html = renderToString(<I18nProvider><ReadToolGroup items={items} directory="/repo" initialExpanded /></I18nProvider>);
-    expect(html).toContain('Read (2)');
+    expect(html).toContain('Read (3)');
     expect(html).toContain('failed');
     expect(html).toContain('proc://bg_1');
+    expect(html).toContain('local://3.log');
+    expect(html).not.toContain('href="local://');
     expect(html).toContain('src/secret.ts');
     expect(html).toContain('Permission denied');
   });
