@@ -1602,6 +1602,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream covers the same native Host authentication contract or the connection implementation retires that contract.
 
+## 2026-11-19 - Android status-bar icons follow the painted background owner
+
+- **Decided:** retain `packages/ui/src/apps/mobileNativeChrome.ts` with native-background contrast from `WindowLayoutPlugin` when Capacitor pads the Android decor view, app-theme contrast when the WebView paints behind the bar, and refreshes on app/system appearance changes and resume.
+- **Instead of:** choosing icons solely from the app's dark class, assuming unsupported Android 15 background writes succeed, or forcing native insets off on WebViews with broken CSS safe areas.
+- **Because:** the installed WebView 124 reaches Capacitor SystemBars' native-inset fallback. On Android 15 the native strip follows Android's theme while StatusBar background writes are ignored; app-dark icons therefore became white on the native light background. Newer edge-to-edge WebViews still need app-theme icons because their strip is web content.
+- **Mine:** yes
+- **Revisit when:** Capacitor exposes native background ownership directly or native-inset fallback is retired.
+
 ## 2026-11-19 - Identify malformed mobile pairing links in the welcome form
 
 - **Decided:** Show the translated pairing rejection message when pasted `ohpichamber://` text cannot be parsed, and prevent address submission until it is corrected.
@@ -1615,3 +1623,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Instead of:** relying on Chromium's frame-wide native history for CodeMirror while both the file editor and chat composer are mounted.
 - **Because:** native Undo could revert and autosave an unfocused file after a chat paste, and native Redo did not restore the CodeMirror edit. Ordinary inputs still use native history.
 - **Revisit when:** upstream ports the same focused-editor history routing and tests.
+
+## 2026-11-19 - Refuse editor saves to externally missing paths
+
+- **Decided:** text editor saves send an optional `mustExist` condition through the shared Files API and content cache to the Host. Missing paths return `409`; the editor displays the error and retains its dirty draft. New-file writes and binary canvas uploads keep their existing behavior.
+- **Instead of:** silently recreating an externally renamed or deleted file, or replacing atomic writes with direct writes through an open handle.
+- **Because:** saving should not undo an external rename. Keep temporary-file replacement and check existence both at resolution and immediately before rename, cleaning the temporary file on refusal. A narrow check-to-rename race remains; this is not compare-and-swap or fingerprint conflict detection. Existing Host directory-query, workspace containment, native view documentation and FS search boundary decisions remain unchanged.
+- **Mine:** yes
+- **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.

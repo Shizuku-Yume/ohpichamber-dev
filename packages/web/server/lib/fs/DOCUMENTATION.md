@@ -32,7 +32,7 @@ The interval reopens the watcher before checking, so Linux/Windows folder deleti
       Add project dialog uses it to show a link to an added project as added.
     - `POST /api/fs/preview`
     - `GET /api/fs/preview/:grant/:path(*)`
-    - `POST /api/fs/write`
+    - `POST /api/fs/write` accepts `{ path, content, mustExist? }`. Editor text saves set `mustExist: true`: a missing target returns `409` with a renamed/deleted message, leaving the draft unsaved. Creation callers omit it. Conditional writes check existence at resolution and again after writing the temporary file, immediately before atomic replacement; refusal removes the temporary file. This minimizes but does not eliminate the check-to-rename race. Binary uploads are unchanged.
     - `POST /api/fs/upload`
     - `POST /api/fs/delete`
     - `POST /api/fs/rename` — renames or moves within one workspace root and

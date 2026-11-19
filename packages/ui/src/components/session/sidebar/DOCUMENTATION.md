@@ -21,8 +21,10 @@ kept at this root in `types.ts` and `utils.tsx`.
   directories together. Chats uses the same `activity:chats` identity for status
   and row projection, including a Chats-only sidebar. An unresolved global list
   keeps unopened groups loading; a global failure exposes Retry against the global
-  loader, without bootstrapping a directory. A complete global snapshot or complete
-  active-directory coverage stops loading independently of initialization. Archived
+  loader, without bootstrapping a directory. This also applies to failures scoped
+  to one group by the global list: only a global refresh replaces those errors.
+  A complete global snapshot or complete active-directory coverage stops loading
+  independently of initialization. Archived
   groups require global coverage. Directory failures keep their retry/access actions.
 - Root session right-click and overflow menus expose `Move to worktree`: a submenu
   listing the canonical primary and linked worktree destinations, with the current

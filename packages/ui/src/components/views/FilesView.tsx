@@ -694,7 +694,7 @@ const Dialogs: React.FC<DialogsProps> = ({
     );
 };
 
-export type FileTabCloseGuard = (directoryKey: string, paths: readonly string[], close: () => void) => void;
+export type FileTabCloseGuard = (directoryKey: string, paths: readonly string[] | 'all', close: () => void) => void;
 
 interface FilesViewProps {
   visible?: boolean;
@@ -1886,7 +1886,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       } else {
         // The file keeps the line endings it was loaded with, drawn or typed.
         const contentToWrite = serializeEditorContent(canvasSnapshot ? canvasSnapshot.content : draftContent, loadedFileLineEnding);
-        const result = await files.writeFile(selectedFile.path, contentToWrite);
+        const result = await files.writeFile(selectedFile.path, contentToWrite, { mustExist: true });
         if (!result?.success) {
           toast.error(t('filesView.toast.writeFileFailed'));
           return false;
@@ -2429,7 +2429,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         })
         .catch((error) => {
           if (cancelled || getRuntimeKey() !== requestRuntime || fileScopeRef.current !== requestScope) return;
-          // Unsaved edits stay on screen; saving writes the file back.
+          // Unsaved edits stay on screen; saving reports the missing file.
           const stat = isFileMissingError(error) ? 'missing' : 'failed';
           const sawMissing = missingSeenPathRef.current === selectedPath;
           const moving = isFilePathMoveInFlight(selectedPath) || pendingPathMoveRef.current !== null;
@@ -2494,7 +2494,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (!fileTabCloseGuard) return;
     const guard: FileTabCloseGuard = (directoryKey, paths, close) => {
       if (directoryKey === normalizeContextPanelDirectoryKey(panelRoot)
-        && selectedFile && isDirty && paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path))) {
+        && selectedFile && isDirty
+        && (paths === 'all' || paths.some((path) => toComparablePath(path) === toComparablePath(selectedFile.path)))) {
         confirmDraftAction(close);
       } else {
         close();
