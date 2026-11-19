@@ -88,7 +88,6 @@ describe('createArchiveStore', () => {
     const legacy = { ses_archived: 5, ses_restored: null };
     writeLegacyArchive(dataDir, legacy);
     const store = createArchiveStore({ dataDir });
-<<<<<<< HEAD
     await expect(store.listAll()).resolves.toMatchObject({
       entries: {
         ses_archived: { archivedAt: 5, revision: '1' },
@@ -109,118 +108,6 @@ describe('createArchiveStore', () => {
   it('imports valid legacy entities while isolating corrupt entries and leaving the source repairable', async () => {
     const dataDir = makeDataDir();
     writeLegacyArchive(dataDir, { ses_good: 5, ses_bad: 'yesterday' });
-||||||| bc50ba56aa
-
-    await expect(store.getAll()).resolves.toEqual({ ses_1: 7, ses_3: null });
-    await expect(store.entry('ses_1')).resolves.toBe(7);
-    await expect(store.entry('ses_3')).resolves.toBeNull();
-    await expect(store.entry('ses_4')).resolves.toBeUndefined();
-  });
-
-  it('drops entries that are not positive timestamps', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_ok: 5, ses_zero: 0, ses_text: 'yesterday', ses_float: 1.5 });
-    const store = createArchiveStore({ dataDir });
-    await expect(store.getAll()).resolves.toEqual({ ses_ok: 5 });
-  });
-
-  it('treats a malformed file as empty and keeps a backup', async () => {
-    const dataDir = makeDataDir();
-    fs.writeFileSync(path.join(dataDir, 'sessions-archive.json'), '{ not json', 'utf8');
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    const store = createArchiveStore({ dataDir, now: () => 11 });
-    await expect(store.getAll()).resolves.toEqual({});
-    expect(fs.existsSync(path.join(dataDir, 'sessions-archive.json.corrupt-11'))).toBe(true);
-  });
-
-  it('forgets entries, ignoring blank and duplicate ids, and the file keeps the rest', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_1: 7, ses_2: 7, ses_3: null });
-    const store = createArchiveStore({ dataDir });
-
-    await expect(store.forget(['ses_1', ' ses_1 ', '', null, 'ses_3', 'ses_4'])).resolves.toEqual({ failedIds: [] });
-    expect(JSON.parse(readFile(dataDir))).toEqual({ ses_2: 7 });
-    await expect(createArchiveStore({ dataDir }).getAll()).resolves.toEqual({ ses_2: 7 });
-  });
-
-  it('writes atomically: the visible file is the previous one until the rename', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_1: 3, ses_2: 3 });
-    const seen = [];
-    const fsPromises = {
-      ...fs.promises,
-      writeFile: async (target, payload, encoding) => {
-        seen.push(readFile(dataDir));
-        return fs.promises.writeFile(target, payload, encoding);
-      },
-    };
-    const store = createArchiveStore({ dataDir, fsPromises });
-
-    await store.forget(['ses_1']);
-
-    expect(seen).toEqual([JSON.stringify({ ses_1: 3, ses_2: 3 })]);
-    expect(JSON.parse(readFile(dataDir))).toEqual({ ses_2: 3 });
-  });
-
-  it('refuses to write when the file could not be read, so unknown state is never overwritten', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_1: 1 });
-    const unreadable = Object.assign(new Error('EACCES'), { code: 'EACCES' });
-    const fsPromises = {
-      ...fs.promises,
-      readFile: async () => { throw unreadable; },
-      writeFile: async () => { throw new Error('must not write'); },
-    };
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    const store = createArchiveStore({ dataDir, fsPromises });
-    await expect(store.forget(['ses_1'])).resolves.toEqual({ failedIds: [] });
-    expect(JSON.parse(readFile(dataDir))).toEqual({ ses_1: 1 });
-  });
-
-  it('writes nothing to forget a session it does not hold, and restores entries when the write fails', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_1: 7 });
-=======
-
-    await expect(store.getAll()).resolves.toEqual({ ses_1: 7, ses_3: null });
-    await expect(store.entry('ses_1')).resolves.toBe(7);
-    await expect(store.entry('ses_3')).resolves.toBeNull();
-    await expect(store.entry('ses_4')).resolves.toBeUndefined();
-  });
-
-  it('drops entries that are not positive timestamps', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_ok: 5, ses_zero: 0, ses_text: 'yesterday', ses_float: 1.5 });
-    const store = createArchiveStore({ dataDir });
-    await expect(store.getAll()).resolves.toEqual({ ses_ok: 5 });
-  });
-
-  it('treats a malformed file as empty and keeps a backup', async () => {
-    const dataDir = makeDataDir();
-    fs.writeFileSync(path.join(dataDir, 'sessions-archive.json'), '{ not json', 'utf8');
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    const store = createArchiveStore({ dataDir, now: () => 11 });
-    await expect(store.getAll()).resolves.toEqual({});
-    expect(fs.existsSync(path.join(dataDir, 'sessions-archive.json.corrupt-11'))).toBe(true);
-  });
-
-  it('forgets entries, ignoring blank and duplicate ids, and the file keeps the rest', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_1: 7, ses_2: 7, ses_3: null });
-    const store = createArchiveStore({ dataDir });
-
-    await expect(store.forget(['ses_1', ' ses_1 ', '', null, 'ses_3', 'ses_4'])).resolves.toEqual({ failedIds: [] });
-    expect(JSON.parse(readFile(dataDir))).toEqual({ ses_2: 7 });
-    await expect(createArchiveStore({ dataDir }).getAll()).resolves.toEqual({ ses_2: 7 });
-  });
-
-  it('writes nothing to forget a session it does not hold, and restores entries when the write fails', async () => {
-    const dataDir = makeDataDir();
-    writeFile(dataDir, { ses_1: 7 });
->>>>>>> upstream/main
     const store = createArchiveStore({ dataDir });
     await expect(store.getState('ses_good')).resolves.toEqual({ archivedAt: 5, revision: '1' });
     await expect(store.getState('ses_bad')).rejects.toMatchObject({ code: 'METADATA_CORRUPT' });
