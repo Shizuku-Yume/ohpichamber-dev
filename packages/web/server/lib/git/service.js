@@ -2708,6 +2708,59 @@ export async function isGitRepository(directory, options) {
  return (await probeRepository(normalizeDirectoryPath(directory), options)).isRepository;
 }
 
+// Whether `directoryPath` holds a `.git` entry Git's discovery would have used.
+// Discovery walks the parents and stops at the first filesystem boundary
+// (`GIT_DISCOVERY_ACROSS_FILESYSTEM` unset), so the walk mirrors that. An
+// unreadable ancestor answers `true`: not finding the entry proves nothing.
+const hasGitDirectoryEntry = async (directoryPath) => {
+ const hasEntry = async (entry) => {
+  try { await fsp.lstat(entry); return true; }
+  catch (error) {
+   if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
+   throw error;
+  }
+ };
+ try {
+  let current = await fsp.realpath(path.resolve(directoryPath));
+  const device = (await fsp.stat(current)).dev;
+  for (; ;) {
+   if (await hasEntry(path.join(current, '.git'))) return true;
+   const parent = path.dirname(current);
+   if (parent === current) return false;
+   if ((await fsp.stat(parent)).dev !== device) return false;
+   current = parent;
+  }
+ } catch {
+  return true;
+ }
+};
+
+/**
+ * Whether Git found no repository at all for `directory`, as opposed to a
+ * repository it could not read. Callers that answer a precondition (a folder
+ * outside any repository) rather than a fault use this instead of matching
+ * Git's diagnostic, which is translated and reworded between versions.
+ *
+ * Locale-independent by construction: the decision is Git's exit status plus
+ * the entry discovery would have used, never the message. A `rev-parse` that
+ * exits 128 without answering a git directory over no `.git` entry up to the
+ * filesystem boundary means "no repository". The same exit with an entry present
+ * is a repository Git refused to read (a refused `safe.directory`, a corrupt
+ * config, a dangling gitfile), and every other failure (a timeout, Git that
+ * could not start, a missing directory) is not this function's to claim: it
+ * answers `false` so the caller keeps the error it already has.
+ */
+export const isOutsideGitRepository = async (directory) => {
+ const directoryPath = String(normalizeDirectoryPath(directory) ?? '');
+ if (!directoryPath.trim()) return false;
+ const result = await runGitCommand(directoryPath, ['rev-parse', '--git-dir', '--show-toplevel'], { timeoutMs: GIT_PROBE_TIMEOUT_MS });
+ if (result.success || result.exitCode !== 128) return false;
+ // A bare repository or the `.git` directory itself exits 128 with
+ // "must be run in a work tree" but does answer its git directory.
+ if (result.stdout.trim()) return false;
+ return !(await hasGitDirectoryEntry(directoryPath));
+};
+
 export async function getGlobalIdentity() {
  const git = await createGitForGlobalConfig();
 

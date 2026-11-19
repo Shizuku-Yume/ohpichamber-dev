@@ -8,6 +8,7 @@ process.env.OPENCHAMBER_DATA_DIR = TEMP_DATA_DIR;
 
 vi.mock('../git/service.js', () => ({
   getRepositoryRoot: vi.fn(async () => '/repo'),
+  isOutsideGitRepository: vi.fn(async () => false),
   getDiff: vi.fn(),
   getRangeDiff: vi.fn(),
   getUntrackedDiffs: vi.fn(async () => []),

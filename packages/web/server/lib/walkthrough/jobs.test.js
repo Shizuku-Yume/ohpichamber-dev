@@ -10,6 +10,7 @@ process.env.OPENCHAMBER_DATA_DIR = TEMP_DATA_DIR;
 // seams faked means the test exercises the real digest and prompt path.
 vi.mock('../git/service.js', () => ({
   getRepositoryRoot: vi.fn(async () => '/repo'),
+  isOutsideGitRepository: vi.fn(async () => false),
   getDiff: vi.fn(),
   getRangeDiff: vi.fn(),
   getUntrackedDiffs: vi.fn(async () => []),
@@ -315,20 +316,22 @@ describe('generation jobs', () => {
 // same, so the small case guarded nothing and the big case died just short of
 // the finish line.
 describe('non-repository directories', () => {
-  // The routes map this code to 422; a plain "not a git repository" would reach
-  // them as an untyped error and answer 500.
-  const gitRefusal = () => Object.assign(new Error('fatal: not a git repository (or any of the parent directories): .git'), { exitCode: 128 });
+  // The routes map this code to 422; a plain failure would reach them as an
+  // untyped error and answer 500. The classification must not read Git's
+  // message: a localized Git says the same thing in different words.
+  const gitRefusal = () => Object.assign(new Error('fatal: Kein Git-Repository (oder eines der Elternverzeichnisse): .git'), { exitCode: 128 });
 
-  it('reports Git\'s refusal for a directory outside a repository as a typed precondition', async () => {
-    const { getRepositoryRoot } = await import('../git/service.js');
+  it('reports a directory outside any repository as a typed precondition without reading the message', async () => {
+    const { getRepositoryRoot, isOutsideGitRepository } = await import('../git/service.js');
     getRepositoryRoot.mockRejectedValueOnce(gitRefusal());
+    isOutsideGitRepository.mockResolvedValueOnce(true);
 
     await expect(getWalkthrough({ directory: '/not-a-repo', workspaceId: 'workspace-1', source: SOURCE }))
       .rejects.toMatchObject({ code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY', reason: 'not-a-git-repository' });
   });
 
   it('does the same for every entrypoint that keys work by repository root', async () => {
-    const { getRepositoryRoot } = await import('../git/service.js');
+    const { getRepositoryRoot, isOutsideGitRepository } = await import('../git/service.js');
     for (const run of [
       () => getWalkthrough({ directory: '/not-a-repo', workspaceId: 'workspace-1', source: SOURCE }),
       () => generateWalkthrough({ directory: '/not-a-repo', workspaceId: 'workspace-1', source: SOURCE }),
@@ -336,17 +339,34 @@ describe('non-repository directories', () => {
       () => getRepositoryRootFor('/not-a-repo', SOURCE),
     ]) {
       getRepositoryRoot.mockRejectedValueOnce(gitRefusal());
+      isOutsideGitRepository.mockResolvedValueOnce(true);
       await expect(run()).rejects.toMatchObject({ code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY' });
     }
   });
 
   it('leaves a repository it cannot read as the failure Git reported', async () => {
-    const { getRepositoryRoot } = await import('../git/service.js');
+    const { getRepositoryRoot, isOutsideGitRepository } = await import('../git/service.js');
     const unreadable = Object.assign(new Error('Permission denied'), { code: 'GIT_REPOSITORY_UNREADABLE' });
     getRepositoryRoot.mockRejectedValueOnce(unreadable);
+    // A repository Git found but refused: there is a `.git` entry, so this is
+    // the repository's own failure, not a directory outside one.
+    isOutsideGitRepository.mockResolvedValueOnce(false);
 
     await expect(getWalkthrough({ directory: '/repo', workspaceId: 'workspace-1', source: SOURCE }))
       .rejects.toBe(unreadable);
+  });
+
+  it('leaves an unclassified Git failure alone even when the wording looked like a refusal', async () => {
+    const { getRepositoryRoot, isOutsideGitRepository } = await import('../git/service.js');
+    // A reworded diagnostic must not be the classification, in either direction:
+    // text that happens to read like the old message does not make a failure a
+    // "outside a repository" case when the probe declines to claim it.
+    const failure = Object.assign(new Error('fatal: not a git repository (or any of the parent directories): .git'), { exitCode: 1 });
+    getRepositoryRoot.mockRejectedValueOnce(failure);
+    isOutsideGitRepository.mockResolvedValueOnce(false);
+
+    await expect(getWalkthrough({ directory: '/repo', workspaceId: 'workspace-1', source: SOURCE }))
+      .rejects.toBe(failure);
   });
 });
 
