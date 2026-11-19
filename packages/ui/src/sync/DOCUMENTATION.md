@@ -32,6 +32,14 @@ The directory-scoped sync stores do not provide a complete global view:
 
 Use the directory sync stores for live session, message, approval, and question state. Use the global sessions store for cold or global session coverage (archived pages and unopened directories). Use aggregated child-store sessions (`useAllLiveSessions()`) and the global session status index (`useGlobalSessionStatus()`) for live truth across initialized directories.
 
+## Snapshot startup and cold-send recovery
+
+Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryable failures stop immediately, exhausted failures preserve prior state and report a loader error, and retired loads stop before another request. Every adopted snapshot reaches the existing event pipeline through `onSnapshot`.
+
+Cold snapshots remain worker-free and do not subscribe to worker-owned events. A normal send whose starting snapshot was cold or absent requests a recovery snapshot only after native acceptance. SyncProvider queues this recovery behind any in-flight load and requires an available worker snapshot within the same startup budget before attachment. Snapshot errors never replay or reject an accepted send. The pipeline attaches from the returned cursor so already-completed replies come from the snapshot and later deltas come from the stream. Manual history retry followed by send takes the same path.
+
+Web/PWA, Electron, hosted mobile and Capacitor share this behavior through the Canonical Client; Guest SDK and transport/auth contracts are unchanged.
+
 ## Host operational metadata authority
 
 The Host owns session operational metadata (pins, color, icon, notes), workspace associations, archive state, and folder membership; OMP owns session titles directly in session storage. Execution session records and persisted UI caches are not metadata fallbacks. Metadata responses and change events carry decimal-string revisions; the metadata patch route (`PATCH /api/agent/v1/sessions/:sessionId/metadata`) requires a `{ changes: { ... } }` wrapper and returns `SessionMetadataState` (`{ sessionId, revision, metadata }`).
@@ -614,5 +622,3 @@ First-connect subscribers now observe the first successful, current canonical di
 `seedGlobalSessionStatusFromHost()` retains its no-argument asynchronous entry point. It uses canonical `listSessions()` projections, admitted workspace-to-directory bindings, numeric `updatedAt` freshness, per-session/workspace discovery failures, and runtime generation guards (including A→B→A switches). Seeding is additive and cannot overwrite live observations. Only `awaiting_approval`/`awaiting_input` sessions fetch canonical snapshots to discover pending request DTOs; idle/unavailable discovery does not invent request payloads or native events. `buildHostStatusSeedSnapshots` replaces the old wire-event builder.
 
 `directory-recovery-snapshots.ts` was an unreferenced OpenCode event-observer mechanism and is retired. Its retained regression suite now exercises native `installSessionSnapshot`/`applyDirectoryEvent` recovery, including stale snapshot and request revision races, rather than introducing disconnected observers into the canonical pipeline.
-
-

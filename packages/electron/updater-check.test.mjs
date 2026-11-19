@@ -43,7 +43,18 @@ test('treats missing update feed (404) as no update available', async () => {
   assert.equal(result.nextVersion, '1.15.0');
 });
 
-for (const message of ['ENOTFOUND', 'HttpError: 404 Not Found']) {
+test('treats No published versions on GitHub as no update available', async () => {
+  const result = await checkForDesktopUpdate({
+    autoUpdater: { checkForUpdates: async () => { throw new Error('No published versions on GitHub'); } },
+    currentVersion: '1.0.0',
+    pendingUpdate: null,
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.pendingUpdate, null);
+  assert.equal(result.nextVersion, '1.0.0');
+});
+
+for (const message of ['ENOTFOUND', 'HttpError: 404 Not Found', 'No published versions on GitHub']) {
   test(`preserves a downloaded update on feed failure: ${message}`, async () => {
     const pendingUpdate = { version: '2.0.0', downloaded: true, downloadedFile: '/cache/A' };
     await assert.rejects(checkForDesktopUpdate({

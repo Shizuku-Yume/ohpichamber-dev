@@ -6,6 +6,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from '@/lib/configSync';
+import { retry, STARTUP_RETRY } from '@/sync/retry';
 
 export type CommandScope = 'workspace' | 'agent';
 export type Command = CommandEntry;
@@ -121,10 +122,15 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
       if (inflight) return inflight;
       const request = (async () => {
         const startedGeneration = generation;
+        const runtimeKey = getRuntimeKey();
         set({ isLoading: true });
         try {
-          const owner = await context(directory);
-          const catalog = await canonicalClient.fileResources.getCommands(owner.workspaceId);
+          const { owner, catalog } = await retry(async () => {
+            if (startedGeneration !== generation || runtimeKey !== getRuntimeKey()) throw new Error('File resource runtime changed');
+            const owner = await context(directory);
+            const catalog = await canonicalClient.fileResources.getCommands(owner.workspaceId);
+            return { owner, catalog };
+          }, STARTUP_RETRY);
           if (!current(owner)) return false;
           publish(owner.directory, catalog);
           return true;

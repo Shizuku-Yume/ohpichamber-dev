@@ -18,6 +18,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { ensureChatsRootDirectory, getChatsRoot, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
+import { retry, STARTUP_RETRY } from '@/sync/retry';
 import {
   applyGlobalSessionStructureMutations,
   buildGlobalSessionStructure,
@@ -56,6 +57,8 @@ type GlobalSessionsState = {
   /** The global list request itself failed; partial per-scope errors do not set this. */
   globalRefreshFailed: boolean;
   discoveryErrors: ReadonlyMap<string, string>;
+  failedChildDiscoveryParents: ReadonlySet<string>;
+  clearWorkspaceDiscoveryErrors: (workspaceId: string) => void;
   /** Re-read the persisted managed-chats snapshot after the chats root is
       warm; retain newer mutations and stop after an authoritative load. */
   rehydrateManagedChatSessions: () => void;
@@ -406,6 +409,9 @@ const fetchDirectoryPages = async (
         if (generation !== loadGeneration) throw new Error('Runtime changed before session discovery');
         return canonicalClient.listSessions(workspace.workspaceId);
       });
+      if (generation === loadGeneration && Object.keys(result.errors).length === 0) {
+        useGlobalSessionsStore.getState().clearWorkspaceDiscoveryErrors(workspace.workspaceId);
+      }
       return { status: 'fulfilled' as const, value: { directory, ...result } };
     } catch (reason) {
       return { status: 'rejected' as const, reason };
@@ -755,6 +761,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   status: 'idle',
   globalRefreshFailed: false,
   discoveryErrors: new Map(),
+  failedChildDiscoveryParents: new Set(),
 
   applySnapshot: (activeSessions, archivedSessions, status = 'ready') => {
     // An authoritative snapshot may carry newer `updated` stamps for sessions
@@ -800,6 +807,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       status: 'idle',
       globalRefreshFailed: false,
       discoveryErrors: new Map(),
+      failedChildDiscoveryParents: new Set(),
     });
   },
 
@@ -817,44 +825,58 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         rootsReady = true;
         get().rehydrateManagedChatSessions();
-        const [result, binding] = await Promise.all([canonicalClient.listSessions(), bindKnownWorkspaceDirectories(generation)]);
+        let attempt = 0;
+        return await retry(async () => {
+          if (generation !== loadGeneration) throw new Error('Runtime changed before session discovery');
+          attempt += 1;
+          const result = await canonicalClient.listSessions();
+          const retryPartial = attempt < (STARTUP_RETRY.attempts ?? 3)
+            && Object.values(result.errors).some((code) => code === 'SERVICE_UNAVAILABLE');
+          if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
+          const binding = await bindKnownWorkspaceDirectories(generation);
 
-        if (generation !== loadGeneration) {
-          // Runtime switched mid-load: this snapshot belongs to the previous
-          // instance — drop it.
-          return { activeSessions: [], archivedSessions: [] };
-        }
-        await bindDerivedSessionWorkspaces(result.items, binding.projectRootsById, generation);
-        if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
-        const children = await discoverChildSessions(result.items, get().entityById, generation);
-        if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
-        set((state) => {
-          const incoming = [...result.items, ...children.sessions];
-          const incomingIds = new Set(incoming.map((session) => session.sessionId));
-          const retained = [...state.activeSessions, ...state.archivedSessions].filter((session) => (
-            !incomingIds.has(session.sessionId) && (isSessionDiscoveryFailed(session, result.errors)
-              || (session.parentSessionId !== undefined && (children.failedParents.has(session.parentSessionId)
-                || isSessionDiscoveryFailed(state.entityById.get(session.parentSessionId) ?? session, result.errors))))
-          ));
-          const { active, archived } = splitGlobalSessionsByArchived([
-            ...incoming.map((session) => mergeSessionDirectoryMetadata(session, state.entityById.get(session.sessionId))),
-            ...retained,
-          ]);
-          const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
-          const newErrors = new Map<string, string>(Object.entries(result.errors));
-          for (const parentId of children.failedParents) newErrors.set(parentId, 'SERVICE_UNAVAILABLE');
-          // Scoped discovery errors degrade only the specific failing workspace(s) via discoveryErrors,
-          // rather than poisoning the entire global store status to 'error'. Global status stays 'ready'
-          // and markLoaded is true so healthy workspaces remain ready.
-          return {
-            ...applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready', true, newErrors),
-            globalRefreshFailed: false,
-          };
-        });
-        const committed = get();
-        raiseSessionOrderingBaselines(committed.activeSessions);
-        binding.adoptGuessedSession();
-        return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
+          if (generation !== loadGeneration) {
+            // Runtime switched mid-load: this snapshot belongs to the previous
+            // instance — drop it.
+            return { activeSessions: [], archivedSessions: [] };
+          }
+          await bindDerivedSessionWorkspaces(result.items, binding.projectRootsById, generation);
+          if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
+          const children = await discoverChildSessions(result.items, get().entityById, generation);
+          if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
+          set((state) => {
+            const incoming = [...result.items, ...children.sessions];
+            const incomingIds = new Set(incoming.map((session) => session.sessionId));
+            const retained = [...state.activeSessions, ...state.archivedSessions].filter((session) => (
+              !incomingIds.has(session.sessionId) && (isSessionDiscoveryFailed(session, result.errors)
+                || (session.parentSessionId !== undefined && (children.failedParents.has(session.parentSessionId)
+                  || isSessionDiscoveryFailed(state.entityById.get(session.parentSessionId) ?? session, result.errors))))
+            ));
+            const { active, archived } = splitGlobalSessionsByArchived([
+              ...incoming.map((session) => mergeSessionDirectoryMetadata(session, state.entityById.get(session.sessionId))),
+              ...retained,
+            ]);
+            const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
+            const newErrors = new Map<string, string>(Object.entries(result.errors)
+              .filter(([, code]) => !retryPartial || code !== 'SERVICE_UNAVAILABLE'));
+            const retainedIds = new Set([...reconciled.activeSessions, ...reconciled.archivedSessions].map((session) => session.sessionId));
+            const failedChildDiscoveryParents = new Set([...state.failedChildDiscoveryParents]
+              .filter((parentId) => retainedIds.has(parentId) && !children.succeededParents.has(parentId)));
+            for (const parentId of children.failedParents) failedChildDiscoveryParents.add(parentId);
+            for (const parentId of failedChildDiscoveryParents) newErrors.set(parentId, 'SERVICE_UNAVAILABLE');
+            // Complete scopes reconcile during warmup; failed scopes retain their records.
+            return {
+              ...applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, retryPartial ? 'loading' : 'ready', !retryPartial || state.hasLoaded, newErrors),
+              failedChildDiscoveryParents,
+              globalRefreshFailed: false,
+            };
+          });
+          const committed = get();
+          raiseSessionOrderingBaselines(committed.activeSessions);
+          if (retryPartial) throw Object.assign(new Error('Session discovery is temporarily unavailable'), { status: 503 });
+          binding.adoptGuessedSession();
+          return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
+        }, STARTUP_RETRY);
       } catch (error) {
         if (generation !== loadGeneration) {
           return { activeSessions: [], archivedSessions: [] };
@@ -902,7 +924,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     }
     if (inflightHead) return inflightHead;
     // Only a complete load establishes the baseline this pass compares to.
-    if (!get().hasLoaded) {
+    if (!get().hasLoaded || get().failedChildDiscoveryParents.size > 0) {
       await get().loadSessions();
       return get().status === 'ready';
     }
@@ -921,7 +943,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             const merged = mergeSessionDirectoryMetadata(session, existing);
             if (!existing || !isSameSessionRecord(existing, merged)) mutations.push({ type: 'upsert', session: merged });
           }
-          return mutations.length > 0 ? applySessionMutations(state, mutations) : state;
+          const discovered = mutations.length > 0 ? applySessionMutations(state, mutations) : state;
+          const discoveryErrors = new Map(Object.entries(result.errors));
+          for (const parentId of state.failedChildDiscoveryParents) discoveryErrors.set(parentId, 'SERVICE_UNAVAILABLE');
+          return { ...discovered, discoveryErrors, globalRefreshFailed: false };
         });
         raiseSessionOrderingBaselines(result.items.flatMap((session) => {
           const committed = get().entityById.get(session.sessionId);
@@ -936,6 +961,17 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     inflightHead = headPromise;
     void headPromise.finally(() => { if (inflightHead === headPromise) inflightHead = null; });
     return headPromise;
+  },
+
+  clearWorkspaceDiscoveryErrors: (workspaceId) => {
+    set((state) => {
+      const discoveryErrors = new Map(state.discoveryErrors);
+      for (const identity of discoveryErrors.keys()) {
+        if (!state.failedChildDiscoveryParents.has(identity)
+          && (identity === workspaceId || state.entityById.get(identity)?.workspaceId === workspaceId)) discoveryErrors.delete(identity);
+      }
+      return discoveryErrors.size === state.discoveryErrors.size ? state : { discoveryErrors };
+    });
   },
 
   refreshSessionsForDirectories: async (directories, fallbackActive) => {
@@ -1013,16 +1049,29 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         : buildSessionsByDirectory(nextActiveSessions);
       const activeChanged = nextActiveSessions !== state.activeSessions;
       const archivedChanged = nextArchivedSessions !== state.archivedSessions;
+      const failedChildDiscoveryParents = new Set(state.failedChildDiscoveryParents);
+      const discoveryErrors = new Map(state.discoveryErrors);
+      for (const parentId of children.succeededParents) {
+        if (failedChildDiscoveryParents.delete(parentId) && !fetched.failures[parentId]) discoveryErrors.delete(parentId);
+      }
+      for (const parentId of children.failedParents) {
+        failedChildDiscoveryParents.add(parentId);
+        discoveryErrors.set(parentId, 'SERVICE_UNAVAILABLE');
+      }
 
       if (
         !activeChanged
         && !archivedChanged
         && nextSessionsByDirectory === state.sessionsByDirectory
+        && children.failedParents.size === 0
+        && ![...children.succeededParents].some((parentId) => state.failedChildDiscoveryParents.has(parentId))
       ) {
         return state;
       }
 
       return {
+        failedChildDiscoveryParents,
+        discoveryErrors,
         activeSessions: nextActiveSessions,
         archivedSessions: nextArchivedSessions,
         entityById: new Map([...nextActiveSessions, ...nextArchivedSessions].map((session) => [session.sessionId, session])),

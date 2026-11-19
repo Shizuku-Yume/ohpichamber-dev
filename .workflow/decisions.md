@@ -1750,6 +1750,40 @@ Small-file acceptance also exposed `No valid theme loader registered for "opench
 - **Mine:** yes
 - **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
 
+## 2026-11-19 - Empty GitHub release feeds mean no desktop update
+
+Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
+
+## 2026-11-19 - Refresh desktop login items only when enabled
+
+The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup re-registers an enabled login item so its path and background-start args stay current after updates or moves, and skips the write when the item is disabled, unregistered, or unreadable (macOS can reject that no-op write with `Operation not permitted`). Explicit settings-change IPC remains authoritative and unchanged.
+
+## 2026-11-19 - Retry native session and command discovery during Agent Service startup
+
+Global sessions and native command catalogs use the existing bounded `STARTUP_RETRY` policy in their owning stores, including command workspace resolution. A successful native read establishes authority; readiness does not manufacture an empty snapshot. Session workspace binding follows successful discovery so it cannot exhaust its own retry window before the service is ready. Non-retryable or exhausted failures retain the existing error and cached-data behavior. Runtime generation changes retire retries before another request. This shared behavior applies to Web/PWA, Electron, hosted mobile, and Capacitor; the Guest SDK contract is unchanged.
+
+## 2026-11-19 - Refresh composer catalogs after provider settings mutations
+
+- **Decided:** Explicit provider-settings refreshes emit the existing `providers` config-change notification before rereading their page-owned catalog. The existing config-store subscriber invalidates and freshly loads known-directory catalogs for the composer.
+- **Because:** Custom provider save and credential/account changes refreshed only the settings page, leaving the composer's separate catalog stale until reload. A failed page reread must not suppress notification of a completed write. Ordinary loads and stale-runtime refreshes do not emit.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the same store and notification path. Guest SDK is unchanged.
+- **Instead of:** Directly mutating composer catalogs from Settings or adding another event channel.
+
+## 2026-11-19 - Retry transient partial session discovery without losing complete scopes
+
+The global sessions store owns bounded startup recovery for successful HTTP 200 discovery pages containing `SERVICE_UNAVAILABLE` errors. Retry whole listings within the same eight-attempt budget as thrown retryable failures. Reconcile healthy scopes on every page, retain failed scopes, defer transient sidebar errors until exhaustion, and expose non-transient errors immediately. An initial retrying partial page does not establish global completeness; runtime changes retire the retry loop.
+
+Keep the Host's explicit partial `items`/`errors` contract, including all-unavailable pages, rather than replacing it with a top-level 503 that loses scoped information. Discovery errors carry codes, not retryable flags; only `SERVICE_UNAVAILABLE` is classified transient here. Web/PWA, Electron, hosted mobile and Capacitor share this store; Guest SDK and session admission are unchanged.
+
+Later successful listings also retire stale failures: global head polls replace the discovery error map, and successful workspace lists clear only that workspace and its known session errors through the global store owner. This applies even when no session record changes; an unrelated workspace's failure is not cleared by a scoped success.
+
+## 2026-11-19 - Recover startup snapshots and cold-send streams without opening cold workers
+
+- **Decided:** SessionMessageLoader retries retryable snapshot/workspace failures within `STARTUP_RETRY`, preserving authoritative state and stopping retired loads. After accepted native delivery, sends starting from a cold or absent snapshot request a queued recovery snapshot; only that recovery waits for an available worker within the bounded budget. Successful snapshots attach the existing event pipeline from the returned cursor.
+- **Because:** A startup snapshot failure was terminal. Manual retry could read a worker-free cold snapshot, which correctly skipped SSE; the pre-send stream request still saw that cold snapshot and never retried after the worker opened.
+- **Instead of:** Removing the cold-session stream guard, retaining cold journals in the service, opening workers just to read history, or replaying accepted prompts. Recovery failure stays a loader error, never a failed-send rollback.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor use the shared loader/actions/provider. Guest SDK, Host admission and transport/auth behavior are unchanged. Earlier scoped discovery-error clearing remains in the same SyncProvider paths.
+
 ## 2026-11-19 - Preserve sanitized native provider failure details
 
 - **Decided:** project the last unrecovered assistant error message into canonical run failure and turn history after removing resolved provider credentials and credential-shaped text. Preserve generic detail only when OMP supplies none.
@@ -1785,3 +1819,10 @@ Small-file acceptance also exposed `No valid theme loader registered for "opench
 - **Instead of:** invoking inherited native private-field methods on an `Object.create(nativeSession)` wrapper or patching the OMP dependency.
 - **Because:** JavaScript private fields belong to the constructed instance, not objects inheriting from it. OMP's own ToolSession delegates these calls to the real session; our adapter must preserve the same receiver.
 - **Revisit when:** the worker no longer needs a separate Host-identity ToolSession for broker services.
+
+## 2026-11-19 - Keep child discovery failures distinct from healthy root listings
+
+- **Decided:** Track failed child-discovery parents separately from root-listing failures. Root-only head and workspace listings cannot retire them. A head poll with pending child failures reuses full discovery to retry child reads; full and directory refreshes clear a pending parent only after successful child discovery, including empty results.
+- **Instead of:** Clearing every session-keyed error after a healthy root listing, or adding another child polling owner.
+- **Because:** Canonical session lists contain roots, not the result of `listSubagents(parentId)`. Root success cannot establish that a missing child tree recovered. Known children and unrelated scope failures must survive unsuccessful retries and runtime changes must retire old completions.
+- **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the global store. Guest SDK and native admission are unchanged. Existing bounded root-listing startup retries and scoped root-error clearing remain in place.
