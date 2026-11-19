@@ -35,24 +35,12 @@ export const DiagramEditor = React.forwardRef<DiagramEditorHandle, DiagramEditor
       stableXmlRef.current = latestXmlRef.current;
     }
 
-    const containerRef = React.useRef<HTMLDivElement>(null);
-
     React.useEffect(() => {
       const check = () => setIsDark(detectDark());
       check();
       const observer = new MutationObserver(check);
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
       return () => observer.disconnect();
-    }, []);
-
-    // Focus the iframe once on mount so keyboard shortcuts work without
-    // clicking the canvas. Intentionally not keyed on isDark — re-focusing
-    // on every theme toggle would steal keyboard focus from the user.
-    React.useEffect(() => {
-      const id = setTimeout(() => {
-        containerRef.current?.querySelector<HTMLIFrameElement>('.diagrams-iframe')?.focus();
-      }, 600);
-      return () => clearTimeout(id);
     }, []);
 
     React.useImperativeHandle(ref, () => ({
@@ -69,12 +57,13 @@ export const DiagramEditor = React.forwardRef<DiagramEditorHandle, DiagramEditor
     }, []);
 
     const handleAutoSave = React.useCallback((data: { xml: string }) => {
+      if (data.xml === latestXmlRef.current) return;
       latestXmlRef.current = data.xml;
       onChange?.(data.xml);
     }, [onChange]);
 
     return (
-      <div ref={containerRef} className={cn('h-full w-full', className)}>
+      <div className={cn('h-full w-full', className)}>
         <DrawIoEmbed
           key={isDark ? 'dark' : 'light'}
           ref={drawioRef}

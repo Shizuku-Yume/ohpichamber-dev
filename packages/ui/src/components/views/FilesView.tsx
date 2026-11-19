@@ -3418,11 +3418,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (previewTab) state.pinContextPanelTab(directoryKey, previewTab.id);
   };
   const handleDiagramChange = React.useCallback((xml: string) => {
-    const content = prepareFileEditorContent(xml).content;
-    if (content === draftContent) return;
-    setDraftContent(content);
+    setDraftContent(prepareFileEditorContent(xml).content);
     pinPreviewOnEditRef.current();
-  }, [draftContent]);
+  }, []);
   const pinPreviewOnEditExtension = React.useMemo(() => EditorView.updateListener.of((update) => {
     if (!update.docChanged) return;
     const edited = update.transactions.some((transaction) => (
