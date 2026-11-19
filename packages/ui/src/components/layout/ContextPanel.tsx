@@ -1,5 +1,6 @@
 import React from 'react';
 import type { FileTabCloseGuard } from '@/components/views/FilesView';
+import type { FileTabSelectionGuard } from '@/components/views/files/fileTabSelectionGuard';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
@@ -406,7 +407,7 @@ const maxPanelHeight = (availableHeight: number | null): number => {
  * size and the surfaces that remount on every switch. The keep-alive
  * surfaces are portalled into its body from `ContextSurfacePanes`.
  */
-export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null> }> = ({ zone = 'right', fileTabCloseGuard }) => {
+export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null>; fileTabSelectionGuard: React.RefObject<FileTabSelectionGuard | null> }> = ({ zone = 'right', fileTabCloseGuard, fileTabSelectionGuard }) => {
   const geometry = ZONE_GEOMETRY[zone];
   const layoutAnimationMs = useLayoutAnimationMs();
   const isVertical = geometry.axis === 'y';
@@ -1052,7 +1053,14 @@ export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: Rea
             if (!directoryKey) {
               return;
             }
-            setActiveContextPanelTab(directoryKey, tabID);
+            const select = () => setActiveContextPanelTab(directoryKey, tabID);
+            const target = useUIStore.getState().contextPanelByDirectory[directoryKey]?.tabs.find((tab) => tab.id === tabID);
+            const guard = fileTabSelectionGuard.current;
+            if (guard) {
+              guard(directoryKey, target?.mode === 'file' ? target.targetPath ?? null : null, select);
+            } else {
+              select();
+            }
           }}
           onClose={(tabID) => requestCloseTabs([tabID])}
           onReorder={(activeTabID, overTabID) => {

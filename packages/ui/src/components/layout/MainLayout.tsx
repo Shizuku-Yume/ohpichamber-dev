@@ -6,6 +6,7 @@ import { TitlebarLeftControls } from './TitlebarLeftControls';
 import { ContextPanel } from './ContextPanel';
 import { ContextSurfacePanes } from './ContextSurfacePanes';
 import type { FileTabCloseGuard } from '@/components/views/FilesView';
+import type { FileTabSelectionGuard } from '@/components/views/files/fileTabSelectionGuard';
 import { ZoneDropOverlay } from './ZoneDropOverlay';
 import { ZoneFitArbiter } from './ZoneFitArbiter';
 import { followZonePlacementOfOtherWindows } from './zoneSync';
@@ -102,6 +103,7 @@ LeftSidebar.displayName = 'LeftSidebar';
  */
 export const MainLayout: React.FC = () => {
  const fileTabCloseGuard = React.useRef<FileTabCloseGuard | null>(null);
+ const fileTabSelectionGuard = React.useRef<FileTabSelectionGuard | null>(null);
  useSessionListSync({ isVSCode: false });
  useTerminalSessionKeepalive();
  // The grant dialog of isolated spaces.
@@ -214,7 +216,7 @@ export const MainLayout: React.FC = () => {
          <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true" data-workspace-row="true">
           {/* The left zone: surfaces the user moved beside the
                                         sidebar. Empty and closed, it takes no width. */}
-          <ContextPanel zone="left" fileTabCloseGuard={fileTabCloseGuard} />
+          <ContextPanel zone="left" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
           {/* Holds the chat and the right zone together, so its
                                         width does not move when the right zone opens. The
                                         work-status panel measures this rather than the chat,
@@ -243,12 +245,12 @@ export const MainLayout: React.FC = () => {
                onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>
              </div>}
             </main>
-            <ContextPanel zone="bottom" fileTabCloseGuard={fileTabCloseGuard} />
+            <ContextPanel zone="bottom" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
            </div>
-           <ContextPanel zone="right" fileTabCloseGuard={fileTabCloseGuard} />
+           <ContextPanel zone="right" fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
            {/* After every zone: the panes attach to the bodies the
                                             zones register, behind their layout animation. */}
-           <ContextSurfacePanes fileTabCloseGuard={fileTabCloseGuard} />
+           <ContextSurfacePanes fileTabCloseGuard={fileTabCloseGuard} fileTabSelectionGuard={fileTabSelectionGuard} />
            <ZoneDropOverlay />
            <ZoneFitArbiter />
           </div>
