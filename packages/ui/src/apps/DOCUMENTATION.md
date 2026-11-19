@@ -6,6 +6,13 @@
 
 `MobileShell` in `MobileApp` owns the phone and tablet surfaces, Settings among them.
 
+`mobileNativeChrome` delegates Android status-bar background ownership to
+`WindowLayoutPlugin`: native inset padding uses native-background contrast,
+while edge-to-edge WebView content uses the app theme. It does not write an
+unsupported background color on API 35+, and rechecks on app/system theme
+changes and resume. iOS overlay behavior is unchanged; web, hosted mobile and
+Electron do not invoke this Android bridge.
+
 `mobileConnections` owns saved mobile instances and their connect, password and reconnect flows. The welcome screen and Instances are one view (`MobileConnectionsView`) over its controller. Runtime HTTP authentication remains in `lib/runtime-auth` and `lib/runtime-fetch`.
 
 ## Invariants
