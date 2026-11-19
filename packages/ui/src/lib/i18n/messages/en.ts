@@ -6053,7 +6053,7 @@ export const dict = {
   "gitView.commit.aiHighlights.insertTooltip": "Insert  tooltip",
   "gitView.commit.aiHighlights.title": "Highlights",
   "gitView.commit.commit": "Commit",
-  "gitView.commit.commitAria": "Commit  aria label",
+  "gitView.commit.commitAria": "Commit",
   "gitView.commit.committing": "Committing...",
   "gitView.commit.generate": "Generate",
   "gitView.commit.generateAria": "Generate commit message",

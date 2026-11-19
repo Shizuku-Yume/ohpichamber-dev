@@ -1,5 +1,10 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
 path	state	class	decision	reason
+packages/ui/src/components/sections/openchamber/SourceControlBindingSettings.tsx	fork-differs	decision	2026-11-19 - Complete repository dialog dismissal before opening Git Settings	Opens Git Settings after repository dialog close completion, retaining the popup for lifecycle cleanup.
+packages/ui/src/components/sections/openchamber/SourceControlBindingSettings.test.tsx	fork-differs	decision	2026-11-19 - Complete repository dialog dismissal before opening Git Settings	Covers the configuration-to-settings handoff.
+packages/ui/src/components/chat/composer/state/useDraftTarget.ts		decision	2026-11-19 - Complete repository dialog dismissal before opening Git Settings	Rechecks the draft directory warning when its Git index revision changes after a mutation.
+packages/ui/src/components/chat/composer/state/__tests__/useDraftTarget.worktreeBootstrap.test.tsx	fork-differs	decision	2026-11-19 - Complete repository dialog dismissal before opening Git Settings	Covers dirty warning refresh after the commit index revision changes.
+packages/ui/src/components/views/git/CommitSection.test.tsx		decision	2026-11-19 - Complete repository dialog dismissal before opening Git Settings	Requires the commit control's action label.
 packages/ui/src/components/chat/ChatContainer.tsx	fork-differs	decision	2026-11-19 - Compact draft welcomes scroll before clipping large text	Preserves compact welcome centering when content fits while making its title and starter actions vertically reachable above the composer at large text sizes.
 packages/ui/src/components/views/FilesView.tsx		decision	2026-11-19 - Refuse editor saves to externally missing paths	Optional mustExist editor writes preserve dirty drafts on missing targets; keep atomic replacement and existing Host boundary decisions.
 packages/ui/src/components/sections/plugins/PluginsPage.tsx		decision	2026-11-19 - Bound plugin marketplace metadata and actions on narrow panes	Constrain long metadata to the available row width and keep install actions compact and separate from labels.

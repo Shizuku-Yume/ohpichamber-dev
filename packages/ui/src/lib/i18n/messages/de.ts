@@ -5941,7 +5941,7 @@ export const dict = {
   "gitView.commit.aiHighlights.insertTooltip": "Einfügen tooltip",
   "gitView.commit.aiHighlights.title": "Highlights",
   "gitView.commit.commit": "Commit",
-  "gitView.commit.commitAria": "Commit aria-Label",
+  "gitView.commit.commitAria": "Commit erstellen",
   "gitView.commit.committing": "Committen...",
   "gitView.commit.generate": "Generieren",
   "gitView.commit.generateAria": "Commit-Nachricht generieren",

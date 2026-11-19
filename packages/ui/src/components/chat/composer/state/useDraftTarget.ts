@@ -335,6 +335,9 @@ export function useDraftTarget(enabled: boolean) {
     // transient bootstrap files as the branch being dirty.
     const selectedDraftDirectoryBootstrapPending = useWorktreeBootstrapPending(selectedDraftDirectory);
     const draftDirectoryNeedsFreshStatusRef = React.useRef<string | null>(null);
+    const draftIndexRevision = useGitStore((state) => selectedDraftDirectory
+        ? state.directories.get(selectedDraftDirectory)?.indexRevision ?? 0
+        : 0);
 
     React.useEffect(() => {
         if (
@@ -353,7 +356,6 @@ export function useDraftTarget(enabled: boolean) {
         }
 
         let cancelled = false;
-        setDirtyDraftDirectory(null);
         const needsFreshStatus = draftDirectoryNeedsFreshStatusRef.current === selectedDraftDirectory;
         const statusRequest = needsFreshStatus
             ? getGitStatus(selectedDraftDirectory, { mode: 'light', fresh: true })
@@ -363,18 +365,16 @@ export function useDraftTarget(enabled: boolean) {
                 if (!cancelled && needsFreshStatus && draftDirectoryNeedsFreshStatusRef.current === selectedDraftDirectory) {
                     draftDirectoryNeedsFreshStatusRef.current = null;
                 }
-                if (!cancelled && (status.files?.length ?? 0) > 0) {
-                    setDirtyDraftDirectory(selectedDraftDirectory);
+                if (!cancelled) {
+                    setDirtyDraftDirectory((status.files?.length ?? 0) > 0 ? selectedDraftDirectory : null);
                 }
             })
-            .catch(() => {
-                if (!cancelled) setDirtyDraftDirectory(null);
-            });
+            .catch(() => undefined);
 
         return () => {
             cancelled = true;
         };
-    }, [enabled, newSessionDraft?.bootstrapPendingDirectory, newSessionDraft?.pendingWorktreeRequestId, selectedDraftDirectory, selectedDraftDirectoryBootstrapPending, selectedDraftProject?.kind]);
+    }, [enabled, newSessionDraft?.bootstrapPendingDirectory, newSessionDraft?.pendingWorktreeRequestId, selectedDraftDirectory, selectedDraftDirectoryBootstrapPending, selectedDraftProject?.kind, draftIndexRevision]);
 
     const shouldKeepMissingSelectedDraftDirectory = React.useMemo(() => {
         const pendingDirectory = normalizePath(newSessionDraft?.bootstrapPendingDirectory ?? null);
