@@ -244,6 +244,7 @@ export class WorkerRegistry {
   // publish their own flat `entries` map, which must not shadow the live
   // process entries the reaper and lifecycle paths own.
   private readonly workerEntries = new Map<string, WorkerEntry>();
+  private readonly retiredSessionIds = new Map<string, string[]>();
   private readonly mutations = new Map<string, Promise<void>>();
   private readonly actions = new Map<string, ActionHandle>();
   private readonly restartReservations = new Map<string, string>();
@@ -333,6 +334,8 @@ export class WorkerRegistry {
     this.workerEntries.delete(oldRootSessionId);
     entry.info.rootSessionId = newRootSessionId;
     if (entry.kind === 'session') {
+      this.retiredSessionIds.set(newRootSessionId, [...(this.retiredSessionIds.get(oldRootSessionId) ?? []), oldRootSessionId]);
+      this.retiredSessionIds.delete(oldRootSessionId);
       entry.input.rootSessionId = newRootSessionId;
     }
     this.workerEntries.set(newRootSessionId, entry);
@@ -1095,7 +1098,7 @@ export class WorkerRegistry {
     const { env: _privateEnvironment, ...bootstrap } = input;
     const { rootSessionId: authorizationRootId, ...statelessBootstrap } = bootstrap;
     const command = owner.kind === 'session'
-      ? WorkerBootstrapMessageSchema.parse({ ...bootstrap, type: 'bootstrap', workerGeneration, approvalPolicies })
+      ? WorkerBootstrapMessageSchema.parse({ ...bootstrap, type: 'bootstrap', workerGeneration, approvalPolicies, retiredSessionIds: this.retiredSessionIds.get(input.rootSessionId) })
       : owner.kind === 'usage'
         ? UsageWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'usage.bootstrap', workerGeneration })
         : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'completion.bootstrap', workerGeneration });
