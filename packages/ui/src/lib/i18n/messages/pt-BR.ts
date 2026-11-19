@@ -148,6 +148,8 @@ export const dict = {
   "chat.goal.mark.complete": "Objetivo concluído",
   "chat.goal.toast.distillFallback": "O objetivo excedeu o limite e não pôde ser destilado — o auditor usa uma versão recortada",
   "terminalView.error.cannotConnect": "O terminal não conseguiu se conectar",
+  'terminalView.status.inputPaused': "Conexão restabelecida. Confira a linha de comando antes de voltar a digitar.",
+  'terminalView.actions.resumeInput': "Voltar a digitar",
   "terminalView.actions.tryAgain": "Tentar novamente",
   "directoryExplorerDialog.actions.addNamed": "Adicionar \"{name}\"",
   "directoryExplorerDialog.actions.createNamed": "Criar \"{name}\" e adicionar",
