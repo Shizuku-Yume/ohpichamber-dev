@@ -21,6 +21,23 @@ type BoundCredentialResolver = (
 ) => Promise<BoundProviderCredentialResolution>;
 
 class NativeModelRegistry extends ModelRegistry {
+  private readonly providerSecrets = new Set<string>();
+
+  rememberProviderSecrets(values: Iterable<string | undefined>): void {
+    for (const value of values) if (value) this.providerSecrets.add(value);
+  }
+
+  sanitizeProviderError(text: string): string {
+    for (const key of [...this.providerSecrets].sort((left, right) => right.length - left.length)) {
+      text = text.split(key).join('[redacted]');
+    }
+    return text
+      .replace(/(authorization["']?\s*[:=]\s*["']?)(?:bearer\s+)?[^\r\n]*/gi, '$1[redacted]')
+      .replace(/\bbearer\s+[^\s,;"']+/gi, 'Bearer [redacted]')
+      .replace(/((?:api[_-]?key|token|secret|password)["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1[redacted]')
+      .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted]');
+  }
+
   constructor(
     authStorage: AuthStorage,
     modelsPath: string,
@@ -42,8 +59,9 @@ class NativeModelRegistry extends ModelRegistry {
     };
     if (model.accountAccess) providerOptions.accountIds = Object.keys(model.accountAccess);
     const resolved = await this.resolveBoundCredential(model.provider, sessionId, providerOptions);
-    if (resolved.bound) return resolved.credential?.apiKey;
-    return super.getApiKey(model, sessionId, options);
+    const key = resolved.bound ? resolved.credential?.apiKey : await super.getApiKey(model, sessionId, options);
+    this.rememberProviderSecrets([key]);
+    return key;
   }
 
   override async getApiKeyWithCredentialForProvider(
@@ -52,8 +70,9 @@ class NativeModelRegistry extends ModelRegistry {
     options?: AuthApiKeyOptions,
   ): Promise<ResolvedApiKey | undefined> {
     const resolved = await this.resolveBoundCredential(provider, sessionId, options);
-    if (resolved.bound) return resolved.credential;
-    return super.getApiKeyWithCredentialForProvider(provider, sessionId, options);
+    const credential = resolved.bound ? resolved.credential : await super.getApiKeyWithCredentialForProvider(provider, sessionId, options);
+    this.rememberProviderSecrets([credential?.apiKey]);
+    return credential;
   }
 }
 
@@ -65,6 +84,7 @@ export interface NativeWorkerRuntime {
   modelsPath: string;
   bindSessionId: (currentNativeSessionId: () => string) => void;
   effectiveEditMode: (activeModel?: string) => NativePolicyContext['editMode'];
+  sanitizeProviderError: (text: string) => string;
 }
 
 export async function openNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime> {
@@ -84,7 +104,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
   const authStorage = await discoverAuthStorage(input.agentDirectory, { cwd: input.cwd, settings });
   try {
     let currentNativeSessionId = () => '';
-    const modelRegistry: ModelRegistry = new NativeModelRegistry(
+    const modelRegistry = new NativeModelRegistry(
       authStorage,
       modelsPath,
       settings,
@@ -98,6 +118,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
       modelsPath,
       oauthProviderIds: () => new Set(getOAuthProviders().filter(provider => provider.available).map(provider => provider.id)),
       currentNativeSessionId: () => currentNativeSessionId(),
+      rememberProviderSecrets: values => modelRegistry.rememberProviderSecrets(values),
     });
     // Startup uses native local/cache discovery only; network entry is authorized at use.
     await modelRegistry.refresh('offline');
@@ -109,6 +130,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
       settings,
       modelsPath,
       effectiveEditMode: activeModel => resolveEditMode({ settings, getActiveModelString: () => activeModel }),
+      sanitizeProviderError: text => modelRegistry.sanitizeProviderError(text),
       bindSessionId: next => { currentNativeSessionId = next; },
     };
   } catch (error) { authStorage.close(); throw error; }

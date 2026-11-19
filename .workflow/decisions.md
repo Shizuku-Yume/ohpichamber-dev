@@ -1750,9 +1750,31 @@ Small-file acceptance also exposed `No valid theme loader registered for "opench
 - **Mine:** yes
 - **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
 
+## 2026-11-19 - Preserve sanitized native provider failure details
+
+- **Decided:** project the last unrecovered assistant error message into canonical run failure and turn history after removing resolved provider credentials and credential-shaped text. Preserve generic detail only when OMP supplies none.
+- **Instead of:** replacing every provider failure with a generic service failure or teaching the UI to read native transcripts.
+- **Because:** OMP owns the provider outcome and the existing canonical failure string already reaches the chat error notice. Credential values must not cross that boundary even when a provider echoes them.
+- **Mine:** yes
+- **Revisit when:** the canonical API introduces a structured provider-error contract.
+
 ## 2026-11-19 - Complete repository dialog dismissal before opening Git Settings
 
 - **Decided:** retain the repository popup through dismissal and open Git Settings on close completion. Recheck the draft warning when its directory's Git index revision changes and use action names for commit accessible labels.
 - **Instead of:** opening sibling modals during dismissal or keeping a one-shot dirty snapshot after a commit.
 - **Because:** closing modal focus cleanup must complete before the next surface opens, and a successful Git mutation invalidates the earlier dirty answer.
 - **Revisit when:** the shared dialog supports an atomic modal handoff or the draft target reads its dirty answer from the shared Git store.
+
+## 2026-11-19 - Restore chat failure notices from canonical turns
+
+- **Decided:** use the latest canonical failed turn when no equally recent live notification explains the failure.
+- **Instead of:** persisting the notification cache or relying on replay of a terminal event after a reload.
+- **Because:** snapshots already own sanitized terminal outcomes; transient notification state is not a complete history source. Completed, cancelled and superseded turns must not become current failures.
+- **Revisit when:** the chat renders terminal explanations inline with each canonical turn.
+
+## 2026-11-19 - Recheck draft dirtiness on working-tree status updates
+
+- **Decided:** subscribe the draft dirty probe to its selected directory's shared Git status in addition to index revision changes.
+- **Instead of:** waiting for staging to change the index or introducing another status poller.
+- **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
+- **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
