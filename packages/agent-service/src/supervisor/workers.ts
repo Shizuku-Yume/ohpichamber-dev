@@ -239,6 +239,45 @@ async function waitWithin(operation: Promise<void>, milliseconds: number): Promi
   }
 }
 
+type WindowsWorkerProcess = { pid: number; parentPid: number; creationDate: string };
+
+const listWindowsWorkerProcesses = async (): Promise<WindowsWorkerProcess[]> => {
+  const script = "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -gt 1 } | ForEach-Object { [PSCustomObject]@{pid=[int]$_.ProcessId;parentPid=[int]$_.ParentProcessId;creationDate=$(if($_.CreationDate){$_.CreationDate.ToUniversalTime().ToString('O')}else{''})} }) | ConvertTo-Json -Compress";
+  const { stdout } = await defaultExecFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, encoding: 'utf8', timeout: 5_000, maxBuffer: 1024 * 1024 });
+  return z.array(z.object({ pid: z.number().int().min(2), parentPid: z.number().int().nonnegative(), creationDate: z.string() })).parse(JSON.parse(stdout));
+};
+
+export async function snapshotWorkerDescendants(pid: number | undefined, { listProcesses = listWindowsWorkerProcesses } = {}): Promise<WindowsWorkerProcess[]> {
+  if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
+  const processes = await listProcesses();
+  const visited = new Set([pid]);
+  const descendants: WindowsWorkerProcess[] = [];
+  for (const parent of visited) {
+    for (const child of processes) {
+      if (child.parentPid !== parent || visited.has(child.pid)) continue;
+      if (child.pid === process.pid || !child.creationDate) throw new Error('Invalid descendant identity');
+      visited.add(child.pid);
+      descendants.push(child);
+    }
+  }
+  return descendants;
+}
+
+export async function cleanupWorkerDescendants(snapshot: WindowsWorkerProcess[], { listProcesses = listWindowsWorkerProcesses, terminateTree = terminateWorkerProcessTree } = {}): Promise<boolean> {
+  if (!snapshot.length) return true;
+  const matches = (expected: WindowsWorkerProcess, current: WindowsWorkerProcess) => expected.pid === current.pid && expected.creationDate === current.creationDate;
+  try {
+    for (const expected of snapshot) {
+      if (!Number.isSafeInteger(expected.pid) || expected.pid <= 1 || expected.pid === process.pid || !expected.creationDate) return false;
+      if ((await listProcesses()).some(current => matches(expected, current))) {
+        try { await terminateTree(expected.pid, 'SIGKILL'); } catch { /* Check all snapshot identities before returning. */ }
+      }
+    }
+    const remaining = await listProcesses();
+    return !snapshot.some(expected => remaining.some(current => matches(expected, current)));
+  } catch { return false; }
+}
+
 export async function stopWorkerProcess(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
   exited: Promise<void>,
@@ -1323,13 +1362,24 @@ export class WorkerRegistry {
       entry.info.state = 'stopping';
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       if (wasStarting) entry.rejectReady(new Error('SDK worker is stopping'));
+      let descendants: WindowsWorkerProcess[] = [];
+      let descendantsStopped = true;
+      if (process.platform === 'win32' && cooperativeGraceMs > 0) {
+        try { descendants = await snapshotWorkerDescendants(entry.child.pid); } catch { descendantsStopped = false; }
+      }
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
-      const stopped = await stopWorkerProcess(entry.child, entry.exited, { cooperativeGraceMs, stopTimeoutMs: this.options.stopTimeoutMs });
+      let stopped: boolean;
+      try {
+        stopped = await stopWorkerProcess(entry.child, entry.exited, { cooperativeGraceMs, stopTimeoutMs: this.options.stopTimeoutMs });
+      } finally {
+        const cleaned = await cleanupWorkerDescendants(descendants);
+        descendantsStopped = descendantsStopped && cleaned;
+      }
       for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
       entry.pending.clear();
       entry.info.state = 'stopped';
       if (this.workerEntries.get(entry.info.rootSessionId) === entry) this.workerEntries.delete(entry.info.rootSessionId);
-      return stopped;
+      return stopped && descendantsStopped;
     })();
     return entry.stopping;
   }

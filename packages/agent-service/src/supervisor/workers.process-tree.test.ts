@@ -3,7 +3,66 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkerRegistry, stopWorkerProcess, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
+import { WorkerRegistry, cleanupWorkerDescendants, snapshotWorkerDescendants, stopWorkerProcess, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
+
+const identity = (pid: number, parentPid = 4242, creationDate = '2026-11-19T00:00:00.0000000Z') => ({ pid, parentPid, creationDate });
+
+test('descendant snapshot walks every level without including siblings or the leader', async () => {
+  const processes = [identity(4242, 10), identity(5001), identity(5002, 5001), identity(5003, 10)];
+  expect(await snapshotWorkerDescendants(4242, { listProcesses: async () => processes })).toEqual([processes[1], processes[2]]);
+  expect(await snapshotWorkerDescendants(4242, { listProcesses: async () => [] })).toEqual([]);
+});
+
+test('snapshot inspection errors and missing identities are not successful snapshots', async () => {
+  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => { throw new Error('CIM failed'); } })).rejects.toThrow('CIM failed');
+  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(5001, 4242, '')] })).rejects.toThrow('Invalid descendant identity');
+});
+
+test('snapshot cleanup checks identity before every forced tree kill and verifies removal', async () => {
+  let alive = [identity(5001), identity(5002, 5001)];
+  const calls: string[] = [];
+  expect(await cleanupWorkerDescendants([...alive], {
+    listProcesses: async () => { calls.push('inspect'); return [...alive]; },
+    terminateTree: async (pid, signal) => { calls.push(`${pid}:${signal}`); alive = alive.filter(p => p.pid !== pid); return true; },
+  })).toBe(true);
+  expect(calls).toEqual(['inspect', '5001:SIGKILL', 'inspect', '5002:SIGKILL', 'inspect']);
+});
+
+test('snapshot cleanup never kills a reused PID or an already exited process', async () => {
+  const calls: number[] = [];
+  expect(await cleanupWorkerDescendants([identity(5001), identity(5002)], {
+    listProcesses: async () => [identity(5001, 4242, 'different-creation-date')],
+    terminateTree: async pid => { calls.push(pid!); return true; },
+  })).toBe(true);
+  expect(calls).toEqual([]);
+});
+
+test('snapshot cleanup fails closed on survivors, inspection failures and unsafe identities', async () => {
+  const snapshot = [identity(5001)];
+  expect(await cleanupWorkerDescendants(snapshot, {
+    listProcesses: async () => snapshot,
+    terminateTree: async () => true,
+  })).toBe(false);
+  expect(await cleanupWorkerDescendants(snapshot, {
+    listProcesses: async () => { throw new Error('CIM failed'); },
+  })).toBe(false);
+  expect(await cleanupWorkerDescendants([identity(process.pid)], {
+    listProcesses: async () => { throw new Error('Must not inspect'); },
+  })).toBe(false);
+});
+
+test('snapshot cleanup continues after a kill error and an empty snapshot needs no inspection', async () => {
+  const snapshot = [identity(5001), identity(5002)];
+  const calls: number[] = [];
+  expect(await cleanupWorkerDescendants(snapshot, {
+    listProcesses: async () => snapshot,
+    terminateTree: async pid => { calls.push(pid!); throw new Error('taskkill failed'); },
+  })).toBe(false);
+  expect(calls).toEqual([5001, 5002]);
+  expect(await cleanupWorkerDescendants([], {
+    listProcesses: async () => { throw new Error('Must not inspect'); },
+  })).toBe(true);
+});
 
 const stoppingWorker = () => {
   const calls: string[] = [];
