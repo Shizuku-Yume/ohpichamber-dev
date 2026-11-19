@@ -68,7 +68,7 @@ test('native connection checks disable redirects and keep the browser fallback c
     expect(await validateMobileConnectionSession({ url })).toBe(true);
     expect(targetRequests).toBe(2);
 
-    const { autoConnectLastInstance, upsertMobileConnection, loadMobileConnections } = await import('./mobileConnections');
+    const { autoConnectLastInstance, upsertMobileConnection, loadMobileConnections, reprobeActiveConnection } = await import('./mobileConnections');
     const { getRuntimeBearerTokenSync } = await import('@/lib/runtime-auth');
     const { switchRuntimeEndpoint } = await import('@/lib/runtime-switch');
     await upsertMobileConnection({ label: 'Passwordless', candidates: [{ kind: 'direct', url: 'https://passwordless.example' }] });
@@ -79,6 +79,11 @@ test('native connection checks disable redirects and keep the browser fallback c
     expect([...secrets.values()]).toContain('signed-passwordless-session');
     sessionExpired = true;
     expect(await autoConnectLastInstance({ fast: false })).toEqual({ status: 'connected' });
+    bootstrap = { sessionToken: 'renewed-passwordless-session' };
+    expect(await reprobeActiveConnection({ fast: false })).toBe('switched');
+    expect(getRuntimeBearerTokenSync()).toBe('renewed-passwordless-session');
+    expect([...secrets.values()]).toContain('renewed-passwordless-session');
+    bootstrap = { sessionToken: 'signed-passwordless-session' };
     sessionExpired = false;
     switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null });
     for (const result of [{ sessionToken: '' }, {}, null]) {

@@ -1496,8 +1496,10 @@ export const reprobeActiveConnection = async (options?: { fast?: boolean }): Pro
     }
   }
 
-  // 3. Current transport is dead — fall through to lower-priority candidates.
-  const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + 1) : [];
+  // 3. Current transport is dead — fall through to lower-priority candidates. A
+  // rejected credential is re-probed on the current transport too, so an expired
+  // passwordless session is renewed (or reports needs-login) instead of dropped.
+  const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + (current === 'invalid' ? 0 : 1)) : [];
   const fallback = await probeConnectionCandidates(lower, token, { fast, requestHeaders });
   logConnect('reprobe:fallback', { status: fallback.status, probed: lower.length });
   if (fallback.status === 'ok') {
