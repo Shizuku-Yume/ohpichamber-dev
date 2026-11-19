@@ -462,48 +462,23 @@ const resolveChatsPathWithoutProject = async ({ targetPath, chatsRoots, path, os
   return null;
 };
 
-const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots, chatsRoots }: WorkspaceContextOptions): Promise<WorkspacePathResult> => {
-const resolvedProject = await resolveProjectDirectory(req);
-
-const bases = [resolvedProject.directory, ...managedRoots, resolvedProject.requestedDirectory];
-
-if (!resolvedProject.directory) {
-  if (resolutionError) throw resolutionError;
-  return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
+const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots, chatsRoots }) => {
+ const resolvedProject = await resolveProjectDirectory(req);
+ // Managed chats do not require a configured project. Each base is an
+ // independently authorized root, not a fallback to the user's home.
+ const bases = [resolvedProject.directory, ...managedRoots, resolvedProject.requestedDirectory];
+ for (const baseDirectory of bases) {
+  if (!baseDirectory) continue;
+  const resolved = resolveWorkspacePath({
+   targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [],
+  });
+  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') return resolved;
  }
 
-const resolved = resolveWorkspacePath({
-    targetPath,
-    baseDirectory: resolvedProject.directory,
-    path,
-    os,
-    normalizeDirectoryPath,
-    managedRoots,
-  });
-
-if (resolved.ok || resolved.error !== 'Path is outside of active workspace') {
-    return resolved;
-  }
-
-const requestedBase = resolvedProject.requestedDirectory;
-
-if (requestedBase && requestedBase !== resolvedProject.directory) {
-    const lexical = resolveWorkspacePath({
-      targetPath,
-      baseDirectory: requestedBase,
-      path,
-      os,
-      normalizeDirectoryPath,
-      managedRoots,
-    });
-    if (lexical.ok) {
-      return lexical;
-    }
-  }
-
-let resolutionError;
-
-for (const root of managedRoots) {
+ // Keep lexical aliases addressable, then check filesystem-confirmed roots.
+ // Write routes retain their canonical-target containment checks.
+ let resolutionError;
+ for (const root of managedRoots) {
   try {
    const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
    const resolvedPath = path.resolve(normalizeDirectoryPath(targetPath));
@@ -514,28 +489,20 @@ for (const root of managedRoots) {
    resolutionError ??= error;
   }
  }
-
-for (const baseDirectory of bases) {
-  if (!baseDirectory) continue;
-  const resolved = resolveWorkspacePath({
-   targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [],
-  });
-  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') return resolved;
+ if (!resolvedProject.directory) {
+  if (resolutionError) throw resolutionError;
+  return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
  }
-
-const worktree = await resolveWorkspacePathFromWorktrees({
-    targetPath,
-    baseDirectory: resolvedProject.directory,
-    path,
-    os,
-    normalizeDirectoryPath,
-  });
-
-if (worktree.ok) return worktree;
-
-if (resolutionError) throw resolutionError;
-
-return worktree;
+ const worktree = await resolveWorkspacePathFromWorktrees({
+  targetPath,
+  baseDirectory: resolvedProject.directory,
+  path,
+  os,
+  normalizeDirectoryPath,
+ });
+ if (worktree.ok) return worktree;
+ if (resolutionError) throw resolutionError;
+ return worktree;
 };
 
 const GIT_DIRS_MAX_DEPTH = 3;
