@@ -4,6 +4,10 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-19 Desktop OMP selection and upgrades:** Desktop prefers a local SDK only when its package versions and the app's shell-observation and offline model-discovery patches match. A compatible compiled OMP can supply Bun but cannot replace the SDK. The offline fallback ships with the app and upgrades with supported desktop updates; the native menu can turn background updates off. Linux system-package installs keep their manual update path.
+
+Linux x64 verification: the staged bundle and a matching local SDK reached Agent Service readiness; an unpatched registry OMP 19.0.0 fell back to the bundle. All 75 Electron test files and eight focused Host tests passed. In the loopback AppImage fixture, a fresh profile downloaded 1.0.2 in the background while 1.0.1 stayed running. Quit replaced the image with the expected checksum; on the next launch, Electron and the ready Bun Agent Service ran from the new mount. Native macOS and Windows installer handoffs remain unverified.
+
 **2026-11-19 OMP 19 post-review main merge:** Merged `origin/main` at `f32665d62` with the real merge strategy. The development-record conflict retains both sides and drops the diff3 base markers; the upstream-delta ledger merged automatically with both branches' entries. Main did not change dependency inputs, so the source-packed core archives, exact 19.0.0 registry leaves and lockfile remain unchanged.
 
 Post-merge `bun install --frozen-lockfile` exits 0: 1426 installs across 1579 packages, no changes. Root type-check exits 0 through mobile: 3,888 files across five projects and all five repository guards. Full Agent Service `bun test src --timeout 15000`: 682 pass, 12 skip, 0 fail, 6702 assertions across 694 tests/80 files. The merged CodeMirror editor suite passes 12 tests/70 assertions. Receipts: `/home/ubuntu/omp19-artifacts/logs/review-merge-*`. CI completion remains unverified: the owner reports unassigned queued Blacksmith runners and explicitly accepts local verification instead of waiting for CI.
