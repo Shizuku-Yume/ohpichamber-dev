@@ -8,6 +8,8 @@ import { detectSystemOmpRuntime, findSystemOmpCandidates } from 'ohpichamber/ser
 import { withoutInjectedEnv } from 'ohpichamber/server/lib/injected-env.js';
 
 const CODING_AGENT = '@oh-my-pi/pi-coding-agent';
+// Same-version registry builds lack the app's offline model and shell observation patches.
+const PATCHED_SDK_FILES = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
 const readManifest = (directory) => JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
 
 // Bun must read physical files, never Electron's virtual ASAR filesystem.
@@ -109,6 +111,9 @@ export function resolveAgentRuntime(resourcesDirectory, {
           if (manifest.name !== CODING_AGENT || manifest.version !== bundled.ompVersion || manifest.bin?.omp !== 'dist/cli.js') continue;
           const cli = path.join(sdkRoot, 'dist', 'cli.js');
           if (!fs.existsSync(cli) || (platform !== 'win32' && fs.realpathSync(executable) !== cli)) continue;
+          const shippedSdk = path.join(path.dirname(bundled.entrypoint), '..', 'node_modules', CODING_AGENT);
+          if (!PATCHED_SDK_FILES.every(file => fs.readFileSync(path.join(sdkRoot, file))
+            .equals(fs.readFileSync(path.join(shippedSdk, file))))) continue;
           fs.rmSync(localServiceDir, { recursive: true, force: true });
           const entrypoint = prepareLocalSdk(bundled, sdkRoot, localServiceDir, platform, Math.max(1, deadline - Date.now()), env);
           return { ...bundled, entrypoint, source: 'system', path: executable };

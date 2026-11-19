@@ -56,9 +56,15 @@ test('resolveAgentRuntime validates platform manifest and required files', () =>
 test('desktop resolves an installed OMP SDK only when it matches the shipped SDK', { skip: process.platform === 'win32' }, () => {
   const fixture = createMockRuntimeFixture();
   const sdk = '@oh-my-pi/pi-coding-agent';
-  const writeSdk = (root, version) => {
+  const patchedFiles = ['src/sdk.ts', 'src/async/job-manager.ts', 'src/tools/bash.ts'];
+  const writeSdk = (root, version, unpatchedFile) => {
     fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: sdk, version, bin: { omp: 'dist/cli.js' } }));
+    for (const file of patchedFiles) {
+      const target = path.join(root, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, file === unpatchedFile ? '// unpatched' : '// patched');
+    }
     const cli = path.join(root, 'dist', 'cli.js');
     fs.writeFileSync(cli, '#!/bin/sh\necho omp/' + version + '\n', { mode: 0o755 });
     return cli;
@@ -86,6 +92,11 @@ test('desktop resolves an installed OMP SDK only when it matches the shipped SDK
     assert.equal(fallback.source, 'bundled');
     assert.equal(fallback.ompVersion, '19.0.0');
     assert.equal(fallback.entrypoint, fixture.entrypoint);
+
+    for (const file of patchedFiles) {
+      writeSdk(localSdk, '19.0.0', file);
+      assert.equal(resolveAgentRuntime(fixture.root, options).entrypoint, fixture.entrypoint, file);
+    }
 
     writeSdk(localSdk, '19.0.0');
     fs.writeFileSync(fixture.bunPath, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
