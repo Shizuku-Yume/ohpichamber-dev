@@ -698,6 +698,7 @@ export interface GhosttyTerminalSurfaceOptions {
    */
   readonly handleTouchPointer?: boolean;
   readonly onData: (data: string) => void;
+  readonly onReply: (data: string) => void;
   readonly onResize: (cols: number, rows: number) => void;
   readonly onSelectionChange?: () => void;
   /**
@@ -911,7 +912,7 @@ export class GhosttyTerminalSurface {
       metrics.width,
       metrics.height,
       options.theme,
-      options.onData,
+      options.onReply,
     );
     const surface = new GhosttyTerminalSurface(
       mount,

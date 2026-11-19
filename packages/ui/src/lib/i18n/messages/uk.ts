@@ -148,6 +148,8 @@ export const dict = {
   "chat.goal.mark.complete": "Ціль завершена",
   "chat.goal.toast.distillFallback": "Ціль перевищила ліміт і її не вдалося стиснути — аудитор використовує скорочену версію",
   "terminalView.error.cannotConnect": "Терміналу не вдалося підключитися",
+  'terminalView.status.inputPaused': "З’єднання відновлено. Перш ніж продовжити введення, перевірте командний рядок.",
+  'terminalView.actions.resumeInput': "Продовжити введення",
   "terminalView.actions.tryAgain": "Спробувати ще раз",
   "directoryExplorerDialog.actions.addNamed": "Додати \"{name}\"",
   "directoryExplorerDialog.actions.createNamed": "Створити \"{name}\" і додати",

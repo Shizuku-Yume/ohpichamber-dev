@@ -1639,6 +1639,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Keep interactive terminal input bound to its attachment
+
+- **Decided:** interactive input requires the current socket's terminal snapshot and an explicit resume after reconnect. Project-action interrupts can still use a socket without attaching a viewport.
+- **Instead of:** automatically accepting input as soon as the next socket opens or replaying keys typed during a disconnect.
+- **Because:** forwarding an arbitrary suffix of a command can change what the shell executes. After reattachment, the user can inspect the recovered command line before typing again.
+- **Revisit when:** interactive terminal transport can acknowledge command input across a connection change without ambiguity.
+
 ## 2026-11-19 - Keep composer image removal from sending drafts
 
 - **Decided:** mark the shared composer's image removal control as a non-submit button.
