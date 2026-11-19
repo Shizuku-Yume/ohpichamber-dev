@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import type { JsonObject, JsonValue } from '../magic-prompts/runtime.js';
 import type { ActionPlatform, DraftStarter, PersonalProjectSetup, ProjectAction, SharedProjectConfig, SharedProjectDocument, SharedProjectRead, StoredProjectSetupPatch } from './contracts.js';
+const sanitizeCreateWorktreeCommand = z.unknown().transform((value) => clamp(trimmedString(value), SETUP_COMMAND_MAX_LENGTH)).parse;
+
 
 const isObjectRecord = (value: unknown): value is SharedProjectDocument => isRecord(value);
 const isInputArray = (value: unknown): value is unknown[] => Array.isArray(value);
