@@ -211,6 +211,8 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
+    /** The shared catalog identity; a `/btw` branch rekeys its root in place. */
+    private readonly workerIdentity: { rootSessionId: string },
     private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
@@ -501,6 +503,9 @@ export class WorkerSession {
       }
       return hostAuthorize({ type: 'tool', toolName, input: toolInput, ...approval }, nativeContext);
     };
+    // One mutable identity object is shared by the catalogs, the MCP manager
+    // and the host-tool scope, so a completed `/btw` branch rekeys them all at
+    // once instead of leaving a retired root id on any published catalog.
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
     const observer: ExtensionFactory = api => {
@@ -739,7 +744,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, hostToolsController);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -1697,6 +1702,14 @@ export class WorkerSession {
         if (branchRes.sessionFile) this._sessionFile = branchRes.sessionFile;
         const newSessionId = this.session.sessionManager.getSessionId();
         this._sessionId = newSessionId;
+        // The native branch rekeys the root this worker serves. Shell jobs, the
+        // Host tool scope, the MCP/skill catalog owner and the parent id of any
+        // subagent all name that root, so they move with it; a stale id makes
+        // the Host's root check refuse those reads with 503.
+        this.shell.rekey(newSessionId);
+        this.hostToolsController?.rekey(newSessionId);
+        this.mcp?.rekey(newSessionId);
+        this.workerIdentity.rootSessionId = newSessionId;
         this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases());
         this.projection.resetSelection();
         this.syncTodoAutoClear();

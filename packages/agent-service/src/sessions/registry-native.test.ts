@@ -836,6 +836,42 @@ test('btwBranch rekeys live session entry, worker, journal and reference to new 
   }
 }, 60000);
 
+test('btwBranch leaves no root-addressed read pointing at the retired session id', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-read-session-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          // A real branch replies with the seed of its rekeyed projection, so the
+          // journal history is re-addressed to the minted id as well.
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    const ack = await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    expect(ack.type === 'btw.branch' && ack.sessionId).toBe(newSessionId);
+    // Every route the composer reads after a Promote to Branch: the snapshot,
+    // the roster runtime and the subagent list. Before the rekey fan-out these
+    // answered 404 / "The session has no listed root" for the minted id because
+    // the registry kept the retired one.
+    expect((await harness.sessions.snapshot(newSessionId)).session.sessionId).toBe(newSessionId);
+    expect(harness.sessions.runtime(newSessionId).sessionId).toBe(newSessionId);
+    expect(harness.sessions.listSubagents(newSessionId)).toEqual([]);
+    // The retired id must not resolve to the session the Host no longer binds.
+    expect(() => harness.sessions.runtime(rootSessionId)).toThrow();
+    expect(harness.workers.bootstrap(newSessionId)?.rootSessionId).toBe(newSessionId);
+    expect(harness.workers.bootstrap(rootSessionId)).toBeUndefined();
+  } finally { await harness.close(); }
+}, 60000);
+
 test('btwBranch returns an ack the strict public SessionControlAckSchema accepts', async () => {
   const harness = await fixture();
   try {
