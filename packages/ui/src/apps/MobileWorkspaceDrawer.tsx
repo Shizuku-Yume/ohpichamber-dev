@@ -52,7 +52,8 @@ export const MobileWorkspaceDrawer: React.FC<{
   /** Notes tab: opens a plan fullscreen (layered above the drawer). */
   onOpenPlan: (plan: { id: string; title: string; projectRef: ProjectRef }) => void;
   variant?: 'drawer' | 'panel';
-}> = ({ open, onClose, registerBackHandler, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer' }) => {
+  reconnectBanner?: React.ReactNode;
+}> = ({ open, onClose, registerBackHandler, tab, onTabChange, pendingChangesDiff, onOpenPlan, variant = 'drawer', reconnectBanner }) => {
   const { t, direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
@@ -224,6 +225,7 @@ export const MobileWorkspaceDrawer: React.FC<{
           <Icon name="close" className="size-5" />
         </button>
       </div>
+      {reconnectBanner}
       <div className="min-h-0 flex-1 overflow-hidden">
         {/* Panes stay MOUNTED once visited (hidden when inactive/closed), so
             reopening the drawer lands exactly where the user left off — an
