@@ -8,21 +8,13 @@ import {
   isGuestApproved,
   requestedGuestCapabilities,
   serviceProvides,
-<<<<<<< HEAD:packages/web/server/lib/browser-control/provider.js
 } from 'ohpichamber-sdk';
 import { browserProviderResultSchema } from 'ohpichamber-sdk/schemas';
-||||||| bc50ba56aa:packages/web/server/lib/browser-control/provider.js
-} from '@openchamber/sdk';
-import { browserProviderResultSchema } from '@openchamber/sdk/schemas';
-=======
-} from '@openchamber/sdk';
-import { browserProviderResultSchema } from '@openchamber/sdk/schemas';
 import type { z } from 'zod';
->>>>>>> upstream/main:packages/web/server/lib/browser-control/provider.ts
 
 import { GuestServiceError, proxyGuestServiceRequest } from '../guests/service.js';
 import { BrowserControlError } from './broker.js';
-import type { GuestCapability, OpenChamberContributes, ServiceContribution } from '@openchamber/sdk';
+import type { GuestCapability, OpenChamberContributes, ServiceContribution } from 'ohpichamber-sdk';
 import type { BrowserControlOptions, BrowserControlParameters, createBrowserControlBroker } from './broker.js';
 
 export interface BrowserProviderGuest extends Omit<OpenChamberContributes, 'panel'> {

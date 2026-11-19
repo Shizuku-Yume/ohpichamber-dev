@@ -39,20 +39,10 @@ export const requestControlAction = async (port: number, action: string, input: 
     ? ` ${partialSubject} ${partialSessionId} remains available${partialDirectory ? ` in ${partialDirectory}` : ''}.`
     : '';
   if (isPartial && body?.partialAction === 'worktree-created' && partialDirectory) {
-<<<<<<< HEAD:packages/web/bin/lib/cli-control.js
-    const retry = ['ohpichamber session create', '--directory', shellQuote(partialDirectory), '--port', String(port)];
-    for (const key of ['prompt', 'title', 'model', 'agent', 'variant', 'timeout']) {
-      if (input?.[key] != null) retry.push(`--${key}`, shellQuote(input[key]));
-||||||| bc50ba56aa:packages/web/bin/lib/cli-control.js
-    const retry = ['openchamber session create', '--directory', shellQuote(partialDirectory), '--port', String(port)];
-    for (const key of ['prompt', 'title', 'model', 'agent', 'variant', 'timeout']) {
-      if (input?.[key] != null) retry.push(`--${key}`, shellQuote(input[key]));
-=======
     const retry = ['openchamber session create', '--directory', shellQuote(partialDirectory), '--port', String(port)];
     const valueKeys: (keyof ControlInput)[] = ['prompt', 'title', 'model', 'agent', 'variant', 'timeout'];
     for (const key of valueKeys) {
       if (input?.[key] != null) retry.push(`--${key}`, shellQuote(String(input[key])));
->>>>>>> upstream/main:packages/web/bin/lib/cli-control.ts
     }
     const booleanFlags: [keyof ControlInput, string][] = [['goal', '--goal'], ['wait', '--wait'], ['lastAssistant', '--last-assistant']];
     for (const [key, flag] of booleanFlags) {

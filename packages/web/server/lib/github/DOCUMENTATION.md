@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- This module owns GitHub auth, Octokit access, repo resolution, and Pull Request status resolution for OpenChamber.
+- This module owns GitHub auth, Octokit access, repo resolution, and Pull Request status resolution for OhPiChamber.
 - From user perspective, this is the layer that lets the app know which PR belongs to a local branch and keeps that UI feeling current.
 
 ## Entrypoints and structure
@@ -49,7 +49,7 @@ GitHub sits on the shared source-control route shell (`../source-control/provide
 ### Device flow
 
 - `startDeviceFlow({ clientId, scope, fetch, timeoutMs })`: request and validate the provider grant with a bounded request that rejects redirects.
-- `exchangeDeviceCode({ clientId, deviceCode, fetch, timeoutMs })`: server-internal access-token polling. The provider device code never crosses the OpenChamber HTTP boundary.
+- `exchangeDeviceCode({ clientId, deviceCode, fetch, timeoutMs })`: server-internal access-token polling. The provider device code never crosses the OhPiChamber HTTP boundary.
 
 ### Octokit
 
@@ -84,13 +84,7 @@ GitHub Enterprise authenticates per instance, the same model GitLab uses: each i
 - github.com's own gh switch is unchanged: its switch lives in Settings (`setGhCliActive` / `isGhCliActive`, stored in `settings.json`), and its `ghCliDisabled` kill switch turns github.com's CLI off. While `ghCliDisabled` is on, the github.com status read never runs gh: `cli.available` then comes from a github.com login in `hosts.yml` or a `GH_TOKEN`/`GITHUB_TOKEN` in the server's environment (the token gh itself would read), so the row that turns gh back on stays without a gh process every few minutes. Each enterprise host's own switch and `cliDisabled` live with that instance, so turning one host off never takes another with it.
 ## Auth storage and config
 
-<<<<<<< HEAD
-- Auth storage: `~/.config/ohpichamber/github-auth.json` — github.com's device-flow accounts. A GitHub Enterprise host's personal access tokens and its gh switch live in `source-control-auth.json`, the server token store GitLab uses, one entry per host; each instance keeps its own `activeCredentialId`, credentials, `cliDisabled`, and `cliActive`. github.com's gh switch keeps living in `settings.json`; a non-github.com host's switch lives with its instance there. Versions 1 and 2 flat files migrate into the `github.com` instance on first write.
-||||||| bc50ba56aa
-- Auth storage: `~/.config/openchamber/github-auth.json` — github.com's device-flow accounts. A GitHub Enterprise host's personal access tokens and its gh switch live in `source-control-auth.json`, the server token store GitLab uses, one entry per host; each instance keeps its own `activeCredentialId`, credentials, `cliDisabled`, and `cliActive`. github.com's gh switch keeps living in `settings.json`; a non-github.com host's switch lives with its instance there. Versions 1 and 2 flat files migrate into the `github.com` instance on first write.
-=======
 - Auth storage: `~/.config/openchamber/github-auth.json` - github.com's device-flow accounts, in the same versions as before: `cliLogin` is written into a version 3 instance only while a login is pinned, so a file this release touches without pinning one stays readable by an older release's strict parser, and a pinned login upgrades the file to version 3. A GitHub Enterprise host's personal access tokens and its gh switch live in `source-control-auth.json`, the server token store GitLab uses, one entry per host; each instance keeps its own `activeCredentialId`, credentials, `cliDisabled`, `cliActive`, and `cliLogin` (the gh login its switch is on for; null or absent means gh's own active login, so older files read unchanged and a switch with no pinned login still writes nothing extra). github.com's gh switch keeps living in `settings.json` (as `ghCliActive`/`ghCliDisabled`, with a pinned login as `ghCliLogin`); a non-github.com host's switch lives with its instance there. Versions 1 and 2 flat files migrate into the `github.com` instance on first write.
->>>>>>> upstream/main
 - Writes are atomic and file mode is `0o600`.
 - Client ID resolution order: `OPENCHAMBER_GITHUB_CLIENT_ID` -> `settings.json` -> default.
 - Scope resolution order: `OPENCHAMBER_GITHUB_SCOPES` -> `settings.json` -> default.
@@ -501,7 +495,7 @@ The asynchronous merge runs first with the existing `bypass_rules: true`, so an 
 
 Live summaries carry `isInMergeQueue`, `mergeQueueEntry { state, position }` and `autoMergeRequest { enabledAt, mergeMethod }`. The shared PR actions show that waiting state with Cancel, which dequeues and disables any retained auto-merge request through the same durable merge route using `cancel: true`. The cancel digest differs from merging; existing merge digests remain unchanged. Reconciliation reads the waiting state before claiming a lost enable/cancel succeeded.
 
-Follows notify on merged, closed, leaving both queue and auto-merge, and checks becoming failing, including another failure on a new head. A terminal state wins over its simultaneous queue disappearance and ends the follow. Removal and failing checks leave it active until merged or closed. A cancel made from OpenChamber ends the follow without a removal notification: the source-control routes call `onMutationStarting` before the provider write, and removal seen while that cancel runs is not announced. A merged read is accepted even when it began before the follow, since tracked items stop reading a merged PR and no later read would come. Unknown reads and reads begun before the merge request never imply removal. Baselines are saved before best-effort notification delivery, matching session notifications' live delivery contract. Notification settings and enterprise content stripping are owned by `../notifications`.
+Follows notify on merged, closed, leaving both queue and auto-merge, and checks becoming failing, including another failure on a new head. A terminal state wins over its simultaneous queue disappearance and ends the follow. Removal and failing checks leave it active until merged or closed. A cancel made from OhPiChamber ends the follow without a removal notification: the source-control routes call `onMutationStarting` before the provider write, and removal seen while that cancel runs is not announced. A merged read is accepted even when it began before the follow, since tracked items stop reading a merged PR and no later read would come. Unknown reads and reads begun before the merge request never imply removal. Baselines are saved before best-effort notification delivery, matching session notifications' live delivery contract. Notification settings and enterprise content stripping are owned by `../notifications`.
 
 ### Why merge-permission refusals are remembered for five minutes
 
@@ -525,7 +519,7 @@ Every Octokit for a gh account, every Settings status read and every Git credent
 
 ### Why every gh login of a host is listed, not only the active one
 
-gh can be signed in to several accounts per host, and a repository often belongs to the other one. Listing only gh's active login forced the user to `gh auth switch` — a global change outside OpenChamber — before a repository's owner could be read or pushed to. `hosts.yml` names every login (the active one in `user`, all of them in `users`, also when tokens live in the OS keyring), so each becomes a row of its own and an exact `<host>#cli:<id>` id resolves to a token asked for the way the listing verified it: by name (`gh auth token --user <login>`, gh 2.40+) for a login other than the active one, without `--user` for the active login and the `GH_TOKEN` account. Converting every lookup to a named one was rejected: gh's named lookup skips `GH_TOKEN` and older gh rejects the flag, so the account that worked before would list and then resolve to nothing. Only GitHub says which account a login is, so `gh-cli-logins.js` reads that once per login and caches it against the same `hosts.yml` stat the token cache uses; the token itself stays in `gh-cli-credential.js`. Consent did not move per account: the instance's one gh switch is still the consent, `current` still names the login an unbound use falls back to, and a switch-off still takes every login with it. A host reachable only through `GH_TOKEN` has no `hosts.yml` entry, so gh's own token account stands in for the login there and nothing that worked before stops working.
+gh can be signed in to several accounts per host, and a repository often belongs to the other one. Listing only gh's active login forced the user to `gh auth switch` — a global change outside OhPiChamber — before a repository's owner could be read or pushed to. `hosts.yml` names every login (the active one in `user`, all of them in `users`, also when tokens live in the OS keyring), so each becomes a row of its own and an exact `<host>#cli:<id>` id resolves to a token asked for the way the listing verified it: by name (`gh auth token --user <login>`, gh 2.40+) for a login other than the active one, without `--user` for the active login and the `GH_TOKEN` account. Converting every lookup to a named one was rejected: gh's named lookup skips `GH_TOKEN` and older gh rejects the flag, so the account that worked before would list and then resolve to nothing. Only GitHub says which account a login is, so `gh-cli-logins.js` reads that once per login and caches it against the same `hosts.yml` stat the token cache uses; the token itself stays in `gh-cli-credential.js`. Consent did not move per account: the instance's one gh switch is still the consent, `current` still names the login an unbound use falls back to, and a switch-off still takes every login with it. A host reachable only through `GH_TOKEN` has no `hosts.yml` entry, so gh's own token account stands in for the login there and nothing that worked before stops working.
 
 ### Why live summaries fall back to the host's current account
 

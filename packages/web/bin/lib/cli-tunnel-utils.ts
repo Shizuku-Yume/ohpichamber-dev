@@ -152,16 +152,8 @@ function buildTunnelStartReplayCommand({
   includeTokenPlaceholder,
   tokenViaStdin,
   tokenFileProvided,
-<<<<<<< HEAD:packages/web/bin/lib/cli-tunnel-utils.js
-}) {
-  const parts = ['ohpichamber', 'tunnel', 'start'];
-||||||| bc50ba56aa:packages/web/bin/lib/cli-tunnel-utils.js
-}) {
-  const parts = ['openchamber', 'tunnel', 'start'];
-=======
 }: TunnelReplayOptions) {
   const parts = ['openchamber', 'tunnel', 'start'];
->>>>>>> upstream/main:packages/web/bin/lib/cli-tunnel-utils.ts
   if (Number.isFinite(port) && port > 0) {
     parts.push('--port', String(port));
   }
@@ -209,7 +201,7 @@ function buildTunnelStartReplayCommand({
 
 function buildTunnelProfileAddCommand({ provider, hostname }: { provider: string; hostname: string }) {
   const parts = [
-    'ohpichamber',
+    'openchamber',
     'tunnel',
     'profile',
     'add',

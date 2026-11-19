@@ -1,18 +1,10 @@
 import { OpenChamberControlError } from '../openchamber-control/error.js';
-<<<<<<< HEAD:packages/web/server/lib/guests/service-host-api.js
-import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, isGuestApproved, requestedGuestCapabilities } from 'ohpichamber-sdk';
+import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, SERVICE_MARKS_MAX, SERVICE_MARK_RATE_MAX, isGuestApproved, requestedGuestCapabilities } from 'ohpichamber-sdk';
 import { serviceHostCallSchema } from 'ohpichamber-sdk/schemas';
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-host-api.js
-import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
-import { serviceHostCallSchema } from '@openchamber/sdk/schemas';
-=======
-import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, SERVICE_MARKS_MAX, SERVICE_MARK_RATE_MAX, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
-import { serviceHostCallSchema } from '@openchamber/sdk/schemas';
->>>>>>> upstream/main:packages/web/server/lib/guests/service-host-api.ts
 
 import { setHostCallbackRoute } from './host-callback.js';
 import { guestIdOfServiceToken } from './service.js';
-import type { GuestCapability } from '@openchamber/sdk';
+import type { GuestCapability } from 'ohpichamber-sdk';
 import type { z } from 'zod';
 import type { GuestRecord } from './contracts.js';
 import type { HostCallbackRoute } from './host-callback.js';
@@ -37,19 +29,6 @@ export interface ServiceHostApiOptions {
   now?: () => number;
 }
 
-<<<<<<< HEAD:packages/web/server/lib/guests/service-host-api.js
-/** Control errors already speak to the caller; anything else stays on the server. */
-const controlFailure = (error) => {
-  const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
-  if (status >= 500) console.warn('[service-host] a session call failed:', error?.message ?? error);
-  return fail(status, 'SESSION_FAILED', status >= 500 ? 'OhPiChamber could not reach the session.' : String(error?.message ?? 'The call was refused.'));
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-host-api.js
-/** Control errors already speak to the caller; anything else stays on the server. */
-const controlFailure = (error) => {
-  const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
-  if (status >= 500) console.warn('[service-host] a session call failed:', error?.message ?? error);
-  return fail(status, 'SESSION_FAILED', status >= 500 ? 'OpenChamber could not reach the session.' : String(error?.message ?? 'The call was refused.'));
-=======
 type ServiceHostCall = z.infer<typeof serviceHostCallSchema>;
 type SessionQuery = { sessionId: string; role?: 'user' | 'assistant'; limit?: number };
 
@@ -65,8 +44,7 @@ const controlFailure = (cause: unknown) => {
   const status = hasIntegerStatusCode(cause) ? cause.statusCode : 500;
   const message = hasErrorMessage(cause) ? cause.message : undefined;
   if (status >= 500) console.warn('[service-host] a session call failed:', message ?? cause);
-  return fail(status, 'SESSION_FAILED', status >= 500 ? 'OpenChamber could not reach the session.' : String(message ?? 'The call was refused.'));
->>>>>>> upstream/main:packages/web/server/lib/guests/service-host-api.ts
+  return fail(status, 'SESSION_FAILED', status >= 500 ? 'OhPiChamber could not reach the session.' : String(message ?? 'The call was refused.'));
 };
 
 const readSession = async <Action extends SessionReadAction>(control: ServiceHostControl, action: Action, input: SessionQuery) => {

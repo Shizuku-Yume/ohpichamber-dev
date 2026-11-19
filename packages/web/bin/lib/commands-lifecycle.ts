@@ -133,16 +133,8 @@ async function stopCommand(options: StopOptions) {
         if (showOutput && !unmanagedStopSpin) {
           logStatus('info', `found unmanaged OhPiChamber instance on port ${options.port}`, 'attempting shutdown');
         }
-<<<<<<< HEAD:packages/web/bin/lib/commands-lifecycle.js
         unmanagedStopSpin?.start(`Stopping unmanaged OhPiChamber on port ${options.port}...`);
-        const requested = await requestServerShutdown(options.port, options.host);
-||||||| bc50ba56aa:packages/web/bin/lib/commands-lifecycle.js
-        unmanagedStopSpin?.start(`Stopping unmanaged OpenChamber on port ${options.port}...`);
-        const requested = await requestServerShutdown(options.port, options.host);
-=======
-        unmanagedStopSpin?.start(`Stopping unmanaged OpenChamber on port ${options.port}...`);
         const requested = await requestServerShutdown(requestedPort, options.host);
->>>>>>> upstream/main:packages/web/bin/lib/commands-lifecycle.ts
 
         if (isFinitePid(explicitInstance.pid) && isProcessRunning(explicitInstance.pid)) {
           await stopInstanceProcess(explicitInstance.pid, {

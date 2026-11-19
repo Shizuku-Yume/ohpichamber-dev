@@ -33,14 +33,7 @@ const GOOGLE_HEADERS = {
     '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}'
 };
 
-<<<<<<< HEAD:packages/web/server/lib/quota/providers/google/api.js
-
-export const fetchGoogleQuotaBuckets = async (accessToken, projectId) => {
-||||||| bc50ba56aa:packages/web/server/lib/quota/providers/google/api.js
-export const fetchGoogleQuotaBuckets = async (accessToken, projectId) => {
-=======
 export const fetchGoogleQuotaBuckets = async (accessToken: string, projectId?: string | null): Promise<JsonValue> => {
->>>>>>> upstream/main:packages/web/server/lib/quota/providers/google/api.ts
   const body = projectId ? { project: projectId } : {};
 
   try {

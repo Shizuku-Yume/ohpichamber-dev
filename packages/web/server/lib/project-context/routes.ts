@@ -1,37 +1,3 @@
-<<<<<<< HEAD:packages/web/server/lib/project-context/routes.js
-/**
- * OpenChamber project context routes: notes, todos, and plan files.
- *
- * These replace the shared UI's direct `/api/fs/*` access to
- * `~/.config/ohpichamber/projects/*`. The client no longer resolves the home
- * directory or composes storage paths, and plan markdown is addressed by id
- * rather than by an absolute path supplied by the caller.
- *
- * Body parsing is attached per route. There is no global JSON parser: the
- * generic OpenCode proxy needs an unread request stream, so `core-routes`
- * parses only an explicit allowlist of path prefixes and leaves every other
- * `/api` request untouched. A route that forgets this sees `req.body` as
- * undefined and rejects every write as a malformed body.
- */
-
-||||||| bc50ba56aa:packages/web/server/lib/project-context/routes.js
-/**
- * OpenChamber project context routes: notes, todos, and plan files.
- *
- * These replace the shared UI's direct `/api/fs/*` access to
- * `~/.config/openchamber/projects/*`. The client no longer resolves the home
- * directory or composes storage paths, and plan markdown is addressed by id
- * rather than by an absolute path supplied by the caller.
- *
- * Body parsing is attached per route. There is no global JSON parser: the
- * generic OpenCode proxy needs an unread request stream, so `core-routes`
- * parses only an explicit allowlist of path prefixes and leaves every other
- * `/api` request untouched. A route that forgets this sees `req.body` as
- * undefined and rejects every write as a malformed body.
- */
-
-=======
->>>>>>> upstream/main:packages/web/server/lib/project-context/routes.ts
 import { isRecord as isObjectRecord } from '../shared/guards.js';
 import express from 'express';
 import { z } from 'zod';

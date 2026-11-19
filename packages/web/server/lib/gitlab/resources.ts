@@ -5,7 +5,7 @@ import { changeRequestNetworkTarget } from '../source-control/repository-network
 import { mapGitLabCI, mapGitLabCommit, mapGitLabDiff, mapGitLabIssue, mapGitLabMergeRequest, mapGitLabNote, mapGitLabProject, mapGitLabUser, mapGitLabVerdictNote } from './mappers.js';
 import { resolveGitLabProjectsFromDirectory } from './repo.js';
 import { isPlainObject as isPlain, isPresent, isString } from './validation.js';
-import type { SourceControlMutationTarget, SourceControlProjectRef } from '@openchamber/sdk';
+import type { SourceControlMutationTarget, SourceControlProjectRef } from 'ohpichamber-sdk';
 import type { ProviderReadContext } from '../source-control/provider-contract.js';
 import type { reviewCommentPosition } from '../source-control/review-position.js';
 import type { JsonObject, JsonValue } from '../shared/json-values.js';
@@ -952,18 +952,10 @@ export function createGitLabResourceService({ origin, client, download, resolveP
       const raw = await client.MergeRequests.show(projectId, number);
       const refs = obj(obj(raw)?.diff_refs);
       if (!isString(refs?.base_sha) || !isString(refs?.start_sha) || !isString(refs?.head_sha)) throw new Error('GitLab returned an invalid merge request');
-<<<<<<< HEAD:packages/web/server/lib/gitlab/resources.js
       const diffs = await readCollection((page) => client.MergeRequests.allDiffs(projectId, number, page), 'GitLab merge request has more changed files than OhPiChamber reads', DIFF_PER_PAGE);
-      const diff = diffs.find((entry) => entry?.new_path === position.path || entry?.old_path === position.path);
-||||||| bc50ba56aa:packages/web/server/lib/gitlab/resources.js
-      const diffs = await readCollection((page) => client.MergeRequests.allDiffs(projectId, number, page), 'GitLab merge request has more changed files than OpenChamber reads', DIFF_PER_PAGE);
-      const diff = diffs.find((entry) => entry?.new_path === position.path || entry?.old_path === position.path);
-=======
-      const diffs = await readCollection((page) => client.MergeRequests.allDiffs(projectId, number, page), 'GitLab merge request has more changed files than OpenChamber reads', DIFF_PER_PAGE);
       if (!diffs) throw new TypeError('Missing GitLab diff list');
       const diff = diffs.find((entry): entry is JsonObject => hasFields(entry)
         && (entry.new_path === position.path || entry.old_path === position.path));
->>>>>>> upstream/main:packages/web/server/lib/gitlab/resources.ts
       if (!diff) throw Object.assign(new Error('This file is not in the merge request'), { status: 422 });
       const created = await client.MergeRequestDraftNotes.create(projectId, number, body, {
         position: draftPosition(position, diff, refs),
@@ -1452,19 +1444,9 @@ export function createGitLabResourceService({ origin, client, download, resolveP
       const { target } = await findByNumber(directory, number, options.project, {
         constrainToPrimary: true, remote: options.remote, requireNetwork: true, linked: options.linked,
       });
-<<<<<<< HEAD:packages/web/server/lib/gitlab/resources.js
       const diffs = await readCollection((page) => client.MergeRequests.allDiffs(target.project.id, number, page), 'GitLab merge request has more changed files than OhPiChamber reads', DIFF_PER_PAGE);
-      if (!Array.isArray(diffs)) throw new Error('GitLab returned an invalid merge request diff list');
-      const files = diffs.filter((diff) => isPlainObject(diff) && (text(diff.new_path) || text(diff.old_path)));
-||||||| bc50ba56aa:packages/web/server/lib/gitlab/resources.js
-      const diffs = await readCollection((page) => client.MergeRequests.allDiffs(target.project.id, number, page), 'GitLab merge request has more changed files than OpenChamber reads', DIFF_PER_PAGE);
-      if (!Array.isArray(diffs)) throw new Error('GitLab returned an invalid merge request diff list');
-      const files = diffs.filter((diff) => isPlainObject(diff) && (text(diff.new_path) || text(diff.old_path)));
-=======
-      const diffs = await readCollection((page) => client.MergeRequests.allDiffs(target.project.id, number, page), 'GitLab merge request has more changed files than OpenChamber reads', DIFF_PER_PAGE);
       if (!array(diffs)) throw new Error('GitLab returned an invalid merge request diff list');
       const files = diffs.filter((diff): diff is JsonObject => isPlainObject(diff) && Boolean(text(diff.new_path) || text(diff.old_path)));
->>>>>>> upstream/main:packages/web/server/lib/gitlab/resources.ts
       if (files.length !== diffs.length) throw new Error('GitLab returned an invalid merge request diff');
       return {
         patch: files.map(gitPatchForDiff).join(''),
@@ -1535,16 +1517,8 @@ export function createGitLabResourceService({ origin, client, download, resolveP
       const issue = await client.Issues.show(number, { projectId: target.project.id });
       const mappedIssue = canonicalReads
         ? requireIssue(issue, target.project)
-<<<<<<< HEAD:packages/web/server/lib/gitlab/resources.js
-        : requireMapped(mapGitLabIssue(issue, identity, target.project), 'GitLab returned an invalid issue');
-      const notes = await readCollection((page) => client.IssueNotes.all(target.project.id, number, page), 'GitLab issue has more comments than OhPiChamber reads');
-||||||| bc50ba56aa:packages/web/server/lib/gitlab/resources.js
-        : requireMapped(mapGitLabIssue(issue, identity, target.project), 'GitLab returned an invalid issue');
-      const notes = await readCollection((page) => client.IssueNotes.all(target.project.id, number, page), 'GitLab issue has more comments than OpenChamber reads');
-=======
         : requireMapped(mapGitLabIssue(obj(issue), identity, target.project), 'GitLab returned an invalid issue');
-      const notes = await readCollection((page) => client.IssueNotes.all(target.project.id, number, page), 'GitLab issue has more comments than OpenChamber reads');
->>>>>>> upstream/main:packages/web/server/lib/gitlab/resources.ts
+      const notes = await readCollection((page) => client.IssueNotes.all(target.project.id, number, page), 'GitLab issue has more comments than OhPiChamber reads');
       if (canonicalReads && !Array.isArray(notes)) throw new Error('GitLab returned an invalid issue note list');
       return asArray(notes).flatMap((note) => {
         if (obj(note)?.system === true) return [];

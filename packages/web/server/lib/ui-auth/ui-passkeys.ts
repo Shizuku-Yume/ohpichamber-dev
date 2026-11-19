@@ -90,7 +90,7 @@ const DEFAULT_RP_NAME = 'OhPiChamber';
 
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.config', 'ohpichamber');
+  : path.join(os.homedir(), '.config', 'openchamber');
 
 const PASSKEY_STORE_FILE = path.join(OPENCHAMBER_DATA_DIR, 'ui-passkeys.json');
 
@@ -599,13 +599,7 @@ export const createUiPasskeys = ({
     const passkey = store.passkeys.find((item) => item.id === (hasProperties(response) ? response.id : undefined));
 
     if (!passkey) {
-<<<<<<< HEAD:packages/web/server/lib/ui-auth/ui-passkeys.js
-      const error = new Error('That passkey is not registered for this OhPiChamber instance');
-||||||| bc50ba56aa:packages/web/server/lib/ui-auth/ui-passkeys.js
-      const error = new Error('That passkey is not registered for this OpenChamber instance');
-=======
-      const error: Error & { statusCode?: number } = new Error('That passkey is not registered for this OpenChamber instance');
->>>>>>> upstream/main:packages/web/server/lib/ui-auth/ui-passkeys.ts
+      const error: Error & { statusCode?: number } = new Error('That passkey is not registered for this OhPiChamber instance');
       error.statusCode = 404;
       throw error;
     }

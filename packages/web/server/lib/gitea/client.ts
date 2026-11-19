@@ -193,24 +193,8 @@ export function createGiteaClient({
     put: async (path: string, body?: GiteaBody) => (await send('PUT', path, { body })).body,
     delete: async (path: string, body?: GiteaBody) => (await send('DELETE', path, { body })).body,
     page,
-<<<<<<< HEAD:packages/web/server/lib/gitea/client.js
-    /**
-     * Every page of a collection up to `maxItems`; past it the read fails
-     * instead of passing a capped list off as complete.
-     */
-    collection: async (path, query, { limit = 50, maxItems = 2000, message = `${label} list is longer than OhPiChamber reads` } = {}) => {
-      const items = [];
-||||||| bc50ba56aa:packages/web/server/lib/gitea/client.js
-    /**
-     * Every page of a collection up to `maxItems`; past it the read fails
-     * instead of passing a capped list off as complete.
-     */
-    collection: async (path, query, { limit = 50, maxItems = 2000, message = `${label} list is longer than OpenChamber reads` } = {}) => {
-      const items = [];
-=======
-    collection: async (path: string, query?: GiteaQuery, { limit = 50, maxItems = 2000, message = `${label} list is longer than OpenChamber reads` }: CollectionOptions = {}) => {
+    collection: async (path: string, query?: GiteaQuery, { limit = 50, maxItems = 2000, message = `${label} list is longer than OhPiChamber reads` }: CollectionOptions = {}) => {
       const items: JsonValue[] = [];
->>>>>>> upstream/main:packages/web/server/lib/gitea/client.ts
       for (let number = 1; ; number += 1) {
         const result = await page(path, query, { page: number, limit });
         items.push(...result.items);

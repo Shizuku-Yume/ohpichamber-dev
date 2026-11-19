@@ -18,7 +18,7 @@ import { notificationsProviderSchemasV1 as schemas } from 'ohpichamber-sdk/schem
 import { isProviderUsername } from '../source-control/provider-id.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 import { genericNotificationTitle } from './message.js';
-import type { GuestNotification, NotificationsContribution, NotificationsProviderAccount, NotificationsProviderMethod, NotificationsProviderInputs, ServiceContribution } from '@openchamber/sdk';
+import type { GuestNotification, NotificationsContribution, NotificationsProviderAccount, NotificationsProviderMethod, NotificationsProviderInputs, ServiceContribution } from 'ohpichamber-sdk';
 import type { z } from 'zod';
 import type { GuestRecord } from '../guests/contracts.js';
 import type { proxyGuestServiceRequest } from '../guests/service.js';
@@ -254,13 +254,7 @@ export const createExtensionNotificationChannels = ({
           code, status: 503, kind: isString(code) && NOT_REACHED_CODES.has(code) ? 'unavailable' : 'provider-error',
         });
       }
-<<<<<<< HEAD:packages/web/server/lib/notifications/extension-channels.js
-      const malformed = (detail) => callError(`${guest.name} answered something OhPiChamber cannot use: ${detail}`, {
-||||||| bc50ba56aa:packages/web/server/lib/notifications/extension-channels.js
-      const malformed = (detail) => callError(`${guest.name} answered something OpenChamber cannot use: ${detail}`, {
-=======
-      const malformed = (detail: string) => callError(`${guest.name} answered something OpenChamber cannot use: ${detail}`, {
->>>>>>> upstream/main:packages/web/server/lib/notifications/extension-channels.ts
+      const malformed = (detail: string) => callError(`${guest.name} answered something OhPiChamber cannot use: ${detail}`, {
         status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', kind: 'malformed',
       });
       if (proxied.status !== 200) throw malformed(`HTTP ${proxied.status}`);

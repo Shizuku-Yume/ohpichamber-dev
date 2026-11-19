@@ -7,13 +7,7 @@ import * as fsPromises from 'fs/promises';
 import { execFileSync } from 'child_process';
 
 import { resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel } from '../git/service.js';
-<<<<<<< HEAD
-import { registerCommonRequestMiddleware } from '../host/core-routes.js';
-||||||| bc50ba56aa
-import { registerCommonRequestMiddleware } from '../opencode/core-routes.js';
-=======
 import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
->>>>>>> upstream/main
 import { createProjectConfigRuntime } from '../projects/project-config.js';
 import { registerMagicPromptRoutes } from './routes.js';
 

@@ -11,7 +11,7 @@ import { resolveGiteaReposFromDirectory } from './repo.js';
 import type { JsonObject, JsonValue } from '../shared/json-values.js';
 import type { ProviderMutationContext, ProviderReadContext } from '../source-control/provider-contract.js';
 import type { reviewCommentPosition } from '../source-control/review-position.js';
-import type { SourceControlMutationTarget } from '@openchamber/sdk';
+import type { SourceControlMutationTarget } from 'ohpichamber-sdk';
 import type { GiteaBody, GiteaQuery, createGiteaClient } from './client.js';
 import type { GiteaProject } from './mappers.js';
 
@@ -837,20 +837,8 @@ export function createGiteaResourceService({
       const add = wanted.filter((login) => !currentLogins.includes(login));
       const remove = currentLogins.filter((login) => !wanted.includes(login));
       if (remove.length) {
-<<<<<<< HEAD:packages/web/server/lib/gitea/resources.js
-        // Gitea answers 204 to removing someone who already reviewed and keeps
-        // them, so that removal is refused before anything is sent.
         const reviews = await client.collection(`${repoPath(repo)}/pulls/${providerTarget.number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OhPiChamber reads` });
-        const reviewed = remove.filter((login) => reviews.some((review) => isPlainObject(review) && review.user?.login === login
-||||||| bc50ba56aa:packages/web/server/lib/gitea/resources.js
-        // Gitea answers 204 to removing someone who already reviewed and keeps
-        // them, so that removal is refused before anything is sent.
-        const reviews = await client.collection(`${repoPath(repo)}/pulls/${providerTarget.number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OpenChamber reads` });
-        const reviewed = remove.filter((login) => reviews.some((review) => isPlainObject(review) && review.user?.login === login
-=======
-        const reviews = await client.collection(`${repoPath(repo)}/pulls/${providerTarget.number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OpenChamber reads` });
         const reviewed = remove.filter((login) => reviews.some((review) => plainObject(review) && field(review.user, 'login') === login
->>>>>>> upstream/main:packages/web/server/lib/gitea/resources.ts
           && SUBMITTED_REVIEW_STATES.has(review.state) && review.dismissed !== true));
         if (reviewed.length) {
           throw Object.assign(new Error(`${reviewed.join(', ')} already reviewed this pull request; ${providerLabel} keeps reviewers who reviewed`), {

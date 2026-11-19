@@ -33,16 +33,8 @@ export const isNetworkExposedBindHost = (host: string) => !isLoopbackBindHost(ho
 export const isUnsafeUnauthenticatedLanAllowed = (env: NodeJS.ProcessEnv | null = process.env) =>
   env?.OPENCHAMBER_ALLOW_UNAUTHENTICATED_LAN === 'true';
 
-<<<<<<< HEAD:packages/web/server/lib/security/bind-host.js
-export const getUnauthenticatedLanErrorMessage = (host) =>
-  `OhPiChamber refuses to bind to ${host || 'a network-exposed host'} without UI authentication. `
-||||||| bc50ba56aa:packages/web/server/lib/security/bind-host.js
-export const getUnauthenticatedLanErrorMessage = (host) =>
-  `OpenChamber refuses to bind to ${host || 'a network-exposed host'} without UI authentication. `
-=======
 export const getUnauthenticatedLanErrorMessage = (host: string) =>
-  `OpenChamber refuses to bind to ${host || 'a network-exposed host'} without UI authentication. `
->>>>>>> upstream/main:packages/web/server/lib/security/bind-host.ts
+  `OhPiChamber refuses to bind to ${host || 'a network-exposed host'} without UI authentication. `
   + 'Set --ui-password or OPENCHAMBER_UI_PASSWORD before exposing it over LAN, '
   + 'or set OPENCHAMBER_ALLOW_UNAUTHENTICATED_LAN=true to accept the risk.';
 

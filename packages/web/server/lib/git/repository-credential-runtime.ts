@@ -185,16 +185,8 @@ export function createGitRepositoryCredentialRuntime({
     helperCommand: () => `!'${launcherPath.replace(/\\/g, '/').replace(/'/g, `'\\''`)}'`,
     publish: async () => {
       const port = getActivePort();
-<<<<<<< HEAD:packages/web/server/lib/git/repository-credential-runtime.js
-      if (!Number.isInteger(port) || port <= 0) {
-        throw new Error('OhPiChamber listener port is unavailable for the Git credential helper');
-||||||| bc50ba56aa:packages/web/server/lib/git/repository-credential-runtime.js
-      if (!Number.isInteger(port) || port <= 0) {
-        throw new Error('OpenChamber listener port is unavailable for the Git credential helper');
-=======
       if (!isInteger(port) || port <= 0) {
-        throw new Error('OpenChamber listener port is unavailable for the Git credential helper');
->>>>>>> upstream/main:packages/web/server/lib/git/repository-credential-runtime.ts
+        throw new Error('OhPiChamber listener port is unavailable for the Git credential helper');
       }
       activeSecret = randomBytes(32).toString('base64url');
       const url = `http://${callbackHost()}:${port}/api/git/repository-credential`;

@@ -25,7 +25,7 @@ import { TrackerRouteError, routeError } from './route-error.js';
 import { createSessionStatusRuntime } from './session-status-runtime.js';
 import { buildSessionOpenUrl, buildSessionStatusComment, isPublicSessionOrigin, readSessionOrigin } from './session-origin.js';
 import { z } from 'zod';
-import type { TrackerProviderInputs, TrackerProviderMethod } from '@openchamber/sdk';
+import type { TrackerProviderInputs, TrackerProviderMethod } from 'ohpichamber-sdk';
 import type { GuestRecord } from '../guests/contracts.js';
 import type { createOutboundHandles } from '../source-control/outbound-handles.js';
 import type { createTrackerAccounts, StoredTracker, StoredTrackerAccount, TrackerCredential } from './extension-accounts.js';
@@ -194,13 +194,7 @@ export function createExtensionTracker({
           code, status: 503, kind: NOT_REACHED_CODES.has(isText(code) ? code : '') ? 'unavailable' : 'provider-error',
         });
       }
-<<<<<<< HEAD:packages/web/server/lib/trackers/extension-tracker.js
-      const malformed = (detail) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
-||||||| bc50ba56aa:packages/web/server/lib/trackers/extension-tracker.js
-      const malformed = (detail) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
-=======
-      const malformed = (detail: string) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
->>>>>>> upstream/main:packages/web/server/lib/trackers/extension-tracker.ts
+      const malformed = (detail: string) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
         status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', kind: 'malformed',
       });
       if (proxied.status !== 200) throw malformed(`HTTP ${proxied.status}`);

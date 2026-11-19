@@ -75,17 +75,7 @@ export const createWorkNamer = ({
     }
   };
 
-<<<<<<< HEAD:packages/web/server/lib/openchamber-sessions/work-naming.js
-  // Said whenever the agent passed a branch that was not renamed, so it does
-  // not take the call for a rename.
   const BRANCH_KEPT = { branchRenamed: false, branchNote: 'Only a placeholder branch OhPiChamber generated is renamed here; this one stays as it is.' };
-||||||| bc50ba56aa:packages/web/server/lib/openchamber-sessions/work-naming.js
-  // Said whenever the agent passed a branch that was not renamed, so it does
-  // not take the call for a rename.
-  const BRANCH_KEPT = { branchRenamed: false, branchNote: 'Only a placeholder branch OpenChamber generated is renamed here; this one stays as it is.' };
-=======
-  const BRANCH_KEPT = { branchRenamed: false, branchNote: 'Only a placeholder branch OpenChamber generated is renamed here; this one stays as it is.' };
->>>>>>> upstream/main:packages/web/server/lib/openchamber-sessions/work-naming.ts
 
   const nameBranch = async (worktree: string, rawBranch: WorkNameInput['branch']) => {
     const branch = asText(rawBranch);

@@ -9,17 +9,11 @@ import {
   SERVICE_SCHEDULE_WIRE_VERSION,
   isGuestApproved,
   requestedGuestCapabilities,
-<<<<<<< HEAD:packages/web/server/lib/guests/service-lifetime.js
 } from 'ohpichamber-sdk';
-||||||| bc50ba56aa:packages/web/server/lib/guests/service-lifetime.js
-} from '@openchamber/sdk';
-=======
-} from '@openchamber/sdk';
-import type { ServiceScheduleEntry } from '@openchamber/sdk';
+import type { ServiceScheduleEntry } from 'ohpichamber-sdk';
 import type { GuestRecord } from './contracts.js';
 import type { GuestServiceRequest } from './service.js';
 import { hasErrorCode } from './input-guards.js';
->>>>>>> upstream/main:packages/web/server/lib/guests/service-lifetime.ts
 
 
 const CHECK_INTERVAL_MS = 15_000;

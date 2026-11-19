@@ -1,12 +1,7 @@
 import fs from 'node:fs/promises';
 import http from 'node:http';
-<<<<<<< HEAD:packages/web/server/lib/source-control/test-support/service-login.js
 import { readSourceControlProviderRequest } from 'ohpichamber-sdk';
-||||||| bc50ba56aa:packages/web/server/lib/source-control/test-support/service-login.js
-import { readSourceControlProviderRequest } from '@openchamber/sdk';
-=======
-import { readSourceControlProviderRequest } from '@openchamber/sdk';
-import type { SourceControlJson, SourceControlJsonObject } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlJsonObject } from 'ohpichamber-sdk';
 
 const isJsonObject = (value: SourceControlJson): value is SourceControlJsonObject =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -23,7 +18,6 @@ const readField = (value: SourceControlJson | undefined, field: FixtureField) =>
   }
   return isJsonObject(value) ? value[field] : undefined;
 };
->>>>>>> upstream/main:packages/web/server/lib/source-control/test-support/service-login.ts
 
 const stateUrl = new URL('./login-state.json', import.meta.url);
 const sha = 'b'.repeat(40);

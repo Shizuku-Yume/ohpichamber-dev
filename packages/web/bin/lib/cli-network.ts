@@ -116,16 +116,8 @@ async function detectLanIPv4Address() {
 }
 
 
-<<<<<<< HEAD:packages/web/bin/lib/cli-network.js
-function formatUnsafePortWarning(port) {
-  return `Port ${port} is browser-unsafe (ERR_UNSAFE_PORT) and is not supported for OhPiChamber UI at ${buildLocalUrl(port, '/')}.`;
-||||||| bc50ba56aa:packages/web/bin/lib/cli-network.js
-function formatUnsafePortWarning(port) {
-  return `Port ${port} is browser-unsafe (ERR_UNSAFE_PORT) and is not supported for OpenChamber UI at ${buildLocalUrl(port, '/')}.`;
-=======
 function formatUnsafePortWarning(port: number | undefined) {
-  return `Port ${port} is browser-unsafe (ERR_UNSAFE_PORT) and is not supported for OpenChamber UI at ${buildLocalUrl(port, '/')}.`;
->>>>>>> upstream/main:packages/web/bin/lib/cli-network.ts
+  return `Port ${port} is browser-unsafe (ERR_UNSAFE_PORT) and is not supported for OhPiChamber UI at ${buildLocalUrl(port, '/')}.`;
 }
 
 function assertSafeBrowserPort(port: number | undefined, { context = 'This action' } = {}) {

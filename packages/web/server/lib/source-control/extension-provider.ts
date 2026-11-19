@@ -18,7 +18,7 @@ import { createPatAccountAuth } from './pat-account-auth.js';
 import { isProviderUsername } from './provider-id.js';
 import { createStandardMutations } from './standard-mutations.js';
 import type { z } from 'zod';
-import type { SourceControlJson, SourceControlProviderInputs, SourceControlProviderMethod, SourceControlResourceMethod, ServiceContribution } from '@openchamber/sdk';
+import type { SourceControlJson, SourceControlProviderInputs, SourceControlProviderMethod, SourceControlResourceMethod, ServiceContribution } from 'ohpichamber-sdk';
 import type { ProviderDescriptor, ProviderReadContext, ProviderSession } from './provider-contract.js';
 import type { GuestRecord } from '../guests/contracts.js';
 import type { PatAccountAuthOptions } from './pat-account-auth.js';
@@ -126,13 +126,7 @@ const callError = (message: string, { status, code, kind = 'provider-error', out
   return error;
 };
 
-<<<<<<< HEAD:packages/web/server/lib/source-control/extension-provider.js
-const malformed = (label, detail, outbound = []) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
-||||||| bc50ba56aa:packages/web/server/lib/source-control/extension-provider.js
-const malformed = (label, detail, outbound = []) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
-=======
-const malformed = (label: string, detail: string, outbound: OutboundAttempt[] = []) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
->>>>>>> upstream/main:packages/web/server/lib/source-control/extension-provider.ts
+const malformed = (label: string, detail: string, outbound: OutboundAttempt[] = []) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
   status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', outbound,
 });
 

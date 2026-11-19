@@ -1,14 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-<<<<<<< HEAD
-import { registerCommonRequestMiddleware } from '../host/core-routes.js';
-||||||| bc50ba56aa
-import { registerCommonRequestMiddleware } from '../opencode/core-routes.js';
-=======
 import path from 'node:path';
 import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
->>>>>>> upstream/main
 import { registerProjectDirectoryRoutes } from './routes.js';
 
 const createApp = (overrides = {}) => {
@@ -26,7 +20,7 @@ const createApp = (overrides = {}) => {
   return { app, dependencies };
 };
 
-describe('OpenChamber project directory route', () => {
+describe('OhPiChamber project directory route', () => {
   it('creates and activates a requested project outside the active workspace', async () => {
     const { app, dependencies } = createApp();
 

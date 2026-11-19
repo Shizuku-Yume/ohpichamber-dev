@@ -2,15 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-<<<<<<< HEAD:packages/web/server/lib/guests/storage.js
 import { GUEST_STORAGE_KEY_MAX, GUEST_STORAGE_KEYS_MAX, GUEST_STORAGE_TOTAL_BYTES, GUEST_STORAGE_VALUE_BYTES } from 'ohpichamber-sdk';
-||||||| bc50ba56aa:packages/web/server/lib/guests/storage.js
-import { GUEST_STORAGE_KEY_MAX, GUEST_STORAGE_KEYS_MAX, GUEST_STORAGE_TOTAL_BYTES, GUEST_STORAGE_VALUE_BYTES } from '@openchamber/sdk';
-=======
-import { GUEST_STORAGE_KEY_MAX, GUEST_STORAGE_KEYS_MAX, GUEST_STORAGE_TOTAL_BYTES, GUEST_STORAGE_VALUE_BYTES } from '@openchamber/sdk';
-import type { guestStorageRequestSchema } from '@openchamber/sdk/schemas';
+import type { guestStorageRequestSchema } from 'ohpichamber-sdk/schemas';
 import { hasErrorCode } from './input-guards.js';
->>>>>>> upstream/main:packages/web/server/lib/guests/storage.ts
 
 const stores = new Map<string, Promise<unknown>>();
 const documentSchema = z.record(z.string().min(1).max(GUEST_STORAGE_KEY_MAX), z.json());
