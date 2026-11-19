@@ -215,34 +215,13 @@ const readKnownFile = async (file: string, source: string) => {
   }
 };
 
-<<<<<<< HEAD:packages/web/server/lib/diagnostics/local-files.js
-/** Read only fixed application log locations. Never accept a path from the renderer. */
-export async function collectLocalFileDiagnostics({ electronLogPath, home = os.homedir(), env = process.env, webPort, journal = serverDiagnosticJournal } = {}) {
-  const dataDir = env.OPENCHAMBER_DATA_DIR || path.join(home, '.config', 'ohpichamber');
-||||||| bc50ba56aa:packages/web/server/lib/diagnostics/local-files.js
-/** Read only fixed application log locations. Never accept a path from the renderer. */
-export async function collectLocalFileDiagnostics({ electronLogPath, home = os.homedir(), env = process.env, webPort, journal = serverDiagnosticJournal } = {}) {
-  const dataDir = env.OPENCHAMBER_DATA_DIR || path.join(home, '.config', 'openchamber');
-=======
 export async function collectLocalFileDiagnostics({ electronLogPath, home = os.homedir(), env = process.env, webPort, journal = serverDiagnosticJournal }: LocalFileDiagnosticOptions = {}): Promise<DiagnosticSnapshot> {
-  const dataDir = env.OPENCHAMBER_DATA_DIR || path.join(home, '.config', 'openchamber');
->>>>>>> upstream/main:packages/web/server/lib/diagnostics/local-files.ts
+  const dataDir = env.OPENCHAMBER_DATA_DIR || path.join(home, '.config', 'ohpichamber');
   const sources = [
-<<<<<<< HEAD:packages/web/server/lib/diagnostics/local-files.js
-    ...(electronLogPath ? [{ name: 'desktop', folder: path.dirname(electronLogPath), matches: (name) => /^main(?:\.\d+)?\.log$/.test(name) }] : []),
-    ...(Number.isInteger(webPort) && webPort > 0 ? [{ name: 'web', folder: path.join(dataDir, 'logs'), matches: (name) => name === `openchamber-${webPort}.log` }] : []),
-    ...(process.platform === 'darwin' ? [{ name: 'startup', folder: path.join(home, 'Library', 'Logs', 'OhPiChamber'), matches: (name) => /^startup(?:\.err)?\.log$/.test(name) }] : []),
-||||||| bc50ba56aa:packages/web/server/lib/diagnostics/local-files.js
-    ...(electronLogPath ? [{ name: 'desktop', folder: path.dirname(electronLogPath), matches: (name) => /^main(?:\.\d+)?\.log$/.test(name) }] : []),
-    ...(Number.isInteger(webPort) && webPort > 0 ? [{ name: 'web', folder: path.join(dataDir, 'logs'), matches: (name) => name === `openchamber-${webPort}.log` }] : []),
-    ...(process.platform === 'darwin' ? [{ name: 'startup', folder: path.join(home, 'Library', 'Logs', 'OpenChamber'), matches: (name) => /^startup(?:\.err)?\.log$/.test(name) }] : []),
-    { name: 'update', folder: dataDir, matches: (name) => name === 'update-install.log' },
-=======
     ...(electronLogPath ? [{ name: 'desktop', folder: path.dirname(electronLogPath), matches: (name: string) => /^main(?:\.\d+)?\.log$/.test(name) }] : []),
     ...(webPort !== undefined && Number.isInteger(webPort) && webPort > 0 ? [{ name: 'web', folder: path.join(dataDir, 'logs'), matches: (name: string) => name === `openchamber-${webPort}.log` }] : []),
-    ...(process.platform === 'darwin' ? [{ name: 'startup', folder: path.join(home, 'Library', 'Logs', 'OpenChamber'), matches: (name: string) => /^startup(?:\.err)?\.log$/.test(name) }] : []),
+    ...(process.platform === 'darwin' ? [{ name: 'startup', folder: path.join(home, 'Library', 'Logs', 'OhPiChamber'), matches: (name: string) => /^startup(?:\.err)?\.log$/.test(name) }] : []),
     { name: 'update', folder: dataDir, matches: (name: string) => name === 'update-install.log' },
->>>>>>> upstream/main:packages/web/server/lib/diagnostics/local-files.ts
   ];
   const { events: journalEvents, coverage: journalCoverage } = journal.snapshot();
   const events = [...journalEvents];
