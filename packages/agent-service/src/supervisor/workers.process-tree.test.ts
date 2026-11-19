@@ -1,9 +1,125 @@
 import { expect, test } from 'bun:test';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkerRegistry, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
+import { WorkerRegistry, stopWorkerProcess, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
+
+const stoppingWorker = () => {
+  const calls: string[] = [];
+  let resolveExit = () => {};
+  const exited = new Promise<void>(resolve => { resolveExit = resolve; });
+  const child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'> = {
+    pid: 4242, exitCode: null, signalCode: null,
+    kill(signal) { calls.push(`kill:${signal}`); return true; },
+  };
+  const exit = (code: number | null = 0, signal: NodeJS.Signals | null = null) => {
+    child.exitCode = code;
+    child.signalCode = signal;
+    resolveExit();
+  };
+  const terminateTree = async (_pid: number | undefined, signal: NodeJS.Signals = 'SIGKILL') => { calls.push(`tree:${signal}`); return false; };
+  const waitForTree = async () => { calls.push('tree:wait'); return true; };
+  return { child, exited, exit, calls, terminateTree, waitForTree };
+};
+
+test('cooperative stop waits for a delayed clean exit without terminating the worker', async () => {
+  const f = stoppingWorker();
+  const waits: number[] = [];
+  const stopped = stopWorkerProcess(f.child, f.exited, {
+    cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+    waitForExit: (operation, ms) => { waits.push(ms); return operation; },
+  });
+  expect(waits).toEqual([1_000]);
+  expect(f.calls).toEqual([]);
+  f.exit();
+  expect(await stopped).toBe(true);
+  expect(f.calls).toEqual(['tree:wait']);
+  expect(waits).toEqual([1_000, 5_000]);
+});
+
+test('expired grace preserves taskkill, fallback, stop timeout and forced escalation', async () => {
+  const f = stoppingWorker();
+  const waits: number[] = [];
+  expect(await stopWorkerProcess(f.child, f.exited, {
+    cooperativeGraceMs: 1_000, stopTimeoutMs: 200, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+    waitForExit: async (_operation, ms) => {
+      waits.push(ms);
+      if (waits.length < 3) throw new Error('Worker operation timed out');
+      f.exit(null, 'SIGKILL');
+    },
+  })).toBe(false);
+  expect(waits).toEqual([1_000, 200, 500]);
+  expect(f.calls).toEqual(['tree:SIGTERM', 'kill:SIGTERM', 'tree:SIGKILL', 'kill:SIGKILL']);
+});
+
+for (const code of [0, 1]) {
+  test(`an already-exited worker retains exit code ${code}`, async () => {
+    const f = stoppingWorker();
+    f.exit(code);
+    expect(await stopWorkerProcess(f.child, f.exited, {
+      cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+    })).toBe(code === 0);
+    expect(f.calls).toEqual(['tree:wait']);
+  });
+}
+
+test('a signalled cooperative exit is not reported as success', async () => {
+  const f = stoppingWorker();
+  f.exit(null, 'SIGTERM');
+  expect(await stopWorkerProcess(f.child, f.exited, {
+    cooperativeGraceMs: 1_000, terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+  })).toBe(false);
+  expect(f.calls).toEqual(['tree:wait']);
+});
+
+test('a cooperative leader exit still cleans up surviving process-group descendants', async () => {
+  const f = stoppingWorker();
+  f.exit();
+  expect(await stopWorkerProcess(f.child, f.exited, {
+    cooperativeGraceMs: 1_000,
+    terminateTree: async (_pid, signal) => { f.calls.push(`tree:${signal}`); return true; },
+    waitForTree: async (_pid, options) => { f.calls.push(`tree:wait:${options?.graceMs ?? 250}`); return options?.graceMs === 500; },
+  })).toBe(true);
+  expect(f.calls).toEqual(['tree:wait:250', 'tree:SIGTERM', 'tree:wait:250', 'tree:SIGKILL', 'tree:wait:500']);
+});
+
+test('ordinary stops still terminate immediately without a cooperative grace', async () => {
+  const f = stoppingWorker();
+  expect(await stopWorkerProcess(f.child, f.exited, {
+    terminateTree: f.terminateTree, waitForTree: f.waitForTree,
+    waitForExit: async () => { f.exit(null, 'SIGTERM'); },
+  })).toBe(false);
+  expect(f.calls).toEqual(['tree:SIGTERM', 'kill:SIGTERM']);
+});
+
+test('concurrent and repeated registry stops send one cooperative stop', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'worker-cooperative-stop-'));
+  const entrypoint = join(root, 'worker.mjs');
+  const stops = join(root, 'stops');
+  await writeFile(entrypoint, `import { appendFileSync } from 'node:fs';
+process.on('message', message => {
+  if (message.type === 'bootstrap') process.send({ type: 'ready', workerGeneration: message.workerGeneration });
+  if (message.type === 'stop') {
+    appendFileSync(${JSON.stringify(stops)}, 'stop\\n');
+    setTimeout(() => process.exit(0), 25);
+  }
+});`);
+  const registry = new WorkerRegistry({ workerEntrypoint: entrypoint, workerRuntime: process.execPath });
+  try {
+    await registry.start({ rootSessionId: 'root', projectId: 'project', workspaceId: 'workspace', cwd: root, agentDirectory: root });
+    expect(await Promise.all([
+      registry.stop('root', { cooperativeGraceMs: 1_000 }),
+      registry.stop('root', { cooperativeGraceMs: 1_000 }),
+    ])).toEqual([true, true]);
+    expect(await registry.stop('root', { cooperativeGraceMs: 1_000 })).toBe(true);
+    expect(await readFile(stops, 'utf8')).toBe('stop\n');
+    expect(registry.info('root')).toBeUndefined();
+  } finally {
+    await registry.close();
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  }
+});
 
 // This integration test observes real Linux process state, including zombies:
 // an unreaped zombie has exited and is not a running descendant.

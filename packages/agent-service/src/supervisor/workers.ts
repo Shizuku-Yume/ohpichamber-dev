@@ -239,6 +239,37 @@ async function waitWithin(operation: Promise<void>, milliseconds: number): Promi
   }
 }
 
+export async function stopWorkerProcess(
+  child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
+  exited: Promise<void>,
+  { cooperativeGraceMs = 0, stopTimeoutMs = 5_000, terminateTree = terminateWorkerProcessTree, waitForTree = waitForWorkerProcessTree, waitForExit = waitWithin } = {},
+): Promise<boolean> {
+  let cooperativelyExited = false;
+  if (cooperativeGraceMs > 0) {
+    try {
+      await waitForExit(exited, cooperativeGraceMs);
+      cooperativelyExited = await waitForTree(child.pid);
+    } catch { /* Continue with process-tree termination after the grace. */ }
+  }
+  const groupSignalled = !cooperativelyExited && await terminateTree(child.pid, 'SIGTERM');
+  if (!groupSignalled && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  let escalated = false;
+  try {
+    await waitForExit(exited, stopTimeoutMs);
+  } catch {
+    if (child.exitCode === null && child.signalCode === null) {
+      escalated = await terminateTree(child.pid, 'SIGKILL');
+      if (!escalated) child.kill('SIGKILL');
+    }
+    await waitForExit(exited, 500);
+  }
+  if (groupSignalled && !await waitForTree(child.pid)) {
+    await terminateTree(child.pid, 'SIGKILL');
+    await waitForTree(child.pid, { graceMs: 500 });
+  }
+  return child.exitCode === 0;
+}
+
 export class WorkerRegistry {
   // Deliberately not named `entries`: test doubles extend this class and
   // publish their own flat `entries` map, which must not shadow the live
@@ -884,12 +915,12 @@ export class WorkerRegistry {
     });
   }
 
-  async stop(rootSessionId: string): Promise<boolean> {
+  async stop(rootSessionId: string, { cooperativeGraceMs = 0 } = {}): Promise<boolean> {
     return this.withRoot(rootSessionId, async () => {
       const entry = this.workerEntries.get(rootSessionId);
       if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The restart of this session is already reserved');
-      return entry ? this.stopEntry(entry) : true;
+      return entry ? this.stopEntry(entry, cooperativeGraceMs) : true;
     });
   }
   async stopGeneration(rootSessionId: string, expectedGeneration: string): Promise<boolean> {
@@ -1287,7 +1318,7 @@ export class WorkerRegistry {
     }
   }
 
-  private async stopEntry(entry: WorkerEntry): Promise<boolean> {
+  private async stopEntry(entry: WorkerEntry, cooperativeGraceMs = 0): Promise<boolean> {
     if (entry.stopping) return entry.stopping;
     entry.stopping = (async () => {
       const wasStarting = entry.info.state === 'starting';
@@ -1295,27 +1326,12 @@ export class WorkerRegistry {
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       if (wasStarting) entry.rejectReady(new Error('SDK worker is stopping'));
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
-      const groupSignalled = await terminateWorkerProcessTree(entry.child.pid, 'SIGTERM');
-      if (!groupSignalled && entry.child.exitCode === null && entry.child.signalCode === null) entry.child.kill('SIGTERM');
-      let escalated = false;
-      try {
-        await waitWithin(entry.exited, this.options.stopTimeoutMs ?? 5_000);
-      } catch {
-        if (entry.child.exitCode === null && entry.child.signalCode === null) {
-          escalated = await terminateWorkerProcessTree(entry.child.pid, 'SIGKILL');
-          if (!escalated) entry.child.kill('SIGKILL');
-        }
-        await waitWithin(entry.exited, 500);
-      }
-      if (groupSignalled && !await waitForWorkerProcessTree(entry.child.pid)) {
-        await terminateWorkerProcessTree(entry.child.pid, 'SIGKILL');
-        await waitForWorkerProcessTree(entry.child.pid, { graceMs: 500 });
-      }
+      const stopped = await stopWorkerProcess(entry.child, entry.exited, { cooperativeGraceMs, stopTimeoutMs: this.options.stopTimeoutMs });
       for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
       entry.pending.clear();
       entry.info.state = 'stopped';
       if (this.workerEntries.get(entry.info.rootSessionId) === entry) this.workerEntries.delete(entry.info.rootSessionId);
-      return entry.child.exitCode === 0;
+      return stopped;
     })();
     return entry.stopping;
   }

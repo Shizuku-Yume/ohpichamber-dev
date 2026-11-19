@@ -10,7 +10,7 @@ Build with `bun run build`. The built entrypoint is `dist/index.js`, with its wo
 
 The Host generates a 256-bit token and answers the service's private spawn-IPC request with it; the service accepts only a 64-hex value and gives up after 10 seconds. The token never appears in the environment, arguments, URLs or logs. Every request requires `X-Internal-Secret` and a loopback peer. The listener binds only `127.0.0.1`; stdout publishes one `{ "type": "agent-service.listening", "port": ... }` line for endpoint discovery, not readiness. After that handshake an IPC `disconnect` stops the service beside SIGTERM/SIGINT, so a hard-killed Host does not leave the detached service and its unrelated workers running.
 
-`GET /api/agent/v1/ready` returns `{ "ready": true, "engine": "omp", "version": "1.0.0" }` only after a dedicated worker initializes the real SDK public factory, disposes its session and exits successfully. The probe owns an ephemeral profile and workspace, removed after it exits. Startup is bounded to 15 seconds; orderly stop gets 5 seconds before forced termination.
+`GET /api/agent/v1/ready` returns `{ "ready": true, "engine": "omp", "version": "1.0.0" }` only after a dedicated worker initializes the real SDK public factory, disposes its session and exits successfully. The probe owns an ephemeral profile and workspace, removed after it exits. On Windows only, the readiness probe allows up to one second after IPC stop for a cooperative exit before the normal process-tree termination sequence. A signalled or nonzero exit still fails readiness. Other worker stops are unchanged. Startup is bounded to 15 seconds; orderly stop gets 5 seconds before forced termination.
 
 ## Private worker operations
 
