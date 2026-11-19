@@ -1,16 +1,7 @@
 import crypto from 'node:crypto';
-<<<<<<< HEAD:packages/web/server/lib/workflows/runtime.js
 
 import { asNonEmptyString, isPlainObject, isString } from '../shared/guards.js';
 import { escapeAttribute } from '../dispatch-results/runtime.js';
-||||||| bc50ba56aa:packages/web/server/lib/workflows/runtime.js
-
-import { asNonEmptyString, isPlainObject, isString } from '../shared/guards.js';
-import { createMessageId, escapeAttribute } from '../dispatch-results/runtime.js';
-=======
-import { asNonEmptyString, isString } from '../shared/guards.js';
-import { createMessageId, escapeAttribute } from '../dispatch-results/runtime.js';
->>>>>>> upstream/main:packages/web/server/lib/workflows/runtime.ts
 import { WORKFLOW_ANSWER_TOOL } from '../openchamber-control/actions.js';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { WorkflowAgentStopped } from './agent-session.js';
@@ -21,27 +12,12 @@ import { readWorkflowProcessStart } from './process-owner.js';
 import { runWorkflowSandbox } from './sandbox.js';
 import { WorkflowScriptError, parseWorkflowScript, plannedPhases } from './script.js';
 import { isWorkflowRunId } from './store.js';
-<<<<<<< HEAD:packages/web/server/lib/workflows/runtime.js
 
 // How many agents of one run work at once, and how many one run may start in
 // all. A script with a loop must not be able to spend a subscription in a
 // minute; a run that needs more is split into several.
 const MAX_CONCURRENT_AGENTS = 8;
 const MAX_AGENTS_PER_RUN = 200;
-||||||| bc50ba56aa:packages/web/server/lib/workflows/runtime.js
-
-// How many agents of one run work at once, and how many one run may start in
-// all. A script with a loop must not be able to spend a subscription in a
-// minute; a run that needs more is split into several.
-export const MAX_CONCURRENT_AGENTS = 8;
-export const MAX_AGENTS_PER_RUN = 200;
-=======
-import type { WorkflowRun, WorkflowAgent } from './store.js';
-import type { WorkflowAgentCall } from './sandbox.js';
-import type { AgentOptions, AnswerSlot, Ending, Execution, RunInput, WorkflowInput, WorkflowRuntimeOptions, WorkflowSchema, WorkflowScope, WorkflowText } from './contracts.js';
-export const MAX_CONCURRENT_AGENTS = 8;
-export const MAX_AGENTS_PER_RUN = 200;
->>>>>>> upstream/main:packages/web/server/lib/workflows/runtime.ts
 const SCHEMA_ATTEMPTS = 3;
 const MAX_LOGS = 200;
 const MAX_ARGS_LENGTH = 50_000;
@@ -54,7 +30,6 @@ const DELIVERY_BASE_DELAY_MS = 2_000;
 const SAVED_DIRECTORY = ['.openchamber', 'workflows'];
 const WORKFLOW_RESULT_SOURCE = 'openchamber-workflow';
 
-<<<<<<< HEAD:packages/web/server/lib/workflows/runtime.js
 // The report's id is minted once and kept, so a retry never delivers twice.
 const createMessageId = (now) => {
   const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
@@ -63,17 +38,6 @@ const createMessageId = (now) => {
 
 const truncate = (text, limit) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
 const asText = (value) => (isString(value) ? value : JSON.stringify(value ?? null, null, 2));
-
-const callKey = (prompt, options) => crypto.createHash('sha256').update(JSON.stringify([prompt, options])).digest('hex').slice(0, 24);
-||||||| bc50ba56aa:packages/web/server/lib/workflows/runtime.js
-const truncate = (text, limit) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
-const asText = (value) => (isString(value) ? value : JSON.stringify(value ?? null, null, 2));
-
-const callKey = (prompt, options) => crypto.createHash('sha256').update(JSON.stringify([prompt, options])).digest('hex').slice(0, 24);
-=======
-const truncate = <T extends WorkflowText>(text: T, limit: number) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
-const asText = (value: WorkflowAgent['result']) => (isWorkflowText(value) ? value : JSON.stringify(value ?? null, null, 2));
->>>>>>> upstream/main:packages/web/server/lib/workflows/runtime.ts
 
 const callKey = (prompt: string, options: AgentOptions) => crypto.createHash('sha256').update(JSON.stringify([prompt, options])).digest('hex').slice(0, 24);
 const createRunId = () => `wf_${crypto.randomBytes(12).toString('base64url').replace(/[-_]/g, '').slice(0, 16).padEnd(16, '0')}`;

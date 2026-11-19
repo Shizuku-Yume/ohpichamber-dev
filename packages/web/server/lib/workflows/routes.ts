@@ -3,15 +3,9 @@ import express from 'express';
 import { z } from 'zod';
 
 import { asControlError } from '../openchamber-control/error.js';
-<<<<<<< HEAD:packages/web/server/lib/workflows/routes.js
 import { createWorkflowAgentSessions } from './agent-session.js';
 import { createWorkflowRuntime } from './runtime.js';
 import { createWorkflowRunStore } from './store.js';
-||||||| bc50ba56aa:packages/web/server/lib/workflows/routes.js
-=======
-import type { Application } from '../shared/http-contracts.js';
-import type { createWorkflowRuntime } from './runtime.js';
->>>>>>> upstream/main:packages/web/server/lib/workflows/routes.ts
 
 const ACTIONS = new Set(['approve', 'decline', 'stop', 'resume']);
 type WorkflowAction = 'approve' | 'decline' | 'stop' | 'resume';
@@ -29,7 +23,6 @@ const startBodySchema = z.object({
   args: z.json().optional(),
 });
 
-<<<<<<< HEAD:packages/web/server/lib/workflows/routes.js
 /**
  * The user's side of workflow runs: the runs of a session for the chat, the
  * work-status panel and the Workflows panel, one run's log, script and result
@@ -38,18 +31,6 @@ const startBodySchema = z.object({
  * Registered only in builds with workflows.
  */
 const registerWorkflowRoutes = (app, runtime) => {
-||||||| bc50ba56aa:packages/web/server/lib/workflows/routes.js
-/**
- * The user's side of workflow runs: the runs of a session for the chat, the
- * work-status panel and the Workflows panel, one run's log, script and result
- * and one agent's prompt and answer for that panel, and the approve, decline,
- * stop and resume buttons.
- * Registered only in builds with workflows.
- */
-export const registerWorkflowRoutes = (app, runtime) => {
-=======
-export const registerWorkflowRoutes = (app: Application, runtime: ReturnType<typeof createWorkflowRuntime>) => {
->>>>>>> upstream/main:packages/web/server/lib/workflows/routes.ts
   app.get('/api/openchamber/workflows', async (req, res) => {
     const query = listQuerySchema.safeParse(req.query);
     if (!query.success) return res.status(400).json({ error: 'sessionId or directory is required' });

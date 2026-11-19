@@ -30,7 +30,6 @@ card and the Workflows panel open them.
   agent that wrote the script.
 - `sandbox.ts`: runs a body in a worker thread, inside a vm context that sees
   only `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()` and `args`.
-<<<<<<< HEAD
 - `agent-session.js`: one workflow agent is a child session of the proposing
   session (`parentSessionId`), prompted once and awaited until its turn
   ends; a schema correction is a follow-up prompt in the same session. All
@@ -39,34 +38,6 @@ card and the Workflows panel open them.
 - `json-schema.js`: the small part of JSON Schema `agent({ schema })` checks.
 - `store.js`: run files under `<data-dir>/workflow-runs/`, one per run.
 - `runtime.js`: the run lifecycle, the limits, replay, the report, and the
-||||||| bc50ba56aa
-- `agent-session.js`: one workflow agent is one OpenCode child session of the
-  proposing session (`parentID`), prompted once and awaited until its turn
-  ends; a schema correction is a follow-up prompt in the same session. An
-  agent asked for a schema answer gets its parent's permission rules plus an
-  allow for `openchamber_workflow_answer`. Also posts the report as a synthetic
-  message.
-- `json-schema.js`: the small part of JSON Schema `agent({ schema })` checks.
-- `store.js`: run files under `<data-dir>/workflow-runs/`, one per run.
-- `runtime.js`: the run lifecycle, the limits, replay, the report, and the
-=======
-- `agent-session.ts`: one workflow agent is one session linked to the
-  proposing session by metadata, prompted once and awaited until its turn
-  ends; a schema correction is a follow-up prompt in the same session. The
-  agent copies what a child would inherit from the proposing session: its
-  folder, its permission rules, and its model when the call names none. An
-  agent asked for a schema answer also gets an allow for
-  `openchamber_workflow_answer`. Also posts the report as a synthetic message.
-- `json-schema.ts`: the small part of JSON Schema `agent({ schema })` checks.
-- `store.ts`: run files under `<data-dir>/workflow-runs/`, one per run. A
-  settled run (finished, report delivered) stays in memory only as
-  `lightenWorkflowRun(run)`: no script, prompts or full answers, enough for
-  `summarizeRun` to give the same summary. `get` reads the whole run from its
-  file. Kept whole, 35 real runs held 12 MB of the server's heap; light, 1.7 MB.
-  `list()` therefore hands out light runs for settled ones: read a run's
-  prompts or answers through `get`.
-- `runtime.ts`: the run lifecycle, the limits, replay, the report, and the
->>>>>>> upstream/main
   agent tool's `workflow.*` actions (`executeAction`).
 - `routes.ts`: the user's side for the chat card, the work-status panel and
   the Workflows panel: `GET /api/openchamber/workflows?sessionId=` or
