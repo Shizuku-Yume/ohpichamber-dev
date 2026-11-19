@@ -1724,3 +1724,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** one shared editor holds the current draft. Other file tabs replace its document, while non-file surfaces only hide the mounted editor and retain its selected path. Keyboard activation of strip buttons follows the same selection callback; there is no separate next/previous strip shortcut. Existing close guards, runtime directory ownership and conditional-save decisions remain in force.
 - **Mine:** yes
 - **Revisit when:** upstream guards strip selection or introduces authoritative per-file draft ownership.
+
+## 2026-11-19 - Complete repository dialog dismissal before opening Git Settings
+
+- **Decided:** retain the repository popup through dismissal and open Git Settings on close completion. Recheck the draft warning when its directory's Git index revision changes and use action names for commit accessible labels.
+- **Instead of:** opening sibling modals during dismissal or keeping a one-shot dirty snapshot after a commit.
+- **Because:** closing modal focus cleanup must complete before the next surface opens, and a successful Git mutation invalidates the earlier dirty answer.
+- **Revisit when:** the shared dialog supports an atomic modal handoff or the draft target reads its dirty answer from the shared Git store.

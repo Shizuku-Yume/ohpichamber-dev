@@ -18,13 +18,80 @@ describe('useDraftTarget while a new worktree attaches', () => {
       localStorage: dom.localStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
     });
-    // Store modules probe the server on import; nothing here needs an answer.
-    globalThis.fetch = Object.assign(async () => new Response(null, { status: 503 }), originalFetch);
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+      if (url.pathname === '/api/fs/home') return Response.json({ home: '/sandbox' });
+      return new Response(null, { status: 503 });
+    }, originalFetch);
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     dom.close();
+  });
+
+  test('refreshes the dirty warning after a commit changes the directory index revision', async () => {
+    const { createRoot } = await import('react-dom/client');
+    const { I18nProvider } = await import('@/lib/i18n');
+    const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+    const { createWebAPIs } = await import('../../../../../../../web/src/api/index');
+    const { useProjectsStore } = await import('@/stores/useProjectsStore');
+    const { useSessionUIStore } = await import('@/sync/session-ui-store');
+    const { useGitStore } = await import('@/stores/useGitStore');
+    const { notifyGitStatusInvalidated } = await import('@/lib/gitStatusInvalidation');
+    const { useDraftTarget } = await import('../useDraftTarget');
+    let dirty = true;
+    let failStatus = false;
+    const status = () => ({ current: 'main', tracking: null, ahead: 0, behind: 0,
+      files: dirty ? [{ path: 'file.txt', index: 'M', working_dir: ' ' }] : [], isClean: !dirty });
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+      if (url.pathname === '/api/git/status') return failStatus ? new Response(null, { status: 503 }) : Response.json(status());
+      if (url.pathname === '/api/git/branches') return Response.json({ all: ['main'], current: 'main', branches: {} });
+      if (url.pathname === '/api/fs/home') return Response.json({ home: '/sandbox' });
+      return new Response(null, { status: 503 });
+    }, originalFetch);
+    const apis = createWebAPIs();
+    await useGitStore.getState().fetchStatus(PROJECT.path, {
+      ...apis.git, checkIsGitRepository: async () => true, getGitStatus: async () => status(),
+    });
+    useProjectsStore.setState({ projects: [PROJECT], activeProjectId: PROJECT.id });
+    useSessionUIStore.setState({ availableWorktreesByProject: new Map(), newSessionDraft: {
+      draftId: 2, open: true, selectedProjectId: PROJECT.id, directoryOverride: PROJECT.path,
+      parentID: null, target: 'project',
+    } });
+    let hasChanges = false;
+    const Probe = () => {
+      hasChanges = useDraftTarget(true).selectedDraftDirectoryHasUncommittedChanges;
+      return null;
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}><Probe /></RuntimeAPIContext.Provider></I18nProvider>));
+      for (let attempt = 0; attempt < 20 && !hasChanges; attempt += 1) {
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+      }
+      expect(hasChanges).toBe(true);
+      failStatus = true;
+      await act(async () => {
+        notifyGitStatusInvalidated(PROJECT.path);
+        useGitStore.getState().bumpIndexRevision(PROJECT.path);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      expect(hasChanges).toBe(true);
+      failStatus = false;
+      dirty = false;
+      await act(async () => {
+        notifyGitStatusInvalidated(PROJECT.path);
+        useGitStore.getState().bumpIndexRevision(PROJECT.path);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      expect(hasChanges).toBe(false);
+    } finally {
+      await act(async () => root.unmount());
+    }
   });
 
   test('keeps the selected worktree listed until its bootstrap settles, without rewriting the draft', async () => {
