@@ -1752,15 +1752,21 @@ Small-file acceptance also exposed `No valid theme loader registered for "opench
 
 ## 2026-11-19 - Empty GitHub release feeds mean no desktop update
 
-Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
+- **Decided:** treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
+- **Instead of:** rejecting an update check for an empty release feed when no download is pending.
+- **Because:** electron-updater throws for an empty GitHub release feed rather than returning a no-update result; before the first release, that is an expected absence of an update.
 
 ## 2026-11-19 - Refresh desktop login items only when enabled
 
-The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup re-registers an enabled login item so its path and background-start args stay current after updates or moves, and skips the write when the item is disabled, unregistered, or unreadable (macOS can reject that no-op write with `Operation not permitted`). Explicit settings-change IPC remains authoritative and unchanged.
+- **Decided:** use the OS login-item settings as the desktop's stored launch-at-login preference. Packaged startup re-registers an enabled login item and skips the write when the item is disabled, unregistered, or unreadable. Explicit settings-change IPC remains authoritative and unchanged.
+- **Instead of:** re-registering disabled or unregistered login items on every packaged launch.
+- **Because:** macOS can reject that no-op write with `Operation not permitted`, while enabled items need their path and background-start args refreshed after updates or moves.
 
 ## 2026-11-19 - Retry native session and command discovery during Agent Service startup
 
-Global sessions and native command catalogs use the existing bounded `STARTUP_RETRY` policy in their owning stores, including command workspace resolution. A successful native read establishes authority; readiness does not manufacture an empty snapshot. Session workspace binding follows successful discovery so it cannot exhaust its own retry window before the service is ready. Non-retryable or exhausted failures retain the existing error and cached-data behavior. Runtime generation changes retire retries before another request. This shared behavior applies to Web/PWA, Electron, hosted mobile, and Capacitor; the Guest SDK contract is unchanged.
+- **Decided:** global sessions and native command catalogs use the existing bounded `STARTUP_RETRY` policy in their owning stores, including command workspace resolution. A successful native read establishes authority; readiness does not manufacture an empty snapshot. Session workspace binding follows successful discovery so it cannot exhaust its own retry window before the service is ready. Non-retryable or exhausted failures retain the existing error and cached-data behavior. Runtime generation changes retire retries before another request. This shared behavior applies to Web/PWA, Electron, hosted mobile, and Capacitor; the Guest SDK contract is unchanged.
+- **Instead of:** relying on global polling or a command directory change to recover startup discovery, or treating readiness as an empty native snapshot.
+- **Because:** the gateway returns `503 SERVICE_UNAVAILABLE` before the Agent Service is ready, and config readiness reaches the agents store rather than these loaders.
 
 ## 2026-11-19 - Refresh composer catalogs after provider settings mutations
 
@@ -1771,7 +1777,9 @@ Global sessions and native command catalogs use the existing bounded `STARTUP_RE
 
 ## 2026-11-19 - Retry transient partial session discovery without losing complete scopes
 
-The global sessions store owns bounded startup recovery for successful HTTP 200 discovery pages containing `SERVICE_UNAVAILABLE` errors. Retry whole listings within the same eight-attempt budget as thrown retryable failures. Reconcile healthy scopes on every page, retain failed scopes, defer transient sidebar errors until exhaustion, and expose non-transient errors immediately. An initial retrying partial page does not establish global completeness; runtime changes retire the retry loop.
+- **Decided:** the global sessions store owns bounded startup recovery for successful HTTP 200 discovery pages containing `SERVICE_UNAVAILABLE` errors. Retry whole listings within the same eight-attempt budget as thrown retryable failures. Reconcile healthy scopes on every page, retain failed scopes, defer transient sidebar errors until exhaustion, and expose non-transient errors immediately. An initial retrying partial page does not establish global completeness; runtime changes retire the retry loop.
+- **Instead of:** retrying only thrown failures or replacing partial listings with a top-level 503 that loses scoped information.
+- **Because:** successful HTTP 200 discovery pages can contain transient `SERVICE_UNAVAILABLE` scope errors during startup; retrying those pages must not discard healthy scopes or failed scopes' existing records.
 
 Keep the Host's explicit partial `items`/`errors` contract, including all-unavailable pages, rather than replacing it with a top-level 503 that loses scoped information. Discovery errors carry codes, not retryable flags; only `SERVICE_UNAVAILABLE` is classified transient here. Web/PWA, Electron, hosted mobile and Capacitor share this store; Guest SDK and session admission are unchanged.
 
