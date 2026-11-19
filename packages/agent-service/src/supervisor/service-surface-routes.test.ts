@@ -117,6 +117,13 @@ test('recaps and Agent Hub routes answer over the real service HTTP surface', as
   expect(revive.status).toBe(404);
   expect(revive.body).toBeTruthy();
 
+  const abortCompaction = await request(`${sessionPath}/control`, {
+   method: 'POST',
+   body: JSON.stringify({ type: 'compact.abort' }),
+  });
+  expect(abortCompaction.status).toBe(200);
+  expect(SessionControlAckSchema.parse(abortCompaction.body)).toEqual({ type: 'compact.abort', aborted: false });
+
   // Unrelated routes still resolve elsewhere.
   const snapshot = await request(`${sessionPath}/snapshot`);
   expect(snapshot.status).toBe(200);

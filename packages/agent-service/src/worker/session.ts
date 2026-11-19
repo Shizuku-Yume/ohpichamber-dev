@@ -22,7 +22,7 @@ import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry
 import { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
 import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widgets/caption';
 import { listServicesTolerant, sendService, serviceLogs, stopService } from '@oh-my-pi/pi-coding-agent/launch/services';
-import { cfgAsyncWidgets, cfgTasksTodoClearDelay } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import { cfgAsyncWidgets, cfgTasksTodoClearDelay, cfgToolsIntentTracing } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { createTodoHudStateData, getTodoHudVisibility, TODO_HUD_STATE_CUSTOM_TYPE } from '@oh-my-pi/pi-coding-agent/tools/todo';
 import { isClosedTodo } from '@oh-my-pi/pi-tui/tools/todo';
 import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
@@ -153,6 +153,10 @@ const SubagentProgressObservationSchema = z.object({
     description: z.string().optional(),
     task: z.string().optional(),
     lastIntent: z.string().optional(),
+    currentToolIntent: z.string().optional(),
+    stage: z.string().optional(),
+    completionPercent: z.number().min(0).max(100).optional(),
+    recentOutput: z.array(z.string()).optional(),
     durationMs: z.number().optional(),
     retryState: z.object({ delayMs: z.number(), startedAtMs: z.number() }).optional(),
   }),
@@ -667,6 +671,7 @@ export class WorkerSession {
       // no such seam.
       cfgTitleRefreshOnReplan.override(settings, false);
       cfgTaskPerCallModel.override(settings, 'on');
+      if (!cfgToolsIntentTracing.isConfigured(settings)) cfgToolsIntentTracing.override(settings, true);
       const initialHostTools = normalizeHostToolEnablement(input.hostTools);
       const hostToolsController = createHostToolController({
         scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
@@ -677,6 +682,7 @@ export class WorkerSession {
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
         autoTitle: false,
+        cacheWarming: 'idle',
         enableMCP: mcp !== undefined, mcpManager: mcp, disableExtensionDiscovery: true,
         tuiTranscript: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({
@@ -1118,16 +1124,19 @@ export class WorkerSession {
       role: payload.agent,
       solutionSpace: existing?.solutionSpace,
       status,
-      activeTool: existing?.activeTool,
+      activeTool: status === 'running' ? existing?.activeTool : undefined,
       tokens: existing?.tokens,
       cost: existing?.cost,
       turnCount: existing?.turnCount,
-      retryCountdown: existing?.retryCountdown,
+      retryCountdown: status === 'running' ? existing?.retryCountdown : undefined,
       depth,
       parentSubagentId,
       description: payload.description ?? existing?.description,
       task: existing?.task,
       lastIntent: existing?.lastIntent,
+      stage: existing?.stage,
+      completionPercent: existing?.completionPercent,
+      recentOutput: existing?.recentOutput,
       durationMs: existing?.durationMs,
     };
     this.liveSubagents.set(payload.id, subagent);
@@ -1165,16 +1174,19 @@ export class WorkerSession {
       role: p.agent || payload.agent,
       solutionSpace: existing?.solutionSpace,
       status,
-      activeTool: p.currentTool ?? existing?.activeTool,
+      activeTool: status === 'running' ? p.currentTool : undefined,
       tokens: p.tokens !== undefined && p.tokens >= 0 ? p.tokens : existing?.tokens,
       cost: p.cost !== undefined && p.cost >= 0 ? p.cost : existing?.cost,
       turnCount: p.toolCount ?? p.requests ?? existing?.turnCount,
-      retryCountdown,
+      retryCountdown: status === 'running' ? retryCountdown : undefined,
       depth,
       parentSubagentId,
       description: p.description ?? existing?.description,
       task: p.task ?? payload.task ?? existing?.task,
-      lastIntent: p.lastIntent ?? existing?.lastIntent,
+      lastIntent: p.currentToolIntent ?? p.lastIntent ?? existing?.lastIntent,
+      stage: p.stage ?? existing?.stage,
+      completionPercent: p.completionPercent ?? existing?.completionPercent,
+      recentOutput: p.recentOutput ?? existing?.recentOutput,
       durationMs: p.durationMs ?? existing?.durationMs,
     };
     this.liveSubagents.set(p.id, subagent);
@@ -1633,7 +1645,7 @@ export class WorkerSession {
   private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
-    if (this.compacting) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
+    if ((this.compacting || this.session.isCompacting) && !['compact.abort', 'abort', 'history', 'question.resolve', 'approval.resolve'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
     if (this.reviewingPlan && !['abort', 'question.resolve', 'history'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Plan review transition is in progress');
     switch (operation.type) {
       case 'goal': {
@@ -2038,6 +2050,7 @@ export class WorkerSession {
               settings: this.session.settings,
               hasUI: false,
               enableMCP: false,
+              cacheWarming: 'off',
               agentId: cloneId,
               agentDisplayName: 'tan',
             });
@@ -2260,6 +2273,7 @@ export class WorkerSession {
         await this.stopAutoTitle();
         this.suggestionDriver.cancel();
         this.interaction.cancelAll();
+        this.session.abortCompaction();
         await this.session.abort();
         await this.promptTask;
         await this.bind();
@@ -2284,6 +2298,11 @@ export class WorkerSession {
       case 'history':
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
+      case 'compact.abort': {
+        const aborted = this.compacting || this.session.isCompacting;
+        this.session.abortCompaction();
+        return { type: 'compact.abort', aborted };
+      }
       case 'compact': {
         if (this.preparation || this.projection.activeRun() || this.session.isRunActive || this.continuationPending || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         this.compacting = true;

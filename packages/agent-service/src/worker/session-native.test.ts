@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { JsonValueSchema, type ApprovalRequest, type QuestionRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgEditMode } from '@oh-my-pi/pi-coding-agent/edit/settings';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
-import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import { TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import { renderStepsBrief } from '@oh-my-pi/pi-coding-agent/task/steps';
 import { cfgToolsApprovalMode, cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
@@ -1402,6 +1403,58 @@ test('actual native undo/redo retains sibling transcript and cold-reopen selecti
   expect(harness.requests).toHaveLength(0);
  } finally { await cold?.close(); await harness.close(); }
 }, 30000);
+test('native handoff uses OMP 19 compaction mode and reports native failures', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const compact = spyOn(harness.worker.session, 'compact').mockResolvedValue({ summary: 'Handoff summary', firstKeptEntryId: 'native-entry', tokensBefore: 42 });
+ try {
+  expect(harness.worker.session.agent.intentTracing).toBe(true);
+  const result = await harness.worker.operation({ type: 'command', text: '/handoff preserve the objective' });
+  expect(compact).toHaveBeenCalledWith('preserve the objective', { mode: 'handoff' });
+  expect(result).toMatchObject({ type: 'command' });
+  compact.mockRejectedValueOnce(new Error('fixture compaction failure'));
+  const failure = await harness.worker.operation({ type: 'command', text: '/handoff' });
+  expect(failure).toMatchObject({ type: 'command', output: expect.stringContaining('fixture compaction failure') });
+ } finally { compact.mockRestore(); await harness.close(); }
+});
+
+test('compaction can be cancelled without an active run through the worker control', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const started = Promise.withResolvers<void>();
+ const release = Promise.withResolvers<never>();
+ const compact = spyOn(harness.worker.session, 'compact').mockImplementation(async () => { started.resolve(); return release.promise; });
+ const abort = spyOn(harness.worker.session, 'abortCompaction').mockImplementation(() => release.reject(new Error('compaction cancelled')));
+ try {
+  const pending = harness.worker.operation({ type: 'compact' }).catch(error => error);
+  await started.promise;
+  expect(await harness.worker.operation({ type: 'compact.abort' })).toEqual({ type: 'compact.abort', aborted: true });
+  expect(abort).toHaveBeenCalledTimes(1);
+  expect(await pending).toMatchObject({ message: 'compaction cancelled' });
+  expect(await harness.worker.operation({ type: 'compact.abort' })).toEqual({ type: 'compact.abort', aborted: false });
+ } finally { compact.mockRestore(); abort.mockRestore(); await harness.close(); }
+});
+
+test('native subagent progress retains ordered task briefs and finished status without legacy fields', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const task = renderStepsBrief(['Inspect sources', 'Run checks']);
+  const bus = harness.worker['subagentEventBus'];
+  const frame = { agent: 'worker', task, progress: { id: 'child', agent: 'worker', status: 'running', currentTool: 'read', currentToolIntent: 'Inspect implementation', stage: 'Inspect sources', completionPercent: 25, recentOutput: ['Read source'], taskFile: 'removed', sourceSession: 'removed' } };
+  await bus.emit(TASK_SUBAGENT_PROGRESS_CHANNEL, frame);
+  const updated = harness.events.findLast(input => input.event.type === 'subagent.updated');
+  expect(updated?.event).toMatchObject({ type: 'subagent.updated', subagent: { task, stage: 'Inspect sources', completionPercent: 25, recentOutput: ['Read source'], lastIntent: 'Inspect implementation', activeTool: 'read' } });
+  const count = harness.events.length;
+  await bus.emit(TASK_SUBAGENT_PROGRESS_CHANNEL, {});
+  await bus.emit(TASK_SUBAGENT_PROGRESS_CHANNEL, { ...frame, progress: { ...frame.progress, completionPercent: 101 } });
+  expect(harness.events).toHaveLength(count);
+  await bus.emit(TASK_SUBAGENT_PROGRESS_CHANNEL, { ...frame, progress: { ...frame.progress, recentOutput: [], status: 'completed' } });
+  await bus.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, { id: 'child', agent: 'worker', agentSource: 'bundled', index: 0, status: 'completed' });
+  const finished = harness.events.findLast(input => input.event.type === 'subagent.updated');
+  expect(finished?.event).toMatchObject({ type: 'subagent.updated', subagent: { status: 'completed', activeTool: undefined, retryCountdown: undefined, recentOutput: [] } });
+  expect(JSON.stringify(finished?.event)).not.toContain('taskFile');
+  expect(JSON.stringify(finished?.event)).not.toContain('sourceSession');
+ } finally { await harness.close(); }
+});
+
 test('native compact refuses while a run is active', async () => {
  const firstRequest = Promise.withResolvers<void>();
  const release = Promise.withResolvers<void>();

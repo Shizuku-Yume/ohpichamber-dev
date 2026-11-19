@@ -9,6 +9,8 @@ import type {
   ExtensionAskDialogQuestion,
   ExtensionAskDialogResult,
   ExtensionAskDialogResultItem,
+  ExtensionFormDialogResult,
+  ExtensionUIDialogOptions,
   ExtensionUIContext,
   ExtensionUISelectItem,
   ToolApprovalRequestedEvent,
@@ -19,6 +21,8 @@ import { JsonObjectSchema, PlanReviewSchema, PlanReviewResponseSchema, type Plan
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { WorkerInteraction as WorkerInteractionMessage } from '../protocol.ts';
 import { approvalInputSummary, oneLineApprovalText } from '../interaction/approval-summary.ts';
+import { NativeFormDialog } from './form-dialog.ts';
+import { ProjectionError } from '../projection/journal.ts';
 
 type PendingApproval = { toolCallId: string; resolve: (choice: string | undefined) => void; approve: string; reject: string };
 export type NativePermissionChoice = 'once' | 'always' | 'reject';
@@ -48,6 +52,7 @@ export class WorkerInteraction {
   private readonly permissionHandles = new Map<string, PendingPermission>();
   private readonly executionReceipts = new Map<string, string>();
   private readonly questionHandles = new Map<string, PendingQuestion>();
+  private readonly formHandles = new Map<string, { form: NativeFormDialog; resolve: (result: ExtensionFormDialogResult | undefined) => void; options?: ExtensionUIDialogOptions }>();
   private readonly planHandles = new Map<string, (response: PlanReviewResponse | undefined) => void>();
   private closed = false;
 
@@ -104,6 +109,7 @@ export class WorkerInteraction {
       return result?.kind === 'submit' ? result.results[0]?.customInput : undefined;
     },
     askDialog: (questions, dialogOptions) => this.askDialog(questions, dialogOptions),
+    formDialog: (html, dialogOptions) => this.formDialog(html, dialogOptions),
     notify: () => { },
     onTerminalInput: () => () => { },
     setStatus: () => { },
@@ -174,7 +180,8 @@ export class WorkerInteraction {
     return 'deny';
   }
 
-  private async select(title: string, options: ExtensionUISelectItem[], dialogOptions?: { signal?: AbortSignal }): Promise<string | undefined> {
+  private async select(title: string, options: ExtensionUISelectItem[], dialogOptions?: ExtensionUIDialogOptions): Promise<string | undefined> {
+    if (options.length === 0 || dialogOptions?.signal?.aborted) return undefined;
     if (this.closed) return undefined;
     const turnId = this.callbacks.currentTurn() ?? 'turn-0';
     const callId = (dialogOptions as { toolCallId?: string } | undefined)?.toolCallId;
@@ -195,7 +202,13 @@ export class WorkerInteraction {
         id: 'select',
         question: title,
         options: options.map(option => option instanceof Object ? option : { label: option }),
-      }], dialogOptions);
+      }], dialogOptions, {
+        allowCustom: false,
+        ...(dialogOptions?.initialIndex !== undefined ? { initialSelected: [getExtensionUISelectOptionLabel(options[dialogOptions.initialIndex] ?? options[0]!)] } : {}),
+        ...(dialogOptions?.selectionMarker !== undefined ? { selectionMarker: dialogOptions.selectionMarker } : {}),
+        ...(dialogOptions?.checkedIndices !== undefined ? { checkedIndices: [...dialogOptions.checkedIndices] } : {}),
+        ...(dialogOptions?.markableCount !== undefined ? { markableCount: dialogOptions.markableCount } : {}),
+      });
       return result?.kind === 'submit' ? result.results[0]?.selectedOptions[0] : undefined;
     }
     this.observed.delete(observer.toolCallId);
@@ -317,7 +330,7 @@ export class WorkerInteraction {
     } finally { signal?.removeEventListener('abort', abort); }
   }
 
-  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal; timeout?: number }): Promise<ExtensionAskDialogResult | undefined> {
+  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal; timeout?: number }, presentation?: JsonObject): Promise<ExtensionAskDialogResult | undefined> {
     if (this.closed) return undefined;
     const turnId = this.callbacks.currentTurn();
     if (!turnId || questions.length === 0) return undefined;
@@ -339,7 +352,7 @@ export class WorkerInteraction {
       if (question.recommended !== undefined) safeQuestion.recommended = question.recommended;
       return safeQuestion;
     });
-    const schema: JsonObject = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
+    const schema: JsonObject = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions.map(question => ({ ...question, ...presentation })) });
     if (dialogOptions?.timeout !== undefined) schema.timeout = dialogOptions.timeout;
     const { promise, resolve } = Promise.withResolvers<ExtensionAskDialogResult | undefined>();
     this.questionHandles.set(questionId, { questions, resolve });
@@ -350,6 +363,31 @@ export class WorkerInteraction {
       else dialogOptions.signal.addEventListener('abort', abort, { once: true });
     }
     return promise;
+  }
+
+  private async formDialog(html: string, options?: ExtensionUIDialogOptions): Promise<ExtensionFormDialogResult | undefined> {
+    const turnId = this.callbacks.currentTurn();
+    if (this.closed || !turnId || options?.signal?.aborted) return undefined;
+    const form = new NativeFormDialog(html, options?.timeout);
+    const questionId = randomUUID();
+    const { promise, resolve } = Promise.withResolvers<ExtensionFormDialogResult | undefined>();
+    this.formHandles.set(questionId, { form, resolve, options });
+    const abort = () => {
+      if (!this.formHandles.delete(questionId)) return;
+      options?.onAbandon?.(form.abandoned());
+      this.callbacks.request({ kind: 'cancel', questionId });
+      resolve(undefined);
+    };
+    options?.signal?.addEventListener('abort', abort, { once: true });
+    try {
+      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: '', schema: form.schema, timeout: options?.timeout });
+      if (options?.timeout) options.onTimeoutStart?.();
+      if (options?.signal?.aborted) abort();
+      return await promise;
+    } finally {
+      this.formHandles.delete(questionId);
+      options?.signal?.removeEventListener('abort', abort);
+    }
   }
 
   resolveApproval(approvalId: string, decision: 'approve' | 'approve-always' | 'reject'): boolean {
@@ -383,7 +421,19 @@ export class WorkerInteraction {
     }
   }
 
-  resolveQuestion(questionId: string, action: 'answer' | 'cancel', response?: JsonValue): boolean {
+  resolveQuestion(questionId: string, action: 'answer' | 'cancel' | 'update' | 'timeout', response?: JsonValue): boolean {
+    const pendingForm = this.formHandles.get(questionId);
+    if (pendingForm) {
+      if (action === 'answer' || action === 'update') {
+        if (!pendingForm.form.update(response, action === 'answer')) throw new ProjectionError(400, 'INVALID_REQUEST', 'Form response violates its native controls');
+        if (action === 'update') { pendingForm.options?.onTimeoutReset?.(); return true; }
+      }
+      this.formHandles.delete(questionId);
+      if (action === 'timeout') pendingForm.options?.onTimeout?.();
+      pendingForm.resolve(action === 'cancel' ? undefined : pendingForm.form.result(action === 'timeout'));
+      return true;
+    }
+    if (action === 'update' || action === 'timeout') return false;
     const plan = this.planHandles.get(questionId);
     if (plan) {
       const parsed = action === 'answer' ? PlanReviewResponseSchema.safeParse(response) : undefined;
@@ -429,6 +479,8 @@ export class WorkerInteraction {
   }
 
   cancelAll(): void {
+    for (const pending of this.formHandles.values()) pending.resolve(undefined);
+    this.formHandles.clear();
     for (const pending of this.approvalHandles.values()) pending.resolve(undefined);
     for (const pending of this.permissionHandles.values()) pending.resolve(undefined);
     for (const pending of this.questionHandles.values()) pending.resolve(undefined);

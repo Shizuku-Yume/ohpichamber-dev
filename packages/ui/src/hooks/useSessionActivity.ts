@@ -1,7 +1,7 @@
 import React from 'react';
 import type { SessionRuntimeStatus } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionStatus, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
+import { useDirectorySync, useSessionStatus, useSessionPermissions, useSessionForms, useSessionCompacting } from '@/sync/sync-context';
 import type { State } from '@/sync/types';
 
 /**
@@ -76,7 +76,7 @@ export const sessionActivityPhase = (
  * Precedence is the composer contract:
  * 1. Pending permissions/forms own the send button, so the prompt can be
  *    superseded with a new message instead of a stop.
- * 2. A live runtime status is authoritative activity.
+ * 2. Native compaction or a live runtime status is authoritative activity.
  * 3. An authoritative idle status is authoritative inactivity.
  * 4. Missing or unavailable status proves nothing. Only an existing native run
  *    binding ("unknown") keeps the stop control, because aborting is still
@@ -86,11 +86,13 @@ export function deriveSessionActivity(input: {
   sessionId: string | null | undefined;
   status: SessionRuntimeStatus | undefined;
   activeRunId: string | null;
+  compacting?: boolean;
   permissionsPending: boolean;
   formsPending: boolean;
 }): SessionActivityResult {
   if (!input.sessionId) return IDLE_RESULT;
   if (input.permissionsPending || input.formsPending) return IDLE_RESULT;
+  if (input.compacting) return BUSY_RESULT;
   const phase = sessionActivityPhase(input.status, input.activeRunId);
   return phase === 'busy' ? BUSY_RESULT : phase === 'unknown' ? UNKNOWN_RESULT : IDLE_RESULT;
 }
@@ -109,6 +111,7 @@ export function useSessionActivity(sessionId: string | null | undefined, directo
   const status = useSessionStatus(sessionId ?? '', directory);
   const permissions = useSessionPermissions(sessionId ?? '', directory);
   const forms = useSessionForms(sessionId ?? '', directory);
+  const compacting = useSessionCompacting(sessionId, directory);
   const activeRunId = useDirectorySync(
     React.useCallback((state) => sessionId ? selectBoundRunId(state, sessionId) : null, [sessionId]),
     directory,
@@ -118,9 +121,10 @@ export function useSessionActivity(sessionId: string | null | undefined, directo
     sessionId,
     status,
     activeRunId,
+    compacting: compacting !== null,
     permissionsPending: permissions.length > 0,
     formsPending: forms.length > 0,
-  }), [sessionId, status, activeRunId, permissions, forms]);
+  }), [sessionId, status, activeRunId, compacting, permissions, forms]);
 }
 
 export function useCurrentSessionActivity(): SessionActivityResult {

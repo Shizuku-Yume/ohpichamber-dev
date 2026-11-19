@@ -193,6 +193,15 @@ test('a paired completed edit renders its diff and opens the output dialog', asy
     });
 });
 
+test('native browser calls preserve OMP 19 launch fields in generic tool presentation', async () => {
+    await withToolHarness(async ({ container, render }) => {
+        const call: ToolCallPart = { type: 'tool_call', partId: 'browser-call', toolCallId: 'browser-call', toolName: 'browser', status: 'completed', input: { action: 'open', app: 'chromium', argv: ['--private'], target: 'new-tab', insecure: true } };
+        await render(call, { expanded: true });
+        for (const field of ['chromium', '--private', 'new-tab', 'insecure']) expect(container.textContent).toContain(field);
+        expect(container.textContent).not.toContain('allow_file_access');
+    });
+});
+
 test('a mismatched call never lends its input to a result, and quick-open uses the result diff line', async () => {
     const opened: Array<{ path: string; line?: number }> = [];
     const runtime = runtimeForEditor(async (path, line) => { opened.push({ path, line }); });

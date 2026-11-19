@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { cfgProvidersCacheWarming } from '@oh-my-pi/pi-coding-agent/session/settings';
+import { capCacheWarmingMode } from '@oh-my-pi/pi-coding-agent/session/cache-warmer';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
@@ -21,6 +22,13 @@ async function fixture() {
   await mkdir(agentDirectory);
   return { root, cwd, agentDirectory };
 }
+
+test('OMP 19 warming modes cannot exceed the explicit SDK session cap', () => {
+  const modes = ['off', 'streaming', 'idle'] as const;
+  for (const [capIndex, cap] of modes.entries()) for (const [modeIndex, mode] of modes.entries()) {
+    expect(capCacheWarmingMode(mode, cap)).toBe(modes[Math.min(capIndex, modeIndex)]);
+  }
+});
 
 test('native warming flush reopens from workspace disk and does not change shared or sibling config', async () => {
   const { root, cwd, agentDirectory } = await fixture();

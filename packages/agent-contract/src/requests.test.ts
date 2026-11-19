@@ -27,6 +27,13 @@ const pendingQuestion = {
 };
 
 describe('request wire schemas', () => {
+  test('accepts a nonterminal form draft reply and inactivity reset without changing terminal invariants', () => {
+    expect(QuestionReplySchema.parse({ ...cas, action: 'update', response: { results: [] } })).toMatchObject({ action: 'update' });
+    expect(() => QuestionReplySchema.parse({ ...cas, action: 'update' })).toThrow();
+    expect(QuestionRequestSchema.parse({ ...pendingQuestion, timeoutResetAt: 2 })).toMatchObject({ status: 'pending', version: '1', timeoutResetAt: 2 });
+    expect(() => QuestionRequestSchema.parse({ ...pendingQuestion, timeoutResetAt: -1 })).toThrow();
+    expect(() => QuestionRequestSchema.parse({ ...pendingQuestion, response: {} })).toThrow();
+  });
   test('round-trips CAS and rejects a non-positive version', () => {
     expect(RequestCASSchema.parse(cas)).toEqual(cas);
     expect(() => RequestCASSchema.parse({ ...cas, version: '0' })).toThrow();

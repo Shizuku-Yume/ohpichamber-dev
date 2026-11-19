@@ -96,12 +96,14 @@ export type PlanReviewResponse = z.infer<typeof PlanReviewResponseSchema>;
 export const QuestionReplySchema = z.discriminatedUnion('action', [
   RequestCASSchema.extend({ action: z.literal('answer'), response: JsonValueSchema }),
   RequestCASSchema.extend({ action: z.literal('cancel') }),
+  RequestCASSchema.extend({ action: z.literal('update'), response: JsonValueSchema }),
 ]);
 export type QuestionReply = z.infer<typeof QuestionReplySchema>;
 export const QuestionRequestSchema = RequestCASSchema.extend({
   questionId: EntityIdSchema, sessionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),
   schema: JsonObjectSchema.optional(), status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: JsonValueSchema.optional(), requestedAt: TimestampSchema, answeredAt: TimestampSchema.optional(),
+  timeoutResetAt: TimestampSchema.optional(),
   resolvedAt: TimestampSchema.optional(), resolvedBy: EntityIdSchema.optional(),
 }).superRefine((request, context) => {
   if (request.schema?.type === 'plan-review') {

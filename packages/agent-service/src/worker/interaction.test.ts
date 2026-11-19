@@ -11,6 +11,19 @@ import { APPROVAL_SUMMARY_MAX_CHARS } from '../interaction/approval-summary.ts';
 
 const review = { type: 'plan-review' as const, title: 'Review', planReference: 'local://review-plan.md', planText: '# Review' };
 
+test('select preserves cursor, checkbox markers and unmarked actions without becoming multi-select', async () => {
+  const requests: WorkerInteractionMessage[] = [];
+  const worker = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => 'turn' });
+  try {
+    const result = worker.ui.select('Choose', ['A', 'B', 'Done'], { initialIndex: 1, selectionMarker: 'checkbox', checkedIndices: [0], markableCount: 2 });
+    const request = requests[0];
+    if (request?.kind !== 'question') throw new Error('Question missing');
+    expect(request.schema.questions).toEqual([{ id: 'select', question: 'Choose', options: [{ label: 'A' }, { label: 'B' }, { label: 'Done' }], allowCustom: false, initialSelected: ['B'], selectionMarker: 'checkbox', checkedIndices: [0], markableCount: 2 }]);
+    expect(worker.resolveQuestion(request.questionId, 'answer', { results: [{ id: 'select', selectedOptions: ['Done'] }] })).toBe(true);
+    await expect(result).resolves.toBe('Done');
+  } finally { worker.close(); }
+});
+
 function createToolCall(toolName: string, toolCallId: string, input: JsonObject): ToolCallEvent {
   return {
     type: 'tool_call',

@@ -30,6 +30,13 @@ const activity = (overrides: Partial<Parameters<typeof deriveSessionActivity>[0]
 });
 
 describe('session activity authority', () => {
+  test('native compaction exposes stop without a run and clears with native completion', () => {
+    expect(activity({ status: 'idle', compacting: true })).toMatchObject({ phase: 'busy', isWorking: true });
+    expect(activity({ status: 'idle', compacting: false }).phase).toBe('idle');
+    expect(activity({ status: 'idle', compacting: true, formsPending: true }).phase).toBe('idle');
+    expect(activity({ status: 'idle', compacting: true, permissionsPending: true }).phase).toBe('idle');
+  });
+
   test('a live runtime status is working and exposes stop', () => {
     for (const status of ['running', 'awaiting_approval', 'awaiting_input'] as const) {
       expect(activity({ status })).toMatchObject({ phase: 'busy', isWorking: true, isBusy: true, isUnknown: false });

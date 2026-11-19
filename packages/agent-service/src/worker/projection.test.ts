@@ -173,6 +173,30 @@ test('completed native compaction emits opaque canonical transition only', async
   }
 });
 
+test('manual and background handoff compaction project completion, cancellation and error authoritatively', async () => {
+  const manager = SessionManager.inMemory('.');
+  const projection = new WorkerProjection(manager, 'session');
+  const started = projection.consume({ type: 'manual_compaction_start', mode: 'handoff' });
+  expect(started).toMatchObject([{ event: { type: 'session.updated', compacting: { method: 'handed-off' } } }]);
+  const success = projection.consume({ type: 'manual_compaction_end', aborted: false, result: { summary: 'handoff', firstKeptEntryId: 'native', tokensBefore: 42 } });
+  expect(success.some(input => input.event.type === 'session.compacted')).toBe(true);
+  for (const end of [{ aborted: true }, { aborted: false, errorMessage: 'fixture failure' }, { aborted: false, skipped: true }]) {
+    projection.consume({ type: 'manual_compaction_start', mode: 'handoff' });
+    expect(projection.consume({ type: 'manual_compaction_end', ...end })).toMatchObject([{ event: { type: 'session.updated', compacting: null } }]);
+  }
+  await manager.close();
+});
+
+test('historical secret placeholders are replayed literally without resolving changed labels', async () => {
+  const manager = SessionManager.inMemory('.');
+  const text = '$$0123456789ab$$ $$0123456789ab:U$$ $$OLDNAME_0123456789ab:L$$ $$RENAMED_abcdefgh1234:M$$';
+  manager.appendMessage({ role: 'user', content: 'Historical transcript', timestamp: Date.now() });
+  manager.appendMessage(assistant([{ type: 'text', text }], 'stop', Date.now()));
+  const projection = new WorkerProjection(manager, 'session');
+  expect(projection.seed().messages.flatMap(message => message.parts)).toContainEqual(expect.objectContaining({ type: 'text', content: text }));
+  await manager.close();
+});
+
 test('a projected attachment part publishes its name and media type, never the private Host path', async () => {
   const root = await mkdtemp(join(tmpdir(), 'canonical-attachment-projection-'));
   const manager = SessionManager.create(join(root, 'workspace'), join(root, 'storage'));
