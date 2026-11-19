@@ -175,8 +175,10 @@ const createCanonicalSessionService = (dependencies) => {
   };
   const admissionRecoveries = new Map();
   // A create admission stranded by an earlier Host process is settled by the
-  // Agent Service's complete listing of its workspace: the Host chose the root
-  // id, so a listed root is registered and an absent one was never admitted.
+  // Agent Service's complete listing of its workspace. The Host chose the root
+  // id, so a listed root is registered. An absent root left at most an empty
+  // native file, which every listing hides; a native file with content is
+  // listed and registered by ordinary discovery.
   const recoverPriorCreateAdmissions = (scope) => {
     const running = admissionRecoveries.get(scope.workspaceId);
     if (running) return running;
