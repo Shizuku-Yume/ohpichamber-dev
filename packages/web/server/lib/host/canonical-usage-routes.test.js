@@ -6,10 +6,10 @@ import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
-import { createTunnelAuth } from './tunnel-auth.js';
+import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 import { createRequestSecurityRuntime } from '../security/request-security.js';
-import { registerCommonRequestMiddleware } from './core-routes.js';
+import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
 import * as fsPromises from 'node:fs/promises';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'canonical-usage-auth-'));

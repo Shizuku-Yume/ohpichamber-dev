@@ -8,7 +8,7 @@
 // integrations; format changes are kept local to this implementation.
 import { createRequire } from 'node:module';
 
-const registry = createRequire(import.meta.url)('./settings-registry.json');
+const registry = createRequire(import.meta.url)('../settings/settings-registry.json');
 
 const PREFERENCES_FILE_NAME = 'preferences.json';
 const PREFERENCES_DOCUMENT_VERSION = 1;

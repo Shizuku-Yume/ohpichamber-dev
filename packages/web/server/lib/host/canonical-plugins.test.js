@@ -8,7 +8,7 @@ import express from 'express';
 import request from 'supertest';
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
 import { createAgentServiceSupervisor } from './agent-service-supervisor.js';
-import { createTunnelAuth } from './tunnel-auth.js';
+import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 import { createRequestSecurityRuntime } from '../security/request-security.js';
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'canonical-native-plugin-auth-'));

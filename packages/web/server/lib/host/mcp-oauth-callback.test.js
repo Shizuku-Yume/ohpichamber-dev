@@ -8,10 +8,10 @@ import express from 'express';
 import request from 'supertest';
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
 import { createMcpOAuthPendingFlows } from './mcp-oauth-callback.js';
-import { createTunnelAuth } from './tunnel-auth.js';
+import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 import { createRequestSecurityRuntime } from '../security/request-security.js';
-import { registerCommonRequestMiddleware } from './core-routes.js';
+import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'canonical-mcp-oauth-'));
 const originalDataDirectory = process.env.OPENCHAMBER_DATA_DIR;
