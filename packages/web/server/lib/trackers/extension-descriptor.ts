@@ -1,9 +1,9 @@
 import { isString } from '../shared/guards.js';
 import { extensionProviderId } from '../source-control/provider-id.js';
 
-import type { TrackerContribution } from '@openchamber/sdk';
+import type { TrackerContribution } from 'ohpichamber-sdk';
 import type { TrackerAuthMethod, TrackerDescriptor } from './tracker-contract.js';
-export type { TrackerContribution } from '@openchamber/sdk';
+export type { TrackerContribution } from 'ohpichamber-sdk';
 
 const IDENTIFIER_GROUPS = Object.freeze({
   'key-number': '[A-Za-z][A-Za-z0-9_]{0,31}-\\d{1,16}',
