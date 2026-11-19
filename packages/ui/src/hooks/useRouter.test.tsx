@@ -155,6 +155,25 @@ test('a workspace tab deep link opens without a selected chat', async () => {
   expect(useUIStore.getState().contextPanelByDirectory[DIRECTORY]?.tabs.map((tab) => tab.mode)).toEqual(['git']);
 });
 
+test('a workspace tab deep link opens in the draft directory instead of the previous workspace', async () => {
+  const draftDirectory = '/draft-worktree';
+  window.history.replaceState({}, '', '/?tab=git');
+  useSessionUIStore.getState().setCurrentSession(null);
+  const { newSessionDraft } = useSessionUIStore.getState();
+  useSessionUIStore.setState({ newSessionDraft: { ...newSessionDraft, open: true, directoryOverride: draftDirectory } });
+  useDirectoryStore.setState({ currentDirectory: DIRECTORY });
+  useUIStore.setState({ contextPanelByDirectory: {} });
+
+  try {
+    await act(async () => root.render(<Harness />));
+    const panels = useUIStore.getState().contextPanelByDirectory;
+    expect(panels[draftDirectory]?.tabs.map((tab) => tab.mode)).toEqual(['git']);
+    expect(panels[DIRECTORY]).toBeUndefined();
+  } finally {
+    useSessionUIStore.setState({ newSessionDraft });
+  }
+});
+
 test('a held tab link opens once the session publishes its directory', async () => {
   // Cold load: the URL names the session but neither the workspace nor the
   // active directory is known, so the tab request must be held, not applied to

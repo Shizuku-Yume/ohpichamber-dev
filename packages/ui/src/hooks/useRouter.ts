@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { isDirectoryUnknown, useDirectoryStore } from '@/stores/useDirectoryStore';
+import { resolveEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
 import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import { pushRouteEntry } from '@/lib/router/backGuard';
@@ -88,7 +89,10 @@ export function useRouter(): void {
     let directory = session.currentSessionDirectory;
     if (!route.sessionId && !session.currentSessionId) {
      const workspace = useDirectoryStore.getState();
-     directory = isDirectoryUnknown(workspace) ? null : workspace.currentDirectory;
+     const effectiveDirectory = resolveEffectiveDirectory();
+     directory = effectiveDirectory === workspace.currentDirectory && isDirectoryUnknown(workspace)
+      ? null
+      : effectiveDirectory ?? null;
     }
     if (directory) {
      pendingSurfaceRef.current = null;
