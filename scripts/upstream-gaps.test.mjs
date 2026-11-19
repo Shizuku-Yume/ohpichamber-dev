@@ -107,6 +107,31 @@ test('an unchanged fork passes the guardrail', () => {
   assert.match(result.output, /PASSED/);
 });
 
+test('mounted canonical router prefixes match callers with native filesystem paths', () => {
+  const files = baseFiles();
+  const routes = [
+    ['host/canonical-routes.js', '/ready', '/api/agent/v1/ready'],
+    ['host/file-resource-agent-routes.js', '/files', '/api/agent/v1/files'],
+    ['host/attachment-routes.js', '/:id', '/api/agent/v1/attachments/attachment'],
+    ['host/skill-file-routes.js', '/skills/file', '/api/agent/v1/skills/file'],
+    ['host/skill-catalog-routes.js', '/skills/catalog', '/api/agent/v1/skills/catalog'],
+    ['openchamber-sessions/routes.js', '/:id/snapshot', '/api/agent/v1/sessions/session/snapshot'],
+    ['message-queue/runtime.js', '/sessions/:id/queue', '/api/agent/v1/sessions/session/queue'],
+  ];
+  for (const [index, [file, route, caller]] of routes.entries()) {
+    files['packages/web/server/index.js'] += `\nimport { registerFixture${index}Routes } from './lib/${file}';\nregisterFixture${index}Routes(app);\n`;
+    files[`packages/web/server/lib/${file}`] = `export function registerFixture${index}Routes(router) { router.get('${route}', (_req, res) => res.json({})); }\n`;
+    files[`packages/ui/src/api/canonical${index}.ts`] = `export const load = () => fetch('${caller}');\n`;
+  }
+  const fixture = makeFixture(files);
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/web/server/lib/host/canonical-routes.js', 'export function registerFixture0Routes(router) {}\n');
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /\[ui-call-no-route\] \/api\/agent\/v1\/ready/);
+});
+
 test('deleting a tracker route handler leaves its caller uncovered, even with a 404 fallback mounted', () => {
   const fixture = makeFixture(baseFiles());
   fixture.fork('packages/web/server/lib/trackers/routes.js', TRACKER_ROUTES.replace(/  app\.get\('\/api\/tracker\/things'[\s\S]*?\}\);\n/, ''));
