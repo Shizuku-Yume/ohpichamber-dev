@@ -1,23 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { shouldUpdateLoginItemSettings } from './login-item-settings.mjs';
+import { shouldRefreshLoginItemSettings } from './login-item-settings.mjs';
 
-test('leaves disabled and unregistered login items unchanged', () => {
-  assert.equal(shouldUpdateLoginItemSettings(false, { openAtLogin: false, status: 'not-found' }), false);
-  assert.equal(shouldUpdateLoginItemSettings(false, {}), false);
+test('skips disabled and unregistered login items', () => {
+  assert.equal(shouldRefreshLoginItemSettings({ openAtLogin: false, status: 'not-found' }), false);
+  assert.equal(shouldRefreshLoginItemSettings({}), false);
 });
 
-test('leaves enabled login items unchanged', () => {
-  assert.equal(shouldUpdateLoginItemSettings(true, { openAtLogin: true }), false);
+test('refreshes enabled login items so path and args stay current', () => {
+  assert.equal(shouldRefreshLoginItemSettings({ openAtLogin: true }), true);
 });
 
-test('updates login items only when the preference differs', () => {
-  assert.equal(shouldUpdateLoginItemSettings(true, { openAtLogin: false }), true);
-  assert.equal(shouldUpdateLoginItemSettings(false, { openAtLogin: true }), true);
-});
-
-test('does not write when login-item settings could not be read', () => {
-  assert.equal(shouldUpdateLoginItemSettings(undefined, { openAtLogin: true }), false);
-  assert.equal(shouldUpdateLoginItemSettings(false, null), false);
+test('skips when login-item settings could not be read', () => {
+  assert.equal(shouldRefreshLoginItemSettings(null), false);
+  assert.equal(shouldRefreshLoginItemSettings(undefined), false);
 });

@@ -1690,6 +1690,6 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 Treat electron-updater's `No published versions on GitHub` like a missing platform manifest when no update is pending. Preserve pending downloads on failed checks; keep the production release feed unchanged.
 
-## 2026-11-19 - Reconcile desktop login items only when their enabled state differs
+## 2026-11-19 - Refresh desktop login items only when enabled
 
-The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup compares the captured preference with a fresh OS read and writes only on a difference; unreadable settings never trigger a write. Explicit settings-change IPC remains authoritative and unchanged. Avoid re-registering disabled or already-matching items on every launch.
+The OS login-item settings are the desktop's stored launch-at-login preference. Packaged startup re-registers an enabled login item so its path and background-start args stay current after updates or moves, and skips the write when the item is disabled, unregistered, or unreadable (macOS can reject that no-op write with `Operation not permitted`). Explicit settings-change IPC remains authoritative and unchanged.
