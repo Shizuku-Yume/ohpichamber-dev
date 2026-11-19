@@ -2,6 +2,10 @@ import net from 'node:net';
 import { WebSocket } from 'ws';
 import type { WebSocket as TunnelWebSocket } from '../shared/websocket-contracts.js';
 import type { DevTunnel, DevTunnelClientOptions, DevTunnelInfo, DevTunnelOpenOptions, DevTunnelOpenResult, DevTunnelTarget } from './contracts.js';
+const hasErrorMessage = (value: unknown): value is { message?: unknown } => value != null;
+
+const isPipeAddress = (value: net.AddressInfo | string): value is string => typeof value === 'string';
+
 
 const MAX_PENDING_BYTES = 256 * 1024;
 const HANDSHAKE_TIMEOUT_MS = 15_000;
