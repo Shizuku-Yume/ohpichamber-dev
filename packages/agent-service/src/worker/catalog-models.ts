@@ -61,6 +61,7 @@ export type NativeModelsContext = {
  modelsPath: string;
  oauthProviderIds: () => ReadonlySet<string>;
  currentNativeSessionId: () => string;
+ rememberProviderSecrets?: (values: Iterable<string | undefined>) => void;
 };
 
 // These are canonical records, stored alongside native models/overrides in the native file.
@@ -945,11 +946,15 @@ export class NativeModels {
   const configured = this.metadata.models[modelKey(input)] ?? this.metadata.imageModels[modelKey(input)];
   const resolved = resolveModelSelection(this.context.modelRegistry, input, configured, controls);
   const headers = this.metadata.providerHeaders[input.providerId];
-  if (headers && Object.keys(headers).length > 0) {
-   const model = resolved.nativeModel;
+  const model = resolved.nativeModel;
+  if (model.resolveHeaders || model.headers || (headers && Object.keys(headers).length > 0)) {
    resolved.nativeModel = {
     ...model, headers: undefined,
-    resolveHeaders: async signal => ({ ...(model.resolveHeaders ? await model.resolveHeaders(signal) : model.headers), ...headers })
+    resolveHeaders: async signal => {
+     const resolvedHeaders = { ...(model.resolveHeaders ? await model.resolveHeaders(signal) : model.headers), ...headers };
+     this.context.rememberProviderSecrets?.(Object.values(resolvedHeaders));
+     return resolvedHeaders;
+    }
    };
   }
   return { ...resolved, nativeCredentialSessionId };

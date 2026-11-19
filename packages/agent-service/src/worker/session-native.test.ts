@@ -147,8 +147,8 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?
  return pending.promise;
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey }: {
- respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey, headers }: {
+ respond: (payload: ProviderRequest, root: string, request: Request) => Promise<Response> | Response;
  invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
  machineCommands?: string[];
  onSubagent?: (payload: SubagentLifecyclePayload) => void;
@@ -158,6 +158,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
  reasoningEfforts?: readonly string[];
  denyProviderUse?: (attempt: number) => Error | undefined;
  apiKey?: string;
+ headers?: Record<string, string>;
 }) {
  const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
  const home = process.env.HOME;
@@ -184,7 +185,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   hostname: '127.0.0.1', port: 0, async fetch(request) {
    const payload = ProviderRequestSchema.parse(await request.json());
    requests.push(payload);
-   return respond(payload, cwd);
+   return respond(payload, cwd, request);
   }
  });
  const openWorker = (sessionFile?: string, bootstrapOverrides: Partial<WorkerBootstrapMessage> = {}) => WorkerSession.open({
@@ -250,7 +251,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   await worker.operation({
    type: 'catalog', revision: '1', operation: {
     type: 'catalog.provider.configure', request: {
-     expectedRevision: '0', configuration: {
+     expectedRevision: '0', headers, configuration: {
       providerId: 'native-fixture', name: 'Native fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef,
      }
     }
@@ -350,11 +351,17 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
  return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
 
-test('native HTTP 401 preserves provider detail without echoed credentials in canonical failures', async () => {
+test('native HTTP 401 preserves provider detail without echoed API keys or custom header secrets', async () => {
  const apiKey = 'fixture-invalid-provider-credential';
+ const headerSecret = 'fixture-private-custom-header-value';
+ let receivedHeader: string | null = null;
  const harness = await fixture({
   apiKey,
-  respond: () => Response.json({ error: { message: `Invalid API key (${apiKey}); token=other-private-token`, type: 'authentication_error' } }, { status: 401 }),
+  headers: { 'x-tenant-auth': headerSecret },
+  respond: (_payload, _root, request) => {
+   receivedHeader = request.headers.get('x-tenant-auth');
+   return Response.json({ error: { message: `Invalid API key (${apiKey}); rejected header value ${receivedHeader}; token=other-private-token`, type: 'authentication_error' } }, { status: 401 });
+  },
  });
  try {
   await harness.worker.operation({ type: 'prompt', runId: 'provider-error-run', request: prompt('Reply to this provider error probe.') });
@@ -366,6 +373,9 @@ test('native HTTP 401 preserves provider detail without echoed credentials in ca
   expect(failure.error).toContain('[redacted]');
   expect(failure.error).not.toContain(apiKey);
   expect(failure.error).not.toContain('other-private-token');
+  expect(receivedHeader).toBe(headerSecret);
+  expect(failure.error).not.toContain(headerSecret);
+  expect(JSON.stringify(harness.events)).not.toContain(headerSecret);
   expect(harness.journal.snapshot().turns.at(-1)).toMatchObject({ status: 'failed', error: failure.error });
   await harness.worker.session.sessionManager.flush();
   const entries = harness.worker.session.sessionManager.getBranch();

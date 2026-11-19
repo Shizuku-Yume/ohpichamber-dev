@@ -21,10 +21,14 @@ type BoundCredentialResolver = (
 ) => Promise<BoundProviderCredentialResolution>;
 
 class NativeModelRegistry extends ModelRegistry {
-  private readonly resolvedKeys = new Set<string>();
+  private readonly providerSecrets = new Set<string>();
+
+  rememberProviderSecrets(values: Iterable<string | undefined>): void {
+    for (const value of values) if (value) this.providerSecrets.add(value);
+  }
 
   sanitizeProviderError(text: string): string {
-    for (const key of [...this.resolvedKeys].sort((left, right) => right.length - left.length)) {
+    for (const key of [...this.providerSecrets].sort((left, right) => right.length - left.length)) {
       text = text.split(key).join('[redacted]');
     }
     return text
@@ -56,7 +60,7 @@ class NativeModelRegistry extends ModelRegistry {
     if (model.accountAccess) providerOptions.accountIds = Object.keys(model.accountAccess);
     const resolved = await this.resolveBoundCredential(model.provider, sessionId, providerOptions);
     const key = resolved.bound ? resolved.credential?.apiKey : await super.getApiKey(model, sessionId, options);
-    if (key) this.resolvedKeys.add(key);
+    this.rememberProviderSecrets([key]);
     return key;
   }
 
@@ -67,7 +71,7 @@ class NativeModelRegistry extends ModelRegistry {
   ): Promise<ResolvedApiKey | undefined> {
     const resolved = await this.resolveBoundCredential(provider, sessionId, options);
     const credential = resolved.bound ? resolved.credential : await super.getApiKeyWithCredentialForProvider(provider, sessionId, options);
-    if (credential?.apiKey) this.resolvedKeys.add(credential.apiKey);
+    this.rememberProviderSecrets([credential?.apiKey]);
     return credential;
   }
 }
@@ -114,6 +118,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
       modelsPath,
       oauthProviderIds: () => new Set(getOAuthProviders().filter(provider => provider.available).map(provider => provider.id)),
       currentNativeSessionId: () => currentNativeSessionId(),
+      rememberProviderSecrets: values => modelRegistry.rememberProviderSecrets(values),
     });
     // Startup uses native local/cache discovery only; network entry is authorized at use.
     await modelRegistry.refresh('offline');
