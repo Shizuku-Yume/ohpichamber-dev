@@ -113,165 +113,19 @@ user is still speaking, so only the tail is left to transcribe on stop.
   expected to retain unacked segments for retry/replay.
 - Silence-only segments (peak < 300) are cleared, never committed, so
   Whisper-style providers do not hallucinate on silence.
-<<<<<<< HEAD
 - Model files live under `~/.config/ohpichamber/speech-models`.
 - Model installation verifies required files in a staging directory before promotion. Extraction failures remove the staging directory and cached archive.
-||||||| bc50ba56aa
-- Model files live under `~/.config/openchamber/speech-models`.
-- Model installation verifies required files in a staging directory before promotion. Extraction failures remove the staging directory and cached archive.
-=======
-- Model files live under `~/.config/openchamber/speech-models`.
-- Model installation verifies required files in staging before promotion because the installed check only tests file presence. Extraction failures remove staging and the cached archive. Partial destination directories are removed before retry; recognized model-load or Protobuf failures remove the installed copy so the next attempt can download clean files.
-- Segment byte and peak counters reset when the manager issues a commit. A delayed `committed` event must preserve audio received since that commit, or the tail can be mistaken for silence and discarded.
-- Finalization waits for every commit the manager issues to be acknowledged and for every segment's final transcript. Counting only echoed events can omit a commit still in flight when the client finishes.
-- The correction deadline covers model resolution and generation because the Small Model's own generation budget starts after resolution and cannot bound a stalled lookup. The finalization budget includes the correction pass after transcription.
-- A correction result is emitted only while its original stream state is still registered. Cancellation or timeout makes a late result obsolete.
-- Request-supplied transcription keys remain accepted for older clients that predate server-side voice-key storage. The stored key supplies the fallback.
-- Model deletion is refused during download. Deleting files leaves an already-loaded worker engine alive until idle shutdown; selecting the model again requires its files to be downloaded again.
-- CPU-quota discovery distinguishes an unreadable hierarchy from an unlimited one and checks visible ancestors. A container can hide the process's listed cgroup path while exposing its limit at the mount root.
-- Extraction diagnostics retain only the stderr tail so a failing subprocess cannot grow the server's memory without bound.
->>>>>>> upstream/main
 
 ## Decisions
 
-<<<<<<< HEAD
 ### Why Parakeet TDT v3 is the default model and not v2
-||||||| bc50ba56aa
-### Why Parakeet Ultra is the default model and not v3 or v2
-=======
-### Why stream event fields remain unchecked
-
-The stream manager uses TypeScript but does not validate forwarded worker event
-fields. Segment ids remain unknown map keys, transcript values remain unknown
-until the existing array join converts them, and final flags retain their
-truthiness test. The injected session contract describes the properties consumed
-by the listeners without claiming their values are strings or booleans.
-
-WebSocket start fields likewise remain unknown. Correction stringifies its
-language hint when constructing the prompt, so its options accept the unchecked
-hint the manager already forwards. Rejections retain inherited and non-string
-message values, including primitive boxing and the original truthy fallback.
-
-Contiguous audio chunks are occupied map entries. A missing entry still fails
-rather than skipping audio. A session result without a session and a correction
-state without its callback still fail with TypeError. RMS indexing substitutes
-NaN only for missing numeric samples, preserving JavaScript's comparison result.
-
-### Why provider options stay unchecked until use
-
-WebSocket start options carry unchecked fields. The service keeps the truthiness
-defaults for the compatible configuration, API key and remote language hint.
-The URL and path normalizers check their inputs. The local session forwards the
-language hint via IPC, where model-language resolution checks it. The worker
-client accepts explicitly absent speaker and speed values because it already
-forwards them in the speech request.
-
-The installed OpenAI SDK's constructor leaves a non-string, non-function API key
-unset for authentication. Its multipart encoder handles model and language fields
-with the same conversion and failure rules as other form fields. The local SDK
-declaration describes those inputs without promising that authentication or an
-upstream request will succeed.
-
-Status still fails if an id from the catalog's enumerated keys has no entry.
-Download failures retain a truthy rejection message verbatim, and the corrupt
-model check coerces that message to a string only for the regex match.
-
-### Why the runtime retains unchecked property values
-
-HTTP speech fields and WebSocket messages remain unchecked until their existing
-field checks run. WebSocket start options accept arrays as well as objects.
-The speech-body and rejection-message predicates establish only non-nullish
-property access, including JavaScript's primitive boxing; they do not promise
-string fields or require own properties. Rejection messages remain arbitrary
-values, with the original truthy-message fallback.
-
-`Number.isInteger` remains the speaker-id acceptance check. The speech-error
-predicate retains the service result's truthiness check and distinguishes its
-readiness errors from its audio result. The WebSocket server uses default client
-tracking; a missing client set still throws rather than silently skipping cleanup.
-
-The Small Model's JavaScript destructuring infers required properties for its
-optional arguments. Correction supplies explicit `undefined` for the unused
-arguments; the generation function reads only the destructured values, so these
-remain the same as absent arguments. Service status and speech option types admit
-the explicit `undefined` values the runtime already supplies.
-
-### Why audio indexing preserves missing samples
-
-Typed-array indexing can produce `undefined`. Arithmetic on a missing sample
-produces `NaN`, including fractional RMS frame indices and invalid resampler
-positions. Numeric calculations retain that outcome instead of substituting
-silence or throwing. The resampler carry retains its original null/undefined
-distinction.
-
-IPC buffer views can start at odd byte offsets. PCM helpers copy those views
-before creating an `Int16Array`, which requires an aligned start offset.
-
-The audio helpers import no external modules. Their inputs are PCM buffers,
-format strings and numeric rates supplied by the stream manager and local
-recognizer/worker. The correction helper receives finished text, an optional
-language and an injected Small Model generator. Its deadline, generation
-failure and implausible corrections still fall back to the original text.
-
-### Why Parakeet Ultra is the default model and not v3 or v2
->>>>>>> upstream/main
 
 v2 knows English only and turns any other language into garbage, while v3
-<<<<<<< HEAD
 decodes 25 European languages at the same speed. The default applies only
 while the user has not picked a model (the client sends an empty
 `localModel`). Someone who already has v2 installed keeps v2: v2 was the
 default before, so an installed copy means they dictate with it, and switching
 would cost them a download and English accuracy.
-||||||| bc50ba56aa
-decodes 25 European languages at the same speed. Ultra is Moondream's
-post-trained v3: same architecture, size and speed, fewer errors. On 300
-FLEURS clips per language through our own recognizer (int8, 2 threads), WER
-fell from 9.24% to 8.01% on Ukrainian and from 6.85% to 5.50% on English.
-Nemotron 3.5 ASR Streaming, the other candidate, scored 19.5% and 13.5% on the
-same clips.
-
-k2-fsa publishes no sherpa export of Ultra, so the archive is OpenChamber's
-own, in the `asr-models` pre-release: the sherpa v3 export script run on the
-Ultra `.nemo`. Its transcripts match an independent export word for word on
-all 600 clips. A pre-release keeps the desktop updater, which reads the latest
-full release, away from it.
-
-The default applies only while the user has not picked a model (the client
-sends an empty `localModel`). Someone who already has v2 installed keeps v2:
-v2 was the default before, so an installed copy means they dictate with it,
-and switching would cost them a download and English accuracy. Someone with
-v3 installed, the default before Ultra, keeps dictating with v3 while Ultra
-downloads in the background, so the switch never blocks a dictation.
-=======
-decodes 25 European languages at the same speed. Ultra is Moondream's
-post-trained v3: same architecture, size and speed, fewer errors. On 300
-FLEURS clips per language through our own recognizer (int8, 2 threads), WER
-fell from 9.24% to 8.01% on Ukrainian and from 6.85% to 5.50% on English.
-Nemotron 3.5 ASR Streaming, the other candidate, scored 19.5% and 13.5% on the
-same clips.
-
-k2-fsa publishes no sherpa export of Ultra, so the archive is OpenChamber's
-own, in the `asr-models` pre-release: the sherpa v3 export script run on the
-Ultra `.nemo`. Its transcripts match an independent export word for word on
-all 600 clips. A pre-release keeps the desktop updater, which reads the latest
-full release, away from it.
-
-To export another model of the Parakeet v3 architecture, run sherpa-onnx's
-`scripts/nemo/parakeet-tdt-0.6b-v3/export_onnx.py` on its `.nemo` in a Python
-3.11 venv with `nemo_toolkit[asr]`, `numpy<2`, `pyarrow<20`, `onnx==1.17.0`
-and `onnxruntime==1.17.1`. The encoder's `url` metadata must contain `tdt`,
-or sherpa-onnx 1.13 refuses the model. Pack it as a `.tar.bz2`, upload it to
-the `asr-models` pre-release, and point the entry's `archiveUrl` in
-`local/model-catalog.js` at it.
-
-The default applies only while the user has not picked a model (the client
-sends an empty `localModel`). Someone who already has v2 installed keeps v2:
-v2 was the default before, so an installed copy means they dictate with it,
-and switching would cost them a download and English accuracy. Someone with
-v3 installed, the default before Ultra, keeps dictating with v3 while Ultra
-downloads in the background, so the switch never blocks a dictation.
->>>>>>> upstream/main
 
 A failed background Ultra upgrade waits for the next server start, so each
 dictation does not restart the same failing download.
