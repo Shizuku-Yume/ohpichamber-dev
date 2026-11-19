@@ -2347,11 +2347,10 @@ export class WorkerSession {
           },
         };
       }
-      case 'delete':
+      case 'delete.prepare':
         if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         await this.bind();
-        await this.session.sessionManager.dropSession(this.sessionFile);
-        return { type: 'delete', deletedSessionIds: [this.sessionId] };
+        return { type: 'delete.prepare', sessionFile: this.sessionFile };
     }
     throw new ProjectionError(400, 'INVALID_REQUEST', 'Unsupported worker operation');
   }
