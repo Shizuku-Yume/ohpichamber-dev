@@ -1570,3 +1570,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream gates its binding reads on a repository probe itself, or its router already keeps `general` distinct from the settings root.
 - **Effort:** final-main-audit
+
+## 2026-11-19 - Confirm before closing a dirty file tab
+
+- **Decided:** the desktop tab strip defers single and bulk closes that include the dirty file until the editor confirms the close.
+- **Instead of:** closing directly from the strip and leaving confirmation to the editor's own close shortcut.
+- **Because:** the editor owns the draft, and a direct strip close silently loses it in Manual save mode.
+- **Mine:** yes
+- **Revisit when:** upstream routes all tab-close actions through its editor's unsaved-changes guard.
