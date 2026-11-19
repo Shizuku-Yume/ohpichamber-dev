@@ -32,15 +32,9 @@ interface WorktreeBridgeDependencies {
     branch?: string | null;
     name?: string | null;
   }>) | null;
-  createWorktreeInstanceDisposer?: ((dependencies: {
-    buildOpenCodeUrl: WorktreeBridgeDependencies['buildOpenCodeUrl'];
-    getOpenCodeAuthHeaders: WorktreeBridgeDependencies['getOpenCodeAuthHeaders'];
-  }) => (directory: string) => Promise<void>) | null;
   removeWorktree: typeof removeWorktree;
   deleteBranch: typeof deleteBranch;
   isGitRepository: typeof isGitRepository;
-  buildOpenCodeUrl: (pathname: string, query: string) => string;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
   bootstrapStore: ReturnType<typeof createWorktreeBootstrapStore> | undefined;
 }
 
@@ -62,12 +56,9 @@ export const fillScheduledWorktreeBridge = (bridge: Partial<ScheduledWorktreeBri
 
   const {
     createWorktree,
-    createWorktreeInstanceDisposer,
     removeWorktree,
     deleteBranch,
     isGitRepository,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
     bootstrapStore,
   } = dependencies;
 
@@ -89,9 +80,6 @@ export const fillScheduledWorktreeBridge = (bridge: Partial<ScheduledWorktreeBri
     if (removeDirectory) await removeWorktree(projectDirectory, {
       directory: worktreeDirectory,
       deleteLocalBranch: false,
-      disposeInstance: createWorktreeInstanceDisposer instanceof Function
-        ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
-        : undefined,
     }, { bootstrapStore });
     if (deleteLocalBranch !== false && branch) {
       await deleteBranch(projectDirectory, branch, { force: true, ifExists: true });

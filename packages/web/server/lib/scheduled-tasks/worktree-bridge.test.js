@@ -10,12 +10,9 @@ import { createScheduledTasksRuntime } from './runtime.js';
 
 const dependencies = (overrides = {}) => ({
   createWorktree: vi.fn(async () => ({ path: '/repo/.worktrees/scheduled-run-1', branch: 'openchamber/run', name: 'scheduled-run-1' })),
-  createWorktreeInstanceDisposer: vi.fn(() => 'disposer'),
   removeWorktree: vi.fn(async () => { }),
   deleteBranch: vi.fn(async () => { }),
   isGitRepository: vi.fn(async () => true),
-  buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
-  getOpenCodeAuthHeaders: () => ({ authorization: 'Bearer token' }),
   bootstrapStore: { store: true },
   ...overrides,
 });
@@ -195,7 +192,7 @@ describe('scheduled task worktree bridge', () => {
     expect(bridge.isGitRepository).toBeInstanceOf(Function);
   });
 
-  it('removes the run worktree with its branch and releases its instance by path', async () => {
+  it('removes the run worktree and branch without constructing an engine disposer', async () => {
     const removeWorktree = vi.fn(async () => { });
     const disposer = vi.fn(() => 'disposer');
     const deps = dependencies({
@@ -206,14 +203,10 @@ describe('scheduled task worktree bridge', () => {
 
     await bridge.remove({ projectDirectory: '/repo', worktreeDirectory: '/repo/.worktrees/run-1', deleteLocalBranch: true, branch: 'openchamber/run' });
 
-    expect(disposer).toHaveBeenCalledWith({
-      buildOpenCodeUrl: deps.buildOpenCodeUrl,
-      getOpenCodeAuthHeaders: deps.getOpenCodeAuthHeaders,
-    });
+    expect(disposer).not.toHaveBeenCalled();
     expect(removeWorktree).toHaveBeenCalledWith('/repo', {
       directory: '/repo/.worktrees/run-1',
       deleteLocalBranch: false,
-      disposeInstance: 'disposer',
     }, { bootstrapStore: deps.bootstrapStore });
     expect(deps.deleteBranch).toHaveBeenCalledWith('/repo', 'openchamber/run', { force: true, ifExists: true });
   });
@@ -250,7 +243,7 @@ describe('scheduled task worktree bridge', () => {
     await bridge.remove({ projectDirectory: '/repo', worktreeDirectory: '/repo/.worktrees/run-1' });
 
     expect(removeWorktree.mock.calls[0][1]).toMatchObject({ deleteLocalBranch: false });
-    expect(Object.hasOwn(removeWorktree.mock.calls[0][1], 'disposeInstance')).toBe(true);
+    expect(Object.hasOwn(removeWorktree.mock.calls[0][1], 'disposeInstance')).toBe(false);
     expect(removeWorktree.mock.calls[0][1].disposeInstance).toBeUndefined();
   });
 

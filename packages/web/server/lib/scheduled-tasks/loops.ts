@@ -1,69 +1,84 @@
+/**
+ * Markdown loops — portable scheduled-task definitions.
+ *
+ * Loops are git-commit-able markdown files with YAML frontmatter, discovered
+ * from `.agents/loops/*.md` (project scope, including ancestor directories up
+ * to the worktree root) and `~/.agents/loops/*.md` (user scope).
+ *
+ * File format:
+ *
+ *   ---
+ *   name: daily-digest
+ *   schedule: "0 9 * * *"
+ *   enabled: true
+ *   model: opencode/big-pickle
+ *   agent: plan
+ *   timezone: Europe/Kyiv
+ *   ---
+ *   Summarize repository changes since yesterday and post the digest.
+ *
+ * Field mapping (see packages/ui/src/lib/scheduledTasksApi.ts):
+ *   name     -> task.name
+ *   schedule -> task.schedule.kind "cron" + task.schedule.cron
+ *   enabled  -> task.enabled (default false — loops only run when the file
+ *               explicitly enables them, so discovery never auto-executes
+ *               repository content)
+ *   model    -> split into task.execution.providerID / task.execution.modelID
+ *   agent    -> legacy input-only field; retained if present but ignored at runtime
+ *   timezone -> task.schedule.timezone (optional, defaults to the server zone)
+ *   body     -> task.execution.prompt
+ *
+ * `thinking_level` and `goalEnabled`/`goalTokenBudget` are not part of the
+ * portable format (they are UI-only today); editing them in the file has no
+ * effect and they remain JSON/UI-only.
+ *
+ * Runtime state (lastRunAt, nextRunAt, lastStatus, ...) is never written to
+ * the markdown file; it continues to live in the project config/state store.
+ */
 
 import { asNonEmptyString } from '../shared/guards.js';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseMdFile, writeMdFile } from '../opencode/markdown-files.js';
-import { getAncestors, findWorktreeRoot } from '../opencode/config-files.js';
+import { parseMdFile, writeMdFile, getAncestors, findWorktreeRoot } from '../host/shared.js';
 import { MAX_TASK_NAME_LENGTH } from '../projects/project-config.js';
-import { controlErrorFields } from '../openchamber-control/error.js';
-import { isBoolean } from '../shared/object-guards.js';
-
-export interface LoopDefinition {
-  name: string;
-  enabled: boolean;
-  schedule: { kind: 'cron'; cron: string; timezone?: string };
-  execution: { prompt: string; providerID: string; modelID: string; agent?: string };
-}
-
-export interface LoopFile {
-  filePath: string;
-  scope: 'user' | 'project';
-}
-
-export interface DiscoveredLoop extends LoopFile {
-  definition: LoopDefinition | null;
-  fingerprint?: string;
-}
-
-const isLoopFrontmatter = (value: unknown): value is {
-  name?: unknown;
-  schedule?: unknown;
-  model?: unknown;
-  timezone?: unknown;
-  agent?: unknown;
-  enabled?: unknown;
-} => Boolean(value && typeof value === 'object');
+import { parseModelSelector } from '@openchamber/agent-contract';
 
 const LOOP_DIR_NAME = 'loops';
 const USER_LOOP_ROOT = () => path.join(os.homedir(), '.agents', LOOP_DIR_NAME);
 
-const splitProviderModel = (value: string | null) => {
-  const raw = value;
-  if (!raw) {
-    return null;
-  }
-  const separator = raw.indexOf('/');
-  if (separator <= 0 || separator === raw.length - 1) {
+/**
+ * Split a `provider/model` string into its two parts through the one selector
+ * grammar, which keeps an id's own slashes and any thinking suffix.
+ */
+const splitProviderModel = (value) => {
+  const parsed = parseModelSelector(asNonEmptyString(value) ?? '');
+  if (!parsed) {
     return null;
   }
   return {
-    providerId: raw.slice(0, separator).trim(),
-    modelId: raw.slice(separator + 1).trim(),
+    providerId: parsed.providerId,
+    modelId: parsed.modelId,
+    thinkingLevel: parsed.thinkingLevel,
   };
 };
 
-export const parseLoopDefinition = (filePath: string): LoopDefinition | null => {
+/**
+ * Parse one loop markdown file into a scheduled-task definition, or return
+ * null when the file is malformed. Malformed files are skipped with a warning
+ * and never prevent valid files from loading.
+ */
+export const parseLoopDefinition = (filePath) => {
   let parsed;
   try {
     parsed = parseMdFile(filePath);
   } catch (error) {
-    console.warn(`[loops] skipped malformed loop file ${filePath}:`, controlErrorFields(error)?.message ?? error);
+    console.warn(`[loops] skipped malformed loop file ${filePath}:`, error?.message ?? error);
     return null;
   }
 
-  const frontmatter = isLoopFrontmatter(parsed.frontmatter)
+  const frontmatter = parsed.frontmatter && typeof parsed.frontmatter === 'object'
     ? parsed.frontmatter
     : {};
   const name = asNonEmptyString(frontmatter.name);
@@ -72,6 +87,8 @@ export const parseLoopDefinition = (filePath: string): LoopDefinition | null => 
     return null;
   }
   if (name.length > MAX_TASK_NAME_LENGTH) {
+    // Reject instead of clamping: task names are clamped to this length at
+    // storage time, so identity keys must match the stored value exactly.
     console.warn(`[loops] skipped ${filePath}: frontmatter "name" exceeds ${MAX_TASK_NAME_LENGTH} characters`);
     return null;
   }
@@ -88,7 +105,7 @@ export const parseLoopDefinition = (filePath: string): LoopDefinition | null => 
     return null;
   }
 
-  const providerModel = splitProviderModel(asNonEmptyString(frontmatter.model));
+  const providerModel = splitProviderModel(frontmatter.model);
   if (!providerModel) {
     console.warn(`[loops] skipped ${filePath}: frontmatter "model" must be "provider/model"`);
     return null;
@@ -96,37 +113,42 @@ export const parseLoopDefinition = (filePath: string): LoopDefinition | null => 
 
   const timezone = asNonEmptyString(frontmatter.timezone);
   const agent = asNonEmptyString(frontmatter.agent);
-  const schedule: LoopDefinition['schedule'] = { kind: 'cron', cron };
-  if (timezone) schedule.timezone = timezone;
-  const execution: LoopDefinition['execution'] = {
-    prompt,
-    providerID: providerModel.providerId,
-    modelID: providerModel.modelId,
-  };
-  if (agent) execution.agent = agent;
 
   return {
     name,
-    enabled: isBoolean(frontmatter.enabled) ? frontmatter.enabled : false,
-    schedule,
-    execution,
+    enabled: typeof frontmatter.enabled === 'boolean' ? frontmatter.enabled : false,
+    schedule: {
+      kind: 'cron',
+      cron,
+      ...(timezone ? { timezone } : {}),
+    },
+    execution: {
+      prompt,
+      providerID: providerModel.providerId,
+      modelID: providerModel.modelId,
+      ...(agent ? { agent } : {}),
+    },
   };
 };
 
-export const loopFingerprint = (definition: LoopDefinition) => createHash('sha256')
+/**
+ * What a local approval of a project loop covers: everything that decides
+ * what runs and when. `enabled` is left out, it is what the approval gates.
+ */
+export const loopFingerprint = (definition) => createHash('sha256')
   .update(JSON.stringify({ name: definition.name, schedule: definition.schedule, execution: definition.execution }))
   .digest('hex');
 
-export const setLoopFileEnabled = (filePath: string, enabled: boolean) => {
+export const setLoopFileEnabled = (filePath, enabled) => {
   if (!parseLoopDefinition(filePath)) {
     return false;
   }
   const { frontmatter, body } = parseMdFile(filePath);
-  writeMdFile(filePath, { ...(frontmatter ?? {}), enabled: Boolean(enabled) }, body);
+  writeMdFile(filePath, { ...frontmatter, enabled: Boolean(enabled) }, body);
   return true;
 };
 
-const walkLoopMdFiles = (rootDir: string) => {
+const walkLoopMdFiles = (rootDir) => {
   if (!rootDir || !fs.existsSync(rootDir)) {
     return [];
   }
@@ -140,8 +162,13 @@ const walkLoopMdFiles = (rootDir: string) => {
   }
 };
 
-export const discoverLoopFiles = (projectPath: string | null | undefined) => {
-  const files: LoopFile[] = [];
+/**
+ * Discover loop files for a project: `~/.agents/loops/*.md` (user scope) plus
+ * `.agents/loops/*.md` in every ancestor of the project path up to the
+ * worktree root (project scope).
+ */
+export const discoverLoopFiles = (projectPath) => {
+  const files = [];
   for (const filePath of walkLoopMdFiles(USER_LOOP_ROOT())) {
     files.push({ filePath, scope: 'user' });
   }
@@ -157,9 +184,20 @@ export const discoverLoopFiles = (projectPath: string | null | undefined) => {
   return files;
 };
 
-export const discoverLoops = (projectPath: string | null | undefined) => {
-  const byName = new Map<string, DiscoveredLoop>();
-  const loops: DiscoveredLoop[] = [];
+/**
+ * Discover and parse all loops for a project. Project-scope loops shadow
+ * user-scope loops with the same name; among project files the nearest
+ * ancestor wins.
+ *
+ * Unparseable files are reported as `{ scope, filePath, definition: null }`
+ * entries instead of being dropped: the scheduler must distinguish "file is
+ * gone" (unschedule its task) from "file exists but is currently malformed"
+ * (keep its task with the last good definition until the file is fixed).
+ * Malformed files never block valid ones in the same or other scopes.
+ */
+export const discoverLoops = (projectPath) => {
+  const byName = new Map();
+  const loops = [];
   for (const { filePath, scope } of discoverLoopFiles(projectPath)) {
     const definition = parseLoopDefinition(filePath);
     if (!definition) {
