@@ -3,6 +3,7 @@ import { expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import type { NotificationPayload } from '@/lib/api/types';
+import type { RuntimeEndpointChangedDetail } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
 import { configureRuntimeUrlResolver } from '@/lib/runtime-url';
 import { createWebNotificationsAPI } from '../../../web/src/api/notifications';
@@ -93,8 +94,12 @@ test('shares one control stream, deduplicates main-stream delivery, and retires 
     expect(delivered).toEqual(['Done']);
     useUIStore.setState({ nativeNotificationsEnabled: true });
 
-    configureRuntimeUrlResolver({ apiBaseUrl: 'http://other-runtime.test', realtimeBaseUrl: 'http://other-runtime.test' });
-    window.dispatchEvent(new CustomEvent('openchamber:runtime-endpoint-changed'));
+    const apiBaseUrl = 'http://other-runtime.test';
+    const previousApiBaseUrl = window.location.origin;
+    configureRuntimeUrlResolver({ apiBaseUrl, realtimeBaseUrl: apiBaseUrl });
+    window.dispatchEvent(new CustomEvent<RuntimeEndpointChangedDetail>('openchamber:runtime-endpoint-changed', {
+      detail: { apiBaseUrl, previousApiBaseUrl, runtimeKey: `url:${apiBaseUrl}`, previousRuntimeKey: `url:${previousApiBaseUrl}` },
+    }));
     expect(source.readyState).toBe(EventSourceFixture.CLOSED);
     expect(EventSourceFixture.instances).toHaveLength(2);
     const next = EventSourceFixture.instances[1];

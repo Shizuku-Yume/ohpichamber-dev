@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { blob, createLocalPlace, createTestHost, forConfig, hostState, makeBait, removeTestHosts, unexpectedChanges } from './code-in-bait.js';
 import { createCodeOut, firstRedirectedFolder, nameNotAllowedHere } from './code-out.js';
@@ -2345,7 +2345,7 @@ describe('applyAsChanges after round seven', () => {
     round({ 'one.txt': numbered(10, { 1: 'round two' }) });
     const markers = path.join(host.root, 'clean-ran');
     g(['config', 'filter.slow.clean', `echo ran >> '${forConfig(markers)}'; sleep 6; cat`]);
-    fs.writeFileSync(path.join(repo, '.git', 'info', 'attributes'), '*.txt filter=slow\n');
+    fs.writeFileSync(path.join(repo, '.git', 'info', 'attributes'), own.slice(0, 3).map((name) => `${name} filter=slow\n`).join(''));
     const hashed = [];
     const counting = host.codeOut(null, { readBackTimeoutMs: 5000, files: { ...fs.promises, open: (file, ...rest) => { hashed.push(path.basename(file)); return fs.promises.open(file, ...rest); } } });
     expect(await describeState(host, repo, counting)).toMatchObject({ newPaths: 1, newPathsUndecided: false });
@@ -3552,16 +3552,36 @@ describe.skipIf(WIN)('bringCodeOut from a local stand-in for a space', () => {
     expect(space.g(['rev-parse', RESULT]).trim()).toBe(out.result);
   }, 60_000);
 
-  // A result small enough to arrive between two polls is held to the cap once the fetch is over. The
-  // space's own sender ends normally here, which is what tells the two checks apart.
-  it('refuses a transfer over the cap that arrived in one piece', async () => {
+  it('checks the transfer cap even when the poll has not seen the pack', async () => {
     const host = createTestHost();
     const space = await spaceWithCode(host);
     space.write('middling.bin', crypto.randomBytes(1536 * 1024));
     const before = hostState(space.repo);
-    const failure = await space.out({ maxTransferBytes: 1024 * 1024 }).catch((error) => error);
-    expect(failure).toMatchObject({ code: 'result_transfer_too_large', details: { step: 'fetch into the quarantine' } });
-    expect(space.local.uploadPackExit(), 'the fetch was stopped in the middle, so this proves nothing about the cap after it').toBe('0');
+    let fetchFinished = false;
+    const codeOut = host.codeOut(space.local.place, {
+      git: {
+        ...host.git,
+        async run(directory, args, options) {
+          const result = await host.git.run(directory, args, options);
+          if (path.basename(directory) === 'quarantine.git' && args.includes('fetch')) fetchFinished = true;
+          return result;
+        },
+      },
+    });
+    // Keep the real pack out of the poll's view until Git completes, regardless of transfer speed.
+    const { readdir } = fs.promises;
+    const listing = vi.spyOn(fs.promises, 'readdir').mockImplementation((directory, ...args) => (
+      typeof directory === 'string' && path.basename(directory) === 'quarantine.git' && !fetchFinished
+        ? Promise.resolve([])
+        : readdir(directory, ...args)
+    ));
+    try {
+      await expect(codeOut.bringCodeOut(space.request({ maxTransferBytes: 1024 * 1024 })))
+        .rejects.toMatchObject({ code: 'result_transfer_too_large', details: { step: 'fetch into the quarantine' } });
+      expect(space.local.uploadPackExit()).toBe('0');
+    } finally {
+      listing.mockRestore();
+    }
     expect(anyChangeSince(before, space.repo)).toEqual([]);
   });
 
