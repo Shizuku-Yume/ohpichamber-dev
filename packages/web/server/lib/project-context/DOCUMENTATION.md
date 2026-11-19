@@ -367,13 +367,7 @@ misrepresent or change this behavior.
 
 ## Cross-module contract
 
-<<<<<<< HEAD
 `packages/web/server/lib/host/settings-runtime.js` merges project storage
-||||||| bc50ba56aa
-`packages/web/server/lib/opencode/settings-runtime.js` merges project storage
-=======
-`packages/web/server/lib/settings/settings-runtime.js` merges project storage
->>>>>>> upstream/main
 when a project id changes. Its `mergeProjectContextFiles` step must run before
 `moveDirectoryContents`, because that mover only renames into a free
 destination and would otherwise discard the old `context.json` whenever the
