@@ -81,6 +81,27 @@ describe('native HTML forms', () => {
     expect(context).not.toContain('file:///');
   });
 
+  test('worker reports the rejected field and native constraint while leaving the form pending', async () => {
+    for (const [control, value, message] of [
+      ['<label>Count<input name="count" type="number" min="1" max="5"></label>', '9', 'Count: Must be at most 5'],
+      ['<label>Code<input name="code" minlength="3"></label>', 'ab', 'Code: Needs at least 3 characters'],
+      ['<label>Code<input name="code" pattern="[A-Z]+"></label>', 'abc', 'Code: Must match [A-Z]+'],
+    ]) {
+      const requests: Interaction[] = [];
+      const worker = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => 'turn' });
+      try {
+        const pending = worker.ui.formDialog!(`<form>${control}</form>`);
+        const request = requests[0];
+        if (request?.kind !== 'question') throw new Error('Question missing');
+        expect(() => worker.resolveQuestion(request.questionId, 'answer', {
+          results: [{ id: 'field-0', selectedOptions: [], customInput: value! }],
+        })).toThrow(message);
+        expect(worker.resolveQuestion(request.questionId, 'cancel')).toBe(true);
+        await expect(pending).resolves.toBeUndefined();
+      } finally { worker.close(); }
+    }
+  });
+
   test('worker returns current draft on timeout, including incomplete required values, and releases the handle', async () => {
     const requests: Interaction[] = [];
     const worker = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => 'turn' });

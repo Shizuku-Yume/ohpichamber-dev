@@ -20,6 +20,7 @@ function mediaMarkdown(block: FormBlock): string {
 export class NativeFormDialog {
   readonly form: HtmlForm;
   readonly schema: JsonObject;
+  validationError: string | undefined;
   private current: ExtensionFormDialogResult;
   private readonly defaults: ExtensionFormDialogResult;
 
@@ -66,6 +67,7 @@ export class NativeFormDialog {
   }
 
   update(response: unknown, submit: boolean): boolean {
+    this.validationError = undefined;
     const parsed = AskAnswerSchema.safeParse(response);
     const controls = AskRequestSchema.parse(this.schema).questions;
     if (!parsed.success || parsed.data.results.length !== controls.length) return false;
@@ -92,7 +94,11 @@ export class NativeFormDialog {
           notes.push({ name: field.name!, question: controls[index]!.question!, option: spansText(option.label), value: option.value, text: answer.note.trim() });
         }
       }
-      if (submit && fieldError(field, data[field.name!]) !== undefined) return false;
+      const error = submit ? fieldError(field, data[field.name!]) : undefined;
+      if (error !== undefined) {
+        this.validationError = `${controls[index]!.question}: ${error}`;
+        return false;
+      }
     }
     this.current = { data, ...(notes.length ? { notes } : {}) };
     return true;

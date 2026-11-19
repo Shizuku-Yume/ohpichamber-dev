@@ -209,7 +209,7 @@ export function serializeAskQuestionsMarkdown(prompt: string, questions: readonl
 type QuestionAnswerDelivery = {
   reply: (payload: QuestionAnswerPayload) => Promise<void>;
   recover: () => void;
-  failed: () => void;
+  failed: (error: unknown) => void;
 };
 
 /**
@@ -224,8 +224,8 @@ export async function deliverQuestionAnswer(
   try {
     await delivery.reply(payload);
     return true;
-  } catch {
-    delivery.failed();
+  } catch (error) {
+    delivery.failed(error);
     delivery.recover();
     return false;
   }

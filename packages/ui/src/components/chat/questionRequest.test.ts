@@ -188,6 +188,19 @@ describe('question answer delivery', () => {
     expect(calls).toEqual(['failed', 'recover']);
   });
 
+  test('a rejected native field constraint reaches the error presenter without answering the form', async () => {
+    const error = new Error('Count: Must be at most 5');
+    let reported: unknown;
+    let recovered = false;
+    expect(await deliverQuestionAnswer({
+      reply: async () => { throw error; },
+      failed: (cause: unknown) => { reported = cause; },
+      recover: () => { recovered = true; },
+    }, payload)).toBe(false);
+    expect(reported).toBe(error);
+    expect(recovered).toBe(true);
+  });
+
   test('acceptance marks the reply complete without recovering a stale card', async () => {
     const calls: string[] = [];
     const accepted = await deliverQuestionAnswer({

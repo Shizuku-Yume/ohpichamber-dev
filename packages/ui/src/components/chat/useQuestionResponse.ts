@@ -51,7 +51,7 @@ export function useQuestionResponse(form: QuestionRequest) {
             const accepted = await deliverQuestionAnswer({
                 reply: (next) => sessionActions.replyToForm(form.sessionId, form.questionId, next),
                 recover: recoverPending,
-                failed: () => toast.error(t('chat.questionCard.submitFailed'), { description: t('chat.formCard.tryAgain') }),
+                failed: (error) => toast.error(problemMessage(error, t('chat.questionCard.submitFailed')), { description: t('chat.formCard.tryAgain') }),
             }, payload);
             if (accepted) setHasResponded(true);
             return accepted;

@@ -425,7 +425,7 @@ export class WorkerInteraction {
     const pendingForm = this.formHandles.get(questionId);
     if (pendingForm) {
       if (action === 'answer' || action === 'update') {
-        if (!pendingForm.form.update(response, action === 'answer')) throw new ProjectionError(400, 'INVALID_REQUEST', 'Form response violates its native controls');
+        if (!pendingForm.form.update(response, action === 'answer')) throw new ProjectionError(400, 'INVALID_REQUEST', pendingForm.form.validationError ?? 'Form response violates its native controls');
         if (action === 'update') { pendingForm.options?.onTimeoutReset?.(); return true; }
       }
       this.formHandles.delete(questionId);
