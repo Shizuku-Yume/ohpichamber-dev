@@ -1820,6 +1820,13 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** editor saves already invalidate Git status and the Git panel publishes working-tree changes without changing the index revision. The draft warning must follow those same directory-scoped updates.
 - **Revisit when:** advisory draft dirtiness is derived directly from a bootstrap-safe authoritative store snapshot.
 
+## 2026-11-19 - Remove Agent junctions before NSIS atomic uninstall
+
+- **Decided:** The new Windows installer's customInit and the generated uninstaller's customUnInstall remove directory reparse points beneath the physical Agent runtime root, using non-recursive RMDir without following targets. Physical directories and files remain for normal NSIS removal.
+- **Because:** electron-builder's atomic upgrade removal traverses dependency junctions into paths beyond MAX_PATH and aborts. New-installer cleanup also covers older uninstallers without this hook.
+- **Instead of:** Materializing dependency directory copies or relying on the newly installed uninstaller to repair an upgrade executed by the old one.
+- **Surfaces:** Windows NSIS only; runtime junction semantics and Linux/macOS packaging remain unchanged.
+
 ## 2026-11-19 - Keep child discovery failures distinct from healthy root listings
 
 - **Decided:** Track failed child-discovery parents separately from root-listing failures. Root-only head and workspace listings cannot retire them. A head poll with pending child failures reuses full discovery to retry child reads; full and directory refreshes clear a pending parent only after successful child discovery, including empty results.

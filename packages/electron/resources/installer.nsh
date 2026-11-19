@@ -9,3 +9,5 @@
 !macro customHeader
   ManifestDPIAware true
 !macroend
+
+!include "${__FILEDIR__}\nsis-agent-links.nsh"
