@@ -35,7 +35,8 @@ export const MobileWalkthroughScreen: React.FC<{
   revision: string;
   visible: boolean;
   onBack: () => void;
-}> = ({ directory, target, subtitle, revision, visible, onBack }) => {
+  registerBackHandler?: (handler: (() => boolean) | null) => void;
+}> = ({ directory, target, subtitle, revision, visible, onBack, registerBackHandler }) => {
   const { t } = useI18n();
   const review = useWalkthroughReview({ directory, target, visible, needsSourceSelection: false, revision });
   const { view } = review;
@@ -51,10 +52,17 @@ export const MobileWalkthroughScreen: React.FC<{
     review.handleSelectStop(stopId);
     setReadingAt(generatedAt);
   };
-  const goBack = () => {
+  const goBack = React.useCallback(() => {
     if (reading) setReadingAt(null);
     else onBack();
-  };
+    return true;
+  }, [reading, onBack]);
+
+  React.useEffect(() => {
+    if (!visible || !registerBackHandler) return;
+    registerBackHandler(goBack);
+    return () => registerBackHandler(null);
+  }, [visible, registerBackHandler, goBack]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">

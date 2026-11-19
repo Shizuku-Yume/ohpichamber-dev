@@ -43,6 +43,7 @@ async function createSurface(userAgent: string, platform?: string) {
     CompositionEvent: happyWindow.CompositionEvent,
   });
   const sent: string[] = [];
+  const replies: string[] = [];
   surface = await GhosttyTerminalSurface.create(document.createElement('div'), {
     visible: false,
     labels: { input: 'Terminal input', scrollbar: 'Terminal scrollback' },
@@ -52,6 +53,7 @@ async function createSurface(userAgent: string, platform?: string) {
       cursor: { r: 255, g: 255, b: 255 },
     },
     onData: (data) => sent.push(data),
+    onReply: (data) => replies.push(data),
     onResize() {},
   });
   const field = surface.input;
@@ -76,8 +78,15 @@ async function createSurface(userAgent: string, platform?: string) {
     // happy-dom's CompositionEvent is a bare Event that drops its init.
     field.dispatchEvent(Object.assign(new CompositionEvent(type), { data }));
   };
-  return { sent, field, key, edited, composition, terminal: surface, write: (data: string) => surface?.write(data) };
+  return { sent, replies, field, key, edited, composition, terminal: surface, write: (data: string) => surface?.write(data) };
 }
+
+test('routes a live terminal query reply separately from user input', async () => {
+  const { sent, replies, write } = await createSurface(ANDROID_UA);
+  write('\x1b[6n');
+  expect(replies).toEqual(['\x1b[1;1R']);
+  expect(sent).toEqual([]);
+});
 
 // Sequences recorded on an Android 15 emulator with Gboard 14.2, Chrome 124 and Chromium 158.
 const IME_KEY = { key: 'Unidentified', code: '', keyCode: 229 };
