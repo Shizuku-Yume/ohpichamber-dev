@@ -11,6 +11,14 @@ navigation, expanded sections and editor state. Its `visible` prop combines
 the panel's open state with the selected tab. Hiding via CSS alone does not
 pause React effects.
 
+The desktop context-panel strip asks the file editor before selecting another
+file while its draft is dirty. The editor registers a selection guard beside
+its close guard and reuses the Save/Discard/Cancel dialog: failed saves and
+Cancel keep the current tab and draft; Discard or a completed save allows the
+selection. Clean drafts and reselecting the same path need no prompt. Switching
+to a non-file surface does not change the editor's selected path or unmount it,
+so that draft stays in memory without prompting. There is no per-tab draft cache.
+
 Tabs belong to the panel's directory, the project root. A view showing a
 repository nested under a root that is not one (Git, Changes) still opens its
 diff and file tabs under that root: a tab keyed by the nested repository is
