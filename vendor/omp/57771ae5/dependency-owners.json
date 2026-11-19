@@ -1,0 +1,26 @@
+{
+  "sourceRevision": "57771ae562b9345e0579bceb2d68d585e3e6927e",
+  "sourceConsumerLockSha256": "c8954b4a1c4de79c887c517c4b24420cf19a7d2a66202df93f55d3068bad091d",
+  "overrides": {
+    "@oh-my-pi/omp-stats@19.0.0>lucide-react": "1.47.0",
+    "@oh-my-pi/omp-stats@19.0.0>react": "19.2.7",
+    "@oh-my-pi/omp-stats@19.0.0>react-dom": "19.2.7",
+    "@oh-my-pi/pi-agent-core@19.0.0>@opentelemetry/api": "1.9.1",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@babel/parser": "7.29.9",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/api": "1.9.1",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/api-logs": "0.220.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/context-async-hooks": "2.11.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/exporter-logs-otlp-proto": "0.220.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/exporter-metrics-otlp-proto": "0.220.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/exporter-trace-otlp-proto": "0.220.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/resources": "2.11.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/sdk-logs": "0.220.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/sdk-metrics": "2.11.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/sdk-trace-base": "2.11.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>@opentelemetry/sdk-trace-node": "2.11.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>axe-core": "4.13.0",
+    "@oh-my-pi/pi-coding-agent@19.0.0>puppeteer-core": "25.3.0",
+    "@oh-my-pi/pi-mnemopi@19.0.0>fastembed": "3.0.0",
+    "@oh-my-pi/pi-mnemopi@19.0.0>onnxruntime-node": "1.26.0"
+  }
+}
