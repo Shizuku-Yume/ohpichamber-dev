@@ -8,6 +8,8 @@
 
 Stage 2b W7–W9 automated checks pass: root type-check through mobile; Agent Service 677 pass/12 skip/0 fail; contracts 273 pass; affected UI 231 pass across 12 files. Development.md records receipts and visual/platform limits. Independent review is still required; the owner's Stage 2b request authorizes local commits only.
 
+Stage 3 real browser checks and Linux x64 packaged Agent runtime verification pass. The shared UI gates transient subagent/BTW observations through canonical sequencing; focused regressions and root type-check pass. Development.md owns screenshot paths, compaction results and platform limits. Independent review remains required before effort close; no push or integration into main is authorized.
+
 ## What this is for
 
 Make the OMP 19 vendor pin usable by the Agent Service and its Canonical API consumers without retaining the removed OMP API model.

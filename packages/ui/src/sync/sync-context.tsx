@@ -101,6 +101,12 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
   let contiguous = true
   for (const event of events) {
     if (event.sessionId !== target.sessionId) { contiguous = false; break }
+    if (event.type === "btw.delta" || event.type === "btw.completed" || event.type === "subagent.updated") {
+      const result = applyDirectoryEvent(next, event)
+      if (result.kind === "resnapshot") { contiguous = false; break }
+      if (result.kind === "duplicate") continue
+      next = result.state
+    }
     if ((event.type === "btw.delta" || event.type === "btw.completed") && next.snapshot[target.sessionId]?.session.epoch === event.epoch) {
       if (event.type === "btw.delta") useBtwStore.getState().applyEphemeralDelta(target.sessionId, event.recordId, event.delta)
       else useBtwStore.getState().completeEphemeral(target.sessionId, event.recordId, event.status === 'completed' ? 'completed' : event.status === 'cancelled' ? 'cancelled' : 'failed', event.text)

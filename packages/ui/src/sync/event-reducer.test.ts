@@ -25,6 +25,21 @@ const event = (sequence: string, type: CanonicalEvent["type"], fields: Record<st
 } as CanonicalEvent)
 
 describe("native canonical event reducer", () => {
+  test.each([
+    event("1", "btw.delta", { recordId: "btw-1", delta: "Answer" }),
+    event("1", "btw.completed", { recordId: "btw-1", status: "completed", text: "Answer" }),
+    event("1", "subagent.updated", { subagent: { subagentId: "child", parentSessionId: "session-1", role: "task", status: "completed" } }),
+  ])("ephemeral $type consumes its sequence before the next durable event", observation => {
+    const base = state({ snapshot: { "session-1": snapshot() } })
+    const observed = applyDirectoryEvent(base, observation)
+    expect(observed.kind).toBe("applied")
+    expect(observed.state.snapshot["session-1"]?.session.headSequence).toBe("1")
+    expect(applyDirectoryEvent(observed.state, event("2", "session.status", { runtimeStatus: "idle", activeRunId: null })).kind).toBe("applied")
+    expect(applyDirectoryEvent(observed.state, observation).kind).toBe("duplicate")
+    expect(applyDirectoryEvent(base, { ...observation, sequence: "2" }).kind).toBe("resnapshot")
+    expect(applyDirectoryEvent(base, { ...observation, epoch: "old" }).kind).toBe("resnapshot")
+  })
+
   test("compares arbitrary uint64 counters numerically", () => {
     expect(compareCounters("9007199254740993", "9007199254740992")).toBe(1)
     expect(compareCounters("10", "2")).toBe(1)

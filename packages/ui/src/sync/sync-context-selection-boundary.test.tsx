@@ -39,6 +39,37 @@ const session = (sessionId: string, workspaceId: string): Session => ({
 })
 
 describe("SyncProvider native scope and selection boundaries", () => {
+  test("subagent observations advance the stream without losing terminal frames or admitting stale ones", () => {
+    const dom = installHookTestDom()
+    const manager = new ChildStoreManager()
+    const target = { directory: "/workspace/subagent-events", sessionId: "subagent-parent" }
+    const store = manager.ensureChild(target.directory, { bootstrap: false })
+    const snapshot = nativeSnapshot(target.sessionId)
+    snapshot.session.headSequence = "0"
+    snapshot.cursor = `${snapshot.session.epoch}:0`
+    store.setState(state => installSessionSnapshot(state, snapshot))
+    const envelope = { sessionId: target.sessionId, epoch: snapshot.session.epoch, timestamp: 1 }
+    const subagent = { subagentId: "child", parentSessionId: target.sessionId, childSessionId: "child-session", role: "task", status: "running" as const }
+    const started: CanonicalEvent = { ...envelope, sequence: "1", type: "subagent.updated", subagent }
+    const idle: CanonicalEvent = { ...envelope, sequence: "2", type: "session.status", runtimeStatus: "idle", activeRunId: null }
+    const finished: CanonicalEvent = { ...started, sequence: "3", subagent: { ...subagent, status: "completed" } }
+    try {
+      expect(handleEvents(target, [], manager)).toBe(true)
+      expect(handleEvents(target, [started, idle, finished, { ...idle, sequence: "4" }], manager)).toBe(true)
+      expect(store.getState().snapshot[target.sessionId]?.session.headSequence).toBe("4")
+      expect(useSubagentsStore.getState().byParent[target.sessionId]?.[0]?.status).toBe("completed")
+      expect(handleEvents(target, [started], manager)).toBe(true)
+      expect(handleEvents(target, [{ ...started, sequence: "6" }], manager)).toBe(false)
+      expect(handleEvents(target, [{ ...started, sequence: "5", epoch: "retired-epoch" }], manager)).toBe(false)
+      expect(useSubagentsStore.getState().byParent[target.sessionId]?.[0]?.status).toBe("completed")
+      expect(store.getState().snapshot[target.sessionId]?.session.headSequence).toBe("4")
+    } finally {
+      useSubagentsStore.getState().clearSession(target.sessionId)
+      manager.disposeAll()
+      dom.restore()
+    }
+  })
+
   test.each([false, true])("a cold session opens its worker stream after send, including manual snapshot retry (manual=%s)", async manual => {
     const dom = installHookTestDom()
     const root = createRoot(dom.container)
