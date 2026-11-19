@@ -28,6 +28,10 @@ if (!globalThis.window) {
 
 let lastTabClosedHandler: (() => void) | undefined;
 let terminalViewMounted = false;
+let filesSurfaceProps: {
+  visible?: boolean;
+  registerBackHandler?: (handler: (() => boolean) | null) => void;
+} | undefined;
 
 mock.module('@/components/views/TerminalView', () => ({
   TerminalView: ({ onLastTabClosed, visible }: { onLastTabClosed?: () => void; visible?: boolean }) => {
@@ -54,8 +58,11 @@ mock.module('@/components/sections/status/MobileStatusPane', () => ({
   MobileStatusPane: () => <div />,
 }));
 
-mock.module('@/components/views/files/MobileFilesSurface', () => ({
-  MobileFilesSurface: () => <div />,
+mock.module('./MobileFilesSurface', () => ({
+  MobileFilesSurface: (props: NonNullable<typeof filesSurfaceProps>) => {
+    filesSurfaceProps = props;
+    return <div />;
+  },
 }));
 
 mock.module('@/components/context/ProjectContextPanel', () => ({
@@ -71,6 +78,7 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
   beforeEach(() => {
     lastTabClosedHandler = undefined;
     terminalViewMounted = false;
+    filesSurfaceProps = undefined;
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container as unknown as Element);
@@ -79,6 +87,29 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+  });
+
+  test('forwards viewer Back registration only with the Files visibility state', async () => {
+    const registerBackHandler = () => undefined;
+    const renderDrawer = async (open: boolean) => act(async () => root.render(
+      <I18nProvider>
+        <MobileWorkspaceDrawer
+          open={open}
+          tab="files"
+          onClose={() => undefined}
+          onTabChange={() => undefined}
+          pendingChangesDiff={null}
+          onOpenPlan={() => undefined}
+          registerBackHandler={registerBackHandler}
+          variant="panel"
+        />
+      </I18nProvider>,
+    ));
+    await renderDrawer(true);
+    expect(filesSurfaceProps?.registerBackHandler).toBe(registerBackHandler);
+    expect(filesSurfaceProps?.visible).toBe(true);
+    await renderDrawer(false);
+    expect(filesSurfaceProps?.visible).toBe(false);
   });
 
   test('closing the last terminal tab unmounts the terminal pane and calls onClose', async () => {

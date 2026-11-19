@@ -33,6 +33,9 @@ afterAll(() => { globalThis.fetch = originalFetch; });
 
 const search = mock<FilesAPI['search']>();
 const listDirectory = mock<FilesAPI['listDirectory']>();
+mock.module('@/components/views/FilesView', () => ({
+  FilesView: () => <div data-testid="file-editor" />,
+}));
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
@@ -48,11 +51,15 @@ const webAPIs = createWebAPIs();
 const apis = { ...webAPIs, files: { ...webAPIs.files, search, listDirectory } };
 let container: HTMLElement;
 let root: Root;
+let fileBackHandler: (() => boolean) | null = null;
+const registerBackHandler = (handler: (() => boolean) | null) => { fileBackHandler = handler; };
+let renderSurface: (visible?: boolean) => Promise<void>;
 
 beforeEach(async () => {
   search.mockReset();
   listDirectory.mockReset();
   listDirectory.mockResolvedValue({ directory: '/workspace', entries: [] });
+  fileBackHandler = null;
   useDirectoryStore.setState({ currentDirectory: '/workspace' });
   container = document.createElement('div');
   document.body.append(container);
@@ -65,17 +72,21 @@ beforeEach(async () => {
     messageLoader: new SessionMessageLoader(childStores, { client, runtimeKey }),
     currentDirectory: { get: () => '/workspace', subscribe: () => () => {} },
   };
-  await act(async () => root.render(
+  renderSurface = async (visible = true) => { await act(async () => root.render(
     <I18nProvider>
       <SyncRuntimeContext.Provider value={sync}>
-        <RuntimeAPIContext.Provider value={apis}><MobileFilesSurface /></RuntimeAPIContext.Provider>
+        <RuntimeAPIContext.Provider value={apis}>
+          <MobileFilesSurface visible={visible} registerBackHandler={registerBackHandler} />
+        </RuntimeAPIContext.Provider>
       </SyncRuntimeContext.Provider>
     </I18nProvider>,
-  ));
+  )); };
+  await renderSurface();
 });
 
 afterEach(() => {
   act(() => root.unmount());
+  expect(fileBackHandler).toBeNull();
   container.remove();
 });
 
@@ -132,4 +143,73 @@ test('ignores a failure from a superseded search', async () => {
   await act(async () => oldSearch.reject(new Error('Offline')));
   expect(container.textContent).toContain('README.md');
   expect(button('Retry')).toBeUndefined();
+});
+
+const showFileInBrowser = async () => {
+  listDirectory.mockResolvedValue({ directory: '/workspace', entries: [
+    { name: 'README.md', path: '/workspace/README.md', isDirectory: false },
+  ] });
+  await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label]')!.click());
+  await act(async () => button('README.md')!.click());
+  expect(container.querySelector('[data-testid="file-editor"]')).not.toBeNull();
+};
+
+test('Back returns the viewer to its folder before a second Back closes the workspace', async () => {
+  expect(fileBackHandler).toBeNull();
+  listDirectory.mockImplementation(async (directory) => ({ directory, entries: directory === '/workspace' ? [
+    { name: 'docs', path: '/workspace/docs', isDirectory: true },
+  ] : [
+    { name: 'README.md', path: '/workspace/docs/README.md', isDirectory: false },
+  ] }));
+  await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label]')!.click());
+  await act(async () => button('docs')!.click());
+  await act(async () => button('README.md')!.click());
+  expect(container.querySelector('[data-testid="file-editor"]')).not.toBeNull();
+
+  let workspaceOpen = true;
+  const back = () => {
+    if (fileBackHandler?.()) return;
+    workspaceOpen = false;
+  };
+  await act(async () => back());
+  expect(workspaceOpen).toBe(true);
+  expect(container.querySelector('[data-testid="file-editor"]')).toBeNull();
+  expect(button('README.md')).toBeDefined();
+  expect(listDirectory.mock.calls.at(-1)?.[0]).toBe('/workspace/docs');
+  expect(fileBackHandler).toBeNull();
+  back();
+  expect(workspaceOpen).toBe(false);
+});
+
+test('hidden viewers release Back and the header arrow clears the registration', async () => {
+  await showFileInBrowser();
+  expect(fileBackHandler).not.toBeNull();
+  await renderSurface(false);
+  expect(fileBackHandler).toBeNull();
+  await renderSurface(true);
+  expect(fileBackHandler).not.toBeNull();
+  await act(async () => container.querySelector<HTMLButtonElement>('header button')!.click());
+  expect(fileBackHandler).toBeNull();
+  expect(button('README.md')).toBeDefined();
+});
+
+test('a failed folder reload after Back does not leave a viewer handler registered', async () => {
+  await showFileInBrowser();
+  listDirectory.mockRejectedValueOnce(new Error('Folder not reachable'));
+  await act(async () => { expect(fileBackHandler?.()).toBe(true); });
+  expect(container.textContent).toContain('Folder not reachable');
+  expect(fileBackHandler).toBeNull();
+});
+
+test('a root change releases the old viewer handler', async () => {
+  await showFileInBrowser();
+  expect(fileBackHandler).not.toBeNull();
+  await act(async () => { useDirectoryStore.setState({ currentDirectory: '/other' }); });
+  expect(fileBackHandler).toBeNull();
+  expect(container.querySelector('[data-testid="file-editor"]')).toBeNull();
+});
+
+test('unmounting a viewer releases its Back handler', async () => {
+  await showFileInBrowser();
+  expect(fileBackHandler).not.toBeNull();
 });

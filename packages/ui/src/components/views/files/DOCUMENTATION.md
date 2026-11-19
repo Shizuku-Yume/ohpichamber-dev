@@ -740,6 +740,19 @@ one instance is mounted, in the docked chain or in the fullscreen overlay;
 entering or leaving fullscreen moves unsaved edits through the text draft, as
 the source toggle does, and the other slot remounts from it.
 
+The desktop tab strip asks the mounted editor before closing its dirty file,
+including through a bulk tab-close command. Cancel leaves the tabs and draft
+unchanged; Save closes only after a successful write; Discard closes without
+writing. Closing clean or unrelated tabs does not prompt.
+Autosave pauses while the confirmation is open. If a write had already
+started, the confirmation waits for it and closes only if the draft is clean.
+An autosave failure leaves the draft open for an explicit retry; the next edit
+can schedule a new autosave, but the same failed write is not repeated.
+
+Visual draw.io edits update the same draft as source edits. The XML sent to
+the iframe stays stable while editing; loads, Discard, and switching from
+source to preview supply a new starting document.
+
 `isDirty` (draft differs from file) is not proof of a user edit. The context
 panel keeps one FilesView that follows the selected path, so during a file
 switch the draft and the file briefly belong to different files. React to real
@@ -754,9 +767,9 @@ Key events inside the frame never reach the host, so Cmd/Ctrl+S arrives as the
 frame's `file-save` and runs the same `saveNow` as the keybind. `saveDraft`
 writes the canvas snapshot when the canvas is dirty and the text draft
 otherwise, in the line endings the file was loaded with. It takes one snapshot
-and marks its version saved after the write; `markSaved` clears the dirty flag
-at once and the frame's answer to `file-saved` sets it again when edits landed
-during the write. A canvas that went away with its extension clears the flag
+and marks its version saved after the write. Only the frame's answer to
+`file-saved` can clear the dirty flag, so a tab cannot close while newer
+canvas edits still need saving. A canvas that went away with its extension clears the flag
 instead of keeping autosave writing. The frame's `edited` notices hold
 autosave's timer back until the canvas has been quiet for the full delay.
 

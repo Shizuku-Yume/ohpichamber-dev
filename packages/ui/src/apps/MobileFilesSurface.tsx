@@ -68,14 +68,15 @@ type MobileFilesSurfaceProps = {
   onClose?: () => void;
   /** The surface is on screen; file changes wait for it. */
   visible?: boolean;
+  registerBackHandler?: (handler: (() => boolean) | null) => void;
 };
 
-export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose, visible = true }) => {
+export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose, visible = true, registerBackHandler }) => {
   const root = normalizePathImpl(useEffectiveDirectory() ?? null) ?? '';
-  return <MobileFilesSurfaceForRoot key={root} root={root} onClose={onClose} visible={visible} />;
+  return <MobileFilesSurfaceForRoot key={root} root={root} onClose={onClose} visible={visible} registerBackHandler={registerBackHandler} />;
 };
 
-const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: string; visible: boolean }> = ({ root, onClose, visible }) => {
+const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: string; visible: boolean }> = ({ root, onClose, visible, registerBackHandler }) => {
   const { t } = useI18n();
   const { files } = useRuntimeAPIs();
   const showGitignored = useFilesViewShowGitignored();
@@ -93,6 +94,18 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const currentDirectory = route.type === 'browser' ? route.directory : route.returnDirectory;
   const currentDirectoryRef = React.useRef(currentDirectory);
   currentDirectoryRef.current = currentDirectory;
+
+  const returnToBrowser = React.useCallback(() => {
+    if (route.type !== 'file') return false;
+    setRoute({ type: 'browser', directory: route.returnDirectory });
+    return true;
+  }, [route]);
+
+  React.useEffect(() => {
+    if (!visible || route.type !== 'file' || !registerBackHandler) return;
+    registerBackHandler(returnToBrowser);
+    return () => registerBackHandler(null);
+  }, [visible, route.type, registerBackHandler, returnToBrowser]);
 
   // A background reload (a file change, not a navigation) keeps the listing
   // on screen when it fails.
@@ -221,7 +234,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
             type="button"
             className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={t('header.actions.backAria')}
-            onClick={() => setRoute({ type: 'browser', directory: route.returnDirectory })}
+            onClick={returnToBrowser}
             style={{ touchAction: 'manipulation' }}
           >
             <Icon name="arrow-left" className="size-5" />

@@ -1,4 +1,5 @@
 import React from 'react';
+import type { FileTabCloseGuard } from '@/components/views/FilesView';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
@@ -405,7 +406,7 @@ const maxPanelHeight = (availableHeight: number | null): number => {
  * size and the surfaces that remount on every switch. The keep-alive
  * surfaces are portalled into its body from `ContextSurfacePanes`.
  */
-export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' }) => {
+export const ContextPanel: React.FC<{ zone?: ContextZone; fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null> }> = ({ zone = 'right', fileTabCloseGuard }) => {
   const geometry = ZONE_GEOMETRY[zone];
   const layoutAnimationMs = useLayoutAnimationMs();
   const isVertical = geometry.axis === 'y';
@@ -424,7 +425,6 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
   const placement = useUIStore((state) => state.contextSurfaceZones);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const closeContextZone = useUIStore((state) => state.closeContextZone);
-  const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab);
   const pinContextPanelTab = useUIStore((state) => state.pinContextPanelTab);
   const toggleContextPanelExpanded = useUIStore((state) => state.toggleContextPanelExpanded);
   const setContextZoneSize = useUIStore((state) => state.setContextZoneSize);
@@ -904,6 +904,20 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
         : null;
 
   const isFileTabActive = activeTab?.mode === 'file';
+  const requestCloseTabs = React.useCallback((tabIds: string[]) => {
+    if (!directoryKey) return;
+    const { contextPanelByDirectory, closeContextPanelTabs } = useUIStore.getState();
+    const commitClose = () => closeContextPanelTabs(directoryKey, tabIds);
+    const guard = fileTabCloseGuard.current;
+    if (!guard) {
+      commitClose();
+      return;
+    }
+    const paths = (contextPanelByDirectory[directoryKey]?.tabs ?? []).flatMap((tab) => (
+      tab.mode === 'file' && tab.targetPath && tabIds.includes(tab.id) ? [tab.targetPath] : []
+    ));
+    guard(directoryKey, paths, commitClose);
+  }, [directoryKey, fileTabCloseGuard]);
 
   // Cmd/Ctrl+W in the desktop app closes the strip's active tab here, as its
   // close button does. A file shown in the editor registers from the editor,
@@ -915,23 +929,22 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
     : null;
   React.useEffect(() => {
     if (!directoryKey || !shortcutClosableTabId) return;
-    return registerCloseTabTarget(() => closeContextPanelTab(directoryKey, shortcutClosableTabId), panelRef);
-  }, [closeContextPanelTab, directoryKey, shortcutClosableTabId]);
+    return registerCloseTabTarget(() => requestCloseTabs([shortcutClosableTabId]), panelRef);
+  }, [directoryKey, requestCloseTabs, shortcutClosableTabId]);
 
-  const closeContextPanelTabs = useUIStore((state) => state.closeContextPanelTabs);
   const renderTabContextMenu = React.useCallback(
     (args: { id: string; index: number; allIds: string[]; close: () => void }): React.ReactNode => {
       if (!directoryKey) {
         return null;
       }
       const { id, index, allIds, close } = args;
-      const closeOthers = () => closeContextPanelTabs(directoryKey, allIds.filter((tabId) => tabId !== id));
+      const closeOthers = () => requestCloseTabs(allIds.filter((tabId) => tabId !== id));
       // "Left" and "right" name the screen sides; in RTL the earlier tabs are on the right.
       const before = allIds.slice(0, index);
       const after = allIds.slice(index + 1);
-      const closeToLeft = () => closeContextPanelTabs(directoryKey, isRtl ? after : before);
-      const closeToRight = () => closeContextPanelTabs(directoryKey, isRtl ? before : after);
-      const closeAll = () => closeContextPanelTabs(directoryKey, allIds);
+      const closeToLeft = () => requestCloseTabs(isRtl ? after : before);
+      const closeToRight = () => requestCloseTabs(isRtl ? before : after);
+      const closeAll = () => requestCloseTabs(allIds);
       const hasOthers = allIds.length > 1;
       const nothingToLeft = isRtl ? index === allIds.length - 1 : index === 0;
       const nothingToRight = isRtl ? index === 0 : index === allIds.length - 1;
@@ -969,7 +982,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
         </>
       );
     },
-    [activeTab, closeContextPanelTabs, directoryKey, isRtl, t],
+    [activeTab, directoryKey, isRtl, requestCloseTabs, t],
   );
 
   // A tab dragged out of the strip moves its whole surface to a zone.
@@ -1041,12 +1054,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
             }
             setActiveContextPanelTab(directoryKey, tabID);
           }}
-          onClose={(tabID) => {
-            if (!directoryKey) {
-              return;
-            }
-            closeContextPanelTab(directoryKey, tabID);
-          }}
+          onClose={(tabID) => requestCloseTabs([tabID])}
           onReorder={(activeTabID, overTabID) => {
             if (!directoryKey) {
               return;

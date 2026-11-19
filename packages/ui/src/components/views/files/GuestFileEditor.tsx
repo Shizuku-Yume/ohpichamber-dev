@@ -100,9 +100,6 @@ export const GuestFileEditor = React.forwardRef<FileCanvasHandle, GuestFileEdito
       },
       markSaved: (signature) => {
         channel?.markSaved(signature);
-        // The editor answers `file-saved` with its own state; edits made while
-        // the write ran turn this back to dirty.
-        eventsRef.current.onDirtyChange(false);
       },
     }), [channel, contentKind, t, title]);
 

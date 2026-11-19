@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { TerminalView } from '@/components/views/TerminalView';
+import type { FileTabCloseGuard } from '@/components/views/FilesView';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { BrowserPane } from '@/components/browser/BrowserPane';
 import { ChatView } from '@/components/views/ChatView';
@@ -260,7 +261,7 @@ const ZonePane: React.FC<{
  * refs and begin their layout animation in layout effects, both of which have
  * to run before the panes attach and the settle step queues behind them.
  */
-export const ContextSurfacePanes: React.FC = () => {
+export const ContextSurfacePanes: React.FC<{ fileTabCloseGuard: React.RefObject<FileTabCloseGuard | null> }> = ({ fileTabCloseGuard }) => {
   const { t } = useI18n();
   const effectiveDirectory = useEffectiveDirectory() ?? '';
   const directoryKey = React.useMemo(
@@ -605,7 +606,14 @@ export const ContextSurfacePanes: React.FC = () => {
             // Hidden rather than unmounted so a hidden editor keeps its state.
             <div className={cn('h-full min-w-0 flex-1', hasOpenEditorFile && !showsEditor && 'hidden')}>
               {hasOpenEditorFile ? (
-                <React.Suspense fallback={null}><FilesView mode="editor-only" visible={!contentHidden(fileZone.zone) && isFileTabActive && showsEditor} onCloseFile={handleCloseEditorFile} /></React.Suspense>
+                <React.Suspense fallback={null}>
+                  <FilesView
+                    mode="editor-only"
+                    visible={!contentHidden(fileZone.zone) && isFileTabActive && showsEditor}
+                    onCloseFile={handleCloseEditorFile}
+                    fileTabCloseGuard={fileTabCloseGuard}
+                  />
+                </React.Suspense>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                   <Icon name="file-code" className="h-12 w-12 text-muted-foreground/50" />
