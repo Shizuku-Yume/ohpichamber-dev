@@ -3,12 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { prepareWebAgentRuntime, resolveBunExecutable } from './prepare-agent-runtime.mjs';
 import { stageChangelog } from './stage-changelog.mjs';
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(webRoot, '../..');
-const backupPath = path.join(os.tmpdir(), 'ohpichamber-package-json-backup.json');
+const backupKey = createHash('sha256').update(webRoot).digest('hex').slice(0, 12);
+const backupPath = path.join(os.tmpdir(), `ohpichamber-package-json-backup-${backupKey}.json`);
 
 export function runPrepack() {
   const bunPath = resolveBunExecutable();

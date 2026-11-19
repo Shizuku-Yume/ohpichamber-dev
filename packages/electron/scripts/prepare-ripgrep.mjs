@@ -12,8 +12,7 @@ const outputDir = path.join(electronRoot, 'resources', 'ripgrep');
  * in `Resources/ripgrep` (`packages/web/server/lib/fs/ripgrep.js`). This fork
  * does not depend on `@vscode/ripgrep`, so the binary is taken from ripgrep
  * already installed on the build host: `OPENCHAMBER_RIPGREP` when set, then
- * `rg` on `PATH`, then the standalone install OpenChamber's own runtime cache
- * carries.
+ * `rg` on `PATH`.
  *
  * The staged binary is verified to be ripgrep before it ships, and a missing
  * one fails the build instead of leaving `Resources/ripgrep` empty for the
@@ -22,10 +21,6 @@ const outputDir = path.join(electronRoot, 'resources', 'ripgrep');
  * for another architecture must set `OPENCHAMBER_RIPGREP` to that binary.
  */
 const binaryName = process.platform === 'win32' ? 'rg.exe' : 'rg';
-const knownLocations = () => [
- path.join(process.env.HOME || '', '.cache', 'opencode', 'bin', binaryName),
- path.join(process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache'), 'opencode', 'bin', binaryName),
-];
 
 const isExecutableFile = (candidate) => {
  try {
@@ -40,7 +35,7 @@ const candidates = () => {
  const onPath = (process.env.PATH || '').split(path.delimiter)
   .filter(Boolean)
   .map((directory) => path.join(directory, binaryName));
- return [...(configured ? [configured] : []), ...onPath, ...knownLocations()];
+ return [...(configured ? [configured] : []), ...onPath];
 };
 
 const readRipgrepVersion = (binaryPath) => {

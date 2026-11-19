@@ -150,6 +150,12 @@ export class CatalogCoordinator {
   private readonly skillSnapshots = new Map<string, SkillsCatalogState>();
   private readonly pluginSnapshots = new Map<string, PluginRuntimeState>();
   private readonly hydrating = new Map<string, Promise<void>>();
+  /**
+   * The root a session currently serves, once a `/btw` branch rekeys it. The
+   * worker registration and its snapshots move in `rekey`; readers that hold
+   * the admitted identity still need the live one.
+   */
+  private readonly roots = new Map<string, string>();
   private tail: Promise<void> = Promise.resolve();
   private initialized = false;
   private readonly file: string;
@@ -264,6 +270,52 @@ export class CatalogCoordinator {
   retire(rootSessionId: string, generation: string): void {
     const worker = this.workers.get(rootSessionId);
     if (worker?.identity.workerGeneration === generation) this.dropWorker(worker);
+  }
+
+  /**
+   * Follow a session rekey (a completed `/btw` branch mints a new native
+   * session id). The worker registration and every catalog snapshot keyed by
+   * the old root id move together, so a root-addressed MCP or skill read still
+   * resolves the live worker instead of answering 503.
+   */
+  rekey(previousRootSessionId: string, rootSessionId: string): void {
+    if (previousRootSessionId === rootSessionId) return;
+    for (const [previous, current] of this.roots) {
+      if (current === previousRootSessionId) this.roots.set(previous, rootSessionId);
+    }
+    this.roots.set(previousRootSessionId, rootSessionId);
+    const worker = this.workers.get(previousRootSessionId);
+    if (!worker) return;
+    this.workers.delete(previousRootSessionId);
+    const moved = { ...worker, identity: { ...worker.identity, rootSessionId } };
+    this.workers.set(rootSessionId, moved);
+    const mcp = this.mcpSnapshots.get(previousRootSessionId);
+    if (mcp) {
+      this.mcpSnapshots.delete(previousRootSessionId);
+      this.mcpSnapshots.set(rootSessionId, {
+        ...mcp,
+        workerCatalog: { ...mcp.workerCatalog, worker: { ...mcp.workerCatalog.worker, rootSessionId } },
+      });
+    }
+    const skills = this.skillSnapshots.get(previousRootSessionId);
+    if (skills) {
+      this.skillSnapshots.delete(previousRootSessionId);
+      this.skillSnapshots.set(rootSessionId, { ...skills, worker: { ...skills.worker, rootSessionId } });
+    }
+    const plugins = this.pluginSnapshots.get(previousRootSessionId);
+    if (plugins) {
+      this.pluginSnapshots.delete(previousRootSessionId);
+      this.pluginSnapshots.set(rootSessionId, { ...plugins, worker: { ...plugins.worker, rootSessionId } });
+    }
+  }
+
+  /**
+   * The root a session serves now. A reader that captured the admitted id
+   * before a `/btw` branch resolves the minted id here; an unrekeyed session
+   * answers itself.
+   */
+  liveRoot(rootSessionId: string): string {
+    return this.roots.get(rootSessionId) ?? rootSessionId;
   }
 
   async readMcp(rootSessionId: string): Promise<MCPCatalogRead> {
@@ -959,6 +1011,7 @@ export class CatalogCoordinator {
     this.mcpSnapshots.delete(worker.identity.rootSessionId);
     this.skillSnapshots.delete(worker.identity.rootSessionId);
     this.pluginSnapshots.delete(worker.identity.rootSessionId);
+    for (const [previous, current] of this.roots) if (current === worker.identity.rootSessionId) this.roots.delete(previous);
   }
 
   private serial<T>(operation: () => Promise<T>): Promise<T> {

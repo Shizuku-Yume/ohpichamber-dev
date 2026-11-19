@@ -1,6 +1,4 @@
 import React from 'react';
-import { RiCheckLine, RiDeleteBinLine, RiFolder6Line } from '@remixicon/react';
-
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,7 +92,7 @@ const WorktreeRow: React.FC<{
           onClick={onDelete}
           style={{ touchAction: 'manipulation' }}
         >
-          <RiDeleteBinLine className="size-4" />
+          <Icon name="delete-bin" className="size-4" />
         </button>
       )}
     </div>
@@ -153,11 +151,15 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
     setIsDiscovering(true);
     void discoverProjectIcon(project.id)
       .then((result) => {
-        if (!result.ok) {
+        if (result.status === 'failed') {
           toast.error(result.error || t('projectEditDialog.toast.failedToDiscoverIcon'));
           return;
         }
-        if (result.skipped) {
+        if (result.status === 'no-favicon-found') {
+          toast.info(t('projectEditDialog.toast.iconNotFound'));
+          return;
+        }
+        if (result.status === 'custom-icon-present') {
           toast.success(t('projectEditDialog.toast.customIconAlreadySet'));
           return;
         }
@@ -199,7 +201,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
             disabled={!name.trim()}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiCheckLine className="size-4" />
+            <Icon name="check" className="size-4" />
             {t('projectEditDialog.actions.save')}
           </Button>
         }
@@ -220,12 +222,12 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                       iconColor: currentTheme.colors.surface.foreground,
                     }}
                     className="size-full object-contain"
-                    fallback={<RiFolder6Line className="size-7" />}
+                    fallback={<Icon name="folder-6" className="size-7" />}
                   />
                 ) : previewIconName ? (
                   <Icon name={previewIconName} className="size-7" style={currentColorVar ? { color: currentColorVar } : undefined} />
                 ) : (
-                  <RiFolder6Line className="size-7" style={currentColorVar ? { color: currentColorVar } : undefined} />
+                  <Icon name="folder-6" className="size-7" style={currentColorVar ? { color: currentColorVar } : undefined} />
                 )}
               </span>
             </div>

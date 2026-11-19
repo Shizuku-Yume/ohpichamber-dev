@@ -136,12 +136,12 @@ export function tokenizeComposer(
             const word = magicMatch[0].toLowerCase();
             const className =
                 word === 'ultrathink'
-                    ? 'bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent font-semibold'
+                    ? 'text-[var(--status-error)] font-semibold'
                     : word === 'orchestrate'
-                    ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500 bg-clip-text text-transparent font-semibold'
-                    : word === 'workflowz'
-                    ? 'bg-gradient-to-r from-amber-500 via-lime-500 to-emerald-500 bg-clip-text text-transparent font-semibold'
-                    : 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-amber-500 bg-clip-text text-transparent font-semibold';
+                        ? 'text-[var(--status-success)] font-semibold'
+                        : word === 'workflowz'
+                            ? 'text-[var(--status-warning)] font-semibold'
+                            : 'text-[var(--primary-base)] font-semibold';
             ranges.push({ start, end, style: 'attention', className, priority: 100 });
         }
     }
@@ -157,7 +157,7 @@ export function tokenizeComposer(
                 start,
                 end,
                 style: 'attention',
-                className: 'px-1 py-0.5 rounded text-xs font-mono font-medium bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+                className: 'px-1 py-0.5 rounded text-xs font-mono font-medium bg-[var(--status-warning-background)] text-[var(--status-warning-text)] border border-[var(--status-warning-border)]',
                 priority: 95,
             });
         }

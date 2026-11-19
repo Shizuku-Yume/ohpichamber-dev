@@ -77,12 +77,14 @@ export const UsageToolsSchema = z.discriminatedUnion('mode', [
   z.strictObject({ mode: z.literal('detail'), totals: UsageToolTotalsSchema, usage: z.array(UsageToolUsageSchema) }),
 ]);
 export type UsageTools = z.infer<typeof UsageToolsSchema>;
-const FailureShape = {
+const FailureStructure = {
   partial: z.boolean(),
   errors: z.record(UsageIdentitySchema, z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/)).optional(),
 };
 export const UsageToolsResponseSchema = z.strictObject({
-  totals: UsageToolTotalsSchema, usage: z.array(UsageToolUsageSchema), ...FailureShape,
+  totals: UsageToolTotalsSchema,
+  usage: z.array(UsageToolUsageSchema),
+  ...FailureStructure,
 });
 export type UsageToolsResponse = z.infer<typeof UsageToolsResponseSchema>;
 const UsageStatusSchema = z.enum(['ok', 'warning', 'exhausted', 'unknown']);
@@ -142,6 +144,6 @@ export const UsageStatsSchema = z.strictObject({
   pricing: UsagePricingSchema.nullable().optional(),
   errorRate: z.number().min(0).max(1).optional(),
   accounts: UsageAccountsSchema.optional(),
-  ...FailureShape,
+  ...FailureStructure,
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;

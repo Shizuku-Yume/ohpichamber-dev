@@ -161,31 +161,52 @@ describe('tokenizeComposer — ranges are usable', () => {
     });
 });
 describe('tokenizeComposer — magic keywords and turn budget', () => {
-    test('standalone magic keyword in prose is styled with attention and gradient shimmer', () => {
-        const ranges = tokenizeComposer('please ultrathink this', context());
-        const ultra = ranges.find(r => r.style === 'attention' && r.className?.includes('from-red-500'));
-        expect(ultra).toBeDefined();
+    const classTokens = (className?: string) => (className ?? '').split(/\s+/).filter(Boolean);
+
+    test('standalone magic keyword in prose is styled with attention and status color token', () => {
+        const cases = [
+            ['please ultrathink this', 'ultrathink', 'text-[var(--status-error)]'],
+            ['please orchestrate this', 'orchestrate', 'text-[var(--status-success)]'],
+            ['please workflowz this', 'workflowz', 'text-[var(--status-warning)]'],
+            ['please jevify this', 'jevify', 'text-[var(--primary-base)]'],
+        ] as const;
+
+        for (const [text, keyword, expectedToken] of cases) {
+            const ranges = tokenizeComposer(text, context());
+            const match = ranges.find(
+                r =>
+                    text.slice(r.start, r.end) === keyword &&
+                    r.style === 'attention' &&
+                    classTokens(r.className).includes(expectedToken) &&
+                    classTokens(r.className).includes('font-semibold'),
+            );
+            expect(match).toBeDefined();
+            expect(match?.priority).toBe(100);
+        }
     });
 
-    test('magic keyword inside inline code or code block is not shimmered', () => {
+    test('magic keyword inside inline code or code block does not emit attention', () => {
         const ranges = tokenizeComposer('`ultrathink`\n```\njevify\n```', context());
-        const shimmer = ranges.filter(r => r.style === 'attention' && r.className?.includes('from-'));
-        expect(shimmer).toHaveLength(0);
+        const attentionRanges = ranges.filter(r => r.style === 'attention');
+        expect(attentionRanges).toHaveLength(0);
     });
 
     test('embedded keyword with hyphens, dots, or calls is not treated as standalone prose', () => {
         const ranges = tokenizeComposer('ultrathink-mode ultrathink.ts foo/ultrathink ultrathink()', context());
-        const shimmer = ranges.filter(r => r.style === 'attention' && r.className?.includes('from-'));
-        expect(shimmer).toHaveLength(0);
+        const attentionRanges = ranges.filter(r => r.style === 'attention');
+        expect(attentionRanges).toHaveLength(0);
 
-        const punctuationRanges = tokenizeComposer('"ultrathink", (orchestrate)!', context());
-        const punctShimmer = punctuationRanges.filter(r => r.style === 'attention' && r.className?.includes('from-'));
-        expect(punctShimmer).toHaveLength(2);
+        const punctText = '"ultrathink", (orchestrate)!';
+        const punctuationRanges = tokenizeComposer(punctText, context());
+        const punctAttention = punctuationRanges.filter(r => r.style === 'attention');
+        expect(punctAttention).toHaveLength(2);
+        expect(punctAttention.map(r => punctText.slice(r.start, r.end))).toEqual(['ultrathink', 'orchestrate']);
+        expect(classTokens(punctAttention[0]?.className)).toContain('text-[var(--status-error)]');
+        expect(classTokens(punctAttention[1]?.className)).toContain('text-[var(--status-success)]');
     });
-
     test('turn budget directive +50k! in prose is highlighted with amber badge', () => {
         const ranges = tokenizeComposer('deploy now +50k!', context());
-        const budget = ranges.find(r => r.style === 'attention' && r.className?.includes('bg-amber-500/20'));
+        const budget = ranges.find(r => r.style === 'attention' && r.className?.includes('bg-[var(--status-warning-background)]'));
         expect(budget).toBeDefined();
     });
 });

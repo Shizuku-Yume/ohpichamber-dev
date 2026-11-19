@@ -9,7 +9,7 @@ import { Icon } from '@/components/icon/Icon';
 import { toast } from '@/components/ui';
 import { useBtwStore } from '@/stores/useBtwStore';
 import { extractBtwInject, type BtwPanelState } from './useBtwPanelState';
-import { openSessionLink } from '@/lib/router/openSessionFromRoute';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 
 /** The transient `/btw` answer panel. */
 const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; onExit: () => void }> = ({
@@ -37,17 +37,20 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
         setPromoting(true);
         try {
             const result = await canonicalClient.branchFromBtw(parentSessionId, panel.ephemeralRecordId);
+            // The branch rekeys the session: the service and the Host retire the
+            // pre-branch id, so the selection, projection and caches must move to
+            // the minted id before anything reads the old one again.
+            const rekeyedSessionId = result.sessionId && result.sessionId !== parentSessionId ? result.sessionId : null;
+            if (rekeyedSessionId) useSessionUIStore.getState().rekeySession(parentSessionId, rekeyedSessionId);
             toast.success(t('chat.btw.promoteSuccess'));
-            useBtwStore.getState().setPanelState(parentSessionId, {
+            const panelOwner = rekeyedSessionId ?? parentSessionId;
+            useBtwStore.getState().setPanelState(panelOwner, {
                 ephemeralRecordId: undefined,
                 ephemeralText: '',
                 ephemeralStatus: 'idle',
                 collapsed: true,
             });
             onExit();
-            if (result.sessionId && result.sessionId !== parentSessionId) {
-                void openSessionLink(result.sessionId, null);
-            }
         } catch (err) {
             toast.error(err instanceof Error ? err.message : String(err));
         } finally {

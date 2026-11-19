@@ -25,6 +25,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import * as sessionActions from '@/sync/session-actions';
 import { buildLinkedIssue } from '@/lib/linkedIssues';
 import { normalizePath } from '@/lib/pathNormalization';
+import { useIsGitRepo } from '@/stores/useGitStore';
 import { getSourceControlAuthKey, getSourceControlReadContextAuthState, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { getFreshestSourceControlStatusForBranch, getSourceControlStatusKey, useBranchTrackedPulls, useGitHubPrStatusStore, type SourceControlStatus } from '@/stores/useGitHubPrStatusStore';
 import { useTrackedItems } from '@/lib/trackedItems/interest';
@@ -274,6 +275,9 @@ export const PullRequestSection: React.FC<{
   );
   const openSourceControlSettings = useOpenSourceControlSettings();
   const { sourceControl } = useRuntimeAPIs();
+  // The binding route answers 422 for a folder that is no repository, so its
+  // read waits for the probe to say this folder is one.
+  const isGitRepo = useIsGitRepo(directory);
   const confirmation = useConfirmDialog();
   const sourceControlAuthEntries = useSourceControlAuthStore((state) => state.entries);
   const { isMobile, hasTouchInput, screenWidth } = useDeviceInfo();
@@ -329,7 +333,7 @@ export const PullRequestSection: React.FC<{
   const [changeIdRevision, setChangeIdRevision] = React.useState(0);
 
   const [isContextOpen, setIsContextOpen] = React.useState(false);
-  const binding = useRepositoryBinding(directory, sourceControl);
+  const binding = useRepositoryBinding(directory, sourceControl, isGitRepo === true);
   const runtimeKey = binding.scope.runtimeKey;
   React.useEffect(() => {
     if (!directory) return;

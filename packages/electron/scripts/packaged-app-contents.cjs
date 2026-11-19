@@ -9,7 +9,7 @@ const WEB_PACKAGE = 'node_modules/ohpichamber';
 
 // Packaged builds serve the UI from Resources/web-dist (OPENCHAMBER_DIST_DIR),
 // so the web package's own build output is dead weight inside the archive.
-const FORBIDDEN_DIRECTORIES = [`${WEB_PACKAGE}/dist`];
+const FORBIDDEN_DIRECTORIES = [`${WEB_PACKAGE}/dist`, `${WEB_PACKAGE}/resources/agent-runtime`];
 
 // ripgrep ships in Resources/ripgrep for the target architecture
 // (prepare-ripgrep.mjs). The npm platform packages hold the build host's
@@ -37,6 +37,8 @@ const REQUIRED_FILES = [
   // Loaded by server/lib/host/agent-runtime.js when the Host starts the Agent
   // Service; a packaged app without it fails every launch.
   `${WEB_PACKAGE}/scripts/standalone-loader.mjs`,
+  `${WEB_PACKAGE}/resources/standalone-sdk/dist/index.js`,
+  `${WEB_PACKAGE}/resources/changelog/index.json`,
 ];
 
 // Run by git and ssh as separate processes, so they must exist on disk.

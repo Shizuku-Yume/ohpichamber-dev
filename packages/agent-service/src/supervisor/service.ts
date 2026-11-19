@@ -234,6 +234,13 @@ export class AgentService {
       options.approvalPolicyLoad,
       options.permissionAuthority,
       sessionIds => this.sessionWarming.clear(sessionIds),
+      // A completed /btw branch rekeys the session inside its worker. The
+      // catalog and warming owners live outside the registry, so they follow
+      // here; otherwise their root-addressed reads answer 503 after a Promote.
+      async (previousSessionId, sessionId) => {
+        this.catalog.rekey(previousSessionId, sessionId);
+        await this.sessionWarming.rekey(previousSessionId, sessionId);
+      },
     );
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
     this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
@@ -322,58 +329,63 @@ export class AgentService {
     return result.sources;
   }
   private async registerCatalogWorker(input: WorkerBootstrap, generation: string): Promise<void> {
-    const root = input.rootSessionId;
+    // A completed `/btw` branch rekeys the session inside its worker, so these
+    // closures must follow the live root instead of capturing the admitted one;
+    // a captured root made the MCP and skill catalog routes answer 503 after a
+    // Promote to Branch even though the worker was still serving the session.
+    const admittedRoot = input.rootSessionId;
+    const root = { current: admittedRoot, live: (): string => this.catalog.liveRoot(admittedRoot) };
     if (input.agentDirectoryId === undefined) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'A catalog worker requires an agent directory id');
     await this.catalog.register({
-      identity: { rootSessionId: root, workspaceId: input.workspaceId, agentDirectoryId: input.agentDirectoryId, workerGeneration: generation },
-      isLive: () => this.workers.authorizationScope(root)?.workerGeneration === generation,
+      identity: { rootSessionId: root.current, workspaceId: input.workspaceId, agentDirectoryId: input.agentDirectoryId, workerGeneration: generation },
+      isLive: () => this.workers.authorizationScope(root.live())?.workerGeneration === generation,
       mcp: {
         read: async configuration => {
-          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'read', configuration } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'mcp', operation: { type: 'read', configuration } }, generation);
           if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.catalog operation.');
           return result.result.catalog;
         },
         apply: async (request, configuration) => {
-          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'apply', request, configuration } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'mcp', operation: { type: 'apply', request, configuration } }, generation);
           if (result.type !== 'mcp' || result.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.applied operation.');
           return result.result.result;
         },
         reconnect: async (serverId, request, configuration) => {
-          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }, generation);
           if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.catalog operation.');
           return result.result.catalog;
         },
         oauthStatus: async (serverId, configuration) => {
-          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'oauth.status', serverId, configuration } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'mcp', operation: { type: 'oauth.status', serverId, configuration } }, generation);
           if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.oauth operation.');
           return result.result.result;
         },
         oauth: async (serverId, request, configuration) => {
-          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'oauth', serverId, request, configuration } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'mcp', operation: { type: 'oauth', serverId, request, configuration } }, generation);
           if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.oauth operation.');
           return result.result.result;
         },
       },
       skills: {
         read: async persistedSources => {
-          const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.read', persistedSources } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.read', persistedSources } }, generation);
           if (result.type !== 'catalog' || result.result.type !== 'skills.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested skills.catalog operation.');
           return result.result.catalog;
         },
         apply: async (sources, catalogRevision) => {
-          const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.apply', request: { scope: 'workspace', sourceRevision: sources.workspace }, sources, catalogRevision } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.apply', request: { scope: 'workspace', sourceRevision: sources.workspace }, sources, catalogRevision } }, generation);
           if (result.type !== 'catalog' || result.result.type !== 'skills.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested skills.applied operation.');
           return result.result.result;
         },
         expand: async request => {
-          const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.expand', request } }, generation);
+          const result = await this.workers.request(root.live(), { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.expand', request } }, generation);
           if (result.type !== 'catalog' || result.result.type !== 'skills.expanded') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested skills.expanded operation.');
           return result.result.result;
         },
       },
     });
     if (input.pluginRevision !== undefined) this.catalog.publishPluginRuntime({
-      rootSessionId: root,
+      rootSessionId: root.live(),
       workspaceId: input.workspaceId, workerGeneration: generation
     }, input.pluginRevision);
   }

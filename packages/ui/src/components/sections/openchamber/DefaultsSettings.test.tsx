@@ -88,11 +88,18 @@ const mockOmpSettings = {
   ],
 };
 
+// A settings read the Agent Service refuses (provider/service trouble) must
+// surface as a failed row, not as a control that says "loading" forever.
+let failOmpSettings = false;
+
 mock.module('@/api/canonicalClient', () => ({
-  CanonicalApiError: class extends Error {},
+  CanonicalApiError: class extends Error { },
   canonicalClient: {
     resolveWorkspace: async () => ({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'repo' }),
-    getOmpSettings: async () => mockOmpSettings,
+    getOmpSettings: async () => {
+      if (failOmpSettings) throw new Error('Agent Service settings read failed');
+      return mockOmpSettings;
+    },
     getModels: async () => mockModelCatalog,
     updateOmpSettings: async () => mockOmpSettings,
     readCacheWarming: async () => ({ mode: 'off' }),
@@ -108,6 +115,11 @@ const { useUIStore } = await import('@/stores/useUIStore');
 const { useSessionDisplayStore } = await import('@/stores/useSessionDisplayStore');
 const { DefaultsSettings } = await import('./DefaultsSettings');
 const persistence = await import('@/lib/persistence');
+const syncRefs = await import('@/sync/sync-refs');
+// The composer's Plan availability is read from the workspace catalog, which
+// the sync layer re-reads when a role write changes it.
+let catalogRefreshCalls = 0;
+let refreshSpy: ReturnType<typeof spyOn> | undefined;
 const settle = async () => {
   await act(async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -121,10 +133,15 @@ describe('DefaultsSettings', () => {
   let root: Root;
 
   beforeEach(() => {
+    failOmpSettings = false;
     updatedDesktopSettingsPayload = null;
+    catalogRefreshCalls = 0;
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
+    refreshSpy = spyOn(syncRefs, 'refreshDirectoryCatalogs').mockImplementation(() => {
+      catalogRefreshCalls += 1;
+    });
     updateSpy = spyOn(persistence, 'updateDesktopSettings').mockImplementation(async (payload) => {
       updatedDesktopSettingsPayload = payload as Record<string, unknown>;
       return { ok: true };
@@ -136,6 +153,7 @@ describe('DefaultsSettings', () => {
       root.unmount();
     });
     host.remove();
+    refreshSpy?.mockRestore();
     updateSpy?.mockRestore();
   });
 
@@ -199,6 +217,84 @@ describe('DefaultsSettings', () => {
     expect(host.querySelector('[data-settings-item="omp.retry.maxRetries"]')).not.toBeNull();
     expect(host.querySelector('[data-settings-item="omp.retry.fallbackChains"]')).toBeNull();
     expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')).not.toBeNull();
+  });
+
+  test('a failed settings read says so instead of spinning the plan model row forever', async () => {
+    failOmpSettings = true;
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <DefaultsSettings />
+        </I18nProvider>,
+      );
+    });
+    await settle();
+
+    // A failure is a status notice, never a settings jump target: it names no
+    // anchor, so searching for it cannot land on nothing.
+    const notice = host.querySelector('p[role="status"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.textContent).toBeTruthy();
+    expect(notice?.parentElement?.getAttribute('data-settings-item') ?? undefined).toBeUndefined();
+
+    // The plan row is still drawn; the read failure is what it reports.
+    const planRow = host.querySelector('[data-settings-item="sessions.default-plan"]');
+    expect(planRow).not.toBeNull();
+  });
+
+  test('the plan model role is drawn with the Plan & Goal Modes it unlocks', async () => {
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <DefaultsSettings />
+        </I18nProvider>,
+      );
+    });
+    await settle();
+
+    // The composer disables Plan from the catalog's `planRoleAvailable`, which
+    // OMP resolves from `modelRoles.plan`; the control belongs beside the mode.
+    const modesSection = host.querySelector('[data-settings-item="sessions.plan-goal"]');
+    expect(modesSection).not.toBeNull();
+    const planRow = modesSection?.querySelector('[data-settings-item="sessions.default-plan"]');
+    expect(planRow).not.toBeNull();
+
+    // It is not a default-session row, so it must not sit in the defaults grid.
+    const defaultsSection = host.querySelector('[data-settings-item="omp.modelRoles"]');
+    expect(defaultsSection?.querySelector('[data-settings-item="sessions.default-plan"]')).toBeNull();
+  });
+
+  test('writing a model role re-reads the catalog that decides Plan availability', async () => {
+    catalogRefreshCalls = 0;
+
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <DefaultsSettings />
+        </I18nProvider>,
+      );
+    });
+    await settle();
+
+    // The plan editor writes `modelRoles` through the same path as the
+    // default model; that write invalidates `planRoleAvailable`.
+    await act(async () => {
+      const defaultsSection = host.querySelector('[data-settings-item="omp.modelRoles"]');
+      const picker = defaultsSection?.querySelector('button');
+      picker?.click();
+    });
+    await settle();
+
+    const option = document.querySelector('[role="option"]');
+    expect(option).not.toBeNull();
+    await act(async () => {
+      if (option instanceof HTMLElement) option.click();
+    });
+    await settle();
+
+    // The write is in the shared agent directory, so the composer's directory —
+    // not only the one this page names — must re-read its catalog.
+    expect(catalogRefreshCalls).toBe(1);
   });
 
   test('default session mode selector updates useUIStore', async () => {

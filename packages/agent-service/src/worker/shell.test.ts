@@ -7,7 +7,7 @@ import type { RunningShell } from '@openchamber/agent-contract';
 import { WorkerShell } from './shell.ts';
 
 function createMockStreams(records: Array<{ id: number; producer: string; consumer: string; data: string | Uint8Array; open: boolean }>): PipeStreams {
-  return {
+  const streams: PipeStreams = {
     list() {
       return records.map(r => ({
         id: r.id,
@@ -30,7 +30,8 @@ function createMockStreams(records: Array<{ id: number; producer: string; consum
         open: match.open,
       };
     },
-  } as unknown as PipeStreams;
+  };
+  return streams;
 }
 
 describe('WorkerShell streams, stdin, and job widgets', () => {
@@ -541,4 +542,40 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
     expect(res.stream.end).toBe(fullBytes.length);
     expect(res.stream.open).toBe(false);
   });
+});
+
+test('a session rekey moves every shell job identity and the snapshot scope to the minted id', async () => {
+  const manager = new AsyncJobManager({ onJobComplete: () => { } });
+  const daemon: DaemonSnapshot = {
+    name: 'service', id: 'daemon-1', state: 'running', pid: 1111, createdAt: 1000, startedAt: 1000,
+    restartCount: 0, outputBytes: 0, persist: true, detached: false, owner: 'session-1',
+  };
+  const shell = new WorkerShell({
+    manager, workspaceId: 'ws-1', projectId: 'proj-1', sessionId: 'session-1',
+    workerGeneration: 'gen-1', epoch: 'epoch-1', cwd: '/workspace',
+    listServices: async () => [daemon, { ...daemon, id: 'foreign', owner: 'other-session' }],
+  });
+  const startRes = await shell.operation({ type: 'start', request: { command: 'sleep 5', background: true } });
+  expect(startRes.type).toBe('start');
+  if (startRes.type !== 'start') throw new Error('A shell start must return its job');
+  expect(startRes.job.sessionId).toBe('session-1');
+  shell.rekey('session-minted');
+  // The Host resolves a shell job by the root the worker registers under, so
+  // the job, the ended records and the scope must all name the minted id.
+  // Before the rekey these stayed on the retired id and every read 503ed.
+  const snapshot = await shell.operation({ type: 'snapshot' });
+  expect(snapshot.type).toBe('snapshot');
+  if (snapshot.type !== 'snapshot') throw new Error('A shell snapshot must return its scope');
+  expect(snapshot.snapshot.scope).toEqual({ kind: 'session', sessionId: 'session-minted' });
+  const running = snapshot.snapshot.running.find(job => job.jobId === startRes.job.jobId);
+  expect(running?.sessionId).toBe('session-minted');
+  expect(snapshot.snapshot.running.filter(job => job.jobId.startsWith('service:'))).toMatchObject([
+    { jobId: 'service:daemon-1', sessionId: 'session-minted' },
+  ]);
+  const stop = await shell.operation({
+    type: 'stop',
+    request: { job: { jobId: startRes.job.jobId, sessionId: 'session-minted', epoch: startRes.job.epoch, workerGeneration: startRes.job.workerGeneration } },
+  });
+  expect(stop.type).toBe('stop');
+  await shell.close();
 });

@@ -156,6 +156,28 @@ export class SessionWarming {
     }));
   }
 
+  /**
+   * Move a persisted per-session warming override after the session is rekeyed
+   * by a completed `/btw` branch, so its keep-warm choice still names the live
+   * root and the reaper does not evict the branch's worker.
+   */
+  async rekey(previousSessionId: string, sessionId: string): Promise<void> {
+    if (previousSessionId === sessionId) return;
+    const existing = this.entries.get(previousSessionId);
+    if (!existing) return;
+    await this.stateMutation(async () => {
+      this.entries.delete(previousSessionId);
+      this.entries.set(sessionId, { ...existing, sessionId });
+      try {
+        await this.persist();
+      } catch (error) {
+        this.entries.delete(sessionId);
+        this.entries.set(previousSessionId, existing);
+        throw error;
+      }
+    });
+  }
+
   async clear(sessionIds: Iterable<string>): Promise<void> {
     const targetIds = new Set(sessionIds);
     if (targetIds.size === 0) return;

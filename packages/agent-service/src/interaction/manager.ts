@@ -228,6 +228,37 @@ export class InteractionManager {
       ?? this.policies.get(this.policyKey(sessionId, workspaceId, 'session', target));
   }
 
+  /**
+   * Move a session's pending approvals, questions and session-scoped policies
+   * to the id a completed `/btw` branch minted. The worker kept answering the
+   * old request ids, so only the addressed session id moves; the requests
+   * themselves are re-addressed so a pending approval is still actionable.
+   */
+  rekey(previousSessionId: string, sessionId: string): void {
+    if (previousSessionId === sessionId) return;
+    const prior = this.sessions.get(previousSessionId);
+    if (prior) { this.sessions.delete(previousSessionId); this.sessions.set(sessionId, prior); }
+    for (const [id, grant] of this.executionGrants) if (grant.sessionId === previousSessionId) this.executionGrants.set(id, { ...grant, sessionId });
+    for (const [id, record] of this.records) {
+      if (record.request.sessionId !== previousSessionId) continue;
+      if (record.kind === 'approval') {
+        const request: ApprovalRequest = { ...record.request, sessionId };
+        this.records.set(id, { ...record, request });
+      } else {
+        const request: QuestionRequest = { ...record.request, sessionId };
+        this.records.set(id, { ...record, request });
+      }
+    }
+    const workspaceId = this.sessions.get(sessionId)?.workspaceId;
+    for (const [key, policy] of this.policies) {
+      if (policy.scope !== 'session') continue;
+      if (this.policyKey(previousSessionId, workspaceId ?? '', 'session', policy.target) !== key) continue;
+      this.policies.delete(key);
+      if (workspaceId === undefined) continue;
+      this.policies.set(this.policyKey(sessionId, workspaceId, 'session', policy.target), policy);
+    }
+  }
+
   closeSession(sessionId: string): void {
     this.invalidate(sessionId);
     this.sessions.delete(sessionId);

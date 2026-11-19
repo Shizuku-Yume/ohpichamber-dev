@@ -1531,3 +1531,42 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** `@oh-my-pi/pi-coding-agent` exposes a two-phase session-graph API that separates workspace tool, extension, and prompt construction from `SessionManager`, `MCPManager`, `AgentRegistry` `sessionFile`, and `getApiKey` binding, or the unprepared `POST /sessions` path becomes a user-facing path whose 600 ms first-delta budget is unwaived.
 - **Effort:** tech-debt-sweep
+
+## 2026-11-18 - Remove OpenCode service and environment variables
+
+- **Decided:** delete `packages/web/server/lib/environment/opencode-service-env.js` and `packages/web/server/lib/environment/opencode-service-env.test.js`, remove `readOpenCodeServiceEnv` and `forOpenCode` from `packages/web/server/lib/environment/runtime.js` and `packages/web/server/lib/environment/runtime.test.js`, and update `packages/web/server/lib/environment/DOCUMENTATION.md`.
+- **Instead of:** keeping the OpenCode service-env reader and `forOpenCode` hook on `createEnvironmentRuntime`.
+- **Because:** OhPiChamber runs the OMP Agent Service rather than a managed OpenCode process, so `opencode service set env` variables are unused.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** never; OpenCode service-env compatibility is retired.
+- **Effort:** final-main-audit
+
+## 2026-11-18 - Stage standalone SDK, exclude agent-runtime from ASAR, and configure standalone loader roots
+
+- **Decided:** Stage `ohpichamber-sdk` into `packages/web/resources/standalone-sdk` during both Electron asset builds (`packages/electron/scripts/build-web-assets.mjs`) and npm prepack (`packages/web/scripts/prepack.mjs`), keep `packages/web/package.json` publishing `resources/agent-runtime`, `resources/changelog`, `resources/standalone-sdk`, and `scripts/standalone-loader.mjs` under `ohpichamber` 1.0.0 with a worktree-scoped `package.json` backup/restore in `prepack.mjs`/`postpack.mjs`, exclude `node_modules/ohpichamber/resources/agent-runtime` from Electron `app.asar` while verifying `standalone-loader.mjs`, `standalone-sdk/dist/index.js`, and `changelog/index.json` in `packaged-app-contents.{cjs,test.cjs}`, and pass `{ runtimeRoot, sdkRoot }` via `registerStandaloneLoader` and `Module.register` `initialize()` data in `standalone-loader.mjs` while skipping `.asar` paths.
+- **Instead of:** Bundling `agent-runtime` inside `app.asar`, resolving `ohpichamber-sdk` only from workspace `node_modules`, using a single shared `/tmp` `package.json` backup path across worktrees, or relying on `findRuntimeRoot()` without explicit packaged roots.
+- **Because:** Bun cannot execute `agent-runtime` binaries or resolve symlinks from inside Electron's virtual ASAR archive; standalone npm installs and packaged Electron apps lack workspace symlinks for `ohpichamber-sdk` and `@openchamber/agent-*` until `standalone-loader.mjs` resolves them using `initialize()`-propagated roots; and concurrent worktree packs clobbered the shared backup file.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** Electron and npm distributions consume published packages directly without staged `resources/agent-runtime` or `resources/standalone-sdk`.
+- **Effort:** final-main-audit
+
+
+## 2026-11-19 - Task 04 walkthrough rework fixes
+
+- **Decided:** the three fork-differs paths the Task 04 rework left without a class keep the fork blob and are recorded as `decision` rows: `MobileEffortButton.tsx` passes `t` into `formatEffortLabel`, `ProjectsPage.test.tsx` asserts the project page's `data-settings-page-heading` target, and `useProviderLogo.ts` builds a `models.dev` URL only for a provider the catalog or the bundled map knows.
+- **Instead of:** reverting them to upstream's unlocalized label, test without the heading assertion, and unguarded `https://models.dev/logos/<id>.svg` probe.
+- **Because:** each file carries a fix from this effort rather than an unrelated drift: the effort button rendered the effort level in the default locale (`faf0189437`), the project page's heading focus target is a settings-page contract its test must pin (`10fc8d746e`), and a custom `models.yml` provider such as `CLIProxyAPI` gave a failed remote image request in every session (`ff73f5ba9e`).
+- **Mine:** yes
+- **Revisit when:** upstream localizes effort labels itself, or its settings pages stamp the heading target so the fork's test assertion has nothing to pin.
+- **Effort:** final-main-audit
+
+## 2026-11-19 - Second-round walkthrough fixes own their fork-differs paths
+
+- **Decided:** the seven `fork-differs` paths the second walkthrough fix round left without a class keep the fork blob and are recorded as `decision` rows: the mobile settings navigation module and its test, the Git operation recovery hook and its test, `cycleThinkingVariant`, and the router's `parseRoute` and its test.
+- **Instead of:** reverting them to upstream's nav-only settings entry, ungated binding read, variant-only effort cycle and `settings=general` root alias.
+- **Because:** each file carries a fix the effort requires: the phone opened every deep-linked settings slug as the nav list (`5a6a053d28`), the desktop root request had to stay explicit while `general` stopped being a root alias (`ff07861164`), the recovery hook read the binding route for a folder Git had not proved a repository (`d36656aa8f`), and the phone's effort button derived levels from legacy route variants instead of the shared model levels (`9ce2395e79`).
+- **Mine:** yes
+- **Revisit when:** upstream gates its binding reads on a repository probe itself, or its router already keeps `general` distinct from the settings root.
+- **Effort:** final-main-audit

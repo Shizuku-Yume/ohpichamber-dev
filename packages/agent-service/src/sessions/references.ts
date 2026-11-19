@@ -107,6 +107,42 @@ export class SessionReferences {
     const reference = this.records.get(sessionId);
     return reference ? structuredClone(reference) : null;
   }
+  /**
+   * Re-address one root reference after the Agent Service rekeys a live session
+   * (a completed `/btw` branch mints a new native session id). The durable
+   * reference and its subagent index move in one write, so the retired id can
+   * never outlive the transcript it no longer names and a crash cannot leave
+   * both ids listed.
+   */
+  rekey(previousSessionId: string, reference: SessionReference): Promise<void> {
+    this.ensureReady();
+    const parsed = SessionReferenceSchema.parse(reference);
+    if (parsed.rootSessionId === previousSessionId) throw new SessionReferenceError(400, 'INVALID_REQUEST', 'A session rekey must name a new identity');
+    return this.enqueue(async () => {
+      this.assertWritable(previousSessionId);
+      this.assertWritable(parsed.rootSessionId);
+      const previous = this.records.get(previousSessionId);
+      if (!previous) throw new SessionReferenceError(404, 'SESSION_NOT_FOUND', 'The addressed session reference is not registered');
+      if (this.records.has(parsed.rootSessionId)) throw new SessionReferenceError(409, 'INVALID_REQUEST', 'The new session identity is already registered');
+      const references = { ...this.values };
+      delete references[previousSessionId];
+      references[parsed.rootSessionId] = referenceJson(parsed);
+      const subagents = { ...this.subagentValues };
+      const moved = (subagents[previousSessionId] ?? []).map(row => ChildReferenceSchema.parse({
+        ...row, rootSessionId: parsed.rootSessionId,
+        parentSessionId: row.parentSessionId === previousSessionId ? parsed.rootSessionId : row.parentSessionId,
+      }));
+      delete subagents[previousSessionId];
+      if (moved.length > 0) subagents[parsed.rootSessionId] = moved;
+      await this.persist(references, this.relocations, subagents);
+      this.values = references;
+      this.subagentValues = subagents;
+      this.records.delete(previousSessionId);
+      this.malformed.delete(previousSessionId);
+      this.records.set(parsed.rootSessionId, parsed);
+      for (const row of moved) this.childRecords.set(row.subagentId, row);
+    });
+  }
 
   list(workspaceId?: string) {
     this.ensureReady();

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Modelos Zen',
   'quota.value.requests': 'Solicitudes: {count}',
@@ -7592,6 +7593,7 @@ export const dict = {
   "snippets.source.global": "global",
   "snippets.source.project": "proyecto",
   "chat.chatInput.toast.compactFailed": "No se pudo comprimir la sesión",
+  "chat.chatInput.toast.compactNotNeeded": "Esta sesión es demasiado corta para compactarla todavía.",
   "chat.chatInput.toast.forkFailed": "No se pudo bifurcar la sesión",
   "chat.chatInput.toast.forkNothingToFork": "Aún no hay nada que bifurcar: ninguna respuesta ha terminado en esta sesión",
   "chat.chatInput.toast.forkSendFailed": "Bifurcada, pero el mensaje no se envió. Está de nuevo en el editor.",
@@ -7975,6 +7977,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "No se pudo descubrir el icono del proyecto",
   "projectEditDialog.toast.customIconAlreadySet": "Icono personalizado ya establecido para este proyecto",
   "projectEditDialog.toast.iconDiscovered": "Icono del proyecto descubierto",
+  "projectEditDialog.toast.iconNotFound": "No se encontró ningún favicon en este proyecto",
   "openInApp.actions.open": "Abrir",
   "openInApp.actions.openInAria": "Abrir en {app}",
   "openInApp.actions.chooseAppAria": "Elegir aplicación para abrir",
@@ -8008,7 +8011,7 @@ export const dict = {
   "projects.opencodeTrust.saveFailed": "No se pudo guardar tu respuesta. Inténtalo de nuevo.",
   "projectActions.actions.autoDiscoverTooltip": "Detecta y ejecuta automáticamente el servidor de desarrollo",
   "projectActions.actions.chooseActionAria": "Elegir acción del proyecto",
-  "projectActions.actions.openPreview": "Abrir Preview",
+  "projectActions.actions.openPreview": "Abrir vista previa",
   "projectActions.actions.runNamedAria": "Ejecutar {name}",
   "projectActions.actions.stopNamedAria": "Detener {name}",
   "projectActions.label.fallbackAction": "Acción",
@@ -9318,4 +9321,5 @@ export const dict = {
   "settings.usage.state.error": "No se pudo cargar el uso.",
 
   "chat.workStatus.mcp.unknown": "Los servidores MCP aún no se han cargado.",
+  ...effortI18n.es,
 };

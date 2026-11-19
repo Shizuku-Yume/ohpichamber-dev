@@ -85,7 +85,7 @@ export const guestGrantScope = (guest) => {
         urls: sortedUnique(guest.tracker.urls.item),
       };
     }
-    // A usage provider receives the credentials OpenCode holds for the providers
+    // A usage provider receives the credentials OMP holds for the providers
     // it lists; the approval covers that list, empty included. Absent for every other service.
     if (serviceProvides(guest.service, 'quota') && guest.quota) {
       scope.service.quota = { providers: sortedUnique(guest.quota.providers) };

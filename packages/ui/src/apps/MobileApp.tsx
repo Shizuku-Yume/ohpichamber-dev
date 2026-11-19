@@ -75,7 +75,7 @@ import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components
 import { MobileWorkspaceDrawer } from './MobileWorkspaceDrawer';
 import { shownMobileWorkspaceTabs, type MobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
 import { DedicatedMobileAppProvider, useMobileSettingsSurfaceOpener, type MobileAppActions } from './mobileAppContext';
-import { connectMobileSettingsNavigation } from './mobileSettingsNavigation';
+import { connectMobileSettingsNavigation, MOBILE_SETTINGS_PAGES } from './mobileSettingsNavigation';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
 import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
 import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
@@ -93,31 +93,6 @@ import {
   IPAD_WORKSPACE_SIDEBAR_MAX_WIDTH,
   useIpadSidebarResize,
 } from './ipadSidebarResize';
-
-const MOBILE_SETTINGS_PAGES = [
-  'general',
-  'appearance',
-  'chat',
-  'notifications',
-  'sessions',
-  'routing',
-  'git',
-  'magic-prompts',
-  'snippets',
-  'agents',
-  'commands',
-  'mcp',
-  'plugins',
-  'skills.installed',
-  'skills.catalog',
-  'providers',
-  'web-search',
-  'omp',
-  'usage',
-  'voice',
-  'integrations',
-  'about',
-] as const;
 
 type MobileAppProps = {
   apis: RuntimeAPIs;

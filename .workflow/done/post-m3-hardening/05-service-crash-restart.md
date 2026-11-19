@@ -2,7 +2,7 @@
 
 **Effort:** post-m3-hardening
 **Task type:** bugfix
-**Base commit:** 05dd108e4
+**Base commit:** d09f2282952cb68cbab05d6e9bf548356ec51e69
 **Started:** 2026-10-23T12:51:45+08:00
 **Finished:** 2026-10-23T14:28:00+08:00
 

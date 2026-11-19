@@ -8,12 +8,25 @@ const EXCLUDED_APP_SCHEMES = new Set([
   'ohpichamber', 'openchamber-ui', 'capacitor',
 ]);
 
+export const tryParseExternalUrl = (target) => {
+  try {
+    const parsed = new URL(target);
+    const scheme = parsed.protocol.slice(0, -1);
+    if (scheme === 'http' || scheme === 'https') return parsed;
+    if (!/^[a-z][a-z0-9+.-]{1,31}$/.test(scheme) || EXCLUDED_APP_SCHEMES.has(scheme)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
 export const parseExternalUrl = (target) => {
-  const parsed = new URL(target);
-  const scheme = parsed.protocol.slice(0, -1);
-  if (scheme === 'http' || scheme === 'https') return parsed;
-  if (!/^[a-z][a-z0-9+.-]{1,31}$/.test(scheme) || EXCLUDED_APP_SCHEMES.has(scheme)) {
+  const parsed = tryParseExternalUrl(target);
+  if (!parsed) {
     throw new Error('URL scheme cannot be opened externally');
   }
   return parsed;
 };
+

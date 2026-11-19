@@ -27,6 +27,7 @@ const SessionReopenScopeSchema = z.strictObject({
   env: z.record(z.string(), z.string()).optional(),
   hostTools: z.record(z.string(), z.boolean()).optional(),
 });
+const NativeSessionListSchema = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) });
 const COLD_REFUSAL_CODES = new Set(['SESSION_NOT_FOUND', 'SERVICE_UNAVAILABLE', 'SESSION_RESTORE_FAILED']);
 /**
  * A verified refusal that means the addressed root has no live worker, so a
@@ -172,8 +173,33 @@ const createCanonicalSessionService = (dependencies) => {
       return result;
     }
   };
+  const admissionRecoveries = new Map();
+  // A create admission stranded by an earlier Host process is settled by the
+  // Agent Service's complete listing of its workspace. The Host chose the root
+  // id, so a listed root is registered. An absent root left at most an empty
+  // native file, which every listing hides; a native file with content is
+  // listed and registered by ordinary discovery.
+  const recoverPriorCreateAdmissions = (scope) => {
+    const running = admissionRecoveries.get(scope.workspaceId);
+    if (running) return running;
+    const recovery = (async () => {
+      for (const admission of await agentScopeStore.listPriorCreateAdmissions(scope.workspaceId)) {
+        const owner = await resolveWorkspaceScope(admission.workspaceId);
+        if (!owner) continue;
+        const listed = NativeSessionListSchema.safeParse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(owner.workspaceId)}`).catch(() => null));
+        if (!listed.success || listed.data.errors.length) continue;
+        const roots = listed.data.items.filter((session) => session.rootSessionId === admission.rootSessionId);
+        if (roots.some((session) => session.projectId !== owner.projectId || session.workspaceId !== owner.workspaceId)) continue;
+        if (!(await Promise.all(roots.map(registerSessionScope))).every(Boolean)) continue;
+        await agentScopeStore.releaseSessionAdmission(admission.id);
+      }
+    })().catch(() => {}).finally(() => admissionRecoveries.delete(scope.workspaceId));
+    admissionRecoveries.set(scope.workspaceId, recovery);
+    return recovery;
+  };
   const withSessionAdmission = async (scope, operation, rootSessionId, work, readOnly = false) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host session admission authority is unavailable', 503);
+    await recoverPriorCreateAdmissions(scope);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
     let complete = false;
     try {
@@ -492,7 +518,7 @@ const createCanonicalSessionService = (dependencies) => {
         const workspace = await resolveWorkspaceScope(id);
         if (!workspace) throw new OpenChamberControlError('Workspace scope is unavailable during global session listing', workspaceId ? 404 : 503, { code: workspaceId ? 'SESSION_NOT_FOUND' : 'SERVICE_UNAVAILABLE' });
         return await withSessionAdmission(workspace, 'discovery', id, async () => {
-          const raw = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
+          const raw = NativeSessionListSchema.parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
           const sessionResults = await Promise.all(raw.items.map(async session => {
             try {
               if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });
@@ -879,7 +905,23 @@ const createCanonicalSessionService = (dependencies) => {
     // a cold root has no active run, so reopening would only waste a slot.
     await reopen(scope);
     const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/control`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed) });
-    return SessionControlAckSchema.parse(body);
+    const ack = SessionControlAckSchema.parse(body);
+    // A completed /btw branch rekeys the Agent Service session to the id the
+    // native branch minted. The Host binding the caller addressed is now that
+    // old id, so it must follow the rekey here; otherwise every later
+    // root-addressed read answers "Session scope was not found" for a live
+    // session and the composer loses its chat.
+    if (ack.type === 'btw.branch' && ack.sessionId !== undefined && ack.sessionId !== sessionId) {
+      // The registry rekeys to a self-rooted identity: the minted id is its own
+      // root, and the retired id names no session. Only the branch's session
+      // file records the pre-branch file as its native lineage.
+      if (ack.rootSessionId !== undefined && ack.rootSessionId !== ack.sessionId) throw new OpenChamberControlError('A BTW branch must stay its own root', 502);
+      const rebound = await agentScopeStore.rebindSessionRoot(sessionId, ack.sessionId);
+      if (!rebound || rebound.sessionId !== ack.sessionId) throw new OpenChamberControlError('Canonical session rekey was not persisted', 503);
+      forgetLive(sessionId);
+      rememberLive(ack.sessionId);
+    }
+    return ack;
   };
   const remove = async (id) => {
     const scope = await scopeFor(id);

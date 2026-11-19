@@ -136,8 +136,8 @@ export const createServerStartupRuntime = (dependencies) => {
         await gracefulShutdown();
       };
       // Cover every signal a shell or dev harness may use to stop/restart us, so
-      // the managed OpenCode child is always torn down gracefully instead of
-      // orphaned: SIGINT/SIGQUIT (Ctrl+C/Ctrl+\), SIGTERM (kill/default), SIGHUP
+      // the Host process is always torn down gracefully instead of leaving
+      // child processes orphaned: SIGINT/SIGQUIT (Ctrl+C/Ctrl+\), SIGTERM (kill/default), SIGHUP
       // (terminal close), SIGUSR2 (nodemon restart outside Windows).
       process.on('SIGTERM', handleSignal);
       process.on('SIGINT', handleSignal);

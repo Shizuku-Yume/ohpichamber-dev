@@ -263,6 +263,7 @@ Standard error codes:
 - `COMPLETION_NOT_FOUND`: No matching active completion exists for cancellation.
 - `PROVIDER_CONFIG_WRITE_FAILED` / `MODEL_CONFIG_WRITE_FAILED` / `CREDENTIAL_WRITE_FAILED`: Configuration or credential persistence failed; no success revision is published.
 - `SHELL_NOT_FOUND` / `SHELL_OUTPUT_UNAVAILABLE` / `SHELL_STOP_TIMEOUT`: Missing current job, unreadable retained output or failure to observe stop before its deadline.
+- `SESSION_TOO_SMALL`: A manual compaction had nothing to summarize because the branch is already compacted or holds too little; HTTP 422, not a runtime failure. Every other compaction error keeps its own surface.
 
 ---
 
@@ -593,6 +594,8 @@ The Host authorizer keeps the argument-aware special cases (`edit` effective mod
 There is no tool-name list and no catch-all deny, so ephemeral tools (Vibe `vibe_*`, extension and plugin tools) are classified by the tier they declare.
 
 The remaining hard denials are a write, edit or destination path outside the workspace (an approval grant does not bypass it, per [architecture.md ADR-05](architecture.md#adr-05-host-gatekeeper-as-the-authoritative-security-boundary)), an exact approval-policy deny row, enterprise refusals for web search and provider credential entry, an MCP server absent from the workspace configuration, isolated task delegation, a malformed request, and a missing file capability on the workspace. Every denial names the tool and the rule that refused it.
+
+`NativeOperationDescriptor.internalWriteUrls` is the one exception for internal targets: OMP's `local://` session sandbox is where Plan mode drafts its plan file. The schema admits only the `local` scheme, the descriptor carries those targets instead of `destinationPaths`, and the Host allows them only for the `write` tool with the workspace file-write grant. A write naming any other internal scheme, or the same URL under `edit`/`grep`/`glob`/`read`, stays a hard denial.
 
 ### Interactive questions via OMP ask tool
 

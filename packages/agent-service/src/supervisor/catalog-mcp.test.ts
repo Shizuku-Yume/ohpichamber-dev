@@ -48,6 +48,24 @@ function workerFixture(rootSessionId: string, controls: { fail?: boolean; before
   return { worker, reconnects, retire: () => { live = false; } };
 }
 
+test('catalog worker aliases resolve through repeated rekeys and retire with the worker', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'catalog-rekey-'));
+  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => null, probeMcp: connectedProbe });
+  try {
+    await coordinator.initialize();
+    await coordinator.registerWorkspace('workspace', 'agent');
+    const { worker } = workerFixture('original');
+    await coordinator.register(worker);
+    coordinator.rekey('original', 'first');
+    coordinator.rekey('first', 'second');
+    expect(coordinator.liveRoot('original')).toBe('second');
+    expect(coordinator.liveRoot('first')).toBe('second');
+    coordinator.retire('second', worker.identity.workerGeneration);
+    expect(coordinator.liveRoot('original')).toBe('original');
+    expect(coordinator.liveRoot('first')).toBe('first');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('workspace MCP config is durable without sessions and rejects concurrent stale CAS writes', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-cas-'));
   let stored: MCPConfigurationState | null = null;

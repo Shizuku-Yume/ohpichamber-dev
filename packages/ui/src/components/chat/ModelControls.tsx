@@ -1,4 +1,5 @@
 import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
+import { getReasoningEffortLevels, resolveThinkingLevel } from '@/lib/modelThinkingLevels';
 import React from 'react';
 import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
@@ -349,9 +350,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const currentCatalogModel = providers
         .find((provider) => provider.providerId === currentProviderId)?.models
         .find((model) => model.modelId === currentModelId);
-    const effortOptions = React.useMemo(() => currentCatalogModel?.reasoningEffortSupported
-        ? ['off', ...currentCatalogModel.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')]
-        : [], [currentCatalogModel]);
+    // One derivation for the desktop panel, the phone's button and the picker's
+    // arrow keys: real effort options first, the same `off` entry they all show.
+    const effortOptions = React.useMemo(() => getReasoningEffortLevels(currentCatalogModel), [currentCatalogModel]);
     // OMP's configured default is what an untouched draft runs at. `auto` stays
     // off the wire: the worker resolves it, so the send carries no effort. A
     // model's own default wins, because that is the level OMP resolves for it.
@@ -668,7 +669,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const getModelReasoningOptions = React.useCallback((providerId: string, modelId: string) => {
         const model = providers.find((entry) => entry.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
-        return model?.reasoningEffortSupported ? model.reasoningOptions : [];
+        return getReasoningEffortLevels(model);
     }, [providers]);
     const getModelVariantOptions = React.useCallback((providerId: string, modelId: string) => {
         const provider = providers.find((entry) => entry.providerId === providerId);
@@ -1270,7 +1271,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const handleEffortSelect = React.useCallback((effort: string, providerId = currentProviderId, modelId = currentModelId) => {
         const targetModel = providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId);
-        if (!targetModel?.reasoningEffortSupported || (effort !== 'off' && !targetModel.reasoningOptions.some((option) => option.reasoningEffort === effort))) return;
+        if (!getReasoningEffortLevels(targetModel).includes(effort)) return;
         if (providerId !== currentProviderId || modelId !== currentModelId) {
             if (tryApplyModelSelection(providerId, modelId) !== 'applied') return;
         }
@@ -1294,14 +1295,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 <DropdownMenuTrigger asChild nativeButton>
                     <button type="button" aria-label={t('chat.modelControls.effort')} className={cn('model-controls__effort-trigger flex items-center gap-1.5 min-w-0 hover:opacity-70', buttonHeight)}>
                         <Icon name="brain-ai-3" className={cn(controlIconSize, 'flex-shrink-0')} />
-                        <span className={cn('model-controls__effort-label', controlTextSize, 'font-medium truncate')}>{selected === 'off' ? t('chat.modelControls.off') : formatEffortLabel(selected)}</span>
+                        <span className={cn('model-controls__effort-label', controlTextSize, 'font-medium truncate')}>{selected === 'off' ? t('chat.modelControls.off') : formatEffortLabel(selected, t)}</span>
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="end" className="w-[min(180px,calc(100vw-2rem))]">
                     <DropdownMenuLabel>{t('chat.modelControls.effort')}</DropdownMenuLabel>
                     {effortOptions.map((effort) => (
                         <DropdownMenuItem key={effort} onSelect={() => handleEffortSelect(effort)}>
-                            <span>{effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort)}</span>
+                            <span>{effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort, t)}</span>
                             {selected === effort && <Icon name="check" className="ms-auto size-4" />}
                         </DropdownMenuItem>
                     ))}
@@ -1971,6 +1972,57 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     };
 
 
+    const renderMobileEffortPanel = () => {
+        if (!isCompact) return null;
+        if (!currentProviderId || !currentModelId) return null;
+
+        const levels = getReasoningEffortLevels(currentCatalogModel);
+        if (levels.length === 0) return null;
+
+        const agentId = resolveLiveAgentName() ?? ROOT_SELECTION_AGENT;
+        const savedEffort = currentSessionId
+            ? getAgentModelReasoningEffortForSession(currentSessionId, agentId, currentProviderId, currentModelId)
+            : undefined;
+        const selected = resolveThinkingLevel(levels, [savedEffort, configuredCurrentReasoningEffort, currentCatalogModel?.defaultReasoningEffort]);
+
+        const handleSelect = (effort: string) => {
+            handleEffortSelect(effort);
+            closeMobilePanel();
+            requestAnimationFrame(focusColumnInput);
+        };
+
+        return (
+            <MobileOverlayPanel
+                open={activeMobilePanel === 'effort'}
+                onClose={closeMobilePanel}
+                title={t('chat.modelControls.effort')}
+            >
+                <div className="flex flex-col gap-1.5">
+                    {levels.map((effort) => {
+                        const isSelected = selected === effort;
+                        return (
+                            <button
+                                key={effort}
+                                type="button"
+                                className={cn(
+                                    'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-start',
+                                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                                    isSelected ? 'border-border bg-interactive-selection text-interactive-selection-foreground' : 'border-border/40'
+                                )}
+                                onClick={() => handleSelect(effort)}
+                            >
+                                <span className="typography-meta font-medium text-inherit">
+                                    {effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort, t)}
+                                </span>
+                                {isSelected && <Icon name="check" className="size-4 text-inherit flex-shrink-0" />}
+                            </button>
+                        );
+                    })}
+                </div>
+            </MobileOverlayPanel>
+        );
+    };
+
     const renderModelTooltipContent = () => (
         <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
             {currentMetadata ? (
@@ -2065,8 +2117,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const handleEffortKey = (e: React.KeyboardEvent, selectedItem: ModelPickerEntry) => {
             keyboardOwnsModelSelectionRef.current = true;
             if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return false;
-            const options = getModelReasoningOptions(selectedItem.providerId, selectedItem.modelId);
-            const efforts = options.length > 0 ? ['off', ...options.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')] : [];
+            const efforts = getModelReasoningOptions(selectedItem.providerId, selectedItem.modelId);
             if (efforts.length <= 1) return false;
             e.preventDefault();
             e.stopPropagation();
@@ -2440,6 +2491,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
             {renderMobileModelPanel()}
             {renderMobileVariantPanel()}
+            {renderMobileEffortPanel()}
             {renderMobileModelTooltip()}
         </>
     );

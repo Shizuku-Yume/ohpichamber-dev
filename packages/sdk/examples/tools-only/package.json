@@ -13,7 +13,7 @@
       },
       "tools": [
         {
-          "match": "example_findings",
+          "match": "mcp__example_findings",
           "name": "Code review",
           "icon": "search",
           "title": "Review \u00b7 {input.scope}",
@@ -26,7 +26,7 @@
           ]
         },
         {
-          "match": "example_checks",
+          "match": "mcp__example_checks",
           "name": "Project checks",
           "icon": "checkbox-circle",
           "title": "Checks \u00b7 {input.project}",
@@ -39,7 +39,7 @@
           ]
         },
         {
-          "match": "mcp.*",
+          "match": "mcp__*",
           "name": "Tool result",
           "icon": "tools",
           "output": "json"

@@ -28,5 +28,6 @@ export function resolveAgentRuntime(resourcesDirectory, platform = process.platf
     path: detected.path,
     reason: detected.reason,
     env: detected.env,
+    root,
   };
 }

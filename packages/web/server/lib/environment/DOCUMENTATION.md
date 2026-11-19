@@ -25,16 +25,7 @@ worktree setup commands and `/api/fs/exec`. There are two layers:
   read or parsed throws `EnvironmentStoreError`; it never reads as empty,
   because a write on top would erase every stored value. Patches: a string
   sets, `null` removes, an absent name stays.
-- `runtime.js`: `createEnvironmentRuntime` decides what each spawn gets.
-  `forDirectory(dir)` finds the project (a configured project containing the
-  directory, or for a linked worktree the project at the same place in the
-  primary checkout, read from the `.git` file without running Git) and layers
-  user variables, command output, then project variables. `forOpenCode()`
-  answers `opencode service set env` variables under the user variables.
   `applyToDirectory(dir, env)` is the overlay consumers call.
-- `opencode-service-env.js`: reads `env` from `service.json` in OpenCode's
-  global config directory (the stable channel's file only). Not a published
-  OpenCode contract; anything unexpected reads as no variables.
 - `routes.js`: `/api/environment` (user) and `/api/environment/projects/:id`
   (+ `/reload`). On the JSON-body allowlist in `host/core-routes.js`.
 
@@ -42,7 +33,7 @@ worktree setup commands and `/api/fs/exec`. There are two layers:
 
 | Process | Variables | Wired in |
 |---|---|---|
-| Managed OpenCode | service env, then user (none in enterprise mode) | `opencode/lifecycle.js` `getUserEnvironment` |
+ | Git commands in `git/service.js`, hooks included (push, pull and fetch run through `git/network-operations.js` with its own scrubbed environment and get none) | user, command output, project; minus the names simple-git refuses and the repository-location names | `git/service.js` `configureGitEnvironment` / `buildGitEnv(directory)` |
 | Git commands in `git/service.js`, hooks included (push, pull and fetch run through `git/network-operations.js` with its own scrubbed environment and get none) | user, command output, project; minus the names simple-git refuses and the repository-location names | `git/service.js` `configureGitEnvironment` / `buildGitEnv(directory)` |
 | Terminal, project actions | user, command output, project | `terminal/runtime.js` `environmentRuntime` |
 | Worktree setup commands | same as Git | `git/service.js` `runWorktreeStartCommand` |

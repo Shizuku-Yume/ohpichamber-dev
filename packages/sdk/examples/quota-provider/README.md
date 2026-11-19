@@ -3,10 +3,10 @@
 An extension that adds a usage provider to OhPiChamber, next to the built-in
 ones on the Usage page, in the header, in Work Status and on the phone. It
 declares `contributes.service.provides: ["quota"]` and lists in
-`contributes.quota.providers` the one OpenCode provider whose credential it
+`contributes.quota.providers` the one OMP provider whose credential it
 reads, `teapot`. OhPiChamber names the provider `ext-quota-provider`, draws
 its card with the extension's name and icon, asks the service for usage the
-way it asks a built-in, and hands it on every read the credential OpenCode
+way it asks a built-in, and hands it on every read the credential OMP
 holds for `teapot`, and nothing else of the credential store. The approval
 dialog lists that provider; a version that lists another asks again.
 
@@ -20,9 +20,9 @@ exists so the example can be tried end to end on one machine.
    It prints its address (`http://127.0.0.1:4569`) and the key it accepts
    (`demo`). `TEAPOT_PORT` and `TEAPOT_TOKEN` change them; the service reads
    the default address, so keep the port.
-2. Store the key for the `teapot` provider in OpenCode: in **Settings →
+2. Store the key for the `teapot` provider in OMP: in **Settings →
    Providers**, add a custom provider with the id `teapot` and the key
-   `demo` (or `opencode auth login`, choose Other, type `teapot`).
+   `demo`.
 3. In **Settings → Extensions**, add this folder and allow the local service.
    The dialog names `teapot` as the provider whose credential the extension
    receives.
@@ -39,7 +39,7 @@ enabling it brings it back with its settings.
 ## What the service does
 
 OhPiChamber posts one call, `usage.read`, to the service at `POST /quota`,
-with `input.credentials.teapot` set to the credential OpenCode holds (an API
+with `input.credentials.teapot` set to the credential OMP holds (an API
 key, or a browser login's tokens). The service sends the key as a bearer to
 `GET /api/usage` on the fake API and answers the usage in the shape a built-in
 computes: `usedPercent`, `windowSeconds` and `resetAt` per window, a

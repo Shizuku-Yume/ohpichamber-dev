@@ -26,7 +26,17 @@ import { stopEmbeddedServer } from './server-shutdown.mjs';
 import { describeStartupEnvironmentOverrides, resolveStartupUrlProbePlan } from './startup-url-selection.mjs';
 import { clearAppCache } from './app-cache.mjs';
 import { hideWindow, isWindowHidePending, showWindow } from './window-hide.mjs';
-import { parseExternalUrl } from './external-url-policy.mjs';
+import { tryParseExternalUrl } from './external-url-policy.mjs';
+
+const openExternalIfAllowed = (url, label) => {
+  try {
+    const parsed = tryParseExternalUrl(url);
+    if (!parsed) throw new Error();
+    void shell.openExternal(parsed.toString()).catch(() => { });
+  } catch {
+    log.warn(`[electron] blocked attempt to open unvalidated ${label}:`, url);
+  }
+};
 import {
   BACKGROUND_START_ARG,
   DEEP_LINK_PROTOCOL,
@@ -1587,6 +1597,10 @@ const spawnLocalServer = async () => {
     OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: agentRuntime.entrypoint,
     ...(agentRuntime.env || {}),
   });
+  if (app.isPackaged && agentRuntime.root) {
+    const { registerStandaloneLoader } = await import('ohpichamber/scripts/standalone-loader.mjs');
+    registerStandaloneLoader({ runtimeRoot: agentRuntime.root });
+  }
 
   const { startWebUiServer } = await import('ohpichamber/server/index.js');
 
@@ -2741,14 +2755,14 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
       if (route) emitToWindow(browserWindow, 'openchamber:open-session', route);
       return { action: 'deny' };
     }
-    void shell.openExternal(url).catch(() => { });
+    openExternalIfAllowed(url, 'URL');
     return { action: 'deny' };
   });
 
   browserWindow.webContents.on('will-navigate', (event, url) => {
     if (isAllowedNavigationUrl(url)) return;
     event.preventDefault();
-    void shell.openExternal(url).catch(() => { });
+    openExternalIfAllowed(url, 'navigation');
   });
 
   // The runtime key says which instance this window shows, and only a page of
@@ -3295,7 +3309,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   });
 
   browserWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url).catch(() => { });
+    openExternalIfAllowed(url, 'Mini Chat URL');
     return { action: 'deny' };
   });
   browserWindow.webContents.on('will-navigate', (event, url) => {
@@ -3306,7 +3320,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     } catch {
     }
     event.preventDefault();
-    void shell.openExternal(url).catch(() => { });
+    openExternalIfAllowed(url, 'Mini Chat navigation');
   });
   browserWindow.webContents.on('dom-ready', () => {
     const initScript = browserWindow.__ocInitScript;
@@ -4733,7 +4747,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       const target = typeof args.url === 'string' ? args.url.trim() : '';
       if (!target) throw new Error('URL is required');
 
-      const parsed = parseExternalUrl(target);
+      const parsed = tryParseExternalUrl(target);
+      if (!parsed) throw new Error('URL scheme cannot be opened externally');
 
       // A saved instance opens in the app, like the window.open path above.
       const host = findConfiguredHostForUrl(parsed.toString());

@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { IncomingMessage } from 'node:http';
 import { sessionSurfaceRoute } from './routes.ts';
-import type { SessionRegistry } from './registry.ts';
 
 const sessionId = 'sess_recap_1';
 const subagentId = 'sub_agent_1';
@@ -10,7 +9,7 @@ const request = (method: string): IncomingMessage => ({ method }) as IncomingMes
 const url = (path: string): URL => new URL(path, 'http://localhost');
 
 /** The registry surface the routes touch, without opening a native session. */
-const registry = (overrides: Partial<SessionRegistry> = {}): SessionRegistry => ({
+const registry = (): Parameters<typeof sessionSurfaceRoute>[0] => ({
   listRecaps: async (id: string) => [
     { sessionId: id, cwd: '/tmp/project', recap: 'Sixteen tiles now render on the board', createdAt: 1_700_000_000_000 },
   ],
@@ -23,8 +22,7 @@ const registry = (overrides: Partial<SessionRegistry> = {}): SessionRegistry => 
   }),
   subagentTreeCost: async (id: string) => ({ sessionId: id, directCost: 0.02, treeCost: 0.11 }),
   tools: async (id: string) => ({ sessionId: id, tools: [{ name: 'read', label: 'Read', description: 'Read files', tier: 'read' as const, availability: true }] }),
-  ...overrides,
-} as unknown as SessionRegistry);
+});
 
 describe('sessionSurfaceRoute', () => {
   test('serves journaled recaps for an admitted session', async () => {

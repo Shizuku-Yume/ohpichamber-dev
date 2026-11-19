@@ -799,6 +799,15 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'reasoning', 'variant'],
   },
   {
+    // The plan role is what makes Plan selectable in the composer, so a search
+    // for "plan model" has to land on the control that writes it.
+    id: 'sessions.default-plan',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.defaults.planModel.title',
+    descriptionKey: 'settings.openchamber.defaults.planModel.description',
+    keywords: ['plan', 'plan mode', 'model', 'plan model', 'role'],
+  },
+  {
     // The fallback chain is an OMP record the generic row cannot draw; this
     // selector writes it, so a search for the chain lands on the real control.
     id: 'sessions.fallback-model',

@@ -9,11 +9,6 @@ import { overlayEnvironment, parseEnvironmentOutput } from './variables.js';
  * Which environment variables each process OpenChamber starts receives on top
  * of its own environment:
  *
- * - the managed OpenCode: the user's variables, over the variables
- *   `opencode service set env` stored. One OpenCode serves every project, so
- *   a project's variables cannot reach it. Enterprise mode passes nothing:
- *   a variable can carry a provider key, and enterprise mode refuses new
- *   provider keys from the app.
  * - Git, the terminal (and the project actions it runs), worktree setup
  *   commands and command execution for a directory: the user's variables,
  *   then what the project's environment command printed, then the project's
@@ -92,7 +87,6 @@ export const createEnvironmentRuntime = ({
   listProjects,
   spawn,
   commandBaseEnv,
-  readOpenCodeServiceEnv = () => ({}),
   isEnterpriseMode,
   readFile = fsPromises.readFile,
   stat = fsPromises.stat,
@@ -262,17 +256,6 @@ export const createEnvironmentRuntime = ({
     return Object.keys(variables).length > 0 ? variables : null;
   };
 
-  /** The variables for the managed OpenCode process; none in enterprise mode. */
-  const forOpenCode = () => {
-    if (isEnterpriseMode()) return {};
-    let serviceVariables = {};
-    try {
-      serviceVariables = readOpenCodeServiceEnv();
-    } catch {
-      serviceVariables = {};
-    }
-    return { ...serviceVariables, ...readUserVariables() };
-  };
 
   /** The last outcome of the project's environment command, or null before any run. */
   const projectStatus = (projectId) => statuses.get(projectId) ?? null;
@@ -304,5 +287,5 @@ export const createEnvironmentRuntime = ({
     return variables ? overlayEnvironment(env, variables) : env;
   };
 
-  return { forDirectory, applyToDirectory, forOpenCode, projectStatus, invalidateProject, reloadProject };
+  return { forDirectory, applyToDirectory, projectStatus, invalidateProject, reloadProject };
 };

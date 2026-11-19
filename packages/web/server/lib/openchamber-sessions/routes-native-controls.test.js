@@ -60,6 +60,7 @@ const fixture = async () => {
       if (body.action === 'commit' && native.loseCommitResponse) { native.loseCommitResponse = false; throw new Error('Commit response was lost'); }
       return Response.json({ session: runtime() });
     }
+    if (pathname.startsWith('/api/agent/v1/sessions?')) return Response.json({ items: native.listed ?? [], errors: native.listErrors ?? [] });
     if (pathname === '/internal/sessions') return Response.json({ ...runtime(body.rootSessionId), rootSessionId: body.rootSessionId });
     if (pathname === '/api/agent/v1/sessions/public-root/snapshot') return Response.json(snapshot([], [], runtime()));
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
@@ -77,22 +78,27 @@ const fixture = async () => {
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
     if (pathname.endsWith('/control')) {
+      if (body.type === 'btw.branch') return Response.json({ type: 'btw.branch', sessionId: 'btw-branched-root', rootSessionId: 'btw-branched-root', sessionFile: '/tmp/btw-branched-root.jsonl', branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: null } });
       if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : body.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
       if (body.type === 'goal') return Response.json({ type: 'goal', mode: body.op === 'drop' ? { kind: 'main' } : { kind: 'goal', status: body.op === 'pause' ? 'paused' : 'active', objective: body.objective || 'Finish the task', tokenBudget: body.tokenBudget ?? null, tokensUsed: 0 } });
       return Response.json(native.compactResult);
     }
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
+    if (pathname.endsWith('/snapshot')) {
+      const sessionId = decodeURIComponent(pathname.split('/').at(-2));
+      return Response.json(snapshot([], [], { ...runtime(sessionId), rootSessionId: sessionId }));
+    }
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
   };
   const registrations = [];
-  const makeService = () => createOpenChamberSessionService({
-    service: { request }, agentScopeStore: store, resolveHostRelocationScope: (id) => store.getSession(id),
-    resolveSessionScope: (id) => store.getSession(id), resolveHostSessionScope: (id) => store.getSession(id),
-    resolveWorkspaceScope: async (id) => { const scope = await store.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
+  const makeService = (state = owner) => createOpenChamberSessionService({
+    service: { request }, agentScopeStore: state.agentScopeStore, resolveHostRelocationScope: (id) => state.agentScopeStore.getSession(id),
+    resolveSessionScope: (id) => state.agentScopeStore.getSession(id), resolveHostSessionScope: (id) => state.agentScopeStore.getSession(id),
+    resolveWorkspaceScope: async (id) => { const scope = await state.agentScopeStore.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
     resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
-    directCommandAdmissionStore: owner.directCommandAdmissionStore,
-    archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
+    directCommandAdmissionStore: state.directCommandAdmissionStore,
+    archiveStore: state.archiveStore, sessionMetadataStore: state.sessionMetadataStore,
   });
   return { owner, root, store, source, destination, native, makeService, registrations };
 };
@@ -123,6 +129,46 @@ describe('Host native session control saga', () => {
     expect(native.calls).toHaveLength(count);
     await expect(service.control('missing-session', create)).rejects.toMatchObject({ statusCode: 404 });
   });
+  it('moves the Host binding with the identity a /btw branch mints', async () => {
+    const { owner, store, native, makeService } = await fixture();
+    const service = makeService();
+    const issue = { id: 'owner/repo#1', title: 'Issue', url: 'https://github.com/owner/repo/issues/1', kind: 'issue', number: 1, linkedAt: 1 };
+    await service.setSessionLinks('public-root', { entries: [issue], linked: true });
+    const saved = await service.getMetadata('public-root');
+    expect(saved.metadata).toMatchObject({ openchamber: { linked_issues: [issue] } });
+    const ack = await service.control('public-root', { type: 'btw.branch', recordId: 'btw-record-1' });
+    expect(ack).toMatchObject({ type: 'btw.branch', sessionId: 'btw-branched-root' });
+    expect(native.calls.at(-1)).toEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'btw.branch', recordId: 'btw-record-1' } });
+    // The transcript moved to the minted id: every root-addressed read must
+    // resolve against it, and the pre-branch id must no longer name a session.
+    await expect(store.getSession('btw-branched-root')).resolves.toMatchObject({ sessionId: 'btw-branched-root', rootSessionId: 'btw-branched-root' });
+    await expect(store.getSession('public-root')).resolves.toBeNull();
+    await expect(service.open('btw-branched-root')).resolves.toMatchObject({ session: { sessionId: 'btw-branched-root' } });
+    await expect(service.open('public-root')).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.getMetadata('btw-branched-root')).resolves.toEqual({ ...saved, sessionId: 'btw-branched-root' });
+    await expect(owner.sessionMetadataStore.getState('public-root')).resolves.toBeNull();
+  });
+
+  it.each([
+    ['public-root', 'btw-branched-root'],
+    ['another-root', 'another-root'],
+    [null, null],
+  ])('rekeys only a multi-run membership owned by the promoted root (%s)', async (ownerId, expectedId) => {
+    const { makeService } = await fixture();
+    const service = makeService();
+    const multirun = {
+      version: 1, sessionID: ownerId, group: { kind: 'id', id: '957a6bd0-bf88-4497-9add-da381ed07ca5' },
+      groupSlug: 'comparison', providerID: 'provider', modelID: 'model', role: 'run',
+    };
+    const saved = await service.setMetadata('public-root', { changes: { openchamber: { multirun } } });
+    await service.control('public-root', { type: 'btw.branch', recordId: 'btw-record-1' });
+    const expectedMembership = expectedId === null ? saved.metadata.openchamber.multirun : { ...multirun, sessionID: expectedId };
+    await expect(service.getMetadata('btw-branched-root')).resolves.toEqual({
+      sessionId: 'btw-branched-root', revision: saved.revision,
+      metadata: { openchamber: { multirun: expectedMembership } },
+    });
+  });
+
   it('releases an admission on a known pre-dispatch refusal', async () => {
     const { store, source, native, makeService } = await fixture();
     native.refusePath = '/internal/sessions/public-root/reopen';
@@ -159,6 +205,35 @@ describe('Host native session control saga', () => {
     const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
     fixtures[fixtures.length - 1].owner = reopened;
     await expect(reopened.agentScopeStore.createWorktreeArchive({ hostProjectId: 'project', archiveId: 'uncertain-fork', archiveRef: 'refs/openchamber/archive/uncertain-fork', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+  });
+  it.each([false, true])('settles a create admission an earlier Host process left once the native listing proves its outcome (root listed: %s)', async (rootListed) => {
+    const { owner, root, source, native, makeService, registrations } = await fixture();
+    const create = (service) => service.create({ projectId: source.projectId, workspaceId: source.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } });
+    native.failPath = '/internal/sessions';
+    await expect(create(makeService())).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', retryable: false });
+    const strandedRoot = native.calls.find(({ pathname }) => pathname === '/internal/sessions').body.rootSessionId;
+    await expect(create(makeService())).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
+    fixtures[fixtures.length - 1].owner = reopened;
+    native.failPath = null;
+    native.listErrors = [{ sessionId: 'unreadable', code: 'SESSION_RESTORE_FAILED' }];
+    await expect(create(makeService(reopened))).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    native.listErrors = [];
+    native.listed = !rootListed ? [] : [{ sessionId: strandedRoot, rootSessionId: strandedRoot, projectId: source.projectId, workspaceId: source.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001, mode: { kind: 'main' }, epoch: 'epoch-native', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }];
+    await expect(create(makeService(reopened))).resolves.toBeDefined();
+    expect(registrations.includes(strandedRoot)).toBe(rootListed);
+    await expect(reopened.agentScopeStore.listPriorCreateAdmissions(source.workspaceId)).resolves.toEqual([]);
+  });
+  it('keeps an uncertain fork admission fenced after Host restart', async () => {
+    const { owner, root, native, makeService } = await fixture();
+    native.failPath = '/internal/sessions/public-root/fork';
+    await expect(makeService().fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', retryable: false });
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
+    fixtures[fixtures.length - 1].owner = reopened;
+    native.failPath = null;
+    await expect(makeService(reopened).fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
   });
   it.each(['create', 'reopen'])('reserves %s until native admission settles', async (operation) => {
     const { store, source, native, makeService } = await fixture();

@@ -1,10 +1,11 @@
 import { copyFile, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { formatBytes, isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
-import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload, type SubagentProgressPayload, type SubagentEventPayload } from '@oh-my-pi/pi-coding-agent/task';
+import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import type { CompletedRewindState } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
 import { autosaveApprovedPlan, isPlanAutosaveEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-autosave';
 import type { AssistantMessage, Model } from '@oh-my-pi/pi-ai';
@@ -125,7 +126,49 @@ type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'fo
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile?: Agent | null };
 
+const SubagentLifecyclePayloadSchema = z.object({
+  id: z.string(),
+  agent: z.string(),
+  agentSource: z.enum(['bundled', 'user', 'project']),
+  description: z.string().optional(),
+  status: z.enum(['started', 'completed', 'failed', 'aborted']),
+  sessionFile: z.string().optional(),
+  parentToolCallId: z.string().optional(),
+  index: z.number(),
+  detached: z.boolean().optional(),
+}) satisfies z.ZodType<SubagentLifecyclePayload>;
 
+const SubagentProgressObservationSchema = z.object({
+  agent: z.string(),
+  task: z.string(),
+  parentToolCallId: z.string().optional(),
+  progress: z.object({
+    id: z.string(),
+    agent: z.string(),
+    status: z.enum(['pending', 'running', 'completed', 'failed', 'aborted']),
+    currentTool: z.string().optional(),
+    tokens: z.number().optional(),
+    cost: z.number().optional(),
+    toolCount: z.number().optional(),
+    requests: z.number().optional(),
+    description: z.string().optional(),
+    task: z.string().optional(),
+    lastIntent: z.string().optional(),
+    durationMs: z.number().optional(),
+    retryState: z.object({ delayMs: z.number(), startedAtMs: z.number() }).optional(),
+  }),
+});
+type SubagentProgressObservation = z.infer<typeof SubagentProgressObservationSchema>;
+
+const SubagentEventObservationSchema = z.object({
+  id: z.string(),
+  event: z.object({
+    type: z.string(),
+    toolName: z.string().optional(),
+    toolCallId: z.string().optional(),
+  }),
+});
+type SubagentEventObservation = z.infer<typeof SubagentEventObservationSchema>;
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
   private projection: WorkerProjection;
@@ -201,6 +244,8 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
+    /** The shared catalog identity; a `/btw` branch rekeys its root in place. */
+    private readonly workerIdentity: { rootSessionId: string },
     private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
@@ -229,15 +274,20 @@ export class WorkerSession {
       if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
-      const payload = data as SubagentLifecyclePayload;
-      this.onSubagent(payload);
-      this.handleSubagentLifecycle(payload);
+      const parsed = SubagentLifecyclePayloadSchema.safeParse(data);
+      if (!parsed.success) return;
+      this.onSubagent(parsed.data);
+      this.handleSubagentLifecycle(parsed.data);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
-      this.handleSubagentProgress(data as SubagentProgressPayload);
+      const parsed = SubagentProgressObservationSchema.safeParse(data);
+      if (!parsed.success) return;
+      this.handleSubagentProgress(parsed.data);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, data => {
-      this.handleSubagentEvent(data as SubagentEventPayload);
+      const parsed = SubagentEventObservationSchema.safeParse(data);
+      if (!parsed.success) return;
+      this.handleSubagentEvent(parsed.data);
     });
     // OMP's own IdleMaintenance owns recaps now: it journals them into
     // `history.db` (`session_recaps`), and the UI reads that journal through
@@ -487,6 +537,9 @@ export class WorkerSession {
       }
       return hostAuthorize({ type: 'tool', toolName, input: toolInput, ...approval }, nativeContext);
     };
+    // One mutable identity object is shared by the catalogs, the MCP manager
+    // and the host-tool scope, so a completed `/btw` branch rekeys them all at
+    // once instead of leaving a retired root id on any published catalog.
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
     const observer: ExtensionFactory = api => {
@@ -725,7 +778,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, hostToolsController);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, worker, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -1078,7 +1131,7 @@ export class WorkerSession {
     this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
   }
 
-  private handleSubagentProgress(payload: SubagentProgressPayload): void {
+  private handleSubagentProgress(payload: SubagentProgressObservation): void {
     const p = payload.progress;
     if (!p) return;
     const existing = this.liveSubagents.get(p.id);
@@ -1125,20 +1178,19 @@ export class WorkerSession {
     this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
   }
 
-  private handleSubagentEvent(payload: SubagentEventPayload): void {
+  private handleSubagentEvent(payload: SubagentEventObservation): void {
     const { id, event } = payload;
     const existing = this.liveSubagents.get(id);
     if (!existing) return;
     let changed = false;
     const updated: Subagent = { ...existing };
     if (event.type === 'tool_execution_start') {
-      const toolEvent = event as { toolName?: string; toolCallId?: string };
-      if (toolEvent.toolName) {
-        updated.activeTool = toolEvent.toolName;
+      if (event.toolName) {
+        updated.activeTool = event.toolName;
         changed = true;
       }
-      if (toolEvent.toolCallId) {
-        this.toolCallToSubagentId.set(toolEvent.toolCallId, id);
+      if (event.toolCallId) {
+        this.toolCallToSubagentId.set(event.toolCallId, id);
       }
     } else if (event.type === 'tool_execution_end') {
       if (updated.activeTool) {
@@ -1683,6 +1735,14 @@ export class WorkerSession {
         if (branchRes.sessionFile) this._sessionFile = branchRes.sessionFile;
         const newSessionId = this.session.sessionManager.getSessionId();
         this._sessionId = newSessionId;
+        // The native branch rekeys the root this worker serves. Shell jobs, the
+        // Host tool scope, the MCP/skill catalog owner and the parent id of any
+        // subagent all name that root, so they move with it; a stale id makes
+        // the Host's root check refuse those reads with 503.
+        this.shell.rekey(newSessionId);
+        this.hostToolsController?.rekey(newSessionId);
+        this.mcp?.rekey(newSessionId);
+        this.workerIdentity.rootSessionId = newSessionId;
         this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases());
         this.projection.resetSelection();
         this.syncTodoAutoClear();
@@ -2240,7 +2300,13 @@ export class WorkerSession {
         try {
           await this.binding;
           const previousCompaction = this.lastEmittedCompaction;
-          const result = await this.session.compact(operation.instructions);
+          const result = await this.session.compact(operation.instructions).catch(error => {
+            // OMP does not export the refusal class; its name is the stable identity.
+            if (error instanceof Error && error.name === 'ManualCompactionNoOpError') {
+              throw new ProjectionError(422, 'SESSION_TOO_SMALL', 'Session is too small to compact');
+            }
+            throw error;
+          });
           if (this.lastEmittedCompaction && this.lastEmittedCompaction !== previousCompaction) {
             return {
               type: 'compact',
@@ -2341,4 +2407,3 @@ export class WorkerSession {
     this._draftPresent = present;
   }
 }
-

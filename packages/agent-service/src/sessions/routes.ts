@@ -40,7 +40,7 @@ function identity(value: string): string {
  * `GET /api/agent/v1/sessions/:id/subagents/tree-cost`
  */
 export async function sessionSurfaceRoute(
- sessions: SessionRegistry,
+ sessions: Pick<SessionRegistry, 'listRecaps' | 'listHubSubagents' | 'subagentTranscript' | 'subagentTreeCost' | 'tools'>,
  request: IncomingMessage,
  url: URL,
 ): Promise<SessionSurfaceResponse | null> {

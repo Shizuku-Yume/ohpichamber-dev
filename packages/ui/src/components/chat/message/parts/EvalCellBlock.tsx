@@ -154,7 +154,7 @@ export const EvalCellBlock: React.FC<EvalCellBlockProps> = ({
                         ) : isFailed ? (
                             <Icon name="error-warning" className="size-3.5 text-destructive" />
                         ) : isComplete ? (
-                            <Icon name="check" className="size-3.5 text-emerald-500" />
+                            <Icon name="check" className="size-3.5 text-[var(--status-success)]" />
                         ) : (
                             <Icon name="time" className="size-3.5 text-muted-foreground/60" />
                         )}

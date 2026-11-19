@@ -13,8 +13,9 @@ import { buildResult, toUsageWindow } from './utils/formatters.js';
  * An installed extension's usage provider: the host half of the SDK's quota
  * role (`packages/sdk/src/service-providers.ts`). The manifest lists the
  * native provider ids whose credentials the service receives, the user
- * approved that list, and every read carries opencode's stored credentials
- * for exactly those ids — nothing else of the credential store.
+ * approved that list, and every read carries the credentials OMP stores for
+ * exactly those ids, resolved through the Host's selected-credential
+ * resolver — nothing else of the credential store.
  *
  * Answers are checked with the SDK's `quotaProviderSchemasV1`; one that does
  * not parse is a failed read, never an empty result.

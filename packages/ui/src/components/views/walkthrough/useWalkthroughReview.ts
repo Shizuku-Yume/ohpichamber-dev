@@ -17,6 +17,7 @@ interface WalkthroughReviewOptions {
   needsSourceSelection: boolean;
   /** Moves when the subject's content moves (a branch's revision, a push to the pull request), so it reads again. */
   revision: string;
+  enabled?: boolean;
 }
 
 /**
@@ -25,7 +26,7 @@ interface WalkthroughReviewOptions {
  * desktop panel and the phone's Changes screen show the same walkthrough
  * through this hook and differ only in how they lay it out.
  */
-export const useWalkthroughReview = ({ directory, target, visible, needsSourceSelection, revision }: WalkthroughReviewOptions) => {
+export const useWalkthroughReview = ({ directory, target, visible, needsSourceSelection, revision, enabled = true }: WalkthroughReviewOptions) => {
   const { locale, locales } = useI18n();
   const runtimeKey = useGitStore((state) => state.runtimeKey);
   const entry: WalkthroughEntry = useWalkthroughStore((state) => state.getEntry(directory, target));
@@ -58,14 +59,14 @@ export const useWalkthroughReview = ({ directory, target, visible, needsSourceSe
   // request — and the language instruction is part of that request.
   const lastPrRead = useRef<string | null>(null);
   useEffect(() => {
-    if (!visible || needsSourceSelection) return;
+    if (!visible || needsSourceSelection || !enabled) return;
     if (target.source.kind === 'pr') {
       const key = JSON.stringify([runtimeKey, directory, target, activeLanguage, selectedModel, composerProviderId, composerModelId, revision]);
       if (lastPrRead.current === key) return;
       lastPrRead.current = key;
     }
     void load(directory, target, { language: activeLanguage, providerID: composerProviderId, modelID: composerModelId });
-  }, [activeLanguage, composerProviderId, composerModelId, needsSourceSelection, directory, load, target, selectedModel, revision, visible, runtimeKey]);
+  }, [activeLanguage, composerProviderId, composerModelId, enabled, needsSourceSelection, directory, load, target, selectedModel, revision, visible, runtimeKey]);
 
   const view = useMemo(() => needsSourceSelection ? null : buildWalkthroughView(entry.result), [needsSourceSelection, entry.result]);
 

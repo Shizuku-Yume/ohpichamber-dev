@@ -8,7 +8,7 @@ import type { ProjectEntry } from '@/lib/api/types';
 describe('ProjectsPage', () => {
   let dom: Window;
   let root: Root | undefined;
-  let restoreStores = () => {};
+  let restoreStores = () => { };
   let closed: string[] = [];
   const globals = new Map<string, PropertyDescriptor | undefined>();
 
@@ -102,6 +102,19 @@ describe('ProjectsPage', () => {
     await act(async () => { cancel.click(); });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(closed).toEqual([]);
+  });
+
+  test('the selected project names the page through a heading focus target', async () => {
+    await render();
+    // SettingsView focuses `[data-settings-page-heading]` when a page opens;
+    // a JSX title is not stamped by the shared layout, so the panel owns it.
+    const heading = document.querySelector('[data-settings-page-heading]');
+    expect(heading).not.toBeNull();
+    expect(heading?.tagName).toBe('H1');
+    expect(heading?.textContent?.trim()).toBe('Beta');
+    expect(heading?.getAttribute('tabindex')).toBe('-1');
+    // The name input is a field, never the page's heading target.
+    expect(document.querySelector('[data-settings-item="projects.name"]')?.hasAttribute('data-settings-page-heading')).toBe(false);
   });
 
   test('confirming closes the shown project through the store, as the sidebar does', async () => {

@@ -71,6 +71,7 @@ import { sessionWarmingI18n } from './session-warming.i18n';
 import { usageToolI18n } from './usage-tool.i18n';
 import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
 import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
+import { effortI18n } from './effort.i18n';
 export const dict = {
   'quota.family.zen': 'Моделі Zen',
   'quota.value.requests': 'Запити: {count}',
@@ -7592,6 +7593,7 @@ export const dict = {
   "snippets.source.global": "глобальний",
   "snippets.source.project": "проєкт",
   "chat.chatInput.toast.compactFailed": "Не вдалося стиснути сесію",
+  "chat.chatInput.toast.compactNotNeeded": "Ця сесія ще занадто коротка, щоб її стискати.",
   "chat.chatInput.toast.forkFailed": "Не вдалося відгалузити сесію",
   "chat.chatInput.toast.forkNothingToFork": "Поки нічого відгалужувати: у цій сесії ще немає завершеної відповіді",
   "chat.chatInput.toast.forkSendFailed": "Відгалужено, але повідомлення не надіслано. Воно повернулося в поле вводу.",
@@ -7975,6 +7977,7 @@ export const dict = {
   "projectEditDialog.toast.failedToDiscoverIcon": "Не вдалося знайти значок проєкту",
   "projectEditDialog.toast.customIconAlreadySet": "Спеціальна піктограма вже встановлена для цього проєкту",
   "projectEditDialog.toast.iconDiscovered": "Виявлено значок проєкту",
+  "projectEditDialog.toast.iconNotFound": "У цьому проєкті не знайдено фавікону",
   "openInApp.actions.open": "Відкрити",
   "openInApp.actions.openInAria": "Відкрити в {app}",
   "openInApp.actions.chooseAppAria": "Вибрати програму для відкриття",
@@ -9318,4 +9321,5 @@ export const dict = {
   "settings.usage.state.error": "Не вдалося завантажити використання.",
 
   "chat.workStatus.mcp.unknown": "Сервери MCP ще не завантажено.",
+  ...effortI18n.uk,
 };

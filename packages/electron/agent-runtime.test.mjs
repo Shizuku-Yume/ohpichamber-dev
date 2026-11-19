@@ -45,6 +45,7 @@ test('resolveAgentRuntime validates platform manifest and required files', () =>
     const resolved = resolveAgentRuntime(fixture.root);
     assert.equal(typeof resolved.bunPath, 'string');
     assert.equal(typeof resolved.entrypoint, 'string');
+    assert.equal(resolved.root, fixture.runtimeDir);
     assert.ok(resolved.source === 'bundled' || resolved.source === 'system' || resolved.source === 'operator');
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });

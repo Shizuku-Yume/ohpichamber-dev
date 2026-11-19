@@ -15,6 +15,7 @@ import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolv
 import { setRuntimeExtraHeaders } from '../../../ui/src/lib/runtime-auth.ts';
 import { WorkerReplySchema } from '../protocol.ts';
 import { AgentService } from './service.ts';
+
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
 
 const ListeningPortSchema = z.object({ port: z.number().int().positive() });
@@ -84,7 +85,7 @@ test('a worker cause reaches the problem response and the toast unchanged', asyn
       const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
       if (init.body) headers.set('content-type', 'application/json');
       const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-      return { status: response.status, body: await response.json().catch(() => null) as unknown };
+      return { status: response.status, body: z.json().parse(await response.json().catch(() => null)) };
     };
     expect((await request(`/internal/workspaces/${encodeURIComponent(workspaceId)}`, {
       method: 'POST',

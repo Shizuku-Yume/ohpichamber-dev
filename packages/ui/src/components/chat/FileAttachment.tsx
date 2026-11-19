@@ -295,7 +295,7 @@ export const AttachedFilesList = memo(({ onShowPopup, className, draftIdentity }
           ))}
         </div>
       )}
-      
+
       {/* Other files row - inline text-only */}
       {otherFiles.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -401,8 +401,8 @@ const NativeAttachmentThumbnail = memo(({ part, workspaceId, runtimeKey, compact
           )}
           {!compact && state.kind === 'ready' && (
             <>
-              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 p-2 text-left text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--surface-foreground)]/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 p-2 text-left text-[var(--surface-background)] opacity-0 transition-opacity group-hover:opacity-100">
                 <span className="block truncate text-xs font-medium">{part.name}</span>
                 {sizeText && <span className="block text-xs opacity-80">{sizeText}</span>}
               </span>

@@ -15,6 +15,7 @@ import {
  SessionToolsCatalogSchema,
 } from '@openchamber/agent-contract';
 import { AgentService } from './service.ts';
+
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
 
 const ListeningPortSchema = z.object({ port: z.number().int().positive() });
@@ -78,7 +79,7 @@ test('recaps and Agent Hub routes answer over the real service HTTP surface', as
    const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
    if (init.body) headers.set('content-type', 'application/json');
    const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-   return { status: response.status, body: await response.json().catch(() => null) as unknown };
+   return { status: response.status, body: z.json().parse(await response.json().catch(() => null)) };
   };
 
   const workspace = await request(`/internal/workspaces/${encodeURIComponent(workspaceId)}`, {
@@ -173,8 +174,7 @@ test('workspace tools catalog reports hostTools enablement configured at workspa
    const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
    if (init.body) headers.set('content-type', 'application/json');
    const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-   // SAFETY: untrusted test response body is safely validated with Zod schemas below
-   return { status: response.status, body: (await response.json().catch(() => null)) as unknown };
+   return { status: response.status, body: z.json().parse(await response.json().catch(() => null)) };
   };
 
   const workspace = await request(`/internal/workspaces/${encodeURIComponent(workspaceId)}`, {
@@ -253,8 +253,7 @@ test('workspace tools catalog reports enabled MCP tools with no session worker',
    const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
    if (init.body) headers.set('content-type', 'application/json');
    const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-   // SAFETY: untrusted test response body is safely validated with Zod schemas below
-   return { status: response.status, body: (await response.json().catch(() => null)) as unknown };
+   return { status: response.status, body: z.json().parse(await response.json().catch(() => null)) };
   };
 
   const workspace = await request(`/internal/workspaces/${encodeURIComponent(workspaceId)}`, {

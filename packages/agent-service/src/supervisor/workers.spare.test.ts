@@ -53,7 +53,7 @@ const registryFor = (entrypoint: string) => new WorkerRegistry({
 });
 
 const bootstrap = (rootSessionId: string, cwd: string, agentDirectory: string): WorkerBootstrap =>
-  ({ rootSessionId, projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory });
+({ rootSessionId, projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory });
 
 const spawnCount = async (log: string): Promise<number> => {
   const text = await Bun.file(log).text().catch(() => '');
@@ -149,12 +149,12 @@ test('a refused refill does not retry from its own settle', async () => {
   const registry = registryFor(f.entrypoint);
   try {
     await registry.acquireWorktreeLease('lease-under-test', f.cwd);
-    const warm = (registry as unknown as { warmSessionWorker: (...args: unknown[]) => void }).warmSessionWorker.bind(registry);
+    const warm = registry.warmSessionWorker.bind(registry);
     let attempts = 0;
-    (registry as unknown as { warmSessionWorker: unknown }).warmSessionWorker = ((...args: unknown[]) => {
+    registry.warmSessionWorker = (input, environment) => {
       attempts += 1;
-      return warm(...args);
-    }) as unknown;
+      warm(input, environment);
+    };
 
     registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
 
@@ -235,6 +235,7 @@ test('a deliberate eviction does not refuse refills until the next reaper sweep'
   const third = join(f.root, 'third-workspace');
   await Promise.all([mkdir(second), mkdir(third)]);
   const registry = registryFor(f.entrypoint);
+  // SAFETY: Accessing private `spareWorkers` for test-only inspection.
   const pool = () => (registry as unknown as { spareWorkers: { cwd: string; retired?: boolean }[] }).spareWorkers;
   try {
     // The first workspace fills the pool while its spares are still loading, so
@@ -273,6 +274,7 @@ test('a deliberate eviction does not refuse refills until the next reaper sweep'
 
     // And it was a chosen removal, so the refusal that freezes the pool for a
     // whole reap interval is not set.
+    // SAFETY: Accessing private `spareRefillBlocked` for test-only inspection.
     expect((registry as unknown as { spareRefillBlocked: boolean }).spareRefillBlocked).toBe(false);
   } finally {
     await registry.close();

@@ -287,7 +287,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             {downloaded && installing && (
               <button
                 disabled
-                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)]/50 text-white cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)]/50 text-[var(--status-success-foreground)] cursor-not-allowed"
               >
                 <Spinner className="h-4 w-4" />
                 {t('updateDialog.status.restarting')}
@@ -297,7 +297,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             {downloaded && !installing && (
               <button
                 onClick={onRestart}
-                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)] text-white hover:opacity-90 transition-opacity"
+                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)] text-[var(--status-success-foreground)] hover:opacity-90 transition-opacity"
               >
                 <Icon name="restart" className="h-4 w-4" />
                 {t('updateDialog.actions.restartToUpdate')}

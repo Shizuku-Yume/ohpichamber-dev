@@ -18,7 +18,7 @@ export const ProblemCodeSchema = z.enum([
   'MODEL_UNAVAILABLE', 'PROVIDER_UNAVAILABLE', 'PROVIDER_FAILURE', 'CONTEXT_LIMIT', 'STRUCTURED_OUTPUT_INVALID',
   'COMPLETION_NOT_FOUND', 'PROVIDER_CONFIG_WRITE_FAILED', 'MODEL_CONFIG_WRITE_FAILED', 'CREDENTIAL_WRITE_FAILED',
   'CREDENTIAL_UNAVAILABLE', 'OAUTH_REAUTH_REQUIRED',
-  'SHELL_NOT_FOUND', 'SHELL_OUTPUT_UNAVAILABLE', 'SHELL_STOP_TIMEOUT',
+  'SHELL_NOT_FOUND', 'SHELL_OUTPUT_UNAVAILABLE', 'SHELL_STOP_TIMEOUT', 'SESSION_TOO_SMALL',
 ]);
 export type ProblemCode = z.infer<typeof ProblemCodeSchema>;
 export const ProblemDetailsSchema = z.strictObject({
@@ -34,7 +34,7 @@ export const ProblemDetailsSchema = z.strictObject({
     case 'SESSION_BRANCH_CONFLICT': case 'SESSION_RELOCATION_CONFLICT': case 'SESSION_READ_ONLY': return problem.status === 409;
     case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': case 'MCP_OAUTH_IN_PROGRESS': return problem.status === 409;
     case 'MCP_OAUTH_NOT_FOUND': return problem.status === 404;
-    case 'MCP_CREDENTIAL_UNAVAILABLE': return problem.status === 422;
+    case 'MCP_CREDENTIAL_UNAVAILABLE': case 'SESSION_TOO_SMALL': return problem.status === 422;
     case 'MCP_OAUTH_FAILED': return problem.status === 422 || problem.status === 502;
     case 'MCP_OAUTH_CLIENT_REGISTRATION_REJECTED': return problem.status === 403 || problem.status === 422;
     case 'MCP_CONFIG_READ_FAILED': return problem.status === 503;

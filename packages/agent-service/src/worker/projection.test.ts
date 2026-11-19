@@ -870,6 +870,46 @@ test('an assistant step carries its own start, first token and completion', asyn
   }
 });
 
+test('an assistant step derives completedAt from duration when completedAt is omitted', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-step-timing-duration-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const user = { role: 'user' as const, content: 'ping', timestamp: 1000 };
+    journal.append(projection.consume({ type: 'message_start', message: user }));
+    manager.appendMessage(user);
+    journal.append(projection.consume({ type: 'message_end', message: user }));
+    projection.bindPending();
+    const step = { ...assistant([{ type: 'text' as const, text: 'pong' }], 'stop', 1000), ttft: 250, duration: 1400 };
+    journal.append(projection.consume({ type: 'message_start', message: step }));
+    manager.appendMessage(step);
+    const created = projection.consume({ type: 'message_end', message: step });
+    journal.append(created);
+    projection.bindPending();
+    journal.append(projection.completeRun(2400));
+    const expected = { startedAt: 1000, firstTokenAt: 1250, completedAt: 2400 };
+    const history = projection.history({ sessionId: 'session' });
+    const live = history.messages.find(message => message.role === 'assistant');
+    expect(live?.timing).toEqual(expected);
+    expect(created).toContainEqual({ timestamp: expect.any(Number), event: expect.objectContaining({ type: 'message.updated', timing: expected }) });
+    await manager.flush();
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session').seed();
+    expect(restored.messages.find(message => message.role === 'assistant')?.timing).toEqual(expected);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('a run OMP prompts itself opens a turn without an empty user message', async () => {
   const root = await mkdtemp(join(tmpdir(), 'canonical-worker-turn-'));
   const manager = SessionManager.create(root, root);

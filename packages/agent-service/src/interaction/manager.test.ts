@@ -698,3 +698,25 @@ describe('service-owned interaction CAS', () => {
 
 
 });
+
+test('a session rekey moves a pending approval to the minted id it must be answered under', async () => {
+  const { manager, operations } = sessionHarness();
+  const previousSessionId = 'session-1';
+  const sessionId = 'session-minted';
+  try {
+    manager.onRequest(previousSessionId, 'worker-1', approval);
+    expect(manager.approvals(previousSessionId)[0]?.sessionId).toBe(previousSessionId);
+    manager.rekey(previousSessionId, sessionId);
+    // The Host and the worker only know the minted id after the native branch,
+    // so a card left under the retired id is unreachable for the user.
+    expect(manager.approvals(previousSessionId)).toEqual([]);
+    expect(manager.approvals(sessionId)[0]).toMatchObject({ approvalId: 'approval-1', sessionId });
+    const resolved = await manager.resolveApproval(sessionId, 'approval-1', {
+      decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1',
+    });
+    // Resolving under the minted id succeeds and returns the request it closed,
+    // which proves the card itself moved rather than only a lookup alias.
+    expect(resolved).toMatchObject({ approvalId: 'approval-1', sessionId, status: 'approved' });
+    expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'approval-1', decision: 'approve' }]);
+  } finally { manager.closeSession(sessionId); }
+});

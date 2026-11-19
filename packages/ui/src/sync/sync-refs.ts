@@ -55,6 +55,29 @@ export function getDirectoryState(directory?: string): State | undefined {
   return stores.getState(dir)
 }
 
+/**
+ * Re-read initialized directories' canonical environments after a settings
+ * write moved a fact they all derive: the model catalog carries
+ * `planRoleAvailable`, which reads `modelRoles.plan`, and the composer disables
+ * Plan from that value.
+ *
+ * `modelRoles` is one record in the shared agent directory, so a write changes
+ * `planRoleAvailable` for every workspace. The Settings page names its own
+ * directory, which is not necessarily the one a composer reads — a session in
+ * a managed-chat or another project's directory kept the pre-write catalog, and
+ * Plan stayed disabled while every catalog the settings page could see said the
+ * role existed. Invalidating the fact therefore means re-running the bootstrap
+ * lane for every directory the client has initialized; the lane owns the read,
+ * so this asks for a forced run instead of fetching catalogs beside it.
+ */
+export function refreshDirectoryCatalogs(): void {
+  const stores = _childStores
+  if (!stores || boundRuntimeKey !== getRuntimeKey()) return
+  for (const directory of stores.children.keys()) {
+    stores.requestBootstrap({ directory, priority: "selected", reason: "action-demand", force: true })
+  }
+}
+
 
 /** Read sessions from current directory's child store */
 export function getSyncSessions(directory?: string): State["session"] {

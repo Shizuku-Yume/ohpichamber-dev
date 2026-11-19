@@ -9,11 +9,6 @@ const asNonEmptyString = (value) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const formatModelRef = (entry) => {
-  const providerID = asNonEmptyString(entry?.providerID) || asNonEmptyString(entry?.providerId);
-  const modelID = asNonEmptyString(entry?.modelID) || asNonEmptyString(entry?.modelId) || asNonEmptyString(entry?.id);
-  return providerID && modelID ? `${providerID}/${modelID}` : null;
-};
 
 const formatDefaultLine = ({ defaultModel, defaultAgent, defaultVariant }) => {
   const model = asNonEmptyString(defaultModel) || 'none';
@@ -22,7 +17,7 @@ const formatDefaultLine = ({ defaultModel, defaultAgent, defaultVariant }) => {
   return `Default: \`${model}${variant ? ` (${variant})` : ''}\` / \`${agent}\``;
 };
 
-const formatModelsOutput = (settings = {}) => {
+const formatModelsOutput = (settings = {}, formatModelRef) => {
   const favorites = Array.isArray(settings.favoriteModels)
     ? settings.favoriteModels.map(formatModelRef).filter(Boolean)
     : [];
@@ -57,7 +52,8 @@ async function modelsCommand(options = {}, action = 'show') {
     printJson(result);
     return;
   }
-  process.stdout.write(formatModelsOutput(result));
+  const { formatModelRef } = await import('@openchamber/agent-contract');
+  process.stdout.write(formatModelsOutput(result, formatModelRef));
 }
 
 export { modelsCommand, formatModelsOutput };

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { useUIStore } from '@/stores/useUIStore';
-import { connectMobileSettingsNavigation, type MobileSettingsStage } from './mobileSettingsNavigation';
+import { connectMobileSettingsNavigation, MOBILE_SETTINGS_PAGES, type MobileSettingsStage } from './mobileSettingsNavigation';
 
 const originalUI = useUIStore.getState();
 let disconnect: (() => void) | undefined;
@@ -34,6 +34,28 @@ describe('mobile Settings navigation', () => {
     useUIStore.getState().setSettingsPage('shortcuts');
     useUIStore.getState().setSettingsDialogOpen(true);
     expect(opened).toEqual(['nav', 'nav']);
+  });
+
+  test('opens a deep-linked page the phone renders, including General', () => {
+    useUIStore.setState({ isSettingsDialogOpen: false, settingsPage: 'home' });
+    const opened: MobileSettingsStage[] = [];
+    disconnect = connectMobileSettingsNavigation(MOBILE_SETTINGS_PAGES, (stage) => { opened.push(stage); });
+    for (const slug of ['general', 'projects', 'remote-instances', 'tunnel', 'tools', 'memory', 'behavior']) {
+      useUIStore.getState().setSettingsPage(slug);
+      useUIStore.getState().setSettingsDialogOpen(true);
+    }
+    expect(opened).toEqual(Array(7).fill('page-content'));
+  });
+
+  test('keeps the nav stage for home and for pages the phone hides', () => {
+    useUIStore.setState({ isSettingsDialogOpen: false, settingsPage: 'home' });
+    const opened: MobileSettingsStage[] = [];
+    disconnect = connectMobileSettingsNavigation(MOBILE_SETTINGS_PAGES, (stage) => { opened.push(stage); });
+    for (const slug of ['home', 'shortcuts', 'extensions']) {
+      useUIStore.getState().setSettingsPage(slug);
+      useUIStore.getState().setSettingsDialogOpen(true);
+    }
+    expect(opened).toEqual(['nav', 'nav', 'nav']);
   });
 
   test('handles a request made before it connected, and none after it disconnects', () => {

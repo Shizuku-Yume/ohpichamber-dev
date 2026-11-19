@@ -35,6 +35,66 @@ const PR: ChangeRequest = {
 
 const STATUS: GitStatus = { current: 'feature-17', tracking: null, ahead: 0, behind: 0, files: [], isClean: true };
 
+// B-1: the binding route answers 422 for a folder outside a repository, so the
+// Changes view must not ask it there. It opens on the shared not-a-repository
+// state (Git's own probe is the only git call it makes).
+test('a non-repository directory asks no repository binding', async () => {
+  const dom = new Window({ url: 'http://localhost' });
+  const originals = new Map<string, PropertyDescriptor | undefined>();
+  const globals = {
+    window: dom, document: dom.document, navigator: dom.navigator, location: dom.location, localStorage: dom.localStorage,
+    Element: dom.Element, HTMLElement: dom.HTMLElement, HTMLInputElement: dom.HTMLInputElement, Node: dom.Node,
+    customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
+    Event: dom.Event, CustomEvent: dom.CustomEvent, KeyboardEvent: dom.KeyboardEvent, MouseEvent: dom.MouseEvent,
+    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,
+    getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+    cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true,
+  };
+  for (const [name, value] of Object.entries(globals)) {
+    originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  }
+  const originalFetch = globalThis.fetch;
+  const paths: string[] = [];
+  globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+    paths.push(url.pathname);
+    if (url.pathname === '/api/git/projects') {
+      return Response.json({ projects: [{ directory: '/chats', isGitRepository: false, status: null }] });
+    }
+    if (url.pathname === '/api/fs/git-dirs') return Response.json({ repositories: [] });
+    return new Promise<Response>(() => {});
+  }, originalFetch);
+  const { createRoot } = await import('react-dom/client');
+  const { I18nProvider } = await import('@/lib/i18n');
+  const { CanonicalClient } = await import('@/api/canonicalClient');
+  const { SyncProvider } = await import('@/sync/sync-context');
+  const client = new CanonicalClient();
+  const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+  const { createWebAPIs } = await import('../../../../web/src/api/index');
+  const { DiffView } = await import('./DiffView');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(<SyncProvider client={client} directory="/chats"><I18nProvider><RuntimeAPIContext.Provider value={createWebAPIs()}>
+        <DiffView directory="/chats" diffScope="working" />
+      </RuntimeAPIContext.Provider></I18nProvider></SyncProvider>);
+    });
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    expect(paths).not.toContain('/api/source-control/binding');
+  } finally {
+    await act(async () => root.unmount());
+    globalThis.fetch = originalFetch;
+    await dom.happyDOM.abort();
+    for (const [name, value] of originals) {
+      if (value) Object.defineProperty(globalThis, name, value);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  }
+}, 30_000);
+
 test('the pull request diff on a host without change-request diffs says so and offers no retry', async () => {
   const dom = new Window({ url: 'http://localhost' });
   const originals = new Map<string, PropertyDescriptor | undefined>();

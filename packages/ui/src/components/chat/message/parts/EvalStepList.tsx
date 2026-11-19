@@ -13,7 +13,7 @@ const MINI_CODE_STYLE: React.CSSProperties = {
     backgroundColor: 'transparent',
     padding: '0.25rem 0.5rem',
     borderRadius: '0.375rem',
-    border: '1px solid var(--border-color, rgba(128, 128, 128, 0.2))',
+    border: '1px solid var(--interactive-border)',
     fontSize: '0.75rem',
     lineHeight: '1rem',
 };

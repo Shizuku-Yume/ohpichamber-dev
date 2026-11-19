@@ -215,7 +215,7 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   // `idle`; this only lets the supervisor prefer a spare with nothing left to pay.
   z.strictObject({ type: z.literal('warm') }),
   z.strictObject({ type: z.literal('ready'), workerGeneration: EntityIdSchema }),
-  z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, detail: z.string().min(1).max(200).optional() }),
+  z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599).optional(), detail: z.string().min(1).max(200).optional() }),
   z.strictObject({
     type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema,
     status: z.number().int().min(400).max(599), detail: z.string().min(1).max(McpOAuthOperationErrorDetailLimit),

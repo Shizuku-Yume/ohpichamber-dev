@@ -905,13 +905,12 @@ export class NativeModels {
   // that may rotate it between attempts.
   const apiKey = this.context.modelRegistry.resolver(nativeModel, this.context.currentNativeSessionId());
   const deadline = AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS);
-  const result = await generateImage(nativeModel, {
-   prompt: request.prompt,
-   ...(request.inputImages ? { inputImages: request.inputImages } : {}),
-   ...(request.aspectRatio ? { aspectRatio: request.aspectRatio } : {}),
-   ...(request.imageSize ? { imageSize: request.imageSize } : {}),
-   ...(request.count ? { count: request.count } : {}),
-  }, { apiKey, signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
+  const imageOptions: Parameters<typeof generateImage>[1] = { prompt: request.prompt };
+  if (request.inputImages) imageOptions.inputImages = request.inputImages;
+  if (request.aspectRatio) imageOptions.aspectRatio = request.aspectRatio;
+  if (request.imageSize) imageOptions.imageSize = request.imageSize;
+  if (request.count) imageOptions.count = request.count;
+  const result = await generateImage(nativeModel, imageOptions, { apiKey, signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
   return ImageGenerateResultSchema.parse({
    model: request.selection,
    images: result.images.map(image => ({

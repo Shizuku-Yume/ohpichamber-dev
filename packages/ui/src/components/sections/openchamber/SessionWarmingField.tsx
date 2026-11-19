@@ -37,8 +37,10 @@ const useResolvedActiveRootSessionId = (): string | null => {
       return null;
     }
     const entity = state.entityById.get(currentSessionId) ?? null;
+    // The warming route answers 404 for an id the Host has not listed, so the
+    // field waits for the record instead of asking early.
     if (!entity) {
-      return currentSessionId;
+      return null;
     }
     if (entity.archivedAt !== undefined) {
       return null;

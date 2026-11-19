@@ -53,7 +53,7 @@ import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
 import { BtwPanel } from './btw/BtwPanel';
 import { useBtwPanelState } from './btw/useBtwPanelState';
-import { canonicalClient } from '@/api/canonicalClient';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { AttachedFilesList } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
@@ -521,13 +521,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const isNewChatDraft = useSessionUIStore((s) => (
         !columnPinned && !currentSessionId && Boolean(s.newSessionDraft?.open) && s.newSessionDraft.target === 'chat'
     ));
+    // The composer belongs to the btw question only while that question is
+    // pending; once its answer is displayed the composer is the main session's
+    // input again, so an answered panel does not duplicate its draft.
+    const btwQuestionPending = isBtwActive && btwPanel.pending;
     const chatDraftIdentity = React.useMemo(
         () => createChatDraftIdentity(
             activeRuntimeKey,
             isNewChatDraft ? NEW_CHAT_DRAFT_DIRECTORY : currentSessionDirectoryForSync ?? currentDirectory,
-            currentSessionId,
+            btwQuestionPending && currentSessionId ? `btw-pending:${currentSessionId}` : currentSessionId,
         ),
-        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, isNewChatDraft],
+        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, btwQuestionPending, isNewChatDraft],
     );
     const claimAttachmentSlot = React.useCallback(() => {
         useInputStore.getState().selectAttachmentDraft(chatDraftIdentity);
@@ -1342,7 +1346,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const handleCycleThinking = React.useCallback(() => {
         cycleThinkingVariant(currentSessionId);
     }, [currentSessionId]);
-    const handleOpenThinkingPanel = React.useCallback(() => handleOpenMobilePanel('variant'), [handleOpenMobilePanel]);
+    const handleOpenThinkingPanel = React.useCallback(() => handleOpenMobilePanel('effort'), [handleOpenMobilePanel]);
 
     // Consume pending input text (e.g., from revert action). Must stay after
     // useComposerDraft: on a draft switch the incoming draft loads first and
@@ -1792,14 +1796,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Enter BTW before sending so the question stays separate from the main draft.
         // A bare command waits for input; an argument requests one immediate send.
         if (commandPlan?.kind === 'prompt' && commandPlan.command.name === 'btw' && currentSessionId) {
+            useBtwStore.getState().setPanelState(currentSessionId, {
+                pending: true,
+                collapsed: false,
+                ephemeralRecordId: undefined,
+                ephemeralText: undefined,
+                ephemeralStatus: undefined,
+                pendingSend: undefined
+            });
             const targetIdentity = createChatDraftIdentity(activeRuntimeKey, currentSessionDirectoryForSync ?? currentDirectory, `btw-pending:${currentSessionId}`);
             const argument = commandPlan.command.argument.trim();
             handoffDraft(targetIdentity, isBtwActive ? argument : argument || null);
             if (argument && targetIdentity) immediateBtwSubmitRef.current = { identity: targetIdentity, text: argument };
             return;
         }
-
-        // Opening BTW is local and still works while authentication is expired.
         if (useAuthSessionStore.getState().state !== 'ok') {
             toast.error(t('sessionAuth.expired.sendBlocked'));
             return;
@@ -2015,6 +2025,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     return;
                 }
                 if (actionName !== 'compact') throw error;
+                if (error instanceof CanonicalApiError && error.problem.code === 'SESSION_TOO_SMALL') {
+                    toast.info(t('chat.chatInput.toast.compactNotNeeded'));
+                    return;
+                }
                 toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.compactFailed')));
             }
             return;
@@ -2287,6 +2301,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // never claims the new message.
         scrollToBottom?.();
 
+        // Only the btw question owns the composer. An ephemeral answer keeps
+        // the panel open (`isBtwActive`), but the composer is then the main
+        // session's input again, so a submit must fall through to the regular
+        // send path rather than return after the composer was cleared.
         if (isBtwActive && btwPanel.pending && currentSessionId) {
             try {
                 const result = await canonicalClient.askBtw(currentSessionId, primaryText);

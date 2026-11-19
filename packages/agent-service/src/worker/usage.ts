@@ -13,7 +13,7 @@ import { MemorySessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
-import type { UsageHistoryEntry, UsageLimit, UsageReport } from '@oh-my-pi/pi-ai';
+import type { AssistantMessage, UsageHistoryEntry, UsageLimit, UsageReport } from '@oh-my-pi/pi-ai';
 import { getAgentDir, getProjectDir } from '@oh-my-pi/pi-utils';
 import type { UsageScopeFile, UsageSessionReference } from '../protocol.ts';
 import { initDb } from '@oh-my-pi/omp-stats/db';
@@ -91,21 +91,31 @@ async function readSource(reference: UsageSessionReference, includeTools: boolea
       if (!MessageIdentity.safeParse(entry.message).success) throw new CorruptSession();
       const message = entry.message;
       if (message.role === 'assistant') {
-        if (!Assistant.safeParse(message).success) throw new CorruptSession();
+        const parsedAssistant = Assistant.safeParse(message);
+        if (!parsedAssistant.success) throw new CorruptSession();
         normalizeAssistantUsage(message);
         const content: Extract<typeof message.content[number], { type: 'toolCall' }>[] = [];
         if (includeTools) for (const block of message.content) if (block.type === 'toolCall') {
           if (!ToolCall.safeParse(block).success) throw new CorruptSession();
           content.push({ type: 'toolCall', id: block.id, name: block.name, arguments: {} });
         }
-        entries.push({
-          ...base, type: 'message', message: {
-            role: 'assistant', api: message.api, provider: message.provider,
-            model: message.model, usage: message.usage, stopReason: message.stopReason, timestamp: message.timestamp, content,
-            duration: typeof message.duration === 'number' ? message.duration : undefined,
-            ttft: typeof message.ttft === 'number' ? message.ttft : undefined,
-          }
-        });
+        const messageData: AssistantMessage = {
+          role: 'assistant',
+          api: message.api,
+          provider: message.provider,
+          model: message.model,
+          usage: message.usage,
+          stopReason: message.stopReason,
+          timestamp: message.timestamp,
+          content,
+        };
+        if (parsedAssistant.data.duration !== null && parsedAssistant.data.duration !== undefined) {
+          messageData.duration = parsedAssistant.data.duration;
+        }
+        if (parsedAssistant.data.ttft !== null && parsedAssistant.data.ttft !== undefined) {
+          messageData.ttft = parsedAssistant.data.ttft;
+        }
+        entries.push({ ...base, type: 'message', message: messageData });
       } else if (message.role === 'user') {
         entries.push({ ...base, type: 'message', message: { role: 'user', content: '', synthetic: message.synthetic, timestamp: message.timestamp } });
       } else if (includeTools && message.role === 'toolResult') {
@@ -564,10 +574,15 @@ function projectLimit(limit: UsageLimit): UsageAuthLimit {
 
 function projectReport(report: UsageReport): UsageAuthReport {
   const credits = report.resetCredits;
-  return {
-    provider: report.provider, fetchedAt: report.fetchedAt, limits: report.limits.map(projectLimit),
-    ...(credits ? { resetCredits: { availableCount: credits.availableCount, redeemableCount: credits.redeemableCount } } : {}),
+  const result: UsageAuthReport = {
+    provider: report.provider,
+    fetchedAt: report.fetchedAt,
+    limits: report.limits.map(projectLimit),
   };
+  if (credits) {
+    result.resetCredits = { availableCount: credits.availableCount, redeemableCount: credits.redeemableCount };
+  }
+  return result;
 }
 
 function projectHistory(entry: UsageHistoryEntry): UsageAuthHistoryEntry {

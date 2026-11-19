@@ -55,9 +55,13 @@ export function useGitOperationRecovery(
     }
     if (changed) { currentEntries.current = next; setEntries(next); }
   }), []);
+  // The binding route answers 422 for a folder outside a repository, so a
+  // repository scope is read only once Git says this folder is one.
+  const isGitRepo = useIsGitRepo(kind === 'clone' ? null : directory ?? null);
   const resolveScope = React.useCallback(async () => {
     owner.hydrate();
     if (!directory) return;
+    if (kind !== 'clone' && isGitRepo !== true) return;
     const capturedRevision = revision.current;
     try {
       const [runtimeKey, repositoryId] = await Promise.all([owner.runtimeKey(runtime), kind === 'clone'
@@ -68,15 +72,15 @@ export function useGitOperationRecovery(
     } catch {
       if (currentScope.current === key) setScopeFailed(true);
     }
-  }, [directory, key, kind, owner, runtime, sourceControl]);
-  React.useEffect(() => { void resolveScope(); }, [resolveScope]);
+  }, [directory, isGitRepo, key, kind, owner, runtime, sourceControl]);
   // A binding read fails while Git refuses the folder (`safe.directory`). Once
   // the folder reads as a repository again, the scope is read again, so the
   // "couldn't read this repository" blocker does not outlive the cause.
-  const isGitRepo = useIsGitRepo(kind === 'clone' ? null : directory ?? null);
   React.useEffect(() => {
-    if (scopeFailed && isGitRepo === true) void resolveScope();
-  }, [isGitRepo, resolveScope, scopeFailed]);
+    if (isGitRepo !== true && kind !== 'clone') return;
+    if (scope?.key === key && !scopeFailed) return;
+    void resolveScope();
+  }, [isGitRepo, key, kind, resolveScope, scope, scopeFailed]);
 
   const reconcile = React.useCallback(async (references: PendingGitReference[]) => {
     const capturedRevision = revision.current;

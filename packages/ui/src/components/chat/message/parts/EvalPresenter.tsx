@@ -121,7 +121,7 @@ export const EvalPresenter: React.FC<EvalPresenterProps> = ({
                 ) : null}
 
                 {evalData.meta?.truncated ? (
-                    <div data-testid="eval-meta-truncated" className="text-amber-500/90 flex items-center gap-1">
+                    <div data-testid="eval-meta-truncated" className="text-[var(--status-warning-text)] flex items-center gap-1">
                         <Icon name="error-warning" className="size-3" />
                         <span>{t('chat.toolPart.outputTruncated')}</span>
                     </div>

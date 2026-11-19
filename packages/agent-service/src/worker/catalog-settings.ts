@@ -77,13 +77,16 @@ export class NativeSettings {
   private state(workspaceId: string, revision: string): OmpSettingsState {
     const all = orderedSettings();
     const exposed = all.filter(s => !s.isCredential && OMP_SETTING_EXPOSED_IDS.has(s.id));
-    return OmpSettingsStateSchema.parse({
+    const data: OmpSettingsState = {
       workspaceId,
       revision,
-      ...(this.configFilePath === undefined ? {} : { configPath: this.configFilePath }),
       totalCount: all.length,
       settings: exposed.map(s => descriptor(s, this.settings)),
-    });
+    };
+    if (this.configFilePath !== undefined) {
+      data.configPath = this.configFilePath;
+    }
+    return OmpSettingsStateSchema.parse(data);
   }
 
   async read(workspaceId: string, revision: string): Promise<OmpSettingsState> {

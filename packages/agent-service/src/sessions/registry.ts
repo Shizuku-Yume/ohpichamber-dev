@@ -84,6 +84,8 @@ export class SessionRegistry {
     private readonly policyLoad?: ApprovalPolicyLoad,
     permission?: PermissionAuthority,
     private readonly onSessionDeleted?: (sessionIds: readonly string[]) => Promise<void> | void,
+    /** Move the owners that live outside the registry (catalog, warming) after a native session rekey. */
+    private readonly onSessionRekeyed?: (previousSessionId: string, sessionId: string) => Promise<void> | void,
   ) {
     this.references = new SessionReferences(stateDirectory);
     this.interactions = new InteractionManager(undefined, policyCommit, permission);
@@ -1320,27 +1322,54 @@ export class SessionRegistry {
       const entry = this.entries.get(sessionId);
       if (entry?.state === 'live' && result.sessionFile) {
         entry.opened.sessionFile = result.sessionFile;
+        // The branch seed re-mints the journal epoch, so it has to land before
+        // the owners below re-register: a request minted against the retired
+        // epoch cannot be published by a snapshot taken under the new one, and
+        // `GET /snapshot` answered 503 on the pending-request contract for every
+        // poll between a Promote to Branch and the next request's resolution.
+        if (result.seed) entry.opened.journal.replace(result.seed);
         if (targetSessionId !== sessionId) {
-          this.entries.delete(sessionId);
-          entry.input.rootSessionId = targetSessionId;
-          this.entries.set(targetSessionId, entry);
+          // The native branch rekeys the session in place. Every owner keyed by
+          // the root id has to move with it: the worker registration, the live
+          // entry and its interaction callbacks, the journal, the durable
+          // reference and its subagent index, any cold state, and the parent id
+          // the branch records. A stale id made the stateful owners answer
+          // "Session scope was not found" while the Host still bound the old
+          // identity, so the composer lost its chat after a Promote to Branch.
+          const previousReference = this.references.get(sessionId);
+          this.rekeyKeyedState(sessionId, targetSessionId, entry);
           this.workers.rekey(sessionId, targetSessionId);
-          entry.opened.journal.rekey(targetSessionId);
+          if (previousReference) {
+            // The branch is its own root: the identity moves to the minted
+            // native session, so the retired id names no session left to be a
+            // parent. `?? sessionId` recorded it anyway, and every parent-chain
+            // reader (the archive manifest, the roster's root/child split, the
+            // runtime a restart restores) then addressed an id the same write
+            // retired. A root has no parent; a pre-branch parent that still
+            // exists stays, because the branch continues that lineage.
+            await this.references.rekey(sessionId, {
+              ...previousReference,
+              rootSessionId: targetSessionId,
+              sessionFile: result.sessionFile,
+            });
+          }
+          await this.onSessionRekeyed?.(sessionId, targetSessionId);
         }
-        if (result.seed) {
-          entry.opened.journal.replace(result.seed);
-        }
-        const reference = this.references.get(sessionId);
-        if (reference) {
-          await this.references.put({
-            ...reference,
-            rootSessionId: targetSessionId,
-            sessionFile: result.sessionFile,
-            parentSessionId: reference.parentSessionId ?? sessionId,
-          });
+        if (result.seed && targetSessionId === sessionId) {
+          // A branch seed re-mints the journal epoch, so the interaction owner
+          // must follow it exactly as a branch selection does. Without this the
+          // manager kept the retired epoch and every request minted after the
+          // branch (a plan review, a question) was published under an epoch the
+          // snapshot does not carry; `GET /snapshot` then answered 503 on the
+          // pending-request contract until that request was resolved.
+          this.openInteractions(targetSessionId, entry.opened, entry.input.workspaceId);
         }
       }
-      return result;
+      // The projection seed is already applied to the journal above; the public
+      // control ack is strict and carries no seed, so returning it turned a
+      // completed branch into a 503 the client could not act on.
+      const { seed: _seed, ...ack } = result;
+      return ack;
     } finally {
       this.controls.delete(sessionId);
       this.controls.delete(targetSessionId);
@@ -1547,6 +1576,34 @@ export class SessionRegistry {
     };
     entry.opened = opened;
     this.openInteractions(sessionId, opened, entry.input.workspaceId);
+  }
+
+  /**
+   * Move every registry index keyed by a root session id when a completed
+   * `/btw` branch rekeys that session in place. The entry, its subagent
+   * records, the cold-read state, in-flight control reservations and the
+   * interaction callbacks all name the root, so none may keep the retired id:
+   * a later root-addressed read would answer 404 for a session the Host binds.
+   */
+  private rekeyKeyedState(previousSessionId: string, sessionId: string, entry: Extract<Entry, { state: 'live' }>): void {
+    this.entries.delete(previousSessionId);
+    entry.input.rootSessionId = sessionId;
+    entry.opened.journal.rekey(sessionId);
+    for (const [id, value] of this.openings) if (id === previousSessionId) { this.openings.delete(id); this.openings.set(sessionId, value); }
+    if (this.pendingRuns.delete(previousSessionId)) this.pendingRuns.add(sessionId);
+    if (this.controls.delete(previousSessionId)) this.controls.add(sessionId);
+    this.entries.set(sessionId, entry);
+    for (const [subagentId, record] of this.subagents) {
+      if (record.rootSessionId === previousSessionId) this.subagents.set(subagentId, { ...record, rootSessionId: sessionId, parentSessionId: record.parentSessionId === previousSessionId ? sessionId : record.parentSessionId });
+    }
+    const coldJournal = this.coldJournals.get(previousSessionId);
+    if (coldJournal) { this.coldJournals.delete(previousSessionId); coldJournal.rekey(sessionId); this.coldJournals.set(sessionId, coldJournal); }
+    const nativeCold = this.nativeCold.get(previousSessionId);
+    if (nativeCold) { this.nativeCold.delete(previousSessionId); this.nativeCold.set(sessionId, { ...nativeCold, identity: { ...nativeCold.identity, rootSessionId: sessionId } }); }
+    const opening = this.coldSnapshotOpenings.get(previousSessionId);
+    if (opening) { this.coldSnapshotOpenings.delete(previousSessionId); this.coldSnapshotOpenings.set(sessionId, opening); }
+    this.interactions.rekey(previousSessionId, sessionId);
+    this.openInteractions(sessionId, entry.opened, entry.input.workspaceId);
   }
 
   private openInteractions(sessionId: string, opened: Opened, workspaceId: string): void {

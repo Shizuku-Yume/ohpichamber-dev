@@ -1,6 +1,7 @@
 /** Plugins settings card grid and Settings list-search strings — merged into each locale's main dictionary. */
 export const pluginsGridI18n = {
   en: {
+    'settings.plugins.provider.builtinDefaults': 'Builtin Defaults',
     'settings.plugins.grid.actionsAria': 'Actions for {name}',
     'settings.common.sidebar.searchPlaceholder': 'Search',
     'settings.common.sidebar.noMatches': 'Nothing matches “{query}”.',
@@ -55,6 +56,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Project overrides affect the effective settings. Editing global settings does not change those overrides.',
   },
   nl: {
+    'settings.plugins.provider.builtinDefaults': 'Ingebouwde standaarden',
     'settings.plugins.grid.actionsAria': 'Acties voor {name}',
     'settings.common.sidebar.searchPlaceholder': 'Zoeken',
     'settings.common.sidebar.noMatches': 'Niets komt overeen met “{query}”.',
@@ -109,6 +111,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Projectoverschrijvingen beïnvloeden de effectieve instellingen. Het bewerken van globale instellingen verandert die overschrijvingen niet.',
   },
   uk: {
+    'settings.plugins.provider.builtinDefaults': 'Вбудовані типові',
     'settings.plugins.grid.actionsAria': 'Дії для {name}',
     'settings.common.sidebar.searchPlaceholder': 'Пошук',
     'settings.common.sidebar.noMatches': 'Нічого не знайдено за запитом «{query}».',
@@ -163,6 +166,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Перевизначення проєкту впливають на фактичні налаштування. Редагування глобальних налаштувань не змінює ці перевизначення.',
   },
   de: {
+    'settings.plugins.provider.builtinDefaults': 'Integrierte Standards',
     'settings.plugins.grid.actionsAria': 'Aktionen für {name}',
     'settings.common.sidebar.searchPlaceholder': 'Suchen',
     'settings.common.sidebar.noMatches': 'Nichts passt zu „{query}“.',
@@ -217,6 +221,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Projekt-Überschreibungen beeinflussen die effektiven Einstellungen. Das Bearbeiten globaler Einstellungen ändert diese Überschreibungen nicht.',
   },
   es: {
+    'settings.plugins.provider.builtinDefaults': 'Valores predeterminados integrados',
     'settings.plugins.grid.actionsAria': 'Acciones de {name}',
     'settings.common.sidebar.searchPlaceholder': 'Buscar',
     'settings.common.sidebar.noMatches': 'Nada coincide con «{query}».',
@@ -271,6 +276,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Las invalidaciones del proyecto afectan a los ajustes efectivos. Editar los ajustes globales no cambia esas invalidaciones.',
   },
   fr: {
+    'settings.plugins.provider.builtinDefaults': 'Valeurs par défaut intégrées',
     'settings.plugins.grid.actionsAria': 'Actions pour {name}',
     'settings.common.sidebar.searchPlaceholder': 'Rechercher',
     'settings.common.sidebar.noMatches': 'Rien ne correspond à « {query} ».',
@@ -325,6 +331,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Les surcharges du projet affectent les paramètres effectifs. Modifier les paramètres globaux ne modifie pas ces surcharges.',
   },
   ja: {
+    'settings.plugins.provider.builtinDefaults': '組み込みのデフォルト',
     'settings.plugins.grid.actionsAria': '{name} の操作',
     'settings.common.sidebar.searchPlaceholder': '検索',
     'settings.common.sidebar.noMatches': '「{query}」に一致するものはありません。',
@@ -379,6 +386,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'プロジェクトの上書きが有効な設定に反映されます。グローバル設定を編集しても、それらの上書きは変更されません。',
   },
   ko: {
+    'settings.plugins.provider.builtinDefaults': '기본 내장',
     'settings.plugins.grid.actionsAria': '{name} 작업',
     'settings.common.sidebar.searchPlaceholder': '검색',
     'settings.common.sidebar.noMatches': '“{query}”와 일치하는 항목이 없습니다.',
@@ -433,6 +441,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': '프로젝트 재정의가 적용된 설정에 영향을 줍니다. 전역 설정을 편집해도 해당 재정의는 변경되지 않습니다.',
   },
   pl: {
+    'settings.plugins.provider.builtinDefaults': 'Wbudowane domyślne',
     'settings.plugins.grid.actionsAria': 'Działania dla {name}',
     'settings.common.sidebar.searchPlaceholder': 'Szukaj',
     'settings.common.sidebar.noMatches': 'Nic nie pasuje do „{query}”.',
@@ -487,6 +496,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Nadpisania projektu wpływają na ustawienia efektywne. Edycja ustawień globalnych nie zmienia tych nadpisań.',
   },
   'pt-BR': {
+    'settings.plugins.provider.builtinDefaults': 'Padrões integrados',
     'settings.plugins.grid.actionsAria': 'Ações para {name}',
     'settings.common.sidebar.searchPlaceholder': 'Buscar',
     'settings.common.sidebar.noMatches': 'Nada corresponde a “{query}”.',
@@ -541,6 +551,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'As substituições do projeto afetam as configurações efetivas. Editar as configurações globais não altera essas substituições.',
   },
   tr: {
+    'settings.plugins.provider.builtinDefaults': 'Yerleşik varsayılanlar',
     'settings.plugins.grid.actionsAria': '{name} için işlemler',
     'settings.common.sidebar.searchPlaceholder': 'Ara',
     'settings.common.sidebar.noMatches': '“{query}” ile eşleşen bir şey yok.',
@@ -595,6 +606,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': 'Proje geçersiz kılmaları geçerli ayarları etkiler. Genel ayarları düzenlemek bu geçersiz kılmaları değiştirmez.',
   },
   'zh-CN': {
+    'settings.plugins.provider.builtinDefaults': '内置默认',
     'settings.plugins.grid.actionsAria': '{name} 的操作',
     'settings.common.sidebar.searchPlaceholder': '搜索',
     'settings.common.sidebar.noMatches': '没有与“{query}”匹配的内容。',
@@ -649,6 +661,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': '项目覆盖设置会影响实际生效的设置。编辑全局设置不会更改这些项目覆盖设置。',
   },
   'zh-TW': {
+    'settings.plugins.provider.builtinDefaults': '內建預設',
     'settings.plugins.grid.actionsAria': '{name} 的操作',
     'settings.common.sidebar.searchPlaceholder': '搜尋',
     'settings.common.sidebar.noMatches': '沒有符合「{query}」的內容。',
@@ -703,6 +716,7 @@ export const pluginsGridI18n = {
     'settings.plugins.field.projectOverride': '專案覆寫設定會影響實際生效的設定。編輯全域設定不會變更這些專案覆寫設定。',
   },
   ar: {
+    'settings.plugins.provider.builtinDefaults': 'الإعدادات الافتراضية المدمجة',
     'settings.plugins.grid.actionsAria': 'إجراءات {name}',
     'settings.common.sidebar.searchPlaceholder': 'بحث',
     'settings.common.sidebar.noMatches': 'لا شيء يطابق “{query}”.',
@@ -715,6 +729,7 @@ export const pluginsGridI18n = {
     'settings.plugins.page.back': 'كل المكوّنات الإضافية',
   },
   he: {
+    'settings.plugins.provider.builtinDefaults': 'ברירות מחדל מובנות',
     'settings.plugins.grid.actionsAria': 'פעולות עבור {name}',
     'settings.common.sidebar.searchPlaceholder': 'חיפוש',
     'settings.common.sidebar.noMatches': 'אין תוצאות עבור “{query}”.',

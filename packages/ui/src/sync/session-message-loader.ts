@@ -8,8 +8,11 @@ import { mergeMessages, mergeOptimisticPage, type OptimisticItem } from "./optim
 import { clearDirectorySessionPrefetch, clearRuntimeSessionPrefetch, clearSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
+import { isDraftSessionId } from "@/lib/sessionIdentity"
+import { isRetiredSessionId } from "./session-rekey-registry"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { dropSessionCaches } from "./session-cache"
 import { SessionCacheRetention } from "./session-cache-retention"
@@ -227,7 +230,7 @@ export class SessionMessageLoader {
   }
 
   ensure(target: SessionMessageTarget, options?: { force?: boolean; reason?: "navigation" | "reactive" | "prefetch" }): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
@@ -236,12 +239,14 @@ export class SessionMessageLoader {
       if (options?.reason !== "prefetch" && entry.snapshot.loadingKind === "prefetch") this.patchEntry(entry, { loadingKind: "initial" })
       return entry.inflight
     }
-    if (!options?.force && entry.snapshot.resolved && !entry.evicted && store.getState().snapshot[normalized.sessionId]) return Promise.resolve()
+    if (!options?.force && entry.snapshot.resolved && !entry.evicted
+      && (store.getState().snapshot[normalized.sessionId] !== undefined
+        || store.getState().message[normalized.sessionId] !== undefined)) return Promise.resolve()
     return this.startSnapshotLoad(normalized, entry, store, options?.reason === "prefetch" ? "prefetch" : "initial")
   }
 
   prefetch(target: SessionMessageTarget): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     this.childStores.ensureChild(normalized.directory, { bootstrap: false })
     if (this.retention && !this.retention.admitPrefetch(normalized)) return Promise.resolve()
@@ -249,7 +254,7 @@ export class SessionMessageLoader {
   }
 
   refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot, options?: { recovered?: boolean }): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     if (snapshot) this.invalidateSession(normalized)
     const entry = this.getEntry(normalized)
@@ -288,7 +293,7 @@ export class SessionMessageLoader {
   }
 
   loadOlder(target: SessionMessageTarget): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
     if (entry.inflight && entry.snapshot.loadingKind === "older") return entry.inflight
@@ -361,7 +366,7 @@ export class SessionMessageLoader {
   }
 
   async loadComplete(target: SessionMessageTarget): Promise<void> {
-    const normalized = this.normalizeTarget(target)
+    const normalized = this.readTarget(target)
     if (!normalized || this.disposed) throw new Error("Session message loader is unavailable")
     const release = this.retainSessionHistory(normalized)
     const configurationGeneration = this.configurationGeneration
@@ -494,6 +499,20 @@ export class SessionMessageLoader {
     return directory && target.sessionId ? { directory, sessionId: target.sessionId } : null
   }
 
+  /**
+   * The boundary every *read* enters. A session id the rekey retired is not
+   * addressable any more, so it is refused here and no request leaves the
+   * browser for it: a deferred consumer holding one pre-rekey commit would
+   * otherwise ask the Host for a session both authorities now answer 404 for.
+   * Cache cleanup keeps addressing the raw id, so its own entry still clears.
+   */
+  private readTarget(target: SessionMessageTarget): SessionMessageTarget | null {
+    const normalized = this.normalizeTarget(target)
+    if (!normalized) return null
+    return isRetiredSessionId(normalized.sessionId, this.configuration.runtimeKey) ? null : normalized
+  }
+
+
   private keyFor(target: SessionMessageTarget): string {
     return `${this.configuration.runtimeKey}\n${target.directory}\n${target.sessionId}`
   }
@@ -545,12 +564,43 @@ export class SessionMessageLoader {
     return promise
   }
 
-  private knownChild(target: SessionMessageTarget, store: ChildStore) {
-    const session = useGlobalSessionsStore.getState().entityById.get(target.sessionId)
-      ?? store.getState().session.find(session => session.sessionId === target.sessionId)
-    return session?.parentSessionId ? session : undefined
+  private knownSession(sessionId: string, store: ChildStore): Session | undefined {
+    return store.getState().session.find(session => session.sessionId === sessionId)
+      ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
   }
-
+  /**
+   * The row that tells a child apart from a root: the listed child row when the
+   * projection carries one, otherwise the identity a `vibe_spawn` child still
+   * has through the live subagent index. Its transcript is readable only through
+   * the history route; the root-only snapshot, metadata, queue and event routes
+   * answer 403/404 for it. The parent row supplies the workspace identity, and
+   * the subagent record supplies the child's own activity. A child has no event
+   * stream of its own: its epoch and head are its own identity, never the
+   * parent's cursor, which would describe events the child never received.
+   */
+  private knownChild(target: SessionMessageTarget, store: ChildStore): Session | undefined {
+    const listed = this.knownSession(target.sessionId, store)
+    if (listed) return listed.rootSessionId !== listed.sessionId ? listed : undefined
+    const subagents = useSubagentsStore.getState().byParent
+    for (const parentId in subagents) {
+      const found = subagents[parentId].find(child => child.subagentId === target.sessionId || child.childSessionId === target.sessionId)
+      if (!found) continue
+      const parent = this.knownSession(parentId, store)
+      if (!parent) continue
+      const active = found.status === "running" && parent.activeRunId !== null
+      const runtimeStatus = parent.runtimeStatus === "unavailable" ? "unavailable" : active ? parent.runtimeStatus : "idle"
+      return {
+        sessionId: target.sessionId, parentSessionId: parentId, rootSessionId: parent.rootSessionId,
+        projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
+        createdAt: found.createdAt ?? parent.createdAt, updatedAt: found.updatedAt ?? parent.updatedAt,
+        epoch: target.sessionId, headSequence: "0",
+        runtimeStatus, activeRunId: runtimeStatus === "idle" || runtimeStatus === "unavailable" ? null : parent.activeRunId,
+        mode: { kind: "main" },
+        metadata: null, metadataRevision: "0", archiveRevision: "0",
+      }
+    }
+    return undefined
+  }
   private startChildHistoryLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: SessionMessageLoadKind): Promise<void> {
     const client = this.configuration.client
     const child = this.knownChild(target, store)
@@ -573,19 +623,36 @@ export class SessionMessageLoader {
       }
       const incoming = sortMessagesChronologically(page.messages)
       const messages = kind === "older" ? mergeMessages(current.message[target.sessionId] ?? [], incoming) : incoming
+      // History establishes the transcript, not session authority. `knownChild`
+      // reads the directory row first, so a child installed while this read was
+      // in flight keeps its own status and cursor; the pre-read identity is only
+      // used when no row exists yet to materialize the unlisted child.
       const next = installHostSession(current, this.knownChild(target, store) ?? child)
-      store.setState({ ...next, message: { ...next.message, [target.sessionId]: messages },
-        partOwner: { ...next.partOwner, [target.sessionId]: partOwners(messages) } })
+      store.setState({
+        ...next, message: { ...next.message, [target.sessionId]: messages },
+        partOwner: { ...next.partOwner, [target.sessionId]: partOwners(messages) }
+      })
       entry.historyBranch = page.branch
       entry.evicted = false
-      this.patchEntry(entry, { status: "ready", loadingKind: null, error: null, resolved: true,
-        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: messages.length, updatedAt: Date.now() })
+      this.patchEntry(entry, {
+        status: "ready", loadingKind: null, error: null, resolved: true,
+        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: messages.length, updatedAt: Date.now()
+      })
       this.persistCoverage(target, entry.snapshot)
       // No synthetic snapshot or journal cursor: Task32 exposes child history only.
     })
   }
 
   private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot, recovered = false): Promise<void> {
+    // A composer draft is a local `draft_<draftId>` identity the Host has never
+    // seen. Its transcript is the optimistic echo in the child store, so there
+    // is no snapshot to request and no failure to report.
+    if (isDraftSessionId(target.sessionId)) {
+      if (!entry.snapshot.resolved || entry.snapshot.status !== "idle" || entry.snapshot.error !== null) {
+        this.patchEntry(entry, { status: "idle", loadingKind: null, error: null, resolved: true, complete: true, limit: store.getState().message[target.sessionId]?.length ?? 0 })
+      }
+      return Promise.resolve()
+    }
     if (this.knownChild(target, store)) return this.startChildHistoryLoad(target, entry, store, kind)
     const client = this.configuration.client
     const onSnapshot = this.configuration.onSnapshot
@@ -645,6 +712,8 @@ export class SessionMessageLoader {
   }
 
   private async loadHostState(target: SessionMessageTarget, store: ChildStore, snapshot: SessionSnapshot, client: CanonicalClient, isCurrent: () => boolean): Promise<void> {
+    // Metadata and queue are root-only routes; a child answers 404 for both.
+    if (this.knownChild(target, store)) return
     const requestedRevision = store.getState().sessionRevision ?? 0
     const missingSession = !store.getState().session.some(session => session.sessionId === target.sessionId)
     const sessions = missingSession ? client.listSessions(snapshot.session.workspaceId).catch(() => null) : Promise.resolve(null)
@@ -722,10 +791,12 @@ export class SessionMessageLoader {
     if (messages === current.message[target.sessionId] && authoritativeMessages === snapshot.messages && turns === snapshot.turns) return
     store.setState({
       message: messages === current.message[target.sessionId] ? current.message : { ...current.message, [target.sessionId]: messages },
-      snapshot: { ...current.snapshot, [target.sessionId]: {
-        ...snapshot, messages: authoritativeMessages, turns,
-        window: { ...snapshot.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: authoritativeMessages[0]?.messageId ?? null, lastMessageId: authoritativeMessages.at(-1)?.messageId ?? null, hasEarlier: page.nextCursor !== null },
-      } },
+      snapshot: {
+        ...current.snapshot, [target.sessionId]: {
+          ...snapshot, messages: authoritativeMessages, turns,
+          window: { ...snapshot.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: authoritativeMessages[0]?.messageId ?? null, lastMessageId: authoritativeMessages.at(-1)?.messageId ?? null, hasEarlier: page.nextCursor !== null },
+        }
+      },
       partOwner: messages === current.message[target.sessionId] ? current.partOwner : { ...current.partOwner, [target.sessionId]: partOwners(messages) },
     })
   }

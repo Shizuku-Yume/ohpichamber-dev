@@ -1,9 +1,14 @@
 import React, { act } from 'react';
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
-mock.module('@/components/chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
-mock.module('../chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
 import type { Root } from 'react-dom/client';
 import { HTMLDivElement as HappyDivElement, Window } from 'happy-dom';
+import type { RuntimeAPIs } from '@/lib/api/types';
+
+mock.module('@/components/chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
+mock.module('../chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
+
+// SAFETY: These navigation tests do not call any runtime API.
+const runtime = {} as RuntimeAPIs;
 
 const browser = new Window({ url: 'http://localhost' });
 let root: Root;
@@ -31,6 +36,7 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
 const { SettingsView } = await import('./SettingsView');
+const { MOBILE_SETTINGS_PAGES } = await import('@/apps/mobileSettingsNavigation');
 
 let container: HappyDivElement;
 
@@ -55,7 +61,7 @@ afterEach(async () => {
 test('SettingsView renders the restored Behavior page in the agent navigation group', async () => {
   await act(async () => {
     root.render(
-      <RuntimeAPIContext.Provider value={{} as import('@/lib/api/types').RuntimeAPIs}>
+      <RuntimeAPIContext.Provider value={runtime}>
         <I18nProvider>
           <SettingsView onClose={() => {}} forceMobile={false} />
         </I18nProvider>
@@ -78,7 +84,7 @@ test('SettingsView renders the restored Behavior page in the agent navigation gr
 test('SettingsView displays clarified Guest Extensions, OMP Plugins, and Prompt Templates labels', async () => {
   await act(async () => {
     root.render(
-      <RuntimeAPIContext.Provider value={{} as import('@/lib/api/types').RuntimeAPIs}>
+      <RuntimeAPIContext.Provider value={runtime}>
         <I18nProvider>
           <SettingsView onClose={() => {}} forceMobile={false} />
         </I18nProvider>
@@ -97,4 +103,53 @@ test('SettingsView displays clarified Guest Extensions, OMP Plugins, and Prompt 
   expect(navTexts.includes('Extensions')).toBe(false);
   expect(navTexts.includes('Plugins')).toBe(false);
   expect(navTexts.includes('Snippets')).toBe(false);
+});
+
+test('the phone Settings list offers every page a deep link can open', async () => {
+  useUIStore.setState({ settingsPage: 'home', isSettingsDialogOpen: true });
+  await act(async () => {
+    root.render(
+      <RuntimeAPIContext.Provider value={runtime}>
+        <I18nProvider>
+          <SettingsView onClose={() => {}} forceMobile initialMobileStage="nav" visiblePageSlugs={[...MOBILE_SETTINGS_PAGES]} />
+        </I18nProvider>
+      </RuntimeAPIContext.Provider>
+    );
+  });
+  const navTexts = Array.from(container.querySelectorAll('button')).map((b) => b.textContent?.trim() || '');
+  for (const page of ['Memory', 'Behavior', 'Projects', 'Remote instances', 'Tools', 'General']) {
+    expect(navTexts.some((text) => text === page)).toBe(true);
+  }
+  // The phone has no hardware keyboard, so Shortcuts stays out of its list.
+  expect(navTexts).not.toContain('Shortcuts');
+});
+
+test('a phone deep link to a page the list shows opens the page', async () => {
+  useUIStore.setState({ settingsPage: 'memory', isSettingsDialogOpen: true });
+  await act(async () => {
+    root.render(
+      <RuntimeAPIContext.Provider value={runtime}>
+        <I18nProvider>
+          <SettingsView onClose={() => {}} forceMobile initialMobileStage="page-content" visiblePageSlugs={[...MOBILE_SETTINGS_PAGES]} />
+        </I18nProvider>
+      </RuntimeAPIContext.Provider>
+    );
+  });
+  // The navigation stage is the list with a search field; the page is not.
+  expect(container.querySelector('[data-settings-search]')).toBeNull();
+});
+
+test('a phone deep link to the keyboard-only Shortcuts page stays on the list', async () => {
+  useUIStore.setState({ settingsPage: 'shortcuts', isSettingsDialogOpen: true });
+  await act(async () => {
+    root.render(
+      <RuntimeAPIContext.Provider value={runtime}>
+        <I18nProvider>
+          <SettingsView onClose={() => {}} forceMobile initialMobileStage="nav" visiblePageSlugs={[...MOBILE_SETTINGS_PAGES]} />
+        </I18nProvider>
+      </RuntimeAPIContext.Provider>
+    );
+  });
+  expect(container.querySelector('[data-settings-search]')).not.toBeNull();
+  expect(container.textContent).not.toContain('Customize keyboard shortcuts.');
 });

@@ -573,7 +573,7 @@ function App({ apis }: AppProps) {
     if (!isInitialized || isSwitchingDirectory) return;
     if (appReadyDispatchedRef.current) return;
     appReadyDispatchedRef.current = true;
-    (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady = true;
+    window.__openchamberAppReady = true;
     window.dispatchEvent(new Event('openchamber:app-ready'));
   }, [isInitialized, isSwitchingDirectory]);
 

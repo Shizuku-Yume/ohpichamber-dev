@@ -3,18 +3,32 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { register } from 'node:module';
 
+let configuredRuntimeRoot = null;
+let configuredSdkRoot = null;
+
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+export async function initialize(data) {
+  configuredRuntimeRoot = data?.runtimeRoot ?? configuredRuntimeRoot;
+  configuredSdkRoot = data?.sdkRoot ?? configuredSdkRoot;
+}
 
 export function findRuntimeRoot(packageRoot = webRoot) {
   const candidates = [
+    packageRoot === webRoot ? configuredRuntimeRoot : null,
+    packageRoot.includes('.asar') ? path.resolve(packageRoot, '../../..', 'agent-runtime') : null,
     path.join(packageRoot, 'resources', 'agent-runtime'),
-    path.join(packageRoot, 'agent-runtime'),
-  ];
-  return candidates.find((dir) => fs.existsSync(path.join(dir, 'manifest.json'))) ?? null;
+    path.join(packageRoot, 'agent-runtime')
+  ].filter(Boolean);
+
+  return candidates.find((dir) => {
+    if (dir.includes('.asar')) return false;
+    return fs.existsSync(path.join(dir, 'manifest.json'));
+  }) ?? null;
 }
 
 export function ensureAgentRuntimeSymlinks(root) {
-  if (root.includes('.asar')) return;
+  if (!root || root.includes('.asar') || webRoot.includes('.asar')) return;
   const manifestPath = path.join(root, 'manifest.json');
   if (!fs.existsSync(manifestPath)) return;
   let manifest;
@@ -25,7 +39,7 @@ export function ensureAgentRuntimeSymlinks(root) {
   }
   if (!Array.isArray(manifest.files)) return;
   for (const item of manifest.files) {
-    if (item.link !== undefined && typeof item.path === 'string') {
+    if (item?.link !== undefined && item.path) {
       const file = path.join(root, item.path);
       try {
         if (fs.lstatSync(file).isSymbolicLink() && fs.readlinkSync(file) === item.link) {
@@ -96,11 +110,14 @@ export function resolveWebAgentRuntime(
   return { bunPath, entrypoint, worker, root, manifest };
 }
 
-export function registerStandaloneLoader(packageRoot = webRoot) {
+export function registerStandaloneLoader({ packageRoot = webRoot, runtimeRoot, sdkRoot } = {}) {
+  configuredRuntimeRoot = runtimeRoot ?? findRuntimeRoot(packageRoot);
+  configuredSdkRoot = sdkRoot ?? configuredSdkRoot;
+  const runtime = configuredRuntimeRoot;
+  if (!runtime) return;
+
   if (globalThis.__openchamberStandaloneLoaderRegistered) return;
   globalThis.__openchamberStandaloneLoaderRegistered = true;
-  const runtime = findRuntimeRoot(packageRoot);
-  if (!runtime) return;
 
   ensureAgentRuntimeSymlinks(runtime);
 
@@ -111,7 +128,10 @@ export function registerStandaloneLoader(packageRoot = webRoot) {
 
   try {
     const loaderUrl = new URL('./standalone-loader.mjs', import.meta.url);
-    register(loaderUrl, import.meta.url);
+    register(loaderUrl, {
+      parentURL: import.meta.url,
+      data: { runtimeRoot: configuredRuntimeRoot, sdkRoot: configuredSdkRoot }
+    });
   } catch {
     // Already registered or unsupported
   }
@@ -124,7 +144,7 @@ if (detectedRuntime) {
 }
 
 export async function resolve(specifier, context, nextResolve) {
-  const runtime = findRuntimeRoot();
+  const runtime = configuredRuntimeRoot ?? findRuntimeRoot();
   if (runtime) {
     if (specifier === '@openchamber/agent-contract') {
       const candidate = path.join(runtime, 'service', 'node_modules', '@openchamber', 'agent-contract', 'dist', 'index.js');
@@ -138,9 +158,9 @@ export async function resolve(specifier, context, nextResolve) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }
     }
-    const sdkRoot = fs.existsSync(path.join(webRoot, 'resources', 'standalone-sdk', 'dist'))
+    const sdkRoot = configuredSdkRoot ?? (fs.existsSync(path.join(webRoot, 'resources', 'standalone-sdk', 'dist'))
       ? path.join(webRoot, 'resources', 'standalone-sdk')
-      : path.join(webRoot, 'node_modules', 'ohpichamber-sdk');
+      : path.join(webRoot, 'node_modules', 'ohpichamber-sdk'));
     if (specifier === 'ohpichamber-sdk') {
       const candidate = path.join(sdkRoot, 'dist', 'index.js');
       if (fs.existsSync(candidate)) {

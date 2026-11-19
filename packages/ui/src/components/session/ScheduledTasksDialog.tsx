@@ -31,6 +31,7 @@ import {
 } from '@/lib/scheduledTasksApi';
 import { ScheduledTaskEditorDialog } from './ScheduledTaskEditorDialog';
 import { canonicalizeTimezone } from '@/lib/timezones';
+import { formatRelativeTime } from './scheduledTasksRelativeTime';
 import { getModelDisplayName } from '@/lib/modelDisplay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
@@ -125,41 +126,6 @@ const formatClockTime = (value: number | undefined, timeFormatPreference: TimeFo
   return '';
  }
  return formatTimeForPreference(value, timeFormatPreference);
-};
-
-const formatRelativeTime = (value: number | undefined, t: ReturnType<typeof useI18n>['t']): string => {
- if (!value || !Number.isFinite(value)) {
-  return '';
- }
- const diff = value - Date.now();
- const abs = Math.abs(diff);
- const minute = 60_000;
- const hour = 60 * minute;
- const day = 24 * hour;
- const future = diff >= 0;
- if (abs < minute) {
-  return future ? t('sessions.scheduledTasks.dialog.relativeTime.inLessThanOneMinute') : t('sessions.scheduledTasks.dialog.relativeTime.justNow');
- }
- if (abs < hour) {
-  const m = Math.round(abs / minute);
-  return future
-   ? t('sessions.scheduledTasks.dialog.relativeTime.inMinutes', { count: m })
-   : t('sessions.scheduledTasks.dialog.relativeTime.minutesAgo', { count: m });
- }
- if (abs < day) {
-  const h = Math.floor(abs / hour);
-  const m = Math.round((abs % hour) / minute);
-  const body = m > 0 ? `${h}h ${m}m` : `${h}h`;
-  return future
-   ? t('sessions.scheduledTasks.dialog.relativeTime.inDuration', { duration: body })
-   : t('sessions.scheduledTasks.dialog.relativeTime.durationAgo', { duration: body });
- }
- const d = Math.floor(abs / day);
- const h = Math.round((abs % day) / hour);
- const body = h > 0 ? `${d}d ${h}h` : `${d}d`;
- return future
-  ? t('sessions.scheduledTasks.dialog.relativeTime.inDuration', { duration: body })
-  : t('sessions.scheduledTasks.dialog.relativeTime.durationAgo', { duration: body });
 };
 
 type StatusTone = 'success' | 'error' | 'warning' | 'muted';

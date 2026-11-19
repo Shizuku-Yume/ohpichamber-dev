@@ -92,6 +92,10 @@ describe('walkthrough routes', () => {
     },
   };
 
+  // The baseline the non-git cases spread over: one failing read is the only
+  // difference from the service the rest of the file drives.
+  const serviceStub = service;
+
   const generate = (signal) => fetch(`${base}/api/walkthrough/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -407,6 +411,36 @@ describe('walkthrough routes', () => {
     const response = await prDiff({ kind: 'pr', number: 3 }, gitlab);
     expect(response.status).toBe(200);
     expect(lastArgs.readContext).toMatchObject({ provider: 'gitlab', accountId: gitlab.accountId });
+  });
+
+  // The read used to reach `git rev-parse` in the real service, whose plain
+  // "not a git repository" fell through to a 500. A folder that is not a
+  // repository is what the caller asked about, so it answers like the
+  // source-control binding routes: 422 with the typed code.
+  it.each([
+    ['read', () => fetch(`${base}/api/walkthrough?directory=/not-a-repo&source=${encodeURIComponent(JSON.stringify(SOURCE))}`)],
+    ['progress', () => fetch(`${base}/api/walkthrough/progress?directory=/not-a-repo&source=${encodeURIComponent(JSON.stringify(SOURCE))}`)],
+    ['cancel', () => fetch(`${base}/api/walkthrough/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: '/not-a-repo', source: SOURCE }),
+    })],
+  ])('answers a non-git directory with 422, not 500, on %s', async (_name, request) => {
+    // As `index.js` reports it: Git's refusal becomes this typed precondition.
+    const failure = Object.assign(new Error('Directory is not a supported Git repository'), {
+      code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY', reason: 'not-a-git-repository',
+    });
+    const service = {
+      ...serviceStub,
+      getWalkthrough: vi.fn().mockRejectedValue(failure),
+      getRepositoryRootFor: vi.fn().mockRejectedValue(failure),
+      cancelWalkthroughGeneration: vi.fn().mockRejectedValue(failure),
+    };
+    getWalkthroughService.mockResolvedValue(service);
+
+    const response = await request();
+
+    expect(response.status).toBe(422);
+    expect(response.status).not.toBe(500);
+    expect(await response.json()).toMatchObject({ code: 'UNSUPPORTED_SOURCE_CONTROL_REPOSITORY' });
   });
 
   it('rejects a validated context from a provider it cannot read', async () => {

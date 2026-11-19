@@ -13,7 +13,7 @@ const PERMISSION_CODE_STYLE: React.CSSProperties = {
     padding: '0.5rem',
     fontSize: 'var(--text-meta)',
     lineHeight: '1.25rem',
-    background: 'rgb(var(--muted) / 0.3)',
+    background: 'color-mix(in srgb, var(--surface-muted) 30%, transparent)',
     borderRadius: '0.25rem',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',

@@ -187,22 +187,12 @@ describe('environment runtime', () => {
     expect(await runtime.reloadProject('path_project', projectPath)).toBeNull();
   });
 
-  it('gives OpenCode the service variables under the user variables, and nothing in enterprise mode', async () => {
-    await store.updateUser({ variables: { SHARED: 'user' } });
-    const readOpenCodeServiceEnv = () => ({ SHARED: 'service', ONLY_SERVICE: 's' });
-    let enterprise = false;
-    const runtime = createRuntime({ readOpenCodeServiceEnv, isEnterpriseMode: () => enterprise });
-    expect(runtime.forOpenCode()).toEqual({ SHARED: 'user', ONLY_SERVICE: 's' });
-    enterprise = true;
-    expect(runtime.forOpenCode()).toEqual({});
-  });
 
   it('keeps spawns going when the store is broken, and says so once', async () => {
     fs.writeFileSync(path.join(root, 'environment.json'), 'broken');
     const runtime = createRuntime();
     expect(await runtime.forDirectory(projectPath, USER_ACTION)).toBeNull();
     expect(await runtime.forDirectory(projectPath, USER_ACTION)).toBeNull();
-    expect(runtime.forOpenCode()).toEqual({});
     expect(logger.warn).toHaveBeenCalledTimes(2);
   });
 

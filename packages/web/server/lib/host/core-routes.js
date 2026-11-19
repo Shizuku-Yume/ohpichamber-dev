@@ -308,7 +308,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     res.json({ ok: true });
 
     // Terminate the entire dev process group so `bun run dev` leaves no orphans.
-    // We still run graceful shutdown to clean up OpenCode, terminals, websockets.
+    // We still run graceful shutdown to clean up terminals and websockets.
     try {
       const rawPreviewUrls = Array.isArray(req.body?.previewUrls) ? req.body.previewUrls : [];
       const previewPorts = Array.from(new Set(

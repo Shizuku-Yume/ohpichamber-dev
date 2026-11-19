@@ -33,7 +33,14 @@ export type SignalIdentities = (
 ) => Promise<PidfdSignalResult[]>;
 
 export function createManagedProcessRegistry(options?: {
-  fs?: Record<string, Function>;
+  fs?: {
+    readFile(path: string, encoding: string): Promise<string>;
+    readdir(path: string): Promise<string[]>;
+    mkdir(path: string, options: { recursive: boolean }): Promise<string | undefined>;
+    writeFile(path: string, data: string): Promise<void>;
+    rename(oldPath: string, newPath: string): Promise<void>;
+    rm(path: string, options: { force: boolean }): Promise<void>;
+  };
   registryDir?: string | null;
   bunPath?: string | null;
   signalIdentities?: SignalIdentities | null;

@@ -1,7 +1,5 @@
 import React from 'react';
-import { RiArchiveLine, RiDeleteBinLine, RiEdit2Line } from '@remixicon/react';
 import { toast } from 'sonner';
-
 import { Icon } from '@/components/icon/Icon';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
@@ -168,7 +166,7 @@ export const MobileSessionRowActions: React.FC<{
           onClick={onArchive}
           style={{ touchAction: 'manipulation' }}
         >
-          <RiArchiveLine className="size-[18px]" />
+          <Icon name="archive" className="size-[18px]" />
         </button>
         {pin ? (
           <button
@@ -213,7 +211,7 @@ export const MobileSessionRowActions: React.FC<{
           onClick={confirmingDelete ? onConfirmDelete : onRequestDelete}
           style={{ touchAction: 'manipulation' }}
         >
-          <RiDeleteBinLine className="size-[18px]" />
+          <Icon name="delete-bin" className="size-[18px]" />
         </button>
         <button
           type="button"
@@ -223,7 +221,7 @@ export const MobileSessionRowActions: React.FC<{
           onClick={onRequestRename}
           style={{ touchAction: 'manipulation' }}
         >
-          <RiEdit2Line className="size-[18px]" />
+          <Icon name="edit-2" className="size-[18px]" />
         </button>
         <button
           type="button"

@@ -1,10 +1,18 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import type { ProjectEntry } from "@/lib/api/types"
 import type { DesktopSettings } from "@/lib/desktop"
 import { parseSettingsDocument } from "@/lib/settings/registry"
 import { useProjectsStore } from "./useProjectsStore"
 import { useDirectoryStore } from "./useDirectoryStore"
 import { hostFilesystem } from '@/lib/host-filesystem'
+
+// Projects are published only after the settings document holds them. Bun has
+// no window, so the real write answers `{ ok: false }` and every add would be
+// refused; the ordering itself is covered by useProjectsStore.persistence.test.ts.
+mock.module('@/lib/persistence', () => ({
+  updateDesktopSettings: async () => ({ ok: true }),
+  loadDesktopSettings: async () => null,
+}))
 
 describe("useProjectsStore settings synchronization", () => {
   test("preserves drive roots and deduplicates Windows drive/separator variants", () => {

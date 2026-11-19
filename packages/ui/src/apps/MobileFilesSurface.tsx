@@ -1,20 +1,9 @@
 import React from 'react';
-import {
-  RiArrowLeftLine,
-  RiArrowRightSLine,
-  RiCloseLine,
-  RiFolder3Fill,
-  RiFolderOpenFill,
-  RiLoader4Line,
-  RiRefreshLine,
-  RiSearchLine,
-} from '@remixicon/react';
-
+import { Icon } from '@/components/icon/Icon';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
-import { Icon } from '@/components/icon/Icon';
 import { useFileTreeUpload } from '@/components/views/files/useFileTreeUpload';
 import { AUTO_RELIST_MAX_ENTRIES, useFileTreeChanges, type FileTreeChangeBatch } from '@/components/views/files/useFileTreeChanges';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -37,16 +26,15 @@ type MobileFilesRoute =
   | { type: 'browser'; directory: string }
   | { type: 'file'; path: string; returnDirectory: string };
 
-const normalizePath = (value: string | null | undefined): string => normalizePathImpl(value) ?? '';
 
 const getNameFromPath = (path: string): string => {
-  const normalized = normalizePath(path);
+  const normalized = normalizePathImpl(path) ?? '';
   if (!normalized || normalized === '/') return normalized || '/';
   return normalized.split('/').filter(Boolean).at(-1) ?? normalized;
 };
 
 const getParentDirectory = (path: string): string | null => {
-  const normalized = normalizePath(path);
+  const normalized = normalizePathImpl(path) ?? '';
   if (!normalized || normalized === '/') return null;
   const index = normalized.lastIndexOf('/');
   if (index <= 0) return normalized.startsWith('/') ? '/' : null;
@@ -54,8 +42,8 @@ const getParentDirectory = (path: string): string | null => {
 };
 
 const getRelativePath = (path: string, root: string): string => {
-  const normalizedPath = normalizePath(path);
-  const normalizedRoot = normalizePath(root);
+  const normalizedPath = normalizePathImpl(path) ?? '';
+  const normalizedRoot = normalizePathImpl(root) ?? '';
   if (!normalizedRoot || normalizedPath === normalizedRoot) return getNameFromPath(normalizedPath);
   if (normalizedPath.startsWith(`${normalizedRoot}/`)) return normalizedPath.slice(normalizedRoot.length + 1);
   return normalizedPath;
@@ -81,7 +69,7 @@ type MobileFilesSurfaceProps = {
 };
 
 export const MobileFilesSurface: React.FC<MobileFilesSurfaceProps> = ({ onClose, visible = true }) => {
-  const root = normalizePath(useEffectiveDirectory() ?? null);
+  const root = normalizePathImpl(useEffectiveDirectory() ?? null) ?? '';
   return <MobileFilesSurfaceForRoot key={root} root={root} onClose={onClose} visible={visible} />;
 };
 
@@ -149,7 +137,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const reloadChangedDirectory = React.useCallback(({ directories }: FileTreeChangeBatch) => {
     const current = routeRef.current;
     if (current.type !== 'browser') return;
-    if (directories && !directories.some((directory) => normalizePath(directory) === normalizePath(current.directory))) return;
+    if (directories && !directories.some((directory) => (normalizePathImpl(directory) ?? '') === (normalizePathImpl(current.directory) ?? ''))) return;
     if (entriesRef.current.length > AUTO_RELIST_MAX_ENTRIES) return;
     void loadDirectory(current.directory, { background: true });
   }, [loadDirectory]);
@@ -157,7 +145,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
 
   // Reload the listing only when the upload landed in the folder still on screen.
   const refreshUploadedDirectory = React.useCallback(async (directory: string) => {
-    if (normalizePath(directory) !== normalizePath(currentDirectoryRef.current)) return;
+    if ((normalizePathImpl(directory) ?? '') !== (normalizePathImpl(currentDirectoryRef.current) ?? '')) return;
     await loadDirectory(currentDirectoryRef.current);
   }, [loadDirectory]);
 
@@ -217,7 +205,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
   const pendingFileFocusPath = useUIStore((state) => state.pendingFileFocusPath);
   const pendingFileNavigation = useUIStore((state) => state.pendingFileNavigation);
   React.useEffect(() => {
-    const target = normalizePath(pendingFileNavigation?.path ?? pendingFileFocusPath ?? '');
+    const target = normalizePathImpl(pendingFileNavigation?.path ?? pendingFileFocusPath ?? '') ?? '';
     if (!target || !root) return;
     setSelectedPath(root, target, { allowOutsideRoot: true });
     setRoute({ type: 'file', path: target, returnDirectory: root });
@@ -242,7 +230,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
             onClick={() => setRoute({ type: 'browser', directory: route.returnDirectory })}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiArrowLeftLine className="size-5" />
+            <Icon name="arrow-left" className="size-5" />
           </button>
           <div className="min-w-0 flex-1">
             <h2 className="truncate typography-ui-header text-foreground">{getNameFromPath(route.path)}</h2>
@@ -282,7 +270,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
             onClick={onClose}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiCloseLine className="size-5" />
+            <Icon name="close" className="size-5" />
           </button>
         ) : null}
         {canGoBack && parentDirectory ? (
@@ -293,7 +281,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
             onClick={() => openDirectory(parentDirectory)}
             style={{ touchAction: 'manipulation' }}
           >
-            <RiArrowLeftLine className="size-5" />
+            <Icon name="arrow-left" className="size-5" />
           </button>
         ) : null}
         <div className="min-w-0 flex-1 px-1">
@@ -306,7 +294,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
           onClick={() => void loadDirectory(route.directory)}
           style={{ touchAction: 'manipulation' }}
         >
-          <RiRefreshLine className={cn('size-5', isLoadingDirectory && 'animate-spin')} />
+          <Icon name="refresh" className={cn('size-5', isLoadingDirectory && 'animate-spin')} />
         </button>
         {canUpload ? (
           <button
@@ -323,7 +311,7 @@ const MobileFilesSurfaceForRoot: React.FC<MobileFilesSurfaceProps & { root: stri
       </header>
       <div className="shrink-0 px-4 pb-2 pt-1">
         <div className="relative">
-          <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -374,13 +362,13 @@ const MobileFileRow: React.FC<{
     style={{ touchAction: 'manipulation' }}
   >
     {directory ? (
-      <RiFolder3Fill className="size-5 shrink-0 text-primary/80" />
+      <Icon name="folder-3-fill" className="size-5 shrink-0 text-primary/80" />
     ) : (
       <FileTypeIcon filePath={path} className="size-5 shrink-0" />
     )}
     <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">{name}</span>
     {meta ? <span className="shrink-0 typography-micro text-muted-foreground">{meta}</span> : null}
-    {directory ? <RiArrowRightSLine className="size-4 shrink-0 text-muted-foreground/60" /> : null}
+    {directory ? <Icon name="arrow-right-s" className="size-4 shrink-0 text-muted-foreground/60" /> : null}
   </button>
 );
 
@@ -390,7 +378,7 @@ const MobileSearchResults: React.FC<{
   onOpenFile: (path: string) => void;
 }> = ({ results, isSearching, onOpenFile }) => {
   const { t } = useI18n();
-  const root = normalizePath(useEffectiveDirectory() ?? null);
+  const root = normalizePathImpl(useEffectiveDirectory() ?? null) ?? '';
   if (isSearching) return <MobileFilesState loading message={t('common.loading')} />;
   if (results.length === 0) return <MobileFilesState message={t('mobile.files.search.empty')} />;
   return (
@@ -413,7 +401,7 @@ const MobileSearchResults: React.FC<{
 const MobileFilesState: React.FC<{ message: string; loading?: boolean }> = ({ message, loading = false }) => (
   <div className="flex h-full items-center justify-center px-6 text-center">
     <div className="flex max-w-sm flex-col items-center gap-2">
-      {loading ? <RiLoader4Line className="size-5 animate-spin text-muted-foreground" /> : <RiFolderOpenFill className="size-6 text-muted-foreground" />}
+      {loading ? <Icon name="loader-4" className="size-5 animate-spin text-muted-foreground" /> : <Icon name="folder-open-fill" className="size-6 text-muted-foreground" />}
       <p className="typography-ui-label font-semibold text-foreground">{message}</p>
     </div>
   </div>

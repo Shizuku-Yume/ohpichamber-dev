@@ -9,9 +9,11 @@ import { openSession } from '@/lib/router/openSessionFromRoute';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useTerminalStore } from '@/stores/useTerminalStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useRouter } from './useRouter';
+import { takeHeldContextSurface, useRouter } from './useRouter';
 
 const DIRECTORY = '/project';
 
@@ -127,6 +129,150 @@ test('an initial message link keeps its message target', async () => {
   expect(useSessionUIStore.getState().currentSessionId).toBe('next');
   expect(window.location.search).toBe('?session=next&message=msg');
   expect(peekMessageFocus('next')?.messageId).toBe('msg');
+});
+
+test('a tab deep link opens the surface in the session directory, not the workspace directory', async () => {
+  // The two owners disagree: the workspace directory store still holds a
+  // different folder while the selected session's directory is its own. The
+  // tab used to follow the workspace store, so a cold `?tab=terminal` link
+  // opened nothing (the empty value) or the wrong project's panel.
+  window.history.replaceState({}, '', '/?tab=terminal');
+  useDirectoryStore.setState({ currentDirectory: '/other' });
+  await act(async () => root.render(<Harness />));
+  expect(useUIStore.getState().contextPanelByDirectory['/other']).toBeUndefined();
+  const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
+  expect(panel?.tabs.map((tab) => tab.mode)).toEqual(['terminal']);
+});
+
+test('a workspace tab deep link opens without a selected chat', async () => {
+  window.history.replaceState({}, '', '/?tab=git');
+  useSessionUIStore.getState().setCurrentSession(null);
+  useDirectoryStore.setState({ currentDirectory: DIRECTORY });
+  useUIStore.setState({ contextPanelByDirectory: {} });
+
+  await act(async () => root.render(<Harness />));
+
+  expect(useSessionUIStore.getState().currentSessionId).toBeNull();
+  expect(useUIStore.getState().contextPanelByDirectory[DIRECTORY]?.tabs.map((tab) => tab.mode)).toEqual(['git']);
+});
+
+test('a workspace tab deep link opens in the draft directory instead of the previous workspace', async () => {
+  const draftDirectory = '/draft-worktree';
+  window.history.replaceState({}, '', '/?tab=git');
+  useSessionUIStore.getState().setCurrentSession(null);
+  const { newSessionDraft } = useSessionUIStore.getState();
+  useSessionUIStore.setState({ newSessionDraft: { ...newSessionDraft, open: true, directoryOverride: draftDirectory } });
+  useDirectoryStore.setState({ currentDirectory: DIRECTORY });
+  useUIStore.setState({ contextPanelByDirectory: {} });
+
+  try {
+    await act(async () => root.render(<Harness />));
+    const panels = useUIStore.getState().contextPanelByDirectory;
+    expect(panels[draftDirectory]?.tabs.map((tab) => tab.mode)).toEqual(['git']);
+    expect(panels[DIRECTORY]).toBeUndefined();
+    expect(panels[draftDirectory]?.isOpen).toBe(true);
+
+    await act(async () => {
+      window.history.replaceState({}, '', '/?tab=git');
+      window.dispatchEvent(new window.PopStateEvent('popstate'));
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[draftDirectory]?.isOpen).toBe(true);
+  } finally {
+    useSessionUIStore.setState({ newSessionDraft });
+  }
+});
+
+test('a Changes link replaces an active comparison from another project', async () => {
+  window.history.replaceState({}, '', '/?tab=diff');
+  useUIStore.setState({ contextPanelByDirectory: {} });
+  useUIStore.getState().openContextPanelTab(DIRECTORY, {
+    mode: 'diff', targetDirectory: '/other-project', targetPath: 'foreign.ts', diffScope: 'staged',
+  });
+
+  await act(async () => root.render(<Harness />));
+
+  const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
+  expect(panel?.isOpen).toBe(true);
+  expect(panel?.tabs.find((tab) => tab.id === panel.activeTabId)).toMatchObject({
+    mode: 'diff', targetDirectory: null, targetPath: null, diffScope: null,
+  });
+});
+
+test('a Terminal link leaves the foreign exited action and shows the session terminal', async () => {
+  window.history.replaceState({}, '', '/?tab=terminal');
+  useUIStore.setState({ contextPanelByDirectory: {} });
+  const foreignDirectory = '/other-project';
+  const terminal = useTerminalStore.getState();
+  const foreignTab = terminal.createTab(foreignDirectory);
+  terminal.setTabPurpose(foreignDirectory, foreignTab, { type: 'project-action', actionId: 'build', executionId: 'exec-1' });
+  terminal.setTabLifecycle(foreignDirectory, foreignTab, 'exited', { expectedExecutionId: 'exec-1' });
+  useUIStore.getState().openContextPanelTab(DIRECTORY, { mode: 'terminal', targetDirectory: foreignDirectory });
+
+  try {
+    await act(async () => root.render(<Harness />));
+
+    const panel = useUIStore.getState().contextPanelByDirectory[DIRECTORY];
+    expect(panel?.isOpen).toBe(true);
+    expect(panel?.tabs.find((tab) => tab.id === panel.activeTabId)).toMatchObject({
+      mode: 'terminal', targetDirectory: null,
+    });
+  } finally {
+    terminal.clearAll();
+  }
+});
+
+test('a held tab link opens once the session publishes its directory', async () => {
+  // Cold load: the URL names the session but neither the workspace nor the
+  // active directory is known, so the tab request must be held, not applied to
+  // '' or to a guessed workspace directory.
+  window.history.replaceState({}, '', '/?tab=terminal&session=next');
+  resetWorkspaceDirectories();
+  useProjectsStore.setState({ projects: [] });
+  useDirectoryStore.setState({ currentDirectory: undefined });
+  const snapshot = { activeSessions: [previous, next], archivedSessions: [] };
+  const loading = Promise.withResolvers<typeof snapshot>();
+  const load = spyOn(useGlobalSessionsStore.getState(), 'loadSessions').mockImplementation(() => loading.promise);
+  useGlobalSessionsStore.setState({ activeSessions: [], entityById: new Map(), hasLoaded: false, status: 'loading' });
+  useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null });
+  // The context panel store outlives a test; this one asserts its own open.
+  useUIStore.setState({ contextPanelByDirectory: {} });
+  try {
+    await act(async () => root.render(<Harness />));
+    expect(useSessionUIStore.getState().currentSessionId).toBe('next');
+    expect(useSessionUIStore.getState().currentSessionDirectory).toBeNull();
+
+    // Discovery lands without a directory: the router reaches the tab branch
+    // with nothing to open, so the request must be held.
+    await act(async () => {
+      useGlobalSessionsStore.setState({ ...snapshot, hasLoaded: true, status: 'ready' });
+      loading.resolve(snapshot);
+      await loading.promise;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[DIRECTORY]).toBeUndefined();
+
+    // The session owner publishes the directory later; until this change the
+    // hold was dropped because only a change event applied it.
+    await act(async () => {
+      useSessionUIStore.setState({ currentSessionDirectory: DIRECTORY });
+    });
+    expect(useUIStore.getState().contextPanelByDirectory[DIRECTORY]?.tabs.map((tab) => tab.mode)).toEqual(['terminal']);
+  } finally {
+    loading.resolve(snapshot);
+    load.mockRestore();
+  }
+});
+
+test('a held tab applies when the directory is already known at the subscription', () => {
+  const hold: Parameters<typeof takeHeldContextSurface>[0] = { current: 'terminal' };
+  expect(takeHeldContextSurface(hold, DIRECTORY)).toBe('terminal');
+  // The hold is cleared: a later directory change must not open it again.
+  expect(hold.current).toBeNull();
+  expect(takeHeldContextSurface(hold, DIRECTORY)).toBeNull();
+  // An unknown directory keeps the request for the next publication.
+  const unknown: Parameters<typeof takeHeldContextSurface>[0] = { current: 'terminal' };
+  expect(takeHeldContextSurface(unknown, null)).toBeNull();
+  expect(unknown.current).toBe('terminal');
 });
 
 test('a PWA notification opens one entry and preserves one-step Back', async () => {

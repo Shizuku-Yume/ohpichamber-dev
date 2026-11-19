@@ -125,13 +125,12 @@ Server routes (authenticated UI session):
 
 The panel never receives `OPENCHAMBER_SERVICE_TOKEN` and never dials the port itself. Opaque iframe origin stays. Only the host proxy talks to loopback.
 
-VS Code and mobile stay `unsupported` for the guest catalog. They do not spawn services.
+Mobile stays `unsupported` for the guest catalog. It does not spawn services.
 
 | Runtime | Extension services |
 |---|---|
 | Web | Supported on the connected OpenChamber server |
 | Electron desktop | Supported through the connected OpenChamber server |
-| VS Code | Unsupported; the extension catalog is unavailable |
 | Hosted mobile | Unsupported; the extension catalog is unavailable |
 | Capacitor mobile | Unsupported; the extension catalog is unavailable |
 
@@ -421,7 +420,6 @@ A handle is minted for one call, carries `auth.verify`'s candidate token or the 
 
 This is least exposure, not a sandbox. OpenChamber keeps tokens because Git transport needs them anyway and the proxy is the one place origin pinning, enterprise policy and audit can act. An approved service still runs as the user and could read OpenChamber's files itself.
 
-VS Code lists no Git hosts from extensions: the guest catalog is unsupported there.
 
 `examples/source-control-provider` is a checked-in provider for a subset of Gitea's REST v1, with a fake forge its tests run against.
 
@@ -552,9 +550,9 @@ A service with this role reports usage next to the built-in providers: a provide
 
 | Field | Rules |
 |---|---|
-| `providers` | Up to `QUOTA_PROVIDERS_MAX` (16) unique OpenCode provider ids (`OPENCODE_PROVIDER_ID`: lowercase letters and digits, then `.`, `_` and `-`), the keys of OpenCode's credential store (`openrouter`, `zai-coding-plan`). Checked by shape alone: a credential can arrive after install, and one OpenCode does not hold is the "not configured" state the card already draws. May be empty, for a provider whose key lives in the extension's own settings |
+| `providers` | Up to `QUOTA_PROVIDERS_MAX` (16) unique OMP provider ids (`OPENCODE_PROVIDER_ID`, a historical name: lowercase letters and digits, then `.`, `_` and `-`), the keys of OMP's credential store (`openrouter`, `zai-coding-plan`). Checked by shape alone: a credential can arrive after install, and one OMP does not hold is the "not configured" state the card already draws. May be empty, for a provider whose key lives in the extension's own settings |
 
-What the user sees: the approval dialog lists the providers and says the extension receives the credential OpenCode holds for each of them and nothing else; a version that adds or drops one asks again, like a new capability. The card is configured when OpenCode holds at least one listed credential, and always when the list is empty. Pausing the extension takes the card away and keeps the user's Usage settings for it; removing it takes the card away. In enterprise mode the role installs only from an allowed repository like every service, and it receives no conversation content. VS Code loads no extensions and shows no such card; the phone shows the card and sets nothing up; a session inside an isolated space reads usage from that space's own server, which has no extensions.
+What the user sees: the approval dialog lists the providers and says the extension receives the credential OMP holds for each of them and nothing else; a version that adds or drops one asks again, like a new capability. The card is configured when OMP holds at least one listed credential, and always when the list is empty. Pausing the extension takes the card away and keeps the user's Usage settings for it; removing it takes the card away. In enterprise mode the role installs only from an allowed repository like every service, and it receives no conversation content. The phone shows the card and sets nothing up; a session inside an isolated space reads usage from that space's own server, which has no extensions.
 
 ### Calls
 
@@ -567,9 +565,9 @@ OpenChamber posts `POST /quota` (`QUOTA_PROVIDER_PATH`) with the service bearer,
 
 | Method | Deadline | `input` | Answer `data` |
 |---|---|---|---|
-| `usage.read` | 20 s | `{ credentials }`: the credential OpenCode holds for each listed provider, keyed by provider id, as OpenCode stores it (`QuotaProviderCredential`: `{ type: "api", key }`, or `{ type: "oauth", access, refresh, expires, … }` for a browser login); a listed provider OpenCode holds nothing for is absent | `QuotaProviderUsageData`: the result a built-in computes, `ok`, `configured`, `error?`, `planLabel?`, and `usage` with `windows` keyed by name (`5h`, `weekly`, `credits_balance`), each `{ usedPercent, windowSeconds?, resetAt?, valueLabel?, value?, creditsUsed? }`, plus `models` for per-model windows |
+| `usage.read` | 20 s | `{ credentials }`: the credential OMP holds for each listed provider, keyed by provider id, as the Host resolves it (`QuotaProviderCredential`: `{ type: "api", key }`, or `{ type: "oauth", access, refresh, expires, … }` for a browser login); a listed provider OMP holds nothing for is absent | `QuotaProviderUsageData`: the result a built-in computes, `ok`, `configured`, `error?`, `planLabel?`, and `usage` with `windows` keyed by name (`5h`, `weekly`, `credits_balance`), each `{ usedPercent, windowSeconds?, resetAt?, valueLabel?, value?, creditsUsed? }`, plus `models` for per-model windows |
 
-A listed provider OpenCode holds no credential for is answered as not configured by OpenChamber itself; the service is not called. OpenChamber refreshes no login for the service: an expired one is the service's to report in `error`, as a built-in reports it. `configured: false` draws the card's "not configured" state, which points at the Providers page, so answer it only when a listed OpenCode credential is what is missing; a key of the extension's own that is missing is `configured: true` with an `error` that says where to enter it.
+A listed provider OMP holds no credential for is answered as not configured by OpenChamber itself; the service is not called. OpenChamber refreshes no login for the service: an expired one is the service's to report in `error`, as a built-in reports it. `configured: false` draws the card's "not configured" state, which points at the Providers page, so answer it only when a listed OMP credential is what is missing; a key of the extension's own that is missing is `configured: true` with an `error` that says where to enter it.
 
 Parse the body with `readQuotaProviderRequest` (`QuotaProviderRequest`; `null` → HTTP 400) and answer HTTP 200 `{ ok: true, data }` or `{ ok: false, error: { message, status?, code? } }` (`QuotaProviderResult`); the envelope's `ok: false` is for a call the service could not handle at all, and its message reaches the card as the error. OpenChamber checks `data` with `quotaProviderSchemasV1`, bounded in count and length (32 windows, 64 models); an answer that does not parse is `502 MALFORMED_PROVIDER_RESPONSE`, never an empty result, and the card keeps its last reading with the failure beside it. OpenChamber adds the provider id, the name and the time of the read, and derives each window's remaining share, reset countdown and formatted strings (`toUsageWindow`), so the card matches a built-in's field for field. The service runs on demand and stops after `QUOTA_PROVIDER_IDLE_MS` (ten minutes) without a call; the Usage page refreshes every three minutes while open, so the service stays up while someone watches.
 
@@ -624,7 +622,7 @@ OpenChamber posts `POST /session-events` (`SESSION_EVENTS_PATH`) with the servic
 }
 ```
 
-- `event.id` is OpenCode's event id (or one OpenChamber made for an event it synthesized), `at` epoch milliseconds, `session.parentId` set for a subagent's session, `project.directory` the session's directory or `null` when OpenChamber does not know it. `linked` is what the user attached to the session: ids, kinds, urls, the tracker's `provider` and `identifier`, a Git host's `number`, never a title. `permission` comes with `permission-asked` only, `question` (`kind` `form` or `page`, and its `id`) with `question-asked` only.
+- `event.id` is the agent event's id (or one OpenChamber made for an event it synthesized), `at` epoch milliseconds, `session.parentId` set for a subagent's session, `project.directory` the session's directory or `null` when OpenChamber does not know it. `linked` is what the user attached to the session: ids, kinds, urls, the tracker's `provider` and `identifier`, a Git host's `number`, never a title. `permission` comes with `permission-asked` only, `question` (`kind` `form` or `page`, and its `id`) with `question-asked` only.
 - `content` comes only with the `transcript` grant, typed by `type`: the four session types carry `sessionTitle`; `turn-finished` carries `sessionTitle`, `reply` (cut at `SESSION_EVENT_REPLY_MAX`, 64 000 characters, with `replyTruncated`); `turn-failed` carries `error { type, message }` and no reply; `permission-asked` carries `action`, `resources`, `message`; `question-asked` carries `ask`, a form (`id`, `title`, `fields`) or a page (`id`, `title`). Each field (`GuestFormField`) has `key`, `type` (`string`, `number`, `integer`, `boolean`, `multiselect` or `external`, a link only the user can open), `title`, `description`, `required`, and for a choice its `options[{ value, label }]`, with `custom` on a multiselect that takes values of its own, and `when` on a field asked only when earlier answers match (`[{ key, op: "eq" | "neq", value }]`, all of them). A field the form hides from the user is left out. `sessions.answerForm` builds the reply the way the chat's form card does: a field you leave out takes its default, and a value for a field whose `when` does not hold is dropped.
 - Parse the body with `readSessionEventRequest` (zod-free; `null` is a body that is not a session event of this wire version, answer HTTP 400) and answer HTTP 200 `{ "ok": true }` once the event is taken, or `{ "ok": false, "error": "…" }` (`GuestSessionEventResult`, `error` up to `SESSION_EVENT_ERROR_MAX`). OpenChamber parses the answer with `sessionEventResultSchema`; anything else is a failed delivery.
 
@@ -635,7 +633,7 @@ OpenChamber posts `POST /session-events` (`SESSION_EVENTS_PATH`) with the servic
 - Event preparation also admits at most one oldest event and `SESSION_EVENT_PENDING_MAX` later events before starting reads. Excess announcements are dropped, while open asks and their answers remain tracked. Shutdown discards prepared events and prevents further reads.
 - One request in flight per service, in order. A delivery has `SESSION_EVENT_TIMEOUT_MS` (10 s). A failed delivery (a timeout, a non-200 status, `ok: false`, a body that does not parse) drops that service's events for the next 30 s and logs the `error` text; OpenChamber never logs an event's content.
 - At most once, with no persistence: an event that happened while OpenChamber was down, while the extension was paused, or during that backoff is gone. A paused extension, a withdrawn approval and a removal drop what waited for them.
-- Two idle events for one turn end (OpenCode announces it twice) are one `turn-finished`.
+- Duplicate idle events for one turn end are one `turn-finished`.
 
 `examples/session-events-log` is the reference: a service-only extension that journals every event to a file.
 
