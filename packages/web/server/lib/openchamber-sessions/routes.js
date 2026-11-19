@@ -887,7 +887,8 @@ const createCanonicalSessionService = (dependencies) => {
     // session and the composer loses its chat.
     if (ack.type === 'btw.branch' && ack.sessionId !== undefined && ack.sessionId !== sessionId) {
       // The registry rekeys to a self-rooted identity: the minted id is its own
-      // root, and the pre-branch id survives only as its recorded parent.
+      // root, and the retired id names no session. Only the branch's session
+      // file records the pre-branch file as its native lineage.
       if (ack.rootSessionId !== undefined && ack.rootSessionId !== ack.sessionId) throw new OpenChamberControlError('A BTW branch must stay its own root', 502);
       const rebound = await agentScopeStore.rebindSessionRoot(sessionId, ack.sessionId);
       if (!rebound || rebound.sessionId !== ack.sessionId) throw new OpenChamberControlError('Canonical session rekey was not persisted', 503);

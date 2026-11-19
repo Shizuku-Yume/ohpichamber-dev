@@ -131,6 +131,32 @@ describe('durable canonical Host scopes', () => {
     } finally { await reopened.close(); }
   });
 
+  it('moves a rekeyed branch root and its family in one write, retiring every mention of the old id', async () => {
+    const { root, input } = fixture();
+    const owner = createHostSessionState({ dataDir: root });
+    const store = owner.agentScopeStore;
+    const scope = await store.ensureWorkspace(input);
+    await store.bindSession({ sessionId: 'branch-root', rootSessionId: 'branch-root', workspaceId: scope.workspaceId });
+    await store.bindSession({ sessionId: 'branch-child', rootSessionId: 'branch-root', workspaceId: scope.workspaceId });
+    await store.bindSession({ sessionId: 'unrelated-root', rootSessionId: 'unrelated-root', workspaceId: scope.workspaceId });
+    const rebound = await store.rebindSessionRoot('branch-root', 'minted-root');
+    expect(rebound).toMatchObject({ sessionId: 'minted-root', rootSessionId: 'minted-root', workspaceId: scope.workspaceId });
+    expect((await store.listSessionFamily('minted-root')).map((member) => member.sessionId)).toEqual(['branch-child', 'minted-root']);
+    await expect(store.listSessionFamily('branch-root')).resolves.toEqual([]);
+    await expect(store.getSession('unrelated-root')).resolves.toMatchObject({ rootSessionId: 'unrelated-root' });
+    // The Host scope schema has no parent column, so the branch cannot leave a
+    // parent here; what it must not leave is any row still naming the retired
+    // id. Scan every session column that could hold one.
+    const database = new DatabaseSync(owner.databasePath);
+    try {
+      const mentions = database.prepare(`SELECT COUNT(*) AS count FROM host_agent_sessions
+        WHERE session_id = 'branch-root' OR root_session_id = 'branch-root'`).get();
+      expect(mentions.count).toBe(0);
+      const columns = database.prepare('PRAGMA table_info(host_agent_sessions)').all().map((column) => column.name);
+      expect(columns).not.toContain('parent_session_id');
+    } finally { database.close(); await owner.close(); }
+  });
+
   it('rejects a partial-family compare-and-set rather than moving a subset', async () => {
     const { root, otherWorkspace, input } = fixture();
     const owner = createHostSessionState({ dataDir: root });

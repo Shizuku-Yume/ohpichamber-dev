@@ -1340,11 +1340,17 @@ export class SessionRegistry {
           this.rekeyKeyedState(sessionId, targetSessionId, entry);
           this.workers.rekey(sessionId, targetSessionId);
           if (previousReference) {
+            // The branch is its own root: the identity moves to the minted
+            // native session, so the retired id names no session left to be a
+            // parent. `?? sessionId` recorded it anyway, and every parent-chain
+            // reader (the archive manifest, the roster's root/child split, the
+            // runtime a restart restores) then addressed an id the same write
+            // retired. A root has no parent; a pre-branch parent that still
+            // exists stays, because the branch continues that lineage.
             await this.references.rekey(sessionId, {
               ...previousReference,
               rootSessionId: targetSessionId,
               sessionFile: result.sessionFile,
-              parentSessionId: previousReference.parentSessionId ?? sessionId,
             });
           }
           await this.onSessionRekeyed?.(sessionId, targetSessionId);

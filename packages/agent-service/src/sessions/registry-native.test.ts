@@ -872,6 +872,92 @@ test('btwBranch leaves no root-addressed read pointing at the retired session id
   } finally { await harness.close(); }
 }, 60000);
 
+test('a promoted btw branch is a root with no dangling parent', async () => {
+  const harness = await fixture();
+  try {
+    const newSessionId = 'minted-root-session-id';
+    // A real branched file, so the archive manifest genuinely reads the
+    // branch header instead of failing on a fabricated path.
+    const branchManager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    branchManager.appendMessage({ role: 'user', content: 'Branched prompt', timestamp: Date.now() });
+    await branchManager.ensureOnDisk();
+    await branchManager.flush();
+    const newFile = branchManager.getSessionFile()!;
+    await branchManager.close();
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: newFile,
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    // The branch rekeys to a self-rooted identity, so the id it retired has no
+    // session left to be its parent. Recording it as one made every parent-chain
+    // reader address an id that no longer exists: the archive manifest emitted
+    // the branch after its "parent" and refused to find it, the roster re-sorted
+    // it as a child, and a restart restored a runtime pointing at the retired id.
+    const reference = harness.sessions['references'].get(newSessionId);
+    expect(reference?.parentSessionId).toBeUndefined();
+    expect(harness.sessions.runtime(newSessionId).parentSessionId).toBeUndefined();
+    const listed = await harness.sessions.list(harness.source);
+    // A root is listed before any linked session, and it is listed at all.
+    expect(listed.items.find(session => session.sessionId === newSessionId)?.parentSessionId).toBeUndefined();
+    expect(listed.items.find(session => session.sessionId === newSessionId)).toBeDefined();
+    await expect(harness.sessions.archiveManifest()).resolves.toMatchObject({ complete: true });
+    const manifest = await harness.sessions.archiveManifest();
+    expect(manifest.chats.find(chat => chat.id === newSessionId)?.parentSessionId).toBeUndefined();
+    // The reference that survives a restart carries no parent either.
+    await harness.restart();
+    expect(harness.sessions.runtime(newSessionId).parentSessionId).toBeUndefined();
+    expect(harness.sessions['references'].get(newSessionId)?.parentSessionId).toBeUndefined();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('a promoted btw branch keeps the pre-branch parent while it still exists', async () => {
+  const harness = await fixture();
+  try {
+    // A branch of a session that is itself linked to a root: the branch
+    // continues that lineage, so the existing parent stays the parent.
+    const linkedId = 'linked-branch-source';
+    const linkedManager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    linkedManager.appendMessage({ role: 'user', content: 'Linked prompt', timestamp: Date.now() });
+    await linkedManager.ensureOnDisk();
+    await linkedManager.flush();
+    const linkedFile = linkedManager.getSessionFile()!;
+    await linkedManager.close();
+    await harness.sessions.open({
+      rootSessionId: linkedId, projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
+      cwd: harness.source.cwd, agentDirectory: harness.source.agentDirectory, agentDirectoryId: harness.source.agentDirectoryId,
+      displayPath: 'source', sessionFile: linkedFile, sessionsDirectory: harness.source.sessionsDirectory,
+      parentSessionId: rootSessionId, env: harness.source.env,
+    });
+    const newSessionId = 'minted-linked-branch-id';
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch', sessionId: newSessionId, rootSessionId: newSessionId,
+          sessionFile: join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`),
+          branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null },
+          seed: { branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: null }, createdAt: 0, updatedAt: 0, turns: [], messages: [], mode: { kind: 'main' } },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+    await harness.sessions.btwBranch(linkedId, 'rec-1');
+    expect(harness.sessions['references'].get(newSessionId)?.parentSessionId).toBe(rootSessionId);
+    expect(harness.sessions.runtime(newSessionId).parentSessionId).toBe(rootSessionId);
+  } finally { await harness.close(); }
+}, 60000);
+
 test('btwBranch leaves the interaction owner on the epoch a later pending request must carry', async () => {
   const harness = await fixture();
   try {
