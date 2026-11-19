@@ -92,6 +92,8 @@ The Agent Service verifies the transcript against the live worker, stops the wor
 
 ## Named daemon ownership after promotion
 
+The session worker's named-service ToolSession retains Host session identity overrides but binds session-change registration and launch-completion delivery to the actual native AgentSession. Inheriting those methods through `Object.create(nativeSession)` changes their receiver and cannot access OMP's private fields. Empty broker listings remain successful; actual listing failures still preserve existing shell service state.
+
 Named daemon services remain owned by their broker session id after `/btw` promotion. `WorkerRegistry` retains the retired ids across worker retirement for the lifetime of the supervisor and passes that lineage through private worker bootstrap. `WorkerShell` authorizes listing, logs, stdin and stop against the current id and those retired ids only, while projecting every service under the current session and worker generation. Catalog aliases are generation-scoped and are not the service ownership authority. Supervisor restart does not restore this in-memory lineage.
 
 ## Worker capacity and idle eviction

@@ -742,6 +742,8 @@ export class WorkerSession {
         getAgentId: () => nativeOwnerId,
         getSessionFile: () => manager?.getSessionFile() ?? undefined,
         getSessionSpawns: () => { const file = manager?.getSessionFile(); return file ? file.replace(/\.jsonl$/, '') : null; },
+        registerSessionChangeCallback: nativeSession.registerSessionChangeCallback.bind(nativeSession),
+        queueLaunchCompletion: nativeSession.queueLaunchCompletion.bind(nativeSession),
       });
       // Subscribe before readiness and prompt admission; factory creation starts no Bash jobs.
       shell = new WorkerShell({

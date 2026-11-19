@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -31,6 +31,9 @@ import { WorkerModeController } from './mode.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import { HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 import { credentialReference } from './catalog-models.ts';
+import { closeDaemonClients, daemonClientForProject } from '@oh-my-pi/pi-coding-agent/launch/client';
+import type { DaemonCompletionNotification } from '@oh-my-pi/pi-coding-agent/launch/protocol';
+import { logger } from '@oh-my-pi/pi-utils';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
 beforeEach(() => {
@@ -1034,6 +1037,41 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   expect(harness.fatal()).toBe(false);
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+test('native daemon service callbacks retain the AgentSession receiver', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const session = harness.worker.session;
+ const client = await daemonClientForProject(harness.root);
+ const subscriptions = spyOn(client, 'onCompletion');
+ const warnings = spyOn(logger, 'warn');
+ try {
+  const unsubscribe = session.registerSessionChangeCallback(() => { });
+  unsubscribe();
+  const inherited: AgentSession = Object.create(session);
+  expect(() => inherited.registerSessionChangeCallback(() => { })).toThrow('private');
+  const result = await harness.worker.operation({ type: 'shell', operation: { type: 'snapshot' } });
+  expect(result.type).toBe('shell');
+  if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new Error('Expected shell snapshot');
+  expect(result.result.snapshot.running).toEqual([]);
+  expect(warnings.mock.calls.filter(([message]) => message === 'Daemon broker list failed; continuing without service state')).toEqual([]);
+  const subscription = subscriptions.mock.calls.find(([owner]) => owner === rootSessionId);
+  if (!subscription) throw new Error('Native daemon completion subscription is missing');
+  const notification: DaemonCompletionNotification = {
+   event: 'daemon-completed', completionId: 'completion-native', owner: rootSessionId,
+   daemon: { name: 'native-service', id: 'native-service-id', state: 'exited', createdAt: 1, startedAt: 1,
+    restartCount: 0, outputBytes: 0, persist: false, detached: false, owner: rootSessionId },
+  };
+  await harness.worker.close();
+  await expect(Promise.resolve().then(() => subscription[1](notification))).rejects.toThrow('Session disposed before launch completion delivery');
+ } finally {
+  subscriptions.mockRestore();
+  warnings.mockRestore();
+  try { await client.request({ op: 'shutdown' }); } finally {
+   await closeDaemonClients();
+   await harness.close();
+  }
+ }
+}, 30000);
+
 test('service returns tool catalog (name, label, description, tier, availability) for a live session', async () => {
  const harness = await fixture({ respond: () => completion() });
  try {
