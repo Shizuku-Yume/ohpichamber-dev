@@ -54,7 +54,8 @@ try {
     '-configuration', 'Debug',
     '-sdk', 'iphonesimulator',
     '-destination', 'generic/platform=iOS Simulator',
-    'CODE_SIGNING_ALLOWED=NO',
+    'CODE_SIGN_IDENTITY=-',
+    'DEVELOPMENT_TEAM=',
     'build',
   ]);
 } finally {

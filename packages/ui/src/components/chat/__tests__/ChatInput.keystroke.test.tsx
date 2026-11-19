@@ -303,6 +303,39 @@ test('typing in a new-session draft re-renders only the composer shell and its e
   expectOnlyTheEditorFollowsTheText(await measureTyping('draft'));
 });
 
+test('mounting the composer before Git discovery does not reset the draft from a linked worktree', async () => {
+  const { useProjectsStore } = await import('@/stores/useProjectsStore');
+  const project = { id: 'path_L3dvcmtzcGFjZQ', path: '/workspace', label: 'Workspace', addedAt: 0 };
+  const worktree = '/linked-worktree';
+  useProjectsStore.setState({ projects: [project], activeProjectId: project.id });
+  useDirectoryStore.setState({ currentDirectory: worktree });
+  useSessionUIStore.setState({
+    currentSessionId: null,
+    currentSessionDirectory: null,
+    availableWorktreesByProject: new Map(),
+    newSessionDraft: { draftId: 1, open: true, target: 'project', selectedProjectId: project.id, directoryOverride: worktree, parentID: null },
+  });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(
+      <RuntimeAPIContext.Provider value={runtimeAPIs}>
+        <ThemeSystemProvider>
+          <I18nProvider>
+            <SyncProvider directory={worktree}><ChatInput /></SyncProvider>
+          </I18nProvider>
+        </ThemeSystemProvider>
+      </RuntimeAPIContext.Provider>,
+    ));
+    expect(useSessionUIStore.getState().newSessionDraft.directoryOverride).toBe(worktree);
+    expect(useDirectoryStore.getState().currentDirectory).toBe(worktree);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
 test('worker catalog builtins appear without disk templates and context output is a notice', async () => {
   // These imports must follow the DOM and Vite-module bootstrap above, just
   // like ChatInput: static loading initializes browser-only dependencies too early.
