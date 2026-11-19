@@ -7,7 +7,7 @@ interface DiagramEditorHandle {
 }
 
 interface DiagramEditorProps {
-  xml: string;
+  initialXml: string;
   readOnly?: boolean;
   className?: string;
   onChange?: (xml: string) => void;
@@ -22,21 +22,12 @@ function detectDark(): boolean {
 }
 
 export const DiagramEditor = React.forwardRef<DiagramEditorHandle, DiagramEditorProps>(
-  function DiagramEditor({ xml, readOnly, className, onChange }, ref) {
-    const latestXmlRef = React.useRef(xml);
+  function DiagramEditor({ initialXml, readOnly, className, onChange }, ref) {
+    const latestXmlRef = React.useRef(initialXml);
     const drawioRef = React.useRef<React.ComponentRef<typeof DrawIoEmbed>>(null);
     const hasShownTemplate = React.useRef(false);
     const [isDark, setIsDark] = React.useState(detectDark);
-    const stableXmlRef = React.useRef(xml);
-
-    // When the parent switches files (xml prop changes), reset the stable
-    // reference so the new content renders instead of the first file's content.
-    const prevXmlRef = React.useRef(xml);
-    if (prevXmlRef.current !== xml) {
-      prevXmlRef.current = xml;
-      stableXmlRef.current = xml;
-      latestXmlRef.current = xml;
-    }
+    const stableXmlRef = React.useRef(initialXml);
 
     const prevIsDark = React.useRef(isDark);
     if (prevIsDark.current !== isDark) {
@@ -69,13 +60,13 @@ export const DiagramEditor = React.forwardRef<DiagramEditorHandle, DiagramEditor
     }));
 
     const handleLoad = React.useCallback(() => {
-      if (!xml && !hasShownTemplate.current) {
+      if (!stableXmlRef.current && !hasShownTemplate.current) {
         hasShownTemplate.current = true;
         setTimeout(() => {
           drawioRef.current?.template({});
         }, 500);
       }
-    }, [xml]);
+    }, []);
 
     const handleAutoSave = React.useCallback((data: { xml: string }) => {
       latestXmlRef.current = data.xml;

@@ -1063,8 +1063,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const [loadedFileLineEnding, setLoadedFileLineEnding] = React.useState<FileLineEnding>('\n');
   const dialogInputRef = React.useRef<HTMLInputElement>(null);
   const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [diagramSourceXml, setDiagramSourceXml] = React.useState('');
-  const pendingDrawioPreviewFrameRef = React.useRef<number | null>(null);
   const pendingCanvasPreviewFrameRef = React.useRef<number | null>(null);
   const canvasEditorRef = React.useRef<FileCanvasHandle | null>(null);
   const [canvasDirty, setCanvasDirty] = React.useState(false);
@@ -1812,7 +1810,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     lastLoadedFileRevisionRef.current += 1;
     setLoadedFileLineEnding(lineEnding);
     setFileContent(editorContent);
-    setDiagramSourceXml(editorContent);
+    if (isDrawioFile(selectedFilePathRef.current)) setDrawioRemountNonce((nonce) => nonce + 1);
     setDraftContent(editorContent);
     return editorContent;
   }, []);
@@ -1942,9 +1940,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const discardDraft = React.useCallback(() => {
     setCanvasDirty(false);
     setCanvasRemountNonce((nonce) => nonce + 1);
-    setDiagramSourceXml(fileContent);
+    if (isDrawioFile(selectedFilePath)) setDrawioRemountNonce((nonce) => nonce + 1);
     setDraftContent(fileContent);
-  }, [fileContent]);
+  }, [fileContent, selectedFilePath]);
 
   const {
     open: confirmDiscardOpen,
@@ -2277,7 +2275,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     setFileError(null);
     setDesktopImageSrc('');
     setFileContent('');
-    setDiagramSourceXml('');
     setCanvasDirty(false);
     setDraftContent('');
     setLoadedFilePath(null);
@@ -2968,29 +2965,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (selectedPath) {
       drawioViewModeByPathRef.current[selectedPath] = mode;
     }
-    if (pendingDrawioPreviewFrameRef.current !== null) {
-      cancelAnimationFrame(pendingDrawioPreviewFrameRef.current);
-      pendingDrawioPreviewFrameRef.current = null;
-    }
-    if (mode === 'edit') {
-      setDrawioViewMode(mode);
-    } else {
-      setDiagramSourceXml(draftContent);
-      const pathAtToggle = selectedPath;
-      setDrawioViewMode('edit');
-      pendingDrawioPreviewFrameRef.current = requestAnimationFrame(() => {
-        pendingDrawioPreviewFrameRef.current = requestAnimationFrame(() => {
-          pendingDrawioPreviewFrameRef.current = null;
-          if (root && pathAtToggle && useFilesViewTabsStore.getState().byRoot[root]?.selectedPath !== pathAtToggle) {
-            return;
-          }
-          setDrawioRemountNonce((value) => value + 1);
-          setDrawioViewMode('preview');
-        });
-      });
-      return;
-    }
-  }, [draftContent, root, selectedFile?.path]);
+    setDrawioViewMode(mode);
+  }, [selectedFile?.path]);
 
   const saveCanvasViewMode = React.useCallback((mode: PreviewViewMode) => {
     const selectedPath = selectedFile?.path;
@@ -3038,15 +3014,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       setCanvasViewMode('preview');
     });
   }, [canMountCanvas, fileContent, guestFileEditor, root, selectedFile?.path, t]);
-
-  React.useEffect(() => {
-    return () => {
-      if (pendingDrawioPreviewFrameRef.current !== null) {
-        cancelAnimationFrame(pendingDrawioPreviewFrameRef.current);
-        pendingDrawioPreviewFrameRef.current = null;
-      }
-    };
-  }, [drawioViewMode, selectedFile?.path]);
 
   const handleCanvasUnsupported = React.useCallback(() => {
     const path = selectedFilePathRef.current;
@@ -3498,9 +3465,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (previewTab) state.pinContextPanelTab(directoryKey, previewTab.id);
   };
   const handleDiagramChange = React.useCallback((xml: string) => {
-    setDraftContent(xml);
-    if (xml !== diagramSourceXml) pinPreviewOnEditRef.current();
-  }, [diagramSourceXml]);
+    const content = prepareFileEditorContent(xml).content;
+    if (content === draftContent) return;
+    setDraftContent(content);
+    pinPreviewOnEditRef.current();
+  }, [draftContent]);
   const pinPreviewOnEditExtension = React.useMemo(() => EditorView.updateListener.of((update) => {
     if (!update.docChanged) return;
     const edited = update.transactions.some((transaction) => (
@@ -4943,7 +4912,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             <div className="h-full overflow-hidden" style={{ minHeight: '400px' }}>
               <DiagramEditor
                 key={`${editorDocumentPath ?? selectedFile.path}:${drawioRemountNonce}`}
-                xml={diagramSourceXml}
+                initialXml={draftContent}
                 onChange={handleDiagramChange}
               />
             </div>

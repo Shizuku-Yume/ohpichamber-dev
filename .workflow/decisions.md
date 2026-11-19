@@ -1578,3 +1578,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the editor owns the draft, and a direct strip close silently loses it in Manual save mode.
 - **Mine:** yes
 - **Revisit when:** upstream routes all tab-close actions through its editor's unsaved-changes guard.
+
+## 2026-11-19 - One draft for draw.io source and preview
+
+- **Decided:** visual draw.io writes update the same draft as the source editor. The iframe receives the draft at mount and remounts when the host adopts an external write or discards the draft.
+- **Instead of:** keeping separate source and visual buffers and reconciling them at close and on every preview toggle.
+- **Because:** one draft makes close, save, and reload see the same edits without reloading the iframe on every visual change.
+- **Mine:** yes
+- **Revisit when:** upstream shares its draw.io source and visual draft and handles external file updates.
