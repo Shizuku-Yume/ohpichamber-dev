@@ -109,17 +109,8 @@ const modelIdSchema = z.string().trim().min(1).max(200).optional().catch(undefin
 
 const clientIsGone = (res: Response) => res.writableEnded || res.destroyed;
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/routes.js
 export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace }) {
   const respondWithError = (res, error, fallback) => {
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/routes.js
-export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext }) {
-  const respondWithError = (res, error, fallback) => {
-=======
-export function registerWalkthroughRoutes(app: Application, { getWalkthroughService, validateReadContext }: WalkthroughRouteDependencies) {
-  const respondWithError = (res: Response, cause: unknown, fallback: string) => {
-    const error = isRouteFailure(cause) ? cause : undefined;
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/routes.ts
     let bindingStatus = 0;
     if (error?.code === 'INVALID_SOURCE_CONTROL_BINDING' || error?.code === 'INVALID_SOURCE_CONTROL_READ_CONTEXT') {
       bindingStatus = 400;
@@ -198,14 +189,8 @@ export function registerWalkthroughRoutes(app: Application, { getWalkthroughServ
       }
 
       const source = readSource(req.query.source);
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/routes.js
       const readContext = await validatePullRequestContext(source, req.query, directory);
       const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/routes.js
-      const readContext = await validatePullRequestContext(source, req.query, directory);
-=======
-      const readContext = await validatePullRequestContext(isPullRequestInput(source) ? source : undefined, req.query, directory);
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/routes.ts
       const { getWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await getWalkthrough(
         {
@@ -246,13 +231,6 @@ export function registerWalkthroughRoutes(app: Application, { getWalkthroughServ
     }
   });
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/routes.js
-  // One file, both sides, from its provider: expand context without touching the working tree.
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/routes.js
-  // One file, both sides, straight from GitHub: the comparison view expands
-  // collapsed context on demand without touching the working tree.
-=======
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/routes.ts
   app.get('/api/walkthrough/pr-file', async (req, res) => {
     try {
       const query = new URL(req.originalUrl, 'http://localhost').searchParams;
@@ -286,14 +264,8 @@ export function registerWalkthroughRoutes(app: Application, { getWalkthroughServ
         return res.status(400).json({ error: 'directory is required' });
       }
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/routes.js
       const readContext = await validatePullRequestContext(source, req.body, directory);
       const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/routes.js
-      const readContext = await validatePullRequestContext(source, req.body, directory);
-=======
-      const readContext = await validatePullRequestContext(isPullRequestInput(source) ? source : undefined, isWalkthroughBody(req.body) ? req.body : undefined, directory);
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/routes.ts
       const { generateWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await generateWalkthrough(
         {

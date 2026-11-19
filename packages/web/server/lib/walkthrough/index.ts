@@ -15,27 +15,9 @@ import {
   writeCachedWalkthrough,
   writePointer,
 } from './store.js';
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 import { loadSourceSections, parseSource, sourceKey, WalkthroughSourceError } from './sources.js';
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-import { readWalkthroughModelOverride, readWalkthroughModelVariant } from './model-settings.js';
-import { loadSourceSections, parseSource, sourceKey, WalkthroughSourceError } from './sources.js';
-=======
-import { readWalkthroughModelOverride, readWalkthroughModelVariant } from './model-settings.js';
-import { loadSourceSections, parseSource, sourceKey } from './sources.js';
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
 import { supportsChangeRequestPatch } from './pull-request.js';
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 import { formatModelRef, modelRefKey } from '@openchamber/agent-contract';
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-=======
-import type { GenerationOptions, ModelLimits } from '../small-model/index.js';
-import type { ReadContext, WalkthroughSource } from './contracts.js';
-import type { DigestFile } from './digest.js';
-import type { Language } from './languages.js';
-import type { ModelJson, ModelJsonObject } from './schema.js';
-import type { WalkthroughRouteService } from './routes.js';
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
 
 export interface WalkthroughInput {
   directory: string;
@@ -125,7 +107,6 @@ async function readInstructions(directory: string, deps: WalkthroughDependencies
   }
 }
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 const fail = (message, statusCode, extra = {}) =>
   Object.assign(new Error(message), { statusCode, ...extra });
 
@@ -136,7 +117,7 @@ const fail = (message, statusCode, extra = {}) =>
 // a minute of paid-for work. Jobs are keyed by repository + source, so a client
 // that comes back attaches to the running job instead of starting a second one,
 // and cancelling is an explicit request rather than a side effect of leaving.
-const jobs = new Map();
+const jobs = new Map<string, { controller: AbortController; promise: ReturnType<typeof runGeneration>; stage: Stage }>();
 
 // Providers that answered a schema request with a 4xx. Retrying the schema on
 // every generation means paying for a call we already know will fail, so the
@@ -145,54 +126,12 @@ const jobs = new Map();
 // Process-lifetime only, on purpose: a provider that gains structured-output
 // support should not need a settings change to be tried again — a restart is
 // enough, and the cost of one wasted first attempt after that is small.
-const schemaRefusedBy = new Set();
+const schemaRefusedBy = new Set<string>();
 
 const modelKey = (model) => modelRefKey(model.providerID, model.modelID);
 const addReadContext = (result, readContext) => {
   if (readContext) result.readContext = readContext;
   return result;
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-const fail = (message, statusCode, extra = {}) =>
-  Object.assign(new Error(message), { statusCode, ...extra });
-
-// Generation outlives the request that started it.
-//
-// A dropped connection and a deliberate cancel look identical at the socket, so
-// tying the work to the request lifetime meant an accidental refresh threw away
-// a minute of paid-for work. Jobs are keyed by repository + source, so a client
-// that comes back attaches to the running job instead of starting a second one,
-// and cancelling is an explicit request rather than a side effect of leaving.
-const jobs = new Map();
-
-// Providers that answered a schema request with a 4xx. Retrying the schema on
-// every generation means paying for a call we already know will fail, so the
-// refusal is remembered and the fallback goes first next time.
-//
-// Process-lifetime only, on purpose: a provider that gains structured-output
-// support should not need a settings change to be tried again — a restart is
-// enough, and the cost of one wasted first attempt after that is small.
-const schemaRefusedBy = new Set();
-
-const modelKey = (model) => `${model.providerID}/${model.modelID}`;
-const addReadContext = (result, readContext) => {
-  if (readContext) result.readContext = readContext;
-  return result;
-=======
-const fail = (message: GenerationFailure['message'], statusCode: number, extra: FailureDetails = {}) => {
-  if (isSymbolMessage(message)) throw new TypeError('Cannot convert a Symbol value to a string');
-  return Object.assign(new Error(message === undefined ? undefined : String(message)), { statusCode, ...extra });
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
-};
-
-const jobs = new Map<string, { controller: AbortController; promise: ReturnType<typeof runGeneration>; stage: Stage }>();
-
-const schemaRefusedBy = new Set<string>();
-
-const modelKey = (model: Model) => `${model.providerID}/${model.modelID}`;
-const addReadContext = <T extends object>(result: T, readContext: ReadContext | undefined) => {
-  const scoped: T & { readContext?: ReadContext } = result;
-  if (readContext) scoped.readContext = readContext;
-  return scoped;
 };
 
 const jobKey = (repoRoot: string, sourceKeyValue: string, readContext: ReadContext | undefined) => readContext
@@ -234,7 +173,6 @@ export function isGenerating(repoRoot: string, sourceKeyValue: string, readConte
   return jobs.has(jobKey(repoRoot, sourceKeyValue, readContext));
 }
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 // A walkthrough is keyed by the repository it documents. A directory outside
 // any repository is a caller-visible precondition (the client asked about a
 // folder that is not a repository), not a fault in this module: the routes
@@ -261,16 +199,6 @@ const resolveRepositoryRoot = async (directory) => {
  */
 /** @public */
 export async function getRepositoryRootFor(directory, rawSource, rawReadContext) {
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-/**
- * Resolve the pair the job registry is keyed by, for callers that need to look
- * a job up without doing any diff work.
- */
-/** @public */
-export async function getRepositoryRootFor(directory, rawSource, rawReadContext) {
-=======
-export async function getRepositoryRootFor(directory: string, rawSource: WalkthroughInput['source'], rawReadContext?: ReadContext) {
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   return { repoRoot: await resolveRepositoryRoot(directory), sourceKey: sourceKey(source), readContext };
@@ -286,15 +214,8 @@ export async function cancelWalkthroughGeneration({ directory, source: rawSource
   return addReadContext({ cancelled: true }, readContext);
 }
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 const modelLabel = (model) => formatModelRef({ providerId: model.providerID, modelId: model.modelID });
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
-=======
-const modelLabel = (model: Model) => `${model.providerID}/${model.modelID}`;
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 /**
  * Resolve the model for this feature: an explicit per-review choice outranks the
  * walkthrough's native `slow` role, which is what the user picks in Settings.
@@ -318,51 +239,6 @@ const resolveModel = (workspaceId, explicitModel, providerID, modelID) => descri
   preferredModelID: modelID || undefined,
   role: 'slow',
 });
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-/**
- * Resolve the model for this feature: the walkthrough override when set,
- * otherwise whatever the small-model chain resolves to.
- */
-/**
- * Resolve the model for this feature. An explicit per-review choice outranks the
- * saved setting, which in turn outranks the small-model chain — the user picking
- * a roomier model for a risky change is the most specific intent there is.
- * A free zen model without a login counts as unset here, and the small-model
- * chain decides (`../small-model/DOCUMENTATION.md`, *Free tier and the
- * session fallback*).
- */
-// `providerID` / `modelID` are the user's composer: without a model of its
-// own choosing, the walkthrough stays on that provider rather than on
-// whichever provider happens to be connected, and on that model when the
-// provider has no small one.
-// The saved thinking level goes with the saved model only: a model picked for
-// one review runs at its own default level.
-const resolveModel = (directory, explicitModel, providerID, modelID) => {
-  const savedModel = readWalkthroughModelOverride();
-  const overrideModel = explicitModel || savedModel;
-  return describeSmallModel({
-    directory,
-    outputReserveTokens: walkthroughOutputTokens,
-    overrideModel,
-    overrideVariant: overrideModel && overrideModel === savedModel ? readWalkthroughModelVariant() : undefined,
-    preferredProviderID: providerID || undefined,
-    preferredModelID: modelID || undefined,
-  });
-};
-=======
-const resolveModel = (directory: string, explicitModel: string | undefined, providerID: string | undefined, modelID: string | undefined) => {
-  const savedModel = readWalkthroughModelOverride();
-  const overrideModel = explicitModel || savedModel;
-  return describeSmallModel({
-    directory,
-    outputReserveTokens: walkthroughOutputTokens,
-    overrideModel,
-    overrideVariant: overrideModel && overrideModel === savedModel ? readWalkthroughModelVariant() : undefined,
-    preferredProviderID: providerID || undefined,
-    preferredModelID: modelID || undefined,
-  });
-};
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
 
 export const __testing = { generationTimeoutMs, walkthroughOutputTokens };
 
@@ -431,21 +307,11 @@ const serializeHunks = (files: DigestFile[]) => files.flatMap((file) => file.hun
   patch: hunk.patch,
 })));
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 /**
  * Read the last walkthrough for a source, resolved against the current diff.
  * Never generates and never spends tokens.
  */
 export async function getWalkthrough({ directory, workspaceId, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-/**
- * Read the last walkthrough for a source, resolved against the current diff.
- * Never generates and never spends tokens.
- */
-export async function getWalkthrough({ directory, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
-=======
-export async function getWalkthrough({ directory, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }: WalkthroughInput, deps: WalkthroughDependencies = {}) {
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await resolveRepositoryRoot(directory);
@@ -455,17 +321,9 @@ export async function getWalkthrough({ directory, source: rawSource, model: expl
   const pointer = readPointer(repoRoot, key, readContext);
   const [built, model, instructions] = await Promise.all([
     loadCurrentDiff(directory, source, deps, readContext),
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
     resolveModel(workspaceId, explicitModel, providerID, modelID).catch(() => null),
     // Readiness only measures the prompt; an unreadable preference fails the
     // generation that would send it, not the read.
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-    resolveModel(directory, explicitModel, providerID, modelID).catch(() => null),
-    // Readiness only measures the prompt; an unreadable preference fails the
-    // generation that would send it, not the read.
-=======
-    resolveModel(directory, explicitModel, providerID, modelID).catch(() => null),
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
     readInstructions(directory, deps).catch(() => ''),
   ]);
   const { files } = built;
@@ -549,7 +407,6 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
   return { ready: true, model, requiredChars, availableChars: model.inputCharBudget, hunkCount, fileCount };
 }
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 /**
  * Generate a walkthrough for a source.
  *
@@ -558,18 +415,6 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
  * nothing.
  */
 export async function generateWalkthrough({ directory, workspaceId, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-/**
- * Generate a walkthrough for a source.
- *
- * Returns the cached entry when the diff, model, and prompt are all unchanged —
- * which also means returning to a previous state of the working tree costs
- * nothing.
- */
-export async function generateWalkthrough({ directory, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
-=======
-export async function generateWalkthrough({ directory, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }: WalkthroughInput, deps: WalkthroughDependencies = {}) {
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await resolveRepositoryRoot(directory);
@@ -591,13 +436,7 @@ export async function generateWalkthrough({ directory, source: rawSource, force 
   return promise;
 }
 
-<<<<<<< HEAD:packages/web/server/lib/walkthrough/index.js
 async function runGeneration({ directory, workspaceId, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }, deps) {
-||||||| bc50ba56aa:packages/web/server/lib/walkthrough/index.js
-async function runGeneration({ directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }, deps) {
-=======
-async function runGeneration({ directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }: GenerationInput, deps: WalkthroughDependencies) {
->>>>>>> upstream/main:packages/web/server/lib/walkthrough/index.ts
 
   const model = await resolveModel(workspaceId, explicitModel, providerID, modelID);
   if (!model) {

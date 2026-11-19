@@ -116,17 +116,9 @@ describe('walkthrough routes', () => {
     app.use(express.json());
     getWalkthroughService = vi.fn(async () => service);
     validateReadContext = vi.fn(async (context) => ({ ...context, instance: 'github.com' }));
-<<<<<<< HEAD
     resolveWorkspaceDirectory = vi.fn(async () => ({ workspaceId: 'workspace-1' }));
     registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace: resolveWorkspaceDirectory });
     server = app.listen(0);
-||||||| bc50ba56aa
-    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext });
-    server = app.listen(0);
-=======
-    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext });
-    server = app.listen(0, '127.0.0.1');
->>>>>>> upstream/main
     await new Promise((resolve) => server.once('listening', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
   });
