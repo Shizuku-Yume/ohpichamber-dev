@@ -62,6 +62,7 @@ type TerminalTabViewportProps = {
  isTerminalVisible: boolean;
  registerController: (tabId: string, controller: TerminalController | null) => void;
  onInput: (data: string) => void;
+ onReply: (tabId: string, data: string) => void;
  onResize: (cols: number, rows: number) => void;
  onProvisionalSize: (cols: number, rows: number) => void;
  theme: TerminalTheme;
@@ -81,7 +82,7 @@ type TerminalTabViewportProps = {
  */
 const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
  directory, tabId, isActive, isTerminalVisible, registerController,
- onInput, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll, clipboard,
+ onInput, onReply, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll, clipboard,
 }) => {
  // Scrollback is a leaf subscription: streaming output must not rerender the tab strip.
  const chunks = useTerminalStore((s) => s.getBuffer(directory, tabId).chunks);
@@ -93,6 +94,7 @@ const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
     sessionKey={viewportKey}
     chunks={chunks}
     onInput={onInput}
+    onReply={(data) => onReply(tabId, data)}
     onResize={onResize}
     onProvisionalSize={onProvisionalSize}
     theme={theme}
@@ -204,12 +206,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
  const [connectionError, setConnectionError] = React.useState<string | null>(null);
  const [isFatalError, setIsFatalError] = React.useState(false);
- const [isReconnectPending, setIsReconnectPending] = React.useState(false);
+ const [inputRecovery, setInputRecoveryState] = React.useState<'attaching' | 'reconnecting' | 'ready' | null>(null);
+ const inputRecoveryRef = React.useRef(inputRecovery);
+ const setInputRecovery = React.useCallback((next: typeof inputRecovery) => {
+  inputRecoveryRef.current = next;
+  setInputRecoveryState(next);
+ }, []);
  const [activeModifier, setActiveModifier] = React.useState<Modifier | null>(null);
  const [isRestarting, setIsRestarting] = React.useState(false);
 
  const streamCleanupRef = React.useRef<(() => void) | null>(null);
  const activeTerminalIdRef = React.useRef<string | null>(null);
+ const hasAttachmentRef = React.useRef(false);
  const activeTabIdRef = React.useRef<string | null>(activeTabId);
  const terminalIdRef = React.useRef<string | null>(terminalSessionId);
  const directoryRef = React.useRef<string | null>(terminalDirectory);
@@ -238,7 +246,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
  }, []);
 
  const focusTerminalWhenWindowActive = React.useCallback(() => {
-  if (useTouchTerminalInput) {
+  if (useTouchTerminalInput || inputRecoveryRef.current) {
    return;
   }
   if (typeof document !== 'undefined' && !document.hasFocus()) {
@@ -248,7 +256,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
  }, [useTouchTerminalInput]);
 
  const focusTerminalController = React.useCallback(() => {
-  if (useTouchTerminalInput) {
+  if (useTouchTerminalInput || inputRecoveryRef.current) {
    return;
   }
   terminalControllerRef.current?.focus();
@@ -318,8 +326,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   streamCleanupRef.current?.();
   streamCleanupRef.current = null;
   activeTerminalIdRef.current = null;
-  setIsReconnectPending(false);
- }, []);
+  hasAttachmentRef.current = false;
+  setInputRecovery(null);
+ }, [setInputRecovery]);
 
  React.useEffect(
   () => () => {
@@ -412,15 +421,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
       switch (event.type) {
        case 'snapshot': {
-        setConnecting(directory, tabId, false);
-        setConnectionError(null);
-        setIsFatalError(false);
-        setIsReconnectPending(false);
-        focusTerminalWhenWindowActive();
+        if (event.attached !== false) {
+         hasAttachmentRef.current = event.status === 'running';
+         setConnecting(directory, tabId, false);
+         setConnectionError(null);
+         setIsFatalError(false);
+         if (inputRecoveryRef.current === 'reconnecting' || inputRecoveryRef.current === 'attaching') {
+          setInputRecovery(hasAttachmentRef.current ? 'ready' : null);
+         }
+         focusTerminalWhenWindowActive();
+        }
 
         replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event), event.sizes);
         scanTerminalPreviewOutput(directory, tabId, event.data ?? '');
-        if (event.status === 'exited') {
+        if (event.attached !== false && event.status === 'exited') {
          if (closesOnExit()) {
           void closeTerminalTab({
            terminal,
@@ -437,10 +451,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         break;
        }
        case 'reconnecting': {
-        void event;
+        hasAttachmentRef.current = false;
         setConnectionError(null);
         setIsFatalError(false);
-        setIsReconnectPending(true);
+        setInputRecovery('reconnecting');
+        setActiveModifier(null);
         break;
        }
        case 'resize': {
@@ -491,7 +506,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         setConnecting(directory, tabId, false);
         setConnectionError(isActionTab ? null : t('terminalView.error.sessionEnded'));
         setIsFatalError(false);
-        setIsReconnectPending(false);
         disconnectStream();
         break;
        }
@@ -523,7 +537,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
        return;
       }
 
-      setIsReconnectPending(false);
       if (error.code === 'SESSION_NOT_FOUND') {
        const currentTab = useTerminalStore.getState().getDirectoryState(directory)?.tabs.find((tab) => tab.id === tabId);
        if (currentTab?.purpose.type !== 'project-action') {
@@ -559,6 +572,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    disconnectStream,
    closesOnExit,
    focusTerminalWhenWindowActive,
+   setInputRecovery,
    scanTerminalPreviewOutput,
    setConnecting,
    setTabLifecycle,
@@ -580,7 +594,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
    setConnectionError(null);
    setIsFatalError(false);
-   setIsReconnectPending(false);
    setConnecting(directory, tabId, true);
    try {
     const session = await terminal.createSession({
@@ -632,7 +645,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
       : t('terminalView.error.startSessionFailed')
     );
     setIsFatalError(true);
-    setIsReconnectPending(false);
     return;
    } finally {
     pendingTerminalCreatesRef.current.delete(createKey);
@@ -780,7 +792,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   setIsRestarting(true);
   setConnectionError(null);
   setIsFatalError(false);
-  setIsReconnectPending(false);
 
   disconnectStream();
   resetTerminalPreviewScan();
@@ -806,7 +817,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     error instanceof Error ? error.message : t('terminalView.error.restartFailed')
    );
    setIsFatalError(false);
-   setIsReconnectPending(false);
    terminalIdRef.current = originalSessionId;
    startStream(terminalDirectory, tabId, originalSessionId);
   } finally {
@@ -825,7 +835,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   setActiveTab(terminalDirectory, tabId);
   setConnectionError(null);
   setIsFatalError(false);
-  setIsReconnectPending(false);
   disconnectStream();
  }, [createTab, disconnectStream, terminalDirectory, setActiveTab]);
 
@@ -861,7 +870,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
  // toolbar offers Paste next to Copy. The clipboard read starts inside the
  // click, which iOS and Android require.
  const handlePasteClipboard = React.useCallback(() => {
-  void terminalControllerRef.current?.pasteClipboard();
+  if (!inputRecoveryRef.current) void terminalControllerRef.current?.pasteClipboard();
  }, []);
 
  const handleSelectTab = React.useCallback(
@@ -870,7 +879,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    setActiveTab(terminalDirectory, tabId);
    setConnectionError(null);
    setIsFatalError(false);
-   setIsReconnectPending(false);
    disconnectStream();
   },
   [disconnectStream, terminalDirectory, setActiveTab]
@@ -882,7 +890,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
    setConnectionError(null);
    setIsFatalError(false);
-   setIsReconnectPending(false);
    void closeTerminalTab({
     terminal,
     directory: terminalDirectory,
@@ -955,7 +962,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
  const handleViewportInput = React.useCallback(
   (data: string) => {
-   if (!data || isReconnectPending) {
+   if (!data || inputRecoveryRef.current) {
+    return;
+   }
+
+   const terminalId = terminalIdRef.current;
+   if (!terminalId || terminalLifecycle === 'exited') return;
+   if (!hasAttachmentRef.current || activeTerminalIdRef.current !== terminalId) {
+    setInputRecovery('attaching');
+    setActiveModifier(null);
     return;
    }
 
@@ -967,11 +982,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     modifierConsumed = true;
    }
 
-   const terminalId = terminalIdRef.current;
-   if (!terminalId) return;
-
-   void terminal.sendInput(terminalId, payload, directoryRef.current).catch((error) => {
-    if (!isReconnectPending) {
+   void terminal.sendInput(terminalId, payload, directoryRef.current, { requireAttachment: true }).catch((error) => {
+    if (!inputRecoveryRef.current) {
      setConnectionError(
       error instanceof Error ? error.message : t('terminalView.error.sendInputFailed')
      );
@@ -983,8 +995,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     focusTerminalController();
    }
   },
-  [activeModifier, focusTerminalController, isReconnectPending, setActiveModifier, t, terminal]
+  [activeModifier, focusTerminalController, setActiveModifier, setInputRecovery, t, terminal, terminalLifecycle]
  );
+
+ const resumeTerminalInput = React.useCallback(() => {
+  if (inputRecoveryRef.current !== 'ready') return;
+  setInputRecovery(null);
+  terminalControllerRef.current?.focus();
+ }, [setInputRecovery]);
+
+ const handleViewportReply = React.useCallback((tabId: string, data: string) => {
+  const terminalId = terminalIdRef.current;
+  if (!data || !terminalId || tabId !== activeTabIdRef.current
+   || !hasAttachmentRef.current || terminalId !== activeTerminalIdRef.current) return;
+  void terminal.sendInput(terminalId, data, directoryRef.current, { requireAttachment: true }).catch(() => undefined);
+ }, [terminal]);
 
  // The estimate only seeds the size a brand-new shell is spawned with. A
  // running PTY keeps its size until Ghostty has fitted the viewport for
@@ -1187,7 +1212,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   );
  }
 
- const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting || isReconnectPending;
+ const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting || inputRecovery !== null;
  const shouldRenderViewport = hasOpenedTerminalViewport;
  // Every open tab stays mounted, so switching back is instant.
  const mountedTabIds = (directoryTerminalState?.tabs ?? []).map((tab) => tab.id);
@@ -1318,7 +1343,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    />
    {directoryTerminalState ? (
     <ContextPanelHeaderToolbar>
-     <div className={cn('app-region-no-drag flex min-w-0 items-center gap-2 text-xs', inPanelHeader ? 'flex-1 pe-1' : cn('sticky top-0 z-20 shrink-0 bg-[var(--surface-background)]', isTouchTerminal ? 'px-4 py-1.5' : 'ps-4 pe-2.5 py-1'))}>
+     <div className={cn('app-region-no-drag flex min-w-0 items-center gap-2 text-xs', inPanelHeader ? 'flex-1 pe-1' : cn('oc-terminal-chrome sticky top-0 z-20 shrink-0 bg-[var(--surface-background)]', isTouchTerminal ? 'px-4 py-1.5' : 'ps-4 pe-2.5 py-1'))}>
       <div className={cn('min-w-0 flex-1', inPanelHeader ? 'self-stretch' : isTouchTerminal ? 'h-8' : 'h-7')}>
        <SortableTabsStrip
         items={terminalTabItems}
@@ -1378,6 +1403,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
          variant="ghost"
          className="h-7 w-7 p-0"
          onClick={handlePasteClipboard}
+         disabled={inputRecovery !== null}
          title={t('terminalView.actions.paste')}
          aria-label={t('terminalView.actions.paste')}
         >
@@ -1420,7 +1446,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     className="relative flex-1 overflow-hidden"
     style={{ backgroundColor: xtermTheme.background }}
    >
-    <div className="h-full w-full box-border ps-4 pe-1.5 pt-3 pb-4">
+    <div className="oc-terminal-output h-full w-full box-border ps-4 pe-1.5 pt-3 pb-4">
      {shouldRenderViewport ? mountedTabIds.map((tabId) => (
       <TerminalTabViewport
        key={`${terminalDirectory}::${tabId}`}
@@ -1430,6 +1456,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
        isTerminalVisible={isTerminalVisible}
        registerController={registerTabController}
        onInput={handleViewportInput}
+       onReply={handleViewportReply}
        onResize={handleViewportResize}
        onProvisionalSize={handleProvisionalSize}
        theme={xtermTheme}
@@ -1441,7 +1468,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
       />
      )) : null}
     </div>
-    {!isReconnectPending && connectionError && (
+    {!inputRecovery && connectionError && (
      <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 text-xs text-[var(--status-error-text)] flex items-center justify-between gap-2">
       <span>{connectionError}</span>
       {isFatalError && isTouchTerminal && (
@@ -1460,8 +1487,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
      </div>
     )}
    </div>
+   {inputRecovery && (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/40 bg-[var(--surface-background)] px-3 py-2 text-xs text-muted-foreground">
+     <span role="status">{t(inputRecovery === 'ready' ? 'terminalView.status.inputPaused'
+      : inputRecovery === 'reconnecting' ? 'contextPanel.surface.status.reconnecting'
+      : 'contextPanel.surface.status.connecting')}</span>
+     {inputRecovery === 'ready' && (
+      <Button type="button" size="sm" variant="secondary" onClick={resumeTerminalInput}>
+       {t('terminalView.actions.resumeInput')}
+      </Button>
+     )}
+    </div>
+   )}
    {isTouchTerminal && showQuickKeys ? (
-    <div className="shrink-0 overflow-x-auto border-t border-border/40 bg-[var(--surface-background)] px-2 pt-1.5 pb-[max(0.375rem,calc(var(--oc-app-bottom-safe,0px)-var(--oc-keyboard-inset,0px)))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="oc-terminal-quick-keys shrink-0 overflow-x-auto border-t border-border/40 bg-[var(--surface-background)] px-2 pt-1.5 pb-[max(0.375rem,calc(var(--oc-app-bottom-safe,0px)-var(--oc-keyboard-inset,0px)))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
      {/* Keys are physical: arrows keep pointing where the key does. */}
      <div dir="ltr" className="flex min-w-max items-center gap-1.5">
       {quickKeysControls}

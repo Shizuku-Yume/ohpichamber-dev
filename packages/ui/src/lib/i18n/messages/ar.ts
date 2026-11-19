@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.complete': 'الهدف مكتمل',
   'chat.goal.toast.distillFallback': 'تجاوزت الغاية الحد ولم يمكن تلخيصها — تُستخدم نسخة مقتطعة للمدقق',
   'terminalView.error.cannotConnect': 'تعذّر اتصال الطرفية',
+  'terminalView.status.inputPaused': "استؤنف الاتصال. تحقق من سطر الأوامر قبل متابعة الكتابة.",
+  'terminalView.actions.resumeInput': "استئناف الكتابة",
   'terminalView.actions.tryAgain': 'حاول مرة أخرى',
   'directoryExplorerDialog.actions.addNamed': "إضافة \"{name}\"",
   'directoryExplorerDialog.actions.createNamed': "إنشاء \"{name}\" وإضافته",

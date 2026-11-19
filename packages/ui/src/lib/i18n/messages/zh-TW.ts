@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.complete': '目標已完成',
   'chat.goal.toast.distillFallback': '目標超出限制且無法提煉 — 稽核將使用節錄版本',
   'terminalView.error.cannotConnect': '終端機無法連線',
+  'terminalView.status.inputPaused': "已重新連線。繼續輸入前請檢查命令列。",
+  'terminalView.actions.resumeInput': "繼續輸入",
   'terminalView.actions.tryAgain': '重試',
   'directoryExplorerDialog.actions.addNamed': "新增「{name}」",
   'directoryExplorerDialog.actions.createNamed': "建立「{name}」並新增",

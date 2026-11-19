@@ -414,7 +414,7 @@ export class AgentService {
         rootSessionId, projectId: randomUUID(), workspaceId: randomUUID(), cwd, agentDirectory, sessionsDirectory,
         env: { HOME: profile, XDG_CONFIG_HOME: join(profile, 'config'), XDG_DATA_HOME: join(profile, 'data') },
       });
-      if (!await this.workers.stop(rootSessionId)) throw new Error('SDK readiness disposal failed');
+      if (!await this.workers.stop(rootSessionId, { cooperativeGraceMs: process.platform === 'win32' ? 1_000 : 0 })) throw new Error('SDK readiness disposal failed');
       if (!this.closing) this.ready = true;
     } catch (error) { await this.stop(); throw error; }
     finally { if (profile) await rm(profile, { recursive: true, force: true }); }

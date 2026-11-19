@@ -115,7 +115,7 @@ export class SessionRegistry {
     if (this.deleting.has(parsed.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted');
     const existing = this.entries.get(parsed.rootSessionId);
     const scope = existing?.state === 'unloaded' ? existing.reference : existing?.input;
-    if (scope && (scope.projectId !== parsed.projectId || scope.workspaceId !== parsed.workspaceId || scope.cwd !== parsed.cwd || scope.agentDirectory !== parsed.agentDirectory || (scope.agentDirectoryId !== undefined && scope.agentDirectoryId !== parsed.agentDirectoryId) || (parsed.mcpConfigPath !== undefined && scope.mcpConfigPath !== parsed.mcpConfigPath))) {
+    if (scope && (scope.projectId !== parsed.projectId || scope.workspaceId !== parsed.workspaceId || scope.cwd !== parsed.cwd || scope.agentDirectory !== parsed.agentDirectory || (scope.agentDirectoryId !== undefined && scope.agentDirectoryId !== parsed.agentDirectoryId) || (scope.mcpConfigPath !== undefined && parsed.mcpConfigPath !== undefined && scope.mcpConfigPath !== parsed.mcpConfigPath))) {
       throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Session scope cannot be changed');
     }
     const pending = this.openings.get(parsed.rootSessionId);
@@ -1536,26 +1536,39 @@ export class SessionRegistry {
     this.assertWritable(sessionId);
     const opening = this.openings.get(sessionId);
     if (opening) await opening;
+    this.assertControlAvailable(sessionId);
+    const reference = this.references.get(sessionId);
     const journal = this.journal(sessionId);
     if (journal.runtime().activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or pending run');
+    this.controls.add(sessionId);
     this.deleting.add(sessionId);
     try {
       await this.subagentLifecycleTails.get(sessionId);
-      const result = await this.workers.request(sessionId, { type: 'delete' });
-      if (result.type !== 'delete') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested delete operation.');
-      for (const id of result.deletedSessionIds) this.entries.delete(id);
-      for (const [subagentId, record] of this.subagents) if (record.rootSessionId === sessionId || result.deletedSessionIds.includes(record.childSessionId)) this.subagents.delete(subagentId);
+      if (!reference) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session reference is not registered');
+      const result = await this.workers.request(sessionId, { type: 'delete.prepare' });
+      if (result.type !== 'delete.prepare' || result.sessionFile !== reference.sessionFile) throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested session deletion.');
+      await this.workers.stop(sessionId);
+      // Native disposal can write exit diagnostics to the transcript.
+      await this.workers.withStoppedRoot(sessionId, async () => {
+        const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
+        try { await manager.dropSession(reference.sessionFile); } finally { await manager.close(); }
+      });
+      this.entries.delete(sessionId);
+      for (const [subagentId, record] of this.subagents) if (record.rootSessionId === sessionId || record.childSessionId === sessionId) this.subagents.delete(subagentId);
       await this.references.removeSubagents(sessionId);
       this.interactions.closeSession(sessionId);
       journal.close();
-      await this.workers.stop(sessionId);
-      for (const id of result.deletedSessionIds) await this.references.remove(id);
+      await this.references.remove(sessionId);
       // A listed native record must not outlive its deleted transcript and
       // resurrect a reference on the next reopen.
-      for (const id of result.deletedSessionIds) this.nativeCold.delete(id);
-      await this.onSessionDeleted?.(result.deletedSessionIds);
-      return { sessionId, deletedSessionIds: result.deletedSessionIds };
-    } finally { this.deleting.delete(sessionId); }
+      this.nativeCold.delete(sessionId);
+      const deletedSessionIds = [sessionId];
+      await this.onSessionDeleted?.(deletedSessionIds);
+      return { sessionId, deletedSessionIds };
+    } finally {
+      this.deleting.delete(sessionId);
+      this.controls.delete(sessionId);
+    }
   }
 
   onOpened(sessionId: string, generation: string, sessionFile: string, seed: ProjectionSeed): void {

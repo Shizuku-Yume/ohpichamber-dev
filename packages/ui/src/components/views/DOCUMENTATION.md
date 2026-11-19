@@ -11,6 +11,14 @@ navigation, expanded sections and editor state. Its `visible` prop combines
 the panel's open state with the selected tab. Hiding via CSS alone does not
 pause React effects.
 
+The desktop context-panel strip asks the file editor before selecting another
+file while its draft is dirty. The editor registers a selection guard beside
+its close guard and reuses the Save/Discard/Cancel dialog: failed saves and
+Cancel keep the current tab and draft; Discard or a completed save allows the
+selection. Clean drafts and reselecting the same path need no prompt. Switching
+to a non-file surface does not change the editor's selected path or unmount it,
+so that draft stays in memory without prompting. There is no per-tab draft cache.
+
 Tabs belong to the panel's directory, the project root. A view showing a
 repository nested under a root that is not one (Git, Changes) still opens its
 diff and file tabs under that root: a tab keyed by the nested repository is
@@ -475,22 +483,18 @@ or focused last among the surfaces with a tab to close.
 
 ## A terminal that cannot connect
 
-The terminal socket (`lib/terminalApi.ts`) retries forever, 0.5 s doubling to
-8 s, and reports each failure as a `reconnecting` event with its attempt
-number. `TerminalView` covers the pane with "Terminal couldn't connect" and a
-Try again button once five attempts in a row have failed, about 8 s, and keeps
-it there until a snapshot arrives. Try again drops the subscription and opens a
-new one, which dials at once; its own failures start the count over without
-hiding the error.
-
-### Why a count of failed attempts and not the retry giving up
-
-The retry never gives up: after a server restart or a dropped network it has to
-come back on its own, so ending it would trade a blank pane for a dead one. A
-browser WebSocket also never sees the upgrade's 401 or 403, so a refused token
-cannot be told apart from a server that is down. Five attempts span a typical
-server restart, so a short outage shows nothing, and an outage that lasts shows
-the error while the retry goes on underneath.
+The terminal socket (`lib/terminalApi.ts`) retries indefinitely with backoff.
+Interactive viewport writes never cross socket connections: the current socket
+must receive the terminal's snapshot before it sends input. After a reconnect,
+the viewport shows the recovered prompt but keeps input paused until the user
+selects Resume typing. An early keypress while a cached tab reattaches also
+requires an explicit resume; cached output never makes the tab writable.
+Reopening the input gate automatically at an arbitrary
+keystroke could send the tail of a command whose beginning was never received.
+The terminal neither queues input for replay nor clears the shell's command
+line; the user can see what the shell received before continuing. Live terminal
+query replies still reach the attached PTY while typing is paused. Programmatic
+project-action interrupts can open a socket without waiting for a snapshot.
 
 ## Office documents in a diff
 

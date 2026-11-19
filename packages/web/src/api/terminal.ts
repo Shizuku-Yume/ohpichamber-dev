@@ -50,8 +50,8 @@ export const createWebTerminalAPI = (): TerminalAPI => ({
     };
   },
 
-  async sendInput(sessionId: string, input: string, directory?: string | null): Promise<void> {
-    await sendTerminalInput(sessionId, input, directory);
+  async sendInput(sessionId, input, directory, options) {
+    await sendTerminalInput(sessionId, input, directory, options);
   },
 
   async resize(payload: ResizeTerminalPayload): Promise<void> {

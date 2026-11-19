@@ -149,6 +149,8 @@ export const dict = {
   'chat.goal.mark.complete': '目标已完成',
   'chat.goal.toast.distillFallback': '目标超出限制且无法提炼 — 审核将使用节选版本',
   'terminalView.error.cannotConnect': '终端无法连接',
+  'terminalView.status.inputPaused': "已重新连接。继续输入前请检查命令行。",
+  'terminalView.actions.resumeInput': "继续输入",
   'terminalView.actions.tryAgain': '重试',
   'directoryExplorerDialog.actions.addNamed': "添加“{name}”",
   'directoryExplorerDialog.actions.createNamed': "创建“{name}”并添加",

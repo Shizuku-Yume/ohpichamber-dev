@@ -148,6 +148,8 @@ export const dict = {
   'chat.goal.mark.complete': 'Goal complete',
   "chat.goal.toast.distillFallback": "Objective exceeded the limit and couldn't be distilled — a trimmed version is used for the auditor",
   'terminalView.error.cannotConnect': 'Terminal couldn\'t connect',
+  'terminalView.status.inputPaused': "Reconnected. Check the command line before you resume typing.",
+  'terminalView.actions.resumeInput': "Resume typing",
   'terminalView.actions.tryAgain': 'Try again',
   'directoryExplorerDialog.actions.addNamed': "Add \"{name}\"",
   'directoryExplorerDialog.actions.createNamed': "Create \"{name}\" & add",

@@ -404,6 +404,31 @@ test('root deletion drains pending child lifecycle writes and removes persisted 
   } finally { await harness.close(); }
 }, 60000);
 
+test('deletes a cold session reopened with an MCP path absent from its reference', async () => {
+  const harness = await fixture();
+  try {
+    await harness.restart();
+    expect(harness.sessions.runtime(rootSessionId).runtimeStatus).toBe('unavailable');
+    const mcpConfigPath = join(harness.source.cwd, '.omp', 'mcp.json');
+    await harness.sessions.reopen({ ...harness.source, mcpConfigPath });
+    await expect(harness.sessions.reopen({ ...harness.source, mcpConfigPath: join(harness.source.cwd, 'other.json') }))
+      .rejects.toMatchObject({ status: 409, code: 'INVALID_REQUEST' });
+    expect(await harness.sessions.delete(rootSessionId)).toEqual({ sessionId: rootSessionId, deletedSessionIds: [rootSessionId] });
+    expect((await harness.sessions.list(harness.source)).items).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('permanent deletion removes the transcript and artifacts of a session with assistant history', async () => {
+  const harness = await fixture();
+  try {
+    expect(await harness.sessions.delete(rootSessionId)).toEqual({ sessionId: rootSessionId, deletedSessionIds: [rootSessionId] });
+    expect(existsSync(harness.source.sessionFile)).toBe(false);
+    expect(existsSync(harness.sourceArtifacts)).toBe(false);
+    await harness.restart();
+    expect((await harness.sessions.list(harness.source)).items).toEqual([]);
+  } finally { await harness.close(); }
+}, 60000);
+
 test('explicit idle restart preserves native transcript files and publishes a new generation and epoch', async () => {
   const harness = await fixture();
   try {
