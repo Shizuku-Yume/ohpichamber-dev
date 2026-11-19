@@ -79,7 +79,7 @@ class RequestError extends Error {
 }
 const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: true, followUpQueue: true, subagents: true, attachments: true, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
 type ServiceHealthObservation = Pick<AgentServiceReady, 'engine' | 'version'> & { status: 'ready' | 'starting' };
-export type ServiceResponse =
+type ServiceResponse =
   | ServiceHealthObservation
   | typeof capabilitiesResponse
   | HostNativePolicySnapshot
