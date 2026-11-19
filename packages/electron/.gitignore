@@ -10,15 +10,6 @@ resources/web-dist/
 resources/agent-runtime/
 resources/agent-runtime.staging/
 resources/web-dist-staging-*/
-<<<<<<< HEAD
-||||||| bc50ba56aa
-resources/sidecar/
-resources/opencode-cli/*
-!resources/opencode-cli/.gitkeep
-=======
-resources/sidecar/
-resources/opencode-server/
->>>>>>> upstream/main
 resources/ripgrep/*
 !resources/ripgrep/.gitkeep
 .cache/

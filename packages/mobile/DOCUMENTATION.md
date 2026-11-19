@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-# Native runtime integrations
-||||||| bc50ba56aa
-# Native runtime WebSockets
-=======
 # Mobile
 
 ## Build and device tooling
@@ -34,7 +29,7 @@ The simulator build uses `cap copy ios` to update bundled web assets without reg
 ## Dev-server preview
 
 The workspace drawer's Browser tab (id `preview`) shows a dev server running on
-the OpenChamber host. It exists only in the native app: hosted mobile cannot
+the OhPiChamber host. It exists only in the native app: hosted mobile cannot
 reach the host's `localhost`, so there the tab is not offered, not in the strip
 and not in Settings (`lib/mobileWorkspaceTabs.ts`).
 
@@ -119,8 +114,8 @@ Every surface is a shape recolored with `setColorFilter` and every text color is
 
 The Sessions widget shows live activity, which changes while the app sits in the background with its WebView still running. Store subscriptions keep the widget current without polling; the iOS widgets only show unread state, which a pull on background covers.
 
-# Native runtime WebSockets
->>>>>>> upstream/main
+# Native runtime integrations
+
 
 ## Android status-bar ownership
 
@@ -135,7 +130,7 @@ transparent overlay/default style, and hosted mobile makes no native calls.
 
 ## WebSocket ownership
 
-The Capacitor shell runs `MobileApp` on the Canonical Client against a Host Gateway serving `/api/agent/v1` and embeds neither the Host server nor the OMP Agent Service. Guest SDK iframes and Guest extension services are not mounted on mobile (`loadGuestCatalog` marks the mobile surface `unsupported`).
+The Capacitor shell runs `MobileApp` on the Canonical Client against a Host Gateway serving `/api/agent/v1` and embeds neither the Host server nor the OMP Agent Service. Guest panels and pages need their mobile opt-in; extension services run on the connected Host, never inside the shell.
 
 Within that shell, the app-local `RuntimeWebSocket` plugins own header-bearing direct WebSockets on iOS and Android. Shared selection and socket lifecycle live in `packages/ui/src/lib/relay/native-websocket.ts` and `runtime-socket.ts`. Feature callers use `openRuntimeWebSocket`; SSE remains in the fetch-based event reader.
 

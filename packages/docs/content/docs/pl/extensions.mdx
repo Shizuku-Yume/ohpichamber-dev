@@ -11,13 +11,7 @@ Własne dane rozszerzenia są przechowywane na połączonym serwerze i usuwane w
 
 W **Ustawienia → Rozszerzenia** dodasz do OhPiChamber panele zrobione przez inne osoby. Rozszerzenie to mała strona na prawym pasku, obok wbudowanych paneli. Może pokazywać dane z innej usługi, dołączać zadanie do czatu, a jeśli na to pozwolisz, uruchamiać sesje, wysyłać prompty lub czytać pliki.
 
-<<<<<<< HEAD
-Rozszerzenia działają w OhPiChamber w wersji web i desktop. To nie to samo co wtyczki Host.
-||||||| bc50ba56aa
-Rozszerzenia działają w OpenChamber w wersji web i desktop. VS Code i aplikacja mobilna jeszcze ich nie ładują. To nie to samo co wtyczki OpenCode.
-=======
-Rozszerzenia działają w OpenChamber w wersji web, desktop i w aplikacji mobilnej; telefon pokazuje część każdego z nich, zobacz [Na telefonie](#na-telefonie). VS Code ich nie ładuje. To nie to samo co wtyczki OpenCode.
->>>>>>> upstream/main
+Rozszerzenia działają w OhPiChamber w wersji web, desktop i w aplikacji mobilnej; telefon pokazuje część każdego z nich, zobacz [Na telefonie](#na-telefonie). VS Code ich nie ładuje. To nie to samo co wtyczki OMP.
 
 ## Zainstaluj rozszerzenie
 
@@ -60,16 +54,9 @@ Pokazywanie panelu i odczyt, który projekt i sesja są otwarte, nie wymaga upra
 - **Czytać, co agent mówi w tle**: końcowa odpowiedź każdej tury, pytania, które agent zadaje, i to, o jakie uprawnienia prosi, w każdym projekcie, wysyłane do lokalnej usługi rozszerzenia. Zezwalaj tylko, jeśli ufasz miejscu, do którego rozszerzenie to wysyła.
 - **Samodzielne uruchamianie sesji i wysyłanie wiadomości**: jego lokalna usługa robi to bez otwartego okna, co kosztuje tokeny i może uruchamiać narzędzia.
 - **Dodawanie do tego, co czytają agenci**: tekst w instrukcjach Twoich sesji i skille oferowane każdemu agentowi, gdy rozszerzenie jest włączone.
-<<<<<<< HEAD
+- **Dodawanie pluginu do OMP**: plugin z pakietu jest ładowany do Twojego OMP, gdy rozszerzenie jest włączone. Kod pluginu działa wewnątrz OMP z Twoimi pełnymi uprawnieniami, jak lokalna usługa, więc zezwalaj tylko wtedy, gdy ufasz autorowi.
 - **Rozpoznawanie jego linków w czatach**: identyfikatory takie jak `DEMO-12` i linki do strony rozszerzenia stają się klikalne w Twoich wiadomościach na czacie. Okno wymienia, które to są, i mówi, czy kliknięcie otwiera je w rozszerzeniu, czy dołącza do Twojej wiadomości. Linki, które OhPiChamber już zna, na przykład pull requesty z GitHub i zadania z Linear, działają jak zwykle.
-||||||| bc50ba56aa
-- **Dodawanie pluginu do OpenCode**: plugin z pakietu jest ładowany do Twojego OpenCode, gdy rozszerzenie jest włączone. Kod pluginu działa wewnątrz OpenCode z Twoimi pełnymi uprawnieniami, jak lokalna usługa, więc zezwalaj tylko wtedy, gdy ufasz autorowi.
-- **Rozpoznawanie jego linków w czatach**: identyfikatory takie jak `DEMO-12` i linki do strony rozszerzenia stają się klikalne w Twoich wiadomościach na czacie. Okno wymienia, które to są, i mówi, czy kliknięcie otwiera je w rozszerzeniu, czy dołącza do Twojej wiadomości. Linki, które OpenChamber już zna, na przykład pull requesty z GitHub i zadania z Linear, działają jak zwykle.
-=======
-- **Dodawanie pluginu do OpenCode**: plugin z pakietu jest ładowany do Twojego OpenCode, gdy rozszerzenie jest włączone. Kod pluginu działa wewnątrz OpenCode z Twoimi pełnymi uprawnieniami, jak lokalna usługa, więc zezwalaj tylko wtedy, gdy ufasz autorowi.
-- **Rozpoznawanie jego linków w czatach**: identyfikatory takie jak `DEMO-12` i linki do strony rozszerzenia stają się klikalne w Twoich wiadomościach na czacie. Okno wymienia, które to są, i mówi, czy kliknięcie otwiera je w rozszerzeniu, czy dołącza do Twojej wiadomości. Linki, które OpenChamber już zna, na przykład pull requesty z GitHub i zadania z Linear, działają jak zwykle.
 - **Pokazywanie znaczników na pasku bocznym**: małe ikony z podpowiedzią przy sesjach i worktree, które wskaże rozszerzenie, na przykład nieudany test na gałęzi. Okno mówi, czy kliknięcie otwiera panel rozszerzenia, czy link podany przez rozszerzenie.
->>>>>>> upstream/main
 
 Lokalna usługa może też działać przez cały czas pracy OhPiChamber albo budzić się według harmonogramu. Okno dialogowe mówi o tym pod **Uruchamianie lokalnej usługi** i informuje też, kiedy to, co wpisujesz po `@`, trafia do usługi. Rozszerzenie może dodać własne wiersze do menu `@` i własne bloki do odpowiedzi agenta. Wstrzymanie rozszerzenia to wszystko odbiera.
 
@@ -79,19 +66,13 @@ Gdy nowsza wersja prosi o więcej, niż pozwoliłeś, karta pokazuje **Wymaga zg
 
 ## Gdzie się pojawia
 
-<<<<<<< HEAD
-Poza panelem na pasku bocznym rozszerzenie może dodawać pozycje do menu, z których już korzystasz: akcje na wiadomości w czacie, menu sesji, menu + obok pola czatu oraz polecenia z ukośnikiem, jak `/task ABC-12`, które dołączają coś bez otwierania czegokolwiek. Może też nadać własnym narzędziom porządną ikonę, tytuł i układ wyniku w czacie, tak jak mają wbudowane narzędzia OhPiChamber. Rozszerzenie samo decyduje, które z nich oferuje; wszystkie są wyłączone, dopóki nie zezwolisz na rozszerzenie.
-||||||| bc50ba56aa
-Poza panelem na pasku bocznym rozszerzenie może dodawać pozycje do menu, z których już korzystasz: akcje na wiadomości w czacie, menu sesji, menu + obok pola czatu oraz polecenia z ukośnikiem, jak `/task ABC-12`, które dołączają coś bez otwierania czegokolwiek. Może też nadać własnym narzędziom porządną ikonę, tytuł i układ wyniku w czacie, tak jak mają wbudowane narzędzia OpenChamber. Rozszerzenie samo decyduje, które z nich oferuje; wszystkie są wyłączone, dopóki nie zezwolisz na rozszerzenie.
-=======
-Strona OpenChamber pokazuje na mapie [wszystkie miejsca, w których rozszerzenie może coś dodać](https://openchamber.dev/pl/extensions/build/).
->>>>>>> upstream/main
+Strona OhPiChamber pokazuje na mapie [wszystkie miejsca, w których rozszerzenie może coś dodać](https://openchamber.dev/pl/extensions/build/).
 
 Poza panelem na pasku bocznym rozszerzenie może dodawać elementy w miejscach, z których już korzystasz:
 
 - **Menu**: akcje na wiadomości w czacie, menu sesji, tekst zaznaczony w wiadomości, plik w Plikach i wiersze zaznaczone w diffie.
 - **Pole czatu**: menu **+**, polecenia z ukośnikiem, takie jak `/task ABC-12`, które coś dołączają, niczego nie otwierając, oraz własne wiersze w menu `@`.
-- **Czat**: bloki, które agent rysuje w odpowiedzi, na przykład wykres albo kartę zgłoszenia, oraz własną ikonę, tytuł i układ wyniku dla swoich narzędzi, tak jak mają je wbudowane narzędzia OpenChamber.
+- **Czat**: bloki, które agent rysuje w odpowiedzi, na przykład wykres albo kartę zgłoszenia, oraz własną ikonę, tytuł i układ wyniku dla swoich narzędzi, tak jak mają je wbudowane narzędzia OhPiChamber.
 - **Stan pracy**: własną sekcję w panelu obok czatu.
 - **Pliki**: własny edytor dla typu pliku, na przykład rysunku albo arkusza kalkulacyjnego.
 - **Pasek boczny**: małe znaczniki na wierszach sesji i worktree.
@@ -102,9 +83,9 @@ Niektóre rozszerzenia pokazują obraz na żywo zamiast własnego panelu: to, w 
 
 ## Na telefonie
 
-Aplikacja mobilna, a także OpenChamber otwarty w przeglądarce telefonu, ładują rozszerzenia zainstalowane na serwerze, z którym się łączą. Jest tam też **Ustawienia → Rozszerzenia**, gdzie można je dodawać, zatwierdzać, wstrzymywać i usuwać.
+Aplikacja mobilna, a także OhPiChamber otwarty w przeglądarce telefonu, ładują rozszerzenia zainstalowane na serwerze, z którym się łączą. Jest tam też **Ustawienia → Rozszerzenia**, gdzie można je dodawać, zatwierdzać, wstrzymywać i usuwać.
 
-To, co OpenChamber sam rysuje na podstawie rozszerzenia, pojawia się na każdym telefonie: linki w wiadomościach czatu, układ jego narzędzi w czacie, logo dostawców, jego wiersze w menu `@`, znaczniki na wierszach paska bocznego i jego karty kont w **Ustawienia → Integracje**. Dotknięcie znacznika otwiera ten wiersz i kartę rozszerzenia, gdy jego panel jest przygotowany na telefon (poniżej); w przeciwnym razie pokazuje tekst znacznika i otwiera jego link, jeśli go ma.
+To, co OhPiChamber sam rysuje na podstawie rozszerzenia, pojawia się na każdym telefonie: linki w wiadomościach czatu, układ jego narzędzi w czacie, logo dostawców, jego wiersze w menu `@`, znaczniki na wierszach paska bocznego i jego karty kont w **Ustawienia → Integracje**. Dotknięcie znacznika otwiera ten wiersz i kartę rozszerzenia, gdy jego panel jest przygotowany na telefon (poniżej); w przeciwnym razie pokazuje tekst znacznika i otwiera jego link, jeśli go ma.
 
 Te części rozszerzenia też się pojawiają, bez żadnej dodatkowej pracy autora:
 
@@ -124,26 +105,6 @@ Dla każdego innego rozszerzenia to wszystko nie trafia na telefon, a jego menu 
 
 Strona pełnoekranowa ma własną regułę: pojawia się w **Więcej** na liście sesji, gdy autor oznaczy samą stronę jako przygotowaną na telefon albo gdy strona używa panelu, który jest na to przygotowany.
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-## Rozszerzenie z pluginem OpenCode
-
-Rozszerzenie może dostarczać plugin OpenCode, więc instalujesz jedną rzecz zamiast dwóch. Jego okno uprawnień ma wiersz zaczynający się od **Dodawanie pluginu do OpenCode**. Gdy zezwolisz, OpenChamber w ciągu kilku sekund dodaje plugin do OpenCode, które dla Ciebie uruchamia, bez restartu; wyłączenie lub usunięcie rozszerzenia zabiera go tą samą drogą. Do Twojego własnego `opencode.json` nic nie jest zapisywane, więc plugin nigdy nie przeżyje rozszerzenia i nigdy nie uruchomi się w OpenCode, które startujesz w terminalu.
-
-Gdy OpenChamber nie uruchomił OpenCode, z którym rozmawia, albo Twoje środowisko ustawia własne `OPENCODE_CONFIG`, konfiguracja OpenChamber nie dociera do tego OpenCode. Ekran rozszerzenia mówi o tym i oferuje **Dodaj do globalnej konfiguracji**. To zapisuje folder pluginu do Twojej globalnej konfiguracji OpenCode: działa wtedy w każdym OpenCode na tym komputerze, także w terminalu, pozostaje włączony, gdy rozszerzenie jest wyłączone, i zarządzasz nim w **Ustawieniach → Pluginy**. Jeśli usuniesz rozszerzenie, OpenCode pokaże ten wpis jako plugin, który się nie załadował, i będzie działać dalej, dopóki nie usuniesz tam wpisu. OpenCode na innym komputerze nie może załadować folderu z tego komputera; ekran mówi o tym.
-
-VS Code i aplikacja mobilna nie ładują rozszerzeń. Sesja w izolowanej przestrzeni uruchamia własne OpenCode, które nigdy nie dostaje pluginu. W trybie enterprise plugin liczy się jak lokalna usługa: rozszerzenie instaluje się tylko z repozytorium wskazanego przez administratora.
-
-=======
-## Rozszerzenie z pluginem OpenCode
-
-Rozszerzenie może dostarczać plugin OpenCode, więc instalujesz jedną rzecz zamiast dwóch. Jego okno uprawnień ma wiersz zaczynający się od **Dodawanie pluginu do OpenCode**. Gdy zezwolisz, OpenChamber w ciągu kilku sekund dodaje plugin do OpenCode, które dla Ciebie uruchamia, bez restartu; wyłączenie lub usunięcie rozszerzenia zabiera go tą samą drogą. Do Twojego własnego `opencode.json` nic nie jest zapisywane, więc plugin nigdy nie przeżyje rozszerzenia i nigdy nie uruchomi się w OpenCode, które startujesz w terminalu.
-
-Gdy OpenChamber nie uruchomił OpenCode, z którym rozmawia, albo Twoje środowisko ustawia własne `OPENCODE_CONFIG`, konfiguracja OpenChamber nie dociera do tego OpenCode. Ekran rozszerzenia mówi o tym i oferuje **Dodaj do globalnej konfiguracji**. To zapisuje folder pluginu do Twojej globalnej konfiguracji OpenCode: działa wtedy w każdym OpenCode na tym komputerze, także w terminalu, pozostaje włączony, gdy rozszerzenie jest wyłączone, i zarządzasz nim w **Ustawieniach → Pluginy**. Jeśli usuniesz rozszerzenie, OpenCode pokaże ten wpis jako plugin, który się nie załadował, i będzie działać dalej, dopóki nie usuniesz tam wpisu. OpenCode na innym komputerze nie może załadować folderu z tego komputera; ekran mówi o tym.
-
-VS Code nie ładuje rozszerzeń, więc OpenCode, które uruchamia, nigdy nie dostaje pluginu. Telefon łączy się z serwerem OpenChamber, a plugin działa w OpenCode tego serwera. Sesja w izolowanej przestrzeni uruchamia własne OpenCode, które nigdy nie dostaje pluginu. W trybie enterprise plugin liczy się jak lokalna usługa: rozszerzenie instaluje się tylko z repozytorium wskazanego przez administratora.
-
->>>>>>> upstream/main
 ## Rozszerzenie jako host Git
 
 Rozszerzenie może dodać host Git obok GitHub, GitLab, Gitea, Forgejo i Gerrit. Jego okno uprawnień ma wtedy wiersz, który zaczyna się od **Działa jako host Git** i podaje nazwę hosta. Ten wiersz mówi też, co OhPiChamber mu wysyła: nazwy repozytoriów, gałęzie oraz tekst issues i pull requestów, który piszesz.
@@ -170,9 +131,9 @@ SDK OhPiChamber ma działający przykład, `examples/tracker-provider`, z udawan
 
 ## Rozszerzenie jako dostawca zużycia
 
-Rozszerzenie może dodać dostawcę zużycia obok wbudowanych: dostawcę, którego OhPiChamber nie odczytuje samodzielnie, albo własnego. Jego okno uprawnień ma wtedy wiersz zaczynający się od **Raportuje zużycie jak wbudowany dostawca** i wymienia dostawców OpenCode, których dane logowania odczytuje, na przykład `openrouter`; rozszerzenie, które nie wymienia żadnego, mówi o tym.
+Rozszerzenie może dodać dostawcę zużycia obok wbudowanych: dostawcę, którego OhPiChamber nie odczytuje samodzielnie, albo własnego. Jego okno uprawnień ma wtedy wiersz zaczynający się od **Raportuje zużycie jak wbudowany dostawca** i wymienia dostawców OMP, których dane logowania odczytuje, na przykład `openrouter`; rozszerzenie, które nie wymienia żadnego, mówi o tym.
 
-Gdy na nie pozwolisz, jego karta stoi za wbudowanymi dostawcami w **Ustawienia → Zużycie**, z nazwą i ikoną rozszerzenia, i tak jak każdy wbudowany dostawca trafia do limitów w nagłówku, do stanu pracy, do okienka na telefonie i do zasobnika na pulpicie, gdy zaznaczysz **Pokaż w stanie pracy**. Przy każdym odświeżeniu OhPiChamber przekazuje rozszerzeniu dane logowania, które OpenCode przechowuje dla każdego wymienionego dostawcy, i nic więcej; wersja, która wymienia innego dostawcę, ponownie prosi o Twoją zgodę. Rozszerzenie samo odczytuje zużycie, a OhPiChamber rysuje je tak, jak zużycie wbudowanego dostawcy.
+Gdy na nie pozwolisz, jego karta stoi za wbudowanymi dostawcami w **Ustawienia → Zużycie**, z nazwą i ikoną rozszerzenia, i tak jak każdy wbudowany dostawca trafia do limitów w nagłówku, do stanu pracy, do okienka na telefonie i do zasobnika na pulpicie, gdy zaznaczysz **Pokaż w stanie pracy**. Przy każdym odświeżeniu OhPiChamber przekazuje rozszerzeniu dane logowania, które OMP przechowuje dla każdego wymienionego dostawcy, i nic więcej; wersja, która wymienia innego dostawcę, ponownie prosi o Twoją zgodę. Rozszerzenie samo odczytuje zużycie, a OhPiChamber rysuje je tak, jak zużycie wbudowanego dostawcy.
 
 Wstrzymanie rozszerzenia zabiera kartę, dopóki go z powrotem nie włączysz, a Twoje ustawienia zużycia dla niego zostają. Usunięcie rozszerzenia zabiera kartę na stałe.
 

@@ -22,46 +22,16 @@ import {
 
 recordEarlyStartupMark('electron.entry');
 
-<<<<<<< HEAD
-// Set the product name early so electron-log derives its log directory as
-// ~/Library/Logs/OhPiChamber/ (not ~/Library/Logs/@openchamber/electron/).
-||||||| bc50ba56aa
-// Set the product name early so electron-log derives its log directory as
-// ~/Library/Logs/OpenChamber/ (not ~/Library/Logs/@openchamber/electron/).
-=======
->>>>>>> upstream/main
 const versionBeforeRename = app.getVersion();
-<<<<<<< HEAD
 app.setName('OhPiChamber');
-// An unpackaged run on Linux reports version "0.0" after the rename, and
-// electron-updater refuses a version that is not semver, so the dev app quit
-// before its first window. Restoring the version from before the rename gives
-// it Electron's own version, as on macOS. `setVersion` is undocumented;
-// Electron's default app uses it to apply a package.json version.
-||||||| bc50ba56aa
-app.setName('OpenChamber');
-// An unpackaged run on Linux reports version "0.0" after the rename, and
-// electron-updater refuses a version that is not semver, so the dev app quit
-// before its first window. Restoring the version from before the rename gives
-// it Electron's own version, as on macOS. `setVersion` is undocumented;
-// Electron's default app uses it to apply a package.json version.
-=======
-app.setName('OpenChamber');
 // external: https://github.com/electron/electron/blob/main/default_app/main.ts Preserve the version before renaming an unpackaged app; Electron default_app uses setVersion for package versions.
->>>>>>> upstream/main
 if (app.getVersion() !== versionBeforeRename) {
   app.setVersion(versionBeforeRename);
 }
 if (process.platform === 'linux') {
-<<<<<<< HEAD
   app.setDesktopName('ohpichamber.desktop');
-||||||| bc50ba56aa
-  app.setDesktopName('openchamber.desktop');
-=======
-  app.setDesktopName('openchamber.desktop');
   // external: https://www.electronjs.org/docs/latest/api/command-line-switches#enable-speech-dispatcher-linux Linux speech synthesis requires the opt-in speech-dispatcher backend.
   app.commandLine.appendSwitch('enable-speech-dispatcher');
->>>>>>> upstream/main
 }
 // external: https://www.electronjs.org/docs/latest/api/app#appuseragentfallback Set the worker user agent before any window loads so workers and panel pages present the same browser identity.
 app.userAgentFallback = plainChromeUserAgent(app.userAgentFallback);
@@ -113,29 +83,10 @@ deferAppEventsUntilMainLoads();
 
 app.whenReady().then(async () => {
   recordEarlyStartupMark('electron.app.ready');
-<<<<<<< HEAD
-  // The login shell runs in its own process; only its spawn touches this thread.
-  if (!shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => { });
-  // A login-item or --background launch has no window to show. Otherwise the
-  // splash gets the main thread to itself until it is on screen: loading the
-  // main module and the server behind it would starve its first paint.
-||||||| bc50ba56aa
-  // The login shell runs in its own process; only its spawn touches this thread.
   if (!shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
-  // A login-item or --background launch has no window to show. Otherwise the
-  // splash gets the main thread to itself until it is on screen: loading the
-  // main module and the server behind it would starve its first paint.
-=======
-  if (!shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
->>>>>>> upstream/main
   if (!shouldStartInBackground()) {
     await createEarlyWindow().whenShown;
   }
-<<<<<<< HEAD
-  if (shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => { });
-||||||| bc50ba56aa
-  if (shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
-=======
   if (shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
   const hmrStartFile = process.env.OPENCHAMBER_ELECTRON_HMR_START_FILE;
   if (!app.isPackaged && hmrStartFile) {
@@ -157,7 +108,6 @@ app.whenReady().then(async () => {
     }
     configureDevDataDir(process.env, false);
   }
->>>>>>> upstream/main
   return import('./main.mjs');
 }).catch((error) => {
   console.error('[electron] startup failed before the main module loaded:', error);

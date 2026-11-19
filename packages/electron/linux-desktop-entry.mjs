@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const DESKTOP_FILE_NAME = 'ohpichamber.desktop';
 const WM_CLASS = 'ohpichamber';
-const MANAGED_KEY = 'X-OpenChamber-Managed';
+const MANAGED_KEY = 'X-OhPiChamber-Managed';
 const ICON_RELATIVE_PATH = path.join('icons', 'hicolor', '512x512', 'apps', 'ohpichamber.png');
 const APPDIR_ICON_RELATIVE_PATH = path.join('usr', 'share', 'icons', 'hicolor', '512x512', 'apps', 'ohpichamber.png');
 
@@ -133,16 +133,9 @@ export const reconcileAppImageDesktopEntry = async ({
   const appImagePath = (env.APPIMAGE ?? '').trim();
   const appDir = (env.APPDIR ?? '').trim();
   if (!path.isAbsolute(appImagePath) || !path.isAbsolute(appDir) || /[\r\n]/.test(appImagePath)) {
-<<<<<<< HEAD
     // An installed .deb or .rpm ships its own ohpichamber.desktop, which an
     // entry left by an earlier AppImage run would hide: ours takes precedence.
     // An extracted AppImage also runs without APPIMAGE; it keeps the entry.
-||||||| bc50ba56aa
-    // An installed .deb or .rpm ships its own openchamber.desktop, which an
-    // entry left by an earlier AppImage run would hide: ours takes precedence.
-    // An extracted AppImage also runs without APPIMAGE; it keeps the entry.
-=======
->>>>>>> upstream/main
     const installed = await findInstalledPackageEntry(env, desktopPath);
     return { status: 'not-appimage', removed: installed ? await removeManagedEntry({ desktopPath, iconPath }) : false };
   }

@@ -66,16 +66,8 @@ Zugriffstokens tauchen hier nie auf, auch nicht in einem `request`-Ergebnis.
 | `generate({ prompt, system?, maxOutputTokens? })` | einmaliger Text vom Small Model des Nutzers. Liefert `{ text }`. Braucht die Berechtigung `model`. |
 | `onResolve(handler)` | den Handler für deine Slash-Befehle registrieren. Er bekommt `{ command, args }` und liefert einen Eintrag zum Anhängen oder `null`. |
 | `setBadge(count)` | dein Symbol in der Leiste mit einem Punkt markieren und die Zahl (0 bis 999) im Tooltip zeigen, oder `null`, um sie zu entfernen |
-<<<<<<< HEAD
 | `openCommit(sha)` | die Diff-Ansicht für diesen Commit des aktuellen Projekts öffnen. `sha` hat 7 bis 64 Hex-Zeichen; OhPiChamber liest den Commit selbst. |
-| `setHeight(px)` | die Höhe deines Work-Status-Abschnitts setzen. OhPiChamber hält sie zwischen 24 und 320 Pixeln; höherer Inhalt scrollt in deiner Seite. Anderswo wird es ignoriert. |
-||||||| bc50ba56aa
-| `openCommit(sha)` | die Diff-Ansicht für diesen Commit des aktuellen Projekts öffnen. `sha` hat 7 bis 64 Hex-Zeichen; OpenChamber liest den Commit selbst. |
-| `setHeight(px)` | die Höhe deines Work-Status-Abschnitts setzen. OpenChamber hält sie zwischen 24 und 320 Pixeln; höherer Inhalt scrollt in deiner Seite. Anderswo wird es ignoriert. |
-=======
-| `openCommit(sha)` | die Diff-Ansicht für diesen Commit des aktuellen Projekts öffnen. `sha` hat 7 bis 64 Hex-Zeichen; OpenChamber liest den Commit selbst. |
-| `setHeight(px)` | die Höhe deines Work-Status-Abschnitts setzen. OpenChamber hält sie zwischen 24 und 480 Pixeln; höherer Inhalt scrollt in deiner Seite. Anderswo wird es ignoriert. |
->>>>>>> upstream/main
+| `setHeight(px)` | die Höhe deines Work-Status-Abschnitts setzen. OhPiChamber hält sie zwischen 24 und 480 Pixeln; höherer Inhalt scrollt in deiner Seite. Anderswo wird es ignoriert. |
 | `onFileOpen(listener)` | Datei-Editoren: die zu bearbeitende Datei erhalten, `{ path, name, readOnly }` plus `encoding: "text"` mit `content` oder `encoding: "binary"` mit `bytes`. Sorgt außerdem dafür, dass Cmd/Ctrl+S in deiner Seite speichert. |
 | `onFileSnapshot(handler)` | Datei-Editoren: `{ content, version }` zurückgeben (oder `{ bytes, version }` bei einem binären Editor), die ganze bearbeitete Datei. OhPiChamber ruft es zum Speichern auf und bevor zur Quelltextansicht oder in den Vollbildmodus gewechselt wird. |
 | `onFileSaved(listener)` | Datei-Editoren: der Snapshot mit dieser `version` liegt auf der Festplatte. Antworte mit `reportFileChange`. |
@@ -160,7 +152,7 @@ Ohne `send` ersetzt `prompt` den Text im Chatfeld. Mit `send: true` sendet es di
 
 `activity` ist `unknown`, `idle`, `running`, `retrying`, `waiting-permission` oder `waiting-question`. `outcome` ist ein beobachtetes `completed`/`failed` oder `null`, nur im Speicher für höchstens 2.000 beobachtete Sitzungen. Idle nach einem Fehler behält den Fehler bis zum nächsten Lauf. Das setzt keine Aufgabe auf Done. `inWork` ist `true`, wenn die Sitzung im Bereich In Arbeit der Seitenleiste steht, und immer `false`, solange der Nutzer In Arbeit ausgeschaltet hat; ältere Hosts lassen es weg. `unread` ist `true`, wenn der letzte Turn beendet ist und seitdem niemand die Sitzung geöffnet hat, also die Markierung, die die Seitenleiste zeigt; sie übersteht Neustarts und verschwindet auf jedem Gerät. `openSession(sessionId)` öffnet den Chat ausdrücklich.
 
-`tool` ist das, womit die Sitzung arbeitet, solange `activity` `running` ist: der laufende Werkzeugaufruf oder der zuletzt beendete, während der Agent über dessen Ergebnis nachdenkt. Felder: `name`, wie OpenCode es nennt (`read`, `edit`, `bash`), und `target`, die Datei oder der Ordner aus dem Aufruf relativ zum `directory` der Sitzung (bei einem Pfad außerhalb nur der Name), oder `null`, wenn der Aufruf keinen nennt. Der Text eines Shell-Befehls erscheint hier nie. `context` gibt an, wie voll das Kontextfenster nach dem letzten Schritt der Sitzung war: `tokens`, die es enthielt, und `limit`, das Fenster des Modells, oder `null`, wenn der Host es nicht kennt. `tool` ist `null`, solange die Sitzung nicht läuft; `context` ist `null`, bevor der Host einen Schritt gesehen hat, und nach einer Komprimierung bis zum nächsten Schritt. Ältere Hosts lassen beide Felder weg.
+`tool` ist das, womit die Sitzung arbeitet, solange `activity` `running` ist: der laufende Werkzeugaufruf oder der zuletzt beendete, während der Agent über dessen Ergebnis nachdenkt. Felder: `name`, wie OMP es nennt (`read`, `edit`, `bash`), und `target`, die Datei oder der Ordner aus dem Aufruf relativ zum `directory` der Sitzung (bei einem Pfad außerhalb nur der Name), oder `null`, wenn der Aufruf keinen nennt. Der Text eines Shell-Befehls erscheint hier nie. `context` gibt an, wie voll das Kontextfenster nach dem letzten Schritt der Sitzung war: `tokens`, die es enthielt, und `limit`, das Fenster des Modells, oder `null`, wenn der Host es nicht kennt. `tool` ist `null`, solange die Sitzung nicht läuft; `context` ist `null`, bevor der Host einen Schritt gesehen hat, und nach einer Komprimierung bis zum nächsten Schritt. Ältere Hosts lassen beide Felder weg.
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` und `keys()` speichern eigenes JSON ohne weitere Berechtigung. Fehlende Schlüssel liefern `undefined`, gespeichertes null bleibt null. Schlüssel haben 1 bis 128 Zeichen, Werte höchstens 64 KiB UTF-8, der gesamte Speicher 2 MiB und 2.000 Schlüssel. Nutze Projekt-IDs im Schlüssel für projektspezifische Daten. Schreibvorgänge sind serialisiert und atomar; Fehler erhalten vorhandene Daten. Entfernen löscht den Speicher auf dem verbundenen Server.
 
@@ -285,7 +277,7 @@ await host.setMark({ sessionId }, null);
 
 Setzt du ein Ziel erneut, ersetzt das seine Markierung, und `null` entfernt sie. Eine Zeile zeichnet höchstens zwei Markierungen, eine pro Erweiterung, und listet alle in ihrem Tooltip auf. In einer einzeiligen Zeile verdecken die Schaltflächen der Zeile die Markierungen, solange der Zeiger darüber steht. Ein Klick erreicht eine Markierung daher in zweizeiligen Zeilen und auf Touchscreens.
 
-Eine Markierung lebt so lange wie dein Dienstprozess. Deklariere deshalb `service.keepRunning` und setze die Markierungen beim Start des Dienstes erneut. Ein Dienst hält bis zu 200 Markierungen und ändert sie bis zu 60 Mal pro Minute. Markierungen brauchen eine OpenChamber-Version, die neuer als 2.7.0 ist: Eine ältere ignoriert den Schlüssel und lehnt den Aufruf ab.
+Eine Markierung lebt so lange wie dein Dienstprozess. Deklariere deshalb `service.keepRunning` und setze die Markierungen beim Start des Dienstes erneut. Ein Dienst hält bis zu 200 Markierungen und ändert sie bis zu 60 Mal pro Minute. Markierungen brauchen eine OhPiChamber-Version, die neuer als 2.7.0 ist: Eine ältere ignoriert den Schlüssel und lehnt den Aufruf ab.
 
 ## Zeilen im @-Menü
 
@@ -403,14 +395,14 @@ Schaltet der Nutzer Sitzungskommentare ein, ruft OhPiChamber `comments.create` m
 
 ## Nutzungsanbieter
 
-Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die OpenCode-Anbieter auf, deren Zugangsdaten er braucht. OhPiChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
+Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die OMP-Anbieter auf, deren Zugangsdaten er braucht. OhPiChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OhPiChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in OpenCode wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
+Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OhPiChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die OMP für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in OMP wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
 
 Lies den Body mit `readQuotaProviderRequest` und antworte mit `{ ok: true, data }` und dem Ergebnis, das ein eingebauter Anbieter berechnet: `ok`, `configured`, `error`, `planLabel` und `usage.windows` nach Fensternamen, jedes mit `usedPercent`, `windowSeconds`, `resetAt` (Epoche in Millisekunden) und optional `valueLabel` oder `value`, dazu `usage.models` für Fenster je Modell. OhPiChamber leitet den verbleibenden Anteil, den Countdown bis zum Reset und die formatierten Zeichenketten ab, sodass die Karte der eines eingebauten Anbieters entspricht.
 

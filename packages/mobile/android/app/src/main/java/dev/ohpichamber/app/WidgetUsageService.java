@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import android.appwidget.AppWidgetManager;
 import android.content.Context;

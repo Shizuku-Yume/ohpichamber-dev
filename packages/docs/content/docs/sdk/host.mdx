@@ -66,16 +66,8 @@ Access tokens never appear here or in a `request` result.
 | `generate({ prompt, system?, maxOutputTokens? })` | one-off text from the user's Small Model. Returns `{ text }`. Needs the `model` capability. |
 | `onResolve(handler)` | register the handler for your slash commands. It gets `{ command, args }` and returns an attach item or `null`. |
 | `setBadge(count)` | mark your rail icon with a dot and put the count (0 to 999) in its tooltip, or `null` to clear it |
-<<<<<<< HEAD
 | `openCommit(sha)` | open the Diff view on that commit of the current project. `sha` is 7 to 64 hex characters; OhPiChamber reads the commit itself. |
-| `setHeight(px)` | set the height of your Work Status section. OhPiChamber keeps it between 24 and 320 pixels; taller content scrolls inside your page. Other places ignore it. |
-||||||| bc50ba56aa
-| `openCommit(sha)` | open the Diff view on that commit of the current project. `sha` is 7 to 64 hex characters; OpenChamber reads the commit itself. |
-| `setHeight(px)` | set the height of your Work Status section. OpenChamber keeps it between 24 and 320 pixels; taller content scrolls inside your page. Other places ignore it. |
-=======
-| `openCommit(sha)` | open the Diff view on that commit of the current project. `sha` is 7 to 64 hex characters; OpenChamber reads the commit itself. |
-| `setHeight(px)` | set the height of your Work Status section. OpenChamber keeps it between 24 and 480 pixels; taller content scrolls inside your page. Other places ignore it. |
->>>>>>> upstream/main
+| `setHeight(px)` | set the height of your Work Status section. OhPiChamber keeps it between 24 and 480 pixels; taller content scrolls inside your page. Other places ignore it. |
 | `onFileOpen(listener)` | file editors: get the file to edit, `{ path, name, readOnly }` plus `encoding: "text"` with `content`, or `encoding: "binary"` with `bytes`. Also makes Cmd/Ctrl+S in your page save. |
 | `onFileSnapshot(handler)` | file editors: return `{ content, version }` (or `{ bytes, version }` for a binary editor), the whole edited file. OhPiChamber calls it to save and before switching to the source view or fullscreen. |
 | `onFileSaved(listener)` | file editors: the snapshot with that `version` is on disk. Answer with `reportFileChange`. |
@@ -175,7 +167,7 @@ Snapshots have `state: "loading" | "ready" | "error"`. Loading/error may retain 
 
 Session `activity` is `unknown`, `idle`, `running`, `retrying`, `waiting-permission`, or `waiting-question`. `outcome` is an observed `completed`/`failed` turn or `null`. It is not reconstructed from history and is retained in memory for at most 2,000 observed sessions. Idle after an error keeps the failed outcome until another run starts. Neither idle nor completed marks your task Done. `inWork` is `true` when the session sits in the sidebar's In work block, and always `false` while the user has In work turned off; older hosts leave it out. `unread` is `true` when the last turn ended and nobody has opened the session since, the mark the sidebar shows; it survives restarts and clears on every device. Use `host.openSession(sessionId)` for an explicit transition from a card to its chat.
 
-`tool` is what the session works with while `activity` is `running`, the tool call running now or the one that ended last while the agent thinks about its result: `name` as OpenCode calls it (`read`, `edit`, `bash`) and `target`, the file or folder the call names relative to the session's `directory` (the bare name for one outside it), or `null` when it names none. A shell command's text never appears in it. `context` is how full the context window was after the session's latest step: `tokens` it held and `limit`, the model's window, or `null` when the host doesn't know it. `tool` is `null` whenever the session doesn't run; `context` is `null` before the host has seen a step and after a compaction until the next step measures the window. Older hosts leave both out.
+`tool` is what the session works with while `activity` is `running`, the tool call running now or the one that ended last while the agent thinks about its result: `name` as OMP calls it (`read`, `edit`, `bash`) and `target`, the file or folder the call names relative to the session's `directory` (the bare name for one outside it), or `null` when it names none. A shell command's text never appears in it. `context` is how full the context window was after the session's latest step: `tokens` it held and `limit`, the model's window, or `null` when the host doesn't know it. `tool` is `null` whenever the session doesn't run; `context` is `null` before the host has seen a step and after a compaction until the next step measures the window. Older hosts leave both out.
 
 ## Background shells
 
@@ -195,7 +187,7 @@ The host keeps an ended command's output for its latest 25 ended commands per di
 
 ## Microphone
 
-With the `microphone` capability, `openMicrophone()` gives your panel the user's microphone as a `MediaStream`. Your frame can't call `getUserMedia` itself, since the browser refuses it to a sandboxed frame, so OpenChamber captures the audio and streams it in.
+With the `microphone` capability, `openMicrophone()` gives your panel the user's microphone as a `MediaStream`. Your frame can't call `getUserMedia` itself, since the browser refuses it to a sandboxed frame, so OhPiChamber captures the audio and streams it in.
 
 ```ts
 button.addEventListener("click", async () => {
@@ -208,7 +200,7 @@ button.addEventListener("click", async () => {
 
 Open it from a click inside your frame: the audio starts only from the user's gesture. Check `features.microphone` in `onReady` first; older hosts and hidden background frames answer `UNSUPPORTED`. One microphone is open per frame, so a second call while it's open is `HOST_REJECTED`. A refusal by the user or the system is `DENIED`, no input device is `NOT_FOUND`, and an unapproved capability is `NOT_GRANTED`.
 
-`close()` stops the capture and ends the track. `onEnded` tells you when OpenChamber stopped it on its own: `revoked` when the user withdrew the capability or paused the extension, `device-lost` when the device went away. Reloading or removing the frame stops it too. The stream is mono, with echo cancellation, noise suppression and auto gain on.
+`close()` stops the capture and ends the track. `onEnded` tells you when OhPiChamber stopped it on its own: `revoked` when the user withdrew the capability or paused the extension, `device-lost` when the device went away. Reloading or removing the frame stops it too. The stream is mono, with echo cancellation, noise suppression and auto gain on.
 
 ## Persistent extension data
 
@@ -342,7 +334,7 @@ await host.setMark({ sessionId }, null);
 
 Setting a target again replaces its mark, and `null` removes it. A row draws two marks at most, one per extension, and lists them all in its tooltip. On a one-line row the row's buttons cover the marks while the pointer is over it, so a click reaches a mark on two-line rows and on touch screens.
 
-A mark lives as long as your service process, so declare `service.keepRunning` and set the marks again when the service starts. A service holds up to 200 marks and changes them up to 60 times a minute. Marks need an OpenChamber release newer than 2.7.0: an older one ignores the key and refuses the call.
+A mark lives as long as your service process, so declare `service.keepRunning` and set the marks again when the service starts. A service holds up to 200 marks and changes them up to 60 times a minute. Marks need an OhPiChamber release newer than 2.7.0: an older one ignores the key and refuses the call.
 
 ## Rows in the @ menu
 
@@ -460,14 +452,14 @@ When the user turns session comments on, OhPiChamber calls `comments.create` wit
 
 ## Usage providers
 
-A service can report usage next to the built-in providers: declare `provides: ["quota"]` and list in `contributes.quota.providers` the OpenCode providers whose credentials it needs. OhPiChamber names the provider `ext-<panel.id>`, draws its card with the extension's name and icon, and asks it the way it asks a built-in.
+A service can report usage next to the built-in providers: declare `provides: ["quota"]` and list in `contributes.quota.providers` the OMP providers whose credentials it needs. OhPiChamber names the provider `ext-<panel.id>`, draws its card with the extension's name and icon, and asks it the way it asks a built-in.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-The approval dialog lists those providers, and a version that changes the list asks again. On every refresh OhPiChamber posts one call, `usage.read`, to `POST /quota`, with `input.credentials` holding the credential OpenCode stores for each listed provider it has one for (an API key, or a browser login's tokens) and nothing else of the store. A listed provider OpenCode holds no credential for is shown as not configured and the service is not called; an empty list is allowed, for a provider whose key lives in the extension's own settings.
+The approval dialog lists those providers, and a version that changes the list asks again. On every refresh OhPiChamber posts one call, `usage.read`, to `POST /quota`, with `input.credentials` holding the credential OMP stores for each listed provider it has one for (an API key, or a browser login's tokens) and nothing else of the store. A listed provider OMP holds no credential for is shown as not configured and the service is not called; an empty list is allowed, for a provider whose key lives in the extension's own settings.
 
 Read the body with `readQuotaProviderRequest` and answer `{ ok: true, data }` with the result a built-in computes: `ok`, `configured`, `error`, `planLabel`, and `usage.windows` keyed by window name, each with `usedPercent`, `windowSeconds`, `resetAt` (epoch milliseconds) and an optional `valueLabel` or `value`, plus `usage.models` for per-model windows. OhPiChamber derives the remaining share, the reset countdown and the formatted strings, so the card matches a built-in's.
 

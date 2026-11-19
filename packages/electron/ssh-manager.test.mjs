@@ -954,7 +954,7 @@ printf '4321\\n'`);
       const result = await manager.ensureRemoteServer(managed(), parsed, '/unused.sock');
 
       expect(result.startedByUs).toBe(true);
-      expect(manager.logsForInstance('ssh-reuse', 50).join('\n')).toContain('Could not list OpenChamber servers');
+      expect(manager.logsForInstance('ssh-reuse', 50).join('\n')).toContain('Could not list OhPiChamber servers');
     });
   });
 });

@@ -805,24 +805,6 @@ const readResultMessage = (wire: WireRecord): HostResultMessage | null => {
   return null;
 };
 
-<<<<<<< HEAD
-/**
- * The guest's read of a host message. The host is the trusted parent frame
- * (the client only listens to `event.source === parent`), so this checks the
- * envelope and the discriminant rather than every field, and the guest bundle
- * carries no schema library for it. The host side parses guest input with
- * `guestMessageSchema` in `ohpichamber-sdk/schemas`.
- */
-||||||| bc50ba56aa
-/**
- * The guest's read of a host message. The host is the trusted parent frame
- * (the client only listens to `event.source === parent`), so this checks the
- * envelope and the discriminant rather than every field, and the guest bundle
- * carries no schema library for it. The host side parses guest input with
- * `guestMessageSchema` in `@openchamber/sdk/schemas`.
- */
-=======
->>>>>>> upstream/main
 export const readHostMessage = (data: MessageEvent['data']): HostMessage | null => {
   const wire = asWireRecord(data);
   if (!wire || wire.channel !== OPENCHAMBER_SDK_CHANNEL || wire.v !== OPENCHAMBER_SDK_API_VERSION) return null;

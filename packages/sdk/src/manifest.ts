@@ -281,42 +281,7 @@ export type PublicSocketBinding = {
   override: string | null;
 };
 
-<<<<<<< HEAD
-/**
- * Host roles a service can stand in for. `browser` answers the agent's
- * `browser.*` actions in place of the in-app browser view. `source-control`
- * makes the extension a Git host next to GitHub, GitLab and Gitea, described
- * by `contributes.sourceControl`. `notifications` makes it a delivery channel
- * for the user's notifications next to the desktop and the phone, described
- * by `contributes.notifications`. `tracker` makes it a work item tracker next
- * to Linear, described by `contributes.tracker`; an extension is a Git host
- * or a tracker, never both. `quota` makes it a usage provider next to the
- * built-in ones on the Usage page, described by `contributes.quota`. The
- * contracts are in `service-providers.ts`. A
- * service that provides a role needs no panel or background entry: the host
- * starts it on the first call.
- */
 export const GUEST_SERVICE_PROVIDES = ['browser', 'source-control', 'notifications', 'tracker', 'quota'] as const;
-||||||| bc50ba56aa
-/**
- * Host roles a service can stand in for. `browser` answers the agent's
- * `browser.*` actions in place of the in-app browser view. `source-control`
- * makes the extension a Git host next to GitHub, GitLab and Gitea, described
- * by `contributes.sourceControl`. `notifications` makes it a delivery channel
- * for the user's notifications next to the desktop and the phone, described
- * by `contributes.notifications`. `tracker` makes it a work item tracker next
- * to Linear, described by `contributes.tracker`; an extension is a Git host
- * or a tracker, never both. `quota` makes it a usage provider next to the
- * built-in ones on the Usage page, described by `contributes.quota`. The
- * contracts are in `service-providers.ts`. `opencode` lets the service read
- * from the OpenCode the host uses, requiring its own capability approval. A
- * service that provides a role needs no panel or background entry: the host
- * starts it on the first call.
- */
-export const GUEST_SERVICE_PROVIDES = ['browser', 'source-control', 'notifications', 'tracker', 'quota', 'opencode'] as const;
-=======
-export const GUEST_SERVICE_PROVIDES = ['browser', 'source-control', 'notifications', 'tracker', 'quota', 'opencode'] as const;
->>>>>>> upstream/main
 export type GuestServiceProvides = (typeof GUEST_SERVICE_PROVIDES)[number];
 
 export const SOURCE_CONTROL_GUEST_ID_MAX = 28;
@@ -573,59 +538,7 @@ export const serviceProvides = (
   role: GuestServiceProvides,
 ): boolean => Boolean(service?.provides?.includes(role));
 
-<<<<<<< HEAD
-/**
- * What a guest may do beyond drawing its own panel. The user approves the
- * full list once, when the package is installed; a later package that asks
- * for more is re-approved. `prompt`, `sessions`, `files`, `model`, and
- * `shells` are declared under `contributes.capabilities`; `service`, `network`,
- * `filesystem` and `origins` follow from `contributes.service`,
- * `contributes.integration`, `contributes.filesystem` and `contributes.origins`. `model` is one-off text generation with the
- * user's Small Model (`host.generate`), outside any session. `transcript`
- * follows from `contributes.sessionEvents.content` or
- * `contributes.sessionControl.content`: the service receives what the agent
- * said or asked, not only that it did. `sessionControl` follows from
- * `contributes.sessionControl`: the service starts sessions and sends to them
- * with no window open. `sessionAnswers` follows from
- * `contributes.sessionControl.answers`: the service answers the agent's
- * permission requests and forms in any session, for the user.
- * `instructions` follows from `contributes.instructions`:
- * the service adds to what agents read. `skills` follows from
- * `contributes.skills`: the package's skills reach every agent. `links`
- * follows from `contributes.links`: identifiers and links in chat messages
- * become the extension's, and a click hands the one clicked to it.
- */
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'links'] as const;
-||||||| bc50ba56aa
-/**
- * What a guest may do beyond drawing its own panel. The user approves the
- * full list once, when the package is installed; a later package that asks
- * for more is re-approved. `prompt`, `sessions`, `files`, `model`, and
- * `shells` are declared under `contributes.capabilities`; `service`, `network`,
- * `filesystem` and `origins` follow from `contributes.service`,
- * `contributes.integration`, `contributes.filesystem` and `contributes.origins`. `model` is one-off text generation with the
- * user's Small Model (`host.generate`), outside any session. `transcript`
- * follows from `contributes.sessionEvents.content` or
- * `contributes.sessionControl.content`: the service receives what the agent
- * said or asked, not only that it did. `sessionControl` follows from
- * `contributes.sessionControl`: the service starts sessions and sends to them
- * with no window open. `sessionAnswers` follows from
- * `contributes.sessionControl.answers`: the service answers the agent's
- * permission requests and forms in any session, for the user.
- * `instructions` follows from `contributes.instructions`:
- * the service adds to what agents read. `skills` follows from
- * `contributes.skills`: the package's skills reach every agent.
- * `opencodePlugin` follows from `contributes.opencodePlugin`: the package's
- * plugin runs inside the user's OpenCode. `opencode` follows from the service
- * role of the same name: the service reads sessions, messages, projects and
- * live events from the OpenCode the host uses, and nothing else. `links`
- * follows from `contributes.links`: identifiers and links in chat messages
- * become the extension's, and a click hands the one clicked to it.
- */
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'opencodePlugin', 'opencode', 'links'] as const;
-=======
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'microphone', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'opencodePlugin', 'opencode', 'links', 'wake', 'marks'] as const;
->>>>>>> upstream/main
+export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'microphone', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'links', 'wake', 'marks'] as const;
 
 export type GuestCapability = (typeof GUEST_CAPABILITIES)[number];
 
@@ -731,18 +644,6 @@ export type OpenChamberContributes = {
   instructions?: true;
   marks?: true;
   skills?: string;
-<<<<<<< HEAD
-  /** Rows in the composer's `@` menu. Needs `service`. */
-||||||| bc50ba56aa
-  /**
-   * An OpenCode plugin folder inside the package: a directory with a
-   * `package.json` whose entry OpenCode loads. Grants `opencodePlugin`.
-   */
-  opencodePlugin?: string;
-  /** Rows in the composer's `@` menu. Needs `service`. */
-=======
-  opencodePlugin?: string;
->>>>>>> upstream/main
   mentions?: MentionsContribution;
   blocks?: GuestBlockContribution[];
   links?: LinksContribution;
@@ -758,13 +659,7 @@ export type PublicGuestCapabilities = {
 };
 
 export const requestedGuestCapabilities = (
-<<<<<<< HEAD
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'links'>,
-||||||| bc50ba56aa
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'opencodePlugin' | 'links'>,
-=======
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'opencodePlugin' | 'links' | 'waits' | 'marks'>,
->>>>>>> upstream/main
+  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'links' | 'waits' | 'marks'>,
 ): GuestCapability[] => {
   const declared = new Set<GuestCapability>(contributes.capabilities ?? []);
   if (guestActionsNeedConversation(contributes.actions)) declared.add('conversation');

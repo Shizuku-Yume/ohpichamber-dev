@@ -7,13 +7,7 @@ description: Skonfiguruj Jev, mały model klasyfikacji, który podejmuje decyzje
 
 Niektóre funkcje OhPiChamber potrzebują szybkiej decyzji, zanim zaczną działać: czy to polecenie jest ryzykowne, jakiego rodzaju zadaniem jest ten prompt, czy ta praca wygląda na skończoną? Na takie pytania odpowiada Jev, mały model decyzyjny od TypeSafe. Ta strona pokazuje, jak dać OhPiChamber dostęp do Jev.
 
-<<<<<<< HEAD
-Jev nie pisze kodu i nie odpowiada na Twoim czacie. Zwraca tylko werdykt, a OhPiChamber działa zgodnie z nim. Na odpowiedź OhPiChamber czeka najwyżej cztery sekundy.
-||||||| bc50ba56aa
-Jev nie pisze kodu i nie odpowiada na Twoim czacie. Zwraca tylko werdykt, a OpenChamber działa zgodnie z nim. Na odpowiedź OpenChamber czeka najwyżej cztery sekundy.
-=======
-Jev nie pisze kodu i nie odpowiada na Twoim czacie. Zwraca tylko werdykt, a OpenChamber działa zgodnie z nim. Na odpowiedź OpenChamber czeka najwyżej cztery sekundy przed wysłaniem wiadomości lub wykonaniem akcji, a do piętnastu sekund przy sprawdzeniach po turze, na które nic nie czeka.
->>>>>>> upstream/main
+Jev nie pisze kodu i nie odpowiada na Twoim czacie. Zwraca tylko werdykt, a OhPiChamber działa zgodnie z nim. Na odpowiedź OhPiChamber czeka najwyżej cztery sekundy przed wysłaniem wiadomości lub wykonaniem akcji, a do piętnastu sekund przy sprawdzeniach po turze, na które nic nie czeka.
 
 ## Co korzysta z Jev
 
@@ -61,14 +55,14 @@ Korzysta z zapisanego klucza API skonfigurowanego dla Vercel AI Gateway, a opła
 
 ### Google Gemini
 
-Korzysta z Gemini Decision 1, własnego modelu decyzyjnego Google, przez Decisions API Google, a opłaty idą z Twojego konta Google. OpenChamber zadaje mu te same pytania co Jev. W darmowym planie Google może używać tego, co otrzymuje, do ulepszania swoich produktów ([warunki Gemini API](https://ai.google.dev/gemini-api/terms#data-use-unpaid)).
+Korzysta z Gemini Decision 1, własnego modelu decyzyjnego Google, przez Decisions API Google, a opłaty idą z Twojego konta Google. OhPiChamber zadaje mu te same pytania co Jev. W darmowym planie Google może używać tego, co otrzymuje, do ulepszania swoich produktów ([warunki Gemini API](https://ai.google.dev/gemini-api/terms#data-use-unpaid)).
 
 1. Zdobądź klucz API w [Google AI Studio](https://aistudio.google.com/apikey).
 2. Wklej go w pole **Klucz API Gemini** i kliknij **Zapisz**.
 
-Zapisany klucz od razu zostaje wybrany. Leży na serwerze OpenChamber w osobnym pliku i nigdy nie trafia do przeglądarki.
+Zapisany klucz od razu zostaje wybrany. Leży na serwerze OhPiChamber w osobnym pliku i nigdy nie trafia do przeglądarki.
 
-Jeśli dostawca **Google** w OpenCode ma już klucz API, możesz pominąć pole i wybrać **Google Gemini**. Klucz w `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` lub `GEMINI_API_KEY` też działa. Klucz zapisany w OpenChamber wygrywa z oboma. Trzymaj klucz w OpenChamber, jeśli chcesz używać Gemini tylko do decyzji: klucz u dostawcy Google w OpenCode otwiera tam też wszystkie modele czatu Gemini, a klucza API Gemini nie da się ograniczyć do jednego modelu.
+Jeśli dostawca **Google** w OMP ma już klucz API, możesz pominąć pole i wybrać **Google Gemini**. Klucz w `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` lub `GEMINI_API_KEY` też działa. Klucz zapisany w OhPiChamber wygrywa z oboma. Trzymaj klucz w OhPiChamber, jeśli chcesz używać Gemini tylko do decyzji: klucz u dostawcy Google w OMP otwiera tam też wszystkie modele czatu Gemini, a klucza API Gemini nie da się ograniczyć do jednego modelu.
 
 ### Klucz API TypeSafe
 
@@ -107,13 +101,7 @@ Gdy dostawca zacznie działać, karta w **Ustawienia → Dostawcy** pokaże **Go
 
 ## Kiedy Twój wybór przestaje działać
 
-<<<<<<< HEAD
-Jeśli z wybranego dostawcy nie da się skorzystać (promocja się skończyła, klucz usunięto), OhPiChamber przechodzi na pierwszy działający z Twoich własnych kluczy: klucz TypeSafe, potem Twój własny endpoint, potem OpenRouter, potem Vercel AI Gateway, potem klucz Zen. Nigdy nie przechodzi na promocję, a **Wyłączone** pozostaje wyłączone. Strona pokazuje, którego używa w tej chwili.
-||||||| bc50ba56aa
-Jeśli z wybranego dostawcy nie da się skorzystać (promocja się skończyła, klucz usunięto), OpenChamber przechodzi na pierwszy działający z Twoich własnych kluczy: klucz TypeSafe, potem Twój własny endpoint, potem OpenRouter, potem Vercel AI Gateway, potem klucz Zen. Nigdy nie przechodzi na promocję, a **Wyłączone** pozostaje wyłączone. Strona pokazuje, którego używa w tej chwili.
-=======
-Jeśli z wybranego dostawcy nie da się skorzystać (promocja się skończyła, klucz usunięto), OpenChamber przechodzi na pierwszy działający z Twoich własnych kluczy: klucz TypeSafe, potem Twój własny endpoint, potem OpenRouter, potem Vercel AI Gateway, potem klucz Zen. Nigdy nie przechodzi na promocję ani na Google Gemini, a **Wyłączone** pozostaje wyłączone. Strona pokazuje, którego używa w tej chwili.
->>>>>>> upstream/main
+Jeśli z wybranego dostawcy nie da się skorzystać (promocja się skończyła, klucz usunięto), OhPiChamber przechodzi na pierwszy działający z Twoich własnych kluczy: klucz TypeSafe, potem Twój własny endpoint, potem OpenRouter, potem Vercel AI Gateway, potem klucz Zen. Nigdy nie przechodzi na promocję ani na Google Gemini, a **Wyłączone** pozostaje wyłączone. Strona pokazuje, którego używa w tej chwili.
 
 Jeśli Jev odpowiada wolno albo zawodzi przy pojedynczym zapytaniu, nic się nie psuje. Każda funkcja ma na ten wypadek bezpieczną odpowiedź:
 
@@ -124,21 +112,9 @@ Jeśli Jev odpowiada wolno albo zawodzi przy pojedynczym zapytaniu, nic się nie
 
 ## Co widzi Jev
 
-<<<<<<< HEAD
-Jev dostaje krótkie fragmenty Twojej rozmowy: Twoją ostatnią wiadomość i, jako kontekst, do trzech poprzednich tur, przyciętych do kilkuset pierwszych znaków. Dla siatki bezpieczeństwa dostaje też sprawdzane działanie: polecenie, które agent chce uruchomić, albo plik i zmianę przy edycji. Nigdy nie dostaje całych plików ani obrazów.
-||||||| bc50ba56aa
-Jev dostaje krótkie fragmenty Twojej rozmowy: Twoją ostatnią wiadomość i, jako kontekst, do trzech poprzednich tur, przyciętych do kilkuset pierwszych znaków. Dla siatki bezpieczeństwa dostaje też sprawdzane działanie w takiej postaci, w jakiej opisuje je OpenCode: polecenie, które agent chce uruchomić, albo plik i zmianę przy edycji. Nigdy nie dostaje całych plików ani obrazów.
-=======
-Jev dostaje Twoją ostatnią wiadomość i, jako kontekst, fragmenty niedawnej rozmowy: do trzech poprzednich tur, każdą przyciętą do kilkuset znaków, a na koniec tury początek i koniec odpowiedzi agenta. Dla siatki bezpieczeństwa dostaje też działanie, na które agent prosi o zgodę, w takiej postaci, w jakiej opisuje je OpenCode: polecenie, które agent chce uruchomić, albo plik i zmianę przy edycji. Gdy agent tworzy plik, ta zmiana to cały plik, także obraz zapisany jako tekst, np. SVG. Gdy Jev sprawdza cel, dostaje cel i ostatnią odpowiedź agenta, do 10 000 znaków.
->>>>>>> upstream/main
+Jev dostaje Twoją ostatnią wiadomość i, jako kontekst, fragmenty niedawnej rozmowy: do trzech poprzednich tur, każdą przyciętą do kilkuset znaków, a na koniec tury początek i koniec odpowiedzi agenta. Dla siatki bezpieczeństwa dostaje też działanie, na które agent prosi o zgodę, w takiej postaci, w jakiej opisuje je OMP: polecenie, które agent chce uruchomić, albo plik i zmianę przy edycji. Gdy agent tworzy plik, ta zmiana to cały plik, także obraz zapisany jako tekst, np. SVG. Gdy Jev sprawdza cel, dostaje cel i ostatnią odpowiedź agenta, do 10 000 znaków.
 
-<<<<<<< HEAD
-Zapytania idą z serwera OhPiChamber prosto do OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe albo Twojego własnego endpointu, zależnie od Twojego wyboru.
-||||||| bc50ba56aa
-Zapytania idą z serwera OpenChamber prosto do OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe albo Twojego własnego endpointu, zależnie od Twojego wyboru.
-=======
-Zapytania idą z serwera OpenChamber prosto do OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe albo Twojego własnego endpointu, zależnie od Twojego wyboru.
->>>>>>> upstream/main
+Zapytania idą z serwera OhPiChamber prosto do OpenCode Zen, OpenRouter, Vercel AI Gateway, Google, TypeSafe albo Twojego własnego endpointu, zależnie od Twojego wyboru.
 
 ## Gdzie to działa
 

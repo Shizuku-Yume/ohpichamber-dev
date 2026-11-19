@@ -11,13 +11,7 @@ Eigene Erweiterungsdaten bleiben auf dem verbundenen Server gespeichert und werd
 
 Unter **Einstellungen → Erweiterungen** fügst du OhPiChamber Panels hinzu, die andere Leute gebaut haben. Eine Erweiterung ist eine kleine Seite in der rechten Leiste, neben den eingebauten Panels. Sie kann dir Daten aus einem anderen Dienst zeigen, eine Aufgabe an den Chat anhängen und, wenn du es erlaubst, Sitzungen starten, Prompts senden oder Dateien lesen.
 
-<<<<<<< HEAD
-Erweiterungen laufen in OhPiChamber Web und Desktop. Sie sind nicht dasselbe wie Host-Plugins.
-||||||| bc50ba56aa
-Erweiterungen laufen in OpenChamber Web und Desktop. VS Code und die Mobile-App laden sie noch nicht. Sie sind nicht dasselbe wie OpenCode-Plugins.
-=======
-Erweiterungen laufen in OpenChamber Web, Desktop und der Mobile-App; das Handy zeigt von jeder einen Teil, siehe [Auf dem Handy](#auf-dem-handy). VS Code lädt sie nicht. Sie sind nicht dasselbe wie OpenCode-Plugins.
->>>>>>> upstream/main
+Erweiterungen laufen in OhPiChamber Web, Desktop und der Mobile-App; das Handy zeigt von jeder einen Teil, siehe [Auf dem Handy](#auf-dem-handy). VS Code lädt sie nicht. Sie sind nicht dasselbe wie OMP-Plugins.
 
 ## Eine Erweiterung installieren
 
@@ -60,16 +54,9 @@ Ein Panel anzeigen und lesen, welches Projekt und welche Sitzung offen sind, bra
 - **Lesen, was der Agent im Hintergrund sagt**: die endgültige Antwort jedes Zugs, die Fragen, die der Agent stellt, und wofür er um Erlaubnis bittet, in jedem Projekt, gesendet an den lokalen Dienst der Erweiterung. Erlaube das nur, wenn du vertraust, wohin die Erweiterung es schickt.
 - **Selbstständig Sitzungen starten und Nachrichten senden**: ihr lokaler Dienst tut das ohne geöffnetes Fenster, was Tokens kostet und Tools ausführen kann.
 - **Ergänzen, was Agenten lesen**: Text in den Anweisungen deiner Sitzungen und Skills, die jedem Agenten angeboten werden, solange die Erweiterung aktiv ist.
-<<<<<<< HEAD
+- **Ein Plugin zu OMP hinzufügen**: Das Plugin des Pakets wird in dein OMP geladen, solange die Erweiterung aktiv ist. Plugin-Code läuft innerhalb von OMP mit deinem vollen Zugriff, wie ein lokaler Dienst; erlaube es nur, wenn du dem Autor vertraust.
 - **Seine Links in Chats erkennen**: Kennungen wie `DEMO-12` und Links auf die Website der Erweiterung werden in deinen Chat-Nachrichten anklickbar. Der Dialog listet auf, welche das sind, und sagt, ob ein Klick sie in der Erweiterung öffnet oder an deine Nachricht anhängt. Links, die OhPiChamber schon kennt, etwa Pull Requests auf GitHub und Issues in Linear, verhalten sich wie gewohnt.
-||||||| bc50ba56aa
-- **Ein Plugin zu OpenCode hinzufügen**: Das Plugin des Pakets wird in dein OpenCode geladen, solange die Erweiterung aktiv ist. Plugin-Code läuft innerhalb von OpenCode mit deinem vollen Zugriff, wie ein lokaler Dienst; erlaube es nur, wenn du dem Autor vertraust.
-- **Seine Links in Chats erkennen**: Kennungen wie `DEMO-12` und Links auf die Website der Erweiterung werden in deinen Chat-Nachrichten anklickbar. Der Dialog listet auf, welche das sind, und sagt, ob ein Klick sie in der Erweiterung öffnet oder an deine Nachricht anhängt. Links, die OpenChamber schon kennt, etwa Pull Requests auf GitHub und Issues in Linear, verhalten sich wie gewohnt.
-=======
-- **Ein Plugin zu OpenCode hinzufügen**: Das Plugin des Pakets wird in dein OpenCode geladen, solange die Erweiterung aktiv ist. Plugin-Code läuft innerhalb von OpenCode mit deinem vollen Zugriff, wie ein lokaler Dienst; erlaube es nur, wenn du dem Autor vertraust.
-- **Seine Links in Chats erkennen**: Kennungen wie `DEMO-12` und Links auf die Website der Erweiterung werden in deinen Chat-Nachrichten anklickbar. Der Dialog listet auf, welche das sind, und sagt, ob ein Klick sie in der Erweiterung öffnet oder an deine Nachricht anhängt. Links, die OpenChamber schon kennt, etwa Pull Requests auf GitHub und Issues in Linear, verhalten sich wie gewohnt.
 - **Markierungen in der Seitenleiste anzeigen**: kleine Symbole mit Tooltip an den Sitzungen und Worktrees, die die Erweiterung nennt, etwa ein fehlgeschlagener Check an einem Branch. Der Dialog sagt, ob ein Klick das Panel der Erweiterung öffnet oder einen Link, den die Erweiterung mitgibt.
->>>>>>> upstream/main
 
 Ein lokaler Dienst kann auch weiterlaufen, solange OhPiChamber läuft, oder nach Zeitplan aufwachen. Der Dialog sagt das unter **Lokalen Dienst ausführen**, und er sagt auch, wann das, was du nach `@` tippst, an den Dienst geht. Eine Erweiterung kann dem `@`-Menü eigene Zeilen und Agentenantworten eigene Blöcke hinzufügen. Das Pausieren der Erweiterung nimmt all das wieder weg.
 
@@ -79,19 +66,13 @@ Wenn eine neuere Version mehr verlangt, als du erlaubt hast, zeigt die Karte **F
 
 ## Wo sie auftaucht
 
-<<<<<<< HEAD
-Neben ihrem Panel in der Leiste kann eine Erweiterung Einträge in Menüs ergänzen, die du ohnehin benutzt: die Aktionen an einer Chat-Nachricht, das Menü einer Sitzung, das +-Menü neben dem Chatfeld und Slash-Befehle wie `/task ABC-12`, die etwas anhängen, ohne etwas zu öffnen. Sie kann ihren eigenen Tools auch ein richtiges Symbol, einen Titel und ein Ausgabelayout im Chat geben, so wie es die eingebauten Tools von OhPiChamber haben. Die Erweiterung entscheidet, welche davon sie anbietet; alle bleiben aus, bis du die Erweiterung erlaubst.
-||||||| bc50ba56aa
-Neben ihrem Panel in der Leiste kann eine Erweiterung Einträge in Menüs ergänzen, die du ohnehin benutzt: die Aktionen an einer Chat-Nachricht, das Menü einer Sitzung, das +-Menü neben dem Chatfeld und Slash-Befehle wie `/task ABC-12`, die etwas anhängen, ohne etwas zu öffnen. Sie kann ihren eigenen Tools auch ein richtiges Symbol, einen Titel und ein Ausgabelayout im Chat geben, so wie es die eingebauten Tools von OpenChamber haben. Die Erweiterung entscheidet, welche davon sie anbietet; alle bleiben aus, bis du die Erweiterung erlaubst.
-=======
 Die Website zeigt [alle Stellen, an denen eine Erweiterung etwas hinzufügen kann](https://openchamber.dev/de/extensions/build/), auf einer Karte.
->>>>>>> upstream/main
 
 Neben ihrem Panel in der Leiste kann eine Erweiterung Dinge an Stellen ergänzen, die du ohnehin benutzt:
 
 - **Menüs**: die Aktionen an einer Chat-Nachricht, das Menü einer Sitzung, markierter Text in einer Nachricht, eine Datei in Dateien und markierte Zeilen in einem Diff.
 - **Das Chatfeld**: das **+**-Menü, Slash-Befehle wie `/task ABC-12`, die etwas anhängen, ohne etwas zu öffnen, und eigene Zeilen im `@`-Menü.
-- **Der Chat**: Blöcke, die ein Agent in seine Antwort zeichnet, etwa ein Diagramm oder eine Ticket-Karte, und ein eigenes Symbol, ein Titel und ein Ausgabelayout für ihre Tools, so wie es die eingebauten Tools von OpenChamber haben.
+- **Der Chat**: Blöcke, die ein Agent in seine Antwort zeichnet, etwa ein Diagramm oder eine Ticket-Karte, und ein eigenes Symbol, ein Titel und ein Ausgabelayout für ihre Tools, so wie es die eingebauten Tools von OhPiChamber haben.
 - **Arbeitsstatus**: ein eigener Abschnitt im Panel neben dem Chat.
 - **Dateien**: ein eigener Editor für einen Dateityp, etwa eine Zeichnung oder eine Tabelle.
 - **Die Seitenleiste**: kleine Markierungen an Sitzungs- und Worktree-Zeilen.
@@ -102,9 +83,9 @@ Manche Erweiterungen zeigen statt eines eigenen Panels ein Live-Bild: das, worin
 
 ## Auf dem Handy
 
-Die Mobile-App und OpenChamber im Browser eines Handys laden die Erweiterungen, die auf dem verbundenen Server installiert sind. **Einstellungen → Erweiterungen** gibt es dort auch, um sie hinzuzufügen, zu erlauben, zu pausieren und zu entfernen.
+Die Mobile-App und OhPiChamber im Browser eines Handys laden die Erweiterungen, die auf dem verbundenen Server installiert sind. **Einstellungen → Erweiterungen** gibt es dort auch, um sie hinzuzufügen, zu erlauben, zu pausieren und zu entfernen.
 
-Was OpenChamber selbst aus einer Erweiterung zeichnet, erscheint auf jedem Handy: Links in Chat-Nachrichten, das Layout ihrer Tools im Chat, Anbieter-Logos, ihre Zeilen im `@`-Menü, Markierungen an Zeilen der Seitenleiste und ihre Kontokarten unter **Einstellungen → Integrationen**. Ein Tippen auf eine Markierung öffnet diese Zeile und den Tab der Erweiterung, wenn ihr Panel für das Handy gemacht ist (unten); sonst zeigt es den Text der Markierung und öffnet ihren Link, falls sie einen hat.
+Was OhPiChamber selbst aus einer Erweiterung zeichnet, erscheint auf jedem Handy: Links in Chat-Nachrichten, das Layout ihrer Tools im Chat, Anbieter-Logos, ihre Zeilen im `@`-Menü, Markierungen an Zeilen der Seitenleiste und ihre Kontokarten unter **Einstellungen → Integrationen**. Ein Tippen auf eine Markierung öffnet diese Zeile und den Tab der Erweiterung, wenn ihr Panel für das Handy gemacht ist (unten); sonst zeigt es den Text der Markierung und öffnet ihren Link, falls sie einen hat.
 
 Diese Teile einer Erweiterung erscheinen ebenfalls, ohne dass ihr Autor etwas tun muss:
 
@@ -124,24 +105,6 @@ Bei jeder anderen Erweiterung bleibt das alles vom Handy fern, und ihre Menüs z
 
 Eine Vollbildseite entscheidet für sich: Sie erscheint unter **Mehr** in der Sitzungsliste, wenn ihr Autor die Seite selbst als für das Handy gestaltet markiert oder wenn die Seite ein Panel wiederverwendet, das es ist.
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-## Eine Erweiterung mit einem OpenCode-Plugin
-
-Eine Erweiterung kann ein OpenCode-Plugin mitliefern, sodass du eine Sache installierst statt zwei. Ihr Berechtigungsdialog hat eine Zeile, die mit **Ein Plugin zu OpenCode hinzufügen** beginnt. Sobald du es erlaubst, fügt OpenChamber das Plugin innerhalb weniger Sekunden dem OpenCode hinzu, das es für dich ausführt, ohne Neustart; Deaktivieren oder Entfernen der Erweiterung nimmt es auf demselben Weg wieder heraus. In deine eigene `opencode.json` wird nichts geschrieben, sodass das Plugin die Erweiterung nie überlebt und nie in dem OpenCode läuft, das du im Terminal startest.
-
-Wenn OpenChamber das OpenCode, mit dem es spricht, nicht gestartet hat, oder deine Umgebung ein eigenes `OPENCODE_CONFIG` setzt, erreicht die Konfiguration von OpenChamber dieses OpenCode nicht. Die Seite der Erweiterung sagt das und bietet **Zur globalen Konfiguration hinzufügen** an. Das schreibt den Ordner des Plugins in deine globale OpenCode-Konfiguration: Es läuft dann in jedem OpenCode auf diesem Rechner, auch im Terminal, bleibt aktiv, während die Erweiterung aus ist, und gehört dir zur Verwaltung unter **Einstellungen → Plugins**. Wenn du die Erweiterung entfernst, führt OpenCode diesen Eintrag als fehlgeschlagenes Plugin und läuft weiter, bis du den Eintrag dort löschst. Ein OpenCode auf einem anderen Rechner kann keinen Ordner von diesem laden; die Seite sagt das.
-
-VS Code und die Mobile-App laden keine Erweiterungen. Eine Sitzung in einem isolierten Space läuft mit einem eigenen OpenCode, das das Plugin nie erhält. Im Enterprise-Modus zählt das Plugin wie ein lokaler Dienst: Die Erweiterung installiert sich nur aus einem Repository, das dein Administrator freigegeben hat.
-=======
-## Eine Erweiterung mit einem OpenCode-Plugin
-
-Eine Erweiterung kann ein OpenCode-Plugin mitliefern, sodass du eine Sache installierst statt zwei. Ihr Berechtigungsdialog hat eine Zeile, die mit **Ein Plugin zu OpenCode hinzufügen** beginnt. Sobald du es erlaubst, fügt OpenChamber das Plugin innerhalb weniger Sekunden dem OpenCode hinzu, das es für dich ausführt, ohne Neustart; Deaktivieren oder Entfernen der Erweiterung nimmt es auf demselben Weg wieder heraus. In deine eigene `opencode.json` wird nichts geschrieben, sodass das Plugin die Erweiterung nie überlebt und nie in dem OpenCode läuft, das du im Terminal startest.
-
-Wenn OpenChamber das OpenCode, mit dem es spricht, nicht gestartet hat, oder deine Umgebung ein eigenes `OPENCODE_CONFIG` setzt, erreicht die Konfiguration von OpenChamber dieses OpenCode nicht. Die Seite der Erweiterung sagt das und bietet **Zur globalen Konfiguration hinzufügen** an. Das schreibt den Ordner des Plugins in deine globale OpenCode-Konfiguration: Es läuft dann in jedem OpenCode auf diesem Rechner, auch im Terminal, bleibt aktiv, während die Erweiterung aus ist, und gehört dir zur Verwaltung unter **Einstellungen → Plugins**. Wenn du die Erweiterung entfernst, führt OpenCode diesen Eintrag als fehlgeschlagenes Plugin und läuft weiter, bis du den Eintrag dort löschst. Ein OpenCode auf einem anderen Rechner kann keinen Ordner von diesem laden; die Seite sagt das.
-
-VS Code lädt keine Erweiterungen, daher erhält das OpenCode, das es startet, das Plugin nie. Das Handy verbindet sich mit einem OpenChamber-Server, und das Plugin läuft im OpenCode dieses Servers. Eine Sitzung in einem isolierten Space läuft mit einem eigenen OpenCode, das das Plugin nie erhält. Im Enterprise-Modus zählt das Plugin wie ein lokaler Dienst: Die Erweiterung installiert sich nur aus einem Repository, das dein Administrator freigegeben hat.
->>>>>>> upstream/main
 
 ## Eine Erweiterung als Git-Host
 
@@ -169,9 +132,9 @@ Das OhPiChamber SDK hat ein funktionierendes Beispiel, `examples/tracker-provide
 
 ## Eine Erweiterung als Nutzungsanbieter
 
-Eine Erweiterung kann neben den eingebauten Anbietern einen Nutzungsanbieter hinzufügen: einen Anbieter, den OhPiChamber nicht selbst ausliest, oder einen eigenen. Ihr Berechtigungsdialog hat dann eine Zeile, die mit **Meldet die Nutzung wie ein eingebauter Anbieter** beginnt und die OpenCode-Anbieter aufzählt, deren Zugangsdaten sie liest, etwa `openrouter`; eine Erweiterung, die keine aufzählt, sagt das.
+Eine Erweiterung kann neben den eingebauten Anbietern einen Nutzungsanbieter hinzufügen: einen Anbieter, den OhPiChamber nicht selbst ausliest, oder einen eigenen. Ihr Berechtigungsdialog hat dann eine Zeile, die mit **Meldet die Nutzung wie ein eingebauter Anbieter** beginnt und die OMP-Anbieter aufzählt, deren Zugangsdaten sie liest, etwa `openrouter`; eine Erweiterung, die keine aufzählt, sagt das.
 
-Sobald du sie erlaubst, steht ihre Karte unter **Einstellungen → Nutzung** hinter den eingebauten Anbietern, mit Name und Symbol der Erweiterung, und sie erscheint wie jeder eingebaute Anbieter in den Rate-Limits der Kopfzeile, im Arbeitsstatus, im Popover des Telefons und im Desktop-Tray, wenn du **Im Arbeitsstatus anzeigen** ankreuzt. Bei jeder Aktualisierung übergibt OhPiChamber der Erweiterung die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, und sonst nichts; eine Version, die einen weiteren Anbieter aufzählt, fragt erneut nach deiner Zustimmung. Die Erweiterung liest die Nutzung selbst, und OhPiChamber zeichnet sie so wie bei einem eingebauten Anbieter.
+Sobald du sie erlaubst, steht ihre Karte unter **Einstellungen → Nutzung** hinter den eingebauten Anbietern, mit Name und Symbol der Erweiterung, und sie erscheint wie jeder eingebaute Anbieter in den Rate-Limits der Kopfzeile, im Arbeitsstatus, im Popover des Telefons und im Desktop-Tray, wenn du **Im Arbeitsstatus anzeigen** ankreuzt. Bei jeder Aktualisierung übergibt OhPiChamber der Erweiterung die Zugangsdaten, die OMP für jeden aufgezählten Anbieter hält, und sonst nichts; eine Version, die einen weiteren Anbieter aufzählt, fragt erneut nach deiner Zustimmung. Die Erweiterung liest die Nutzung selbst, und OhPiChamber zeichnet sie so wie bei einem eingebauten Anbieter.
 
 Pausierst du die Erweiterung, verschwindet die Karte, bis du sie wieder einschaltest, und deine Nutzungseinstellungen dafür bleiben. Entfernst du die Erweiterung, verschwindet die Karte endgültig. 
 

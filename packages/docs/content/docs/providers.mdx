@@ -22,16 +22,8 @@ For gateways, campus LLMs, Ollama, LiteLLM, and similar OpenAI-compatible APIs:
 1. Choose **Other / Custom** in the provider list.
 2. Enter a provider ID, display name, base URL (`http://` or `https://`), API key (or `{env:VAR_NAME}`), and at least one model id/name.
 3. Optionally list a model's reasoning levels (for example `low, medium, high`). Each level shows up in the model's variant picker in chat, the same as for built-in providers.
-<<<<<<< HEAD
 4. Optionally add request headers.
 5. Save — OhPiChamber registers the provider and models through the Agent Service, storing API keys as write-only credentials.
-||||||| bc50ba56aa
-4. Optionally add request headers.
-5. Save — OpenChamber writes the provider block to OpenCode config and stores the key in OpenCode auth (literal keys) or records an `{env:VAR}` reference.
-=======
-4. Optionally add request headers. For a gateway that requires mutual TLS, add the paths of its client certificate and private key under **Client certificate** (OpenCode 2.3.0 or newer); an encrypted key also needs its passphrase, best as `{env:VAR_NAME}`.
-5. Save — OpenChamber writes the provider block to OpenCode config and stores the key in OpenCode auth (literal keys) or records an `{env:VAR}` reference.
->>>>>>> upstream/main
 6. To change an existing custom provider, open it and choose **Edit**.
 
 Custom providers require an API key or `{env:VAR_NAME}` before they show as fully connected. Without credentials, models may appear but chat calls will fail.

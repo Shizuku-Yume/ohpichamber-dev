@@ -66,16 +66,8 @@ Erişim token'ları burada da, `request` sonucunda da asla görünmez.
 | `generate({ prompt, system?, maxOutputTokens? })` | kullanıcının Small Model'inden tek seferlik metin. `{ text }` döndürür. `model` yeteneği gerekir. |
 | `onResolve(handler)` | eğik çizgi komutlarınız için işleyiciyi kaydeder. `{ command, args }` alır ve iliştirilecek bir öğe ya da `null` döndürür. |
 | `setBadge(count)` | şerit simgenizi bir noktayla işaretler ve sayıyı (0 ile 999 arası) ipucunda gösterir, `null` ile temizler |
-<<<<<<< HEAD
 | `openCommit(sha)` | geçerli projenin o commit'inde Diff görünümünü açar. `sha` 7 ile 64 onaltılık karakterdir; commit'i OhPiChamber kendisi okur. |
-| `setHeight(px)` | Work Status bölümünüzün yüksekliğini ayarlar. OhPiChamber bunu 24 ile 320 piksel arasında tutar; daha uzun içerik sayfanızın içinde kayar. Başka yerlerde yok sayılır. |
-||||||| bc50ba56aa
-| `openCommit(sha)` | geçerli projenin o commit'inde Diff görünümünü açar. `sha` 7 ile 64 onaltılık karakterdir; commit'i OpenChamber kendisi okur. |
-| `setHeight(px)` | Work Status bölümünüzün yüksekliğini ayarlar. OpenChamber bunu 24 ile 320 piksel arasında tutar; daha uzun içerik sayfanızın içinde kayar. Başka yerlerde yok sayılır. |
-=======
-| `openCommit(sha)` | geçerli projenin o commit'inde Diff görünümünü açar. `sha` 7 ile 64 onaltılık karakterdir; commit'i OpenChamber kendisi okur. |
-| `setHeight(px)` | Work Status bölümünüzün yüksekliğini ayarlar. OpenChamber bunu 24 ile 480 piksel arasında tutar; daha uzun içerik sayfanızın içinde kayar. Başka yerlerde yok sayılır. |
->>>>>>> upstream/main
+| `setHeight(px)` | Work Status bölümünüzün yüksekliğini ayarlar. OhPiChamber bunu 24 ile 480 piksel arasında tutar; daha uzun içerik sayfanızın içinde kayar. Başka yerlerde yok sayılır. |
 | `onFileOpen(listener)` | dosya düzenleyiciler: düzenlenecek dosyayı alır, `{ path, name, readOnly }` ile birlikte `encoding: "text"` ve `content` ya da `encoding: "binary"` ve `bytes`. Ayrıca sayfanızda Cmd/Ctrl+S ile kaydetmeyi sağlar. |
 | `onFileSnapshot(handler)` | dosya düzenleyiciler: düzenlenmiş dosyanın tamamını `{ content, version }` (ikili bir düzenleyicide `{ bytes, version }`) olarak döndürür. OhPiChamber bunu kaydetmek için ve kaynak görünümüne ya da tam ekrana geçmeden önce çağırır. |
 | `onFileSaved(listener)` | dosya düzenleyiciler: bu `version` değerine sahip anlık görüntü diske yazıldı. `reportFileChange` ile yanıt verin. |
@@ -160,7 +152,7 @@ host.onSessionLifecycle((event) => {
 
 `activity`, `unknown`, `idle`, `running`, `retrying`, `waiting-permission` veya `waiting-question` olur. `outcome`, gözlemlenen `completed`, `failed` veya `null` değeridir; yalnızca bellekte en fazla 2.000 oturum için tutulur. Hata sonrası idle, sonraki çalışmaya kadar hatayı korur. Bu, görevin tamamlandığı anlamına gelmez. `inWork`, oturum kenar çubuğundaki Devam eden bölümündeyken `true`, kullanıcı Devam eden özelliğini kapattığı sürece her zaman `false` olur; eski host'lar bu alanı göndermez. `unread`, son tur bittiğinde ve o zamandan beri kimse oturumu açmadığında `true` olur; kenar çubuğunun gösterdiği işaret budur. Yeniden başlatmalardan sonra da kalır ve her cihazda temizlenir. `openSession(sessionId)` sohbeti açıkça açar.
 
-`tool`, `activity` `running` iken oturumun üzerinde çalıştığı şeydir: şu an süren araç çağrısı ya da ajan sonucunu düşünürken en son biten çağrı. Alanlar: `name`, OpenCode'un verdiği ad (`read`, `edit`, `bash`), `target` ise çağrının adlandırdığı dosya ya da klasördür; oturumun `directory` değerine göre görelidir (dışındaysa yalnızca adı), hiçbirini adlandırmıyorsa `null` olur. Bir kabuk komutunun metni burada asla yer almaz. `context`, oturumun son adımından sonra bağlam penceresinin ne kadar dolu olduğunu gösterir: içerdiği `tokens` ve modelin penceresi olan `limit`; host bilmiyorsa `null`. `tool`, oturum çalışmıyorken `null` olur; `context`, host bir adım görmeden önce ve sıkıştırmadan sonra bir sonraki adıma kadar `null` olur. Eski hostlar ikisini de göndermez.
+`tool`, `activity` `running` iken oturumun üzerinde çalıştığı şeydir: şu an süren araç çağrısı ya da ajan sonucunu düşünürken en son biten çağrı. Alanlar: `name`, OMP'un verdiği ad (`read`, `edit`, `bash`), `target` ise çağrının adlandırdığı dosya ya da klasördür; oturumun `directory` değerine göre görelidir (dışındaysa yalnızca adı), hiçbirini adlandırmıyorsa `null` olur. Bir kabuk komutunun metni burada asla yer almaz. `context`, oturumun son adımından sonra bağlam penceresinin ne kadar dolu olduğunu gösterir: içerdiği `tokens` ve modelin penceresi olan `limit`; host bilmiyorsa `null`. `tool`, oturum çalışmıyorken `null` olur; `context`, host bir adım görmeden önce ve sıkıştırmadan sonra bir sonraki adıma kadar `null` olur. Eski hostlar ikisini de göndermez.
 
 ## Kalıcı uzantı verisi
 
@@ -294,7 +286,7 @@ await host.setMark({ sessionId }, null);
 
 Bir hedefi yeniden ayarlamak işaretini değiştirir, `null` ise kaldırır. Bir satır en fazla iki işaret çizer, uzantı başına bir tane, ve hepsini kendi ipucunda listeler. Tek satırlık bir satırda, işaretçi üzerindeyken satırın düğmeleri işaretleri örter; bu yüzden tıklama bir işarete iki satırlık satırlarda ve dokunmatik ekranlarda ulaşır.
 
-Bir işaret, servis süreciniz yaşadığı sürece yaşar; bu yüzden `service.keepRunning` tanımlayın ve servis başladığında işaretleri yeniden ayarlayın. Bir servis en fazla 200 işaret tutar ve bunları dakikada en fazla 60 kez değiştirir. İşaretler 2.7.0'dan yeni bir OpenChamber sürümü gerektirir: daha eski bir sürüm anahtarı yok sayar ve çağrıyı reddeder.
+Bir işaret, servis süreciniz yaşadığı sürece yaşar; bu yüzden `service.keepRunning` tanımlayın ve servis başladığında işaretleri yeniden ayarlayın. Bir servis en fazla 200 işaret tutar ve bunları dakikada en fazla 60 kez değiştirir. İşaretler 2.7.0'dan yeni bir OhPiChamber sürümü gerektirir: daha eski bir sürüm anahtarı yok sayar ve çağrıyı reddeder.
 
 ## @ menüsündeki satırlar
 
@@ -412,14 +404,14 @@ Kullanıcı oturum yorumlarını açtığında OhPiChamber, `comments.create` ç
 
 ## Kullanım sağlayıcıları
 
-Bir servis, yerleşik sağlayıcıların yanında kullanımı bildirebilir: `provides: ["quota"]` tanımlayın ve kimlik bilgilerine ihtiyaç duyduğu OpenCode sağlayıcılarını `contributes.quota.providers` içinde listeleyin. OhPiChamber sağlayıcıya `ext-<panel.id>` adını verir, kartını uzantının adı ve simgesiyle çizer ve yerleşik bir sağlayıcıya sorduğu gibi sorar.
+Bir servis, yerleşik sağlayıcıların yanında kullanımı bildirebilir: `provides: ["quota"]` tanımlayın ve kimlik bilgilerine ihtiyaç duyduğu OMP sağlayıcılarını `contributes.quota.providers` içinde listeleyin. OhPiChamber sağlayıcıya `ext-<panel.id>` adını verir, kartını uzantının adı ve simgesiyle çizer ve yerleşik bir sağlayıcıya sorduğu gibi sorar.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir sürüm yeniden sorar. Her yenilemede OhPiChamber `POST /quota` adresine tek bir çağrı, `usage.read`, gönderir; `input.credentials` içinde, listelenen sağlayıcılardan OpenCode'un kimlik bilgisi sakladığı her biri için o kimlik bilgisi (bir API anahtarı ya da bir tarayıcı girişinin token'ları) bulunur ve depodan başka hiçbir şey bulunmaz. OpenCode'un kimlik bilgisi saklamadığı listelenmiş bir sağlayıcı yapılandırılmamış olarak gösterilir ve servis çağrılmaz; anahtarı uzantının kendi ayarlarında duran bir sağlayıcı için boş listeye izin verilir.
+Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir sürüm yeniden sorar. Her yenilemede OhPiChamber `POST /quota` adresine tek bir çağrı, `usage.read`, gönderir; `input.credentials` içinde, listelenen sağlayıcılardan OMP'un kimlik bilgisi sakladığı her biri için o kimlik bilgisi (bir API anahtarı ya da bir tarayıcı girişinin token'ları) bulunur ve depodan başka hiçbir şey bulunmaz. OMP'un kimlik bilgisi saklamadığı listelenmiş bir sağlayıcı yapılandırılmamış olarak gösterilir ve servis çağrılmaz; anahtarı uzantının kendi ayarlarında duran bir sağlayıcı için boş listeye izin verilir.
 
 Gövdeyi `readQuotaProviderRequest` ile okuyun ve yerleşik bir sağlayıcının hesapladığı sonucu `{ ok: true, data }` ile yanıtlayın: `ok`, `configured`, `error`, `planLabel` ve pencere adına göre `usage.windows`, her biri `usedPercent`, `windowSeconds`, `resetAt` (epoch milisaniye) ve isteğe bağlı `valueLabel` ya da `value` ile; ayrıca model başına pencereler için `usage.models`. Kalan payı, sıfırlamaya geri sayımı ve biçimlendirilmiş metinleri OhPiChamber türetir, böylece kart yerleşik bir sağlayıcınınkiyle eşleşir.
 

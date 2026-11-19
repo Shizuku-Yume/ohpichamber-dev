@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -23,7 +23,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Renders the OpenChamber home-screen widgets from the snapshots the app writes
+ * Renders the OhPiChamber home-screen widgets from the snapshots the app writes
  * (WidgetBridgePlugin.update): the session overview the iOS widgets also read, and the
  * Usage page's quota readout. Colors come from the app's theme and text from the app's
  * language; both travel inside each snapshot.
@@ -34,7 +34,7 @@ final class WidgetRenderer {
     static final String PREFS = "oc_sdk_widgets";
     private static final int MAX_SESSIONS = 10;
 
-    /** Theme colors with the default OpenChamber theme as fallback. */
+    /** Theme colors with the default OhPiChamber theme as fallback. */
     static final class Palette {
         final boolean light;
         final int background;
@@ -140,7 +140,7 @@ final class WidgetRenderer {
             }
             return prefs.getBoolean("refresh_client_available", false)
                 ? labels.get("refreshing", "Refreshing…")
-                : labels.get("queued", "Open OpenChamber to refresh");
+                : labels.get("queued", "Open OhPiChamber to refresh");
         }
         String updated = clean(data.optString("updated"), 40);
         return updated.isEmpty() ? context.getString(R.string.widget_open_to_sync)
@@ -151,7 +151,7 @@ final class WidgetRenderer {
 
     private static void renderSessions(Context context, RemoteViews view, JSONObject data,
                                        Palette palette, Labels labels, int widgetId) {
-        view.setTextViewText(R.id.widget_title, labels.get("sessionsTitle", "OpenChamber"));
+        view.setTextViewText(R.id.widget_title, labels.get("sessionsTitle", "OhPiChamber"));
         int attention = data.optInt("attentionCount", 0);
         view.setViewVisibility(R.id.widget_attention, attention > 0 ? View.VISIBLE : View.GONE);
         view.setTextViewText(R.id.widget_attention, String.valueOf(attention));
@@ -236,7 +236,7 @@ final class WidgetRenderer {
 
     private static void renderUsage(Context context, RemoteViews view, JSONObject data,
                                     Palette palette, Labels labels, int widgetId) {
-        view.setTextViewText(R.id.widget_title, labels.get("usageTitle", "OpenChamber"));
+        view.setTextViewText(R.id.widget_title, labels.get("usageTitle", "OhPiChamber"));
         view.setTextColor(R.id.widget_subtitle, palette.muted);
         boolean known = data.has("providers");
         view.setTextViewText(R.id.widget_subtitle, !known ? "" : "used".equals(data.optString("mode"))

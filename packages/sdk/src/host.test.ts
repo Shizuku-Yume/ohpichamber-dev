@@ -1207,14 +1207,13 @@ describe('openMicrophone', () => {
   };
 
   const microphoneReady = { ...ready, payload: { ...ready.payload, features: { microphone: true } } };
-  const connect = () => {
-    const parent = createFrame();
-    const guest = createFrame();
-    guest.parent = parent.parent;
+  const connect = async () => {
+    const guest = createMessageChannelFrame();
+    const parent = guest;
     const host = connectHost({ target: guest, acceptSource: () => true });
-    guest.dispatch(new MessageEvent('message', { data: microphoneReady }));
+    await guest.receive(microphoneReady);
     const envelope = { channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION } as const;
-    const deliver = (data: HostMessage) => guest.dispatch(new MessageEvent('message', { data }));
+    const deliver = (data: HostMessage) => guest.receive(data);
     const answer = (id: string, outcome: { ok: true } | { ok: false; error: string; code: 'DENIED' }) => deliver(
       outcome.ok ? { ...envelope, type: 'result', id, ok: true, payload: { opened: true } } : { ...envelope, type: 'result', id, ...outcome },
     );
@@ -1232,9 +1231,9 @@ describe('openMicrophone', () => {
   test('is UNSUPPORTED on a host without the feature, before asking anything', async () => {
     const audio = installAudio();
     try {
-      const frame = createFrame();
+      const frame = createMessageChannelFrame();
       const host = connectHost({ target: frame, acceptSource: () => true });
-      frame.dispatch(new MessageEvent('message', { data: ready }));
+      await frame.receive(ready);
       await expect(host.openMicrophone()).rejects.toMatchObject({ code: 'UNSUPPORTED' });
       expect(frame.posted.some((message) => message.type === 'microphone-open')).toBe(false);
       expect(audio.made).toHaveLength(0);
@@ -1247,21 +1246,23 @@ describe('openMicrophone', () => {
   test('asks at the frame rate, plays host audio into the stream, and closes on both sides', async () => {
     const audio = installAudio();
     try {
-      const { parent, host, answer, pushAudio } = connect();
+      const { parent, host, answer, pushAudio } = await connect();
       const opening = host.openMicrophone();
+      await parent.flush();
       const request = lastOpen(parent.posted);
       expect(request).toMatchObject({ payload: { sampleRate: 48_000 } });
       answer(request.id, { ok: true });
       const microphone = await opening;
       await expect(host.openMicrophone()).rejects.toMatchObject({ code: 'HOST_REJECTED' });
 
-      pushAudio(new Float32Array([0.5, -0.5]));
+      await pushAudio(new Float32Array([0.5, -0.5]));
       const out = new Float32Array(3);
       audio.made[0].processor.onaudioprocess?.({ outputBuffer: { getChannelData: () => out } });
       expect([...out]).toEqual([0.5, -0.5, 0]);
 
       microphone.close();
       microphone.close();
+      await parent.flush();
       expect(closes(parent.posted)).toBe(1);
       expect(audio.made[0].stopped()).toBe(true);
       expect(audio.made[0].closed()).toBe(true);
@@ -1274,14 +1275,17 @@ describe('openMicrophone', () => {
   test('a refusal rejects with its code, releases the frame audio, and tells the host to let go', async () => {
     const audio = installAudio();
     try {
-      const { parent, host, answer } = connect();
+      const { parent, host, answer } = await connect();
       const opening = host.openMicrophone();
+      await parent.flush();
       answer(lastOpen(parent.posted).id, { ok: false, error: 'Microphone access was refused.', code: 'DENIED' });
       await expect(opening).rejects.toMatchObject({ code: 'DENIED' });
       expect(audio.made[0].stopped()).toBe(true);
+      await parent.flush();
       expect(closes(parent.posted)).toBe(1);
       // Nothing stays open, so the user can try again.
       const again = host.openMicrophone();
+      await parent.flush();
       answer(lastOpen(parent.posted).id, { ok: true });
       await expect(again).resolves.toBeDefined();
       host.dispose();
@@ -1293,17 +1297,19 @@ describe('openMicrophone', () => {
   test('the host ending the capture reaches onEnded and ends the stream', async () => {
     const audio = installAudio();
     try {
-      const { parent, host, answer, pushEnded } = connect();
+      const { parent, host, answer, pushEnded } = await connect();
       const opening = host.openMicrophone();
+      await parent.flush();
       answer(lastOpen(parent.posted).id, { ok: true });
       const microphone = await opening;
       const reasons: string[] = [];
       microphone.onEnded((reason) => reasons.push(reason));
-      pushEnded();
+      await pushEnded();
       expect(reasons).toEqual(['revoked']);
       expect(audio.made[0].stopped()).toBe(true);
       // Closing after the host ended it sends nothing more.
       microphone.close();
+      await parent.flush();
       expect(closes(parent.posted)).toBe(0);
       host.dispose();
     } finally {
@@ -1314,11 +1320,13 @@ describe('openMicrophone', () => {
   test('dispose releases an open microphone on the host', async () => {
     const audio = installAudio();
     try {
-      const { parent, host, answer } = connect();
+      const { parent, host, answer } = await connect();
       const opening = host.openMicrophone();
+      await parent.flush();
       answer(lastOpen(parent.posted).id, { ok: true });
       await opening;
       host.dispose();
+      await parent.flush();
       expect(closes(parent.posted)).toBe(1);
       expect(audio.made[0].stopped()).toBe(true);
     } finally {

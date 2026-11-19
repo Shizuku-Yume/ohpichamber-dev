@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // Payloads from remote renderers cross into the local Electron process. Keep
 // this command allowlist here so IPC authorization and its tests share one policy.
 
@@ -24,12 +23,6 @@ const REMOTE_SAFE_COMMANDS = new Set([
 ]);
 
 export const isRemoteSafeCommand = (command) => REMOTE_SAFE_COMMANDS.has(command);
-||||||| bc50ba56aa
-// What a remote host's page may hand to, or read from, the desktop shell.
-// These IPC commands are remote-safe (main.mjs COMMANDS_SAFE_FOR_REMOTE), so
-// their payloads are the boundary between one server and the local app.
-=======
->>>>>>> upstream/main
 
 const SPLASH_COLOR_PATTERN = /^(?:#[\da-f]{3,8}|(?:rgba?|hsla?|oklch|oklab)\([\d.,%\s/+-]*\))$/i;
 

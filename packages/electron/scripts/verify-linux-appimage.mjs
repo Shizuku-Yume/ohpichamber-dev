@@ -5,27 +5,44 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalizeTargetArchitecture } from './target-architecture.mjs';
-<<<<<<< HEAD
 import { verifyAgentPayload } from './verify-agent-runtime.mjs';
-||||||| bc50ba56aa
-import { parseOpenCodeCliVersion, readPinnedOpenCodeCliVersion } from './opencode-cli-version.mjs';
-=======
-import { readElfArchitecture } from './binary-architecture.mjs';
-import { readPinnedOpenCodeServerVersion, verifyOpenCodeServer } from './opencode-server-staging.mjs';
-
-export { readElfArchitecture };
->>>>>>> upstream/main
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const electronRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(electronRoot, '../..');
+const ELF_MACHINE = { x64: 62, arm64: 183 };
+// sherpa-onnx-node loads this Node-API addon from its platform-specific prebuilt
+// package in the separate server worker, so verify its architecture here rather
+// than Electron-rebuilding it with the source-built modules.
 const REQUIRED_NATIVE_MODULES = ['pty.node', 'sherpa-onnx.node'];
 
+/** electron-builder AppImage arch token: x64 → x86_64, arm64 → arm64 */
 export const linuxAppImageArchSuffix = (architecture) => (
   architecture === 'x64' ? 'x86_64' : 'arm64'
 );
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+export const readElfArchitecture = (filePath) => {
+  const header = Buffer.alloc(20);
+  const descriptor = fs.openSync(filePath, 'r');
+  try {
+    if (fs.readSync(descriptor, header, 0, header.length, 0) !== header.length) {
+      throw new Error(`ELF header is truncated: ${filePath}`);
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  if (!header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) {
+    throw new Error(`Expected an ELF binary: ${filePath}`);
+  }
+  const byteOrder = header[5];
+  if (byteOrder !== 1 && byteOrder !== 2) throw new Error(`Unsupported ELF byte order: ${filePath}`);
+  const machine = byteOrder === 1 ? header.readUInt16LE(18) : header.readUInt16BE(18);
+  const architecture = Object.entries(ELF_MACHINE).find(([, value]) => value === machine)?.[0];
+  if (!architecture) throw new Error(`Unsupported ELF machine ${machine}: ${filePath}`);
+  return architecture;
+};
 
 export const assertElfArchitecture = (filePath, expectedArchitecture, label) => {
   if (!fs.existsSync(filePath)) throw new Error(`Missing ${label}: ${filePath}`);
@@ -48,19 +65,12 @@ const collectFiles = (root, predicate) => {
   return matches;
 };
 
-<<<<<<< HEAD
 const ONNX_ADDON_TARGET = /(?:^|\/)bin\/napi-v\d+\/([^/]+)\/([^/]+)\/onnxruntime_binding\.node$/;
 const PI_NATIVES_ADDON_TARGET = /(?:^|\/)@oh-my-pi\/pi-natives-([^-]+)-([^/]+)\//;
 
 // Launchers resolve `Icon=ohpichamber` through the hicolor theme, which only
 // reads `<size>/apps/` directories it declares: `scalable` and square sizes up
 // to 512. A file one level up, or at 1024x1024, is never found (#4766, #2934).
-||||||| bc50ba56aa
-// Launchers resolve `Icon=openchamber` through the hicolor theme, which only
-// reads `<size>/apps/` directories it declares: `scalable` and square sizes up
-// to 512. A file one level up, or at 1024x1024, is never found (#4766, #2934).
-=======
->>>>>>> upstream/main
 const isHicolorAppsDirectory = (sizeName) => {
   if (sizeName === 'scalable') return true;
   const match = /^(\d+)x\1$/.exec(sizeName);
@@ -79,37 +89,10 @@ const assertThemeIcon = (root) => {
   if (!fs.existsSync(path.join(root, '.DirIcon'))) throw new Error('Missing AppImage icon: .DirIcon does not resolve');
 };
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-const defaultCliVersion = (binaryPath) => {
-  const result = spawnSync(binaryPath, ['--version'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 15000,
-  });
-  if (result.status !== 0) throw new Error(`Failed to run packaged OpenCode CLI: ${binaryPath}`);
-  return parseOpenCodeCliVersion(result.stdout);
-};
-
-=======
-const defaultServerCheck = ({ root, targetArchitecture, expectedOpenCodeVersion }) => verifyOpenCodeServer(
-  path.join(root, 'resources', 'opencode-server'),
-  { platform: 'linux', arch: targetArchitecture, version: expectedOpenCodeVersion, runtime: process.execPath },
-);
-
->>>>>>> upstream/main
 export const verifyExtractedPayload = ({
   root,
   targetArchitecture,
-<<<<<<< HEAD
   runBunVersion,
-||||||| bc50ba56aa
-  expectedOpenCodeVersion,
-  runCliVersion = defaultCliVersion,
-=======
-  expectedOpenCodeVersion,
-  checkOpenCodeServer = defaultServerCheck,
->>>>>>> upstream/main
 }) => {
   const desktopPath = path.join(root, 'ohpichamber.desktop');
   if (!fs.existsSync(desktopPath)) throw new Error(`Missing desktop entry: ${desktopPath}`);
@@ -120,7 +103,6 @@ export const verifyExtractedPayload = ({
   if (!/^Exec=AppRun(?:\s|$)/m.test(desktop)) throw new Error('Desktop identity mismatch: expected AppImage AppRun entrypoint');
   assertThemeIcon(root);
 
-<<<<<<< HEAD
   assertElfArchitecture(path.join(root, 'ohpichamber'), targetArchitecture, 'Electron executable');
   const agentRoot = path.join(root, 'resources', 'agent-runtime');
   assertElfArchitecture(path.join(agentRoot, 'bun'), targetArchitecture, 'Bun executable');
@@ -136,20 +118,6 @@ export const verifyExtractedPayload = ({
     if (onnxTarget && (onnxTarget[1] !== 'linux' || onnxTarget[2] !== targetArchitecture)) continue;
     assertElfArchitecture(path.join(agentRoot, item.path), targetArchitecture, 'Agent native module');
   }
-||||||| bc50ba56aa
-  assertElfArchitecture(path.join(root, 'openchamber'), targetArchitecture, 'Electron executable');
-  const cliPath = path.join(root, 'resources', 'opencode-cli', 'opencode');
-  assertElfArchitecture(cliPath, targetArchitecture, 'OpenCode CLI');
-  const actualVersion = runCliVersion(cliPath);
-  if (actualVersion !== expectedOpenCodeVersion) {
-    throw new Error(`OpenCode CLI version mismatch: expected ${expectedOpenCodeVersion}, got ${actualVersion || '(empty)'}`);
-  }
-  assertElfArchitecture(path.join(root, 'resources', 'ripgrep', 'rg'), targetArchitecture, 'ripgrep');
-=======
-  assertElfArchitecture(path.join(root, 'openchamber'), targetArchitecture, 'Electron executable');
-  const { version: actualVersion } = checkOpenCodeServer({ root, targetArchitecture, expectedOpenCodeVersion });
-  assertElfArchitecture(path.join(root, 'resources', 'ripgrep', 'rg'), targetArchitecture, 'ripgrep');
->>>>>>> upstream/main
 
   const unpackedModules = path.join(root, 'resources', 'app.asar.unpacked', 'node_modules');
   if (!fs.existsSync(unpackedModules)) throw new Error(`Missing unpacked native modules: ${unpackedModules}`);
@@ -211,21 +179,9 @@ const main = () => {
     const result = verifyExtractedPayload({
       root: extractAppImage(appImagePath, temporaryDirectory),
       targetArchitecture: target,
-<<<<<<< HEAD
-||||||| bc50ba56aa
-      expectedOpenCodeVersion: readPinnedOpenCodeCliVersion(),
-=======
-      expectedOpenCodeVersion: readPinnedOpenCodeServerVersion(),
->>>>>>> upstream/main
     });
     console.log(`[electron] verified Linux ${target} AppImage: ${appImagePath}`);
-<<<<<<< HEAD
     console.log(`[electron] verified Bun ${result.bunVersion}, ${result.packageCount} Agent packages and ${result.nativeModuleCount} Host native modules`);
-||||||| bc50ba56aa
-    console.log(`[electron] verified OpenCode CLI ${result.openCodeVersion} and ${result.nativeModuleCount} native modules`);
-=======
-    console.log(`[electron] verified OpenCode server ${result.openCodeVersion} and ${result.nativeModuleCount} native modules`);
->>>>>>> upstream/main
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }

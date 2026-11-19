@@ -96,7 +96,6 @@ export const probeElectronHostWithDeadline = async ({
     const expectedIdentity = optionalIdentity.parse(expectedServerId);
     if (expectedIdentity) {
       const healthUrl = buildProbeUrl(url, '/health');
-<<<<<<< HEAD
       if (!healthUrl) return result('wrong-service');
       try {
         const response = await fetchProbe(healthUrl, { Accept: 'application/json' });
@@ -109,39 +108,6 @@ export const probeElectronHostWithDeadline = async ({
         if (controller.signal.aborted) throw error;
         // Electron 43 net.fetch rejects manual redirects instead of returning a 3xx response.
         return result('wrong-service');
-||||||| bc50ba56aa
-      if (healthUrl) {
-        try {
-          const response = await fetchProbe(healthUrl, { Accept: 'application/json' });
-          // A redirected identity belongs to another candidate, even if its ID matches.
-          if (response.status >= 300 && response.status < 400 || response.redirected) return result('wrong-service');
-          if (response.ok) {
-            const payload = await response.json().catch(() => null);
-            const reported = optionalIdentity.parse(payload?.serverId);
-            if (reported && reported !== expectedIdentity) return result('wrong-service');
-          }
-        } catch (error) {
-          if (controller.signal.aborted) throw error;
-          // Electron 43 net.fetch rejects manual redirects instead of returning a 3xx response.
-          if (error instanceof Error && error.message === 'Redirect was cancelled') return result('wrong-service');
-          // Identity is optional on older servers; the authenticated request remains authoritative.
-        }
-=======
-      if (healthUrl) {
-        try {
-          const response = await fetchProbe(healthUrl, { Accept: 'application/json' });
-          if (response.status >= 300 && response.status < 400 || response.redirected) return result('wrong-service');
-          if (response.ok) {
-            const payload = await response.json().catch(() => null);
-            const reported = optionalIdentity.parse(payload?.serverId);
-            if (reported && reported !== expectedIdentity) return result('wrong-service');
-          }
-        } catch (error) {
-          if (controller.signal.aborted) throw error;
-          // external: https://www.electronjs.org/docs/latest/api/net Electron 43 net.fetch rejects manual redirects instead of returning a 3xx response.
-          if (error instanceof Error && error.message === 'Redirect was cancelled') return result('wrong-service');
-        }
->>>>>>> upstream/main
       }
     }
 

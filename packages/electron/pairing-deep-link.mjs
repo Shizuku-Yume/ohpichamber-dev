@@ -1,17 +1,8 @@
-<<<<<<< HEAD
 // Reads an `ohpichamber://connect?v=2&p=…` pairing link for the confirmation
 // prompt. It only validates the link and names what it connects to: after the
 // user confirms, the renderer redeems it with the same code as
 // Settings > Remote Instances > Import Link, which knows both direct and relay
 // transports and stores every leg on the host entry.
-||||||| bc50ba56aa
-// Reads an `openchamber://connect?v=2&p=…` pairing link for the confirmation
-// prompt. It only validates the link and names what it connects to: after the
-// user confirms, the renderer redeems it with the same code as
-// Settings > Remote Instances > Import Link, which knows both direct and relay
-// transports and stores every leg on the host entry.
-=======
->>>>>>> upstream/main
 
 const decodePayload = (value) => {
   if (!value) return null;

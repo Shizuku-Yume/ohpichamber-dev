@@ -66,16 +66,8 @@ const host = connectHost();
 | `generate({ prompt, system?, maxOutputTokens? })` | ユーザーの Small Model による一回限りのテキスト。`{ text }` を返す。`model` 権限が必要。 |
 | `onResolve(handler)` | スラッシュコマンドのハンドラーを登録する。`{ command, args }` を受け取り、添付する項目または `null` を返す。 |
 | `setBadge(count)` | レールのアイコンにドットを付け、数字(0 から 999)をツールチップに表示する。`null` で消す |
-<<<<<<< HEAD
 | `openCommit(sha)` | 現在のプロジェクトのそのコミットで Diff ビューを開く。`sha` は 7〜64 文字の 16 進数で、コミットは OhPiChamber 自身が読み込みます。 |
-| `setHeight(px)` | Work Status セクションの高さを設定する。OhPiChamber は 24〜320 ピクセルに収め、それより高い内容はページ内でスクロールします。他の場所では無視されます。 |
-||||||| bc50ba56aa
-| `openCommit(sha)` | 現在のプロジェクトのそのコミットで Diff ビューを開く。`sha` は 7〜64 文字の 16 進数で、コミットは OpenChamber 自身が読み込みます。 |
-| `setHeight(px)` | Work Status セクションの高さを設定する。OpenChamber は 24〜320 ピクセルに収め、それより高い内容はページ内でスクロールします。他の場所では無視されます。 |
-=======
-| `openCommit(sha)` | 現在のプロジェクトのそのコミットで Diff ビューを開く。`sha` は 7〜64 文字の 16 進数で、コミットは OpenChamber 自身が読み込みます。 |
-| `setHeight(px)` | Work Status セクションの高さを設定する。OpenChamber は 24〜480 ピクセルに収め、それより高い内容はページ内でスクロールします。他の場所では無視されます。 |
->>>>>>> upstream/main
+| `setHeight(px)` | Work Status セクションの高さを設定する。OhPiChamber は 24〜480 ピクセルに収め、それより高い内容はページ内でスクロールします。他の場所では無視されます。 |
 | `onFileOpen(listener)` | ファイルエディター: 編集するファイルを受け取る。`{ path, name, readOnly }` に加えて、`encoding: "text"` なら `content`、`encoding: "binary"` なら `bytes` が入ります。ページ内の Cmd/Ctrl+S でも保存されるようになります。 |
 | `onFileSnapshot(handler)` | ファイルエディター: 編集済みのファイル全体を `{ content, version }`(バイナリエディターなら `{ bytes, version }`)で返す。OhPiChamber は保存時と、ソース表示や全画面に切り替える前に呼び出します。 |
 | `onFileSaved(listener)` | ファイルエディター: その `version` のスナップショットがディスクに書き込まれた。`reportFileChange` で応答してください。 |
@@ -160,7 +152,7 @@ host.onSessionLifecycle((event) => {
 
 `activity` は `unknown`、`idle`、`running`、`retrying`、`waiting-permission`、`waiting-question` です。`outcome` は観測済みの `completed`、`failed`、または `null` で、最大2,000セッション分をメモリだけに保持します。エラー後の idle は次の実行まで失敗を保持します。タスクの完了を意味しません。`inWork` はセッションがサイドバーの作業中ブロックにあるとき `true` で、ユーザーが作業中をオフにしている間は常に `false` です。古いホストでは省略されます。`unread` は最後のターンが終わってから誰もセッションを開いていないとき `true` で、サイドバーに表示される印と同じです。再起動後も残り、どのデバイスでも消えます。`openSession(sessionId)` でチャットを明示的に開けます。
 
-`tool` は `activity` が `running` の間にセッションが扱っているものです。実行中のツール呼び出し、またはエージェントが結果を考えている間は最後に終わった呼び出しです。`name` は OpenCode での名前（`read`、`edit`、`bash`）、`target` は呼び出しが指すファイルまたはフォルダーで、セッションの `directory` からの相対パス（外側なら名前だけ）、指していなければ `null` です。シェルコマンドの本文がここに入ることはありません。`context` はセッションの最新ステップ後のコンテキストウィンドウの使用量です。`tokens` は保持していたトークン数、`limit` はモデルのウィンドウで、ホストが知らなければ `null` です。`tool` はセッションが実行中でない間は `null`、`context` はホストがステップをまだ見ていない間と、コンパクション後に次のステップが測るまでは `null` です。古いホストはどちらも省きます。
+`tool` は `activity` が `running` の間にセッションが扱っているものです。実行中のツール呼び出し、またはエージェントが結果を考えている間は最後に終わった呼び出しです。`name` は OMP での名前（`read`、`edit`、`bash`）、`target` は呼び出しが指すファイルまたはフォルダーで、セッションの `directory` からの相対パス（外側なら名前だけ）、指していなければ `null` です。シェルコマンドの本文がここに入ることはありません。`context` はセッションの最新ステップ後のコンテキストウィンドウの使用量です。`tokens` は保持していたトークン数、`limit` はモデルのウィンドウで、ホストが知らなければ `null` です。`tool` はセッションが実行中でない間は `null`、`context` はホストがステップをまだ見ていない間と、コンパクション後に次のステップが測るまでは `null` です。古いホストはどちらも省きます。
 
 `host.storage.get(key)`、`set(key, value)`、`delete(key)`、`keys()` は追加権限なしで独自 JSON を接続先サーバーに保存します。未保存は `undefined`、保存した null は null です。キーは1〜128文字、値は UTF-8 で64 KiB、全体は2 MiB・2,000キーまでです。プロジェクト別データにはキーにプロジェクト ID を含めます。書き込みは直列化されアトミックで、失敗時は既存データを保持します。アンインストールで削除されます。
 
@@ -285,7 +277,7 @@ await host.setMark({ sessionId }, null);
 
 同じターゲットにもう一度設定するとマークが置き換わり、`null` で削除されます。1 つの行に描かれるマークは最大 2 つ、拡張機能ごとに 1 つで、行のツールチップにはすべてのマークが並びます。1 行表示の行では、ポインターが乗っている間は行のボタンがマークを覆うため、マークをクリックできるのは 2 行表示の行とタッチ画面です。
 
-マークはサービスのプロセスが動いている間だけ残ります。そのため `service.keepRunning` を宣言し、サービスの起動時にマークを設定し直してください。サービスは最大 200 個のマークを保持でき、1 分間に 60 回まで変更できます。マークには 2.7.0 より新しい OpenChamber が必要です。それより古いバージョンはこのキーを無視し、呼び出しを拒否します。
+マークはサービスのプロセスが動いている間だけ残ります。そのため `service.keepRunning` を宣言し、サービスの起動時にマークを設定し直してください。サービスは最大 200 個のマークを保持でき、1 分間に 60 回まで変更できます。マークには 2.7.0 より新しい OhPiChamber が必要です。それより古いバージョンはこのキーを無視し、呼び出しを拒否します。
 
 ## @ メニューの行
 
@@ -403,14 +395,14 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 
 ## 使用量プロバイダー
 
-サービスは、組み込みのプロバイダーの隣で使用量を報告できます。`provides: ["quota"]` を宣言し、`contributes.quota.providers` に必要な認証情報を持つ OpenCode プロバイダーを列挙します。OhPiChamber はそのプロバイダーを `ext-<panel.id>` と名付け、拡張機能の名前とアイコンでカードを描き、組み込みのプロバイダーと同じように問い合わせます。
+サービスは、組み込みのプロバイダーの隣で使用量を報告できます。`provides: ["quota"]` を宣言し、`contributes.quota.providers` に必要な認証情報を持つ OMP プロバイダーを列挙します。OhPiChamber はそのプロバイダーを `ext-<panel.id>` と名付け、拡張機能の名前とアイコンでカードを描き、組み込みのプロバイダーと同じように問い合わせます。
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-承認ダイアログにはそれらのプロバイダーが列挙され、リストを変えたバージョンは改めて承認を求めます。更新のたびに OhPiChamber は `POST /quota` に `usage.read` を 1 回送ります。`input.credentials` には、列挙されたプロバイダーのうち OpenCode が認証情報を持つものについて、その認証情報（API キー、またはブラウザーログインのトークン）だけが入り、ストアのそれ以外は入りません。OpenCode が認証情報を持たない列挙済みプロバイダーは未設定として表示され、サービスは呼ばれません。空のリストも許されます。拡張機能自身の設定にキーを持つプロバイダー向けです。
+承認ダイアログにはそれらのプロバイダーが列挙され、リストを変えたバージョンは改めて承認を求めます。更新のたびに OhPiChamber は `POST /quota` に `usage.read` を 1 回送ります。`input.credentials` には、列挙されたプロバイダーのうち OMP が認証情報を持つものについて、その認証情報（API キー、またはブラウザーログインのトークン）だけが入り、ストアのそれ以外は入りません。OMP が認証情報を持たない列挙済みプロバイダーは未設定として表示され、サービスは呼ばれません。空のリストも許されます。拡張機能自身の設定にキーを持つプロバイダー向けです。
 
 ボディは `readQuotaProviderRequest` で読み、組み込みのプロバイダーが算出する結果を `{ ok: true, data }` で答えます。`ok`、`configured`、`error`、`planLabel`、そしてウィンドウ名をキーにした `usage.windows`（それぞれ `usedPercent`、`windowSeconds`、`resetAt`（エポックミリ秒）、任意の `valueLabel` または `value`）、加えてモデル別ウィンドウの `usage.models` です。残りの割合、リセットまでのカウントダウン、整形済み文字列は OhPiChamber が導出するため、カードは組み込みのプロバイダーと一致します。
 

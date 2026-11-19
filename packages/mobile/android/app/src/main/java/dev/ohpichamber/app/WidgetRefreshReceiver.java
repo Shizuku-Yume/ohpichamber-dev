@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -11,7 +11,7 @@ import android.content.SharedPreferences;
  * the pending request remains queued and the widget indicates that honestly.
  */
 public class WidgetRefreshReceiver extends BroadcastReceiver {
-    static final String ACTION = "com.openchamber.app.action.REFRESH_WIDGETS";
+    static final String ACTION = "dev.ohpichamber.app.action.REFRESH_WIDGETS";
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null || !ACTION.equals(intent.getAction())) return;

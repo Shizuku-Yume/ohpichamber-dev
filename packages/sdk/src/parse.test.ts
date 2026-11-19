@@ -1,15 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-<<<<<<< HEAD
 import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
-import { GUEST_PROVIDER_LOGOS_MAX, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
-||||||| bc50ba56aa
-import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
-import { GUEST_PROVIDER_LOGOS_MAX, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
-=======
-import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
 import { GUEST_PROVIDER_LOGOS_MAX, GUEST_TONES, GUEST_TOOL_CARD_FIELDS_MAX, GUEST_TOOL_CARD_TONES_MAX, GUEST_TOOL_CARD_TONE_KEY_MAX, GUEST_TOOL_TEMPLATE_MAX, guestToolLinkSettingIds, clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, toPublicNotifications, toPublicQuota, toPublicSessionEvents, toPublicSourceControl, resolveAttachEntry, resolvePageEntry, resolvePageMobile, resolveStatusSectionEntry, resolveStatusSectionSource, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes, isOpenCodeProviderId, isTrackerUrlTemplate, toPublicTracker } from './manifest.ts';
->>>>>>> upstream/main
 import type { JsonValue } from './contract.ts';
 import type { LinksContribution } from './manifest.ts';
 import { parseManifest, parseManifestJson } from './parse.ts';
@@ -1484,7 +1476,7 @@ describe('contributes.sourceControl', () => {
   const withSourceControl = <T,>(patch: T) => manifest({ sourceControl: { ...sourceControl, ...patch } });
 
   test('accepts service login alone or beside a token, and requires at least one', () => {
-    const login = { kind: 'service', hint: 'Run teahouse auth login on the OpenChamber server' };
+    const login = { kind: 'service', hint: 'Run teahouse auth login on the OhPiChamber server' };
     const result = withSourceControl({ token: undefined, login });
     expect(result).toMatchObject({ ok: true, manifest: { contributes: { sourceControl: { login } } } });
     if (result.ok) expect(result.manifest.contributes.sourceControl).not.toHaveProperty('token');
@@ -1708,7 +1700,7 @@ describe('contributes.waits', () => {
   const pageless = { id: 'wait-kit', name: 'Wait Kit', icon: 'timer' };
   const service = { entry: 'service/main.js', runtime: 'host' };
   const timer = { id: 'timer', title: 'Timer', description: 'Wakes the session after some seconds', params: { seconds: { type: 'number', required: true } }, interval: 10_000 };
-  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_API_VERSION, contributes }));
+  const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
   test('a service-only package may declare waits and asks for wake', () => {
     const result = parse({ panel: pageless, service, waits: [timer, { id: 'url-ready', title: 'URL ready', description: 'Wakes when a URL answers' }] });
@@ -1752,7 +1744,7 @@ describe('contributes.notifications', () => {
   };
   const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
-  test('the role and the contribution come together and name a channel OpenChamber can draw without the service', () => {
+  test('the role and the contribution come together and name a channel OhPiChamber can draw without the service', () => {
     const result = parse({ panel: pageless, service: role, notifications: channel });
     expect(result).toMatchObject({ ok: true, manifest: { contributes: { notifications: channel } } });
     if (!result.ok) throw new Error(result.message);
@@ -1799,7 +1791,7 @@ describe('contributes.tracker', () => {
   };
   const parse = <T,>(contributes: T) => parseManifestJson(JSON.stringify({ apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0], contributes }));
 
-  test('the role and the contribution come together and name a tracker OpenChamber can list without the service', () => {
+  test('the role and the contribution come together and name a tracker OhPiChamber can list without the service', () => {
     const result = parse({ panel: pageless, service: role, tracker });
     expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error(result.message);

@@ -11,7 +11,7 @@ import {
   type GuestWaitCheckResult,
   type GuestWaitStartResult,
   type JsonValue,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 const token = process.env.OPENCHAMBER_SERVICE_TOKEN ?? '';

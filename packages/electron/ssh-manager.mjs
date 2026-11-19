@@ -13,32 +13,7 @@ const DEFAULT_LOCAL_BIND_HOST = '127.0.0.1';
 const REMOTE_USER_PREFIX = '$HOME/.openchamber/npm-global';
 const REMOTE_BUN_CANDIDATE = '"${BUN_INSTALL:-$HOME/.bun}/bin/bun"';
 const REMOTE_NVM_BIN = '${NVM_DIR:-$HOME/.nvm}/versions/node/v$(ls -1 "${NVM_DIR:-$HOME/.nvm}/versions/node" 2>/dev/null | sed "s/^v//" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)/bin';
-<<<<<<< HEAD
 const REMOTE_PATH_PREFIX = `\${BUN_INSTALL:-$HOME/.bun}/bin:\${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin:$HOME/.local/bin:$HOME/.openchamber/npm-global/bin:${REMOTE_NVM_BIN}`;
-||||||| bc50ba56aa
-// The opencode CLI usually installs into the user's home, which an SSH login
-// shell does not have on PATH. The remote server only looks at OPENCODE_BINARY
-// and PATH, so resolve the CLI here and hand it over explicitly.
-const REMOTE_OPENCODE_CANDIDATES = [
-  '"$HOME/.opencode/bin/opencode"',
-  '"${BUN_INSTALL:-$HOME/.bun}/bin/opencode"',
-  '"${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin/opencode"',
-  '"$HOME/.local/bin/opencode"',
-  '"$HOME/.openchamber/npm-global/bin/opencode"',
-  `"${REMOTE_NVM_BIN}/opencode"`,
-];
-const REMOTE_PATH_PREFIX = `$HOME/.opencode/bin:\${BUN_INSTALL:-$HOME/.bun}/bin:\${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin:$HOME/.local/bin:$HOME/.openchamber/npm-global/bin:${REMOTE_NVM_BIN}`;
-=======
-const REMOTE_OPENCODE_CANDIDATES = [
-  '"$HOME/.opencode/bin/opencode"',
-  '"${BUN_INSTALL:-$HOME/.bun}/bin/opencode"',
-  '"${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin/opencode"',
-  '"$HOME/.local/bin/opencode"',
-  '"$HOME/.openchamber/npm-global/bin/opencode"',
-  `"${REMOTE_NVM_BIN}/opencode"`,
-];
-const REMOTE_PATH_PREFIX = `$HOME/.opencode/bin:\${BUN_INSTALL:-$HOME/.bun}/bin:\${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin:$HOME/.local/bin:$HOME/.openchamber/npm-global/bin:${REMOTE_NVM_BIN}`;
->>>>>>> upstream/main
 const REMOTE_BIN_CANDIDATES = [
   '"$HOME/.openchamber/npm-global/bin/ohpichamber"',
   '"${BUN_INSTALL:-$HOME/.bun}/bin/ohpichamber"',
@@ -336,18 +311,18 @@ fi
 
 if has_graphical_session && command -v zenity >/dev/null 2>&1; then
   if [[ "$HIDDEN_INPUT" == "true" ]]; then
-    zenity --entry --title="OpenChamber SSH" --text="$PROMPT" --hide-text
+    zenity --entry --title="OhPiChamber SSH" --text="$PROMPT" --hide-text
   else
-    zenity --entry --title="OpenChamber SSH" --text="$PROMPT" --entry-text="$DEFAULT_ANSWER"
+    zenity --entry --title="OhPiChamber SSH" --text="$PROMPT" --entry-text="$DEFAULT_ANSWER"
   fi
   exit $?
 fi
 
 if has_graphical_session && command -v kdialog >/dev/null 2>&1; then
   if [[ "$HIDDEN_INPUT" == "true" ]]; then
-    kdialog --title "OpenChamber SSH" --password "$PROMPT"
+    kdialog --title "OhPiChamber SSH" --password "$PROMPT"
   else
-    kdialog --title "OpenChamber SSH" --inputbox "$PROMPT" "$DEFAULT_ANSWER"
+    kdialog --title "OhPiChamber SSH" --inputbox "$PROMPT" "$DEFAULT_ANSWER"
   fi
   exit $?
 fi
@@ -448,12 +423,7 @@ const parseVersionToken = (raw) => {
   for (const token of String(raw).split(/\s+/)) {
     let candidate = token.trim().replace(/^v/, '');
     candidate = candidate.replace(/[,)]+$/g, '');
-<<<<<<< HEAD
     // A pre-release version such as 1.0.0-beta.1 is still a version token.
-||||||| bc50ba56aa
-    // A Canary build carries a pre-release part: 2.5.4-canary.20261030.1.
-=======
->>>>>>> upstream/main
     if (/^\d+(\.\d+)+(-[0-9A-Za-z.]+)?$/.test(candidate)) {
       return candidate;
     }
@@ -1162,27 +1132,12 @@ export class ElectronSshManager {
     ]);
     const npmPath = await this.resolveRemoteTool(parsed, controlPath, 'npm', [`"${REMOTE_NVM_BIN}/npm"`]);
 
-<<<<<<< HEAD
     // bun's global install targets `~/.bun` or `${XDG_CACHE_HOME:-~/.cache}/.bun` (bun 1.3.x XDG-aware);
     // npm is pinned to a prefix in the user's home so it never touches the root-owned global directory.
     const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g ohpichamber@${version}` : null;
-||||||| bc50ba56aa
-    // bun's global install targets `~/.bun` or `${XDG_CACHE_HOME:-~/.cache}/.bun` (bun 1.3.x XDG-aware);
-    // npm is pinned to a prefix in the user's home so it never touches the root-owned global directory.
-    const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g @openchamber/web@${version}` : null;
-=======
-    const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g @openchamber/web@${version}` : null;
->>>>>>> upstream/main
     const npmCommand = npmPath
-<<<<<<< HEAD
       // npm is a node script: an nvm npm finds its node only next to itself.
       ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" ohpichamber@${version}`
-||||||| bc50ba56aa
-      // npm is a node script: an nvm npm finds its node only next to itself.
-      ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" @openchamber/web@${version}`
-=======
-      ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" @openchamber/web@${version}`
->>>>>>> upstream/main
       : null;
 
     const commands = [];
@@ -1278,14 +1233,8 @@ export class ElectronSshManager {
     return port || desiredPort;
   }
 
-<<<<<<< HEAD
   // `ohpichamber stop` owns the daemon lifecycle. The HTTP shutdown route sits
   // behind UI authentication, so it cannot stop a password-protected server.
-||||||| bc50ba56aa
-  // `openchamber stop` owns the daemon lifecycle. The HTTP shutdown route sits
-  // behind UI authentication, so it cannot stop a password-protected server.
-=======
->>>>>>> upstream/main
   async stopRemoteServerBestEffort(parsed, controlPath, remotePort, remoteBinPath) {
     if (!remoteBinPath) return;
     try {
@@ -1354,22 +1303,12 @@ export class ElectronSshManager {
       }));
   }
 
-<<<<<<< HEAD
   // A managed server outlives the SSH session on purpose, so every connect has
   // to look for it before starting another: servers nobody reconnects to pile
   // up until the host runs out of memory. Returns the server to reuse, or null
   // when a new one is needed.
   // `daemon` marks a server the remote CLI started in the background, the only
   // kind this manager may stop.
-||||||| bc50ba56aa
-  // A managed server outlives the SSH session on purpose, so every connect has
-  // to look for it before starting another: each server also supervises its own
-  // opencode, and servers nobody reconnects to pile up until the host runs out
-  // of memory. Returns the server to reuse, or null when a new one is needed.
-  // `daemon` marks a server the remote CLI started in the background, the only
-  // kind this manager may stop.
-=======
->>>>>>> upstream/main
   async adoptRunningRemoteServer(instance, parsed, controlPath, binPath) {
     const password = this.configuredOpenChamberPassword(instance);
     const preferredPort = instance.remoteOpenchamber.preferredPort || null;
@@ -1379,7 +1318,7 @@ export class ElectronSshManager {
     try {
       servers = await this.listRemoteServers(parsed, controlPath, binPath);
     } catch (error) {
-      this.appendLogWithLevel(instance.id, 'WARN', `Could not list OpenChamber servers on the remote host; an already running one will not be reused: ${error instanceof Error ? error.message : String(error)}`);
+      this.appendLogWithLevel(instance.id, 'WARN', `Could not list OhPiChamber servers on the remote host; an already running one will not be reused: ${error instanceof Error ? error.message : String(error)}`);
     }
     if (preferredPort) {
       servers = [servers.find((server) => server.port === preferredPort) || { port: preferredPort, launchMode: null, bindHost: null, passwordProtected: null }];
@@ -1412,7 +1351,7 @@ export class ElectronSshManager {
         this.appendLogWithLevel(instance.id, 'INFO', `Not reusing the server on remote port ${server.port}: it runs in the foreground with another version or bind address and is left to its process manager`);
         continue;
       }
-      this.appendLogWithLevel(instance.id, 'INFO', `Replacing the managed server on remote port ${server.port}: ${otherVersion ? `it runs OpenChamber ${runningVersion}` : `it is bound to ${server.bindHost}`}`);
+      this.appendLogWithLevel(instance.id, 'INFO', `Replacing the managed server on remote port ${server.port}: ${otherVersion ? `it runs OhPiChamber ${runningVersion}` : `it is bound to ${server.bindHost}`}`);
       await this.stopRemoteServerBestEffort(parsed, controlPath, server.port, binPath);
       if (await this.remoteServerRunning(parsed, controlPath, server.port, password)) {
         this.appendLogWithLevel(instance.id, 'WARN', `The managed server on remote port ${server.port} did not stop and keeps running`);

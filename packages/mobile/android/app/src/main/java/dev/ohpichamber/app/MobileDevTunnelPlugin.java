@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import android.util.Base64;
 import com.getcapacitor.JSObject;

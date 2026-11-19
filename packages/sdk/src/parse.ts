@@ -793,14 +793,6 @@ const contributesSchema = z.object({
   instructions: z.literal(true).optional(),
   marks: z.literal(true).optional(),
   skills: z.string().trim().refine(isSafeAssetPath).optional(),
-<<<<<<< HEAD
-  // The value becomes a filesystem path OpenCode executes code from, so only a folder inside the package.
-||||||| bc50ba56aa
-  // The value becomes a filesystem path OpenCode executes code from, so only a folder inside the package.
-  opencodePlugin: z.string().trim().refine(isSafeAssetPath).optional(),
-=======
-  opencodePlugin: z.string().trim().refine(isSafeAssetPath).optional(),
->>>>>>> upstream/main
   mentions: z.object({ label: z.string().trim().min(1).max(GUEST_MENTIONS_LABEL_MAX) }).strict().optional(),
   blocks: blocksSchema.optional(),
   links: linksSchema.optional(),

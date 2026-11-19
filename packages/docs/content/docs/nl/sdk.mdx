@@ -7,15 +7,9 @@ description: Voeg met ohpichamber-sdk een eigen paneel toe, installeer het vanui
 
 Gebruik `ohpichamber-sdk` om een eigen paneel aan OhPiChamber toe te voegen. Een extensie is een kleine webpagina in de rechterbalk. Via `connectHost()` kan ze het huidige project en de sessie lezen, meldingen tonen, tekst in het invoerveld plaatsen en een taak aan een sessie koppelen. Met toestemming van de gebruiker kan ze ook sessies starten en prompts versturen.
 
-<<<<<<< HEAD
-Extensies draaien op OhPiChamber web en desktop.
-||||||| bc50ba56aa
-Extensies draaien op OpenChamber web en desktop. VS Code en mobiel laden ze nog niet.
-=======
-Extensies draaien op OpenChamber web, desktop en in de mobiele app. Op de telefoon verschijnen uw paneel en pagina alleen als u aangeeft dat ze op een telefoon passen; zie [Op de telefoon](#op-de-telefoon). VS Code laadt geen extensies.
+Extensies draaien op OhPiChamber web, desktop en in de mobiele app. Op de telefoon verschijnen uw paneel en pagina alleen als u aangeeft dat ze op een telefoon passen; zie [Op de telefoon](#op-de-telefoon). VS Code laadt geen extensies.
 
 De website toont op een kaart [alle plekken waar een extensie iets kan toevoegen](https://openchamber.dev/nl/extensions/build/).
->>>>>>> upstream/main
 
 ## Waaruit bestaat een extensie?
 
@@ -105,13 +99,7 @@ Gebruik voor een bord `host.storage` voor blijvende JSON-gegevens en de project-
 
 `contributes.integration` is optioneel. Het voegt een kaart bij Instellingen → Integraties toe waar de gebruiker een account verbindt. Zie [Accounts en netwerk](#accounts-en-netwerk).
 
-<<<<<<< HEAD
-`contributes.service` is optioneel. Hiermee geeft u een lokaal proces op dat OhPiChamber naast de extensie start voor zaken die een webpagina niet kan bereiken, zoals een Docker-socket. Het proces heeft de volledige gebruikerstoegang en draait zonder sandbox. Het toestemmingsvenster waarschuwt hiervoor. Gebruik een service alleen als de pagina het werk niet zelf kan doen. Zie `GUEST_SERVICES.md` in het pakket. Een service met `provides: ["browser"]` kan ook de browser van de agent leveren. Ze beantwoordt `browser.*`-acties op de server, zodat agents zonder geopende desktopapp kunnen browsen. De gebruiker kiest haar bij Instellingen → OhPiChamber-tools. Zo'n service heeft geen paneel nodig. Een service kan ook te horen krijgen wat er in de sessies van de gebruiker gebeurt: geef `contributes.sessionEvents` ernaast op, en OhPiChamber stuurt elke beurt die wordt afgerond of mislukt en elke toestemming of vraag van de agent naar de service, uit elk project, zonder geopend venster. Zie [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen). En een service met `provides: ["notifications"]` bezorgt de meldingen van de gebruiker naast de desktop en de telefoon, aan Slack, Matrix of een eigen server; de gebruiker verbindt het account bij Instellingen → Integraties en het token blijft in OhPiChamber. Zie [Meldingskanalen](/nl/sdk/host/#meldingskanalen). Een service met `provides: ["tracker"]` is een tracker voor werkitems naast Linear, met zijn accountkaart onder Extensieaccounts; zie [Trackers](/nl/sdk/host/#trackers). En een service met `provides: ["quota"]` rapporteert het verbruik naast de ingebouwde providers en leest daarvoor de aanmeldgegevens die OpenCode bewaart voor de providers die hij in het manifest noemt; zie [Verbruiksproviders](/nl/sdk/host/#verbruiksproviders).
-||||||| bc50ba56aa
-`contributes.service` is optioneel. Hiermee geeft u een lokaal proces op dat OpenChamber naast de extensie start voor zaken die een webpagina niet kan bereiken, zoals een Docker-socket. Het proces heeft de volledige gebruikerstoegang en draait zonder sandbox. Het toestemmingsvenster waarschuwt hiervoor. Gebruik een service alleen als de pagina het werk niet zelf kan doen. Zie `GUEST_SERVICES.md` in het pakket. Een service met `provides: ["browser"]` kan ook de browser van de agent leveren. Ze beantwoordt `browser.*`-acties op de server, zodat agents zonder geopende desktopapp kunnen browsen. De gebruiker kiest haar bij Instellingen → OpenChamber-tools. Zo'n service heeft geen paneel nodig. Een service kan ook te horen krijgen wat er in de sessies van de gebruiker gebeurt: geef `contributes.sessionEvents` ernaast op, en OpenChamber stuurt elke beurt die wordt afgerond of mislukt en elke toestemming of vraag van de agent naar de service, uit elk project, zonder geopend venster. Zie [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen). En een service met `provides: ["notifications"]` bezorgt de meldingen van de gebruiker naast de desktop en de telefoon, aan Slack, Matrix of een eigen server; de gebruiker verbindt het account bij Instellingen → Integraties en het token blijft in OpenChamber. Zie [Meldingskanalen](/nl/sdk/host/#meldingskanalen). Een service met `provides: ["tracker"]` is een tracker voor werkitems naast Linear, met zijn accountkaart onder Extensieaccounts; zie [Trackers](/nl/sdk/host/#trackers). En een service met `provides: ["quota"]` rapporteert het verbruik naast de ingebouwde providers en leest daarvoor de aanmeldgegevens die OpenCode bewaart voor de providers die hij in het manifest noemt; zie [Verbruiksproviders](/nl/sdk/host/#verbruiksproviders).
-=======
-`contributes.service` is optioneel. Hiermee geeft u een lokaal proces op dat OpenChamber naast de extensie start voor zaken die een webpagina niet kan bereiken, zoals een Docker-socket. Het proces heeft de volledige gebruikerstoegang en draait zonder sandbox. Het toestemmingsvenster waarschuwt hiervoor. Gebruik een service alleen als de pagina het werk niet zelf kan doen. Zie `GUEST_SERVICES.md` in het pakket. Een service met `provides: ["browser"]` kan ook de browser van de agent leveren. Ze beantwoordt `browser.*`-acties op de server, zodat agents zonder geopende desktopapp kunnen browsen. De gebruiker kiest haar bij Instellingen → OpenChamber-tools. Zo'n service heeft geen paneel nodig. Een service kan ook te horen krijgen wat er in de sessies van de gebruiker gebeurt: geef `contributes.sessionEvents` ernaast op, en OpenChamber stuurt elke beurt die wordt afgerond of mislukt en elke toestemming of vraag van de agent naar de service, uit elk project, zonder geopend venster. Zie [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen). En een service met `provides: ["notifications"]` bezorgt de meldingen van de gebruiker naast de desktop en de telefoon, aan Slack, Matrix of een eigen server; de gebruiker verbindt het account bij Instellingen → Integraties en het token blijft in OpenChamber. Zie [Meldingskanalen](/nl/sdk/host/#meldingskanalen). Een service met `provides: ["tracker"]` is een tracker voor werkitems naast Linear, met zijn accountkaart onder Extensieaccounts; zie [Trackers](/nl/sdk/host/#trackers). En een service met `provides: ["quota"]` rapporteert het verbruik naast de ingebouwde providers en leest daarvoor de aanmeldgegevens die OpenCode bewaart voor de providers die hij in het manifest noemt; zie [Verbruiksproviders](/nl/sdk/host/#verbruiksproviders). Een service kan met `contributes.marks` ook kleine pictogrammen op rijen in de zijbalk zetten; zie [Markeringen op rijen in de zijbalk](/nl/sdk/host/#markeringen-op-rijen-in-de-zijbalk).
->>>>>>> upstream/main
+`contributes.service` is optioneel. Hiermee geeft u een lokaal proces op dat OhPiChamber naast de extensie start voor zaken die een webpagina niet kan bereiken, zoals een Docker-socket. Het proces heeft de volledige gebruikerstoegang en draait zonder sandbox. Het toestemmingsvenster waarschuwt hiervoor. Gebruik een service alleen als de pagina het werk niet zelf kan doen. Zie `GUEST_SERVICES.md` in het pakket. Een service met `provides: ["browser"]` kan ook de browser van de agent leveren. Ze beantwoordt `browser.*`-acties op de server, zodat agents zonder geopende desktopapp kunnen browsen. De gebruiker kiest haar bij Instellingen → OhPiChamber-tools. Zo'n service heeft geen paneel nodig. Een service kan ook te horen krijgen wat er in de sessies van de gebruiker gebeurt: geef `contributes.sessionEvents` ernaast op, en OhPiChamber stuurt elke beurt die wordt afgerond of mislukt en elke toestemming of vraag van de agent naar de service, uit elk project, zonder geopend venster. Zie [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen). En een service met `provides: ["notifications"]` bezorgt de meldingen van de gebruiker naast de desktop en de telefoon, aan Slack, Matrix of een eigen server; de gebruiker verbindt het account bij Instellingen → Integraties en het token blijft in OhPiChamber. Zie [Meldingskanalen](/nl/sdk/host/#meldingskanalen). Een service met `provides: ["tracker"]` is een tracker voor werkitems naast Linear, met zijn accountkaart onder Extensieaccounts; zie [Trackers](/nl/sdk/host/#trackers). En een service met `provides: ["quota"]` rapporteert het verbruik naast de ingebouwde providers en leest daarvoor de aanmeldgegevens die OMP bewaart voor de providers die hij in het manifest noemt; zie [Verbruiksproviders](/nl/sdk/host/#verbruiksproviders). Een service kan met `contributes.marks` ook kleine pictogrammen op rijen in de zijbalk zetten; zie [Markeringen op rijen in de zijbalk](/nl/sdk/host/#markeringen-op-rijen-in-de-zijbalk).
 
 ## Rechten
 
@@ -124,58 +112,10 @@ Een paneel tonen en de huidige sessie lezen vereist geen toestemming. Voor hande
 | `files` | bestanden in het geopende project lezen en schrijven via `readFile`, `writeFile`, `listDir` en `stat` met een relatief pad |
 | `model` | eenmalig tekst genereren met het Small Model via `generate`, buiten een sessie |
 
-<<<<<<< HEAD
 Elf rechten worden automatisch toegevoegd: `network` bij een `integration`, `service` bij een `service`, `filesystem` bij `filesystem`-patronen, `origins` bij `origins`, `conversation` als een sessieactie berichten opvraagt, `transcript` als `sessionEvents` of `sessionControl` om `content` vraagt, `sessionControl` als uw service op sessies inwerkt, `sessionAnswers` als die namens de gebruiker de toestemmingsverzoeken en formulieren van de agent beantwoordt (`sessionControl: { answers: true }`), `instructions` als die aanvult wat agents lezen, en `skills` als u `contributes.skills` opgeeft, een map in het pakket met skills die elke agent bereiken zolang de extensie aanstaat. Zie [Acties, opdrachten en de badge](#acties-opdrachten-en-de-badge), [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen) en [OhPiChamber aanroepen](/nl/sdk/host/#ohpichamber-aanroepen-vanuit-uw-service). Verder `links` wanneer u `contributes.links` declareert (zie [Links in chatberichten](#links-in-chatberichten)).
-||||||| bc50ba56aa
-Twaalf rechten worden automatisch toegevoegd: `network` bij een `integration`, `service` bij een `service`, `filesystem` bij `filesystem`-patronen, `origins` bij `origins`, `conversation` als een sessieactie berichten opvraagt, `transcript` als `sessionEvents` of `sessionControl` om `content` vraagt, `sessionControl` als uw service op sessies inwerkt, `sessionAnswers` als die namens de gebruiker de toestemmingsverzoeken en formulieren van de agent beantwoordt (`sessionControl: { answers: true }`), `instructions` als die aanvult wat agents lezen, en `skills` als u `contributes.skills` opgeeft, een map in het pakket met skills die elke agent bereiken zolang de extensie aanstaat. Zie [Acties, opdrachten en de badge](#acties-opdrachten-en-de-badge), [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen) en [OpenChamber aanroepen](/nl/sdk/host/#openchamber-aanroepen-vanuit-uw-service). Verder `opencodePlugin` wanneer u `contributes.opencodePlugin` declareert (zie hieronder) en `links` wanneer u `contributes.links` declareert (zie [Links in chatberichten](#links-in-chatberichten)).
-=======
-Dertien rechten worden automatisch toegevoegd: `network` bij een `integration`, `service` bij een `service`, `filesystem` bij `filesystem`-patronen, `origins` bij `origins`, `conversation` als een sessieactie berichten opvraagt, `transcript` als `sessionEvents` of `sessionControl` om `content` vraagt, `sessionControl` als uw service op sessies inwerkt, `sessionAnswers` als die namens de gebruiker de toestemmingsverzoeken en formulieren van de agent beantwoordt (`sessionControl: { answers: true }`), `instructions` als die aanvult wat agents lezen, en `skills` als u `contributes.skills` opgeeft, een map in het pakket met skills die elke agent bereiken zolang de extensie aanstaat. Zie [Acties, opdrachten en de badge](#acties-opdrachten-en-de-badge), [Sessiegebeurtenissen](/nl/sdk/host/#sessiegebeurtenissen) en [OpenChamber aanroepen](/nl/sdk/host/#openchamber-aanroepen-vanuit-uw-service). Verder `opencodePlugin` wanneer u `contributes.opencodePlugin` declareert (zie hieronder) en `links` wanneer u `contributes.links` declareert (zie [Links in chatberichten](#links-in-chatberichten)). `marks` komt erbij wanneer u `contributes.marks` declareert (zie [Markeringen op rijen in de zijbalk](/nl/sdk/host/#markeringen-op-rijen-in-de-zijbalk)).
->>>>>>> upstream/main
 
 Bij installatie ziet de gebruiker de volledige lijst en kan die goedkeuren of de extensie verwijderen. Vraagt een nieuwe versie meer, dan verschijnt het venster opnieuw. Een aanroep waarvoor een nog niet goedgekeurd recht nodig is, faalt met `NOT_GRANTED`.
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-## Een OpenCode-plugin in uw pakket
-
-Een extensie kan een OpenCode-plugin meeleveren, zodat mensen één ding installeren in plaats van twee. Declareer `"opencodePlugin": "plugin"`, een map in het pakket met `index.js` of `server.js` in de hoofdmap. OpenCode leest `main` niet, dus voor een entry op een andere plek zet je `name` en `exports` in de `package.json` van de map. De entry exporteert standaard `{ id, setup }`, de vorm die OpenCode laadt; hij importeert niets, want OpenCode laadt hem met een kale `import()` uit uw map, waar niets geïnstalleerd is. De `input` van een tool is gewoon JSON Schema, en zijn `execute` antwoordt `{ content }`.
-
-```json
-{
-  "contributes": {
-    "panel": { "id": "teapot-tools", "name": "Teapot Tools", "icon": "cup" },
-    "opencodePlugin": "plugin"
-  }
-}
-```
-
-Het goedkeuringsvenster krijgt een regel erbij, **Een plugin toevoegen aan OpenCode**, die duidelijk zegt dat plugincode binnen OpenCode draait met de volledige toegang van de gebruiker. Na toestemming zet OpenChamber uw map in de OpenCode-configuratie die het beheert, hetzelfde bestand als voor `contributes.skills`; de OpenCode die het draait, bewaakt dat bestand en laadt de plugin binnen een paar seconden. De extensie uitschakelen of verwijderen haalt hem op dezelfde manier weg. Er wordt niets in de eigen `opencode.json` van de gebruiker geschreven: dat bestand is van de gebruiker, en een plugin daarin zou uw extensie overleven en in elke OpenCode op de computer draaien.
-
-Waar dat bestand OpenCode niet bereikt, zegt het scherm van de extensie dat en biedt het **Toevoegen aan globale configuratie** aan, wat uw map in de globale OpenCode-configuratie van de gebruiker schrijft als een vermelding die vanaf dan van de gebruiker is. Dat gebeurt wanneer OpenChamber de OpenCode waarmee het praat niet heeft gestart, of wanneer de omgeving van de server een eigen `OPENCODE_CONFIG` instelt (de plugin laadt dan bij de volgende start van OpenCode). Een OpenCode op een andere machine kan geen map van deze machine laden; het scherm zegt dat en biedt niets aan. Een plugin die niet laadt, meldt OpenCode onder Instellingen → Plugins zodra er een vermelding is; uw extensie blijft hoe dan ook werken. De installatie weigert een pakket waarvan de pluginmap ontbreekt of waarvan de `package.json` geen entry-bestand noemt.
-
-VS Code en de mobiele apps laden geen extensies, dus daar komt geen plugin aan. Een sessie in een geïsoleerde space draait zijn eigen OpenCode, dat de configuratie van de host nooit leest. De bedrijfsmodus behandelt de plugin als een lokale service: hij installeert alleen vanuit een repository die de beheerder heeft toegestaan. De SDK heeft een werkend voorbeeld, `examples/opencode-plugin`.
-
-=======
-## Een OpenCode-plugin in uw pakket
-
-Een extensie kan een OpenCode-plugin meeleveren, zodat mensen één ding installeren in plaats van twee. Declareer `"opencodePlugin": "plugin"`, een map in het pakket met `index.js` of `server.js` in de hoofdmap. OpenCode leest `main` niet, dus voor een entry op een andere plek zet je `name` en `exports` in de `package.json` van de map. De entry exporteert standaard `{ id, setup }`, de vorm die OpenCode laadt; hij importeert niets, want OpenCode laadt hem met een kale `import()` uit uw map, waar niets geïnstalleerd is. De `input` van een tool is gewoon JSON Schema, en zijn `execute` antwoordt `{ content }`.
-
-```json
-{
-  "contributes": {
-    "panel": { "id": "teapot-tools", "name": "Teapot Tools", "icon": "cup" },
-    "opencodePlugin": "plugin"
-  }
-}
-```
-
-Het goedkeuringsvenster krijgt een regel erbij, **Een plugin toevoegen aan OpenCode**, die duidelijk zegt dat plugincode binnen OpenCode draait met de volledige toegang van de gebruiker. Na toestemming zet OpenChamber uw map in de OpenCode-configuratie die het beheert, hetzelfde bestand als voor `contributes.skills`; de OpenCode die het draait, bewaakt dat bestand en laadt de plugin binnen een paar seconden. De extensie uitschakelen of verwijderen haalt hem op dezelfde manier weg. Er wordt niets in de eigen `opencode.json` van de gebruiker geschreven: dat bestand is van de gebruiker, en een plugin daarin zou uw extensie overleven en in elke OpenCode op de computer draaien.
-
-Waar dat bestand OpenCode niet bereikt, zegt het scherm van de extensie dat en biedt het **Toevoegen aan globale configuratie** aan, wat uw map in de globale OpenCode-configuratie van de gebruiker schrijft als een vermelding die vanaf dan van de gebruiker is. Dat gebeurt wanneer OpenChamber de OpenCode waarmee het praat niet heeft gestart, of wanneer de omgeving van de server een eigen `OPENCODE_CONFIG` instelt (de plugin laadt dan bij de volgende start van OpenCode). Een OpenCode op een andere machine kan geen map van deze machine laden; het scherm zegt dat en biedt niets aan. Een plugin die niet laadt, meldt OpenCode onder Instellingen → Plugins zodra er een vermelding is; uw extensie blijft hoe dan ook werken. De installatie weigert een pakket waarvan de pluginmap ontbreekt of waarvan de `package.json` geen entry-bestand noemt.
-
-VS Code laadt geen extensies, dus geen plugin bereikt de OpenCode die het draait. De telefoon verbindt met een OpenChamber-server, en de plugin draait in de OpenCode van die server. Een sessie in een geïsoleerde space draait zijn eigen OpenCode, dat de configuratie van de host nooit leest. De bedrijfsmodus behandelt de plugin als een lokale service: hij installeert alleen vanuit een repository die de beheerder heeft toegestaan. De SDK heeft een werkend voorbeeld, `examples/opencode-plugin`.
-
->>>>>>> upstream/main
 ## Links in chatberichten
 
 Een extensie kan zijn ID's en links in chatberichten klikbaar maken, zodat `DEMO-12` in een antwoord van een agent die taak in uw extensie opent in plaats van in een browsertabblad. Geef op wat herkend wordt en wat een klik doet:
@@ -273,13 +213,7 @@ Schrijven is atomair: OhPiChamber schrijft een tijdelijk bestand en hernoemt dat
 - `title` vervangt de paneelnaam in de kop, maximaal 60 tekens.
 - `height` is de beginhoogte in pixels, van 24 tot 480, standaard 120. Roep [`host.setHeight()`](/nl/sdk/host/) aan wanneer de inhoud van grootte verandert.
 
-<<<<<<< HEAD
-De pagina ziet `ctx.surface` als `status`. OhPiChamber laadt haar alleen als Werkstatus zichtbaar is en uw onderdeel is uitgeklapt. Bij inklappen wordt ze verwijderd. Bewaar er dus niets dat u niet opnieuw kunt opbouwen. Een extensie met alleen zo'n onderdeel mag rechten, een service, integratie en bestandstoegang gebruiken, maar geen `page`, `attach`, `actions` of `commands`. Alleen web en desktop. Het voorbeeld `git-graph-status` bevat een volledig onderdeel.
-||||||| bc50ba56aa
-De pagina ziet `ctx.surface` als `status`. OpenChamber laadt haar alleen als Werkstatus zichtbaar is en uw onderdeel is uitgeklapt. Bij inklappen wordt ze verwijderd. Bewaar er dus niets dat u niet opnieuw kunt opbouwen. Een extensie met alleen zo'n onderdeel mag rechten, een service, integratie en bestandstoegang gebruiken, maar geen `page`, `attach`, `actions` of `commands`. Alleen web en desktop. Het voorbeeld `git-graph-status` bevat een volledig onderdeel.
-=======
-De pagina ziet `ctx.surface` als `status`. OpenChamber laadt haar alleen als Werkstatus zichtbaar is en uw onderdeel is uitgeklapt. Bij inklappen wordt ze verwijderd. Bewaar er dus niets dat u niet opnieuw kunt opbouwen. Een extensie met alleen zo'n onderdeel mag rechten, een service, integratie, bestandstoegang en een pagina met een eigen `entry` gebruiken, maar geen `page: true`, `attach`, `actions` of `commands`. Het onderdeel verschijnt op web, desktop en in het tabblad Werkstatus van de telefoon, waar het geen opt-in nodig heeft en de breedte van de telefoon krijgt. Het voorbeeld `git-graph-status` bevat een volledig onderdeel.
->>>>>>> upstream/main
+De pagina ziet `ctx.surface` als `status`. OhPiChamber laadt haar alleen als Werkstatus zichtbaar is en uw onderdeel is uitgeklapt. Bij inklappen wordt ze verwijderd. Bewaar er dus niets dat u niet opnieuw kunt opbouwen. Een extensie met alleen zo'n onderdeel mag rechten, een service, integratie, bestandstoegang en een pagina met een eigen `entry` gebruiken, maar geen `page: true`, `attach`, `actions` of `commands`. Het onderdeel verschijnt op web, desktop en in het tabblad Werkstatus van de telefoon, waar het geen opt-in nodig heeft en de breedte van de telefoon krijgt. Het voorbeeld `git-graph-status` bevat een volledig onderdeel.
 
 ## Een editor voor uw bestandstype
 
@@ -336,13 +270,7 @@ host.onFileSnapshot(() => ({ bytes: currentBytes(), version: versionOf(currentBy
 
 Een binaire editor kan elk bestand claimen dat bij zijn patronen past, ook bestanden waarvoor OhPiChamber zelf een voorbeeld toont, zoals afbeeldingen en PDF's. De editor heeft geen bronweergave. Bij wisselen naar of vanuit volledig scherm slaat OhPiChamber niet-opgeslagen wijzigingen eerst op. Uw editor bepaalt hoe het bestandsformaat wordt gelezen en geschreven. OhPiChamber schrijft precies de teruggegeven bytes weg.
 
-<<<<<<< HEAD
-Uw pagina ziet `ctx.surface` als `file`. OhPiChamber herlaadt haar en geeft het bestand opnieuw door bij wijzigingen op schijf, het weggooien van wijzigingen of wisselen naar of vanuit volledig scherm. De eerste ingeschakelde extensie met een passend patroon krijgt voorrang, ook boven ingebouwde voorbeelden. Een extensie met alleen een editor mag rechten, een service, integratie en bestandstoegang gebruiken, maar geen `page`, `attach`, `actions` of `commands`. Alleen web en desktop. Het voorbeeld `checklist-editor` bevat een volledige editor.
-||||||| bc50ba56aa
-Uw pagina ziet `ctx.surface` als `file`. OpenChamber herlaadt haar en geeft het bestand opnieuw door bij wijzigingen op schijf, het weggooien van wijzigingen of wisselen naar of vanuit volledig scherm. De eerste ingeschakelde extensie met een passend patroon krijgt voorrang, ook boven ingebouwde voorbeelden. Een extensie met alleen een editor mag rechten, een service, integratie en bestandstoegang gebruiken, maar geen `page`, `attach`, `actions` of `commands`. Alleen web en desktop. Het voorbeeld `checklist-editor` bevat een volledige editor.
-=======
-Uw pagina ziet `ctx.surface` als `file`. OpenChamber herlaadt haar en geeft het bestand opnieuw door bij wijzigingen op schijf, het weggooien van wijzigingen of wisselen naar of vanuit volledig scherm. De eerste ingeschakelde extensie met een passend patroon krijgt voorrang, ook boven ingebouwde voorbeelden. Een extensie met alleen een editor mag rechten, een service, integratie, bestandstoegang en een pagina met een eigen `entry` gebruiken, maar geen `page: true`, `attach`, `actions` of `commands`. De editor opent op web, desktop en in het tabblad Bestanden van de telefoon, waar hij het hele scherm vult en geen opt-in nodig heeft. Het voorbeeld `checklist-editor` bevat een volledige editor.
->>>>>>> upstream/main
+Uw pagina ziet `ctx.surface` als `file`. OhPiChamber herlaadt haar en geeft het bestand opnieuw door bij wijzigingen op schijf, het weggooien van wijzigingen of wisselen naar of vanuit volledig scherm. De eerste ingeschakelde extensie met een passend patroon krijgt voorrang, ook boven ingebouwde voorbeelden. Een extensie met alleen een editor mag rechten, een service, integratie, bestandstoegang en een pagina met een eigen `entry` gebruiken, maar geen `page: true`, `attach`, `actions` of `commands`. De editor opent op web, desktop en in het tabblad Bestanden van de telefoon, waar hij het hele scherm vult en geen opt-in nodig heeft. Het voorbeeld `checklist-editor` bevat een volledige editor.
 
 ## Acties, opdrachten en de badge
 
@@ -398,15 +326,9 @@ Wanneer een MCP-server of geïntegreerde tool een tool toevoegt, toont de chat d
 ]
 ```
 
-<<<<<<< HEAD
-`match` is de toolnaam zoals de runtime die meldt. Een afsluitende `*` vergelijkt op voorvoegsel. `icon` is een Remixicon-naam of `.svg`-bestand in uw pakket, net als `panel.icon`. `title` en `subtitle` zijn sjablonen op basis van `input`, `output` en `metadata`. `output` bepaalt de weergave: `text`, `json` als boom, `markdown`, `code` met `language`, `table` met `columns`, of `auto` voor de standaard. Tabelrijen komen uit de uitvoerarray of `output.items`. Een exacte overeenkomst gaat boven een jokerteken; bij gelijke matches wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig, omdat alleen de weergave van bestaande chatgegevens verandert.
-||||||| bc50ba56aa
-`match` is de toolnaam zoals OpenCode die meldt. Een afsluitende `*` vergelijkt op voorvoegsel. `icon` is een Remixicon-naam of `.svg`-bestand in uw pakket, net als `panel.icon`. `title` en `subtitle` zijn sjablonen op basis van `input`, `output` en `metadata`. `output` bepaalt de weergave: `text`, `json` als boom, `markdown`, `code` met `language`, `table` met `columns`, of `auto` voor de standaard. Tabelrijen komen uit de uitvoerarray of `output.items`. Een exacte overeenkomst gaat boven een jokerteken; bij gelijke matches wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig, omdat alleen de weergave van bestaande chatgegevens verandert.
-=======
-`match` is de toolnaam zoals OpenCode die meldt. Een afsluitende `*` vergelijkt op voorvoegsel. `icon` is een Remixicon-naam of `.svg`-bestand in uw pakket, net als `panel.icon`. `title` en `subtitle` zijn sjablonen op basis van `input`, `output` en `metadata`. `output` bepaalt de weergave: `text`, `json` als boom, `markdown`, `code` met `language`, `table` met `columns`, `card` met `card` (één item als kaart, zie hieronder), of `auto` voor de standaard. Tabelrijen komen uit de uitvoerarray of `output.items`. Een exacte overeenkomst gaat boven een jokerteken; bij gelijke matches wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig, omdat alleen de weergave van bestaande chatgegevens verandert.
->>>>>>> upstream/main
+`match` is de toolnaam zoals OMP die meldt. Een afsluitende `*` vergelijkt op voorvoegsel. `icon` is een Remixicon-naam of `.svg`-bestand in uw pakket, net als `panel.icon`. `title` en `subtitle` zijn sjablonen op basis van `input`, `output` en `metadata`. `output` bepaalt de weergave: `text`, `json` als boom, `markdown`, `code` met `language`, `table` met `columns`, `card` met `card` (één item als kaart, zie hieronder), of `auto` voor de standaard. Tabelrijen komen uit de uitvoerarray of `output.items`. Een exacte overeenkomst gaat boven een jokerteken; bij gelijke matches wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig, omdat alleen de weergave van bestaande chatgegevens verandert.
 
-Met Code Mode van OpenCode aan roept de agent tools aan vanuit een kort script in plaats van één voor één. Een script met één aanroep verschijnt als de rij van die tool, en `output` is wat het script teruggaf. Schrijf in `match` een `_` waar het script een punt heeft: `tools.github.list_issues` in een script is `github_list_issues`. Een script met meerdere aanroepen houdt zijn eigen rij.
+Met Code Mode van OMP aan roept de agent tools aan vanuit een kort script in plaats van één voor één. Een script met één aanroep verschijnt als de rij van die tool, en `output` is wat het script teruggaf. Schrijf in `match` een `_` waar het script een punt heeft: `tools.github.list_issues` in een script is `github_list_issues`. Een script met meerdere aanroepen houdt zijn eigen rij.
 
 Een extensie die alleen tools opmaakt, heeft geen pagina nodig. Zonder `panel.entry` verschijnt geen balkpictogram, alleen een kaart bij Instellingen → Extensies. Zonder pagina mag ze uitsluitend `tools` en `providerLogos` opgeven. Een Werkstatus-onderdeel, bestandseditor of schermvullende pagina met een eigen `entry` is de andere uitzondering, zoals hierboven beschreven.
 
@@ -446,7 +368,7 @@ Een deel waarvan de waarde niet in de uitvoer staat, wordt weggelaten. Staat er 
 
 De link opent alleen een `https`-adres. `"{output.url}"` neemt het adres ongewijzigd over uit de uitvoer. U kunt het adres ook zelf rond waarden schrijven, zoals `"https://tracker.example.com/browse/{output.key}"`. Elke waarde wordt dan procentgecodeerd en kan de host of het pad dat u hebt geschreven dus niet veranderen. Een extensie met `settings` van een integratie (zie Accounts en netwerk hierboven) kan ook een instelling lezen die niet geheim is: `"https://{settings.site}/browse/{output.key}"`, waarbij de gebruiker een hostnaam zoals `acme.atlassian.net` heeft opgeslagen als `site`. Een instelling met een volledig adres, een poort of een pad levert geen link op, en een ontbrekende waarde ook niet.
 
-`card` vereist een OpenChamber-versie die nieuwer is dan 2.7.0. Een oudere versie weigert de extensie als ongeldig, en `engines.openchamber` verandert daar niets aan.
+`card` vereist een OhPiChamber-versie die nieuwer is dan 2.7.0. Een oudere versie weigert de extensie als ongeldig, en `engines.openchamber` verandert daar niets aan.
 
 ## Het logo van uw provider
 
@@ -458,16 +380,11 @@ Als uw provider een eigen logo heeft, tonen de modelkiezers en Instellingen mees
 }
 ```
 
-<<<<<<< HEAD
-De sleutel is de provider-ID zoals OpenCode die meldt. De waarde is een `.svg` of `.png` in uw pakket, tot 1 MB. Een ontbrekend, leeg of groter bestand laat de installatie mislukken. Een pakket noemt maximaal 256 providers, en twee ID's kunnen naar hetzelfde bestand verwijzen. Het logo houdt zijn eigen kleuren, en `currentColor` in een SVG volgt het lichte of donkere thema. Het vervangt een logo dat de app voor die ID meelevert. Wat de gebruiker voor die provider heeft ingesteld gaat voor, en bij een gelijke stand wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig. De telefoon laadt geen extensies en toont deze logo’s dus niet.
-||||||| bc50ba56aa
-De sleutel is de provider-ID zoals OpenCode die meldt. De waarde is een `.svg` of `.png` in uw pakket, tot 1 MB. Een ontbrekend, leeg of groter bestand laat de installatie mislukken. Een pakket noemt maximaal 256 providers, en twee ID's kunnen naar hetzelfde bestand verwijzen. Het logo houdt zijn eigen kleuren, en `currentColor` in een SVG volgt het lichte of donkere thema. Het vervangt een logo dat de app voor die ID meelevert. Wat de gebruiker voor die provider heeft ingesteld gaat voor, en bij een gelijke stand wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig. VS Code en de telefoon laden geen extensies en tonen deze logo's dus niet.
-=======
-De sleutel is de provider-ID zoals OpenCode die meldt. De waarde is een `.svg` of `.png` in uw pakket, tot 1 MB. Een ontbrekend, leeg of groter bestand laat de installatie mislukken. Een pakket noemt maximaal 256 providers, en twee ID's kunnen naar hetzelfde bestand verwijzen. Het logo houdt zijn eigen kleuren, en `currentColor` in een SVG volgt het lichte of donkere thema. Het vervangt een logo dat de app voor die ID meelevert. Wat de gebruiker voor die provider heeft ingesteld gaat voor, en bij een gelijke stand wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig. De telefoon toont deze logo's ook; VS Code laadt geen extensies en toont ze dus niet.
+De sleutel is de provider-ID zoals OMP die meldt. De waarde is een `.svg` of `.png` in uw pakket, tot 1 MB. Een ontbrekend, leeg of groter bestand laat de installatie mislukken. Een pakket noemt maximaal 256 providers, en twee ID's kunnen naar hetzelfde bestand verwijzen. Het logo houdt zijn eigen kleuren, en `currentColor` in een SVG volgt het lichte of donkere thema. Het vervangt een logo dat de app voor die ID meelevert. Wat de gebruiker voor die provider heeft ingesteld gaat voor, en bij een gelijke stand wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig. De telefoon toont deze logo's ook; VS Code laadt geen extensies en toont ze dus niet.
 
 ## Op de telefoon
 
-De mobiele app, en OpenChamber in de browser van een telefoon, laden de extensies die zijn geïnstalleerd op de server waarmee ze verbinden. Wat OpenChamber op basis van uw manifest tekent, werkt daar ongewijzigd: links in chatberichten, de opmaak van uw tools, providerlogo's, regels in het `@`-menu, markeringen op rijen in de zijbalk en accountkaarten. Een tik op een markering opent uw tabblad in de werkruimte, in de sessie van die rij, als u `panel.mobile` instelt, zoals een klik op desktop uw paneel opent; zonder dat toont de tik de tekst van de markering en opent hij haar `url`, als die er is.
+De mobiele app, en OhPiChamber in de browser van een telefoon, laden de extensies die zijn geïnstalleerd op de server waarmee ze verbinden. Wat OhPiChamber op basis van uw manifest tekent, werkt daar ongewijzigd: links in chatberichten, de opmaak van uw tools, providerlogo's, regels in het `@`-menu, markeringen op rijen in de zijbalk en accountkaarten. Een tik op een markering opent uw tabblad in de werkruimte, in de sessie van die rij, als u `panel.mobile` instelt, zoals een klik op desktop uw paneel opent; zonder dat toont de tik de tekst van de markering en opent hij haar `url`, als die er is.
 
 Smalle frames verschijnen op de telefoon zonder dat u er iets voor hoeft te doen, op de breedte van de telefoon:
 
@@ -501,14 +418,13 @@ Ontwerp een pagina met opt-in voor ongeveer 360px breed en voor aanraking. `read
 | `insets` | `{ top, right, bottom, left }` in px: de veilige zone waarmee de app zijn eigen scherm opvult op een telefoon met notch, elders nullen |
 | `keyboard` | px van het scherm dat het schermtoetsenbord bedekt, `0` zolang het weg is |
 
-OpenChamber stuurt een nieuwe `ready` als een van deze waarden verandert, zoals bij draaien of als het toetsenbord verschijnt, dus lees het in `onReady` samen met het thema.
+OhPiChamber stuurt een nieuwe `ready` als een van deze waarden verandert, zoals bij draaien of als het toetsenbord verschijnt, dus lees het in `onReady` samen met het thema.
 
 De [UI-kit](/sdk/ui/) vergroot zijn bedieningselementen tot aanraakformaat bij `pointer: coarse`: lijstrijen en selectieopties minstens 44px hoog, knoppen en invoervelden 40px, kleine knoppen, triggers en tabbladen 36px. Invoervelden houden minstens 16px tekst, omdat iOS inzoomt op een kleiner veld met focus. De formaten schalen mee met de interfacegrootte van de gebruiker en bereiken uw extensie zodra u haar opnieuw bouwt met de huidige SDK.
 
 Op de telefoon opent een popover in het blad onderaan de app, op de breedte van het blad en met de gevraagde hoogte, tot de limiet van het blad. Hij blijft tot de gebruiker hem sluit, wat u ontvangt als `outside`. `mountPopoverAnchor` opent hem bij een tik met een vinger of pen, en die tik vervangt de eigen klik van het element: uw klikhandler draait er niet voor. Zet wat de klik deed in de popover als een aanraakgebruiker het nodig heeft. Een klik met muis of toetsenbord verandert niet. `API.md` in het SDK-pakket beschrijft de popover-aanroepen.
 
-Oudere OpenChamber-versies negeren `mobile` en installeren het pakket zoals voorheen, en ze laten `device` weg uit `ready`. Behandel een ontbrekende `device` dus als een desktop met een muis.
->>>>>>> upstream/main
+Oudere OhPiChamber-versies negeren `mobile` en installeren het pakket zoals voorheen, en ze laten `device` weg uit `ready`. Behandel een ontbrekende `device` dus als een desktop met een muis.
 
 ## De eerste regels van het paneel
 

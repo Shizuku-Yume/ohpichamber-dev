@@ -99,17 +99,9 @@ export type HostFrame = {
 
 export type HostClientOptions = {
   target?: HostFrame;
-<<<<<<< HEAD
   /** Test seam retained for callers that model a source; bootstrap events are document-local. */
   acceptSource?: (source: unknown) => boolean;
   /** Test seam. Defaults to `GUEST_REQUEST_TIMEOUT_MS`. */
-||||||| bc50ba56aa
-  /** Test seam. Defaults to `source === parent`. */
-  acceptSource?: (source: MessageEvent['source']) => boolean;
-  /** Test seam. Defaults to `GUEST_REQUEST_TIMEOUT_MS`. */
-=======
-  acceptSource?: (source: MessageEvent['source']) => boolean;
->>>>>>> upstream/main
   requestTimeoutMs?: number;
 };
 
@@ -575,13 +567,13 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
   const requestFileSave = (): void => notify({ ...envelope, type: 'file-save' });
 
   const postMicrophoneClose = (): void => {
-    if (!disposed && target.parent !== target) post({ ...envelope, type: 'microphone-close', id: nextId(ids) });
+    if (!disposed && !Object.is(target.parent, target)) post({ ...envelope, type: 'microphone-close', id: nextId(ids) });
   };
 
   const openMicrophone = async (): Promise<GuestMicrophone> => {
     if (microphone) throw new HostRequestError('HOST_REJECTED', 'The microphone is already open in this frame.');
     if (lastReady?.features?.microphone !== true) {
-      throw new HostRequestError('UNSUPPORTED', 'This OpenChamber cannot share the microphone with extensions.');
+      throw new HostRequestError('UNSUPPORTED', 'This OhPiChamber cannot share the microphone with extensions.');
     }
     const AudioContextCtor = globalThis.AudioContext;
     if (typeof AudioContextCtor !== 'function') throw new HostRequestError('UNSUPPORTED', 'This frame has no Web Audio.');
@@ -1185,23 +1177,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
         return result;
       });
     },
-<<<<<<< HEAD
-||||||| bc50ba56aa
-    onLateGenerateResult: (listener) => {
-      lateGenerateListeners.add(listener);
-      for (const result of unclaimedLateGenerate.splice(0)) emit([listener], result);
-      listenForLateGenerate();
-      return () => { lateGenerateListeners.delete(listener); };
-    },
-=======
-    onLateGenerateResult: (listener) => {
-      lateGenerateListeners.add(listener);
-      for (const result of unclaimedLateGenerate.splice(0)) emit([listener], result);
-      listenForLateGenerate();
-      return () => { lateGenerateListeners.delete(listener); };
-    },
     openMicrophone,
->>>>>>> upstream/main
     setBadge: (count) => request({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: OPENCHAMBER_SDK_API_VERSION,

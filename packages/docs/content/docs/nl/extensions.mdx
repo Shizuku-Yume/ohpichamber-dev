@@ -7,13 +7,7 @@ description: Installeer extensies, keur hun rechten goed, verbind accounts en ve
 
 Voeg via **Instellingen → Extensies** panelen van andere makers toe aan OhPiChamber. Een extensie is een kleine pagina in de rechterbalk, naast de ingebouwde panelen. Ze kan gegevens uit een dienst tonen, een taak aan de chat koppelen en, met uw toestemming, sessies starten, prompts versturen of bestanden lezen.
 
-<<<<<<< HEAD
-Extensies werken op OhPiChamber web en desktop. Het zijn andere uitbreidingen dan Host-plugins.
-||||||| bc50ba56aa
-Extensies werken op OpenChamber web en desktop. VS Code en de mobiele app laden ze nog niet. Het zijn andere uitbreidingen dan OpenCode-plugins.
-=======
-Extensies werken op OpenChamber web, desktop en in de mobiele app; de telefoon toont een deel van elke extensie, zie [Op de telefoon](#op-de-telefoon). VS Code laadt ze niet. Het zijn andere uitbreidingen dan OpenCode-plugins.
->>>>>>> upstream/main
+Extensies werken op OhPiChamber web, desktop en in de mobiele app; de telefoon toont een deel van elke extensie, zie [Op de telefoon](#op-de-telefoon). VS Code laadt ze niet. Het zijn andere uitbreidingen dan OMP-plugins.
 
 ## Een extensie installeren
 
@@ -56,16 +50,9 @@ Een paneel tonen en lezen welk project en welke sessie geopend zijn, vereist gee
 - **Lezen wat de agent op de achtergrond zegt:** het eindantwoord van elke beurt, de vragen die de agent stelt en waarvoor hij toestemming vraagt, in elk project, verstuurd naar de lokale service van de extensie. Sta dit alleen toe als u vertrouwt waar de extensie het naartoe stuurt.
 - **Zelfstandig sessies starten en berichten sturen:** de lokale service doet dit zonder geopend venster. Dit verbruikt tokens en kan tools uitvoeren.
 - **Toevoegen aan wat agents lezen:** tekst in de instructies van uw sessies, en skills die aan elke agent worden aangeboden zolang de extensie aanstaat.
-<<<<<<< HEAD
+- **Een plugin toevoegen aan OMP:** de plugin van het pakket wordt in uw OMP geladen zolang de extensie aanstaat. Plugincode draait binnen OMP met uw volledige toegang, net als een lokale service, dus sta dit alleen toe als u de auteur vertrouwt.
 - **Zijn links in chats herkennen:** ID's zoals `DEMO-12` en links naar de site van de extensie worden klikbaar in uw chatberichten. Het venster toont welke en zegt of een klik ze in de extensie opent of aan uw bericht koppelt. Links die OhPiChamber al kent, zoals pull requests op GitHub en issues in Linear, werken zoals altijd.
-||||||| bc50ba56aa
-- **Een plugin toevoegen aan OpenCode:** de plugin van het pakket wordt in uw OpenCode geladen zolang de extensie aanstaat. Plugincode draait binnen OpenCode met uw volledige toegang, net als een lokale service, dus sta dit alleen toe als u de auteur vertrouwt.
-- **Zijn links in chats herkennen:** ID's zoals `DEMO-12` en links naar de site van de extensie worden klikbaar in uw chatberichten. Het venster toont welke en zegt of een klik ze in de extensie opent of aan uw bericht koppelt. Links die OpenChamber al kent, zoals pull requests op GitHub en issues in Linear, werken zoals altijd.
-=======
-- **Een plugin toevoegen aan OpenCode:** de plugin van het pakket wordt in uw OpenCode geladen zolang de extensie aanstaat. Plugincode draait binnen OpenCode met uw volledige toegang, net als een lokale service, dus sta dit alleen toe als u de auteur vertrouwt.
-- **Zijn links in chats herkennen:** ID's zoals `DEMO-12` en links naar de site van de extensie worden klikbaar in uw chatberichten. Het venster toont welke en zegt of een klik ze in de extensie opent of aan uw bericht koppelt. Links die OpenChamber al kent, zoals pull requests op GitHub en issues in Linear, werken zoals altijd.
 - **Markeringen in de zijbalk tonen:** kleine pictogrammen met een tooltip bij de sessies en worktrees die de extensie noemt, bijvoorbeeld een mislukte check op een branch. Het venster zegt of een klik het paneel van de extensie opent of een link die de extensie meegeeft.
->>>>>>> upstream/main
 
 Een lokale service kan ook blijven draaien zolang OhPiChamber draait, of volgens schema actief worden. Het toestemmingsvenster meldt dat onder **Een lokale service uitvoeren**, en ook wanneer wat u na `@` typt naar de service gaat. Een extensie kan eigen rijen aan het `@`-menu toevoegen en eigen blokken aan antwoorden van de agent. De extensie pauzeren haalt dit allemaal weg.
 
@@ -96,9 +83,9 @@ Sommige extensies tonen een livebeeld van wat de agent op de server gebruikt, zo
 
 ## Op de telefoon
 
-De mobiele app, en OpenChamber in de browser van een telefoon, laden de extensies die zijn geïnstalleerd op de server waarmee ze verbinden. **Instellingen → Extensies** is er ook, om ze toe te voegen, goed te keuren, te pauzeren en te verwijderen.
+De mobiele app, en OhPiChamber in de browser van een telefoon, laden de extensies die zijn geïnstalleerd op de server waarmee ze verbinden. **Instellingen → Extensies** is er ook, om ze toe te voegen, goed te keuren, te pauzeren en te verwijderen.
 
-Wat OpenChamber zelf op basis van een extensie tekent, verschijnt op elke telefoon: links in chatberichten, de opmaak van haar tools in de chat, providerlogo's, haar regels in het `@`-menu, markeringen op rijen in de zijbalk en haar accountkaarten in **Instellingen → Integraties**. Een tik op een markering opent die rij en het tabblad van de extensie als haar paneel voor een telefoon is gemaakt (zie hieronder); anders toont de tik de tekst van de markering en opent hij haar link, als die er is.
+Wat OhPiChamber zelf op basis van een extensie tekent, verschijnt op elke telefoon: links in chatberichten, de opmaak van haar tools in de chat, providerlogo's, haar regels in het `@`-menu, markeringen op rijen in de zijbalk en haar accountkaarten in **Instellingen → Integraties**. Een tik op een markering opent die rij en het tabblad van de extensie als haar paneel voor een telefoon is gemaakt (zie hieronder); anders toont de tik de tekst van de markering en opent hij haar link, als die er is.
 
 Deze onderdelen van een extensie verschijnen ook zonder dat de maker er iets voor hoeft te doen:
 
@@ -118,24 +105,6 @@ Voor elke andere extensie blijft dit van de telefoon af, en haar menu's tonen al
 
 Een pagina op volledig scherm heeft een eigen regel: ze verschijnt onder **Meer** in de sessielijst als de maker de pagina zelf voor een telefoon heeft gemarkeerd, of als de pagina een paneel hergebruikt dat dat is.
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-## Een extensie met een OpenCode-plugin
-
-Een extensie kan een OpenCode-plugin meeleveren, zodat u één ding installeert in plaats van twee. Het toestemmingsvenster heeft een regel die begint met **Een plugin toevoegen aan OpenCode**. Zodra u die toestaat, voegt OpenChamber de plugin binnen een paar seconden toe aan de OpenCode die het voor u draait, zonder herstart; de extensie uitschakelen of verwijderen haalt hem op dezelfde manier weg. Er wordt niets in uw eigen `opencode.json` geschreven, dus de plugin overleeft de extensie nooit en draait nooit in de OpenCode die u in een terminal start.
-
-Als OpenChamber de OpenCode waarmee het praat niet heeft gestart, of uw omgeving een eigen `OPENCODE_CONFIG` instelt, bereikt de configuratie van OpenChamber die OpenCode niet. Het scherm van de extensie zegt dat en biedt **Toevoegen aan globale configuratie** aan. Dat schrijft de map van de plugin in uw globale OpenCode-configuratie: hij draait dan in elke OpenCode op deze computer, ook in de terminal, blijft aan terwijl de extensie uitstaat en is van u om te beheren onder **Instellingen → Plugins**. Als u de extensie verwijdert, toont OpenCode die vermelding als een mislukte plugin en blijft het draaien tot u de vermelding daar verwijdert. Een OpenCode op een andere machine kan geen map van deze machine laden; het scherm zegt dat.
-
-VS Code en de mobiele app laden geen extensies. Een sessie in een geïsoleerde space draait zijn eigen OpenCode, dat de plugin nooit ontvangt. In de bedrijfsmodus telt de plugin als een lokale service: de extensie installeert alleen vanuit een repository die uw beheerder heeft toegestaan.
-=======
-## Een extensie met een OpenCode-plugin
-
-Een extensie kan een OpenCode-plugin meeleveren, zodat u één ding installeert in plaats van twee. Het toestemmingsvenster heeft een regel die begint met **Een plugin toevoegen aan OpenCode**. Zodra u die toestaat, voegt OpenChamber de plugin binnen een paar seconden toe aan de OpenCode die het voor u draait, zonder herstart; de extensie uitschakelen of verwijderen haalt hem op dezelfde manier weg. Er wordt niets in uw eigen `opencode.json` geschreven, dus de plugin overleeft de extensie nooit en draait nooit in de OpenCode die u in een terminal start.
-
-Als OpenChamber de OpenCode waarmee het praat niet heeft gestart, of uw omgeving een eigen `OPENCODE_CONFIG` instelt, bereikt de configuratie van OpenChamber die OpenCode niet. Het scherm van de extensie zegt dat en biedt **Toevoegen aan globale configuratie** aan. Dat schrijft de map van de plugin in uw globale OpenCode-configuratie: hij draait dan in elke OpenCode op deze computer, ook in de terminal, blijft aan terwijl de extensie uitstaat en is van u om te beheren onder **Instellingen → Plugins**. Als u de extensie verwijdert, toont OpenCode die vermelding als een mislukte plugin en blijft het draaien tot u de vermelding daar verwijdert. Een OpenCode op een andere machine kan geen map van deze machine laden; het scherm zegt dat.
-
-VS Code laadt geen extensies, dus de OpenCode die het draait ontvangt de plugin nooit. De telefoon verbindt met een OpenChamber-server, en de plugin draait in de OpenCode van die server. Een sessie in een geïsoleerde space draait zijn eigen OpenCode, dat de plugin nooit ontvangt. In de bedrijfsmodus telt de plugin als een lokale service: de extensie installeert alleen vanuit een repository die uw beheerder heeft toegestaan.
->>>>>>> upstream/main
 
 ## Een extensie als Git-host
 
@@ -163,9 +132,9 @@ De OhPiChamber SDK bevat een werkend voorbeeld, `examples/tracker-provider`, met
 
 ## Een extensie als verbruiksprovider
 
-Een extensie kan naast de ingebouwde providers een verbruiksprovider toevoegen: een provider die OhPiChamber niet zelf uitleest, of een eigen provider. Haar toestemmingsdialoog heeft dan een regel die begint met **Rapporteert gebruik als een ingebouwde provider** en de OpenCode-providers noemt waarvan zij de aanmeldgegevens leest, zoals `openrouter`; een extensie die er geen noemt, zegt dat.
+Een extensie kan naast de ingebouwde providers een verbruiksprovider toevoegen: een provider die OhPiChamber niet zelf uitleest, of een eigen provider. Haar toestemmingsdialoog heeft dan een regel die begint met **Rapporteert gebruik als een ingebouwde provider** en de OMP-providers noemt waarvan zij de aanmeldgegevens leest, zoals `openrouter`; een extensie die er geen noemt, zegt dat.
 
-Zodra u haar toestaat, staat haar kaart onder **Instellingen → Verbruik** achter de ingebouwde providers, met de naam en het pictogram van de extensie, en verschijnt zij net als elke ingebouwde provider in de limieten in de kopbalk, in de werkstatus, in de popover op de telefoon en in het systeemvak op de desktop wanneer u **Tonen in werkstatus** aanvinkt. Bij elke vernieuwing geeft OhPiChamber de extensie de aanmeldgegevens die OpenCode voor elke genoemde provider bewaart, en verder niets; een versie die een andere provider noemt, vraagt opnieuw om uw toestemming. De extensie leest het verbruik zelf, en OhPiChamber tekent het zoals bij een ingebouwde provider.
+Zodra u haar toestaat, staat haar kaart onder **Instellingen → Verbruik** achter de ingebouwde providers, met de naam en het pictogram van de extensie, en verschijnt zij net als elke ingebouwde provider in de limieten in de kopbalk, in de werkstatus, in de popover op de telefoon en in het systeemvak op de desktop wanneer u **Tonen in werkstatus** aanvinkt. Bij elke vernieuwing geeft OhPiChamber de extensie de aanmeldgegevens die OMP voor elke genoemde provider bewaart, en verder niets; een versie die een andere provider noemt, vraagt opnieuw om uw toestemming. De extensie leest het verbruik zelf, en OhPiChamber tekent het zoals bij een ingebouwde provider.
 
 Pauzeert u de extensie, dan verdwijnt de kaart tot u haar weer inschakelt, en uw verbruiksinstellingen ervoor blijven bewaard. Verwijdert u de extensie, dan verdwijnt de kaart voorgoed.
 
