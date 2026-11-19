@@ -180,12 +180,13 @@ async function stopChildTree(child) {
     return;
   }
 
-  signalChild(child, 'SIGINT');
-  await waitForExit(child, 2500);
-
-  if (process.platform === 'win32' && child.exitCode === null && child.signalCode === null) {
+  if (process.platform === 'win32') {
+    // Killing only the wrapper first loses the PID needed to terminate its descendants.
     killWindowsProcessTree(child.pid);
     await waitForExit(child, 1000);
+  } else {
+    signalChild(child, 'SIGINT');
+    await waitForExit(child, 2500);
   }
 
   if (child.exitCode === null && child.signalCode === null) {
