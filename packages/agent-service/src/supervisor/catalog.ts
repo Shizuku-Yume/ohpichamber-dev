@@ -280,6 +280,9 @@ export class CatalogCoordinator {
    */
   rekey(previousRootSessionId: string, rootSessionId: string): void {
     if (previousRootSessionId === rootSessionId) return;
+    for (const [previous, current] of this.roots) {
+      if (current === previousRootSessionId) this.roots.set(previous, rootSessionId);
+    }
     this.roots.set(previousRootSessionId, rootSessionId);
     const worker = this.workers.get(previousRootSessionId);
     if (!worker) return;
