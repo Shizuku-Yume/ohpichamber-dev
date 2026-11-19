@@ -130,8 +130,12 @@ describe('Host native session control saga', () => {
     await expect(service.control('missing-session', create)).rejects.toMatchObject({ statusCode: 404 });
   });
   it('moves the Host binding with the identity a /btw branch mints', async () => {
-    const { store, native, makeService } = await fixture();
+    const { owner, store, native, makeService } = await fixture();
     const service = makeService();
+    const issue = { id: 'owner/repo#1', title: 'Issue', url: 'https://github.com/owner/repo/issues/1', kind: 'issue', number: 1, linkedAt: 1 };
+    await service.setSessionLinks('public-root', { entries: [issue], linked: true });
+    const saved = await service.getMetadata('public-root');
+    expect(saved.metadata).toMatchObject({ openchamber: { linked_issues: [issue] } });
     const ack = await service.control('public-root', { type: 'btw.branch', recordId: 'btw-record-1' });
     expect(ack).toMatchObject({ type: 'btw.branch', sessionId: 'btw-branched-root' });
     expect(native.calls.at(-1)).toEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'btw.branch', recordId: 'btw-record-1' } });
@@ -141,6 +145,8 @@ describe('Host native session control saga', () => {
     await expect(store.getSession('public-root')).resolves.toBeNull();
     await expect(service.open('btw-branched-root')).resolves.toMatchObject({ session: { sessionId: 'btw-branched-root' } });
     await expect(service.open('public-root')).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.getMetadata('btw-branched-root')).resolves.toEqual({ ...saved, sessionId: 'btw-branched-root' });
+    await expect(owner.sessionMetadataStore.getState('public-root')).resolves.toBeNull();
   });
 
   it('releases an admission on a known pre-dispatch refusal', async () => {

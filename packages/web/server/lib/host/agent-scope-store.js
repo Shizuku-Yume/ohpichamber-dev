@@ -288,6 +288,7 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
         }
         db.prepare('UPDATE host_agent_sessions SET session_id = ?, root_session_id = ? WHERE session_id = ? AND root_session_id = ?')
           .run(to, to, from, from);
+        db.prepare('UPDATE session_metadata SET session_id = ? WHERE session_id = ?').run(to, from);
         return readSession(to);
       });
     } catch (error) { throw writeFailure(error); }
