@@ -16,7 +16,7 @@ The state of the post-audit bug hunt on `Shizuku-Yume/ohpichamber-dev`, so a new
 - Electron: #1 ESM `__dirname` startup crash, #4 OMP Bun-mode readiness, #6 old-glibc pidfd cleanup, #7 Linux Add-project label, #9 Windows Vite left running after exit, #10 worktree/project/draft lost on restart, #12 native Undo/Redo hitting the wrong editor (it autosaved a file revert), #22 Chats Retry couldn't clear a scoped discovery error.
 - Web/PWA: #5 mobile file search showed a false "No files found" and now has an error state with Retry, #14 confirm before closing a dirty file tab, #23 mobile editor back arrow dropped drafts, #24 save recreated a file renamed outside the app (now 409), #25 terminal history scrambled after resize and reload, #26 file tab switch silently dropped a dirty draft.
 - Mobile: #11 `ohpichamber://` pairing-link paste, #13 passwordless Host bearer auth (agent calls returned 401), #15 voice-key save reported failure, #16 Android Back in the Files viewer, #17 iOS sim ad-hoc signing, #18 drift ledger for mobile tests, #19 iOS malformed pairing link feedback, #20 Android status bar contrast, #21 empty Voice row, [#31](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/31) terminal rows above the Android landscape keyboard, [#36](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/36) scrollable Android welcome at 200% font size.
-- Host: #32 session delete failed with 409 "Session scope cannot be changed" on every client.
+- Host: #32 session delete failed with 409 "Session scope cannot be changed" on every client; [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37) removes the session transcript on delete. Transcripts from earlier deletions are not cleaned up retroactively.
 - Plus #8 broker ownership after `/btw` promotion and worker replacement, and #29 plugin settings overlap at portrait width.
 
 ## Open PRs (GitHub snapshot, 2026-11-19 UTC)
@@ -31,7 +31,6 @@ Recheck GitHub before picking up a PR; these states can change.
 | [#33](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/33) Terminal input lost before reattach | Open, conflicts with main. See the Web/PWA wrap-up for the remaining checks. |
 | [#34](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/34) Removing a composer image submits the draft | Open, mergeable. The iOS simulator retest passed before the latest merge from main, and review reported no issues. Confirm the gates on the current head. |
 | [#35](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/35) Keep the mobile workspace mounted during Host outages | Open, mergeable. Android Host-stop/resume/recovery passed. Verify iOS resume with the Host down and recheck the Android landscape terminal alongside the reconnect banner. |
-| [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37) Remove the session transcript on delete | Open, mergeable. Focused Agent Service and Host tests and full type-check passed. Verify the gates against current main. Does not clean up transcripts from earlier deletions. |
 | [#38](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/38) Record plugin layout verification | Open, conflicts with main. Docs-only follow-up to #29. The Add plugin search placeholder still clips at 393 CSS px. |
 | [#41](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/41) Pair from links opened outside the mobile app | Open draft, conflicts with main. Finish verification of the confirmation flow before making the PR ready. |
 
@@ -50,7 +49,6 @@ Recheck GitHub before picking up a PR; these states can change.
 
 ## Known bugs not yet fixed
 - draw.io: undo restores the graph but still shows the unsaved prompt (the embed rewrites the XML).
-- A deleted session could leave its transcript on disk; see [#37](https://github.com/Shizuku-Yume/ohpichamber-dev/pull/37).
 
 ## Tested clean
 - Android round 2: git ops, terminal scrollback, all 28 settings pages, session rename/search/relaunch.
