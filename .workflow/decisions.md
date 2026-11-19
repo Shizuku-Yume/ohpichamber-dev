@@ -1663,6 +1663,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream supports conditional editor writes or the Host gains a race-free conditional replacement primitive.
 
+## 2026-11-19 - Keep native mobile visible through Host outages
+
+- **Decided:** keep the workspace mounted and put a reconnect banner in flow below the visible header when the authenticated Host control stream drops or resume finds the Host unreachable. Keep retrying the existing stream after the transport probe ladder ends; confirmed auth and relay-limit failures still return to the instance picker.
+- **Instead of:** treating a reachable network or a successful startup probe as proof the Host is still live, or clearing the runtime when a resume probe times out.
+- **Because:** Android can stay online while the Host is stopped. The existing stream detects this even with no chat open, and its ready event confirms recovery and lets stalled startup retry without a separate poll. Native direct connections use the header-aware stream reader because EventSource cannot send saved proxy headers; when configured, those headers stay on the selected endpoint by rejecting redirects.
+- **Mine:** yes
+- **Revisit when:** upstream provides a native, authenticated Host connectivity signal independent of its session streams.
+
 ## 2026-11-19 - Keep interactive terminal input bound to its attachment
 
 - **Decided:** interactive input requires the current socket's terminal snapshot and an explicit resume after reconnect. Project-action interrupts can still use a socket without attaching a viewport.
