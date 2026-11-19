@@ -62,7 +62,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     Element: dom.Element, HTMLElement: dom.HTMLElement, HTMLInputElement: dom.HTMLInputElement, Node: dom.Node,
     customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
     Event: dom.Event, CustomEvent: dom.CustomEvent, KeyboardEvent: dom.KeyboardEvent, MouseEvent: dom.MouseEvent,
-    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,
+    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver, IntersectionObserver: dom.IntersectionObserver,
     getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
     cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true,
   };
@@ -85,6 +85,14 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     requests.push(url);
     switch (url.pathname) {
       case '/api/git/remotes': return Response.json([]);
+      case '/api/walkthrough': return Response.json({
+        source: { kind: 'working-tree', scope: 'all' }, generatedAt: '2026-11-19T12:00:00Z',
+        hunks: [], hunkCount: 0,
+        walkthrough: { title: 'Working changes tour', focus: 'Review this change', chapters: [{
+          id: 'chapter', title: 'Implementation', icon: 'wrench', blurb: '',
+          stops: [{ id: 'step', title: 'Inspect the change', hunkIds: [], importance: 'normal', prose: 'Step explanation' }],
+        }] },
+      });
       // The identity strip beside the branch reads these on mount.
       case '/api/git/identities': return Response.json([]);
       case '/api/git/global-identity': return Response.json(null);
@@ -364,6 +372,22 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[aria-label="Select change mode"]')?.textContent).toBe('Changes');
     expect(container.querySelector('[aria-label="Publish"]')).not.toBeNull();
     expect(checkoutControl()).toBeDefined();
+
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
+    const openWalkthrough = [...container.querySelectorAll('button')].find((button) => button.getAttribute('aria-label')?.toLowerCase().includes('walkthrough'));
+    if (!openWalkthrough) throw new Error('Missing walkthrough action');
+    await act(async () => { openWalkthrough.click(); });
+    const step = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Inspect the change'));
+    if (!step) throw new Error('Missing walkthrough step');
+    await act(async () => { step.click(); });
+    expect(container.textContent).toContain('Step explanation');
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.textContent).toContain('Review this change');
+    expect(container.textContent).not.toContain('Step explanation');
+    expect(backHandler).not.toBeNull();
+    await act(async () => { expect(backHandler?.()).toBe(true); });
+    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
+    expect(backHandler).toBeNull();
 
     // A nested-repository answer must not outlive the read that produced it.
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'nested/', index: '?', working_dir: '?' }] }); });

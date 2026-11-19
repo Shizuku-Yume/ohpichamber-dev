@@ -276,12 +276,20 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   setRoute(LIST_ROUTE);
   return true;
  }, [route.type, setRoute]);
+ const walkthroughBackRef = React.useRef<(() => boolean) | null>(null);
+ const registerWalkthroughBackHandler = React.useCallback((handler: (() => boolean) | null) => {
+  walkthroughBackRef.current = handler;
+ }, []);
+ const goBack = React.useCallback(() => {
+  if (route.type === 'walkthrough' && walkthroughBackRef.current?.()) return true;
+  return returnToList();
+ }, [route.type, returnToList]);
 
  React.useEffect(() => {
   if (!visible || route.type === 'list' || !registerBackHandler) return;
-  registerBackHandler(returnToList);
+  registerBackHandler(goBack);
   return () => registerBackHandler(null);
- }, [visible, route.type, registerBackHandler, returnToList]);
+ }, [visible, route.type, registerBackHandler, goBack]);
 
  React.useEffect(() => {
   setNavigation((current) => current.ownerKey === ownerKey ? current : { ownerKey, mode: 'working', route: LIST_ROUTE });
@@ -1093,6 +1101,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
    <MobileWalkthroughScreen
     directory={currentDirectory}
     target={walkthroughTarget}
+    registerBackHandler={registerWalkthroughBackHandler}
     subtitle={[modeLabel, sourceLabel].filter(Boolean).join(' · ')}
     revision={JSON.stringify([comparisonRevision, mode === 'pr' ? comparison.revision : 0])}
     visible={visible}

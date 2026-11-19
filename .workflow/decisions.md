@@ -1631,3 +1631,10 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the Git pane owns its list/detail route and visited panes remain mounted. Only that pane can consume one Back to clear the detail, while the shell keeps popups, plans and fullscreen surfaces ahead of workspace navigation. Visibility and owner-key cleanup prevent stale handlers during tab, repository and runtime changes.
 - **Mine:** yes
 - **Revisit when:** upstream wires Git detail navigation into the same workspace Back contract.
+
+## 2026-11-19 - Walkthrough Back follows its reading depth
+
+- **Decided:** the Git workspace Back callback delegates to the visible walkthrough's own header action before returning to Changes.
+- **Instead of:** discarding an open step and its contents in one hardware Back.
+- **Because:** the walkthrough owns its reading depth; step, contents and Changes must follow the same ladder for header and hardware Back. Global overlays retain their shell priority.
+- **Revisit when:** upstream shares walkthrough navigation through the workspace Back contract.
