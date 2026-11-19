@@ -239,6 +239,101 @@ async function waitWithin(operation: Promise<void>, milliseconds: number): Promi
   }
 }
 
+type WindowsWorkerProcess = { pid: number; parentPid: number; creationDate: string };
+
+const TH32CS_SNAPPROCESS = 0x2;
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+const INVALID_HANDLE_VALUE = 0xffff_ffff_ffff_ffffn;
+// PROCESSENTRY32W on 64-bit Windows: dwSize, th32ProcessID and th32ParentProcessID offsets.
+const PROCESS_ENTRY_SIZE = 568;
+const PROCESS_ENTRY_PID_OFFSET = 8;
+const PROCESS_ENTRY_PARENT_PID_OFFSET = 32;
+
+let windowsKernel32: Promise<{
+  CreateToolhelp32Snapshot: (flags: number, pid: number) => bigint;
+  Process32FirstW: (snapshot: bigint, entry: Uint8Array) => number;
+  Process32NextW: (snapshot: bigint, entry: Uint8Array) => number;
+  OpenProcess: (access: number, inherit: number, pid: number) => bigint;
+  GetProcessTimes: (handle: bigint, creation: BigUint64Array, exit: BigUint64Array, kernel: BigUint64Array, user: BigUint64Array) => number;
+  CloseHandle: (handle: bigint) => number;
+}> | undefined;
+
+const loadWindowsKernel32 = () => windowsKernel32 ??= import('bun:ffi').then(({ dlopen, FFIType }) => dlopen('kernel32.dll', {
+  CreateToolhelp32Snapshot: { args: [FFIType.u32, FFIType.u32], returns: FFIType.u64 },
+  Process32FirstW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  Process32NextW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  OpenProcess: { args: [FFIType.u32, FFIType.i32, FFIType.u32], returns: FFIType.u64 },
+  GetProcessTimes: { args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+  CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
+}).symbols as unknown as Awaited<NonNullable<typeof windowsKernel32>>);
+
+// One Toolhelp snapshot plus a creation-time query per process takes a few
+// milliseconds. Spawning PowerShell for Win32_Process took seconds per call,
+// too slow for the readiness probe inside the Host's startup deadline.
+export const listWindowsWorkerProcesses = async (): Promise<WindowsWorkerProcess[]> => {
+  const kernel32 = await loadWindowsKernel32();
+  const snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot === INVALID_HANDLE_VALUE || snapshot === 0n) throw new Error('Process snapshot failed');
+  const entry = new Uint8Array(PROCESS_ENTRY_SIZE);
+  const view = new DataView(entry.buffer);
+  view.setUint32(0, PROCESS_ENTRY_SIZE, true);
+  const [creation, exit, kernel, user] = [new BigUint64Array(1), new BigUint64Array(1), new BigUint64Array(1), new BigUint64Array(1)];
+  const processes: WindowsWorkerProcess[] = [];
+  try {
+    for (let found = kernel32.Process32FirstW(snapshot, entry); found; found = kernel32.Process32NextW(snapshot, entry)) {
+      const pid = view.getUint32(PROCESS_ENTRY_PID_OFFSET, true);
+      if (pid <= 1) continue;
+      let creationDate = '';
+      const handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+      if (handle !== 0n) {
+        if (kernel32.GetProcessTimes(handle, creation, exit, kernel, user)) creationDate = String(creation[0]);
+        kernel32.CloseHandle(handle);
+      }
+      processes.push({ pid, parentPid: view.getUint32(PROCESS_ENTRY_PARENT_PID_OFFSET, true), creationDate });
+    }
+  } finally { kernel32.CloseHandle(snapshot); }
+  if (!processes.length) throw new Error('Process snapshot was empty');
+  return processes;
+};
+
+export async function snapshotWorkerDescendants(pid: number | undefined, { listProcesses = listWindowsWorkerProcesses } = {}): Promise<WindowsWorkerProcess[]> {
+  if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
+  const processes = await listProcesses();
+  const leader = processes.find(entry => entry.pid === pid);
+  if (!leader?.creationDate) throw new Error('Invalid leader identity');
+  const created = new Map([[pid, BigInt(leader.creationDate)]]);
+  const descendants: WindowsWorkerProcess[] = [];
+  for (const [parent, parentCreated] of created) {
+    for (const child of processes) {
+      if (child.parentPid !== parent || created.has(child.pid)) continue;
+      if (child.pid === process.pid || !child.creationDate) throw new Error('Invalid descendant identity');
+      const childCreated = BigInt(child.creationDate);
+      // Windows keeps an exited parent's PID as ParentProcessId; a process older
+      // than its listed parent is an orphan of a reused PID, not a descendant.
+      if (childCreated < parentCreated) continue;
+      created.set(child.pid, childCreated);
+      descendants.push(child);
+    }
+  }
+  return descendants;
+}
+
+export async function cleanupWorkerDescendants(snapshot: WindowsWorkerProcess[], { listProcesses = listWindowsWorkerProcesses, terminateTree = terminateWorkerProcessTree } = {}): Promise<boolean> {
+  if (!snapshot.length) return true;
+  const matches = (expected: WindowsWorkerProcess, current: WindowsWorkerProcess) => expected.pid === current.pid && expected.creationDate === current.creationDate;
+  try {
+    for (const expected of snapshot) {
+      if (!Number.isSafeInteger(expected.pid) || expected.pid <= 1 || expected.pid === process.pid || !expected.creationDate) return false;
+      if ((await listProcesses()).some(current => matches(expected, current))) {
+        try { await terminateTree(expected.pid, 'SIGKILL'); } catch { /* Check all snapshot identities before returning. */ }
+      }
+    }
+    const remaining = await listProcesses();
+    // A live PID whose identity can no longer be read is not proven gone.
+    return !snapshot.some(expected => remaining.some(current => matches(expected, current) || (current.pid === expected.pid && !current.creationDate)));
+  } catch { return false; }
+}
+
 export async function stopWorkerProcess(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
   exited: Promise<void>,
@@ -1323,13 +1418,24 @@ export class WorkerRegistry {
       entry.info.state = 'stopping';
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       if (wasStarting) entry.rejectReady(new Error('SDK worker is stopping'));
+      let descendants: WindowsWorkerProcess[] = [];
+      let descendantsStopped = true;
+      if (process.platform === 'win32' && cooperativeGraceMs > 0) {
+        try { descendants = await snapshotWorkerDescendants(entry.child.pid); } catch { descendantsStopped = false; }
+      }
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
-      const stopped = await stopWorkerProcess(entry.child, entry.exited, { cooperativeGraceMs, stopTimeoutMs: this.options.stopTimeoutMs });
+      let stopped: boolean;
+      try {
+        stopped = await stopWorkerProcess(entry.child, entry.exited, { cooperativeGraceMs, stopTimeoutMs: this.options.stopTimeoutMs });
+      } finally {
+        const cleaned = await cleanupWorkerDescendants(descendants);
+        descendantsStopped = descendantsStopped && cleaned;
+      }
       for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
       entry.pending.clear();
       entry.info.state = 'stopped';
       if (this.workerEntries.get(entry.info.rootSessionId) === entry) this.workerEntries.delete(entry.info.rootSessionId);
-      return stopped;
+      return stopped && descendantsStopped;
     })();
     return entry.stopping;
   }

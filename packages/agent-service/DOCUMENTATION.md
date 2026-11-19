@@ -32,6 +32,8 @@ Top-level worker sessions are initialized with `tuiTranscript: true`, which info
 
 ## Tool result placement, partial output and step timing
 
+An unrecovered OMP assistant `stopReason: error` retains its `errorMessage` through canonical `run.failed.error`, the journal's failed turn and native canonical terminal entries. The existing shared chat error notice displays that string. The native registry remembers credentials and custom header values resolved for provider calls and removes echoed values, authorization headers and credential assignments before failure detail is projected or persisted as canonical metadata; model selection registers merged native and catalog headers before sending them. Private filesystem roots remain redacted. Empty provider detail keeps the generic failure text. A successful retry clears the earlier failure, and abort intent still takes precedence.
+
 A tool result belongs to the message that authored its `tool_call`: the projection records the call's owner when the call is authored, and publishes the outcome as a `tool_result` part at `<call-part>:result` on that message. OMP's `tool_execution_update` frames become `part.updated` on the same part while the call runs, so a long `bash`/`task` shows its body live; the terminal `tool_execution_end` and the native `toolResult` message both close it. A native result message never becomes a canonical message, and no `system` role is authored for a result. A failed result carries the tool's own detail in `error` and a class in `errorKind` (`synthetic` for a call OMP never ran, `interrupted`, an edit's own `errorKind`, `timeout` from `details.timedOut`, `background-job` from a dead `details.async`, else `tool_error`).
 
 `metadata()` also derives each assistant step's `timing` from the native `AssistantMessage` alone (`timestamp`, `ttft`, `duration`/`completedAt`), so a restored step and the live stream publish the same absolute epochs. A run OMP prompts itself (plan/goal continuation) opens a turn with no authored user message; the Host prompt path authors the user message it was given.
@@ -89,6 +91,8 @@ Native JSONL storage appends timestamped `custom` records when a runtime opens o
 The Agent Service verifies the transcript against the live worker, stops the worker, and then removes the native transcript and artifacts before acknowledging deletion. Worker shutdown may write exit diagnostics, so removing storage before shutdown can recreate a deleted transcript.
 
 ## Named daemon ownership after promotion
+
+The session worker's named-service ToolSession retains Host session identity overrides but binds session-change registration and launch-completion delivery to the actual native AgentSession. Inheriting those methods through `Object.create(nativeSession)` changes their receiver and cannot access OMP's private fields. Empty broker listings remain successful; actual listing failures still preserve existing shell service state.
 
 Named daemon services remain owned by their broker session id after `/btw` promotion. `WorkerRegistry` retains the retired ids across worker retirement for the lifetime of the supervisor and passes that lineage through private worker bootstrap. `WorkerShell` authorizes listing, logs, stdin and stop against the current id and those retired ids only, while projecting every service under the current session and worker generation. Catalog aliases are generation-scoped and are not the service ownership authority. Supervisor restart does not restore this in-memory lineage.
 

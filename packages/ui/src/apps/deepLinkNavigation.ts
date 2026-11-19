@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { isCapacitorApp } from '@/lib/platform';
+import type { PairingConnectionPayload } from '@/lib/connectionPayload';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { openSession } from '@/lib/router/openSessionFromRoute';
 
@@ -32,9 +33,10 @@ interface DeepLinkHandlers {
 
 let handlers: DeepLinkHandlers = {};
 let ready = false;
-let pending: DeepLinkIntent | null = null;
+type NavigationIntent = Exclude<DeepLinkIntent, { type: 'pairing' }>;
+let pending: NavigationIntent | null = null;
 
-const execute = (intent: DeepLinkIntent): boolean => {
+const execute = (intent: NavigationIntent): boolean => {
   switch (intent.type) {
     case 'session':
       // The opener resolves a directory the link omits and opens a `/btw` fork
@@ -96,15 +98,17 @@ const flush = (): void => {
 };
 
 /** Apply an intent now if possible, otherwise stash it until the app is ready / a handler appears. */
-const applyDeepLinkIntent = (intent: DeepLinkIntent): void => {
+const applyDeepLinkIntent = (intent: NavigationIntent): void => {
   pending = intent;
   flush();
 };
 
 /** Convenience: parse a raw `ohpichamber://…` URL and apply it. No-op for unrecognised URLs. */
-const applyDeepLinkUrl = (raw: string | null | undefined): void => {
+const applyDeepLinkUrl = (raw: string | null | undefined, onPairing?: (payload: PairingConnectionPayload) => void): void => {
   const intent = parseDeepLink(raw);
-  if (intent) {
+  if (intent?.type === 'pairing') {
+    onPairing?.(intent.payload);
+  } else if (intent) {
     applyDeepLinkIntent(intent);
   }
 };
@@ -138,8 +142,14 @@ export const useDeepLinkHandlers = (next: DeepLinkHandlers): void => {
  * Both listeners are registered UNCONDITIONALLY so a cold-launch tap/open isn't lost while
  * the app is still connecting; intents stash until `ready` (connected + initialized).
  */
-export const useDeepLinkSource = (options: { ready: boolean }): void => {
-  const { ready: isReady } = options;
+export const useDeepLinkSource = ({ ready: isReady, onPairing }: {
+  ready: boolean;
+  onPairing?: (payload: PairingConnectionPayload) => void;
+}): void => {
+  const onPairingRef = React.useRef(onPairing);
+  React.useEffect(() => {
+    onPairingRef.current = onPairing;
+  }, [onPairing]);
 
   React.useEffect(() => {
     setReady(isReady);
@@ -148,19 +158,27 @@ export const useDeepLinkSource = (options: { ready: boolean }): void => {
   React.useEffect(() => {
     if (!isCapacitorApp()) return;
     let disposed = false;
+    let receivedAppUrl = false;
     const cleanup: Array<() => void> = [];
 
     void import('@capacitor/app')
       .then(async ({ App }) => {
         if (disposed) return;
         const handle = await App.addListener('appUrlOpen', (event) => {
-          applyDeepLinkUrl(event?.url);
+          if (disposed) return;
+          receivedAppUrl = true;
+          applyDeepLinkUrl(event?.url, onPairingRef.current);
         });
         if (disposed) {
           void handle.remove();
           return;
         }
         cleanup.push(() => void handle.remove());
+        const launch = await App.getLaunchUrl();
+        if (!disposed && !receivedAppUrl) {
+          const intent = parseDeepLink(launch?.url);
+          if (intent?.type === 'pairing') onPairingRef.current?.(intent.payload);
+        }
       })
       .catch(() => undefined);
 

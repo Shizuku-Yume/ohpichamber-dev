@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -20,6 +20,7 @@ import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manage
 import { InternalUrlRouter } from '@oh-my-pi/pi-coding-agent/internal-urls';
 import { InteractionManager } from '../interaction/manager.ts';
 import { SessionJournal } from '../projection/journal.ts';
+import { WorkerProjection } from './projection.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
 import type { HostActionRequest } from '../native-policy-protocol.ts';
 import { NativeApprovalRequired } from './policy.ts';
@@ -29,6 +30,10 @@ import { WorkerSession } from './session.ts';
 import { WorkerModeController } from './mode.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import { HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
+import { credentialReference } from './catalog-models.ts';
+import { closeDaemonClients, daemonClientForProject } from '@oh-my-pi/pi-coding-agent/launch/client';
+import type { DaemonCompletionNotification } from '@oh-my-pi/pi-coding-agent/launch/protocol';
+import { logger } from '@oh-my-pi/pi-utils';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
 beforeEach(() => {
@@ -145,8 +150,8 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?
  return pending.promise;
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse }: {
- respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse, apiKey, headers }: {
+ respond: (payload: ProviderRequest, root: string, request: Request) => Promise<Response> | Response;
  invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
  machineCommands?: string[];
  onSubagent?: (payload: SubagentLifecyclePayload) => void;
@@ -155,6 +160,8 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
  planModel?: boolean;
  reasoningEfforts?: readonly string[];
  denyProviderUse?: (attempt: number) => Error | undefined;
+ apiKey?: string;
+ headers?: Record<string, string>;
 }) {
  const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
  const home = process.env.HOME;
@@ -181,7 +188,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   hostname: '127.0.0.1', port: 0, async fetch(request) {
    const payload = ProviderRequestSchema.parse(await request.json());
    requests.push(payload);
-   return respond(payload, cwd);
+   return respond(payload, cwd, request);
   }
  });
  const openWorker = (sessionFile?: string, bootstrapOverrides: Partial<WorkerBootstrapMessage> = {}) => WorkerSession.open({
@@ -233,13 +240,22 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
  }, () => { }, onSubagent);
  try {
   worker = await openWorker();
+  let credentialRef: string | null = null;
+  if (apiKey) {
+   const storage = worker.session.modelRegistry.authStorage;
+   await storage.credentials.upsert('native-fixture', { type: 'api_key', key: apiKey, source: 'login' });
+   await storage.credentials.reload();
+   const row = storage.credentials.list('native-fixture')[0];
+   if (!row) throw new Error('Fixture credential is required');
+   credentialRef = credentialReference('native-fixture', row.id);
+  }
   journal = new SessionJournal({ sessionId: rootSessionId, rootSessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, worker.seed());
   interactions.openSession(rootSessionId, journal.runtime().epoch, generation, 'workspace', async operation => { await worker!.operation(operation); }, input => { events.push(input); journal!.append([input]); });
   await worker.operation({
    type: 'catalog', revision: '1', operation: {
     type: 'catalog.provider.configure', request: {
-     expectedRevision: '0', configuration: {
-      providerId: 'native-fixture', name: 'Native fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef: null,
+     expectedRevision: '0', headers, configuration: {
+      providerId: 'native-fixture', name: 'Native fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef,
      }
     }
    }
@@ -337,6 +353,41 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
  });
  return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
+
+test('native HTTP 401 preserves provider detail without echoed API keys or custom header secrets', async () => {
+ const apiKey = 'fixture-invalid-provider-credential';
+ const headerSecret = 'fixture-private-custom-header-value';
+ let receivedHeader: string | null = null;
+ const harness = await fixture({
+  apiKey,
+  headers: { 'x-tenant-auth': headerSecret },
+  respond: (_payload, _root, request) => {
+   receivedHeader = request.headers.get('x-tenant-auth');
+   return Response.json({ error: { message: `Invalid API key (${apiKey}); rejected header value ${receivedHeader}; token=other-private-token`, type: 'authentication_error' } }, { status: 401 });
+  },
+ });
+ try {
+  await harness.worker.operation({ type: 'prompt', runId: 'provider-error-run', request: prompt('Reply to this provider error probe.') });
+  await waitForGoal(harness.worker, () => harness.events.some(({ event }) => event.type === 'run.failed'), 15000);
+  const failure = harness.events.find(({ event }) => event.type === 'run.failed')?.event;
+  if (!failure || failure.type !== 'run.failed') throw new Error('Canonical run failure is required');
+  expect(failure.error).toContain('401');
+  expect(failure.error).toContain('Invalid API key');
+  expect(failure.error).toContain('[redacted]');
+  expect(failure.error).not.toContain(apiKey);
+  expect(failure.error).not.toContain('other-private-token');
+  expect(receivedHeader).toBe(headerSecret);
+  expect(failure.error).not.toContain(headerSecret);
+  expect(JSON.stringify(harness.events)).not.toContain(headerSecret);
+  expect(harness.journal.snapshot().turns.at(-1)).toMatchObject({ status: 'failed', error: failure.error });
+  await harness.worker.session.sessionManager.flush();
+  const entries = harness.worker.session.sessionManager.getBranch();
+  expect(entries.some(entry => entry.type === 'message' && entry.message.role === 'assistant'
+   && entry.message.errorMessage?.includes('Invalid API key'))).toBe(true);
+  const restored = new WorkerProjection(harness.worker.session.sessionManager, rootSessionId).seed();
+  expect(restored.turns.at(-1)).toMatchObject({ status: 'failed', error: failure.error });
+ } finally { await harness.close(); }
+}, 30000);
 
 test('an idle stretch publishes a canonical recap event once OMP records it', async () => {
  const harness = await fixture({ respond: () => completion() });
@@ -986,6 +1037,41 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   expect(harness.fatal()).toBe(false);
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+test('native daemon service callbacks retain the AgentSession receiver', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const session = harness.worker.session;
+ const client = await daemonClientForProject(harness.root);
+ const subscriptions = spyOn(client, 'onCompletion');
+ const warnings = spyOn(logger, 'warn');
+ try {
+  const unsubscribe = session.registerSessionChangeCallback(() => { });
+  unsubscribe();
+  const inherited: AgentSession = Object.create(session);
+  expect(() => inherited.registerSessionChangeCallback(() => { })).toThrow('private');
+  const result = await harness.worker.operation({ type: 'shell', operation: { type: 'snapshot' } });
+  expect(result.type).toBe('shell');
+  if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new Error('Expected shell snapshot');
+  expect(result.result.snapshot.running).toEqual([]);
+  expect(warnings.mock.calls.filter(([message]) => message === 'Daemon broker list failed; continuing without service state')).toEqual([]);
+  const subscription = subscriptions.mock.calls.find(([owner]) => owner === rootSessionId);
+  if (!subscription) throw new Error('Native daemon completion subscription is missing');
+  const notification: DaemonCompletionNotification = {
+   event: 'daemon-completed', completionId: 'completion-native', owner: rootSessionId,
+   daemon: { name: 'native-service', id: 'native-service-id', state: 'exited', createdAt: 1, startedAt: 1,
+    restartCount: 0, outputBytes: 0, persist: false, detached: false, owner: rootSessionId },
+  };
+  await harness.worker.close();
+  await expect(Promise.resolve().then(() => subscription[1](notification))).rejects.toThrow('Session disposed before launch completion delivery');
+ } finally {
+  subscriptions.mockRestore();
+  warnings.mockRestore();
+  try { await client.request({ op: 'shutdown' }); } finally {
+   await closeDaemonClients();
+   await harness.close();
+  }
+ }
+}, 30000);
+
 test('service returns tool catalog (name, label, description, tier, availability) for a live session', async () => {
  const harness = await fixture({ respond: () => completion() });
  try {
