@@ -299,13 +299,19 @@ export const listWindowsWorkerProcesses = async (): Promise<WindowsWorkerProcess
 export async function snapshotWorkerDescendants(pid: number | undefined, { listProcesses = listWindowsWorkerProcesses } = {}): Promise<WindowsWorkerProcess[]> {
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
   const processes = await listProcesses();
-  const visited = new Set([pid]);
+  const leader = processes.find(entry => entry.pid === pid);
+  if (!leader?.creationDate) throw new Error('Invalid leader identity');
+  const created = new Map([[pid, BigInt(leader.creationDate)]]);
   const descendants: WindowsWorkerProcess[] = [];
-  for (const parent of visited) {
+  for (const [parent, parentCreated] of created) {
     for (const child of processes) {
-      if (child.parentPid !== parent || visited.has(child.pid)) continue;
+      if (child.parentPid !== parent || created.has(child.pid)) continue;
       if (child.pid === process.pid || !child.creationDate) throw new Error('Invalid descendant identity');
-      visited.add(child.pid);
+      const childCreated = BigInt(child.creationDate);
+      // Windows keeps an exited parent's PID as ParentProcessId; a process older
+      // than its listed parent is an orphan of a reused PID, not a descendant.
+      if (childCreated < parentCreated) continue;
+      created.set(child.pid, childCreated);
       descendants.push(child);
     }
   }
@@ -323,7 +329,8 @@ export async function cleanupWorkerDescendants(snapshot: WindowsWorkerProcess[],
       }
     }
     const remaining = await listProcesses();
-    return !snapshot.some(expected => remaining.some(current => matches(expected, current)));
+    // A live PID whose identity can no longer be read is not proven gone.
+    return !snapshot.some(expected => remaining.some(current => matches(expected, current) || (current.pid === expected.pid && !current.creationDate)));
   } catch { return false; }
 }
 

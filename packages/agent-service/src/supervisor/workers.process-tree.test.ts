@@ -5,17 +5,27 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkerRegistry, cleanupWorkerDescendants, listWindowsWorkerProcesses, snapshotWorkerDescendants, stopWorkerProcess, terminateWorkerProcessTree, waitForWorkerProcessTree, windowsProcessTreeKillArgs } from './workers.ts';
 
-const identity = (pid: number, parentPid = 4242, creationDate = '2026-11-19T00:00:00.0000000Z') => ({ pid, parentPid, creationDate });
+const identity = (pid: number, parentPid = 4242, creationDate = '134395828713324692') => ({ pid, parentPid, creationDate });
 
 test('descendant snapshot walks every level without including siblings or the leader', async () => {
   const processes = [identity(4242, 10), identity(5001), identity(5002, 5001), identity(5003, 10)];
   expect(await snapshotWorkerDescendants(4242, { listProcesses: async () => processes })).toEqual([processes[1], processes[2]]);
-  expect(await snapshotWorkerDescendants(4242, { listProcesses: async () => [] })).toEqual([]);
+  expect(await snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(4242, 10)] })).toEqual([]);
+});
+
+test('descendant snapshot skips orphans whose exited parent PID was reused by the leader', async () => {
+  const leader = identity(4242, 10, '134395828713324692');
+  const orphan = identity(5001, 4242, '134395828713324000');
+  const orphanChild = identity(5002, 5001, '134395828713324800');
+  const child = identity(5003, 4242, '134395828713324692');
+  expect(await snapshotWorkerDescendants(4242, { listProcesses: async () => [leader, orphan, orphanChild, child] })).toEqual([child]);
 });
 
 test('snapshot inspection errors and missing identities are not successful snapshots', async () => {
   await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => { throw new Error('snapshot failed'); } })).rejects.toThrow('snapshot failed');
-  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(5001, 4242, '')] })).rejects.toThrow('Invalid descendant identity');
+  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(4242, 10), identity(5001, 4242, '')] })).rejects.toThrow('Invalid descendant identity');
+  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(5001)] })).rejects.toThrow('Invalid leader identity');
+  await expect(snapshotWorkerDescendants(4242, { listProcesses: async () => [identity(4242, 10, '')] })).rejects.toThrow('Invalid leader identity');
 });
 
 test('snapshot cleanup checks identity before every forced tree kill and verifies removal', async () => {
@@ -31,7 +41,7 @@ test('snapshot cleanup checks identity before every forced tree kill and verifie
 test('snapshot cleanup never kills a reused PID or an already exited process', async () => {
   const calls: number[] = [];
   expect(await cleanupWorkerDescendants([identity(5001), identity(5002)], {
-    listProcesses: async () => [identity(5001, 4242, 'different-creation-date')],
+    listProcesses: async () => [identity(5001, 4242, '134395828713324693')],
     terminateTree: async pid => { calls.push(pid!); return true; },
   })).toBe(true);
   expect(calls).toEqual([]);
@@ -44,7 +54,11 @@ test('snapshot cleanup fails closed on survivors, inspection failures and unsafe
     terminateTree: async () => true,
   })).toBe(false);
   expect(await cleanupWorkerDescendants(snapshot, {
-    listProcesses: async () => { throw new Error('CIM failed'); },
+    listProcesses: async () => { throw new Error('snapshot failed'); },
+  })).toBe(false);
+  expect(await cleanupWorkerDescendants(snapshot, {
+    listProcesses: async () => [identity(5001, 4242, '')],
+    terminateTree: async () => { throw new Error('Must not kill an unverified identity'); },
   })).toBe(false);
   expect(await cleanupWorkerDescendants([identity(process.pid)], {
     listProcesses: async () => { throw new Error('Must not inspect'); },
@@ -254,6 +268,18 @@ process.on('message', message => {
   expect(processes.every(entry => entry.pid > 1)).toBe(true);
 });
 
+// Windows releases a killed process's working-directory handle shortly after it exits.
+const removeAfterWindowsExit = async (root: string) => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rm(root, { recursive: true, force: true });
+    } catch (error) {
+      if (attempt >= 50) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+};
+
 // Detached children leave the worker's kill-on-close job, and a cooperative
 // stop lets the worker exit before taskkill /T runs. The windowless child and
 // grandchild are then orphans that only the readiness snapshot still names.
@@ -300,16 +326,7 @@ process.on('message', message => {
     sibling.kill('SIGKILL');
     for (const pid of tracked) await terminateWorkerProcessTree(pid, 'SIGKILL');
     await registry.close();
-    // Windows releases a killed process's working-directory handle shortly after it exits.
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await rm(root, { recursive: true, force: true });
-        break;
-      } catch (error) {
-        if (attempt >= 50) throw error;
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
+    await removeAfterWindowsExit(root);
   }
 }, 20_000);
 
