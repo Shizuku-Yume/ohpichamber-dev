@@ -57,6 +57,7 @@ type GlobalSessionsState = {
   /** The global list request itself failed; partial per-scope errors do not set this. */
   globalRefreshFailed: boolean;
   discoveryErrors: ReadonlyMap<string, string>;
+  clearWorkspaceDiscoveryErrors: (workspaceId: string) => void;
   /** Re-read the persisted managed-chats snapshot after the chats root is
       warm; retain newer mutations and stop after an authoritative load. */
   rehydrateManagedChatSessions: () => void;
@@ -407,6 +408,9 @@ const fetchDirectoryPages = async (
         if (generation !== loadGeneration) throw new Error('Runtime changed before session discovery');
         return canonicalClient.listSessions(workspace.workspaceId);
       });
+      if (generation === loadGeneration && Object.keys(result.errors).length === 0) {
+        useGlobalSessionsStore.getState().clearWorkspaceDiscoveryErrors(workspace.workspaceId);
+      }
       return { status: 'fulfilled' as const, value: { directory, ...result } };
     } catch (reason) {
       return { status: 'rejected' as const, reason };
@@ -931,7 +935,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             const merged = mergeSessionDirectoryMetadata(session, existing);
             if (!existing || !isSameSessionRecord(existing, merged)) mutations.push({ type: 'upsert', session: merged });
           }
-          return mutations.length > 0 ? applySessionMutations(state, mutations) : state;
+          const discovered = mutations.length > 0 ? applySessionMutations(state, mutations) : state;
+          return { ...discovered, discoveryErrors: new Map(Object.entries(result.errors)), globalRefreshFailed: false };
         });
         raiseSessionOrderingBaselines(result.items.flatMap((session) => {
           const committed = get().entityById.get(session.sessionId);
@@ -946,6 +951,16 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     inflightHead = headPromise;
     void headPromise.finally(() => { if (inflightHead === headPromise) inflightHead = null; });
     return headPromise;
+  },
+
+  clearWorkspaceDiscoveryErrors: (workspaceId) => {
+    set((state) => {
+      const discoveryErrors = new Map(state.discoveryErrors);
+      for (const identity of discoveryErrors.keys()) {
+        if (identity === workspaceId || state.entityById.get(identity)?.workspaceId === workspaceId) discoveryErrors.delete(identity);
+      }
+      return discoveryErrors.size === state.discoveryErrors.size ? state : { discoveryErrors };
+    });
   },
 
   refreshSessionsForDirectories: async (directories, fallbackActive) => {

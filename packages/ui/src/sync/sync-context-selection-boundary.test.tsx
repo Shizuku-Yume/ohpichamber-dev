@@ -110,10 +110,12 @@ describe("SyncProvider native scope and selection boundaries", () => {
       const stale = session("mutated-session", resolved.workspaceId)
       const current = { ...stale, title: "Local mutation", metadata: {}, metadataRevision: "2" }
       store.setState({ session: [current], sessionRevision: 1, sessionEventRevision: { [current.sessionId]: 1 } })
+      useGlobalSessionsStore.setState({ discoveryErrors: new Map([[resolved.workspaceId, 'SERVICE_UNAVAILABLE'], ['workspace-unrelated', 'SERVICE_UNAVAILABLE']]) })
       await act(async () => { pending.resolve({ items: [stale], errors: {} }); await Promise.resolve() })
       expect(store.getState().session[0]).toBe(current)
       expect(store.getState().session_status[current.sessionId]).toBe("idle")
       expect(store.getState().sessionStatusReady).toBe(true)
+      expect([...useGlobalSessionsStore.getState().discoveryErrors.keys()]).toEqual(['workspace-unrelated'])
     } finally {
       await act(async () => root.unmount())
       dom.restore()

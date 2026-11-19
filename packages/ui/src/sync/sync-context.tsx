@@ -294,6 +294,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       const unchanged = session.length === prior.session.length && session.every((item, index) => item === prior.session[index])
       store.setState({ ...listedState, session: unchanged ? prior.session : session, sessionTotal: session.length, limit: Math.max(prior.limit, session.length), sessionListSource: Object.keys(listed.errors).length ? "live" : "authoritative", discoveryErrors: listed.errors })
       useGlobalSessionsStore.getState().upsertSessions([...byId.values()])
+      if (Object.keys(listed.errors).length === 0) useGlobalSessionsStore.getState().clearWorkspaceDiscoveryErrors(workspace.workspaceId)
       // Only a root session has a snapshot to materialize; a child is read
       // through its history when it is opened.
       const live = session.filter((item) => item.rootSessionId === item.sessionId

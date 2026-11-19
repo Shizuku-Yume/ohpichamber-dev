@@ -231,6 +231,17 @@ describe('native global mutation reconciliation', () => {
 });
 
 describe('native discovery completeness scopes', () => {
+  test.each(['global', 'directory'] as const)('a later healthy %s listing clears stale discovery errors without needing new records', async (scope) => {
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_failed')], []);
+    useGlobalSessionsStore.setState({ discoveryErrors: new Map([['wsp_repo', 'SERVICE_UNAVAILABLE'], ['ses_failed', 'METADATA_READ_FAILED'], ['wsp_other', 'SERVICE_UNAVAILABLE']]) });
+    list.mockResolvedValue({ items: [session('ses_failed')], errors: {} });
+    if (scope === 'global') await useGlobalSessionsStore.getState().refreshSessionHead();
+    else await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('wsp_repo')).toBe(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('ses_failed')).toBe(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.has('wsp_other')).toBe(scope === 'directory');
+  });
+
   test.each([false, true])('all-unavailable HTTP 200 discovery retries before accepting an empty=%s result', async (empty) => {
     jest.useFakeTimers();
     list.mockResolvedValueOnce({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE', wsp_other: 'SERVICE_UNAVAILABLE' } })
