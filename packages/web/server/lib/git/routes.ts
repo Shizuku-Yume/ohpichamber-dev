@@ -17,6 +17,12 @@ import type { createNetworkOperations } from './network-operations.js';
 import type { subscribeWorktreeTopologyChanges } from './service.js';
 import type { createWorktreeBootstrapStore } from './worktree-bootstrap-storage.js';
 
+
+
+
+
+
+
 type BindingRoutes = ReturnType<typeof registerSourceControlRoutes>;
 
 export interface GitRouteDependencies {
@@ -63,6 +69,7 @@ type UncheckedFields = {
 type ErrorFields = {
   readonly message?: unknown; readonly code?: unknown; readonly status?: unknown; readonly statusCode?: unknown;
   readonly reason?: unknown; readonly stderr?: unknown; readonly stdout?: unknown; readonly remoteName?: unknown;
+  readonly details?: unknown;
 };
 type RouteHandler = (req: Request, res: Response, next: NextFunction) => Promise<void | Response>;
 
@@ -2013,9 +2020,13 @@ export function registerGitRoutes(app: Application, {
     ['WORKTREE_BOOTSTRAP_FAILED', 409],
   ]);
   const sendArchiveError = <Cause>(res: Response, error: Cause, fallback: string) => {
-    const status = ARCHIVE_ERROR_STATUS.get(errorFields(error)?.code) ?? 500;
+    const fields = errorFields(error);
+    const status = ARCHIVE_ERROR_STATUS.get(fields?.code)
+      ?? (isInteger(fields?.status) ? fields.status : isInteger(fields?.statusCode) ? fields.statusCode : 500);
     if (status === 500) console.error(`${fallback}:`, error);
-    res.status(status).json({ error: messageOf(error) || fallback, code: errorFields(error)?.code });
+    const body = { error: messageOf(error) || fallback, code: fields?.code,
+      ...(fields?.details && typeof fields.details === 'object' ? { details: fields.details } : {}) };
+    res.status(status).json(body);
   };
 
   app.get('/api/git/worktrees/archives', async (req, res) => {
@@ -2233,5 +2244,5 @@ export function registerGitRoutes(app: Application, {
     }
   });
 
-  return { createWorktree: worktreeCreation.create, createWorktreeInstanceDisposer };
+  return { createWorktree: worktreeCreation.create };
 }

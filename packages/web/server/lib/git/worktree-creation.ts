@@ -2,7 +2,7 @@ import { forkRemoteName } from './contributor-remote.js';
 import { sourceControlProviderDescriptors } from '../source-control/provider-descriptors.js';
 import { asNonEmptyString } from '../shared/guards.js';
 import { fingerprintRemoteUrl, redactRemoteUrl } from '../source-control/url-redaction.js';
-import type { SourceControlChangeRequestSource } from '@openchamber/sdk';
+import type { SourceControlChangeRequestSource } from 'ohpichamber-sdk';
 import type { BindingRead } from '../source-control/binding-service-contracts.js';
 import type { ProviderReadContext } from '../source-control/provider-contract.js';
 import type { GitRouteDependencies } from './routes.js';

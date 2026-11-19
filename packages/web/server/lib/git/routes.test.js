@@ -860,7 +860,7 @@ describe('git worktree topology routes', () => {
 describe('git worktree archive routes', () => {
   const worktreeBootstrapStore = { remove: vi.fn() };
 
-  it('archives with the sessions, the bootstrap store and a disposal hook, like a removal', async () => {
+  it('forwards archive inputs to the Host bootstrap and archive owners without engine disposal', async () => {
     gitLibraries.archiveWorktree.mockResolvedValue({ id: 'a1' });
     const { app, getRoute } = createRouteRegistry();
     registerGitRoutes(app, {
@@ -878,8 +878,8 @@ describe('git worktree archive routes', () => {
       directory: '/repo/wt',
       id: 'a1',
       sessionIds: ['ses_1'],
-      disposeInstance: expect.any(Function),
-    }), { bootstrapStore: worktreeBootstrapStore });
+    }), expect.objectContaining({ bootstrapStore: worktreeBootstrapStore }));
+    expect(gitLibraries.archiveWorktree.mock.calls.at(-1)[1].disposeInstance).toBeUndefined();
   });
 
   it('answers 404 for an archive that is gone', async () => {
@@ -958,170 +958,30 @@ describe('git worktree teardown routes', () => {
   });
 });
 
-describe('git worktree removal instance disposal', () => {
-  let fetchMock;
-  const worktreeBootstrapStore = { remove: vi.fn() };
-
-  const createJsonResponse = (payload, status = 200) => new Response(JSON.stringify(payload), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-
-  beforeEach(() => {
-    gitLibraries.removeWorktree.mockReset();
-    fetchMock = vi.fn(async () => createJsonResponse(true));
+describe('git worktree removal Host boundary', () => {
+  it.each([false, true])('forwards Host bootstrap ownership without an engine disposer (legacy hints: %s)', async (legacyHints) => {
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('passes a disposal hook that targets the removed worktree when the runtime helpers are wired', async () => {
-    gitLibraries.removeWorktree.mockResolvedValue(true);
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, {
-      worktreeBootstrapStore,
-      emitWorktreeChanged: vi.fn(),
-      buildOpenCodeUrl: (routePath) => `http://opencode.test${routePath}`,
-      getOpenCodeAuthHeaders: () => ({ Authorization: 'Bearer test' }),
-    });
-
-    const response = createMockResponse();
-    await getRoute('DELETE', '/api/git/worktrees')(
-      { query: { directory: '/repo' }, body: { directory: '/repo/wt', deleteLocalBranch: true } },
-      response,
-    );
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ success: true });
-    expect(gitLibraries.removeWorktree).toHaveBeenCalledWith('/repo', expect.objectContaining({
-      directory: '/repo/wt',
-      deleteLocalBranch: true,
-    }), { bootstrapStore: worktreeBootstrapStore });
-
-    const disposeInstance = gitLibraries.removeWorktree.mock.calls[0][1].disposeInstance;
-    fetchMock.mockImplementation(async (input, init) => (
-      new Request(input, init).method === 'GET'
-        ? createJsonResponse([{ directory: '/repo/wt' }])
-        : new Response(null, { status: 204 })
-    ));
-    await disposeInstance('/repo/wt');
-
-    const requests = fetchMock.mock.calls.map(([input, init]) => new Request(input, init));
-    const evictions = requests.filter((request) => request.method === 'DELETE');
-    expect(evictions).toHaveLength(1);
-    // OpenCode 2's location eviction; the v1 /instance/dispose route is gone.
-    const url = new URL(evictions[0].url);
-    expect(url.origin + url.pathname).toBe('http://opencode.test/api/debug/location');
-    expect(url.searchParams.get('location[directory]')).toBe('/repo/wt');
-    expect(evictions[0].headers.get('authorization')).toBe('Bearer test');
-  });
-
-  it('evicts every running location inside the removed worktree, such as a project folder', async () => {
-    gitLibraries.removeWorktree.mockResolvedValue(true);
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, {
-      worktreeBootstrapStore,
-      buildOpenCodeUrl: (routePath) => `http://opencode.test${routePath}`,
-      getOpenCodeAuthHeaders: () => ({}),
-    });
-    await getRoute('DELETE', '/api/git/worktrees')(
-      { query: { directory: '/repo/ai' }, body: { directory: '/repo/wt' } },
-      createMockResponse(),
-    );
-
-    const disposeInstance = gitLibraries.removeWorktree.mock.calls[0][1].disposeInstance;
-    fetchMock.mockImplementation(async (input, init) => (
-      new Request(input, init).method === 'GET'
-        ? createJsonResponse([
-          { directory: '/repo' },
-          { directory: '/repo/ai' },
-          { directory: '/repo/wt/ai' },
-          { directory: '/repo/wt/ai/src' },
-          { directory: '/repo/wt-other/ai' },
-        ])
-        : new Response(null, { status: 204 })
-    ));
-    await disposeInstance('/repo/wt');
-
-    const evicted = fetchMock.mock.calls
-      .map(([input, init]) => new Request(input, init))
-      .filter((request) => request.method === 'DELETE')
-      .map((request) => new URL(request.url).searchParams.get('location[directory]'));
-    expect(evicted.sort()).toEqual(['/repo/wt', '/repo/wt/ai', '/repo/wt/ai/src']);
-  });
-
-  it('still evicts the worktree root when the location list cannot be read, and reports the failure', async () => {
-    gitLibraries.removeWorktree.mockResolvedValue(true);
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, {
-      worktreeBootstrapStore,
-      buildOpenCodeUrl: (routePath) => `http://opencode.test${routePath}`,
-      getOpenCodeAuthHeaders: () => ({}),
-    });
-    await getRoute('DELETE', '/api/git/worktrees')(
-      { query: { directory: '/repo' }, body: { directory: '/repo/wt' } },
-      createMockResponse(),
-    );
-
-    const disposeInstance = gitLibraries.removeWorktree.mock.calls[0][1].disposeInstance;
-    fetchMock.mockImplementation(async (input, init) => (
-      new Request(input, init).method === 'GET'
-        ? createJsonResponse({ name: 'BadRequest', data: { message: 'List unavailable' } }, 400)
-        : new Response(null, { status: 204 })
-    ));
-    await expect(disposeInstance('/repo/wt')).rejects.toThrow('List unavailable');
-
-    const evicted = fetchMock.mock.calls
-      .map(([input, init]) => new Request(input, init))
-      .filter((request) => request.method === 'DELETE')
-      .map((request) => new URL(request.url).searchParams.get('location[directory]'));
-    expect(evicted).toEqual(['/repo/wt']);
-  });
-
-  it('rejects disposal errors so the removal wrapper can warn without failing', async () => {
-    gitLibraries.removeWorktree.mockResolvedValue(true);
-    fetchMock.mockImplementation(async (input, init) => (
-      new Request(input, init).method === 'GET'
-        ? createJsonResponse([])
-        : createJsonResponse({ name: 'BadRequest', data: { message: 'Bad request' } }, 400)
-    ));
-
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, {
-      worktreeBootstrapStore,
-      buildOpenCodeUrl: () => 'http://opencode.test/',
-      getOpenCodeAuthHeaders: () => ({}),
-    });
-
-    await getRoute('DELETE', '/api/git/worktrees')(
-      { query: { directory: '/repo' }, body: { directory: '/repo/wt' } },
-      createMockResponse(),
-    );
-
-    const disposeInstance = gitLibraries.removeWorktree.mock.calls[0][1].disposeInstance;
-    await expect(disposeInstance('/repo/wt')).rejects.toThrow('Bad request');
-  });
-
-  it('removes a worktree without a disposal hook when the runtime helpers are absent', async () => {
-    gitLibraries.removeWorktree.mockResolvedValue(true);
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, { worktreeBootstrapStore });
-
-    const response = createMockResponse();
-    await getRoute('DELETE', '/api/git/worktrees')(
-      { query: { directory: '/repo' }, body: { directory: '/repo/wt' } },
-      response,
-    );
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ success: true });
-    expect(gitLibraries.removeWorktree).toHaveBeenCalledWith('/repo', {
-      directory: '/repo/wt',
-      deleteLocalBranch: false,
-      disposeInstance: undefined,
-    }, { bootstrapStore: worktreeBootstrapStore });
+    try {
+      gitLibraries.removeWorktree.mockResolvedValue(true);
+      const worktreeBootstrapStore = { remove: vi.fn() };
+      const { app, getRoute } = createRouteRegistry();
+      registerGitRoutes(app, {
+        worktreeBootstrapStore,
+        ...(legacyHints ? { buildOpenCodeUrl: () => 'http://unused.invalid', getOpenCodeAuthHeaders: () => ({}) } : {}),
+      });
+      const response = createMockResponse();
+      await getRoute('DELETE', '/api/git/worktrees')(
+        { query: { directory: '/repo' }, body: { directory: '/repo/wt', deleteLocalBranch: true } }, response,
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual({ success: true });
+      expect(gitLibraries.removeWorktree).toHaveBeenCalledWith('/repo', expect.objectContaining({
+        directory: '/repo/wt', deleteLocalBranch: true,
+      }), { bootstrapStore: worktreeBootstrapStore });
+      expect(gitLibraries.removeWorktree.mock.calls.at(-1)[1].disposeInstance).toBeUndefined();
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
   });
 });
 

@@ -2338,7 +2338,7 @@ const removeCreateCommandLink = async (link: string | undefined, worktreeDirecto
   }
 };
 
-const runWorktreeStartScripts = async (directory, startCommand, signal) => {
+const runWorktreeStartScripts = async (directory, _projectDirectory, startCommand, signal) => {
  const extraCommand = String(startCommand || '').trim();
  if (!extraCommand) {
   return;

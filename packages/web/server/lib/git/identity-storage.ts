@@ -48,7 +48,7 @@ export type GitIdentityStoreOptions = {
 };
 
 const FILE_NAME = 'git-identities.json';
-const legacyDataDir = () => path.join(os.homedir(), '.config', 'openchamber');
+const legacyDataDir = () => path.join(os.homedir(), '.config', 'ohpichamber');
 const invalidStore = <Cause>(cause?: Cause) => Object.assign(new Error('Git identity profile store is invalid', { cause }), {
   code: 'GIT_IDENTITY_STORE_INVALID',
 });

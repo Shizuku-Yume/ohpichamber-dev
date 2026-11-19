@@ -30,10 +30,7 @@ const CLONE_CREDENTIAL = {
   credentialRevision: 3,
   providerUserId: 'https://example.com#42',
   status: 'valid',
-  // The plan reads the neutral transport credential (`secret`); `token` is
-  // kept for the fork's own resolver callbacks.
   secret: 'clone-secret',
-  token: 'clone-secret',
 };
 const temporaryDirectories = [];
 const execFileAsync = promisify(execFile);
@@ -44,7 +41,7 @@ const createLocalRepository = async () => {
   const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-local-integration-'));
   temporaryDirectories.push(parent);
   const directory = path.join(parent, 'repository');
-  const env = { ...process.env, LC_ALL: 'C', HOME: parent, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_LFS_SKIP_SMUDGE: '1' };
+  const env = { ...process.env, HOME: parent, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_LFS_SKIP_SMUDGE: '1' };
   await execFileAsync('git', ['init', '-b', 'published', directory], { env });
   const git = async (...args) => (await execFileAsync('git', args, { cwd: directory, env })).stdout.trim();
   await git('config', 'user.name', 'Fixture');
@@ -155,7 +152,7 @@ const createSpawn = (results = [], responder) => {
   return { spawnImpl, calls, children };
 };
 
-const setup = ({ mode = 'managed', transport = 'https', credentialId = 'opaque-credential', keyPath = '/keys/selected key', spawnResults, spawnResponder, env, timeoutMs, fsImpl, validateGitIdentity = async () => {}, validateManagedSshCredential, resolveSourceControlAccount = vi.fn(async () => CLONE_CREDENTIAL), applyGitIdentity, bindClonedRepository = async () => {}, inspectMergeState, enumerateManagedConfigKeys = vi.fn(async () => []), resolveChangeRequestSource, validateGitAuxiliaryContext, onCheckoutHydrated, auditStore, operationStore, authorityFor, trustedDirectoriesConfig } = {}) => {
+const setup = ({ mode = 'managed', transport = 'https', credentialId = 'opaque-credential', keyPath = '/keys/selected key', spawnResults, spawnResponder, env, timeoutMs, fsImpl, validateGitIdentity = async () => {}, validateManagedSshCredential, resolveSourceControlAccount = vi.fn(async () => CLONE_CREDENTIAL), applyGitIdentity, bindClonedRepository = async () => {}, inspectMergeState, enumerateManagedConfigKeys = vi.fn(async () => []), resolveChangeRequestSource, validateGitAuxiliaryContext, onCheckoutHydrated, auditStore, operationStore, authorityFor, trustedDirectoriesConfig, sourceControlProviders } = {}) => {
   const authority = {
     endpoint: transport === 'ssh' ? 'git@example.com:owner/repository.git' : ENDPOINT,
     endpointFingerprint: fingerprintRemoteUrl(transport === 'ssh' ? 'git@example.com:owner/repository.git' : ENDPOINT),
@@ -216,6 +213,7 @@ const setup = ({ mode = 'managed', transport = 'https', credentialId = 'opaque-c
     auditStore,
     operationStore,
     trustedDirectoriesConfig,
+    sourceControlProviders,
   });
   return { service, authority, validateGitTransportContext, resolveRef, resolveSymbolicRef, credentialResolver, credentialBroker, ...spawned };
 };
@@ -455,6 +453,34 @@ describe('Git network operations', () => {
         endpointFingerprint: fingerprintRemoteUrl(lfsEndpoint), sourceRef: 'refs/heads/feature' }] },
     }));
     expect(JSON.stringify(auditStore.plan.mock.calls)).not.toMatch(/https:\/\/|lfs-secret|parent-secret/);
+  });
+
+  it.each(['checkout inspection', 'publication preparation'])('accepts identical global and local canonical LFS filters during %s', async (operation) => {
+    const fixture = await createLfsPublicationFixture();
+    await fixture.git('checkout', 'feature');
+    fixture.env.GIT_CONFIG_GLOBAL = path.join(fixture.parent, 'global.gitconfig');
+    for (const [key, value] of [
+      ['filter.lfs.clean', 'git-lfs clean -- %f'],
+      ['filter.lfs.smudge', 'git-lfs smudge -- %f'],
+      ['filter.lfs.process', 'git-lfs filter-process'],
+      ['filter.lfs.required', 'true'],
+    ]) {
+      await fixture.git('config', '--global', key, value);
+      await fixture.git('config', '--local', key, value);
+    }
+    if (operation === 'checkout inspection') {
+      const result = await fixture.service.inspectCheckoutHydration({
+        directory: fixture.directory, parentEndpoint: ENDPOINT, parentRemoteName: 'publish',
+      });
+      expect(result.requirements).toEqual([{ kind: 'lfs', path: '.', endpoint: {
+        displayUrl: fixture.lfsEndpoint, fingerprint: fingerprintRemoteUrl(fixture.lfsEndpoint),
+      } }]);
+      expect(fixture.transfers.calls.some((call) => call.args.includes('fetch') || call.args.includes('push') || call.args.includes('clone'))).toBe(false);
+    } else {
+      const plan = await fixture.service.plan(fixture.pushRequest);
+      expect(await fixture.service.execute(plan.operationId)).toMatchObject({ state: 'succeeded' });
+      expect(fixture.transfers.calls.filter((call) => call.args.includes('push'))).toHaveLength(2);
+    }
   });
 
   it('publishes ordinary history without probing git-lfs or adding a network transfer', async () => {
@@ -944,7 +970,8 @@ describe('Git network operations', () => {
     expect(setupValue.calls).toHaveLength(1);
     const fetchCall = setupValue.calls[0];
     expect(fetchCall.args).toEqual(expect.arrayContaining([
-      'fetch', '--no-tags', '--', ENDPOINT, 'refs/heads/feature:refs/remotes/pr-alice/feature',
+      // Forced, so a force-pushed change request head still replaces the stale tracking ref.
+      'fetch', '--no-tags', '--', ENDPOINT, '+refs/heads/feature:refs/remotes/pr-alice/feature',
     ]));
     expect(fetchCall.options.env.GIT_ASKPASS).toBeUndefined();
     expect(fetchCall.options.env.SSH_AUTH_SOCK).toBeUndefined();
@@ -1470,6 +1497,54 @@ process.exit(safe ? 0 : 1);
     expect(setupValue.credentialBroker.revoke).toHaveBeenCalledWith(plan.operationId);
   });
 
+  it('pushes for review with the composed refspec, writes no tracking ref, and stops when the gate closed', async () => {
+    const changeHost = { ...giteaDescriptor, id: 'review', capabilities: { ...giteaDescriptor.capabilities, createVia: 'push' } };
+    let primaryOf = ['review'];
+    const reviewSetup = () => setup({
+      sourceControlProviders: createProviderDescriptors([giteaDescriptor, changeHost]),
+      authorityFor: (_input, authority) => ({ ...authority, primaryOf }),
+      spawnResponder: ({ args }) => (args.includes('check-ref-format') ? { code: 0, stdout: 'main\n' } : undefined),
+    });
+    const reviewRequest = request('push', { review: { target: 'main', topic: 'sync', wip: true } });
+    delete reviewRequest.destinationRef;
+
+    const setupValue = reviewSetup();
+    const plan = await setupValue.service.plan(reviewRequest);
+    expect(plan.target.destinationRef).toBe('refs/for/main');
+    await expect(setupValue.service.execute(plan.operationId)).resolves.toMatchObject({ state: 'succeeded' });
+    const pushes = setupValue.calls.filter((call) => call.args.includes('push'));
+    expect(pushes.map((call) => call.args.slice(-3))).toEqual([['--', ENDPOINT, `${SHA}:refs/for/main%topic=sync,wip`]]);
+    expect(setupValue.calls.some((call) => call.args.includes('update-ref'))).toBe(false);
+
+    // The association went away between plan and execute: nothing is sent.
+    const closed = reviewSetup();
+    const closedPlan = await closed.service.plan(reviewRequest);
+    primaryOf = [];
+    await expect(closed.service.execute(closedPlan.operationId)).resolves.toMatchObject({ state: 'conflicted', error: { code: 'REMOTE_CHANGED' } });
+    expect(closed.calls.some((call) => call.args.includes('push'))).toBe(false);
+  });
+
+  it('leads a refused push\'s error with the remote\'s rejection, without its progress output', async () => {
+    const stderr = [
+      'remote: Processing changes: refs: 1',
+      'remote: Processing changes: refs: 1, done',
+      'remote: ERROR: commit 1a2b3c4: missing Change-Id in message footer',
+      'remote:',
+      'remote: Hint: to automatically insert a Change-Id, install the hook:',
+      'To https://example.com/owner/repository.git',
+      ' ! [remote rejected] abc -> refs/for/main (commit 1a2b3c4: missing Change-Id in message footer)',
+      'error: failed to push some refs to \'https://example.com/owner/repository.git\'',
+    ].join('\n');
+    const setupValue = setup({ spawnResponder: ({ args }) => (args.includes('push') ? { code: 1, stderr } : undefined) });
+    const plan = await setupValue.service.plan(request());
+    const result = await setupValue.service.execute(plan.operationId);
+    expect(result.state).toBe('failed');
+    expect(result.error.message.split('\n')).toEqual([
+      '! [remote rejected] abc -> refs/for/main (commit 1a2b3c4: missing Change-Id in message footer)',
+      'remote: ERROR: commit 1a2b3c4: missing Change-Id in message footer',
+    ]);
+  });
+
   it('configures the exact local upstream only after a successful push', async () => {
     const setupValue = setup();
     const plan = await setupValue.service.plan(request('push', { configureUpstream: true }));
@@ -1636,7 +1711,7 @@ process.exit(safe ? 0 : 1);
   });
 
   it('forwards only the resolved SSH passphrase and redacts it from failed transfers', async () => {
-    const passphrase = 'ssh-passphrase-sentinel';
+    const passphrase = 'ssh-passphrase-canary';
     const setupValue = setup({ transport: 'ssh', env: { OPENCHAMBER_GIT_SSH_PASSPHRASE: 'ambient-secret',
       OPENCHAMBER_GIT_SSH_EXECUTABLE: '/ambient/ssh',
       SSH_ASKPASS: '/ambient/helper' }, spawnResults: [{ code: 1, stderr: `Permission denied ${passphrase}` }] });
@@ -2653,7 +2728,7 @@ process.exit(safe ? 0 : 1);
         return spawn(binary, args, options);
       },
     });
-    vi.stubEnv('OPENCHAMBER_DATA_DIR', parent);
+    vi.stubEnv('XDG_DATA_HOME', parent);
     const started = performance.now();
     try {
       const created = await createWorktree(directory, {
@@ -3270,7 +3345,9 @@ process.exit(safe ? 0 : 1);
     expect(setupValue.calls[0].args.slice(-6)).toEqual([
       'fetch', '--no-tags', '--no-recurse-submodules', '--', ENDPOINT, 'refs/heads/feature:refs/openchamber/network/git_operation_one',
     ]);
-    expect(setupValue.calls.find((call) => call.args.includes('rebase')).args.slice(-4)).toEqual(['rebase', '--no-verify', '--no-autostash', SHA]);
+    // Only the commits made since the remote copy was last seen are replayed.
+    expect(setupValue.calls.find((call) => call.args.includes('rebase')).args.slice(-7))
+      .toEqual(['rebase', '--no-verify', '--no-autostash', '--fork-point', '--onto', SHA, 'refs/remotes/publish/feature']);
     // The managed credential is revoked before integration; the tracking ref
     // must still move with the credential-free context.
     expect(setupValue.calls.map((call) => call.args.slice(-3)))
@@ -3341,9 +3418,10 @@ process.exit(safe ? 0 : 1);
     expect(setupValue.validateGitTransportContext.mock.calls.map(([value]) => [value.remote, value.endpointKind]))
       .toEqual(expect.arrayContaining([['upstream', 'fetch'], ['origin', 'push']]));
     expect(setupValue.calls[0].args.slice(-6)).toEqual([
-      'fetch', '--no-tags', '--no-recurse-submodules', '--', fetchEndpoint, 'refs/heads/main:refs/remotes/upstream/main',
+      'fetch', '--no-tags', '--no-recurse-submodules', '--', fetchEndpoint, '+refs/heads/main:refs/remotes/upstream/main',
     ]);
-    expect(setupValue.calls.find((call) => call.args.includes('rebase')).args.slice(-4)).toEqual(['rebase', '--no-verify', '--no-autostash', SHA]);
+    expect(setupValue.calls.find((call) => call.args.includes('rebase')).args.slice(-7))
+      .toEqual(['rebase', '--no-verify', '--no-autostash', '--fork-point', '--onto', SHA, 'refs/remotes/upstream/main']);
     expect(setupValue.calls.at(-2).args.slice(-4)).toEqual(['push', '--', pushEndpoint, `${SHA}:refs/heads/published`]);
     expect(setupValue.calls.at(-1).args.slice(-3)).toEqual(['update-ref', 'refs/remotes/origin/published', SHA]);
   });
@@ -4030,7 +4108,7 @@ process.exit(safe ? 0 : 1);
   });
 
   it('waits for a late filesystem mutation before recording timeout and cleaning it up', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.useFakeTimers({ toFake: ['Date'] });
     const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-network-clone-fs-timeout-'));
     temporaryDirectories.push(parent);
     const destination = path.join(parent, 'repository');

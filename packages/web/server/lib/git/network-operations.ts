@@ -1,55 +1,29 @@
 import { isGitString as isString } from './input-guards.js';
-
 import fs from 'node:fs/promises';
-
 import path from 'node:path';
-
 import { spawn } from 'node:child_process';
-
 import { constants as fsConstants } from 'node:fs';
-
 import { fileURLToPath } from 'node:url';
-
 import crypto from 'node:crypto';
-
 import os from 'node:os';
-
 import { createGitCredentialBroker, GIT_CREDENTIAL_NONCE_ENV } from './credential-broker.js';
-
 import { helperShellCommand } from './helper-launch.js';
-
 import { gitLfsCredentialEndpointAliases, normalizeGitRemoteEndpoint, parseGitCredentialReference } from './credential-resolver.js';
-
-import { createNetworkOperationPlanner } from './network-operation-plan.js';
-
+import { createNetworkOperationPlanner, isChangeReviewRemote } from './network-operation-plan.js';
 import { createNetworkOperationRegistry } from './network-operation-registry.js';
-
 import { createGitRedactor, redactGitText } from './redaction.js';
-
 import { parseSubmoduleManifest, SUBMODULE_DISCOVERY_LIMITS } from './submodule-discovery.js';
-
-import { createLfsFileScanner, discoverLfs, scanLfsPushObjects, resolveLfsPushConfig, LFS_DISCOVERY_LIMITS, SAFE_FILTERS, parseTreeObjects, scanLfsFiles } from './lfs-discovery.js';
-
+import { createLfsFileScanner, discoverLfs, scanLfsPushObjects, resolveLfsPushConfig, LFS_DISCOVERY_LIMITS, SAFE_FILTERS } from './lfs-discovery.js';
 import { resolveGitRelativeEndpoint } from './discovery-endpoint.js';
-
 import { fingerprintRemoteUrl, redactRemoteUrl } from '../source-control/url-redaction.js';
-
 import { birthtimeHoldsStill } from './directory-birthtime.js';
-
 import type { ChildProcess } from 'node:child_process';
-
 import type { Stats } from 'node:fs';
-
 import type { BinaryLike } from 'node:crypto';
-
 import type { LfsEndpoint, LfsObjectEntry } from './lfs-discovery.js';
-
 import type { JsonValue } from '../shared/json-values.js';
-
 import type { AuditPlan, AuditResultInput } from '../source-control/audit-storage.js';
-
 import type { EndpointDisplay, HydrationRequirement, HydrationTransfer } from './network-plan-contracts.js';
-
 import type {
   AuditPlans, AuxiliaryAuthority, CheckoutActionsPlan, CheckoutHydration, CheckoutTrustInput, ClonePlan,
   Completion, ContributorPlan, ContributorTransferSource, CopiedCheckoutEntry,
@@ -65,141 +39,104 @@ const occupied = <Value>(value: Value | undefined): Value => {
   if (value === undefined) throw new TypeError('Git execution invariant value is missing');
   return value;
 };
-
 type ErrorFields = {
   code?: unknown; message?: unknown; reason?: unknown; status?: unknown;
   cancelled?: unknown; timedOut?: unknown; stderr?: unknown; stdout?: unknown;
   hydrationHandled?: unknown;
 };
-
 const hasErrorFields = (value: unknown): value is ErrorFields => value !== null && value !== undefined;
-
 const errorFields = <Value>(value: Value): ErrorFields => hasErrorFields(value) ? value : {};
-
 const requiredErrorFields = <Value>(value: Value): ErrorFields => {
   if (!hasErrorFields(value)) throw new TypeError('Git error fields are missing');
   return value;
 };
-
 const isClonePlan = (plan: ExecutionPlan): plan is ClonePlan => plan.target.operation === 'clone';
-
 const isSyncPlan = (plan: ExecutionPlan): plan is SyncPlan => plan.target.operation === 'sync';
-
 const isHydrationPlan = (plan: ExecutionPlan): plan is HydrationPlan => plan.target.operation === 'checkout-hydration';
-
 const isContributorPlan = (plan: ExecutionPlan): plan is ContributorPlan => plan.target.operation === 'contributor-fetch';
-
 const isActionsPlan = (plan: ExecutionPlan): plan is CheckoutActionsPlan => plan.target.operation === 'checkout-actions';
-
 const isExistingPlan = (plan: ExecutionPlan): plan is ExistingPlan => !isClonePlan(plan)
   && !isSyncPlan(plan) && !isHydrationPlan(plan) && !isContributorPlan(plan) && !isActionsPlan(plan);
-
 const existingPlan = (plan: ExecutionPlan) => {
   if (!isExistingPlan(plan)) throw new TypeError('Existing Git execution plan is missing');
   return plan;
 };
-
 const resolvedLfsEndpoint = (endpoint: LfsEndpoint) => {
   if (endpoint.status !== 'resolved') throw new TypeError('Required LFS endpoint is missing');
   return endpoint;
 };
-
 const knownErrorCode = <Code>(code: Code) => {
   if (!isString(code)) throw new TypeError('Validated Git error code is missing');
   return code;
 };
-
 const isHydrationTransport = (plan: ExecutionPlan | TransportPlan): plan is HydrationPlan => plan.target.operation === 'checkout-hydration';
-
 const isSyncTransport = (plan: ExecutionPlan | TransportPlan): plan is SyncPlan => plan.target.operation === 'sync';
-
 const stringInvariant = (value: JsonValue | undefined) => {
   if (!isString(value)) throw new TypeError('Validated Git reference is missing');
   return value;
 };
-
 const hasNetworkRemote = (value: unknown): value is { name: string; endpoint: EndpointDisplay } => value !== null
   && typeof value === 'object' && 'name' in value && isString(value.name)
   && 'endpoint' in value && value.endpoint !== null && typeof value.endpoint === 'object'
   && 'displayUrl' in value.endpoint && isString(value.endpoint.displayUrl)
   && 'fingerprint' in value.endpoint && isString(value.endpoint.fingerprint);
-
 const syncRemote = (value: JsonValue | undefined) => {
   if (!hasNetworkRemote(value)) throw new TypeError('Validated Git remote is missing');
   return value;
 };
-
 type ContributorFields = {
   context?: unknown; sourceProject?: unknown; repositoryId?: unknown; bindingRevision?: unknown;
   accountId?: unknown; instance?: unknown; primaryRemote?: unknown; id?: unknown;
   headSha?: unknown; headRef?: unknown; endpoint?: unknown;
 };
-
 const hasContributorFields = (value: unknown): value is ContributorFields => value !== null && value !== undefined;
-
 const contributorFields = <Value>(value: Value): ContributorFields => {
   if (!hasContributorFields(value)) throw new TypeError('Contributor source fields are missing');
   return value;
 };
-
 type ResolvedCredential = Awaited<ReturnType<NonNullable<NetworkOperationsOptions['credentialResolver']>['resolve']>>;
-
 const managedCredential = (credential: ResolvedCredential) => {
   if (!('transport' in credential)) throw new TypeError('Managed Git credential is missing');
   return credential;
 };
-
 const requireHttpsCredential = (credential: ResolvedCredential | undefined) => {
   const managed = managedCredential(occupied(credential));
   if (managed.transport !== 'https') throw new TypeError('HTTPS Git credential is missing');
   return managed;
 };
-
 const requireSshCredential = (credential: ResolvedCredential | undefined) => {
   const managed = managedCredential(occupied(credential));
   if (managed.transport !== 'ssh') throw new TypeError('SSH Git credential is missing');
   return managed;
 };
-
 const isContributorTransport = (plan: TransportPlan): plan is TransportPlan & ContributorPlan => plan.target.operation === 'contributor-fetch';
-
 const hasExistingTransport = (plan: TransportPlan): plan is TransportPlan & ExistingPlan => plan.target.operation !== 'clone';
-
 const existingTransport = (plan: TransportPlan) => {
   if (!hasExistingTransport(plan)) throw new TypeError('Existing Git transport is missing');
   return plan;
 };
-
 const hasHydrationExistingPlan = (plan: HydrationPlan): plan is HydrationPlan & ExistingPlan => Boolean(plan.target.repositoryId);
-
 const hydrationExistingPlan = (plan: HydrationPlan) => {
   if (!hasHydrationExistingPlan(plan)) throw new TypeError('Bound checkout hydration plan is missing');
   return plan;
 };
-
 const rethrow = (error: Error): never => { throw error; };
-
 const commandAction = (action: Awaited<ReturnType<CheckoutTrustInput['inspect']>>['actions'][number]) => {
   if (action.kind === 'post-checkout-hook') throw new TypeError('Checkout command is missing');
   return action;
 };
-
 const hookAction = (action: Awaited<ReturnType<CheckoutTrustInput['inspect']>>['actions'][number]) => {
   if (action.kind !== 'post-checkout-hook') throw new TypeError('Checkout hook is missing');
   return action;
 };
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-
 const CLEANUP_TIMEOUT_MS = 5_000;
-
 const DEFAULT_OUTPUT_BYTES = 64 * 1024;
-
 const SSH_WRAPPER_PATH = fileURLToPath(new URL('./ssh-wrapper.js', import.meta.url));
 
 export const managedSshCommand = (privateKeyPath: string) =>
   `OPENCHAMBER_GIT_SSH_KEY=${shellQuote(privateKeyPath)} ${helperShellCommand(SSH_WRAPPER_PATH)}`;
-
 const MANAGED_ENV_NAMES = new Set([
   'GIT_ASKPASS', 'SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'GIT_CONFIG_COUNT',
   'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM',
@@ -212,23 +149,15 @@ const MANAGED_ENV_NAMES = new Set([
   'SSL_CERT_DIR', 'SSLKEYLOGFILE', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY',
   'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'NETRC',
 ]);
-
 const SHA_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i;
-
 const GITLINK_PATTERN = /^160000 commit ([0-9a-f]{40}(?:[0-9a-f]{24})?)(?: +-\t|\t)([^]+)$/;
-
 const INDEX_FILE_MODES = new Set(['100644', '100755', '120000', '160000']);
-
 const LINE_ENDING_CONFIG_PATTERN = 'core\\.(autocrlf|eol|safecrlf|attributesfile)';
 
 const operationError = <Details extends object, Status = number>(code: string, message: string, status: Status | number = 500, details: Details | Record<never, never> = {}) => Object.assign(new Error(message), details, { code, status });
-
 const publicError = <Code, Message>(code: Code, message: Message) => ({ code, message });
-
 const terminal = <Code, Message>(state: string, code: Code, message: Message): Completion => ({ state, error: publicError(code, message) });
-
 const INDEX_ENTRY_PATTERN = /^([0-7]{6}) ([0-9a-f]{40}(?:[0-9a-f]{24})?) ([0-3])\t([^]+)$/;
-
 const createIndexFilesStream = (scanner: ReturnType<typeof createLfsFileScanner>) => {
   let remainder: Buffer = Buffer.alloc(0);
   let batch: string[] = [];
@@ -288,7 +217,6 @@ const createIndexFilesStream = (scanner: ReturnType<typeof createLfsFileScanner>
     },
   });
 };
-
 const createGitlinksStream = () => {
   let remainder: Buffer = Buffer.alloc(0);
   let output = '';
@@ -318,16 +246,12 @@ const createGitlinksStream = () => {
     },
   });
 };
-
 const singleRefFetchRefspec = (sourceRef: string, destinationRef: string) => (
   `${destinationRef.startsWith('refs/remotes/') ? '+' : ''}${sourceRef}:${destinationRef}`
 );
-
 const fileIdentity = (stats: Stats) => `${stats.dev}:${stats.ino}`;
-
 const directoryIdentity = (stats: Stats, birthtimeHolds: boolean) => (birthtimeHolds
   ? `${fileIdentity(stats)}:${stats.birthtimeMs}` : fileIdentity(stats));
-
 const lstatSnapshot = (stats: Stats) => ({
   identity: fileIdentity(stats),
   mode: stats.mode,
@@ -335,18 +259,14 @@ const lstatSnapshot = (stats: Stats) => ({
   mtimeMs: stats.mtimeMs,
   ctimeMs: stats.ctimeMs,
 });
-
 const sameLstat = (stats: Stats, snapshot: LstatSnapshot) => stats
   && fileIdentity(stats) === snapshot.identity
   && stats.mode === snapshot.mode
   && stats.size === snapshot.size
   && stats.mtimeMs === snapshot.mtimeMs
   && stats.ctimeMs === snapshot.ctimeMs;
-
 const shellQuote = (value: string) => `'${String(value).replace(/'/g, `'\\''`)}'`;
-
 const contentDigest = (value: BinaryLike) => crypto.createHash('sha256').update(value).digest('base64url');
-
 const publicTransportForContributor = () => ({
   mode: 'managed', verification: { status: 'verified', method: 'credential' },
 });
@@ -369,7 +289,6 @@ const managedEnvironment = (source: NodeJS.ProcessEnv, platform: NodeJS.Platform
 };
 
 const TRUSTED_DIRECTORIES_READ_TIMEOUT_MS = 5_000;
-
 const gitConfigValue = (value: string) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 export const createTrustedDirectoriesConfig = ({
@@ -445,7 +364,6 @@ const HTTP_CONFIG_RESETS = new Map([
   ['delegation', 'none'],
   ['sslautoclientcert', 'false'],
 ]);
-
 const CREDENTIAL_CONFIG_RESETS = new Map([
   ['helper', ''],
   ['askpass', ''],
@@ -453,7 +371,6 @@ const CREDENTIAL_CONFIG_RESETS = new Map([
   ['interactive', 'false'],
   ['usehttppath', 'false'],
 ]);
-
 const configResetValue = (key: string) => {
   const normalized = key.toLowerCase();
   const suffix = normalized.slice(normalized.lastIndexOf('.') + 1);
@@ -513,10 +430,8 @@ const authorityCode = (cause: unknown) => {
   if (error?.code === 'INVALID_GIT_TRANSPORT_CONTEXT') return 'INVALID_REQUEST';
   return 'REMOTE_CHANGED';
 };
-
 const transportFailureCode = (text: string) => /authentication failed|permission denied|could not read username/i.test(text)
   ? 'AUTHENTICATION_FAILED' : 'TRANSPORT_FAILED';
-
 const isLeaseConflict = (text: string) => /stale info|force-with-lease|rejected.*stale/i.test(text);
 
 const phaseError = (controls: PhaseControls | undefined, deadline: number) => {
@@ -565,16 +480,13 @@ const awaitMutation = async <Value>(work: () => Promise<Value>, controls: PhaseC
 };
 
 const REJECTED_LINE_RE = /^!\s*\[(?:remote )?rejected\]/;
-
 const REMOTE_ERROR_LINE_RE = /^remote:\s*(?:error|fatal)\b/i;
-
 const remoteRejection = (detail: string) => {
   const lines = [...new Set(detail.split('\n').map((line) => line.trim()).filter(Boolean))];
   const rejected = lines.filter((line) => REJECTED_LINE_RE.test(line));
   const errors = lines.filter((line) => REMOTE_ERROR_LINE_RE.test(line));
   return rejected.length || errors.length ? [...rejected, ...errors].slice(0, 12).join('\n') : null;
 };
-
 const leadWithRejection = (text: string) => remoteRejection(text) ?? text;
 
 export function createNetworkOperations({
@@ -613,11 +525,10 @@ export function createNetworkOperations({
   onCheckoutHydrated,
   trustedDirectoriesConfig,
 }: NetworkOperationsOptions = {}) {
-if (!(validateGitTransportContext instanceof Function) || !(credentialResolver?.resolve instanceof Function)) {
+  if (!(validateGitTransportContext instanceof Function) || !(credentialResolver?.resolve instanceof Function)) {
     throw new TypeError('Git network operation dependencies are invalid');
   }
-
-const managedGitEnvironment = async () => {
+  const managedGitEnvironment = async () => {
     const env = managedEnvironment(inheritedEnv, platform);
     const trusted = trustedDirectoriesConfig instanceof Function
       ? await trustedDirectoriesConfig().catch(() => null)
@@ -626,20 +537,15 @@ const managedGitEnvironment = async () => {
     return env;
   };
 
-const cancelChild = (child: ChildProcess) => terminateProcessTree(child, { platform, spawnImpl, escalationMs });
-
-const registryOptions = { cancelChild, store: operationStore };
-
-const operationRegistry = registry ?? createNetworkOperationRegistry(registryOptions);
-
-if (auditStore && (!(auditStore.plan instanceof Function)
+  const cancelChild = (child: ChildProcess) => terminateProcessTree(child, { platform, spawnImpl, escalationMs });
+  const registryOptions = { cancelChild, store: operationStore };
+  const operationRegistry = registry ?? createNetworkOperationRegistry(registryOptions);
+  if (auditStore && (!(auditStore.plan instanceof Function)
     || !(auditStore.start instanceof Function) || !(auditStore.finish instanceof Function))) {
     throw new TypeError('Git network operation audit store is invalid');
   }
-
-let brokerStart: Promise<void> | null = null;
-
-const startBroker = () => {
+  let brokerStart: Promise<void> | null = null;
+  const startBroker = () => {
     credentialBroker ??= createGitCredentialBroker();
     brokerStart ??= credentialBroker.start().catch((error) => {
       brokerStart = null;
@@ -648,13 +554,10 @@ const startBroker = () => {
     return brokerStart;
   };
 
-async function run(options: RunOptions & { rawOutput: true }): Promise<RunResult<Buffer>>;
-
-async function run(options: RunOptions & { rawOutput?: false }): Promise<RunResult>;
-
-async function run(options: RunOptions): Promise<RunResult<string | Buffer>>;
-
-async function run({
+  async function run(options: RunOptions & { rawOutput: true }): Promise<RunResult<Buffer>>;
+  async function run(options: RunOptions & { rawOutput?: false }): Promise<RunResult>;
+  async function run(options: RunOptions): Promise<RunResult<string | Buffer>>;
+  async function run({
     binary = gitBinary,
     cwd,
     args,
@@ -772,7 +675,7 @@ async function run({
     });
   }
 
-const queryGit = async (directory: string, args: string[], { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
+  const queryGit = async (directory: string, args: string[], { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
     const result = await run({
       cwd: directory,
       args,
@@ -786,20 +689,17 @@ const queryGit = async (directory: string, args: string[], { controls, deadline 
     }
     return result.stdout.trim();
   };
-
-const resolveRefImpl = resolveRef ?? ((directory, ref, options) => queryGit(
+  const resolveRefImpl = resolveRef ?? ((directory, ref, options) => queryGit(
     directory,
     ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
     options,
   ));
-
-const resolveSymbolicRefImpl = resolveSymbolicRef ?? ((directory, options) => queryGit(
+  const resolveSymbolicRefImpl = resolveSymbolicRef ?? ((directory, options) => queryGit(
     directory,
     ['symbolic-ref', '-q', 'HEAD'],
     options,
   ));
-
-const enumerateManagedConfigKeysImpl = enumerateManagedConfigKeys ?? (async (plan: TransportPlan, controls: ExecutionControls, deadline: number, env: NodeJS.ProcessEnv) => {
+  const enumerateManagedConfigKeysImpl = enumerateManagedConfigKeys ?? (async (plan: TransportPlan, controls: ExecutionControls, deadline: number, env: NodeJS.ProcessEnv) => {
     const result = await run({
       cwd: plan.directory ?? pathImpl.dirname(occupied(plan.destination)),
       args: ['config', '--includes', '--name-only', '--get-regexp', plan.transportMode === 'anonymous' ? '^(http|credential|url)\\.' : '^(http|credential)\\.'],
@@ -813,8 +713,7 @@ const enumerateManagedConfigKeysImpl = enumerateManagedConfigKeys ?? (async (pla
     }
     return result.stdout.split(/\r?\n/).filter(Boolean);
   });
-
-const resolveRemoteFetchMappingImpl = resolveRemoteFetchMapping ?? (async (directory: string, remoteName: string, { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
+  const resolveRemoteFetchMappingImpl = resolveRemoteFetchMapping ?? (async (directory: string, remoteName: string, { controls, deadline = Date.now() + timeoutMs }: PhaseOptions = {}) => {
     let result;
     try {
       result = await run({
@@ -832,8 +731,7 @@ const resolveRemoteFetchMappingImpl = resolveRemoteFetchMapping ?? (async (direc
     }
     return result.stdout;
   });
-
-const checkBranchNameImpl = async (directory: string, name: string) => {
+  const checkBranchNameImpl = async (directory: string, name: string) => {
     const result = await run({
       cwd: directory,
       args: ['check-ref-format', '--branch', name],
@@ -842,15 +740,16 @@ const checkBranchNameImpl = async (directory: string, name: string) => {
     });
     return result.code === 0 && !result.timedOut && !result.cancelled ? result.stdout.trim() : null;
   };
-
-const planner = createNetworkOperationPlanner({
+  const planner = createNetworkOperationPlanner({
     validateGitTransportContext,
     validateManagedSshCredential,
     resolveSourceControlAccount,
+    sourceControlProviders,
     contributorProvenance,
     resolveRef: resolveRefImpl,
     resolveSymbolicRef: resolveSymbolicRefImpl,
     resolveRemoteFetchMapping: resolveRemoteFetchMappingImpl,
+    checkBranchName: checkBranchNameImpl,
     inspectCheckoutHydration: (input) => inspectCheckoutHydration(input),
     runtimeIdentity,
     idFactory,
@@ -858,7 +757,7 @@ const planner = createNetworkOperationPlanner({
     pathImpl,
   });
 
-const mergedTransportRevision = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+  const mergedTransportRevision = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
     let authority;
     try {
       authority = await awaitPhase(() => validateGitTransportContext({
@@ -877,8 +776,8 @@ const mergedTransportRevision = async (plan: ExistingPlan, controls: ExecutionCo
     return authority.transportRevision;
   };
 
-const revalidate = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
-if (plan.contributorAuthority) {
+  const revalidate = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+    if (plan.contributorAuthority) {
       const record = await awaitPhase(() => occupied(contributorProvenance).read(plan.directory), controls, deadline);
       if (record.worktreeId !== plan.contributorAuthority.worktreeId
         || record.revision !== plan.contributorAuthority.revision
@@ -886,10 +785,8 @@ if (plan.contributorAuthority) {
         throw operationError('STALE_CONFIG', 'Contributor worktree provenance changed', 409);
       }
     }
-
-let authority;
-
-try {
+    let authority;
+    try {
       authority = await awaitPhase(() => validateGitTransportContext({
         directory: plan.directory,
         repositoryId: plan.target.repositoryId,
@@ -903,20 +800,17 @@ try {
       if (error?.cancelled || error?.timedOut) throw cause;
       throw operationError(authorityCode(error), 'Git network operation authority changed', error?.status ?? 409);
     }
-
-if (authority.endpoint !== plan.rawEndpoint
+    if (authority.endpoint !== plan.rawEndpoint
       || authority.endpointFingerprint !== plan.target.remote.endpoint.fingerprint
       || authority.transportMode !== plan.transportMode
       || authority.transportRevision !== plan.transportRevision
       || (authority.credentialId ?? null) !== (plan.credentialId ?? null)) {
       throw operationError('REMOTE_CHANGED', 'Git remote or transport binding changed', 409);
     }
-
-if (plan.changeReviewRemote && !isChangeReviewRemote(authority, sourceControlProviders)) {
+    if (plan.changeReviewRemote && !isChangeReviewRemote(authority, sourceControlProviders)) {
       throw operationError('REMOTE_CHANGED', 'The remote is no longer a change host\'s primary remote', 409);
     }
-
-if (plan.sourceSha) {
+    if (plan.sourceSha) {
       const sourceSha = String(await awaitPhase(
         () => resolveRefImpl(plan.directory, occupied(plan.target.sourceRef), { controls, deadline }), controls, deadline,
       )).toLowerCase();
@@ -924,8 +818,7 @@ if (plan.sourceSha) {
         throw operationError('STALE_CONFIG', 'Git source ref changed after planning', 409);
       }
     }
-
-if (plan.target.operation === 'fetch' && plan.target.fetchScope === 'remote') {
+    if (plan.target.operation === 'fetch' && plan.target.fetchScope === 'remote') {
       const output = await awaitPhase(
         () => resolveRemoteFetchMappingImpl(plan.directory, plan.target.remote.name, { controls, deadline }), controls, deadline,
       );
@@ -933,9 +826,8 @@ if (plan.target.operation === 'fetch' && plan.target.fetchScope === 'remote') {
         throw operationError('STALE_CONFIG', 'Remote Fetch mapping changed after planning', 409);
       }
     }
-};
-
-const revalidateContributorSource = async (plan: ContributorPlan, controls: ExecutionControls, deadline: number) => {
+  };
+  const revalidateContributorSource = async (plan: ContributorPlan, controls: ExecutionControls, deadline: number) => {
     if (!(resolveChangeRequestSource instanceof Function)) {
       throw operationError('RUNTIME_UNSUPPORTED', 'Contributor source resolution is unavailable', 501);
     }
@@ -965,15 +857,14 @@ const revalidateContributorSource = async (plan: ContributorPlan, controls: Exec
     }
   };
 
-const revalidatePullHead = async (plan: { directory: string; destinationSha?: string; target: { destinationRef?: string } }, controls: ExecutionControls, deadline: number) => {
+  const revalidatePullHead = async (plan: { directory: string; destinationSha?: string; target: { destinationRef?: string } }, controls: ExecutionControls, deadline: number) => {
     const headRef = await awaitPhase(() => resolveSymbolicRefImpl(plan.directory, { controls, deadline }), controls, deadline);
     const headSha = await awaitPhase(() => resolveRefImpl(plan.directory, occupied(plan.target.destinationRef), { controls, deadline }), controls, deadline);
     if (headRef !== plan.target.destinationRef || String(headSha).toLowerCase() !== plan.destinationSha) {
       throw operationError('STALE_CONFIG', 'Checked out branch changed after pull planning', 409);
     }
   };
-
-const hasMergeState = inspectMergeState ?? (async (directory: string) => {
+  const hasMergeState = inspectMergeState ?? (async (directory: string) => {
     const dotGit = pathImpl.join(directory, '.git');
     let gitDirectory = dotGit;
     const stats = await fsImpl.stat(dotGit);
@@ -994,7 +885,7 @@ const hasMergeState = inspectMergeState ?? (async (directory: string) => {
     return false;
   });
 
-const transport = async (plan: TransportPlan, controls: ExecutionControls, deadline: number): Promise<LeasedTransportContext> => {
+  const transport = async (plan: TransportPlan, controls: ExecutionControls, deadline: number): Promise<LeasedTransportContext> => {
     const anonymous = plan.transportMode === 'anonymous';
     if (anonymous && (plan.credentialId !== undefined || !['fetch', 'pull', 'clone'].includes(plan.target.operation))) {
       throw operationError('INVALID_REQUEST', 'Anonymous Git transport is read-only and credential-free', 400);
@@ -1113,18 +1004,13 @@ const transport = async (plan: TransportPlan, controls: ExecutionControls, deadl
     };
   };
 
-const trackingRefOf = (plan: ExistingPlan, remoteRef: string) => (remoteRef.startsWith('refs/heads/')
+  const trackingRefOf = (plan: ExistingPlan, remoteRef: string) => (remoteRef.startsWith('refs/heads/')
     ? `refs/remotes/${plan.target.remote.name}/${remoteRef.slice('refs/heads/'.length)}`
     : null);
-
-const recordRemoteTrackingRef = async (plan: ExistingPlan, controls: ExecutionControls, context: TransportContext | undefined, deadline: number, sha: string | null | undefined, remoteRef = plan.target.destinationRef) => {
-if (!remoteRef.startsWith('refs/heads/')) return;
-
-const trackingRef = trackingRefOf(plan, occupied(remoteRef));
-
-if (!trackingRef) return null;
-
-try {
+  const recordRemoteTrackingRef = async (plan: ExistingPlan, controls: ExecutionControls, context: TransportContext | undefined, deadline: number, sha: string | null | undefined, remoteRef = plan.target.destinationRef) => {
+    const trackingRef = trackingRefOf(plan, occupied(remoteRef));
+    if (!trackingRef) return null;
+    try {
       await commandResult(plan, controls, sha ? ['update-ref', trackingRef, sha] : ['update-ref', '-d', trackingRef], context, deadline);
       return sha ? trackingRef : null;
     } catch (cause) {
@@ -1132,13 +1018,13 @@ try {
       if (error?.cancelled || error?.timedOut || error?.code === 'CANCELLED' || error?.code === 'TIMEOUT') throw cause;
       return null;
     }
-};
+  };
 
-const pullRebaseArgs = (fetchedSha: string, trackingRef: string | null) => (trackingRef
+  const pullRebaseArgs = (fetchedSha: string, trackingRef: string | null) => (trackingRef
     ? ['rebase', '--no-verify', '--no-autostash', '--fork-point', '--onto', fetchedSha, trackingRef]
     : ['rebase', '--no-verify', '--no-autostash', fetchedSha]);
 
-const commandResult = async (plan: Pick<TransportPlan, 'operationId' | 'directory' | 'destination' | 'temporaryDirectory'>, controls: ExecutionControls, args: string[], context: TransportContext | undefined, deadline: number, options: {
+  const commandResult = async (plan: Pick<TransportPlan, 'operationId' | 'directory' | 'destination' | 'temporaryDirectory'>, controls: ExecutionControls, args: string[], context: TransportContext | undefined, deadline: number, options: {
     localRefCleanup?: boolean; cwd?: string; transfer?: boolean; transferRole?: string;
   } = {}) => {
     const localRefCleanup = options.localRefCleanup === true
@@ -1164,7 +1050,7 @@ const commandResult = async (plan: Pick<TransportPlan, 'operationId' | 'director
     throw operationError(transportFailureCode(detail), detail, 500, result);
   };
 
-const refuseRemoteDefaultBranch = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+  const refuseRemoteDefaultBranch = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
     const probe = await transport(plan, controls, deadline);
     let output;
     try {
@@ -1178,7 +1064,7 @@ const refuseRemoteDefaultBranch = async (plan: ExistingPlan, controls: Execution
     }
   };
 
-const localIntegrationContext = async (directory: string, controls: ExecutionControls, deadline: number) => {
+  const localIntegrationContext = async (directory: string, controls: ExecutionControls, deadline: number) => {
     const env = {
       ...await managedGitEnvironment(),
       GIT_ALLOW_PROTOCOL: '', GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_LFS_SKIP_SMUDGE: '1',
@@ -1232,7 +1118,7 @@ const localIntegrationContext = async (directory: string, controls: ExecutionCon
     return { env, configArgs, secrets: [] };
   };
 
-const hydrationStatus = (submodules: HydrationPart[], lfs: HydrationPart[]) => {
+  const hydrationStatus = (submodules: HydrationPart[], lfs: HydrationPart[]) => {
     const statuses = [...submodules, ...lfs].map((entry) => entry.status);
     if (!statuses.length || statuses.every((status) => status === 'not-needed')) return 'not-needed';
     for (const status of ['cancelled', 'invalid', 'client-missing', 'authorization-required', 'failed']) {
@@ -1240,8 +1126,7 @@ const hydrationStatus = (submodules: HydrationPart[], lfs: HydrationPart[]) => {
     }
     return 'succeeded';
   };
-
-const hydrationError = (cause: unknown): HydrationFailure => {
+  const hydrationError = (cause: unknown): HydrationFailure => {
     const error = errorFields(cause);
     if (error?.code === 'RUNTIME_UNSUPPORTED') {
       return { status: 'failed', error: publicError('RUNTIME_UNSUPPORTED', 'Checkout hydration transport is unavailable') };
@@ -1262,12 +1147,9 @@ const hydrationError = (cause: unknown): HydrationFailure => {
     }
     return { status: 'failed', error: publicError('TRANSPORT_FAILED', 'Checkout hydration failed') };
   };
-
-function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options: LocalGitOptions & { rawOutput: true }): Promise<Buffer>;
-
-function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options?: LocalGitOptions & { rawOutput?: false }): Promise<string>;
-
-async function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, {
+  function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options: LocalGitOptions & { rawOutput: true }): Promise<Buffer>;
+  function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, options?: LocalGitOptions & { rawOutput?: false }): Promise<string>;
+  async function localGit(directory: string, args: string[], controls: ExecutionControls | undefined, deadline: number, {
     input, allowedCodes = [0], disableLfsFilters = false,
     maxOutputBytes = outputLimitBytes, rawOutput = false,
     onStdout,
@@ -1294,8 +1176,7 @@ async function localGit(directory: string, args: string[], controls: ExecutionCo
     }
     return result.stdout;
   }
-
-const currentAuxiliaryAuthority = async (hydrationPlan: Pick<HydrationPlan, 'auxiliaryGrants' | 'repositoryAuthority' | 'directory' | 'authorityDirectory' | 'parentRemoteName'>, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls | undefined, deadline: number): Promise<AuxiliaryAuthority> => {
+  const currentAuxiliaryAuthority = async (hydrationPlan: Pick<HydrationPlan, 'auxiliaryGrants' | 'repositoryAuthority' | 'directory' | 'authorityDirectory' | 'parentRemoteName'>, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls | undefined, deadline: number): Promise<AuxiliaryAuthority> => {
     const fingerprint = fingerprintRemoteUrl(rawEndpoint);
     const displayUrl = redactRemoteUrl(rawEndpoint);
     if (hydrationPlan.auxiliaryGrants) {
@@ -1316,14 +1197,12 @@ const currentAuxiliaryAuthority = async (hydrationPlan: Pick<HydrationPlan, 'aux
     if (hydrationPlan.parentRemoteName) input.parentRemote = hydrationPlan.parentRemoteName;
     return await awaitPhase(() => validateGitAuxiliaryContext(input), controls, deadline);
   };
-
-const sameAuxiliaryAuthority = (left: AuxiliaryAuthority, right: AuxiliaryAuthority) => (left.endpoint ?? left.rawEndpoint) === (right.endpoint ?? right.rawEndpoint)
+  const sameAuxiliaryAuthority = (left: AuxiliaryAuthority, right: AuxiliaryAuthority) => (left.endpoint ?? left.rawEndpoint) === (right.endpoint ?? right.rawEndpoint)
     && left.endpointFingerprint === right.endpointFingerprint
     && left.transportMode === right.transportMode
     && (left.credentialId ?? null) === (right.credentialId ?? null)
     && (left.transportRevision ?? null) === (right.transportRevision ?? null);
-
-const auxiliaryTransport = async (hydrationPlan: HydrationPlan, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls, deadline: number, foundAfterPlanning = false) => {
+  const auxiliaryTransport = async (hydrationPlan: HydrationPlan, kind: 'submodule' | 'lfs', rawEndpoint: string, controls: ExecutionControls, deadline: number, foundAfterPlanning = false) => {
     const pinned = hydrationPlan.plannedAuxiliaryAuthorities?.find((candidate) => candidate.kind === kind
       && candidate.rawEndpoint === rawEndpoint);
     if (hydrationPlan.plannedAuxiliaryAuthorities && !pinned && !foundAfterPlanning) {
@@ -1354,7 +1233,7 @@ const auxiliaryTransport = async (hydrationPlan: HydrationPlan, kind: 'submodule
     return { authority, auxiliaryPlan, context, foundAfterPlanning };
   };
 
-const auxiliaryTransfer = async (transfer: Awaited<ReturnType<typeof auxiliaryTransport>>, hydrationPlan: HydrationPlan, controls: ExecutionControls, args: string[], context: TransportContext, deadline: number) => {
+  const auxiliaryTransfer = async (transfer: Awaited<ReturnType<typeof auxiliaryTransport>>, hydrationPlan: HydrationPlan, controls: ExecutionControls, args: string[], context: TransportContext, deadline: number) => {
     const execute = () => commandResult(transfer.auxiliaryPlan, controls, args, context, deadline, { transfer: true });
     if (!auditStore || !transfer.foundAfterPlanning) return execute();
     const { authority, auxiliaryPlan } = transfer;
@@ -1390,7 +1269,7 @@ const auxiliaryTransfer = async (transfer: Awaited<ReturnType<typeof auxiliaryTr
     }
   };
 
-const prepareHydrationPlans = async (plans: AuditPlans, deadline: number): Promise<AuditPlans> => {
+  const prepareHydrationPlans = async (plans: AuditPlans, deadline: number): Promise<AuditPlans> => {
     if (plans.internalPlan.target?.operation !== 'checkout-hydration') return plans;
     const authorities = [];
     const seen = new Set();
@@ -1433,15 +1312,13 @@ const prepareHydrationPlans = async (plans: AuditPlans, deadline: number): Promi
       internalPlan: { ...plans.internalPlan, plannedAuxiliaryAuthorities: authorities },
     };
   };
-
-const nullConfigRecords = (output: string, pattern: RegExp) => output ? output.split('\0').filter(Boolean).flatMap((record) => {
+  const nullConfigRecords = (output: string, pattern: RegExp) => output ? output.split('\0').filter(Boolean).flatMap((record) => {
     const separator = record.indexOf('\n');
     if (separator < 1) return [];
     const key = record.slice(0, separator);
     return pattern.test(key) ? [{ key, value: record.slice(separator + 1) }] : [];
   }) : [];
-
-const inspectSubmoduleDirectory = async (directory: string, relativePath: string) => {
+  const inspectSubmoduleDirectory = async (directory: string, relativePath: string) => {
     const parts = relativePath.split('/');
     let current = directory;
     for (let index = 0; index < parts.length; index += 1) {
@@ -1467,8 +1344,7 @@ const inspectSubmoduleDirectory = async (directory: string, relativePath: string
     }
     return { path: current, exists: true, ownsRepository: true };
   };
-
-const ensureSubmoduleParentDirectories = async (directory: string, relativePath: string, controls: ExecutionControls, deadline: number) => {
+  const ensureSubmoduleParentDirectories = async (directory: string, relativePath: string, controls: ExecutionControls, deadline: number) => {
     const parts = relativePath.split('/');
     let current = directory;
     for (const part of parts.slice(0, -1)) {
@@ -1487,7 +1363,7 @@ const ensureSubmoduleParentDirectories = async (directory: string, relativePath:
     }
   };
 
-const inspectSingleCheckoutHydration = async ({ directory, parentEndpoint, parentRemoteName, controls, deadline = Date.now() + timeoutMs }: HydrationInspectionInput) => {
+  const inspectSingleCheckoutHydration = async ({ directory, parentEndpoint, parentRemoteName, controls, deadline = Date.now() + timeoutMs }: HydrationInspectionInput) => {
     const headSha = (await localGit(directory, ['rev-parse', '--verify', 'HEAD'], controls, deadline)).trim().toLowerCase();
     if (!SHA_PATTERN.test(headSha)) throw operationError('STALE_CONFIG', 'Checkout HEAD is invalid', 409);
     const configOutput = await localGit(directory, [
@@ -1549,7 +1425,7 @@ const inspectSingleCheckoutHydration = async ({ directory, parentEndpoint, paren
     return Object.freeze({ headSha, requirements, children, sourceRequired });
   };
 
-const inspectCheckoutHydration = async (input: HydrationInspectionInput) => {
+  const inspectCheckoutHydration = async (input: HydrationInspectionInput) => {
     const requirements: HydrationRequirement[] = [];
     const transfers: HydrationTransfer[] = [];
     let requirementCount = 0;
@@ -1619,7 +1495,7 @@ const inspectCheckoutHydration = async (input: HydrationInspectionInput) => {
     return Object.freeze({ headSha, requirements, transfers, sourceRequired });
   };
 
-const hydrateCheckout = async (hydrationPlan: HydrationPlan, controls: ExecutionControls, deadline: number): Promise<CheckoutHydration> => {
+  const hydrateCheckout = async (hydrationPlan: HydrationPlan, controls: ExecutionControls, deadline: number): Promise<CheckoutHydration> => {
     const submodules: HydrationPart[] = [];
     const lfs: HydrationPart[] = [];
     let moduleCount = 0;
@@ -1799,7 +1675,7 @@ const hydrateCheckout = async (hydrationPlan: HydrationPlan, controls: Execution
     return Object.freeze({ status: hydrationStatus(submodules, lfs), submodules, lfs });
   };
 
-const cancellationResult = (plan: { target: { operation: string } }, controls: ExecutionControls, cause: unknown) => {
+  const cancellationResult = (plan: { target: { operation: string } }, controls: ExecutionControls, cause: unknown) => {
     const error = errorFields(cause);
     if ((plan.target.operation === 'push' || plan.target.operation === 'delete-remote-branch')
       && controls.hasTransferStarted()) {
@@ -1810,7 +1686,7 @@ const cancellationResult = (plan: { target: { operation: string } }, controls: E
       : 'Git network operation was cancelled');
   };
 
-const safeRevoke = async (context: LeasedTransportContext | undefined, operationId: string) => {
+  const safeRevoke = async (context: LeasedTransportContext | undefined, operationId: string) => {
     let cleanupFailed = false;
     try {
       if (context && await context.revoke() === false) cleanupFailed = true;
@@ -1821,7 +1697,7 @@ const safeRevoke = async (context: LeasedTransportContext | undefined, operation
     return cleanupFailed;
   };
 
-const prepareLfsPublication = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
+  const prepareLfsPublication = async (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => {
     if (plan.transportMode !== 'managed' || plan.target.operation !== 'push') return false;
     let root: string | undefined;
     let context: LeasedTransportContext | undefined;
@@ -1960,22 +1836,15 @@ const prepareLfsPublication = async (plan: ExistingPlan, controls: ExecutionCont
     return uploaded;
   };
 
-const executeExisting = async (plan: ExistingPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
-let context: LeasedTransportContext | undefined;
-
-let result: Completion | undefined;
-
-let temporaryRef: string | undefined;
-
-let integrationContext: TransportContext | undefined;
-
-let mergeStarted = false;
-
-let pushTransferred = false;
-
-let lfsUploaded = false;
-
-try {
+  const executeExisting = async (plan: ExistingPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
+    let context: LeasedTransportContext | undefined;
+    let result: Completion | undefined;
+    let temporaryRef: string | undefined;
+    let integrationContext: TransportContext | undefined;
+    let mergeStarted = false;
+    let pushTransferred = false;
+    let lfsUploaded = false;
+    try {
       await revalidate(plan, controls, deadline);
       if (plan.target.operation === 'pull') await revalidatePullHead(plan, controls, deadline);
       await controls.markStepCompleted('validated');
@@ -2086,9 +1955,8 @@ try {
       }
     }
 
-let cleanupFailed = false;
-
-if (temporaryRef && plan.target.operation === 'pull') {
+    let cleanupFailed = false;
+    if (temporaryRef && plan.target.operation === 'pull') {
       try {
         const cleanupContext = integrationContext ?? context ?? {
           env: { ...await managedGitEnvironment(), GIT_ALLOW_PROTOCOL: '', GIT_NO_LAZY_FETCH: '1' },
@@ -2100,36 +1968,26 @@ if (temporaryRef && plan.target.operation === 'pull') {
         cleanupFailed = true;
       }
     }
-
-cleanupFailed = await safeRevoke(context, plan.operationId) || cleanupFailed;
-
-if (cleanupFailed && result?.state === 'succeeded') {
+    cleanupFailed = await safeRevoke(context, plan.operationId) || cleanupFailed;
+    if (cleanupFailed && result?.state === 'succeeded') {
       return terminal('failed', 'UNKNOWN', 'Git network operation cleanup failed');
     }
+    return result ?? terminal('failed', 'UNKNOWN', 'Git network operation failed');
+  };
 
-return result ?? terminal('failed', 'UNKNOWN', 'Git network operation failed');
-};
-
-const executeSync = async (plan: SyncPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
-const results = new Map<string, { step: string; status: string; error?: PublicFailure }>();
-
-let activeStep = 'fetch';
-
-let context: LeasedTransportContext | undefined;
-
-let mergeStarted = false;
-
-let hydration: CheckoutHydration | undefined;
-
-let lfsUploaded = false;
-
-const step = (name: string, status: string, error?: PublicFailure) => {
+  const executeSync = async (plan: SyncPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
+    const results = new Map<string, { step: string; status: string; error?: PublicFailure }>();
+    let activeStep = 'fetch';
+    let context: LeasedTransportContext | undefined;
+    let mergeStarted = false;
+    let hydration: CheckoutHydration | undefined;
+    let lfsUploaded = false;
+    const step = (name: string, status: string, error?: PublicFailure) => {
       const value: NonNullable<Completion['stepResults']>[number] = { step: name, status };
       if (error) value.error = error;
       results.set(name, value);
     };
-
-const completion = (state: string, error?: PublicFailure) => {
+    const completion = (state: string, error?: PublicFailure) => {
       const value: Completion = {
         state,
         stepResults: ['fetch', 'pull', 'push'].map((name) => results.get(name) ?? { step: name, status: 'skipped' }),
@@ -2138,26 +1996,21 @@ const completion = (state: string, error?: PublicFailure) => {
       if (hydration) value.hydration = hydration;
       return value;
     };
-
-const syncPlan = (role: 'fetch' | 'push') => ({
+    const syncPlan = (role: 'fetch' | 'push') => ({
       ...plan[role],
       operationId: plan.operationId,
       transportRole: role,
       target: { ...plan[role].target, remote: syncRemote(plan[role].target.remote),
         sourceRef: stringInvariant(plan[role].target.sourceRef), destinationRef: stringInvariant(plan[role].target.destinationRef) },
     });
-
-const fetchPlan = syncPlan('fetch');
-
-let pushPlan = syncPlan('push');
-
-const headPlan = {
+    const fetchPlan = syncPlan('fetch');
+    let pushPlan = syncPlan('push');
+    const headPlan = {
       directory: plan.directory,
       destinationSha: plan.destinationSha,
       target: { destinationRef: plan.target.pull.destinationRef },
     };
-
-try {
+    try {
       await revalidate(fetchPlan, controls, deadline);
       await revalidatePullHead(headPlan, controls, deadline);
       await controls.markStepCompleted('validated');
@@ -2292,9 +2145,9 @@ try {
       return completion(partial ? 'partial' : 'failed', partial && ['GIT_LFS_CLIENT_MISSING', 'INVALID_REQUEST'].includes(code)
         ? publicError('TRANSPORT_FAILED', publicFailure.message) : publicFailure);
     }
-};
+  };
 
-const copyCheckout = async (source: string, destination: string, copiedEntries: CopiedCheckoutEntry[], controls: ExecutionControls, deadline: number, birthtimeHolds: boolean): Promise<void> => {
+  const copyCheckout = async (source: string, destination: string, copiedEntries: CopiedCheckoutEntry[], controls: ExecutionControls, deadline: number, birthtimeHolds: boolean): Promise<void> => {
     const entries = await awaitPhase(() => fsImpl.readdir(source), controls, deadline);
     for (const entry of entries) {
       const sourcePath = pathImpl.join(source, entry);
@@ -2325,7 +2178,7 @@ const copyCheckout = async (source: string, destination: string, copiedEntries: 
     }
   };
 
-const checkoutMatches = async (quarantined: string, destination: string, destinationIdentity: string | undefined, copiedEntries: CopiedCheckoutEntry[], birthtimeHolds: boolean) => {
+  const checkoutMatches = async (quarantined: string, destination: string, destinationIdentity: string | undefined, copiedEntries: CopiedCheckoutEntry[], birthtimeHolds: boolean) => {
     const rootStats = await fsImpl.lstat(quarantined);
     if (!rootStats.isDirectory() || directoryIdentity(rootStats, birthtimeHolds) !== destinationIdentity) return false;
     const expected = new Map(copiedEntries.map((entry) => [pathImpl.relative(destination, entry.path), entry]));
@@ -2353,7 +2206,7 @@ const checkoutMatches = async (quarantined: string, destination: string, destina
     return await inspect(quarantined) && expected.size === 0;
   };
 
-const quarantineAndClean = async (target: string, operationId: string, matches: (moved: string) => Promise<boolean>) => {
+  const quarantineAndClean = async (target: string, operationId: string, matches: (moved: string) => Promise<boolean>) => {
     const quarantine = await fsImpl.mkdtemp(pathImpl.join(
       pathImpl.dirname(target), `.openchamber-quarantine-${operationId}-`,
     ));
@@ -2391,7 +2244,7 @@ const quarantineAndClean = async (target: string, operationId: string, matches: 
     }
   };
 
-const executeClone = async (plan: ClonePlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
+  const executeClone = async (plan: ClonePlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
     let temporaryIdentity: string | undefined;
     let destinationIdentity: string | undefined;
     let birthtimeHolds = false;
@@ -2540,7 +2393,7 @@ const executeClone = async (plan: ClonePlan, controls: ExecutionControls, deadli
     return result ?? terminal('failed', 'UNKNOWN', 'Clone failed');
   };
 
-const executeHydration = async (plan: HydrationPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
+  const executeHydration = async (plan: HydrationPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs): Promise<Completion> => {
     const plannedHydration = Array.isArray(plan.plannedTransfers);
     if (plan.preparedHydrationFailure) {
       const hydration = Object.freeze({
@@ -2613,7 +2466,7 @@ const executeHydration = async (plan: HydrationPlan, controls: ExecutionControls
     return { state: 'failed', error: unsupported?.error ?? publicError('TRANSPORT_FAILED', 'Checkout hydration failed'), hydration };
   };
 
-const hydrateIntegration = (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => executeHydration({
+  const hydrateIntegration = (plan: ExistingPlan, controls: ExecutionControls, deadline: number) => executeHydration({
     operationId: plan.operationId,
     directory: plan.directory,
     target: plan.target,
@@ -2628,10 +2481,9 @@ const hydrateIntegration = (plan: ExistingPlan, controls: ExecutionControls, dea
     },
   }, { ...controls, updateTransportMetadata: () => {} }, deadline);
 
-const executeContributorFetch = async (plan: ContributorPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
-let context;
-
-try {
+  const executeContributorFetch = async (plan: ContributorPlan, controls: ExecutionControls, deadline = Date.now() + timeoutMs) => {
+    let context;
+    try {
       await revalidateContributorSource(plan, controls, deadline);
       await controls.markStepCompleted('validated');
       context = await transport(plan, controls, deadline);
@@ -2658,9 +2510,9 @@ try {
     } finally {
       await safeRevoke(context, plan.operationId);
     }
-};
+  };
 
-const snapshotCheckoutHook = async (action: PostCheckoutHookAction, operationId: string, controls: ExecutionControls, deadline: number) => {
+  const snapshotCheckoutHook = async (action: PostCheckoutHookAction, operationId: string, controls: ExecutionControls, deadline: number) => {
     const root = await awaitPhase(
       () => fsImpl.mkdtemp(pathImpl.join(os.tmpdir(), `openchamber-checkout-hook-${operationId}-`)),
       controls,
@@ -2697,7 +2549,7 @@ const snapshotCheckoutHook = async (action: PostCheckoutHookAction, operationId:
     }
   };
 
-const execute = (plan: ExecutionPlan, controls: ExecutionControls, deadline: number | undefined): Promise<Completion> => {
+  const execute = (plan: ExecutionPlan, controls: ExecutionControls, deadline: number | undefined): Promise<Completion> => {
     if (isHydrationPlan(plan)) return executeHydration(plan, controls, deadline);
     if (isActionsPlan(plan)) return (async () => {
       const checkoutDeadline = Number(deadline);
@@ -2752,10 +2604,8 @@ const execute = (plan: ExecutionPlan, controls: ExecutionControls, deadline: num
     if (isSyncPlan(plan)) return executeSync(plan, controls, deadline);
     return executeExisting(existingPlan(plan), controls, deadline);
   };
-
-const auditId = (operationId: string) => `git:${operationId}`;
-
-const auditTarget = (plans: AuditPlans): Extract<AuditPlan['target'], { kind: 'git-network' }> => {
+  const auditId = (operationId: string) => `git:${operationId}`;
+  const auditTarget = (plans: AuditPlans): Extract<AuditPlan['target'], { kind: 'git-network' }> => {
     const { target } = plans.publicPlan;
     const remote = (value: AuditPlans['publicPlan']['target']['remote'], role: 'operation' | 'fetch' | 'push') => {
       if (!value) return null;
@@ -2790,12 +2640,10 @@ const auditTarget = (plans: AuditPlans): Extract<AuditPlan['target'], { kind: 'g
     if (target.destination) value.destination = target.destination;
     return value;
   };
-
-const auditTransportPart = (plan: Pick<TransportPlan, 'transportMode' | 'credentialId'>, systemMarker: 'system-credentials' | 'local-checkout-actions' = 'system-credentials'): Extract<AuditPlan['transportReference'], { kind: 'managed' | 'anonymous' | 'system' }> => plan.transportMode === 'managed'
+  const auditTransportPart = (plan: Pick<TransportPlan, 'transportMode' | 'credentialId'>, systemMarker: 'system-credentials' | 'local-checkout-actions' = 'system-credentials'): Extract<AuditPlan['transportReference'], { kind: 'managed' | 'anonymous' | 'system' }> => plan.transportMode === 'managed'
     ? { kind: 'managed', credentialId: occupied(plan.credentialId) }
     : plan.transportMode === 'anonymous' ? { kind: 'anonymous' } : { kind: 'system', marker: systemMarker };
-
-const auditTransportReference = (plans: AuditPlans): AuditPlan['transportReference'] => {
+  const auditTransportReference = (plans: AuditPlans): AuditPlan['transportReference'] => {
     if (isHydrationPlan(plans.internalPlan)) {
       const entries = (plans.internalPlan.plannedAuxiliaryAuthorities ?? []).map((authority) => ({
         kind: occupied(authority.kind),
@@ -2816,8 +2664,7 @@ const auditTransportReference = (plans: AuditPlans): AuditPlan['transportReferen
     }
     return auditTransportPart(plans.internalPlan);
   };
-
-const authoritativeProviderAccountId = (internalPlan: ExecutionPlan | TransportPlan) => {
+  const authoritativeProviderAccountId = (internalPlan: ExecutionPlan | TransportPlan) => {
     if (isHydrationTransport(internalPlan)) return null;
     const managed = isSyncTransport(internalPlan)
       ? [internalPlan.fetch, internalPlan.push].filter((part) => part.transportMode === 'managed')
@@ -2834,8 +2681,7 @@ const authoritativeProviderAccountId = (internalPlan: ExecutionPlan | TransportP
     });
     return identities.every(Boolean) && new Set(identities).size === 1 ? identities[0] : null;
   };
-
-const planAudit = (plans: AuditPlans) => auditStore?.plan({
+  const planAudit = (plans: AuditPlans) => auditStore?.plan({
     id: auditId(plans.publicPlan.operationId),
     initiator: 'user',
     executorKind: 'openchamber-server-git',
@@ -2849,8 +2695,7 @@ const planAudit = (plans: AuditPlans) => auditStore?.plan({
     transportReference: auditTransportReference(plans),
     target: auditTarget(plans),
   });
-
-const auditResult = (snapshot: { state: string; error?: { code: string }; completedSteps?: string[]; stepResults?: { step: string; status: string }[] | undefined }): AuditResultInput => ({
+  const auditResult = (snapshot: { state: string; error?: { code: string }; completedSteps?: string[]; stepResults?: { step: string; status: string }[] | undefined }): AuditResultInput => ({
     state: snapshot.state,
     errorCode: snapshot.error?.code ?? null,
     steps: [
@@ -2858,8 +2703,7 @@ const auditResult = (snapshot: { state: string; error?: { code: string }; comple
       ...(snapshot.stepResults ?? []).map((step) => `${step.step}:${step.status}`),
     ],
   });
-
-const registerWithAudit = async (plans: AuditPlans) => {
+  const registerWithAudit = async (plans: AuditPlans) => {
     const registered = await operationRegistry.register(plans);
     try {
       const auditClaim = await planAudit(plans);
@@ -2874,8 +2718,7 @@ const registerWithAudit = async (plans: AuditPlans) => {
       throw error;
     }
   };
-
-const planWithDeadline = async (request: JsonValue, deadline: number) => {
+  const planWithDeadline = async (request: JsonValue, deadline: number) => {
     let plans: AuditPlans = await awaitPhase(() => planner.planNetworkOperation(request), undefined, deadline);
     plans = await prepareHydrationPlans(plans, deadline);
     if (isClonePlan(plans.internalPlan) && plans.internalPlan.gitIdentityId) {
@@ -2890,14 +2733,10 @@ const planWithDeadline = async (request: JsonValue, deadline: number) => {
     }
     return registerWithAudit(plans);
   };
-
-const plan = (request: JsonValue) => planWithDeadline(request, Date.now() + timeoutMs);
-
-const auditedStarts = new Map();
-
-const auditedExecutions = new Map();
-
-const executeOperation = (operationId: string, deadline?: number) => {
+  const plan = (request: JsonValue) => planWithDeadline(request, Date.now() + timeoutMs);
+  const auditedStarts = new Map();
+  const auditedExecutions = new Map();
+  const executeOperation = (operationId: string, deadline?: number) => {
     const startRegistry = () => operationRegistry.start(
       operationId, (operationPlan: ExecutionPlan, controls: ExecutionControls) => execute(operationPlan, controls, deadline),
     );
@@ -2922,8 +2761,7 @@ const executeOperation = (operationId: string, deadline?: number) => {
     }).catch(() => {});
     return operation;
   };
-
-const runHydrationOperation = async ({ directory, parentRemoteName, parentEndpoint, repositoryAuthority }: HydrationInput) => {
+  const runHydrationOperation = async ({ directory, parentRemoteName, parentEndpoint, repositoryAuthority }: HydrationInput) => {
     const deadline = Date.now() + timeoutMs;
     const operationId = `git_${crypto.randomUUID()}`;
     let inspection;
@@ -2963,7 +2801,7 @@ const runHydrationOperation = async ({ directory, parentRemoteName, parentEndpoi
     return result.hydration;
   };
 
-return Object.freeze({
+  return Object.freeze({
     plan,
     issueContributorDestination: planner.issueContributorDestination,
     async transferContributorHead({ directory, sourceRequest, source, credentialId, destinationRef }: {
