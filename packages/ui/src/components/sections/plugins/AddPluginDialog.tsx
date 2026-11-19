@@ -54,7 +54,7 @@ const MarketplaceRow: React.FC<{
    <div className="min-w-0 flex-1 break-words">
     <div className="flex min-w-0 flex-wrap items-center gap-2">
      <span className="max-w-full truncate typography-ui-label text-foreground" title={entry.name}>{entry.name}</span>
-     <span className="max-w-full shrink-0 truncate font-mono typography-micro text-muted-foreground" title={entry.version}>{entry.version ?? '—'}</span>
+     <span className="max-w-full shrink-0 truncate font-mono typography-micro text-muted-foreground" title={entry.version ?? undefined}>{entry.version ?? '—'}</span>
      <span className="oc-tile-inset max-w-full shrink-0 truncate rounded-full px-2 py-px text-[0.625rem] font-medium" title={entry.marketplace}>{entry.marketplace}</span>
     </div>
     {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}

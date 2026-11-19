@@ -1016,7 +1016,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                   <div className="min-w-0 flex-1 break-words">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <p className="max-w-full truncate typography-ui-label text-foreground" title={entry.name}>{entry.name}</p>
-                      <span className="max-w-full shrink-0 truncate font-mono typography-micro text-muted-foreground" title={entry.version}>{entry.version ?? '—'}</span>
+                      <span className="max-w-full shrink-0 truncate font-mono typography-micro text-muted-foreground" title={entry.version ?? undefined}>{entry.version ?? '—'}</span>
                       <SettingsCardChip className="max-w-full truncate" title={entry.marketplace}>{entry.marketplace}</SettingsCardChip>
                       {installed ? (
                         <span className="max-w-full truncate"><SettingsCardPill tone="success">{t('settings.plugins.marketplace.installed')}</SettingsCardPill></span>
