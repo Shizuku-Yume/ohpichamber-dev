@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { isDirectoryUnknown, useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
 import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import { pushRouteEntry } from '@/lib/router/backGuard';
@@ -83,7 +84,12 @@ export function useRouter(): void {
    // and never applied to a guessed workspace directory.
    if (route.tab && route.tab !== 'chat') {
     const mode: ContextPanelMode = route.tab === 'files' ? 'file' : route.tab;
-    const directory = useSessionUIStore.getState().currentSessionDirectory;
+    const session = useSessionUIStore.getState();
+    let directory = session.currentSessionDirectory;
+    if (!route.sessionId && !session.currentSessionId) {
+     const workspace = useDirectoryStore.getState();
+     directory = isDirectoryUnknown(workspace) ? null : workspace.currentDirectory;
+    }
     if (directory) {
      pendingSurfaceRef.current = null;
      useUIStore.getState().openContextSurface(directory, mode);
