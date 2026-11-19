@@ -19,29 +19,23 @@ const createApp = (overrides = {}) => {
 };
 
 describe('session knowledge routes', () => {
-  test('trims sync inputs and preserves optional, null and invalid styles', async () => {
+  test('does not expose the retired OpenCode sync route', async () => {
     const calls = [];
     const app = createApp({ sync: async (...args) => { calls.push(args); return false; } });
     for (const style of [undefined, null, ' custom ', { text: 'invalid' }]) {
       const response = await request(app).post('/api/session-knowledge/sync').send({
         sessionId: ' session ', directory: ' /project ', responseStyleInstruction: style,
       });
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({ synced: false });
+      expect(response.status).toBe(404);
     }
-    expect(calls).toEqual([
-      ['session', '/project', undefined],
-      ['session', '/project', null],
-      ['session', '/project', ' custom '],
-      ['session', '/project', undefined],
-    ]);
+    expect(calls).toEqual([]);
   });
 
-  test('rejects non-string and blank sync inputs', async () => {
+  test('keeps the retired sync route absent for invalid inputs too', async () => {
     for (const sessionId of [null, 1, {}, [], ' ']) {
       const response = await request(createApp()).post('/api/session-knowledge/sync')
         .send({ sessionId, directory: '/project' });
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(404);
     }
   });
 
@@ -51,9 +45,9 @@ describe('session knowledge routes', () => {
       collectSummary: async (...args) => { calls.push(args); return summary; },
       collectSummaryForSession: async (...args) => { calls.push(args); throw new Error('unreadable'); },
     });
-    expect((await request(app).get('/api/session-knowledge/summary')).body).toEqual(summary);
+    expect((await request(app).get('/api/session-knowledge/summary')).body).toEqual({ notes: [], plans: [] });
     expect((await request(app).get('/api/session-knowledge/summary').query({ directory: ' /project ' })).body).toEqual(summary);
-    expect((await request(app).get('/api/session-knowledge/summary').query({ directory: '/project', sessionId: ' session ' })).body).toEqual(summary);
+    expect((await request(app).get('/api/session-knowledge/summary').query({ directory: '/project', sessionId: ' session ' })).body).toEqual({ notes: [], plans: [] });
     expect(calls).toEqual([['/project'], ['session', '/project']]);
   });
 
