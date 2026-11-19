@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -363,6 +364,31 @@ describe('TerminalView project action tab indicator', () => {
     const activeTabId = useTerminalStore.getState().getDirectoryState('/repo')!.activeTabId;
     await act(async () => { paste?.click(); });
     expect(pasteClipboardCalls).toEqual([`/repo::${activeTabId}`]);
+  });
+
+  test('reclaims toolbar and padding space without hiding terminal output or quick keys', async () => {
+    const getStyle = (element: HTMLElement) => window.getComputedStyle(element);
+    const style = document.createElement('style');
+    style.textContent = readFileSync(new URL('../../styles/mobile.css', import.meta.url), 'utf8');
+    document.head.append(style);
+    document.documentElement.classList.add('oc-capacitor-app', 'oc-platform-android', 'oc-keyboard-open');
+    windowInstance.happyDOM.setViewport({ height: 122 });
+    host.classList.add('oc-mobile-workspace-terminal');
+    deviceInfo = { isMobile: true, isTablet: false, hasTouchOnlyPointer: true };
+
+    await act(async () => root.render(<TerminalView visible />));
+    await flushEffects();
+
+    const toolbar = host.querySelector('[data-tabs-strip="terminal"]')!.parentElement!.parentElement!;
+    const viewport = host.querySelector<HTMLElement>('[data-terminal-viewport][data-visible="true"]')!;
+    const output = viewport.parentElement!.parentElement!;
+    const keys = host.querySelector<HTMLElement>('.oc-terminal-quick-keys')!;
+    expect(getStyle(toolbar).display).toBe('none');
+    expect(getStyle(viewport).display).not.toBe('none');
+    expect(getStyle(output).paddingTop).toBe('0px');
+    expect(getStyle(output).paddingBottom).toBe('0px');
+    expect(getStyle(keys).display).not.toBe('none');
+    expect(getStyle(keys).paddingBottom).toBe('6px');
   });
 
   test('uses the explicit terminal directory for terminal tabs and session creation while preview ownership stays on the host directory', async () => {
