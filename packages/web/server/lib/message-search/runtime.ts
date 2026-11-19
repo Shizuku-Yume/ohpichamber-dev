@@ -14,43 +14,7 @@ const REASONING_META_KEY = 'reasoning';
 const INDEX_FILE_SUFFIXES = ['', '-wal', '-shm'];
 const MAX_LIMIT = 200;
 
-<<<<<<< HEAD:packages/web/server/lib/message-search/runtime.js
-||||||| bc50ba56aa:packages/web/server/lib/message-search/runtime.js
-// The hub's envelope: `directory` is 'global' for events with no location.
-const envelopeSchema = z.object({ directory: z.string().nullish() });
-const payloadDirectorySchema = z.object({ properties: z.object({ directory: z.string() }) });
-=======
-const envelopeSchema = z.object({ directory: z.string().nullish() });
-const payloadDirectorySchema = z.object({ properties: z.object({ directory: z.string() }) });
->>>>>>> upstream/main:packages/web/server/lib/message-search/runtime.ts
 
-<<<<<<< HEAD:packages/web/server/lib/message-search/runtime.js
-/**
- * Owns the derived search index for the canonical Agent Service. Search is opt-in
- * (`messageSearchEnabled`): while it is off nothing runs, no file is opened,
- * no event is looked at. Turning it on opens the index, follows the event
- * stream and walks the session list, which fills in whatever changed while it
- * was off. Turning it off stops all of that and keeps the file, so the next
- * start only catches up. Without a SQLite builtin search is unsupported.
- *
- * Reasoning is a second opt-in (`messageSearchReasoningEnabled`). Turning it
- * on makes the next walk read every session's agent records again; turning it
- * off drops the reasoning rows at once.
- */
-||||||| bc50ba56aa:packages/web/server/lib/message-search/runtime.js
-/**
- * Owns the search index for this server's OpenCode. Search is opt-in
- * (`messageSearchEnabled`): while it is off nothing runs, no file is opened,
- * no event is looked at. Turning it on opens the index, follows the event
- * stream and walks the session list, which fills in whatever changed while it
- * was off. Turning it off stops all of that and keeps the file, so the next
- * start only catches up. Without a SQLite builtin search is unsupported.
- *
- * Reasoning is a second opt-in (`messageSearchReasoningEnabled`). Turning it
- * on makes the next walk read every session's agent records again; turning it
- * off drops the reasoning rows at once.
- */
-=======
 interface MessageSearchRuntimeOptions extends Pick<IndexerOptions, 'getArchivedSessions' | 'applyOwnedArchiveState' | 'logger'> {
   dataDir: string;
   buildOpenCodeUrl: (path: string, prefixOverride: string) => string;
@@ -62,7 +26,6 @@ interface MessageSearchRuntimeOptions extends Pick<IndexerOptions, 'getArchivedS
 const hasMessage = (error: unknown): error is { message: unknown } =>
   error != null && 'message' in Object(error);
 
->>>>>>> upstream/main:packages/web/server/lib/message-search/runtime.ts
 export const createMessageSearchRuntime = ({
   dataDir,
   sessionService,
@@ -88,21 +51,6 @@ export const createMessageSearchRuntime = ({
     return run;
   };
 
-<<<<<<< HEAD:packages/web/server/lib/message-search/runtime.js
-||||||| bc50ba56aa:packages/web/server/lib/message-search/runtime.js
-  const createClient = (directory) => {
-    const headers = { ...getOpenCodeAuthHeaders() };
-    // v2 scopes by header and rejects non-ASCII header values.
-    if (directory) headers['x-opencode-directory'] = encodeURIComponent(directory);
-    return OpenCode.make({ baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''), headers });
-  };
-=======
-  const createClient = (directory: string): IndexerClient => {
-    const headers = { ...getOpenCodeAuthHeaders() };
-    if (directory) headers['x-opencode-directory'] = encodeURIComponent(directory);
-    return OpenCode.make({ baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''), headers });
-  };
->>>>>>> upstream/main:packages/web/server/lib/message-search/runtime.ts
 
   const reconcileReasoning = (store: ReturnType<typeof openMessageSearchStore>) => {
     const indexed = store.readMeta(REASONING_META_KEY) === '1';
@@ -121,31 +69,8 @@ export const createMessageSearchRuntime = ({
   const startEngine = (open: SqliteOpener) => {
     const store = openMessageSearchStore(open(indexPath));
     reconcileReasoning(store);
-<<<<<<< HEAD:packages/web/server/lib/message-search/runtime.js
     const indexer = createMessageSearchIndexer({ store, sessionService, resolveSessionScope, includeReasoning: () => reasoning, logger });
     const unsubscribeEvents = globalEventHub.subscribeEvent((event, scope) => indexer.processCanonicalEvent(event, scope));
-||||||| bc50ba56aa:packages/web/server/lib/message-search/runtime.js
-    const indexer = createMessageSearchIndexer({ store, createClient, includeReasoning: () => reasoning, logger });
-    const unsubscribeEvents = globalEventHub.subscribeEvent((event) => {
-      const envelope = envelopeSchema.safeParse(event);
-      const directory = envelope.success && envelope.data.directory !== 'global' ? envelope.data.directory ?? '' : '';
-      for (const payload of event?.translated?.() ?? []) {
-        const own = payloadDirectorySchema.safeParse(payload);
-        indexer.processPayload(payload, directory || (own.success ? own.data.properties.directory : ''));
-      }
-    });
-=======
-    const indexer = createMessageSearchIndexer({ store, createClient, includeReasoning: () => reasoning, getArchivedSessions, applyOwnedArchiveState, logger });
-    const unsubscribeEvents = globalEventHub.subscribeEvent((event) => {
-      const envelope = envelopeSchema.safeParse(event);
-      const directory = envelope.success && envelope.data.directory !== 'global' ? envelope.data.directory ?? '' : '';
-      for (const payload of event?.translated?.() ?? []) {
-        const own = payloadDirectorySchema.safeParse(payload);
-        indexer.processPayload(payload, directory || (own.success ? own.data.properties.directory : ''));
-      }
-      indexer.processArchiveEvent(event?.payload);
-    });
->>>>>>> upstream/main:packages/web/server/lib/message-search/runtime.ts
     const unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
       if (status.type === 'connect') return indexer.onConnected(status.sessionId);
     });
