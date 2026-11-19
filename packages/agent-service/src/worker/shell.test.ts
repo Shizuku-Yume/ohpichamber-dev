@@ -544,6 +544,52 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
   });
 });
 
+test('a fresh worker retains service control for every retired session id but rejects foreign owners', async () => {
+  const manager = new AsyncJobManager({ onJobComplete: () => { } });
+  const daemon: DaemonSnapshot = {
+    name: 'original-service', id: 'original', state: 'running', pid: 1111, createdAt: 1000, startedAt: 1000,
+    restartCount: 0, outputBytes: 0, persist: true, detached: false, owner: 'session-a',
+  };
+  const daemons = [daemon, { ...daemon, id: 'intermediate', name: 'intermediate-service', owner: 'session-b' },
+    { ...daemon, id: 'current', name: 'current-service', owner: 'session-c' },
+    { ...daemon, id: 'foreign', name: 'foreign-service', owner: 'foreign-session' }];
+  const sent: string[] = [];
+  const shell = new WorkerShell({
+    manager, workspaceId: 'ws-1', projectId: 'proj-1', sessionId: 'session-c',
+    retiredSessionIds: ['session-a', 'session-b'],
+    workerGeneration: 'fresh-generation', epoch: 'fresh-epoch', cwd: '/workspace',
+    listServices: async () => daemons,
+    serviceLogs: async name => `logs: ${name}`,
+    sendServiceInput: async name => { sent.push(name); },
+    stopService: async name => {
+      const service = daemons.find(item => item.name === name);
+      if (service) service.state = 'exited';
+    },
+  });
+  try {
+    const snapshot = await shell.operation({ type: 'snapshot' });
+    if (snapshot.type !== 'snapshot') throw new Error('Expected snapshot');
+    expect(snapshot.snapshot.running.map(job => job.jobId).sort()).toEqual(['service:current', 'service:intermediate', 'service:original']);
+    for (const running of snapshot.snapshot.running) {
+      const { jobId, sessionId, epoch, workerGeneration } = running;
+      const job = { jobId, sessionId, epoch, workerGeneration };
+      expect(job.sessionId).toBe('session-c');
+      const output = await shell.operation({ type: 'output', request: { job, cursor: '0', tailBytes: 1000 } });
+      if (output.type !== 'output') throw new Error('Expected output');
+      expect(output.output.output).toBe(`logs: ${running.serviceName}`);
+      await shell.operation({ type: 'stdin', request: { job, input: 'reload\n' } });
+      const stop = await shell.operation({ type: 'stop', request: { job } });
+      if (stop.type !== 'stop') throw new Error('Expected stop');
+      expect(stop.result.job.termination.reason).toBe('stopped');
+    }
+    expect(sent.sort()).toEqual(['current-service', 'intermediate-service', 'original-service']);
+    const foreign = { jobId: 'service:foreign', sessionId: 'session-c', epoch: 'fresh-epoch', workerGeneration: 'fresh-generation' };
+    await expect(shell.operation({ type: 'output', request: { job: foreign, cursor: '0', tailBytes: 1000 } })).rejects.toMatchObject({ code: 'SHELL_NOT_FOUND' });
+    await expect(shell.operation({ type: 'stop', request: { job: foreign } })).rejects.toMatchObject({ code: 'SHELL_NOT_FOUND' });
+    await expect(shell.operation({ type: 'stdin', request: { job: foreign, input: 'no' } })).rejects.toMatchObject({ code: 'SHELL_NOT_FOUND' });
+  } finally { await shell.close(); }
+});
+
 test('a session rekey moves every shell job identity and the snapshot scope to the minted id', async () => {
   const manager = new AsyncJobManager({ onJobComplete: () => { } });
   const daemon: DaemonSnapshot = {
