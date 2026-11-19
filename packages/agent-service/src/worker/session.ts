@@ -1646,7 +1646,7 @@ export class WorkerSession {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
     if ((this.compacting || this.session.isCompacting) && !['compact.abort', 'abort', 'history', 'question.resolve', 'approval.resolve'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
-    if (this.reviewingPlan && !['abort', 'question.resolve', 'history'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Plan review transition is in progress');
+    if (this.reviewingPlan && !['compact.abort', 'abort', 'question.resolve', 'history'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Plan review transition is in progress');
     switch (operation.type) {
       case 'goal': {
         const request = operation;
@@ -2300,6 +2300,7 @@ export class WorkerSession {
         return { type: 'history', history: this.projection.history(operation.request) };
       case 'compact.abort': {
         const aborted = this.compacting || this.session.isCompacting;
+        if (aborted && this.reviewingPlan) this.planRevision++;
         this.session.abortCompaction();
         return { type: 'compact.abort', aborted };
       }

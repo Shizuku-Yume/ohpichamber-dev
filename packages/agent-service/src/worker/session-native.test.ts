@@ -2267,6 +2267,53 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
  }, 30000);
 }
 
+test('Stop cancels plan-review compaction without starting approved execution', async () => {
+ let stage = 0;
+ const planText = '# Stop plan\nDo not execute after Stop.';
+ const harness = await fixture({ planModel: true, respond: () => {
+  stage++;
+  if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
+  if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+  return completion();
+ } });
+ const compacting = Promise.withResolvers<void>();
+ const release = Promise.withResolvers<never>();
+ let compactionActive = false;
+ Object.defineProperty(harness.worker.session, 'isCompacting', { configurable: true, get: () => compactionActive });
+ const compact = spyOn(harness.worker.session, 'compact').mockImplementation(async () => {
+  compactionActive = true;
+  compacting.resolve();
+  return release.promise;
+ });
+ const abort = spyOn(harness.worker.session, 'abortCompaction').mockImplementation(() => {
+  compactionActive = false;
+  release.reject(new Error('Compaction cancelled'));
+ });
+ try {
+  await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+  await harness.worker.operation({ type: 'prompt', runId: 'plan-stop-run', request: prompt('Prepare a plan.') });
+  const question = await harness.waitQuestion();
+  await harness.interactions.resolveQuestion(rootSessionId, question.questionId, {
+   action: 'answer', response: { action: 'approve-compact' },
+   version: question.version, epoch: question.epoch, workerGeneration: question.workerGeneration,
+  });
+  await compacting.promise;
+  expect(harness.worker['reviewingPlan']).toBe(true);
+  expect(harness.worker['projection'].activeRun()).toBeNull();
+  expect(await harness.worker.operation({ type: 'compact.abort' })).toEqual({ type: 'compact.abort', aborted: true });
+  await harness.worker['planReviewTask'];
+  expect(abort).toHaveBeenCalledTimes(1);
+  expect(harness.events.filter(input => input.event.type === 'run.started')).toHaveLength(1);
+  expect(harness.worker['reviewingPlan']).toBe(false);
+  expect(harness.fatal()).toBe(false);
+ } finally {
+  release.reject(new Error('Compaction cancelled'));
+  await harness.worker['planReviewTask'];
+  compact.mockRestore(); abort.mockRestore(); Reflect.deleteProperty(harness.worker.session, 'isCompacting');
+  await harness.close();
+ }
+}, 30000);
+
 test('approve-compact continues the approved plan when there is nothing to compact', async () => {
  const planText = '# Small plan\nExecute the approved scope.';
  const execution = Promise.withResolvers<void>();
