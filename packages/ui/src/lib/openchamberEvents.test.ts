@@ -57,6 +57,9 @@ describe('openchamber events', () => {
       first.onmessage?.(ready);
       first.onerror?.();
       expect(status).toEqual([true]);
+      const unsubscribeSecond = subscribeOpenchamberEvents(() => undefined);
+      unsubscribeSecond();
+      expect(MockEventSource.instances).toHaveLength(1);
       retryOpenchamberEventsNow();
       const resumed = MockEventSource.instances[1];
       resumed.onopen?.();

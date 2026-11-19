@@ -758,6 +758,7 @@ const connect = () => {
  if (typeof window === 'undefined' || listeners.size === 0) {
   return;
  }
+ if (reconnectTimer || authSessionWait) return;
  if (streamAbortController || (eventSource && eventSource.readyState !== EventSource.CLOSED)) {
   return;
  }
