@@ -1,5 +1,7 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
 path	state	class	decision	reason
+packages/ui/src/stores/useGlobalSessionsStore.ts	fork-differs	decision	2026-11-19 - Retry transient partial session discovery without losing complete scopes	Consume the existing startup budget for HTTP 200 SERVICE_UNAVAILABLE scope errors while reconciling healthy records and preserving failed scopes.
+packages/ui/src/stores/useGlobalSessionsStore-races.test.ts	fork-differs	decision	2026-11-19 - Retry transient partial session discovery without losing complete scopes	Cover HTTP 200 warmup, partial reconciliation, non-transient errors, shared-budget exhaustion and runtime retirement.
 packages/ui/src/stores/useProviderSettingsStore.ts	fork-only	decision	2026-11-19 - Refresh composer catalogs after provider settings mutations	Notify existing provider catalog consumers on explicit settings refresh without notifying stale runtimes.
 packages/ui/src/stores/useProviderSettingsStore.test.ts	fork-only	decision	2026-11-19 - Refresh composer catalogs after provider settings mutations	Cover provider refresh notifications, empty catalogs, failed rereads and runtime isolation.
 packages/ui/src/stores/useCommandsStore.ts	fork-differs	decision	2026-11-19 - Retry native session and command discovery during Agent Service startup	Retry native command workspace/catalog reads during bounded service warmup without masking failure.

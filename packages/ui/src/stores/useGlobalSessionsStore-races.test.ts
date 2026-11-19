@@ -21,6 +21,13 @@ const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 const ids = (records: readonly Session[]) => records.map((record) => record.sessionId).sort();
+const advanceStartup = async (seconds = 45) => {
+  for (let second = 0; second < seconds; second += 1) {
+    for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+    jest.advanceTimersByTime(1000);
+  }
+  for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
+};
 let runtime = 0;
 let request = deferred<SessionDiscoveryResult>();
 let list = spyOn(canonicalClient, 'listSessions');
@@ -58,12 +65,6 @@ afterEach(() => {
 });
 
 describe('native global mutation reconciliation', () => {
-  const advanceStartup = async () => {
-    for (let second = 0; second < 45; second += 1) {
-      for (let turn = 0; turn < 40; turn += 1) await Promise.resolve();
-      jest.advanceTimersByTime(1000);
-    }
-  };
   const warmup = () => new CanonicalApiError({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true });
 
   test.each([false, true])('startup discovery recovers after delayed readiness (empty=%s)', async (empty) => {
@@ -230,6 +231,19 @@ describe('native global mutation reconciliation', () => {
 });
 
 describe('native discovery completeness scopes', () => {
+  test.each([false, true])('all-unavailable HTTP 200 discovery retries before accepting an empty=%s result', async (empty) => {
+    jest.useFakeTimers();
+    list.mockResolvedValueOnce({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE', wsp_other: 'SERVICE_UNAVAILABLE' } })
+      .mockResolvedValue({ items: empty ? [] : [session('ses_ready')], errors: {} });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(empty ? [] : ['ses_ready']);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+  });
+
   test('an entity failure preserves its owner while healthy siblings reconcile', async () => {
     const failed = session('ses_failed', { archivedAt: 4 });
     useGlobalSessionsStore.getState().applySnapshot([session('ses_removed'), session('ses_healthy')], [failed]);
@@ -242,12 +256,76 @@ describe('native discovery completeness scopes', () => {
     expect(state.status).toBe('ready');
     expect(state.hasLoaded).toBe(true);
     expect(state.discoveryErrors.get('ses_failed')).toBe('METADATA_READ_FAILED');
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([false, true])('transient partial discovery recovers without losing healthy results (empty=%s)', async (empty) => {
+    jest.useFakeTimers();
+    useGlobalSessionsStore.getState().upsertSession(session('ses_cached'));
+    const recovered = deferred<SessionDiscoveryResult>();
+    list.mockResolvedValueOnce({
+      items: [session('ses_healthy', { workspaceId: 'wsp_other', projectId: 'pro_other' })],
+      errors: { wsp_repo: 'SERVICE_UNAVAILABLE' },
+    }).mockImplementation(() => recovered.promise);
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup(1);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_cached', 'ses_healthy']);
+    expect(useGlobalSessionsStore.getState().status).toBe('loading');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    recovered.resolve({
+      items: empty ? [] : [session('ses_healthy', { workspaceId: 'wsp_other', projectId: 'pro_other' }), session('ses_recovered')],
+      errors: {},
+    });
+    await loading;
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(empty ? [] : ['ses_healthy', 'ses_recovered']);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  test('transient exhaustion preserves healthy results and exposes only failed scopes', async () => {
+    jest.useFakeTimers();
+    list.mockResolvedValue({
+      items: [session('ses_healthy')],
+      errors: { wsp_other: 'SERVICE_UNAVAILABLE', ses_failed: 'METADATA_READ_FAILED' },
+    }).mockRejectedValueOnce(new CanonicalApiError({ type: 'urn:test:warmup', title: 'Unavailable', status: 503, detail: 'The Agent Service is not ready.', code: 'SERVICE_UNAVAILABLE', retryable: true }));
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup(1);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_healthy']);
+    expect([...useGlobalSessionsStore.getState().discoveryErrors]).toEqual([['ses_failed', 'METADATA_READ_FAILED']]);
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(8);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_healthy']);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('wsp_other')).toBe('SERVICE_UNAVAILABLE');
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().globalRefreshFailed).toBe(false);
+  });
+
+  test('runtime switch retires transient partial discovery before another request', async () => {
+    jest.useFakeTimers();
+    list.mockResolvedValue({ items: [session('ses_old')], errors: { wsp_other: 'SERVICE_UNAVAILABLE' } });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup(1);
+    const attempts = list.mock.calls.length;
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://replacement.test', runtimeKey: `replacement-${++runtime}` });
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    await advanceStartup();
+    await loading;
+    expect(list).toHaveBeenCalledTimes(attempts);
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+    expect(useGlobalSessionsStore.getState().discoveryErrors.size).toBe(0);
   });
 
   test('a failed workspace preserves its records but not missing healthy-workspace siblings', async () => {
+    jest.useFakeTimers();
     useGlobalSessionsStore.getState().upsertSessions([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })]);
     request.resolve({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE' } });
-    await useGlobalSessionsStore.getState().loadSessions();
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
     const state = useGlobalSessionsStore.getState();
     expect(ids(state.activeSessions)).toEqual(['ses_failed']);
     expect(state.hasLoaded).toBe(true);
@@ -256,9 +334,12 @@ describe('native discovery completeness scopes', () => {
   });
 
   test('a failed project preserves its records but not missing healthy-project siblings', async () => {
+    jest.useFakeTimers();
     useGlobalSessionsStore.getState().upsertSessions([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })]);
     request.resolve({ items: [], errors: { pro_repo: 'SERVICE_UNAVAILABLE' } });
-    await useGlobalSessionsStore.getState().loadSessions();
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await advanceStartup();
+    await loading;
     const state = useGlobalSessionsStore.getState();
     expect(ids(state.activeSessions)).toEqual(['ses_failed']);
     expect(state.hasLoaded).toBe(true);

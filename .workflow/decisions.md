@@ -1743,3 +1743,9 @@ Global sessions and native command catalogs use the existing bounded `STARTUP_RE
 - **Because:** Custom provider save and credential/account changes refreshed only the settings page, leaving the composer's separate catalog stale until reload. A failed page reread must not suppress notification of a completed write. Ordinary loads and stale-runtime refreshes do not emit.
 - **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the same store and notification path. Guest SDK is unchanged.
 - **Instead of:** Directly mutating composer catalogs from Settings or adding another event channel.
+
+## 2026-11-19 - Retry transient partial session discovery without losing complete scopes
+
+The global sessions store owns bounded startup recovery for successful HTTP 200 discovery pages containing `SERVICE_UNAVAILABLE` errors. Retry whole listings within the same eight-attempt budget as thrown retryable failures. Reconcile healthy scopes on every page, retain failed scopes, defer transient sidebar errors until exhaustion, and expose non-transient errors immediately. An initial retrying partial page does not establish global completeness; runtime changes retire the retry loop.
+
+Keep the Host's explicit partial `items`/`errors` contract, including all-unavailable pages, rather than replacing it with a top-level 503 that loses scoped information. Discovery errors carry codes, not retryable flags; only `SERVICE_UNAVAILABLE` is classified transient here. Web/PWA, Electron, hosted mobile and Capacitor share this store; Guest SDK and session admission are unchanged.
