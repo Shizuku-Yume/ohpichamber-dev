@@ -17,7 +17,7 @@ import {
   sealJson,
   toBase64Url,
 } from './crypto.js';
-import { parseShareLink, PUBLIC_SHARE_ORIGIN } from './received-link.js';
+import { allowedReceiveBases, parseShareLink, PUBLIC_SHARE_ORIGIN } from './received-link.js';
 import { createShareRelayClient, createShareViewerClient } from './relay-client.js';
 import { createReceivedPagesRuntime } from './received-runtime.js';
 import { createReceivedPageStore } from './received-store.js';
@@ -126,6 +126,13 @@ describe('parseShareLink', () => {
     expect(code(`https://evil.test/p/${SHARE_ID}#${key}`)).toBe('link_not_allowed');
     expect(code(`https://share.openchamber.dev.evil.test/p/${SHARE_ID}#${key}`)).toBe('link_not_allowed');
     expect(code(`https://share.openchamber.dev/p/${SHARE_ID}#${key}`, [])).toBe('link_not_allowed');
+  });
+});
+
+describe('allowedReceiveBases', () => {
+  it('offers the public origin without a configured relay and adds a configured one', () => {
+    expect(allowedReceiveBases(null)).toEqual([PUBLIC_SHARE_ORIGIN]);
+    expect(allowedReceiveBases({ privateRelay: { relayUrl: 'wss://relay.acme.test/ws' } })).toEqual([PUBLIC_SHARE_ORIGIN, 'https://relay.acme.test']);
   });
 });
 
