@@ -56,6 +56,12 @@ Status codes copy the legacy Linear routes: disconnected is 200 `{ connected: fa
 
 ## Invariants
 
+- `session-status.ts` fans out Canonical status/failure events from the Host hub.
+  Provider loading queues at most 200 events; failed loads retry on the next
+  event after 30 seconds. Extension removal forgets its runtime, and Host
+  disposal detaches the subscription and stops loaded providers. Extension and
+  Linear runtimes decode Canonical events, never OpenCode SSE payloads.
+
 - Tracker ids are open strings `^[a-z][a-z0-9-]{0,31}$` in the namespace they share with source-control provider ids (tracked-item keys, read-cache keys). The registry refuses malformed ids, the reserved ids (`guest`, `link`, `external`, `repository`), ids a source-control provider owns, and duplicates, by throwing at construction. A built-in never takes an `ext-` id; only `attachExtension` does, with `ext-<guestId>`, and the SDK refuses a manifest that provides both `source-control` and `tracker`, since both would be that id.
 - Extension trackers follow the catalog, never an event: a guest is a tracker while it is enabled, fully approved with an effective `service` grant, provides `tracker` and has a parsed `contributes.tracker`. Pause, removal, withdrawn approval and a grant whose scope changed detach it; a tracker detached mid-call refuses its account writes (`dispose`). Removal forgets its accounts, client, mapping and session records ("remove means forget"); a pause keeps them.
 - An extension tracker's credentials never leave `extension-accounts.js` but to mint a per-call handle, served on `/tracker/outbound`. A read's handle sends `GET` only; `items.updateState` and `comments.create` may write. `hostAccess` is off for every extension tracker. A 401 the service reports writes an account off only when the proxy saw the server answer 401 through that call's handle, and only at the account revision the call read.

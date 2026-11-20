@@ -1,18 +1,5 @@
-import { isPlainObject } from '../shared/guards.js';
-import { z } from 'zod';
+import { CanonicalEventSchema } from '@openchamber/agent-contract';
 import type { TrackerRuntimeEvent, TrackerSessionStatusInput, TrackerSessionStatusResult } from './tracker-contract.js';
-
-const isText = (value: unknown): value is string => typeof value === 'string';
-const text = z.unknown().transform((value) => isText(value) ? value.trim() : '');
-const fields = z.preprocess((value) => isPlainObject(value) ? value : {}, z.object({
-  sessionID: text, sessionId: text, type: text, name: text,
-}));
-const event = z.preprocess((value) => isPlainObject(value) ? value : {}, z.object({
-  properties: z.preprocess((value) => isPlainObject(value) ? value : {}, z.object({
-    sessionID: text, sessionId: text, session: text,
-    info: fields, status: fields, error: fields,
-  })),
-}));
 
 type SessionStatusOptions = {
   post: (input: Pick<TrackerSessionStatusInput, 'sessionId'> & { kind: 'completed' | 'failure' }) => Promise<TrackerSessionStatusResult>;
@@ -30,18 +17,14 @@ export function createSessionStatusRuntime({ post, label, warn = (...args) => co
   return {
     processPayload: (payload: TrackerRuntimeEvent) => {
       if (stopped) return;
-      const parsed = event.parse(payload);
-      const props = parsed.properties;
-      const sessionId = props.info.sessionID || props.info.sessionId || props.sessionID || props.sessionId || props.session;
-      if (!sessionId || !isPlainObject(payload)) return;
-      if (payload.type === 'session.error') {
-        if (props.error.name === 'MessageAbortedError') return;
-        send('failure', sessionId);
+      const parsed = CanonicalEventSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const event = parsed.data;
+      if (event.type === 'run.failed') {
+        send('failure', event.sessionId);
         return;
       }
-      if (payload.type !== 'session.status') return;
-      const status = props.status.type || props.info.type;
-      if (status === 'idle') send('completed', sessionId);
+      if (event.type === 'session.status' && event.runtimeStatus === 'idle') send('completed', event.sessionId);
     },
     stop: () => { stopped = true; },
   };

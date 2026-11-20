@@ -43,6 +43,7 @@ import { createSourceControlProviders } from '../source-control/provider-registr
 import { createOutboundHandles } from '../source-control/outbound-handles.js';
 import { createExtensionProviders } from '../source-control/extension-providers.js';
 import { createTrackerRegistry } from '../trackers/registry.js';
+import { createTrackerSessionStatus } from '../trackers/session-status.js';
 import { registerTrackerRoutes } from '../trackers/routes.js';
 import { SOURCE_CONTROL_OUTBOUND_PATH, TRACKER_OUTBOUND_PATH } from 'ohpichamber-sdk';
 import { createExtensionTrackers } from '../trackers/extension-trackers.js';
@@ -82,6 +83,7 @@ import { createSourceControlAuditStore } from '../source-control/audit-storage.j
 export const createFeatureRoutesRuntime = () => {
   let skillRepositoryDependencies = null;
   let themeFolderWatch = null;
+  let stopTrackerSessionStatus = () => {};
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
     platform: process.env.OPENCHAMBER_RUNTIME === 'desktop' ? 'desktop' : 'web',
@@ -384,6 +386,10 @@ export const createFeatureRoutesRuntime = () => {
     const trackers = createTrackerRegistry(undefined, {
       foreignIds: sourceControlProviders.list().map((descriptor) => descriptor.id),
     });
+    stopTrackerSessionStatus();
+    const trackerSessionStatus = createTrackerSessionStatus({ registry: trackers });
+    const unsubscribeTrackerStatus = globalEventHub.subscribeEvent(trackerSessionStatus.processPayload);
+    stopTrackerSessionStatus = () => { unsubscribeTrackerStatus(); trackerSessionStatus.stop(); };
     // The exact credential behind an account reference, as a neutral Git
     // transport credential: a stored account, or a CLI login the user
     // switched to, so Git transport accepts what reads do.
@@ -664,7 +670,7 @@ export const createFeatureRoutesRuntime = () => {
       accounts: createTrackerAccounts({ persistPath: trackerAccountsPersistPath(openchamberDataDir) }),
       handles: trackerOutboundHandles,
       oauth: createTrackerOAuth(),
-      sessionStatus: { forget: () => { } },
+      sessionStatus: trackerSessionStatus,
       persistPath: extensionsPersistPath(openchamberDataDir),
       emitChanged: () => {
         const clients = getOpenChamberEventClients();
@@ -879,6 +885,7 @@ export const createFeatureRoutesRuntime = () => {
     /** Writes the Git credential helper's endpoint file; a no-op until the Git routes are registered. */
     publishRepositoryCredentialEndpoint: async () => { await gitRepositoryCredentialRuntime?.publish(); },
     dispose() {
+      stopTrackerSessionStatus();
       themeFolderWatch?.stop();
       themeFolderWatch = null;
     },

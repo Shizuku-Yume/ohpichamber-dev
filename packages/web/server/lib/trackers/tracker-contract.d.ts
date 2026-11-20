@@ -1,4 +1,5 @@
 import type { RegisteredTrackerImplementation } from './registry.js';
+import type { CanonicalEvent } from '@openchamber/agent-contract';
 export type TrackerProviderId = string;
 export type TrackerStateCategory = 'triage' | 'backlog' | 'todo' | 'in-progress' | 'done' | 'canceled';
 export type TrackerPriority = 'none' | 'urgent' | 'high' | 'medium' | 'low';
@@ -118,16 +119,7 @@ export type TrackerSessionStatusKind = 'started' | 'completed' | 'failure';
 export type TrackerSessionStatusInput = { kind: TrackerSessionStatusKind; sessionId: string; identifier?: string; sessionOrigin?: string };
 export type TrackerSessionStatusResult = Connected<{ posted?: boolean; skipped?: string; commentId?: string }>;
 
-export type TrackerRuntimeEvent = {
-  type: string;
-  properties?: {
-    [key: string]: unknown;
-    sessionID?: string;
-    info?: { [key: string]: unknown; sessionID?: string; type?: string };
-    status?: { [key: string]: unknown; type?: string };
-    error?: { [key: string]: unknown; name?: string };
-  };
-};
+export type TrackerRuntimeEvent = CanonicalEvent;
 
 export interface TrackerSessionStatusRuntime {
   processPayload(payload: TrackerRuntimeEvent): void;
