@@ -127,6 +127,10 @@ const runGit = (cwd, args) =>
    : { ...process.env, LC_ALL: 'C' },
  });
 
+const runNodeScript = (script) => process.platform === 'win32'
+ ? `"${process.execPath}" "${script}"`
+ : `${JSON.stringify(process.execPath)} ${JSON.stringify(script)}`;
+
 const readBranchConfig = (cwd, branch, key) => {
  try {
   return runGit(cwd, ['config', '--get', `branch.${branch}.${key}`]).trim();
@@ -1675,6 +1679,31 @@ describe('worktree root resolution', () => {
   }
  });
 
+ it('creates a worktree using a quoted executable in the create command', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  const dataHome = createTempDir();
+  const script = path.join(dataHome, 'create worktree.cjs');
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
+  fs.writeFileSync(script, "require('node:child_process').execFileSync('git', ['worktree', 'add', process.env.WORKTREE_PATH, process.env.WORKTREE_BRANCH], { stdio: 'inherit' });\n");
+  vi.stubEnv('OPENCHAMBER_DATA_DIR', dataHome);
+  try {
+   const created = await createWorktree(repo, {
+    mode: 'new', branchName: 'feature/custom-create', worktreeName: 'custom-create',
+    createCommand: runNodeScript(script),
+   });
+   await waitForActiveWorktreeBootstrap(created.path);
+   expect(await getWorktreeBootstrapStatus(created.path)).toMatchObject({ status: 'ready' });
+   expect(runGit(created.path, ['branch', '--show-current']).trim()).toBe('feature/custom-create');
+   await removeWorktree(repo, { directory: created.path });
+  } finally {
+   vi.unstubAllEnvs();
+  }
+ });
+
  it('creates and removes a managed worktree from a bare repository project directory', async () => {
   if (!canRunGit()) return;
   const previousDataHome = process.env.OPENCHAMBER_DATA_DIR;
@@ -2075,7 +2104,7 @@ describe('createWorktree', () => {
     branchName: 'feature/bootstrap-phases',
     worktreeName: 'bootstrap-phases',
     returnAfterDirectoryCreated: true,
-    startCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(setupScript)}`,
+    startCommand: runNodeScript(setupScript),
    });
 
    expect(created.bootstrapStatus).toMatchObject({
@@ -2479,7 +2508,7 @@ describe('createWorktree', () => {
     branchName: 'feature/remove-bootstrap-race',
     worktreeName: 'remove-bootstrap-race',
     returnAfterDirectoryCreated: true,
-    startCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(setupScript)}`,
+    startCommand: runNodeScript(setupScript),
    }, {
     bootstrapStore,
     hydrateCheckout: async () => ({ status: 'not-needed', submodules: [], lfs: [] }),
@@ -3185,7 +3214,7 @@ describe('createWorktree from a forked GitHub PR', () => {
     contributorFork: true,
     expectedRevision: sha,
     returnAfterDirectoryCreated: true,
-    startCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(setupScript)}`,
+    startCommand: runNodeScript(setupScript),
    }, {
     contributorProvenance: { compareAndSwap },
     contributorSource: {
@@ -4731,16 +4760,15 @@ describe('removeWorktree', () => {
   const recording = path.join(scripts, 'record.cjs');
   fs.writeFileSync(failing, "process.stderr.write('stack still running\\n'); process.exit(3);\n");
   fs.writeFileSync(recording, `require('fs').writeFileSync(${JSON.stringify(marker)}, process.cwd());\n`);
-  const run = (script) => `${JSON.stringify(process.execPath)} ${JSON.stringify(script)}`;
   const disposeInstance = vi.fn();
 
-  await expect(removeWorktree(repo, { directory: worktree, teardownCommand: run(failing), disposeInstance }))
+  await expect(removeWorktree(repo, { directory: worktree, teardownCommand: runNodeScript(failing), disposeInstance }))
    .rejects.toThrow(/teardown command failed, so the worktree was kept: [\s\S]*stack still running/);
   expect(fs.existsSync(path.join(worktree, '.git'))).toBe(true);
   expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('branch refs/heads/teardown');
   expect(disposeInstance).not.toHaveBeenCalled();
 
-  await expect(removeWorktree(repo, { directory: worktree, teardownCommand: run(recording), disposeInstance })).resolves.toBe(true);
+  await expect(removeWorktree(repo, { directory: worktree, teardownCommand: runNodeScript(recording), disposeInstance })).resolves.toBe(true);
   expect(fs.readFileSync(marker, 'utf8')).toBe(path.join(fs.realpathSync(path.dirname(worktree)), 'with-teardown'));
   expect(fs.existsSync(worktree)).toBe(false);
  });
@@ -4759,7 +4787,7 @@ describe('removeWorktree', () => {
   const reading = path.join(createTempDir(), 'read.cjs');
   fs.writeFileSync(reading, "process.stdin.resume(); process.stdin.on('end', () => process.exit(0));\n");
 
-  await expect(removeWorktree(repo, { directory: worktree, teardownCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(reading)}` }))
+  await expect(removeWorktree(repo, { directory: worktree, teardownCommand: runNodeScript(reading) }))
    .resolves.toBe(true);
   expect(fs.existsSync(worktree)).toBe(false);
  }, 10_000);
@@ -4804,7 +4832,7 @@ describe('removeWorktree', () => {
   const recording = path.join(scripts, 'record.cjs');
   fs.writeFileSync(recording, `require('fs').writeFileSync(${JSON.stringify(marker)}, process.cwd());\n`);
 
-  await expect(teardownWorktree(repo, { directory: worktree, teardownCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(recording)}` })).resolves.toBe(true);
+  await expect(teardownWorktree(repo, { directory: worktree, teardownCommand: runNodeScript(recording) })).resolves.toBe(true);
   expect(fs.readFileSync(marker, 'utf8')).toBe(path.join(fs.realpathSync(path.dirname(worktree)), 'teardown-only'));
   expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('branch refs/heads/teardown-only');
 
@@ -4826,7 +4854,7 @@ describe('removeWorktree', () => {
   const chatty = path.join(createTempDir(), 'chatty.cjs');
   fs.writeFileSync(chatty, "process.stderr.write('log line\\n'.repeat(5000) + 'daemon not running\\n'); process.exit(1);\n");
 
-  const error = await removeWorktree(repo, { directory: worktree, teardownCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(chatty)}` })
+  const error = await removeWorktree(repo, { directory: worktree, teardownCommand: runNodeScript(chatty) })
    .then(() => null, (reason) => reason);
   expect(error.message).toMatch(/^Worktree teardown command failed, so the worktree was kept: \.\.\./);
   expect(error.message).toMatch(/daemon not running$/);

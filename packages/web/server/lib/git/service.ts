@@ -2161,10 +2161,11 @@ const runWorktreeStartCommand = async (directory: string, command: string | unde
 
   const windows = process.platform === 'win32';
   return new Promise<StartCommandResult>((resolve) => {
-    const child = spawn(windows ? 'cmd' : 'bash', windows ? ['/c', text] : ['-lc', text], {
+    const child = spawn(windows ? 'cmd.exe' : 'bash', windows ? ['/d', '/s', '/c', `"${text}"`] : ['-lc', text], {
       cwd: directory,
       env,
       windowsHide: true,
+      windowsVerbatimArguments: windows,
       detached: !windows,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
