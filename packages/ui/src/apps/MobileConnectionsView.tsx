@@ -4,7 +4,7 @@ import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { MobileSheetRow, MobileSheetSection } from '@/components/ui/MobileSheetList';
-import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
+import { OpenChamberLogo } from '@/components/ui/OhPiChamberLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
@@ -115,15 +115,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
   };
 
   const handleUrlChange = (value: string) => {
-<<<<<<< HEAD
     if (mode === 'welcome') {
-||||||| bc50ba56aa
-    // The first screen takes a pasted pairing link (openchamber://connect?...) in
-    // the URL field and splits it back into the server URL and token.
-    if (mode === 'welcome' && /^openchamber:\/\//i.test(value.trim())) {
-=======
-    if (mode === 'welcome' && /^openchamber:\/\//i.test(value.trim())) {
->>>>>>> upstream/main
       const payload = parseConnectionPayload(value);
       if (payload && 'pairing' in payload) {
         if (invalidPairingLink) setUrl('');

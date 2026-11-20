@@ -1,29 +1,3 @@
-<<<<<<< HEAD
-/**
- * OpenChamber deep-link vocabulary — the single source of truth for the `ohpichamber://`
- * URL scheme used across every native entry point: notification taps, home-screen / lock-
- * screen widgets, and (later) Live Activities. Anything that wants to drive navigation
- * builds a URL with {@link buildDeepLink} and anything that receives one parses it with
- * {@link parseDeepLink} into a typed {@link DeepLinkIntent}; the navigation layer
- * (deepLinkNavigation) is the only place that knows how to *apply* an intent.
- *
- * Keep this file pure (no React, no stores, no Capacitor) so it can be imported from any
- * context — including, eventually, a tiny encoder shared with the native widget/extension.
- */
-||||||| bc50ba56aa
-/**
- * OpenChamber deep-link vocabulary — the single source of truth for the `openchamber://`
- * URL scheme used across every native entry point: notification taps, home-screen / lock-
- * screen widgets, and (later) Live Activities. Anything that wants to drive navigation
- * builds a URL with {@link buildDeepLink} and anything that receives one parses it with
- * {@link parseDeepLink} into a typed {@link DeepLinkIntent}; the navigation layer
- * (deepLinkNavigation) is the only place that knows how to *apply* an intent.
- *
- * Keep this file pure (no React, no stores, no Capacitor) so it can be imported from any
- * context — including, eventually, a tiny encoder shared with the native widget/extension.
- */
-=======
->>>>>>> upstream/main
 
 import { isLinkIdentifier } from '@/lib/router/messageFocus';
 import { parsePairingConnectionPayload, parsePairingConnectionPayloadString, type PairingConnectionPayload } from '@/lib/connectionPayload';
@@ -46,16 +20,6 @@ export type DeepLinkIntent =
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, '');
 
 const segmentsOf = (url: URL): string[] => {
-<<<<<<< HEAD
-  // Custom-scheme URLs put the first route token in `host` (ohpichamber://session/<id>),
-  // but be tolerant of authority-less forms (ohpichamber:/session/<id>) where it lands in
-  // the pathname instead.
-||||||| bc50ba56aa
-  // Custom-scheme URLs put the first route token in `host` (openchamber://session/<id>),
-  // but be tolerant of authority-less forms (openchamber:/session/<id>) where it lands in
-  // the pathname instead.
-=======
->>>>>>> upstream/main
   const pathSegments = trimSlashes(url.pathname).split('/').filter(Boolean);
   if (url.host) {
     return [url.host, ...pathSegments];
@@ -63,20 +27,6 @@ const segmentsOf = (url: URL): string[] => {
   return pathSegments;
 };
 
-<<<<<<< HEAD
-/**
- * Parse a raw `ohpichamber://…` string into a typed intent, or `null` if it isn't a
- * recognised OpenChamber deep link. Tolerant by design: unknown routes return `null`
- * rather than throwing, so callers can fall back without a try/catch.
- */
-||||||| bc50ba56aa
-/**
- * Parse a raw `openchamber://…` string into a typed intent, or `null` if it isn't a
- * recognised OpenChamber deep link. Tolerant by design: unknown routes return `null`
- * rather than throwing, so callers can fall back without a try/catch.
- */
-=======
->>>>>>> upstream/main
 export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | null {
   if (typeof raw !== 'string' || raw.length === 0) {
     return null;

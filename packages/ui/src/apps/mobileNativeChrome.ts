@@ -47,39 +47,19 @@ export const useNativeMobileChrome = (): void => {
       const platform = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.();
       const applyStatusBar = async () => {
         if (platform === 'android') {
-<<<<<<< HEAD
-          // Android 15 ignores status-bar background writes. SystemBars may instead pad
-          // the native view on older WebViews, exposing the native rather than app theme.
-||||||| bc50ba56aa
-          // Inset the WebView below the bar and paint it with the resolved theme background
-          // (the splash colours the theme system persists). On Android 15+ edge-to-edge is
-          // enforced and both calls are no-ops — there the app pads itself via the
-          // Capacitor-injected --safe-area-inset-* CSS vars (see mobile.css, oc-platform-android).
-=======
->>>>>>> upstream/main
           const isDark = document.documentElement.classList.contains('dark');
           const themeBg =
             (isDark ? localStorage.getItem('splashBgDark') : localStorage.getItem('splashBgLight')) ||
             (isDark ? '#171515' : '#fffdf4');
           const overlayOff = await StatusBar.setOverlaysWebView({ overlay: false }).then(() => true, () => false);
-<<<<<<< HEAD
           // Before Android 15 that call moves the WebView below the status bar natively, so
           // the page must not reserve the strip again. Marked only once the call succeeded:
           // until then the WebView still sits under the bar and needs the injected inset.
           const layout = await WindowLayout.get().catch(() => null);
           const edgeToEdge = layout?.edgeToEdge ?? true;
-||||||| bc50ba56aa
-          // Before Android 15 that call moves the WebView below the status bar natively, so
-          // the page must not reserve the strip again. Marked only once the call succeeded:
-          // until then the WebView still sits under the bar and needs the injected inset.
-          const edgeToEdge = await WindowLayout.get().then(({ edgeToEdge }) => edgeToEdge, () => true);
-=======
-          const edgeToEdge = await WindowLayout.get().then(({ edgeToEdge }) => edgeToEdge, () => true);
->>>>>>> upstream/main
           if (overlayOff && !edgeToEdge) {
             root.classList.add('oc-android-below-status-bar');
           }
-<<<<<<< HEAD
           if (!edgeToEdge) {
             await StatusBar.setBackgroundColor({ color: themeBg }).catch(() => undefined);
           }
@@ -87,15 +67,6 @@ export const useNativeMobileChrome = (): void => {
           // Style.Dark = light text (dark bg). So dark theme → Style.Dark, light theme → Style.Light.
           const style = layout ? layout.statusBarStyle ?? (isDark ? Style.Dark : Style.Light) : Style.Default;
           await StatusBar.setStyle({ style }).catch(() => undefined);
-||||||| bc50ba56aa
-          await StatusBar.setBackgroundColor({ color: themeBg }).catch(() => undefined);
-          // Capacitor Style is named for the CONTENT: Style.Light = dark text (light bg),
-          // Style.Dark = light text (dark bg). So dark theme → Style.Dark, light theme → Style.Light.
-          await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => undefined);
-=======
-          await StatusBar.setBackgroundColor({ color: themeBg }).catch(() => undefined);
-          await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => undefined);
->>>>>>> upstream/main
           await StatusBar.show().catch(() => undefined);
           return;
         }

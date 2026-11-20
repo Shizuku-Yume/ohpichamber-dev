@@ -1049,17 +1049,11 @@ export const autoConnectLastInstance = async (options?: { fast?: boolean; skipIf
     return { status: 'no-candidate' };
   }
   try {
-<<<<<<< HEAD
     if (result.sessionToken) {
       if (!await writeSecureToken(secureTokenKeyOf(candidate), result.sessionToken)) return { status: 'unreachable', label: candidate.label };
       token = result.sessionToken;
     }
     await persistMobileConnection({ id: candidate.id, label: candidate.label, candidates: candidate.candidates, clientToken: token });
-||||||| bc50ba56aa
-    await upsertMobileConnection({ id: candidate.id, label: candidate.label, candidates: candidate.candidates }); // bump lastUsedAt (keeps token)
-=======
-    await upsertMobileConnection({ id: candidate.id, label: candidate.label, candidates: candidate.candidates });
->>>>>>> upstream/main
   } catch {
     if (result.transport.kind === 'relay') releaseHeldRelayTunnel(result.transport.tunnel);
     return { status: 'unreachable', label: candidate.label };
@@ -1267,17 +1261,10 @@ export const reprobeActiveConnection = async (options?: { fast?: boolean }): Pro
     }
   }
 
-<<<<<<< HEAD
   // 3. Current transport is dead — fall through to lower-priority candidates. A
   // rejected credential is re-probed on the current transport too, so an expired
   // passwordless session is renewed (or reports needs-login) instead of dropped.
   const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + (current === 'invalid' ? 0 : 1)) : [];
-||||||| bc50ba56aa
-  // 3. Current transport is dead — fall through to lower-priority candidates.
-  const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + 1) : [];
-=======
-  const lower = currentIndex >= 0 ? active.candidates.slice(currentIndex + 1) : [];
->>>>>>> upstream/main
   const fallback = await probeConnectionCandidates(lower, token, { fast, requestHeaders });
   logConnect('reprobe:fallback', { status: fallback.status, probed: lower.length });
   if (fallback.status === 'ok') {
@@ -1491,20 +1478,10 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
         return;
       }
 
-<<<<<<< HEAD
       // Persist newly supplied or bootstrapped credentials before switching.
       if (result.sessionToken) token = result.sessionToken;
       if (token && (tokenIsNew || result.sessionToken) && isCapacitorApp()) {
         if (!await writeSecureToken(tokenKey, token)) throw new MobileHeaderStorageError();
-||||||| bc50ba56aa
-      // Connected. Persist a user-supplied token before switching so a cold
-      // restart won't re-prompt.
-      if (token && tokenIsNew && isCapacitorApp()) {
-        await writeSecureToken(tokenKey, token);
-=======
-      if (token && tokenIsNew && isCapacitorApp()) {
-        await writeSecureToken(tokenKey, token);
->>>>>>> upstream/main
       }
       await persistMetadata({ id: saved?.id, label, candidates, clientToken: token, requestHeaders: headerUpdate });
       switchToTransport(result.transport, token ?? null, { runtimeKey: tokenKey, grant, requestHeaders });
@@ -1620,17 +1597,7 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
         credentials: 'include' as const,
         headers: loginHeaders,
         redirect,
-<<<<<<< HEAD
-        // Same dedupe key as pairing: re-authenticating after a token expires
-        // reuses this phone's existing device record instead of duplicating it.
         body: JSON.stringify({ password, trustDevice: true, issueClientToken: true, clientLabel: 'OhPiChamber Mobile', clientKind: 'mobile', devicePlatform: mobileDevicePlatform(), dedupeKey: mobileClientDedupeKey() }),
-||||||| bc50ba56aa
-        // Same dedupe key as pairing: re-authenticating after a token expires
-        // reuses this phone's existing device record instead of duplicating it.
-        body: JSON.stringify({ password, trustDevice: true, issueClientToken: true, clientLabel: 'OpenChamber Mobile', clientKind: 'mobile', devicePlatform: mobileDevicePlatform(), dedupeKey: mobileClientDedupeKey() }),
-=======
-        body: JSON.stringify({ password, trustDevice: true, issueClientToken: true, clientLabel: 'OpenChamber Mobile', clientKind: 'mobile', devicePlatform: mobileDevicePlatform(), dedupeKey: mobileClientDedupeKey() }),
->>>>>>> upstream/main
       };
       logConnect('password:start', { transport: chosen.kind });
       const login = chosen.kind === 'relay'

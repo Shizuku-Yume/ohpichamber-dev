@@ -14,7 +14,6 @@ const getApnsEnvironment = (): 'sandbox' | 'production' | undefined => {
   return undefined;
 };
 
-<<<<<<< HEAD
 /**
  * The key this phone opens sealed push text with. The native shell makes it
  * once and keeps it where its notification extension (iOS) or messaging
@@ -23,18 +22,6 @@ const getApnsEnvironment = (): 'sandbox' | 'production' | undefined => {
  * that predates it: the server then keeps sending plain text.
  */
 export const PUSH_KEY_PATTERN = /^[A-Za-z0-9+/]{43}=$/;
-||||||| bc50ba56aa
-/**
- * The key this phone opens sealed push text with. The native shell makes it
- * once and keeps it where its notification extension (iOS) or messaging
- * service (Android) can read it; iOS stamps it on the page at document start,
- * Android answers through the app-local PushKey plugin. Undefined from a shell
- * that predates it: the server then keeps sending plain text.
- */
-const PUSH_KEY_PATTERN = /^[A-Za-z0-9+/]{43}=$/;
-=======
-const PUSH_KEY_PATTERN = /^[A-Za-z0-9+/]{43}=$/;
->>>>>>> upstream/main
 
 declare global {
   interface Window {

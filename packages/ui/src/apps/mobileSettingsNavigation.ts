@@ -4,7 +4,6 @@ import { useUIStore } from '@/stores/useUIStore';
 
 export type MobileSettingsStage = 'nav' | 'page-content';
 
-<<<<<<< HEAD
 /**
  * Pages the phone's Settings surface can show. `home` is the nav stage, so a
  * deep link to `home` (or to any page listed here, which is the same list the
@@ -49,15 +48,6 @@ export const MOBILE_SETTINGS_PAGES: readonly SettingsPageSlug[] = [
  * opens the surface: on the requested page when the phone shows it, otherwise
  * on the page list.
  */
-||||||| bc50ba56aa
-/**
- * The phone shows Settings as a fullscreen surface and never renders the
- * Settings dialog. Shared entry points still ask for the dialog, so a request
- * opens the surface: on the requested page when the phone shows it, otherwise
- * on the page list.
- */
-=======
->>>>>>> upstream/main
 export const connectMobileSettingsNavigation = (
   visiblePages: readonly string[],
   openSettings: (stage: MobileSettingsStage) => void,

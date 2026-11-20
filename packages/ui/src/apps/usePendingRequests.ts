@@ -10,20 +10,7 @@ export const usePendingRequests = (sessionIds: readonly string[]): PendingReques
     [sessionIds],
   ));
   const hasForm = useGlobalBlockingRequestsStore(React.useCallback(
-<<<<<<< HEAD
     (state) => sessionIds.some((id) => Boolean(state.bySession.get(id)?.forms.length)),
-||||||| bc50ba56aa
-    // A page that waits for the user's answer counts as a form.
-    (state) => sessionIds.some((id) => {
-      const pending = state.bySession.get(id);
-      return Boolean(pending?.forms.length || pending?.pages.length);
-    }),
-=======
-    (state) => sessionIds.some((id) => {
-      const pending = state.bySession.get(id);
-      return Boolean(pending?.forms.length || pending?.pages.length);
-    }),
->>>>>>> upstream/main
     [sessionIds],
   ));
   return { hasPermission, hasForm };

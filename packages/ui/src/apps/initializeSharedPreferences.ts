@@ -6,12 +6,6 @@ import { initializeAppearancePreferences, syncDesktopSettings } from '@/lib/pers
 import { startTypographyWatcher } from '@/lib/typographyWatcher';
 
 type InitializeSharedPreferencesOptions = {
-<<<<<<< HEAD
-  /** Console prefix for init failures, for example `[web-main]`. */
-||||||| bc50ba56aa
-  /** Console prefix for init failures, for example `[vscode-main]`. */
-=======
->>>>>>> upstream/main
   logLabel: string;
   onAppearanceSettled?: () => void;
 };
