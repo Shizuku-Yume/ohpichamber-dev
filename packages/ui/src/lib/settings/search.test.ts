@@ -21,6 +21,14 @@ const runtimeCtx = {
 };
 
 describe('settings search', () => {
+  test('terminal reading is searchable on every surface, while browser profile sharing is desktop-only', () => {
+    for (const isDesktop of [false, true]) {
+      const context = { ...runtimeCtx, isDesktop };
+      const find = (query: string) => buildSettingsSearchResults({ query, runtimeCtx: context, t, getPageTitle: (page) => page });
+      expect(find('terminal').some((item) => item.id === 'sessions.agent-terminal-tool')).toBe(true);
+      expect(find('logins').some((item) => item.id === 'sessions.agent-browser-logins')).toBe(isDesktop);
+    }
+  });
   test('indexes worktree creation and keeps the mobile Return-key control mobile-only', () => {
     const create = SETTINGS_SEARCH_ITEMS.find((item) => item.id === 'projects.worktree.create');
     expect(create?.page).toBe('projects');
