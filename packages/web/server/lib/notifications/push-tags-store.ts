@@ -6,16 +6,25 @@ import { z } from 'zod';
 const tagSchema = z.object({ tag: z.string().min(1).max(512), nativeTag: z.string().min(1).max(512), sessionId: z.string().max(128).nullable(), at: z.number().finite() });
 type PushTag = z.infer<typeof tagSchema>;
 interface PushTagsState { version: 1; tags: PushTag[]; }
-interface PushTagsStore { read(): Promise<unknown>; write(state: PushTagsState): Promise<void>; }
+interface PushTagsStore { read(): Promise<PushTagsState>; write(state: PushTagsState): Promise<void>; }
 const MAX_TAGS = 500;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function createPushTagsStore(filePath: string): PushTagsStore {
   return {
     async read() {
-      try { return JSON.parse(await readFile(filePath, 'utf8')) as unknown; }
+      try {
+        const state = z.object({ version: z.literal(1), tags: z.array(z.unknown()) }).parse(JSON.parse(await readFile(filePath, 'utf8')));
+        const tags = state.tags.flatMap((value) => {
+          const parsed = tagSchema.safeParse(value);
+          if (parsed.success) return [parsed.data];
+          console.warn('[notifications] Ignoring invalid persisted push tag');
+          return [];
+        });
+        return { version: 1, tags };
+      }
       catch (error) {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return { version: 1, tags: [] };
+        if (z.object({ code: z.literal('ENOENT') }).safeParse(error).success) return { version: 1, tags: [] };
         throw error;
       }
     },
@@ -35,7 +44,10 @@ export function createPushTagTracker({ store = null, now = Date.now, logger = co
   let readable = true;
   const prune = () => {
     for (const [key, value] of tags) if (now() - value.at > MAX_AGE_MS || value.at > now()) tags.delete(key);
-    while (tags.size > MAX_TAGS) tags.delete(tags.keys().next().value!);
+    for (const key of tags.keys()) {
+      if (tags.size <= MAX_TAGS) break;
+      tags.delete(key);
+    }
   };
   let queue = Promise.resolve().then(async () => {
     if (!store) return;
