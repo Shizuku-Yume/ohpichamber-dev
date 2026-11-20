@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { QueueState } from '@openchamber/agent-contract';
 import { adoptRelayTunnel, deactivateRelayTunnel } from './relay/runtime-tunnel';
 import type { RelayTunnelClient } from './relay/tunnel-client';
 import { setRuntimeBearerToken, setRuntimeExtraHeaders } from './runtime-auth';
@@ -332,7 +333,7 @@ describe('openchamber events', () => {
     globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
       const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
       if (url.pathname === '/api/message-queue') reads += 1;
-      return Response.json({ revision: 1, sessions: [] });
+      return Response.json({ revision: '1', items: [] });
     }, originalFetch);
     const unsubscribe = subscribeMessageQueueSync(runtimeKey);
     const source = MockEventSource.instances[0];
@@ -340,17 +341,29 @@ describe('openchamber events', () => {
       source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:event-stream-ready', properties: {} }) });
       await useMessageQueueStore.getState().hydrate();
       expect(reads).toBe(1);
-      const session = { sessionId: target.sessionId, directory: target.directory, sendingId: 'q1', items: [{ id: 'q1', content: 'queued', text: 'queued', createdAt: 1, attachments: [], sendConfig: { providerID: 'p', modelID: 'm' } }] };
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 2, session } }) });
+      const queue: QueueState = {
+        sessionId: target.sessionId,
+        revision: '2',
+        items: [{
+          queueItemId: 'q1', status: 'leased', content: 'queued', text: 'queued', createdAt: 1,
+          attachments: [], context: [], lease: { leaseId: 'lease-1', expiresAt: 2 },
+          options: { providerId: 'p', modelId: 'm', agentId: null, variant: null, reasoningEffort: null },
+        }],
+      };
+      const publish = (state: QueueState) => source.onmessage?.({
+        data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { queue: state } }),
+      });
+      publish(queue);
       const key = getMessageQueueKey(target);
       expect(useMessageQueueStore.getState().queuedMessages[key]).toHaveLength(1);
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 3, session: { ...session, items: [], sendingId: null } } }) });
+      expect(useMessageQueueStore.getState().sendingIds[key]).toEqual(['q1']);
+      publish({ ...queue, revision: '3', items: [] });
       expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined();
       expect(useMessageQueueStore.getState().sendingIds[key]).toBeUndefined();
       expect(reads).toBe(1);
       expect(MockEventSource.instances).toHaveLength(1);
       unsubscribe();
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 4, session } }) });
+      publish({ ...queue, revision: '4' });
       expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined();
     } finally {
       unsubscribe();

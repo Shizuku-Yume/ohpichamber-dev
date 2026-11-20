@@ -16,7 +16,6 @@ import {
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { ensureChatsRootDirectory, getChatsRoot, isChatDirectoryPath } from '@/lib/chatDirectories';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
 import { retry, STARTUP_RETRY } from '@/sync/retry';
 import {
@@ -164,8 +163,8 @@ const bindKnownWorkspaceDirectories = async (generation: number): Promise<{
   /** The store action itself, called once the discovery snapshot has committed. */
   adoptGuessedSession: () => void;
 }> => {
-  const [{ useProjectsStore }, { useSessionUIStore }] = await Promise.all([
-    import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'),
+  const [{ useProjectsStore }, { useSessionUIStore }, { useDirectoryStore }] = await Promise.all([
+    import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'), import('@/stores/useDirectoryStore'),
   ]);
   const projectRootsById = new Map<string, string>();
   const adoptGuessedSession = useSessionUIStore.getState().adoptAuthoritativeSessionDirectory;
@@ -384,6 +383,7 @@ const fetchDirectoryPages = async (
   directories: Set<string>,
 ): Promise<DirectoryPageResult> => {
   const generation = loadGeneration;
+  const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
   const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory);
   const orderedDirectories = [...directories].sort((left, right) => {
     if (left === currentDirectory) return -1;

@@ -3,50 +3,23 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import type { QuestionRequest as FormRequest, ToolCallPart as NativeToolCallPart, ToolResultPart as NativeToolResultPart } from '@openchamber/agent-contract';
-type ToolPart = NativeToolCallPart | NativeToolResultPart;
+import { nativeQuestion } from '@/sync/session-message-loader-test-fixtures';
 import type { State } from '@/sync/types';
 
-// A running turn whose only open form is a deferred plugin question (#5391).
-let directoryState: Pick<State, 'form' | 'part'> = { form: {}, part: {} };
+const directoryState: Pick<State, 'snapshot' | 'session'> = { snapshot: {}, session: [] };
+let forms: State['form'] = {};
+const form = nativeQuestion('ses_a');
 
 mock.module('@/sync/sync-context', () => ({
-  useSessionStatus: () => ({ type: 'busy' }),
-  useSessionStatusSnapshotReady: () => true,
-  useSessionMessagesSelector: () => false,
+  useSessionStatus: () => 'running',
+  useSessionCompacting: () => null,
+  useSessionForms: (sessionId: string) => forms[sessionId] ?? [],
   useSessionPermissions: () => [],
   useDirectorySync: <T,>(select: (state: typeof directoryState) => T) => select(directoryState),
 }));
 mock.module('@/sync/session-ui-store', () => ({ useSessionUIStore: () => null }));
-// The server read of an unloaded tool call; `serverAnswer` is what the read finds.
-let serverAnswer: 'completed' | 'running' | 'failed' = 'completed';
-const reads: string[] = [];
-mock.module('@/sync/session-actions', () => ({
-  readUnloadedFormToolLinks: (sessionId: string) => {
-    reads.push(sessionId);
-    // What readFormToolLink records once the read returns a completed part.
-    if (serverAnswer === 'completed') void Promise.resolve().then(() => recovery.noteFormToolReleased(releaseKey, new Set([releaseKey])));
-  },
-}));
 
 const { useSessionActivity } = await import('./useSessionActivity');
-const recovery = await import('@/sync/recoverable-questions');
-
-const form: FormRequest = {
-  id: 'frm_later',
-  sessionID: 'ses_a',
-  title: 'Questions',
-  metadata: { kind: 'question', tool: { messageID: 'msg_ask', id: 'call_ask' } },
-  fields: [{ key: 'q0', type: 'string' }],
-};
-
-const releaseKey = recovery.formReleaseKey(form, { messageID: 'msg_ask', toolID: 'call_ask' });
-
-const toolPart = (state: ToolPart['state']): ToolPart => ({
-  id: 'call_ask', sessionID: 'ses_a', messageID: 'msg_ask', callID: 'call_ask', tool: 'deferred_question', type: 'tool', state,
-});
-const running = () => toolPart({ status: 'running', input: {}, time: { start: 1 } });
-const completed = () => toolPart({ status: 'completed', input: {}, output: '', time: { start: 1, end: 2 } });
 
 let root: Root | null = null;
 let host: HTMLElement;
@@ -63,9 +36,7 @@ beforeEach(() => {
     originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
-  recovery.resetRecoverableQuestions();
-  reads.length = 0;
-  serverAnswer = 'completed';
+  forms = {};
   host = document.createElement('div');
   root = createRoot(host);
 });
@@ -80,68 +51,55 @@ afterEach(() => {
   originals.clear();
 });
 
-test('a form whose tool call is still running holds the composer idle', async () => {
-  directoryState = { form: { ses_a: [form] }, part: { msg_ask: [running()] } };
+test('a native pending question holds the running session composer idle', async () => {
+  forms = { ses_a: [form] };
   await render();
   expect(phase()).toBe('idle');
-  expect(reads).toEqual([]);
 });
 
-test('a form whose tool call completed leaves the running turn busy, so Queue and Stop stay', async () => {
-  directoryState = { form: { ses_a: [form] }, part: { msg_ask: [completed()] } };
+test('a running session without pending questions keeps Queue and Stop', async () => {
   await render();
   expect(phase()).toBe('busy');
-  expect(reads).toEqual([]);
 });
 
-test('an unloaded tool call is read before any send, so a completed one shows the turn busy for the first Enter', async () => {
-  directoryState = { form: { ses_a: [form] }, part: {} };
+test('a canonical question resolution restores Queue and Stop without waiting for transcript parts', async () => {
+  forms = { ses_a: [form] };
   await render();
-  // No send has happened: the hook started the read itself, and its answer already put Stop and Queue back.
-  expect(reads).toEqual(['ses_a']);
+  expect(phase()).toBe('idle');
+  forms = { ses_a: [] };
+  await render();
   expect(phase()).toBe('busy');
 });
 
-test('an unloaded tool call the read finds running keeps holding the composer idle', async () => {
-  serverAnswer = 'running';
-  directoryState = { form: { ses_a: [form] }, part: {} };
+test('a question arriving before transcript parts keeps the running composer idle', async () => {
   await render();
-  expect(reads).toEqual(['ses_a']);
+  expect(phase()).toBe('busy');
+  forms = { ses_a: [form] };
+  await render();
   expect(phase()).toBe('idle');
 });
 
-test('a failed read is tried again when the forms are refreshed, not on every render', async () => {
-  serverAnswer = 'failed';
-  directoryState = { form: { ses_a: [form] }, part: {} };
+test('a refreshed snapshot of the same pending question keeps the composer idle', async () => {
+  forms = { ses_a: [form] };
   await render();
-  await render();
-  expect(reads).toEqual(['ses_a']);
   expect(phase()).toBe('idle');
-  // A reconnect resync stores the same form again as a new array; the server answers now.
-  serverAnswer = 'completed';
-  directoryState = { form: { ses_a: [{ ...form }] }, part: {} };
+  forms = { ses_a: [{ ...form }] };
   await render();
-  expect(reads).toEqual(['ses_a', 'ses_a']);
+  expect(phase()).toBe('idle');
+});
+
+test('a question in another session does not change the running composer', async () => {
+  forms = { ses_b: [nativeQuestion('ses_b')] };
+  await render();
   expect(phase()).toBe('busy');
 });
 
-test('a released form keeps the turn busy however many other forms are read while it is open', async () => {
-  directoryState = { form: { ses_a: [form] }, part: {} };
+test('resolving one of multiple pending questions keeps the composer idle', async () => {
+  const remaining = { ...form, questionId: 'question-b' };
+  forms = { ses_a: [form, remaining] };
   await render();
-  expect(phase()).toBe('busy');
-  await act(async () => {
-    for (let index = 0; index < 150; index += 1) {
-      const other = recovery.formReleaseKey({ ...form, id: `frm_other_${index}` }, { messageID: 'msg_ask', toolID: 'call_ask' });
-      recovery.noteFormToolReleased(other, new Set([releaseKey, other]));
-    }
-  });
-  expect(phase()).toBe('busy');
-  // The entry stayed: the hook never lost the answer and had to read again.
-  expect(reads).toEqual(['ses_a']);
-});
-
-test('a form without a tool link holds the composer idle, as before', async () => {
-  directoryState = { form: { ses_a: [{ ...form, metadata: undefined }] }, part: {} };
+  expect(phase()).toBe('idle');
+  forms = { ses_a: [remaining] };
   await render();
   expect(phase()).toBe('idle');
 });

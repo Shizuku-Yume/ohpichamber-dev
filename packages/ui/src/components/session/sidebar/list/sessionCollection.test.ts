@@ -150,9 +150,9 @@ describe('projectSidebarActiveSessions', () => {
 
   test('keeps a subsession in an unknown folder under a parent it shows, and only there', () => {
     const parent = session('parent', '/workspace/known');
-    const worker = { ...session('worker', '/removed/worktree'), parentID: 'parent' };
-    const grandchild = { ...session('grandchild', '/removed/worktree'), parentID: 'worker' };
-    const stray = { ...session('stray', '/removed/worktree'), parentID: 'unlisted' };
+    const worker = childSession('worker', '/removed/worktree', 'parent');
+    const grandchild = childSession('grandchild', '/removed/worktree', 'worker', { rootSessionId: 'parent' });
+    const stray = childSession('stray', '/removed/worktree', 'unlisted');
     const input = {
       globalActiveSessions: [parent, worker, grandchild, stray, session('root', '/removed/worktree')],
       liveSessions: [],
@@ -234,8 +234,8 @@ describe('projectSidebarCollection', () => {
   });
 
   test("keeps a managed Chat's subsession in an unknown folder under that Chat", () => {
-    const chat = session('chat', '/home/.config/openchamber/chats/2026-08-24/session-chat');
-    const worker = { ...session('worker', '/removed/worktree'), parentID: 'chat' };
+    const chat = session('chat', '/home/.config/ohpichamber/chats/2026-08-24/session-chat');
+    const worker = childSession('worker', '/removed/worktree', 'chat');
     const input = { globalActiveSessions: [chat, worker], liveSessions: [], knownDirectories: new Set(['/workspace/a']), isVSCode: false };
     expect(projectSidebarCollection(input).map((entry) => entry.sessionId)).toEqual(['worker']);
     expect(buildSidebarSessionProjection({ ...input, pinnedSessionIds: new Set(), sessionOrderRanks: new Map() })

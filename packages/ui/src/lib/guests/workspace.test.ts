@@ -9,6 +9,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { setSyncRefs } from '@/sync/sync-refs';
+import { applyCanonicalMetadataEvent, setActionRefs } from '@/sync/session-actions';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
@@ -24,6 +25,7 @@ let bSession: Session;
 beforeEach(() => {
   manager = new ChildStoreManager();
   setSyncRefs(manager, '/a');
+  setActionRefs(manager, () => '/a');
   resetWorkspaceDirectories();
   useProjectsStore.setState({ hasServerSnapshot: true, serverSnapshotFailed: false, projects: [
     { id: 'path_/a', path: '/a', label: 'A', addedAt: 1 },
@@ -57,16 +59,16 @@ const readB = () => {
 describe('extension workspace projection', () => {
   test('work membership uses canonical metadata and honors its frontend setting', () => {
     useUIStore.setState({ sessionWorkEnabled: true });
-    useGlobalSessionsStore.getState().upsertSession({ ...bSession, metadata: { openchamber: { work: { state: 'open', openedAt: 1, openedBy: 'user' } } } });
+    applyCanonicalMetadataEvent({ sessionId: bSession.sessionId, revision: '2', metadata: { openchamber: { work: { state: 'open', openedAt: 1, openedBy: 'user' } } } });
     expect(readB().sessions[0].inWork).toBe(true);
     useUIStore.setState({ sessionWorkEnabled: false });
     expect(readB().sessions[0].inWork).toBe(false);
     useUIStore.setState({ sessionWorkEnabled: true });
   });
   test('unread uses Host workbench marks rather than legacy transcript timestamps', () => {
-    useGlobalSessionsStore.getState().upsertSession({ ...bSession, metadata: { openchamber: { workbench: { lastIdleAt: 5 } } } });
+    applyCanonicalMetadataEvent({ sessionId: bSession.sessionId, revision: '2', metadata: { openchamber: { workbench: { lastIdleAt: 5 } } } });
     expect(readB().sessions[0].unread).toBe(true);
-    useGlobalSessionsStore.getState().upsertSession({ ...bSession, metadata: { openchamber: { workbench: { lastIdleAt: 5, viewedAt: 5 } } } });
+    applyCanonicalMetadataEvent({ sessionId: bSession.sessionId, revision: '3', metadata: { openchamber: { workbench: { lastIdleAt: 5, viewedAt: 5 } } } });
     expect(readB().sessions[0].unread).toBe(false);
   });
   test('paused and partially approved extensions cannot use retained grants', () => {
