@@ -6,6 +6,15 @@ This module owns microphone capture, chunk conversion, ordered replay and the ru
 
 ## Invariants
 
+- Correction carries the recording origin's authorized opaque workspace ID.
+  Existing sessions resolve by session ID, never by reverse-mapping a shared
+  directory. Draft/project inputs use the Canonical workspace resolver. Scope is
+  captured before microphone permission and retained for replay. Unavailable
+  scope disables correction for that pass without disabling recognition.
+- Stream starts await scope resolution and fence cancellation before sending a
+  start frame. Runtime changes retire preparation instead of sending an old
+  workspace to a new Host. All retained UI surfaces share this transport.
+
 - PCM segments stay buffered until completion so reconnect can replay the entire stream. A failed start or send clears stream identity while retaining segments for retry, and finish surfaces the failure.
 - Microphone level subscriptions bypass React state because audio-rate updates otherwise redraw the entire overlay. Capture emits mono 16 kHz PCM16LE chunks while preserving a separate live waveform signal.
 - Audio context creation and resume occur inside the starting gesture before permission resolves. A stopped pending start retires its graph immediately and releases a late stream; it reports no error to an owner that has already gone away.

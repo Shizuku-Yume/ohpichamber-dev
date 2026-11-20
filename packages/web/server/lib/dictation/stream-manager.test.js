@@ -409,7 +409,7 @@ describe('DictationStreamManager', () => {
         createSttSession: async () => ({ session }),
         correctTranscript,
       });
-      await manager.handleStart('d1', FORMAT, { correct, language: 'uk' });
+      await manager.handleStart('d1', FORMAT, { correct, language: 'uk', workspaceId: 'workspace' });
       manager.handleChunk({ dictationId: 'd1', seq: 0, audioBase64: loudChunkBase64() });
       manager.handleFinish('d1', 0);
       return { manager, messages, session };
@@ -426,7 +426,7 @@ describe('DictationStreamManager', () => {
       });
       await waitFor(() => messages.some((m) => m.type === 'final'));
       expect(messages.find((m) => m.type === 'final').payload.text).toBe('такий і здибав');
-      expect(calls).toEqual([{ text: 'таку з дибав', options: { language: 'uk' } }]);
+      expect(calls).toEqual([{ text: 'таку з дибав', options: { language: 'uk', workspaceId: 'workspace' } }]);
       expect(session.closed).toBe(true);
     });
 

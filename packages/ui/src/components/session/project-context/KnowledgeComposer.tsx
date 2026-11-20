@@ -170,6 +170,7 @@ export const KnowledgeComposer: React.FC<{
       ) : null}
       {dictation ? (
         <InlineDictationButton
+          directory={projectPath}
           onTranscript={(spoken) => {
             const current = currentText();
             setText(normalize(current.trim() ? `${current.trimEnd()} ${spoken}` : spoken));

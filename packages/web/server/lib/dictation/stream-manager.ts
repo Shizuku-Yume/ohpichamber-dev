@@ -9,6 +9,7 @@ import { CORRECTION_TIMEOUT_MS } from './transcript-correction.js';
 import type { CorrectionOptions } from './transcript-correction.js';
 
 export interface DictationStartOptions {
+  workspaceId?: unknown;
   provider?: unknown;
   language?: unknown;
   localModel?: unknown;
@@ -314,7 +315,7 @@ export class DictationStreamManager {
       finalTimeout: null,
       correction:
         startOptions.correct === true && this.correctTranscript
-          ? { language: startOptions.language }
+          ? { language: startOptions.language, workspaceId: startOptions.workspaceId }
           : null,
       correcting: false,
     });

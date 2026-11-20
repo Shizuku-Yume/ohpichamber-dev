@@ -5,6 +5,7 @@ import { openRuntimeWebSocket } from '@/lib/relay/runtime-socket';
 import { type RelayTunnelWebSocket } from '@/lib/relay/tunnel-client';
 
 export interface DictationStartOptions {
+    workspaceId?: string;
     provider?: 'local' | 'openai-compatible';
     language?: string;
     localModel?: string;

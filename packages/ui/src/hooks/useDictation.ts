@@ -5,10 +5,16 @@ import { dictationClient, type DictationStartOptions } from '@/lib/dictation/dic
 import { DictationStreamSender } from '@/lib/dictation/dictation-stream-sender';
 import { useDictationAudioSource, type DictationLevelListener } from '@/lib/dictation/use-dictation-audio-source';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 
 export type DictationStatus = 'idle' | 'recording' | 'uploading' | 'failed';
 
 export interface UseDictationOptions {
+    directory?: string;
+    sessionId?: string | null;
     onTranscript?: (text: string) => void;
     onError?: (error: Error) => void;
     canStart?: () => boolean;
@@ -36,12 +42,13 @@ const DURATION_TICK_MS = 1000;
 const toError = (value: unknown): Error =>
     value instanceof Error ? value : new Error(String(value));
 
-export const getDictationStartOptions = (): DictationStartOptions => {
+export const getDictationStartOptions = async (scope: Pick<UseDictationOptions, 'directory' | 'sessionId'> = {}): Promise<DictationStartOptions> => {
+    const runtimeKey = getRuntimeKey();
     const state = useConfigStore.getState();
     const language = state.sttLanguage?.trim();
     const correct = state.sttCorrectTranscript ? { correct: true } : {};
-    if (state.sttProvider === 'openai-compatible') {
-        return {
+    const options: DictationStartOptions = state.sttProvider === 'openai-compatible'
+        ? {
             provider: 'openai-compatible',
             ...(language ? { language } : {}),
             ...correct,
@@ -50,18 +57,34 @@ export const getDictationStartOptions = (): DictationStartOptions => {
                 model: state.sttModel,
                 endpointPath: state.sttEndpointPath || undefined,
             },
-        };
-    }
-    return {
+        }
+        : {
         provider: 'local',
         ...(language ? { language } : {}),
         ...correct,
         localModel: state.sttLocalModel,
-    };
+        };
+    if (!options.correct) return options;
+    try {
+        if (scope.sessionId) {
+            options.workspaceId = (await canonicalClient.getSession(scope.sessionId)).session.workspaceId;
+        } else if (scope.directory) {
+            options.workspaceId = (await canonicalClient.resolveWorkspace(scope.directory)).workspaceId;
+        }
+    } catch {
+        options.correct = false;
+    }
+    if (runtimeKey !== getRuntimeKey()) throw new Error('Runtime changed while preparing dictation');
+    if (!options.workspaceId) options.correct = false;
+    return options;
 };
 
 export function useDictation(options: UseDictationOptions = {}): UseDictationResult {
     const { onTranscript, onError, canStart } = options;
+    const column = useChatSessionSelection();
+    const scopeRef = useRef({ options, column });
+    scopeRef.current = { options, column };
+    const recordingScopeRef = useRef<Pick<UseDictationOptions, 'directory' | 'sessionId'>>({});
 
     const [status, setStatus] = useState<DictationStatus>('idle');
     const [partialTranscript, setPartialTranscript] = useState('');
@@ -89,7 +112,7 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
     if (!senderRef.current) {
         senderRef.current = new DictationStreamSender({
             client: dictationClient,
-            getStartOptions: getDictationStartOptions,
+            getStartOptions: () => getDictationStartOptions(recordingScopeRef.current),
         });
     }
 
@@ -206,6 +229,12 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         }
 
         gate.starting = true;
+        const { options: current, column: selected } = scopeRef.current;
+        recordingScopeRef.current = {
+            sessionId: current.sessionId !== undefined ? current.sessionId
+                : current.directory !== undefined ? null : selected.sessionId,
+            directory: current.directory ?? selected.directory ?? useDirectoryStore.getState().currentDirectory,
+        };
         clearError();
         setPartialTranscript('');
         setDuration(0);

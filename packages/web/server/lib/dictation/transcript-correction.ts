@@ -11,10 +11,12 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 export interface CorrectionOptions {
+  workspaceId?: unknown;
   language?: unknown;
 }
 
 export interface CorrectionGeneration {
+  workspaceId: string;
   system: string;
   prompt: string;
   timeoutMs: number;
@@ -28,9 +30,9 @@ export interface TranscriptCorrectorDependencies {
 }
 
 export function createTranscriptCorrector({ generate, timeoutMs = CORRECTION_TIMEOUT_MS }: TranscriptCorrectorDependencies) {
-  return async (text: string, { language }: CorrectionOptions = {}) => {
+  return async (text: string, { language, workspaceId }: CorrectionOptions = {}) => {
     const original = String(text ?? '');
-    if (!original.trim()) {
+    if (!original.trim() || typeof workspaceId !== 'string' || !workspaceId.trim()) {
       return original;
     }
     const languageLine = language ? `The speaker's language is "${String(language)}".\n\n` : '';
@@ -41,6 +43,7 @@ export function createTranscriptCorrector({ generate, timeoutMs = CORRECTION_TIM
     try {
       const result = await Promise.race([
         generate({
+          workspaceId,
           system: SYSTEM_PROMPT,
           prompt: `${languageLine}Dictated text:\n${original}`,
           timeoutMs,

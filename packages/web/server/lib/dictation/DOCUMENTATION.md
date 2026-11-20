@@ -33,6 +33,12 @@ response carries `X-Speech-Model` and `X-Speech-Language`.
 
 ## Ownership
 
+Correction start options carry `workspaceId` through the stream manager to the
+native small-model generator. The existing Host workspace resolver authorizes
+that identity before model discovery. Missing/invalid scope or correction failure
+keeps the original transcript; no directory-derived identity or global model
+fallback is synthesized. Recognition remains independent of Agent availability.
+
 - `runtime.js` — registers `GET /api/dictation/status`,
   `POST /api/dictation/models/:modelId/download`, and the
   `/api/dictation/ws` WebSocket endpoint (auth-gated the same way as the

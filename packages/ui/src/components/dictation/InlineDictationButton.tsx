@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 
 interface InlineDictationButtonProps {
+  directory?: string;
   onTranscript: (text: string) => void;
   disabled?: boolean;
   buttonClassName: string;
@@ -19,6 +20,7 @@ interface InlineDictationButtonProps {
 }
 
 export const InlineDictationButton: React.FC<InlineDictationButtonProps> = ({
+  directory,
   onTranscript,
   disabled,
   buttonClassName,
@@ -45,6 +47,7 @@ export const InlineDictationButton: React.FC<InlineDictationButtonProps> = ({
     cancelDictation,
     discardFailedDictation,
   } = useDictation({
+    directory,
     onTranscript: (text) => {
       if (text.trim()) onTranscriptRef.current(text.trim());
     },

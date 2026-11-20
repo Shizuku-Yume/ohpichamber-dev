@@ -21,7 +21,7 @@ export class DictationStreamSender {
     private readonly client: DictationClient;
     private readonly format: string;
     private readonly createDictationId: () => string;
-    private getStartOptions: () => DictationStartOptions;
+    private getStartOptions: () => DictationStartOptions | Promise<DictationStartOptions>;
 
     private dictationId: string | null = null;
     private sendSeq = 0;
@@ -35,7 +35,7 @@ export class DictationStreamSender {
 
     constructor(params: {
         client: DictationClient;
-        getStartOptions: () => DictationStartOptions;
+        getStartOptions: () => DictationStartOptions | Promise<DictationStartOptions>;
         format?: string;
         createDictationId?: () => string;
     }) {
@@ -129,7 +129,9 @@ export class DictationStreamSender {
         this.streamReady = false;
 
         const start = (async () => {
-            await this.client.startDictationStream(dictationId, this.format, this.getStartOptions());
+            const options = await this.getStartOptions();
+            if (this.startGeneration !== generation || this.dictationId !== dictationId) return;
+            await this.client.startDictationStream(dictationId, this.format, options);
             if (this.startGeneration !== generation) {
                 return;
             }

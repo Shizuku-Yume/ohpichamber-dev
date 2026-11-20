@@ -101,13 +101,11 @@ export function createDictationRuntime({
   const correctTranscript = createTranscriptCorrector({
     generate: async (args) => (await import('../small-model/index.js')).generateSmallModelText({
       ...args,
-      directory: undefined,
       maxOutputTokens: undefined,
       model: undefined,
       preferredModelID: undefined,
       preferredProviderID: undefined,
       responseSchema: undefined,
-      variant: undefined,
     }),
   });
 

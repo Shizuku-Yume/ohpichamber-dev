@@ -12,8 +12,13 @@ runtime-certified. Native session snapshot/inventory readers now forward optiona
 cancellation signals; all three cleanup/native session-route suites pass (112
 tests), including signal forwarding and failed-inventory handling.
 
-The latest scoped server check has one diagnostic: dictation correction still
-needs an authorized workspace ID instead of a retired directory argument.
+The scoped server check now passes with zero diagnostics. Dictation captures
+the recording origin's authorized workspace before microphone permission,
+retains it for replay, and carries it to native small-model correction. Session
+scope resolves by opaque session identity, not reverse directory lookup; draft
+and project inputs use the Canonical workspace resolver. Missing scope preserves
+recognition without correction. Four UI suites pass (24 tests), three Host suites
+pass (32 tests), and changed-source lint passes. No visual check was performed.
 The Agent Service projection import failure under Zod 4.6.7 is repaired by
 sharing refined unstamped Canonical payload schemas and snapshot-state fields.
 No wire DTO or cross-field validation was removed. Five focused contract/journal/

@@ -955,7 +955,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tab
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background" onKeyDown={handleReloadShortcut}>
-      {voiceChannel ? <AnnotationDictation channel={voiceChannel} /> : null}
+      {voiceChannel ? <AnnotationDictation channel={voiceChannel} directory={directory} /> : null}
       <BrowserToolbar
         address={address}
         onAddressChange={setAddress}

@@ -15,7 +15,7 @@ export type AnnotationVoiceChannel = {
   readonly subscribe: (listener: (message: AnnotationOverlayMessage) => void) => () => void;
 };
 
-export const AnnotationDictation: React.FC<{ channel: AnnotationVoiceChannel }> = ({ channel }) => {
+export const AnnotationDictation: React.FC<{ channel: AnnotationVoiceChannel; directory?: string }> = ({ channel, directory }) => {
   const { t } = useI18n();
 
   const queueRef = React.useRef<Promise<void>>(Promise.resolve());
@@ -33,6 +33,7 @@ export const AnnotationDictation: React.FC<{ channel: AnnotationVoiceChannel }> 
     cancelDictation,
     discardFailedDictation,
   } = useDictation({
+    directory,
     onTranscript: (text) => post({ type: 'insert', text }),
     onError: (error) => {
       if (modelDownloadSchema.safeParse(error).success) return;
