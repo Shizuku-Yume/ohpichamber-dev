@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-20 - Keep portable and type-safe test harness fixes
+
+- **Decided:** retain file URLs for the Electron startup test's Node `--import` preload and the Git storage fixture's proxy around `readFileSync`.
+- **Instead of:** restoring the upstream baseline's filesystem-path preload and hand-written `readFileSync` overloads.
+- **Because:** Windows drive-letter paths are not valid preload URLs, and the baseline fixture's overloads fail TS2394 and TS2322 against the installed Node types. The proxy preserves the complete Node signature and the fixture's read delay.
+- **Mine:** yes (requested drift classification)
+- **Revisit when:** upstream adopts these fixes or its harness no longer needs them.
+
 ## 2026-11-21 - Restore audit-discovered upload and settings reachability
 
 - **Decided:** compose one Host upload store into browser control and its authenticated download route; expose the existing file-input upload driver as `browser.upload`. Resolve files only inside the captured session folder, never a model-supplied directory or an OpenCode temporary directory. Keep the existing token expiry and file limits.
