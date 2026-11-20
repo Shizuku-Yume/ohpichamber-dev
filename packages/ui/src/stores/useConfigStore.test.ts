@@ -133,6 +133,10 @@ const deferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
+const settle = async () => {
+  for (let step = 0; step < 40; step += 1) await Promise.resolve();
+};
+
 let directoryAvailability: 'available' | 'missing' | 'unknown' = 'available';
 
 mock.module('@/lib/host-filesystem', () => ({
@@ -242,16 +246,6 @@ Object.defineProperty(globalThis, 'window', {
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: makeStorage() });
 Object.defineProperty(window, 'localStorage', { configurable: true, value: makeStorage() });
 const { useProjectsStore } = await import('./useProjectsStore');
-const { opencodeClient } = await import('@/lib/opencode/client');
-environment.cleanup(subscribeRuntimeEndpointChanged(() => opencodeClient.reconnectToRuntimeBaseUrl()));
-const { getOpenCodeTrustSnapshot, settleOpenCodeTrust, subscribeOpenCodeTrust } = await import('@/lib/opencodeTrust');
-const trustPrompts: string[] = [];
-environment.cleanup(subscribeOpenCodeTrust(() => {
-  const prompt = getOpenCodeTrustSnapshot();
-  if (!prompt) return;
-  trustPrompts.push(prompt.directory);
-  void settleOpenCodeTrust('skip');
-}));
 const { emitConfigChange } = await import('@/lib/configSync');
 const { invalidateSettingsCache, updateDesktopSettings } = await import('@/lib/persistence');
 
@@ -323,7 +317,7 @@ const refreshComposerCatalog = async (directory = DIRECTORY): Promise<boolean> =
 describe('useConfigStore provider persistence', () => {
   beforeEach(async () => {
     switchRuntimeEndpoint({ apiBaseUrl: 'https://config-tests.example', runtimeKey: `config-test-${++testRuntime}` });
-    await environment.settle();
+    await settle();
     flushDeferredStorage();
     invalidateSettingsCache();
     storage = new Map<string, string>();
@@ -336,10 +330,7 @@ describe('useConfigStore provider persistence', () => {
       ],
     };
     useProjectsStore.setState(projectsState);
-    providerReads.clear();
-    opencodeClient.clearAgentListRequests();
-    opencodeClient.clearProviderCatalogRequests();
-    opencodeClient.clearConfigCache();
+    canonicalResponsePromises.clear();
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: makeStorage(),
@@ -914,7 +905,7 @@ describe('useConfigStore provider persistence', () => {
       [OTHER_DIRECTORY, 'inactive-live'],
     ]);
     emitConfigChange('providers');
-    await environment.settle();
+    await settle();
 
     const state = useConfigStore.getState();
     expect(getProvidersCalls).toBe(4);

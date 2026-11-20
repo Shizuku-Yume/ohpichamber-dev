@@ -1,4 +1,4 @@
-import { modelRefKey, parseModelString } from '@openchamber/agent-contract';
+import { modelRefKey, parseModelString, type Message, type ModelSelection } from '@openchamber/agent-contract';
 
 export type ContextWindowLimits = {
   context: number;
@@ -7,17 +7,10 @@ export type ContextWindowLimits = {
 
 const NO_CONTEXT_WINDOW_LIMITS: ContextWindowLimits = { context: 0, output: 0 };
 
-/**
- * Canonical records carry `providerId`/`modelId`; the legacy OpenCode export
- * carried `providerID`/`modelID`. Read both so a session synced by either
- * shape still names the model that answered it.
- */
-type AnsweringMessage = { role?: string; providerId?: string; modelId?: string; providerID?: string; modelID?: string };
+type AnsweringMessage = Pick<Message, 'role' | 'providerId' | 'modelId'>;
 
 const messageModelKey = (message: AnsweringMessage): string | null => {
-  const providerId = message.providerId ?? message.providerID;
-  const modelId = message.modelId ?? message.modelID;
-  return modelRefKey(providerId, modelId) || null;
+  return modelRefKey(message.providerId, message.modelId) || null;
 };
 
 export const findAnsweringModelKey = (messages: readonly AnsweringMessage[]): string | null => {
@@ -30,16 +23,15 @@ export const findAnsweringModelKey = (messages: readonly AnsweringMessage[]): st
   return null;
 };
 
-type SessionModelLike = { model?: { providerID: string; id: string } };
+type SessionModelLike = { model?: ModelSelection | null };
 
 export const findSessionModelKey = (session: SessionModelLike | undefined): string | null => {
   const model = session?.model;
-  if (!model?.providerID || !model.id) return null;
-  return `${model.providerID}/${model.id}`;
+  return model ? modelRefKey(model.providerId, model.modelId) || null : null;
 };
 
-type ProviderModelLike = { id: string; limit?: { context?: number; output?: number } };
-type ProviderLike = { id: string; models: readonly ProviderModelLike[] };
+type ProviderModelLike = { modelId: string; contextWindow: number; maxOutputTokens: number };
+type ProviderLike = { providerId: string; models: readonly ProviderModelLike[] };
 
 export const limitsForAnsweringModel = (
   answeringModelKey: string | null,
@@ -48,6 +40,6 @@ export const limitsForAnsweringModel = (
   if (!answeringModelKey) return NO_CONTEXT_WINDOW_LIMITS;
   const parsed = parseModelString(answeringModelKey);
   if (!parsed) return NO_CONTEXT_WINDOW_LIMITS;
-  const model = providers.find((provider) => provider.id === parsed.providerId)?.models.find((entry) => entry.id === parsed.modelId);
-  return { context: model?.limit?.context ?? 0, output: model?.limit?.output ?? 0 };
+  const model = providers.find((provider) => provider.providerId === parsed.providerId)?.models.find((entry) => entry.modelId === parsed.modelId);
+  return { context: model?.contextWindow ?? 0, output: model?.maxOutputTokens ?? 0 };
 };

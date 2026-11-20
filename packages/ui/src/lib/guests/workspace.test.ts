@@ -1,3 +1,4 @@
+import { applySessionLiveWorkEvents, resetSessionLiveWork } from '@/sync/session-live-work';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -9,15 +10,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { setSyncRefs } from '@/sync/sync-refs';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { applySessionEventToGlobalSessions } from '@/sync/session-event-router';
-=======
-import { applySessionEventToGlobalSessions } from '@/sync/session-event-router';
-import { applySessionLiveWorkEvents, resetSessionLiveWork } from '@/sync/session-live-work';
-import type { OpenCodeEvent } from '@opencode/client';
-import { translateWireEvent } from '@/lib/opencode/events';
->>>>>>> upstream/main
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
 import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedTrackerItem } from '@/lib/linkedIssues';
@@ -63,6 +55,20 @@ const readB = () => {
   return snapshot;
 };
 describe('extension workspace projection', () => {
+  test('work membership uses canonical metadata and honors its frontend setting', () => {
+    useUIStore.setState({ sessionWorkEnabled: true });
+    useGlobalSessionsStore.getState().upsertSession({ ...bSession, metadata: { openchamber: { work: { state: 'open', openedAt: 1, openedBy: 'user' } } } });
+    expect(readB().sessions[0].inWork).toBe(true);
+    useUIStore.setState({ sessionWorkEnabled: false });
+    expect(readB().sessions[0].inWork).toBe(false);
+    useUIStore.setState({ sessionWorkEnabled: true });
+  });
+  test('unread uses Host workbench marks rather than legacy transcript timestamps', () => {
+    useGlobalSessionsStore.getState().upsertSession({ ...bSession, metadata: { openchamber: { workbench: { lastIdleAt: 5 } } } });
+    expect(readB().sessions[0].unread).toBe(true);
+    useGlobalSessionsStore.getState().upsertSession({ ...bSession, metadata: { openchamber: { workbench: { lastIdleAt: 5, viewedAt: 5 } } } });
+    expect(readB().sessions[0].unread).toBe(false);
+  });
   test('paused and partially approved extensions cannot use retained grants', () => {
     expect(guestMay({ id: 'board', name: 'Board', icon: 'window', enabled: false,
       capabilities: { requested: ['sessions'], granted: ['sessions'] } }, 'sessions')).toBe(false);
@@ -227,86 +233,8 @@ describe('extension workspace projection', () => {
     await Promise.resolve();
     expect(snapshots.length).toBe(baseline + 1);
   });
-<<<<<<< HEAD
   test('blocking requests expose state without conversation data', () => {
     useConfigStore.setState({ isConnected: true });
-||||||| bc50ba56aa
-  test('links show every thread on the session, whoever linked it, without another extension data', () => {
-    useGlobalSessionsStore.getState().applySnapshot([{ ...session('b-session', '/b-tree'), metadata: { openchamber: { linked_issues: [
-      { id: 'link:https://gitlab.com/g/r/-/merge_requests/4', kind: 'external', thread: 'change', identifier: '!4', title: 'Agent MR', url: 'https://gitlab.com/g/r/-/merge_requests/4', linkedAt: 2 },
-      { id: 'openchamber/openchamber#7', number: 7, kind: 'issue', title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', linkedAt: 3 },
-      { id: 'guest:other:X-1', kind: 'guest', providerId: 'other', identifier: 'X-1', title: 'Other card', url: 'https://other.example/X-1', data: { secret: true }, linkedAt: 4 },
-      { id: 'guest:board:B-2', kind: 'guest', providerId: 'board', identifier: 'B-2', title: 'Own card', url: 'https://board.example/B-2', data: { column: 'todo' }, linkedAt: 5 },
-    ] } } }], [], 'ready');
-
-    const [record] = readB().sessions;
-    expect(record.items).toEqual([{ id: 'B-2', data: { column: 'todo' } }]);
-    expect(record.links).toEqual([
-      { title: 'Agent MR', url: 'https://gitlab.com/g/r/-/merge_requests/4', kind: 'change', linkedAt: 2 },
-      { title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', kind: 'issue', linkedAt: 3 },
-      { title: 'Other card', url: 'https://other.example/X-1', kind: 'issue', linkedAt: 4 },
-      { title: 'Own card', url: 'https://board.example/B-2', kind: 'issue', linkedAt: 5 },
-    ]);
-  });
-  test('blocking requests and retries expose state without conversation data', () => {
-=======
-  test('links show every thread on the session, whoever linked it, without another extension data', () => {
-    useGlobalSessionsStore.getState().applySnapshot([{ ...session('b-session', '/b-tree'), metadata: { openchamber: { linked_issues: [
-      { id: 'link:https://gitlab.com/g/r/-/merge_requests/4', kind: 'external', thread: 'change', identifier: '!4', title: 'Agent MR', url: 'https://gitlab.com/g/r/-/merge_requests/4', linkedAt: 2 },
-      { id: 'openchamber/openchamber#7', number: 7, kind: 'issue', title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', linkedAt: 3 },
-      { id: 'guest:other:X-1', kind: 'guest', providerId: 'other', identifier: 'X-1', title: 'Other card', url: 'https://other.example/X-1', data: { secret: true }, linkedAt: 4 },
-      { id: 'guest:board:B-2', kind: 'guest', providerId: 'board', identifier: 'B-2', title: 'Own card', url: 'https://board.example/B-2', data: { column: 'todo' }, linkedAt: 5 },
-    ] } } }], [], 'ready');
-
-    const [record] = readB().sessions;
-    expect(record.items).toEqual([{ id: 'B-2', data: { column: 'todo' } }]);
-    expect(record.links).toEqual([
-      { title: 'Agent MR', url: 'https://gitlab.com/g/r/-/merge_requests/4', kind: 'change', linkedAt: 2 },
-      { title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', kind: 'issue', linkedAt: 3 },
-      { title: 'Other card', url: 'https://other.example/X-1', kind: 'issue', linkedAt: 4 },
-      { title: 'Own card', url: 'https://board.example/B-2', kind: 'issue', linkedAt: 5 },
-    ]);
-  });
-  test('in work follows the session metadata and the In work setting, and publishes the toggle', async () => {
-    useUIStore.setState({ sessionWorkEnabled: true });
-    useGlobalSessionsStore.getState().applySnapshot([
-      { ...session('b-session', '/b-tree'), metadata: { openchamber: { work: { state: 'open', openedAt: 1 } } } },
-      { ...session('b-done', '/b-tree'), metadata: { openchamber: { work: { state: 'done', doneAt: 2 } } } },
-      session('b-plain', '/b-tree'),
-      { ...session('b-sub', '/b-tree'), parentID: 'b-session', metadata: { openchamber: { work: { state: 'open', openedAt: 1 } } } },
-    ], [{ ...session('b-archived', '/b-tree'), time: { created: 1, updated: 1, archived: 3 }, metadata: { openchamber: { work: { state: 'open', openedAt: 1 } } } }], 'ready');
-    const inWork = () => Object.fromEntries(readB().sessions.map((entry) => [entry.id, entry.inWork]));
-    expect(inWork()).toEqual({ 'b-session': true, 'b-done': false, 'b-plain': false, 'b-sub': false, 'b-archived': false });
-    const seen: boolean[] = [];
-    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', (next) => {
-      if (next.kind === 'sessions') seen.push(next.sessions.some((entry) => entry.inWork));
-    });
-    try {
-      useUIStore.setState({ sessionWorkEnabled: false });
-      await Promise.resolve();
-      expect(inWork()).toEqual({ 'b-session': false, 'b-done': false, 'b-plain': false, 'b-sub': false, 'b-archived': false });
-      expect(seen).toEqual([true, false]);
-    } finally {
-      stop();
-      useUIStore.setState({ sessionWorkEnabled: true });
-    }
-  });
-  test('unread follows the idle and viewed marks, and a view publishes', async () => {
-    const turned = { ...session('b-session', '/b-tree'), time: { created: 1, updated: 2, idle: 5 } };
-    useGlobalSessionsStore.getState().applySnapshot([turned, { ...session('b-seen', '/b-tree'), time: { created: 1, updated: 2, idle: 5, viewed: 5 } }], [], 'ready');
-    expect(Object.fromEntries(readB().sessions.map((entry) => [entry.id, entry.unread]))).toEqual({ 'b-session': true, 'b-seen': false });
-    const seen: boolean[] = [];
-    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', (next) => {
-      if (next.kind === 'sessions') seen.push(next.sessions.find((entry) => entry.id === 'b-session')?.unread ?? false);
-    });
-    try {
-      useGlobalSessionsStore.getState().upsertSession({ ...turned, time: { ...turned.time, viewed: 5 } });
-      await Promise.resolve();
-      expect(seen).toEqual([true, false]);
-    } finally { stop(); }
-  });
-  test('blocking requests and retries expose state without conversation data', () => {
->>>>>>> upstream/main
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
     applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '6', timestamp: 6, runtimeStatus: 'awaiting_approval', activeRunId: 'run-4' });
     expect(readB().sessions[0].activity).toBe('waiting-permission');
@@ -317,21 +245,15 @@ describe('extension workspace projection', () => {
     expect('messages' in readB().sessions[0]).toBe(false);
   });
   test('the running tool shows its path relative to the session, only while the session runs, and publishes', async () => {
-    const wire = { id: 'evt', created: 1, location: { directory: '/b-tree' } };
-    const durable = { aggregateID: 'b-session', seq: 1, version: 1 as const };
     const call = (id: string, name: string, input: Record<string, string>) => {
-      const events: OpenCodeEvent[] = [
-        { ...wire, type: 'session.tool.input.started', durable, data: { sessionID: 'b-session', assistantMessageID: 'msg', id, name } },
-        { ...wire, type: 'session.tool.called', durable, data: { sessionID: 'b-session', assistantMessageID: 'msg', id, input, executed: true } },
-      ];
-      applySessionLiveWorkEvents(events.flatMap(translateWireEvent));
+      applySessionLiveWorkEvents([{ type: 'tool.started', sessionId: 'b-session', epoch: 'epoch-1', sequence: '1', timestamp: 1, toolCallId: id, toolName: name, input }]);
     };
     const tools: unknown[] = [];
-    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', (next) => {
+    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board', (next) => {
       if (next.kind === 'sessions') tools.push(next.sessions[0].tool);
     });
     try {
-      applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', properties: { sessionID: 'b-session', status: { type: 'busy' } } });
+      applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '1', timestamp: 1, runtimeStatus: 'running', activeRunId: 'run-1' });
       call('1', 'edit', { path: '/b-tree/src/layout.ts' });
       await Promise.resolve();
       expect(readB().sessions[0].tool).toEqual({ name: 'edit', target: 'src/layout.ts' });
@@ -345,29 +267,18 @@ describe('extension workspace projection', () => {
       call('5', 'read', { filePath: 'src/./page/../main.ts' });
       expect(readB().sessions[0].tool).toEqual({ name: 'read', target: 'src/main.ts' });
       // The status says idle: a call still in the index is not shown.
-      applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', properties: { sessionID: 'b-session', status: { type: 'idle' } } });
+      applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '2', timestamp: 2, runtimeStatus: 'idle', activeRunId: null });
       expect(readB().sessions[0].tool).toBeNull();
       await Promise.resolve();
       expect(tools.at(-1)).toBeNull();
       expect(tools.some((entry) => JSON.stringify(entry) === JSON.stringify({ name: 'edit', target: 'src/layout.ts' }))).toBe(true);
     } finally { stop(); }
   });
-  test('context fill is the latest step against the session model window, unknown after a compaction', () => {
-    const wire = { id: 'evt', created: 1, location: { directory: '/b-tree' } };
-    const durable = { aggregateID: 'b-session', seq: 1, version: 1 as const };
-    // SAFETY: the projection reads only `id`, `models[].id` and `models[].limit` of a provider.
-    useConfigStore.setState({ providers: [{ id: 'acme', name: 'Acme', models: [{ id: 'big', name: 'Big', limit: { context: 400_000, output: 32_000 } }] }] as never });
-    useGlobalSessionsStore.getState().applySnapshot([{ ...session('b-session', '/b-tree'), model: { providerID: 'acme', id: 'big' } }], [], 'ready');
+  test('context fill uses canonical usage and clears on compaction', () => {
     expect(readB().sessions[0].context).toBeNull();
-    applySessionLiveWorkEvents(translateWireEvent({
-      ...wire, type: 'session.step.ended', durable,
-      data: { sessionID: 'b-session', assistantMessageID: 'msg', finish: 'stop', cost: 0, tokens: { input: 100_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } } },
-    }));
-    expect(readB().sessions[0].context).toEqual({ tokens: 100_000, limit: 400_000 });
-    // A model the provider list does not know has no window to measure against.
-    useConfigStore.setState({ providers: [] });
+    applySessionLiveWorkEvents([{ type: 'message.updated', sessionId: 'b-session', epoch: 'epoch-1', sequence: '1', timestamp: 1, messageId: 'msg', usage: { input: 100_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 100_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } }]);
     expect(readB().sessions[0].context).toEqual({ tokens: 100_000, limit: null });
-    applySessionLiveWorkEvents(translateWireEvent({ ...wire, type: 'session.compaction.ended', durable, data: { sessionID: 'b-session', reason: 'auto', text: 'summary' } }));
+    applySessionLiveWorkEvents([{ type: 'session.compacted', sessionId: 'b-session', epoch: 'epoch-1', sequence: '2', timestamp: 2, compactionId: 'compact-1', tokensBefore: 100_000, completedAt: 2 }]);
     expect(readB().sessions[0].context).toBeNull();
   });
 });

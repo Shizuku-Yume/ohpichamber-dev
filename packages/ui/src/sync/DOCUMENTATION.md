@@ -32,6 +32,8 @@ The directory-scoped sync stores do not provide a complete global view:
 
 Use the directory sync stores for live session, message, approval, and question state. Use the global sessions store for cold or global session coverage (archived pages and unopened directories). Use aggregated child-store sessions (`useAllLiveSessions()`) and the global session status index (`useGlobalSessionStatus()`) for live truth across initialized directories.
 
+`session-live-work.ts` derives Guest tool intent and context fill only from reducer-admitted canonical events and adopted snapshots. Snapshot tools must belong to the current active run, never historical running parts. Terminal events clear live tools; compaction invalidates an old context reading. The bounded cache resets with the runtime, and a Host read started before that reset cannot repopulate it.
+
 ## Snapshot startup and cold-send recovery
 
 Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryable failures stop immediately, exhausted failures preserve prior state and report a loader error, and retired loads stop before another request. Every adopted snapshot reaches the existing event pipeline through `onSnapshot`.

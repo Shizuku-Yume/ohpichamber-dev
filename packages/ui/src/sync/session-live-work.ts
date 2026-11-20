@@ -1,7 +1,5 @@
 import { create } from 'zustand';
-import type { SyncEvent } from '@/lib/opencode/events';
-import type { JsonValue } from '@/lib/opencode/model';
-import { contextTokensFromBreakdown } from '@/stores/utils/tokenUtils';
+import type { CanonicalEvent, JsonValue, SessionSnapshot } from '@openchamber/agent-contract';
 
 
 type LiveTool = {
@@ -28,6 +26,7 @@ export const SESSION_LIVE_WORK_MAX = 2000;
 const CALLS_MAX = 16;
 
 let revision = 0;
+let resetRevision = 0;
 const touchedAt = new Map<string, number>();
 
 const touch = (sessionID: string): void => {
@@ -49,21 +48,6 @@ export const useSessionLiveWorkStore = create<SessionLiveWorkState>()(() => ({
   context: new Map(),
 }));
 
-const RAW_INPUT_MAX = 4096;
-const rawInputs = new Map<string, string>();
-const STREAMED_PATH = /"(?:path|filePath|file_path)"\s*:\s*("(?:[^"\\]|\\.)*")/u;
-
-const readStreamedPath = (raw: string): string | null => {
-  const quoted = STREAMED_PATH.exec(raw)?.[1];
-  if (!quoted) return null;
-  try {
-    const path: unknown = JSON.parse(quoted);
-    return typeof path === 'string' && path.trim() ? path.trim() : null;
-  } catch {
-    return null;
-  }
-};
-
 const readInputPath = (input: Readonly<Partial<Record<string, JsonValue>>>): string | null => {
   for (const key of ['path', 'filePath', 'file_path']) {
     const value = input[key];
@@ -81,7 +65,7 @@ const setCapped = <V>(map: Map<string, V>, key: string, value: V): void => {
   }
 };
 
-export const applySessionLiveWorkEvents = (payloads: readonly SyncEvent[]): void => {
+export const applySessionLiveWorkEvents = (payloads: readonly CanonicalEvent[]): void => {
   const state = useSessionLiveWorkStore.getState();
   let tools: Map<string, SessionCalls> | null = null;
   let context: Map<string, ContextReading> | null = null;
@@ -98,102 +82,71 @@ export const applySessionLiveWorkEvents = (payloads: readonly SyncEvent[]): void
     context ??= new Map(state.context);
     setCapped(context, sessionID, reading);
   };
-  const measure = (sessionID: string, breakdown: Parameters<typeof contextTokensFromBreakdown>[0]) => {
-    const tokens = contextTokensFromBreakdown(breakdown);
+  const measure = (sessionID: string, tokens: number) => {
     if (tokens > 0) read(sessionID, { state: 'measured', tokens });
   };
   const endCalls = (sessionID: string) => {
     const calls = callsOf(sessionID);
     if (calls.running.length === 0 && !calls.last) return;
-    for (const call of calls.running) rawInputs.delete(call.partID);
     setCalls(sessionID, { running: [], last: null });
   };
-  const name = (sessionID: string, partID: string, path: string | null) => {
+  const startCall = (sessionID: string, id: string, toolName: string, input: Record<string, JsonValue>) => {
     const calls = callsOf(sessionID);
-    const call = calls.running.find((entry) => entry.partID === partID);
-    if (!call || !path || call.path === path) return;
-    setCalls(sessionID, { ...calls, running: calls.running.map((entry) => (entry === call ? { ...entry, path } : entry)) });
+    const path = readInputPath(input);
+    const existing = calls.running.find((call) => call.partID === id);
+    if (existing?.name === toolName && existing.path === path) return;
+    const call = { partID: id, name: toolName, path };
+    setCalls(sessionID, { ...calls, running: existing ? calls.running.map((entry) => entry === existing ? call : entry) : [...calls.running, call] });
   };
-  for (const payload of payloads) {
-    switch (payload.type) {
-      case 'message.part.updated': {
-        const { part, sessionID } = payload.properties;
-        if (part.type !== 'tool' || part.state.status !== 'pending') break;
-        const calls = callsOf(sessionID);
-        if (calls.running.some((call) => call.partID === part.id)) break;
-        setCalls(sessionID, { ...calls, running: [...calls.running, { partID: part.id, name: part.tool, path: null }] });
+  const finishCall = (sessionID: string, id: string) => {
+    const calls = callsOf(sessionID);
+    const call = calls.running.find((entry) => entry.partID === id);
+    if (call) setCalls(sessionID, { running: calls.running.filter((entry) => entry !== call), last: call });
+  };
+  for (const event of payloads) {
+    const id = event.sessionId;
+    switch (event.type) {
+      case 'tool.started':
+        startCall(id, event.toolCallId, event.toolName, event.input);
         break;
-      }
-      case 'message.part.delta': {
-        const { sessionID, partID, field, delta } = payload.properties;
-        if (field !== 'raw') break;
-        const call = callsOf(sessionID).running.find((entry) => entry.partID === partID);
-        if (!call || call.path !== null) break;
-        const kept = rawInputs.get(partID) ?? '';
-        if (kept.length >= RAW_INPUT_MAX) break;
-        const raw = (kept + delta).slice(0, RAW_INPUT_MAX);
-        const path = readStreamedPath(raw);
-        if (path) {
-          rawInputs.delete(partID);
-          name(sessionID, partID, path);
-        } else {
-          setCapped(rawInputs, partID, raw);
+      case 'tool.completed':
+        finishCall(id, event.toolCallId);
+        break;
+      case 'part.started':
+      case 'part.updated':
+      case 'part.completed': {
+        const part = event.part;
+        if (part.type === 'tool_call') {
+          if (part.status === 'pending' || part.status === 'running') startCall(id, part.toolCallId, part.toolName, part.input);
+          else finishCall(id, part.toolCallId);
         }
         break;
       }
-      case 'message.tool.transition': {
-        const { sessionID, partID, transition } = payload.properties;
-        const calls = callsOf(sessionID);
-        const call = calls.running.find((entry) => entry.partID === partID);
-        if (!call) break;
-        if (transition.kind === 'input') {
-          rawInputs.delete(partID);
-          name(sessionID, partID, readStreamedPath(transition.raw));
-        } else if (transition.kind === 'called') {
-          rawInputs.delete(partID);
-          name(sessionID, partID, readInputPath(transition.input));
-        } else if (transition.kind === 'success' || transition.kind === 'failed') {
-          rawInputs.delete(partID);
-          const current = callsOf(sessionID);
-          const ended = current.running.find((entry) => entry.partID === partID) ?? call;
-          setCalls(sessionID, { running: current.running.filter((entry) => entry.partID !== partID), last: ended });
-        }
+      case 'message.created':
+      case 'message.updated':
+        if (event.usage) measure(id, event.usage.totalTokens);
         break;
-      }
-      case 'message.patched':
-        if (payload.properties.patch.tokens) measure(payload.properties.sessionID, payload.properties.patch.tokens);
+      case 'session.compacted':
+        read(id, event.tokensAfter === undefined ? { state: 'compacted' } : { state: 'measured', tokens: event.tokensAfter });
         break;
-      case 'message.updated': {
-        const { info } = payload.properties;
-        if (info.role === 'user') endCalls(info.sessionID);
-        else if (info.role === 'assistant' && info.tokens) measure(info.sessionID, info.tokens);
-        else if (info.role === 'compaction' && info.status === 'completed' && !info.error) read(info.sessionID, { state: 'compacted' });
+      case 'run.started':
+      case 'run.completed':
+      case 'run.failed':
+      case 'run.cancelled':
+        endCalls(id);
         break;
-      }
       case 'session.status':
-        if (payload.properties.status.type === 'idle') endCalls(payload.properties.sessionID);
+        if (event.runtimeStatus === 'idle' || event.runtimeStatus === 'unavailable') endCalls(id);
         break;
-      case 'session.idle':
-      case 'session.error':
-        endCalls(payload.properties.sessionID);
-        break;
-      case 'server.connected':
-        if ((tools ?? state.tools).size > 0) {
-          rawInputs.clear();
-          tools = new Map();
+      case 'session.deleted':
+        for (const sessionID of event.deletedSessionIds) {
+          endCalls(sessionID);
+          touch(sessionID);
+          if ((context ?? state.context).has(sessionID)) {
+            context ??= new Map(state.context);
+            context.delete(sessionID);
+          }
         }
-        break;
-      case 'session.deleted': {
-        const { sessionID } = payload.properties;
-        endCalls(sessionID);
-        touch(sessionID);
-        if ((context ?? state.context).has(sessionID)) {
-          context ??= new Map(state.context);
-          context.delete(sessionID);
-        }
-        break;
-      }
-      default:
         break;
     }
   }
@@ -205,6 +158,7 @@ const sameReading = (a: ContextReading, b: ContextReading): boolean => (
 );
 
 export const seedSessionContextFromHost = (readings: ReadonlyMap<string, ContextReading>, since: number): void => {
+  if (since < resetRevision) return;
   const state = useSessionLiveWorkStore.getState();
   let context: Map<string, ContextReading> | null = null;
   for (const [sessionID, reading] of readings) {
@@ -219,6 +173,30 @@ export const seedSessionContextFromHost = (readings: ReadonlyMap<string, Context
 
 export const resetSessionLiveWork = (): void => {
   touchedAt.clear();
-  rawInputs.clear();
+  revision += 1;
+  resetRevision = revision;
   useSessionLiveWorkStore.setState({ tools: new Map(), context: new Map() });
+};
+
+export const applySessionLiveWorkSnapshot = (snapshot: SessionSnapshot): void => {
+  const id = snapshot.session.sessionId;
+  const activeTurns = new Set(snapshot.activeRun ? snapshot.turns.filter((turn) => turn.runId === snapshot.activeRun?.runId).map((turn) => turn.turnId) : []);
+  const calls: LiveTool[] = [];
+  let reading: ContextReading | undefined;
+  for (const message of snapshot.messages) {
+    if (message.role === 'assistant' && message.usage && message.usage.totalTokens > 0) reading = { state: 'measured', tokens: message.usage.totalTokens };
+    for (const part of message.parts) {
+      if (part.type === 'notice' && part.noticeType === 'compaction') reading = part.details.tokensAfter === undefined ? { state: 'compacted' } : { state: 'measured', tokens: part.details.tokensAfter };
+      if (activeTurns.has(message.turnId) && part.type === 'tool_call' && (part.status === 'pending' || part.status === 'running')) calls.push({ partID: part.toolCallId, name: part.toolName, path: readInputPath(part.input) });
+    }
+  }
+  const state = useSessionLiveWorkStore.getState();
+  const tools = new Map(state.tools);
+  const context = new Map(state.context);
+  if (calls.length) setCapped(tools, id, { running: calls.slice(-CALLS_MAX), last: null });
+  else tools.delete(id);
+  if (reading) setCapped(context, id, reading);
+  else context.delete(id);
+  touch(id);
+  useSessionLiveWorkStore.setState({ tools, context });
 };

@@ -1,6 +1,5 @@
 import { refreshRuntimeUrlAuthToken, setRuntimeBearerToken, setRuntimeExtraHeaders } from '@/lib/runtime-auth';
 import { configureRuntimeUrlResolver } from '@/lib/runtime-url';
-import { isVSCodeBootstrapPresent } from '@/lib/vscodeBootstrap';
 import {
   activateRelayTunnel,
   deactivateRelayTunnel,
@@ -62,7 +61,7 @@ const UNINITIALIZED_RUNTIME_KEY = 'url:default';
 export const isTransientRuntimeKey = (runtimeKey: string): boolean =>
   runtimeKey === ''
   || runtimeKey === MOBILE_DISCONNECTED_RUNTIME_KEY
-  || (runtimeKey === UNINITIALIZED_RUNTIME_KEY && !isVSCodeBootstrapPresent());
+  || runtimeKey === UNINITIALIZED_RUNTIME_KEY;
 
 const readInjectedApiBaseUrl = (): string => {
   if (typeof window === 'undefined') return '';

@@ -1,3 +1,4 @@
+import { applySessionLiveWorkEvents, applySessionLiveWorkSnapshot } from "./session-live-work"
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
@@ -169,6 +170,7 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     store.setState(next)
   }
   if (accepted.length) {
+    applySessionLiveWorkEvents(accepted)
     applyGlobalSessionStatusEvents(target.directory, accepted)
     applyGlobalBlockingRequestEvents(target.directory, accepted)
     applyBackgroundShellEvents(target.directory, accepted)
@@ -228,9 +230,11 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     return false
   }, [childStores])
   const onSnapshot = useCallback((target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => {
-    if (!isCurrent() || isKnownChildSession(target.directory, target.sessionId)) return
+    if (!isCurrent()) return
     const store = childStores.getChild(target.directory)
     if (!store || store.getState().snapshot[target.sessionId]?.cursor !== snapshot.cursor) return
+    applySessionLiveWorkSnapshot(snapshot)
+    if (isKnownChildSession(target.directory, target.sessionId)) return
     const invalidated = { ...(store.getState().sessionStatusInvalidated ?? {}) }
     delete invalidated[target.sessionId]
     store.setState({ sessionStatusInvalidated: invalidated, sessionStatusReady: true })
