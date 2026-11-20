@@ -23,8 +23,7 @@ type Props = {
   directory: string | null;
 };
 
-const formatCost = (cost: number): string => `$${cost.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}`;
-
+/** One hover/focus target covers both the label and its value. */
 const TelemetryRow: React.FC<{ label: string; description: string; value: React.ReactNode }> = ({ label, description, value }) => (
   <Tooltip delayDuration={750}>
     <TooltipTrigger asChild>
@@ -71,6 +70,7 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
     return getLatestCompletedTurnStats(records, turns);
   }, [eligibleForStats, records, turns]);
 
+  // Retain only one committed result, never message history or a global ID cache.
   const [retained, setRetained] = React.useState<{ scope: string; stats: CompletedTurnStats | null } | null>(null);
   React.useEffect(() => {
     if (eligibleForStats) {
@@ -80,18 +80,9 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
     }
   }, [scope, status, eligibleForStats, computed]);
   const stats = eligibleForStats ? computed : status !== 'unavailable' && retained?.scope === scope ? retained.stats : null;
-  const previousTurn = stats !== null && (stats.previousTurn || !eligibleForStats);
-  const hasCost = stats !== null && stats.cost !== null && stats.cost > 0;
-  const figures = stats ? [
-    !hasCost && stats.responseTokensPerSecond !== null ? formatThroughputRate(stats.responseTokensPerSecond) : null,
-    stats.elapsedDurationMs !== null ? formatTelemetryDuration(stats.elapsedDurationMs) : null,
-    hasCost && stats.cost !== null ? formatCost(stats.cost) : null,
-  ].filter((figure): figure is string => figure !== null).join(' · ') : '';
-  const summary = previousTurn
-    ? figures
-      ? t('chat.workStatus.telemetry.previousTurnRate', { rate: figures })
-      : t('chat.workStatus.telemetry.previousTurn')
-    : figures || undefined;
+  const summary = stats && stats.responseTokensPerSecond !== null
+    ? formatThroughputRate(stats.responseTokensPerSecond)
+    : undefined;
 
   useReportWorkStatusPresence('telemetry', Boolean(sessionId));
 
@@ -103,6 +94,7 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
       title={t('chat.workStatus.section.telemetry')}
       icon="bar-chart-2"
       summary={summary}
+      defaultExpanded
     >
       {stats ? (
         <>
@@ -152,14 +144,6 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
             />
           ) : null}
 
-          {stats.avgFirstOutputMs !== null ? (
-            <TelemetryRow
-              label={t('chat.workStatus.telemetry.firstOutput')}
-              description={t('chat.workStatus.telemetry.firstOutputDescription')}
-              value={<WorkStatusValue>{formatTelemetryDuration(stats.avgFirstOutputMs)}</WorkStatusValue>}
-            />
-          ) : null}
-
           {stats.stepsCount > 1 ? (
             <TelemetryRow
               label={t('chat.workStatus.telemetry.steps')}
@@ -202,7 +186,7 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
             <TelemetryRow
               label={t('chat.workStatus.telemetry.cost')}
               description={t('chat.workStatus.telemetry.costDescription')}
-              value={<WorkStatusValue tone="muted">{formatCost(stats.cost)}</WorkStatusValue>}
+              value={<WorkStatusValue tone="muted">{`$${stats.cost.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}`}</WorkStatusValue>}
             />
           ) : null}
         </>

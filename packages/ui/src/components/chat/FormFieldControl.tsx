@@ -29,6 +29,11 @@ interface AutoGrowTextareaProps {
  onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
+/**
+ * Free-text answer box. It keeps its own value while typing so a keystroke does
+ * not re-render the whole request, and grows with the content up to the cap in
+ * `formTextareaSizing`.
+ */
 const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
  value,
  placeholder,
@@ -48,7 +53,7 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
   const textarea = textareaRef.current;
   const wrapper = textarea?.parentElement;
   if (!textarea || !wrapper) return;
-        const minHeight = wrapper.style.minHeight;
+  const minHeight = wrapper.style.minHeight;
   wrapper.style.minHeight = `${wrapper.offsetHeight}px`;
   try {
    textarea.style.height = '0px';
@@ -88,12 +93,13 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
 export interface FormFieldControlProps {
  question: AskQuestion;
  answer: AskAnswerState;
-    missing: number;
+ index: number;
  showErrors: boolean;
  isMissing: boolean;
  isResponding: boolean;
  onChange: (answer: AskAnswerState) => void;
-    onTextKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+ /** Enter advances or submits; the owner decides which. */
+ onTextKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
 export function FormFieldControl({
@@ -109,7 +115,7 @@ export function FormFieldControl({
  const { t } = useI18n();
  const fallbackLabel = t('chat.questionCard.questionFallback', { index: String(index + 1) });
  const label = question.header?.trim() || question.question?.trim() || fallbackLabel;
-const body = question.header && question.question ? question.question : undefined;
+ const body = question.header && question.question ? question.question : undefined;
  const missing = showErrors && isMissing;
  const customTextarea = (
   <AutoGrowTextarea
@@ -152,6 +158,8 @@ const body = question.header && question.question ? question.question : undefine
          isResponding ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
         )}
        >
+        {/* The control and label share one centred row; the
+                                    description hangs under the label. */}
         <div className="flex items-center gap-2">
          {question.multi ? (
           <Checkbox checked={selected} onChange={toggle} disabled={isResponding} ariaLabel={option.label} />

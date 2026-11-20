@@ -14,7 +14,7 @@ import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
 import type { useComposerAttachmentWork } from './useComposerAttachmentWork';
 import type { ComposerSendHandlers } from './composerSendHandlers';
-import type { QueuedContextPart } from '@/stores/messageQueueStore';
+import type { QueuedContextPart, QueuedMessage } from '@/stores/messageQueueStore';
 import type { SyntheticContextPart } from '@/sync/input-store';
 import type { ComposerReference } from '../../composer/composerReferences';
 import type { SessionReference } from '../../composer/sessionReferences';
@@ -364,31 +364,34 @@ export function useComposerQueueActions({
         }
     }, [inlineDraftTarget, mailboxTarget, rememberSessionMentions, updateLinkedReferences]);
 
-    const handleQueuedMessageEdit = React.useCallback((messageId: string) => {
+    const handleQueuedMessageEdit = React.useCallback((queued: QueuedMessage) => {
+        if (queued.attachments && queued.attachments.length > 0) {
+            const currentAttachments = useInputStore.getState().attachedFiles;
+            useInputStore.getState().setAttachedFiles([...currentAttachments, ...queued.attachments]);
+        }
+        setMessage(withMissingCitations(queued.content, queued.attachments ?? []));
+        if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null);
+        restoreQueuedContext(queued.context ?? []);
+        setTimeout(() => {
+            composerRef.current?.focus();
+        }, 0);
+    }, [restoreQueuedContext, setMessage, composerRef]);
+
+    const handleQueuedMessageEditById = React.useCallback((messageId: string) => {
         if (!messageQueueTarget) return;
         void popQueuedToInput(messageQueueTarget, messageId).then((queued) => {
-            if (!queued) return;
-            if (queued.attachments && queued.attachments.length > 0) {
-                const currentAttachments = useInputStore.getState().attachedFiles;
-                useInputStore.getState().setAttachedFiles([...currentAttachments, ...queued.attachments]);
-            }
-            setMessage(withMissingCitations(queued.content, queued.attachments ?? []));
-            if (queued.goal) useSessionGoalArmStore.getState().setArmed(true, queued.goal.objective ?? null);
-            restoreQueuedContext(queued.context ?? []);
-            setTimeout(() => {
-                composerRef.current?.focus();
-            }, 0);
+            if (queued) handleQueuedMessageEdit(queued);
         }).catch((error) => {
             console.warn('[queue] failed to take queued message for editing:', error);
             toast.error(t('chat.queuedMessage.toast.takeFailed'));
         });
-    }, [messageQueueTarget, popQueuedToInput, restoreQueuedContext, t, setMessage, composerRef]);
+    }, [messageQueueTarget, popQueuedToInput, handleQueuedMessageEdit, t]);
 
     const handleQueuedMessageSend = React.useCallback((messageId: string) => {
         void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId, delivery: 'steer' });
     }, [handleSubmitRef]);
 
     return {
-        handleQueueMessage, handleQueuedMessageEdit, handleQueuedMessageSend,
+        handleQueueMessage, handleQueuedMessageEdit, handleQueuedMessageEditById, handleQueuedMessageSend,
     };
 }

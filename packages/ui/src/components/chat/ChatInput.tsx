@@ -30,6 +30,7 @@ import { useComposerFileDrop } from './composer/input/useComposerFileDrop';
 import { useComposerFileIntake } from './composer/input/useComposerFileIntake';
 import { useComposerFilePicker } from './composer/input/useComposerFilePicker';
 import { useComposerFocus } from './composer/input/useComposerFocus';
+import { useComposerFooterModes } from './composer/input/useComposerFooterModes';
 import { useComposerGitStatus } from './composer/input/useComposerGitStatus';
 import { useComposerHistorySearchState } from './composer/input/useComposerHistorySearchState';
 import { useComposerInlineContext } from './composer/input/useComposerInlineContext';
@@ -90,7 +91,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     useComposerGitStatus(sessionScope.currentDirectory, runtime.runtimeGit);
     const reviewFlow = useComposerReviewFlow({ sessionScope });
     const language = useComposerLanguage({
-        selection, sessionScope, column, i18n, draftText, editorState, attachmentWork, preferences,
+        selection, sessionScope, i18n, draftText, editorState, attachmentWork, preferences,
         largePasteScope,
     });
     const mentionAttachments = useComposerMentionAttachments({
@@ -131,6 +132,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         inlineContext, sendAvailability, sendHandlers: sending, sessionScope, sessionLifecycle,
         queueState, queueActions: sending, editorState, draftText,
     });
+    const footerModes = useComposerFooterModes({ sessionScope, expansion, queueActions: sending });
     const dictation = useComposerDictation({
         draftText, i18n, dictationState, editorState, draftHistory, sendHandlers: sending,
     });
@@ -154,7 +156,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     useComposerFocus({ props, sessionScope, preferences, column, editorState, mobilePanels });
     useComposerAbortPrompt({ sessionScope });
     const fileDrop = useComposerFileDrop({
-        mentionPaths, draftText, i18n, dropState, editorState, sessionScope, selection, editorActions,
+        draftText, dropState, editorState, sessionScope, editorActions,
         fileIntake,
     });
     const filePicker = useComposerFilePicker({ fileIntake, runtime, i18n });
@@ -172,8 +174,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     });
     const rows = useComposerRows({
         draftText, editorState, i18n, preferences, mobileShell, inlineContext, referenceActions,
-        sendAvailability, sessionScope, queueState, draftTarget, selection, queueActions: sending,
-        sessionLifecycle, editorActions, referencePicker,
+        sendAvailability, sessionScope, queueState, draftTarget, queueActions: sending,
+        sessionLifecycle, editorActions,
     });
     const controls = useComposerControls({
         editorState, mobilePanels, draftText, i18n, preferences, expansion, permissionSettings,
@@ -190,6 +192,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     return (
         <>
             {renderComposerForm({
+                footerModes,
                 historySearchState, largePasteState, column, autocompleteState, dropState, i18n,
                 editorState, draftText, mobilePanels, sessionScope, sessionLifecycle, draftHistory,
                 mobileActions, inlineContext, sendActions, expansion, preferences, draftTarget,

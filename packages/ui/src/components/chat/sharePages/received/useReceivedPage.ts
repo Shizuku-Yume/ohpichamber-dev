@@ -59,7 +59,9 @@ export function useReceivedPage(receivedId: string | null) {
         if (connected) void reload();
         connected = true;
       }
-      if (event.type === 'received-page-changed' && event.receivedId === receivedId) void reload();
+      // The host emits this event; the shared event union does not list it yet.
+      const changed = event as { type: string; receivedId?: string };
+      if (changed.type === 'received-page-changed' && changed.receivedId === receivedId) void reload();
     });
   }, [enterpriseMode, receivedId, reload]);
 

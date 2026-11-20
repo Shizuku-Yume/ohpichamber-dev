@@ -29,7 +29,7 @@ const pull: ComposerReference = {
     contextText: 'pr 7',
 };
 
-const linear: ComposerReference = { kind: 'linear-issue', identifier: 'ENG-3', title: 'Login', url: 'https://linear.app/x/issue/ENG-3', contextText: 'linear' };
+const linear: ComposerReference = { kind: 'tracker-item', provider: 'linear', identifier: 'ENG-3', title: 'Login', url: 'https://linear.app/x/issue/ENG-3', contextText: 'linear' };
 
 const guest: ComposerReference = {
     kind: 'guest',

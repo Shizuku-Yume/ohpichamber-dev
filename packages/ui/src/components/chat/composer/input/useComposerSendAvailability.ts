@@ -5,7 +5,6 @@ import type { useComposerInlineContext } from './useComposerInlineContext';
 import type { useComposerEditorState } from './useComposerEditorState';
 import type { useComposerDraftText } from './useComposerDraftText';
 import React from 'react';
-import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useBtwStore } from '@/stores/useBtwStore';
 import { useIsPageWaiting } from '@/sync/global-blocking-requests';
 import { selectComposerQueue } from '../../composer/submit/buildOutgoingMessage';
@@ -24,7 +23,7 @@ export function useComposerSendAvailability({
 }: Dependencies) {
     const { hasText, composerText } = draftText;
     const { composerRef } = editorState;
-    const { attachedFiles, isBtwActive, currentSessionId, btwPanel } = sessionScope;
+    const { attachedFiles, isBtwActive, currentSessionId } = sessionScope;
     const { hasDrafts } = inlineContext;
     const { queuedMessages } = queueState;
     const { sessionPhase } = sessionLifecycle;
@@ -37,9 +36,9 @@ export function useComposerSendAvailability({
 
     const preparingBtwSend = useBtwStore((state) => Boolean(currentSessionId && state.byParent[currentSessionId]?.pendingSend));
 
-    const pendingFirstSend = useSessionUIStore((s) => (currentSessionId ? s.pendingDraftSends.get(currentSessionId) ?? null : null));
+    const pendingFirstSend = null as { sessionCreated: boolean } | null;
 
-    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && (btwPanel.creating || preparingBtwSend)) && !pendingFirstSend;
+    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && preparingBtwSend) && !pendingFirstSend;
 
     const canAbort = sessionPhase !== 'idle' && !pendingFirstSend;
 

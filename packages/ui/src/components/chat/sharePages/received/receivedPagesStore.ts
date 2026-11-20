@@ -49,7 +49,8 @@ export const ensureReceivedPagesFeed = (enterpriseMode: boolean) => {
       if (connected || useReceivedPagesStore.getState().pages === null) void reload();
       connected = true;
     }
-    if (event.type === 'received-page-changed') void reload();
+    // The host emits this event; the shared event union does not list it yet.
+    if ((event as { type: string }).type === 'received-page-changed') void reload();
   });
   const stopSwitch = subscribeRuntimeEndpointWillChange(() => {
     stopFeed?.();

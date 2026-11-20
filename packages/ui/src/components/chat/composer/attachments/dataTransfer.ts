@@ -1,9 +1,15 @@
-import { VS_CODE_DROP_DATA_TYPES } from './filePaths';
-import { parseDroppedFileReferences } from './filePaths';
+/**
+ * Reading a drop's payload.
+ *
+ * Browser and native pickers expose `File` entries. OpenChamber's own file
+ * tree marks internal drags with a private type so the composer inserts a
+ * project-relative mention instead of attaching the file's contents.
+ */
 
 /** Data type marking a drag that started in OpenChamber's own file tree. */
 export const INTERNAL_FILE_PATH_TYPE = 'application/x-openchamber-file-path';
 
+/** Data types that, by their presence alone, mean files are being dragged. */
 const FILE_BEARING_TYPES = [
     'files',
     INTERNAL_FILE_PATH_TYPE,
@@ -26,6 +32,10 @@ export function hasDraggedFiles(dataTransfer: DataTransfer | null | undefined): 
     return false;
 }
 
+/**
+ * The actual `File` objects in a drop. `files` is the normal source; `items`
+ * covers hosts that only populate the item list.
+ */
 export function collectDroppedFiles(dataTransfer: DataTransfer | null | undefined): File[] {
     if (!dataTransfer) return [];
 
@@ -38,24 +48,3 @@ export function collectDroppedFiles(dataTransfer: DataTransfer | null | undefine
         .filter((file): file is File => Boolean(file));
 }
 
-function readData(dataTransfer: DataTransfer, type: string): string {
-    try {
-        return dataTransfer.getData(type);
-    } catch {
-        return '';
-    }
-}
-
-export function collectDroppedFileUris(dataTransfer: DataTransfer | null | undefined): string[] {
-    if (!dataTransfer || typeof dataTransfer.getData !== 'function') return [];
-
-    const extracted = new Set<string>();
-    for (const dataType of VS_CODE_DROP_DATA_TYPES) {
-        const rawPayload = readData(dataTransfer, dataType);
-        if (!rawPayload) continue;
-        for (const candidate of parseDroppedFileReferences(rawPayload)) {
-            extracted.add(candidate);
-        }
-    }
-    return Array.from(extracted);
-}

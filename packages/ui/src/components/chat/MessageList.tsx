@@ -1,10 +1,5 @@
-import type { RetryOverlay } from './timeline/types';
-import type { ListMetrics } from './timeline/types';
-import { streamPerfMeasure } from '@/stores/utils/streamDebug';
-import { hasPendingUserSendAnimation } from '@/lib/userSendAnimation';
-import { consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
 import React from 'react';
-import type { LegendListRef } from '@legendapp/list/react';
+import { LegendList, type LegendListRef } from '@legendapp/list/react';
 
 import ChatMessage from './ChatMessage';
 import { filterVisibleParts, isEmptyTextPart } from './message/partUtils';
@@ -26,7 +21,8 @@ import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import { turnHeaderCanStick as canStickPrompt } from './lib/turns/stickyPrompt';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
-import { streamPerfCount, streamPerfMark } from '@/stores/utils/streamDebug';
+import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
+import { streamPerfCount, streamPerfMark, streamPerfMeasure } from '@/stores/utils/streamDebug';
 import type { StreamPhase } from './message/types';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionPartsForMessages } from '@/sync/sync-context';
@@ -79,7 +75,13 @@ interface MessageListProps {
     sessionIsWorking?: boolean;
     activeStreamingMessageId?: string | null;
     activeStreamingPhase?: StreamPhase | null;
-    retryOverlay?: RetryOverlay | null;
+    /** Canonical messages carry no retry record; retained for the chat caller contract. */
+    retryOverlay?: {
+        sessionId: string;
+        message: string;
+        confirmedAt?: number;
+        fallbackTimestamp?: number;
+    } | null;
     isLoadingOlder: boolean;
     scrollToBottom?: () => void;
     directory?: string;
@@ -87,7 +89,7 @@ interface MessageListProps {
     endPinningReleased?: boolean;
     composerOverlayHeight?: number;
     onIsAtEndChange?: (isAtEnd: boolean) => void;
-    onListMetricsChange?: (metrics: ListMetrics) => void;
+    onListMetricsChange?: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
     onTimelineDataChange?: () => void;
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
@@ -1081,10 +1083,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         sessionKey,
         showTextJustificationActivity: chatRenderMode === 'sorted',
         showTurnChangedFiles,
-        showReasoningTraces,
-        stickyUserHeader,
-        defaultActivityExpanded,
-        turnExpansion,
     });
     const hasUngroupedStaticEntries = projection.ungroupedMessageIds.size > 0;
     const tailHasAssistant = Boolean(streamingTurn?.assistantMessages.length);
@@ -1591,6 +1589,10 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     ]);
 
     return (
+        // Virtualized rows unmount/remount during scroll; re-running the reveal
+        // fade on every remount reads as blinking. Rows are never "new" from the
+        // list's point of view, so fade-in is disabled for them — content
+        // arriving inside the streaming tail keeps its own animations.
         <FadeInDisabledProvider disabled>
             <TurnMessageWindowContext.Provider value={turnMessageWindowEnabled ? turnMessageWindow : null}>
                 <TimelineList

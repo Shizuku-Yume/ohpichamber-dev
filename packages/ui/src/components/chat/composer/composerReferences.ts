@@ -79,8 +79,6 @@ export const composerReferenceKey = (reference: ComposerReference): string => {
         case 'repository-discussion':
         case 'change-request':
             return `repository:${reference.url.toLowerCase()}`;
-        case 'linear-issue':
-            return `linear:${reference.identifier.toUpperCase()}`;
         case 'tracker-item':
             return `${reference.provider}:${reference.identifier.toUpperCase()}`;
         case 'guest':
@@ -126,10 +124,9 @@ export const toLinkedIssue = (reference: ComposerReference, linkedAt: number): L
             });
         case 'repository-discussion':
             return buildLinkedDiscussion({ url: reference.url, number: reference.number, title: reference.title, linkedAt });
-        case 'linear-issue':
         case 'tracker-item':
             return buildLinkedTrackerItem({
-                provider: reference.kind === 'linear-issue' ? 'linear' : reference.provider,
+                provider: reference.provider,
                 identifier: reference.identifier,
                 title: reference.title,
                 url: reference.url,
@@ -190,11 +187,10 @@ export const toContextReference = (reference: ComposerReference): ComposerContex
                 url: reference.url,
                 context: reference.contextText,
             };
-        case 'linear-issue':
         case 'tracker-item':
             return {
                 kind: 'tracker-item',
-                provider: reference.kind === 'linear-issue' ? 'linear' : reference.provider,
+                provider: reference.provider,
                 identifier: reference.identifier,
                 title: reference.title,
                 url: reference.url,

@@ -169,7 +169,7 @@ export function useComposerMentionAttachments({
                 }
                 try {
                     const response = await runtimeFetch('/api/fs/raw', {
-                        query: { path: mention.serverPath, directory: mention.root || undefined },
+                        query: { path: mention.serverPath },
                     });
                     if (!response.ok) throw new Error(`Failed to read ${mention.filename}`);
                     const sourceBlob = await response.blob();

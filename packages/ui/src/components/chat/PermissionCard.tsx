@@ -1,12 +1,10 @@
-import { usePermissionResponse } from './usePermissionResponse';
-import { usePermissionFromSubagent } from './usePermissionResponse';
-import { getPermissionToolPresentation } from './permissionToolPresentation';
+import { usePermissionFromSubagent, usePermissionResponse, type PermissionResponse } from './usePermissionResponse';
 import React from 'react';
 import { z } from 'zod';
 import type { ApprovalRequest } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 import { useI18n } from '@/lib/i18n';
 import { PermissionActions } from './PermissionActions';
 import { getApprovalPolicyTitle, getApprovalPresentation, isToolScopePolicy, truncateApprovalTarget } from './permissionPresentation';
@@ -94,7 +92,7 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
             {preview ? (
                 <div className="mb-2">
                     <ScrollableOverlay outerClassName="max-h-[60vh]" className="tool-output-surface p-1 rounded-xl border border-edge-muted bg-transparent">
-                        <WorkerHighlightedCode
+                        <HighlightedCode
                             language={command ? 'bash' : 'json'}
                             code={preview}
                             style={PERMISSION_CODE_STYLE}
@@ -125,11 +123,16 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
 /** Allow once / session allowance / deny, with the original dock and inline layouts. */
 export { PermissionActions };
 
+interface PermissionCardProps {
+  permission: ApprovalRequest;
+  onResponse?: (response: PermissionResponse) => void;
+}
+
 export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onResponse }) => {
   const { t } = useI18n();
   const { isResponding, hasResponded, respond } = usePermissionResponse(permission, onResponse);
   const isFromSubagent = usePermissionFromSubagent(permission);
-  const tool = getPermissionToolPresentation(permission);
+  const tool = getApprovalPresentation(permission);
 
   if (hasResponded) {
     return null;
@@ -153,8 +156,8 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
                 ) : null}
               </div>
               <div className="flex items-center gap-1.5">
-                {tool.icon}
-                <span dir="auto" className="typography-meta text-muted-foreground font-medium">{tool.name}</span>
+                <Icon name={tool.icon} className="h-3 w-3" />
+                <span dir="auto" className="typography-meta text-muted-foreground font-medium">{t(tool.titleKey)}</span>
               </div>
             </div>
           </div>

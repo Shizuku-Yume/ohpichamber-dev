@@ -34,7 +34,7 @@ export function useComposerFileIntake({
     const { pendingPastedAttachmentFilenamesRef, pendingAttachWorkRef } = attachmentWork;
     const { insertTextAtSelection } = editorActions;
     const { currentModelMetadata, currentModelId, currentProviderId } = selection;
-    const { currentDirectory, addAttachedFile, chatDraftIdentity, attachedFiles } = sessionScope;
+    const { currentDirectory, addAttachedFile } = sessionScope;
 
     const insertCitationAtSelection = React.useCallback((citationText: string, leadingText: string) => {
         if (!citationText && !leadingText) return;
@@ -123,15 +123,6 @@ export function useComposerFileIntake({
         };
     }, [currentDirectory, currentModelKey, currentModelName, insertCitationAtSelection, t, composerText, composerRef]);
 
-    const renameCitation = React.useCallback((from: string, to: string) => {
-        const editor = composerRef.current;
-        if (!editor) return;
-        const citation = `[${from}]`;
-        const text = editor.getValue();
-        const start = text.lastIndexOf(citation);
-        if (start >= 0) editor.replaceRange(start, start + citation.length, `[${to}]`);
-    }, [composerRef]);
-
     const attachFilesWithCitationNow = React.useCallback(async (
         files: File[],
         leadingText: string = '',
@@ -181,9 +172,7 @@ export function useComposerFileIntake({
             const filename = assignedImageNames[index];
             const file = renameFileForAttachmentCitation(imageFiles[index], filename);
             try {
-                attached = (await addAttachedFile(file, undefined, ([landed]) => {
-                    if (landed && landed.filename.toLowerCase() !== filename.toLowerCase()) renameCitation(filename, landed.filename);
-                })) || attached;
+                attached = (await addAttachedFile(file)) || attached;
             } catch (error) {
                 console.error('Clipboard image attach failed', error);
                 toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.clipboardAttachFailed'));
@@ -204,8 +193,8 @@ export function useComposerFileIntake({
                 ? otherFiles[index]
                 : renameFileForAttachmentCitation(otherFiles[index], otherNames[index]);
             try {
-                let landedName = file.name;
-                if (await addAttachedFile(file, undefined, ([landed]) => { if (landed) landedName = landed.filename; })) {
+                const landedName = file.name;
+                if (await addAttachedFile(file)) {
                     attached = true;
                     attachedOtherNames.push(landedName);
                 }
@@ -223,7 +212,7 @@ export function useComposerFileIntake({
         if (files.length > 0 && !attached && !savedAny && !reported) {
             toast.error(t('chat.chatInput.toast.attachFileFailed'));
         }
-    }, [addAttachedFile, imageSaveMode, insertCitationAtSelection, renameCitation, savePastedImagesAsFiles, saveImagesWithPathCitation, t, composerText, composerRef, pendingPastedAttachmentFilenamesRef]);
+    }, [addAttachedFile, imageSaveMode, insertCitationAtSelection, savePastedImagesAsFiles, saveImagesWithPathCitation, t, composerText, composerRef, pendingPastedAttachmentFilenamesRef]);
 
     const attachFilesWithCitation = React.useCallback((files: File[], leadingText: string = ''): Promise<void> => {
         const work = attachFilesWithCitationNow(files, leadingText);

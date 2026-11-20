@@ -148,6 +148,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
         onPrimaryAction,
         onQueueMessage,
         onAbort,
+        escapeStops = false,
         onStartDictation,
         onDictationInsert,
         onDictationInsertAndSend,

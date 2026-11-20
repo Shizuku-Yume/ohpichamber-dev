@@ -1,5 +1,3 @@
-import type { MarkdownPresentation } from './MarkdownPresentationContext';
-import { useChatSurfaceMode } from '../useChatSurfaceMode';
 import React from 'react';
 import {
   CodeBlockContainer,
@@ -15,13 +13,14 @@ import { Button } from '@/components/ui/button';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
-import { MarkdownSvgFailureContext, useMarkdownPresentation } from './MarkdownPresentationContext';
+import { useMarkdownPresentation } from './MarkdownPresentationContext';
 import { activateMarkdownFile, useOpenMarkdownFile } from './markdownFileReferences';
-import { stripAnsi } from './highlightsEngine';
 import type { MarkdownCodePlugin } from './streamdownCode';
 import { MarkdownDiff } from './MarkdownDiff';
 import { MarkdownSuggestionContext, isSuggestionLanguage, suggestionPatch } from './markdownSuggestion';
 
+// Complete prefix rows keep their identity in the worker client, so appending
+// code only renders changed rows. React owns every node; no HTML patching.
 const CodeLine = React.memo(function CodeLine({ tokens }: { tokens: HighlightToken[] }) {
   const empty = tokens.length === 0 || (tokens.length === 1 && tokens[0].content === '');
   return (
@@ -45,7 +44,8 @@ const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language
   plugin: MarkdownCodePlugin;
 }) {
   const input = React.useMemo(() => ({
-    ...shownCode(source, language),
+    code: source,
+    language,
     isIncomplete: incomplete,
     themes: plugin.getThemes(),
   }), [source, language, incomplete, plugin]);
@@ -55,6 +55,8 @@ const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language
   const committed = React.useRef<{
     input: typeof input; plugin: MarkdownCodePlugin; lineage: symbol; display: Display; exact: boolean;
   } | null>(null);
+  // An edit or context change starts a new lineage, even if later input returns
+  // to an older source. Results from the abandoned lineage must not reappear.
   const lineage = React.useMemo(() => {
     const previous = committed.current;
     return previous?.plugin === plugin && previous.input.language === input.language
@@ -64,6 +66,7 @@ const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language
   const display = React.useMemo<Display>(() => {
     const current = resolved?.lineage === lineage ? resolved : null;
     if (current?.input === input) return current;
+    // Exact hits include policy-driven plain results (copy/export and line budgets).
     if (initial) return { input, result: initial };
     const previous = committed.current;
     const retained = previous?.lineage === lineage ? previous.display : null;
@@ -106,48 +109,13 @@ const MarkdownCodeBody = React.memo(function MarkdownCodeBody({ source, language
   );
 });
 
-const shownCode = (source: string, language: string): { code: string; language: string } => (
-  language.toLowerCase() === 'ansi' ? { code: stripAnsi(source), language: 'text' } : { code: source, language }
-);
-
-const activeSvg = /<script|\son[a-z]+\s*=/i;
-
-type CodeProps = React.ComponentProps<'code'> & ExtraProps;
-
-const languageOf = (className: string | undefined): string => /language-([^\s]+)/.exec(className ?? '')?.[1] ?? '';
-const sourceOf = (node: CodeProps['node']): string => (
-  node?.children.map((child) => child.type === 'text' ? child.value : '').join('') ?? ''
-).replace(/\n$/, '');
-
-const useReplyCommandCode = onDemand(() => import('./ReplyCommand').then((module) => module.ReplyCommandCode));
-
-function RunnableCode({ reply, ...props }: CodeProps & { reply: NonNullable<MarkdownPresentation['settledReply']> }) {
-  const { directory } = useMarkdownPresentation();
-  const ReplyCommandCode = useReplyCommandCode();
-  if (!ReplyCommandCode) return <MarkdownCodeBlock {...props} command={null} />;
-  return (
-    <ReplyCommandCode reply={reply} directory={directory} source={sourceOf(props.node)}>
-      {(command) => <MarkdownCodeBlock {...props} command={command} />}
-    </ReplyCommandCode>
-  );
-}
-
-export function MarkdownCode(props: CodeProps) {
-  const { settledReply } = useMarkdownPresentation();
-  const surface = useChatSurfaceMode();
-  const runnable = settledReply !== null && surface !== 'peek'
-    && isRunnableLanguage(languageOf(props.className)) && sourceOf(props.node).trim().length > 0;
-  return runnable ? <RunnableCode {...props} reply={settledReply} /> : <MarkdownCodeBlock {...props} command={null} />;
-}
-
-function MarkdownCodeBlock({ children, className, node, ...props }: React.ComponentProps<'code'> & ExtraProps) {
+export function MarkdownCode({ children, className, node, ...props }: React.ComponentProps<'code'> & ExtraProps) {
   const presentation = useMarkdownPresentation();
   const { t } = useI18n();
   const wrap = useUIStore((state) => state.codeBlockLineWrap);
   const incomplete = useIsCodeFenceIncomplete();
   const openFile = useOpenMarkdownFile();
   const [copied, setCopied] = React.useState(false);
-  const [failedSvg, setFailedSvg] = React.useState<string | null>(null);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
@@ -160,25 +128,11 @@ function MarkdownCodeBlock({ children, className, node, ...props }: React.Compon
   const code = node?.children.map((child) => child.type === 'text' ? child.value : '').join('') ?? '';
   const copySource = code.replace(/\n$/, '');
   const { purpose, onExportCode } = presentation;
-  const customRenderer = language === 'mermaid' || (language === 'openui-lang' && presentation.uiBlocks);
   React.useLayoutEffect(() => {
-    if (purpose && !customRenderer) {
-      const shown = shownCode(code, language);
-      onExportCode?.(shown.code, shown.language);
-    }
-  }, [purpose, customRenderer, onExportCode, code, language]);
+    if (purpose && language !== 'mermaid' && language !== 'svg') onExportCode?.(code, language);
+  }, [purpose, onExportCode, code, language]);
 
-  if (language === 'svg' && presentation.svgFences && !activeSvg.test(code) && failedSvg !== code) {
-    return (
-      <MarkdownSvgFailureContext.Provider value={() => setFailedSvg(code)}>
-        <defaultComponents.code {...props} node={node} className={className}>
-          {children}
-        </defaultComponents.code>
-      </MarkdownSvgFailureContext.Provider>
-    );
-  }
-
-  if (customRenderer) {
+  if (language === 'mermaid' || language === 'svg' || (language === 'openui-lang' && presentation.uiBlocks)) {
     return (
       <defaultComponents.code {...props} node={node} className={className}>
         {children}

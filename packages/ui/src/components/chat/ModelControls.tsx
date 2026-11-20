@@ -1,4 +1,3 @@
-import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
 import { getReasoningEffortLevels, resolveThinkingLevel } from '@/lib/modelThinkingLevels';
 import React from 'react';
@@ -232,6 +231,7 @@ type ModelControlsProps = {
     className?: string;
     mobilePanel?: MobileControlsPanel;
     onMobilePanelChange?: (panel: MobileControlsPanel) => void;
+    /** Offers "Run on several models" at the top of the desktop model picker. */
     onRunInParallel?: () => void;
 } & (
         | { selection?: never; sessionId?: never; agentSelectable?: never }
@@ -339,6 +339,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const stickySessionAgentName = currentSessionId ? stickySessionAgentRef.current : null;
 
+    // The session's saved profile takes precedence over the main draft selection.
     const uiAgentName = currentSessionId
         ? (sessionSavedAgentName || stickySessionAgentName || currentAgentName)
         : currentAgentName;
@@ -406,9 +407,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
         : null), [autoReady, t]);
     const isAutoSelected = isAutoModel(currentProviderId, currentModelId);
-    const modelUnavailable = useModelMissingFromCatalog(catalogDirectory, currentProviderId, currentModelId);
 
     const { isMobile: deviceIsMobile } = useDeviceInfo();
+    // The composer decides whether it renders the mobile layout from the UI
+    // store (the Capacitor shell forces it true even on tablets/iPad, where
+    // useDeviceInfo classifies the wide screen as non-mobile). The bottom-sheet
+    // panels must follow the SAME source: with the device flag alone, tapping
+    // the model/agent chip on an iPad set the panel state while the sheet
+    // itself rendered null.
     const uiIsMobile = useUIStore((state) => state.isMobile);
     const isMobile = deviceIsMobile || uiIsMobile;
     const isDesktop = React.useMemo(() => isDesktopShell(), []);
@@ -474,6 +480,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
     }, [activeMobilePanel]);
 
+    // Handle model selector close behavior (separate from agent selector)
     const prevModelSelectorOpenRef = React.useRef(isModelSelectorOpen);
     React.useEffect(() => {
         const wasOpen = prevModelSelectorOpenRef.current;
@@ -484,6 +491,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             keyboardOwnsModelSelectionRef.current = false;
             lastModelPointerPositionRef.current = null;
 
+            // Restore focus to chat input when model selector closes
             if (wasOpen && !isCompact) {
                 requestAnimationFrame(focusColumnInput);
             }
@@ -528,6 +536,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const currentModelForMetadata = currentModelId
         ? models.find((model: ProviderModel) => model.modelId === currentModelId)
         : undefined;
+    // Display only: a directory still starting can expose part of its catalog
+    // for a second or two, so a known model name stays on screen. Selection
+    // and validation keep reading the active catalog.
     const knownCurrentModel = useConfigStore((state) => (
         currentModelForMetadata ? undefined : selectKnownCatalogModel(state, currentProviderId, currentModelId)
     ));
@@ -700,6 +711,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const selectionSessionId = selection ? controlledSessionId : currentSessionId;
         if (selectionSessionId && effectiveAgentName) {
             const savedVariant = getAgentModelVariantForSession(selectionSessionId, effectiveAgentName, providerId, modelId);
+            // An explicit "Default" is a choice: it stops the fallbacks below.
             if (savedVariant === null) {
                 return null;
             }
@@ -795,6 +807,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
+        // The session record needs no loaded transcript; a message-derived
+        // choice does, so a partial snapshot is never treated as authoritative.
         const snapshotReady = hasRenderableCurrentSessionSnapshot || Boolean(sessionRecordChoice);
         if (!contextHydrated || providers.length === 0 || !snapshotReady || !latestLoadedUserChoice?.providerId || !latestLoadedUserChoice.modelId) {
             return;
@@ -813,8 +827,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
+        // A message without an agent retains the composer's saved profile.
         const restoreAgentName = latestLoadedUserChoice.agent || resolveLiveAgentName() || undefined;
 
+        // The record's model follows the agent's rule: one the composer has
+        // not reconciled with yet is a newer switch (another client, a plugin)
+        // and outranks a model or route picked here. Auto is the exception:
+        // with Auto the router itself switches the session's model each turn,
+        // and the picker keeps showing Auto.
         const recordModelKey = sessionRecordChoice && latestLoadedUserChoice === sessionRecordChoice
             ? `${formatModelRef(sessionRecordChoice)}#${sessionRecordChoice.variant ?? ''}`
             : null;
@@ -824,9 +844,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (recordModelKey) useSelectionStore.getState().markSessionModelFollowed(currentSessionId, recordModelKey);
         };
 
+        // History can never say "Auto": the server replaces the sentinel with
+        // a real model before the runtime stores the message. A saved Auto is the
+        // newer truth, so it wins over the model the last turn actually ran on.
+        // Until the routing state has loaded, Auto cannot be applied yet, so
+        // the restore stays pending instead of letting history overwrite it.
         const savedSessionModel = getSessionModelSelection(currentSessionId);
         const savedAuto = Boolean(savedSessionModel) && isAutoModel(savedSessionModel!.providerId, savedSessionModel!.modelId);
         if (savedAuto && isStaleAutoSelection(savedSessionModel!.providerId, savedSessionModel!.modelId)) {
+            // Auto saved under a server that could route; this one cannot.
             useConfigStore.getState().dropStaleAutoSelection();
         } else if (savedAuto) {
             if (!autoReady) return;
@@ -849,6 +875,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             }
             markRecordModelFollowed();
             latestLoadedUserChoiceRestoreRef.current = restoreKey;
+            // The saved-selections effect must still get its one-time run so the
+            // persisted session agent is applied via setAgent; only the model
+            // was restored here.
             return;
         }
 
@@ -860,6 +889,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             && getModelVariantOptions(latestLoadedUserChoice.providerId, latestLoadedUserChoice.modelId).includes(latestLoadedUserChoice.variant)
             ? latestLoadedUserChoice.variant
             : undefined;
+        // A saved choice may be newer than the last sent message, including an
+        // explicit Default. Reloading history must not replace that choice.
         const savedVariant = currentSessionId && restoreAgentName
             ? getAgentModelVariantForSession(
                 currentSessionId,
@@ -868,6 +899,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 latestLoadedUserChoice.modelId,
             )
             : undefined;
+        // A newer switch brings its own route; a record without one says
+        // nothing about routing, so the saved choice stays.
         let restoredVariant: string | null | undefined = savedVariant !== undefined ? savedVariant : historicalVariant;
         if (recordModelSwitched && historicalVariant) restoredVariant = historicalVariant;
         const applyResult = applyModelSelectionWithVariant(
@@ -880,6 +913,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
+        // The route is not written again here: `applyModelSelectionWithVariant`
+        // above already recorded `historicalVariant` for this same agent and
+        // model, and a second write can only disagree with the first.
         if (latestLoadedUserChoice.agent) {
             saveSessionAgentSelection(currentSessionId, latestLoadedUserChoice.agent);
         }
@@ -916,6 +952,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
+        // Persisted selections hydrate a session once. Live agent changes are
+        // resolved by setAgent and must not be overwritten by session history.
         if (restoredSessionSelectionRef.current === currentSessionId) {
             return;
         }
@@ -996,6 +1034,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
                 : null;
 
+            // Keep a valid saved profile instead of replacing it with a fallback.
             const preferred =
                 (currentSessionId
                     ? (useSelectionStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
@@ -1036,6 +1075,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
 
         if (!hasRenderableCurrentSessionSnapshot) {
+            // The session's own directory: falling back to the sync directory
+            // loads a worktree session into the wrong store and races the
+            // chat's own load under a different dedupe key.
             const sessionDirectory = currentSessionDirectory ?? undefined;
             if (!sync.isLoading(currentSessionId, sessionDirectory)) {
                 void sync.ensureSessionRenderable(currentSessionId, false, sessionDirectory);
@@ -1200,6 +1242,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     ]);
 
     const handleCycleAgentFromModelPicker = React.useCallback((direction: 1 | -1) => {
+        // Auto hides the agent control, so the shortcut must not change a
+        // choice the user cannot see.
         if (isAutoSelected) return;
         const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
         if (!nextAgentName) {
@@ -1274,6 +1318,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     ) => {
         try {
             const effectiveAgentName = options?.agentName ?? resolveLiveAgentName() ?? undefined;
+            // `applyVariant` means an explicit route selection; no route means Default.
             const result = options?.applyVariant
                 ? applyModelSelectionWithVariant(providerId, modelId, options.variant ?? null, effectiveAgentName)
                 : tryApplyModelSelection(providerId, modelId, effectiveAgentName);
@@ -1286,15 +1331,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return;
             }
             if (!selection && !options?.applyVariant && !isAutoModel(providerId, modelId)) {
+                // Add to recent models on successful selection. Auto is pinned, not recent.
                 addRecentModel(providerId, modelId);
             }
             if (!selection) {
+                // A new session starts on this pick when nothing configured names a
+                // model. Only a person's pick writes it, never a session restore.
                 setLastSelectedModel(providerId, modelId);
             }
             setAgentMenuOpen(false);
             if (isCompact) {
                 closeMobilePanel();
             }
+            // Restore focus to chat input after model selection.
             requestAnimationFrame(focusColumnInput);
         } catch (error) {
             console.error('[ModelControls] Handle model change error:', error);
@@ -1317,9 +1366,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     };
 
     const currentModelDisplayName = getCurrentModelDisplayName();
-    const modelUnavailableText = modelUnavailable
-        ? t('chat.modelControls.modelUnavailable', { model: currentModelDisplayName })
-        : undefined;
     const modelLabelRef = React.useRef<HTMLSpanElement>(null);
     const isModelLabelTruncated = useIsTextTruncated(modelLabelRef, [currentModelDisplayName, isCompact]);
 
@@ -1977,13 +2023,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    const renderModelTooltipContent = () => modelUnavailableText ? (
-        <TooltipContent align="start" sideOffset={8} className="max-w-[280px]">
-            <div className="min-w-[200px] typography-meta text-foreground">
-                <TooltipLabelWithShortcut label={modelUnavailableText} shortcut={modelShortcut} />
-            </div>
-        </TooltipContent>
-    ) : (
+    const renderModelTooltipContent = () => (
         <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
             {currentMetadata ? (
                 <div className="flex min-w-[240px] flex-col gap-3">
@@ -2164,10 +2204,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         </>
                                     ) : isAutoSelected ? (
                                         <Icon name="openchamber" className={cn(controlIconSize, 'flex-shrink-0')} />
-                                    ) : modelUnavailable ? (
-                                        <Icon name="error-warning" className={cn(controlIconSize, 'flex-shrink-0 text-[var(--status-warning)]')} />
                                     ) : currentProviderId ? (
                                         <>
+                                            {/* Provider logos read smaller than the sprite icons
+                                                beside them at the same box size, so they get a step up. */}
                                             <ProviderLogo
                                                 providerId={currentProviderId}
                                                 className={cn(providerLogoSize, 'flex-shrink-0')}
@@ -2182,7 +2222,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             ref={modelLabelRef}
                                             key={`${currentProviderId}-${currentModelId}`}
                                             className={cn(
-                                                'model-controls__model-label overflow-hidden text-ellipsis',
+                                                'model-controls__model-label overflow-hidden',
                                                 controlTextSize,
                                                 'font-medium whitespace-nowrap text-foreground min-w-0',
                                                 'max-w-[260px]'
@@ -2258,7 +2298,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         : false;
 
                                     return (
-                                        <div className="flex items-center gap-x-4 whitespace-nowrap overflow-hidden">
+                                        <div className="flex items-center gap-x-2 whitespace-nowrap overflow-hidden">
                                             <span>{t('chat.modelControls.keyboardHintNavigate')}</span>
                                             {!selection && <span>{t('chat.modelControls.keyboardHintSwitchAgent', { shortcut: 'Tab' })}</span>}
                                             {activeHasEfforts ? <span>{t('chat.modelControls.keyboardHintThinking')}</span> : null}
@@ -2279,7 +2319,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         onTouchEnd={isReady ? handleLongPressEnd : undefined}
                         onTouchCancel={isReady ? handleLongPressEnd : undefined}
                         disabled={!isReady}
-                        aria-label={modelUnavailableText}
                         className={cn(
                             'model-controls__model-trigger flex items-center gap-1.5 min-w-0 focus:outline-none',
                             isReady ? 'cursor-pointer hover:bg-transparent hover:opacity-70' : 'opacity-60 cursor-not-allowed',
@@ -2297,8 +2336,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             <>
                                 {isAutoSelected ? (
                                     <Icon name="openchamber" className={cn(controlIconSize, 'flex-shrink-0')} />
-                                ) : modelUnavailable ? (
-                                    <Icon name="error-warning" className={cn(controlIconSize, 'flex-shrink-0 text-[var(--status-warning)]')} />
                                 ) : currentProviderId ? (
                                     <ProviderLogo
                                         providerId={currentProviderId}
@@ -2310,7 +2347,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 <span
                                     ref={modelLabelRef}
                                     className={cn(
-                                        'model-controls__model-label typography-micro font-medium overflow-hidden text-ellipsis whitespace-nowrap min-w-0',
+                                        'model-controls__model-label typography-micro font-medium overflow-hidden min-w-0',
                                         isMobile ? 'max-w-[120px]' : 'max-w-[220px]',
                                     )}
                                 >

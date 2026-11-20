@@ -1,4 +1,5 @@
 import type { useI18n } from '@/lib/i18n';
+import type { useComposerFooterModes } from './useComposerFooterModes';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -35,7 +36,6 @@ import type { useComposerColumn } from './useComposerColumn';
 import type { useComposerAutocompleteState } from './useComposerAutocompleteState';
 import { ParallelComposerStrip } from '../../composer/parallel/ParallelComposerStrip';
 import { BtwPanel } from '../../btw/BtwPanel';
-import { ActiveEditorFileSuggestion } from '../../FileAttachment';
 import { withAttachmentChips } from '../../message/parts/attachmentCitationChips';
 import { cn } from '@/lib/utils';
 import { shouldPreserveDeferredEnterShift } from '../../composer/keyboardPolicy';
@@ -54,7 +54,6 @@ import { PromptHistorySearchPanel } from '../../composer/ui/PromptHistorySearchP
 import { LargeTextPasteChoice } from '../../composer/ui/LargeTextPasteChoice';
 import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
-import { MessageSelectionBar } from '@/components/chat/messageSelection/MessageSelectionBar';
 import type { ChatInputProps } from './chatInputProps';
 import { renderDraftTitle } from './ComposerDraftTitle';
 import { MAX_MOBILE_COMPOSER_LINES, MAX_VISIBLE_COMPOSER_LINES, MOBILE_COMPOSER_BOUND_GAP_PX } from './composerInputLimits';
@@ -63,10 +62,11 @@ import { MemoComposerDictation, MemoModelControls } from './memoComposerControls
 const NO_ATTACH_GUESTS: [] = [];
 
 type Dependencies = {
+    footerModes: ReturnType<typeof useComposerFooterModes>;
     historySearchState: Pick<ReturnType<typeof useComposerHistorySearchState>, 'setPromptHistorySearchForm' | 'promptHistorySearch'>;
     largePasteState: Pick<ReturnType<typeof useComposerLargePasteState>, 'largeTextPasteGesture' | 'largeTextPasteOffer'>;
     column: Pick<ReturnType<typeof useComposerColumn>, 'chatColumnSession' | 'columnPinned'>;
-    autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'openAutocomplete' | 'autocompleteQuery' | 'commandRef' | 'skillRef' | 'snippetRef' | 'mentionRef' | 'emojiRef' | 'closeAutocomplete'>;
+    autocompleteState: Pick<ReturnType<typeof useComposerAutocompleteState>, 'openAutocomplete' | 'autocompleteQuery' | 'commandRef' | 'skillRef' | 'mentionRef' | 'emojiRef' | 'closeAutocomplete'>;
     dropState: Pick<ReturnType<typeof useComposerDropState>, 'isDragging' | 'dropZoneRef' | 'isInternalDrag'>;
     i18n: Pick<ReturnType<typeof useI18n>, 't'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef' | 'composerViewStore'>;
@@ -102,6 +102,7 @@ type Dependencies = {
 };
 
 export function renderComposerForm({
+    footerModes,
     historySearchState, largePasteState, column, autocompleteState, dropState, i18n, editorState,
     draftText, mobilePanels, sessionScope, sessionLifecycle, draftHistory, mobileActions, inlineContext,
     sendActions, expansion, preferences, draftTarget, controls, props, mobileShell: mobile, language,
@@ -110,9 +111,9 @@ export function renderComposerForm({
 }: Dependencies) {
     const { setPromptHistorySearchForm, promptHistorySearch } = historySearchState;
     const { largeTextPasteGesture, largeTextPasteOffer } = largePasteState;
-    const { chatColumnSession, columnPinned } = column;
+    const { columnPinned } = column;
     const {
-        openAutocomplete, autocompleteQuery, commandRef, skillRef, snippetRef, mentionRef, emojiRef,
+        openAutocomplete, autocompleteQuery, commandRef, skillRef, mentionRef, emojiRef,
         closeAutocomplete,
     } = autocompleteState;
     const { isDragging, dropZoneRef, isInternalDrag } = dropState;
@@ -123,7 +124,7 @@ export function renderComposerForm({
     const {
         isBtwActive, claimAttachmentSlot, messageSelectionActive, currentSessionId,
         currentSessionDirectoryForSync, currentDirectory, newSessionDraftOpen, inputMode,
-        btwComposerSessionId, isBtwPanelVisible, hasPendingPermission, btwPanel,
+        isBtwPanelVisible, hasPendingPermission, btwPanel,
     } = sessionScope;
     const { handleExitBtw } = sessionLifecycle;
     const { isPromptHistorySearchOpen, historyValues } = draftHistory;
@@ -143,14 +144,14 @@ export function renderComposerForm({
         showDraftTargetSelectors, selectedDraftProject, draftProjects, selectedDraftDirectory,
         selectedDraftBranchLabel, selectedDraftBranchIsKnown,
         selectedDraftDirectoryHasUncommittedChanges, projectRootBranchOption, worktreeBranchOptions,
-        spaceBranchOptions, draftBranchItems, shouldShowDraftBranchSelector, handleDraftProjectChange,
-        handleDraftDirectoryChange, refreshDraftTarget, handleCreateSpace, handleCreateCustomWorktree,
+        draftBranchItems, shouldShowDraftBranchSelector, handleDraftProjectChange,
+        handleDraftDirectoryChange, handleCreateSpace, handleCreateCustomWorktree,
         handleMobileDraftPickerChange,
     } = draftTarget;
     const {
         abortShortcutReaches, pillText, footerIconButtonClass, iconSizeClass, sendIconSizeClass,
         stopIconSizeClass, openMobileAttachSheet, toggleDictation, desktopDictating,
-        iconButtonBaseClass, goalObjectiveLength, footerPaddingClass, shownPermissionMode,
+        iconButtonBaseClass, footerPaddingClass, shownPermissionMode,
         isPermissionAutoAcceptInteractive, handlePermissionModeCycle, setDesktopDictating,
         waitingForAgent, footerGapClass,
     } = controls;
@@ -168,9 +169,9 @@ export function renderComposerForm({
         dictationHeightLimit, useCompactChatPlaceholder, handleDictationContentHeightChange,
     } = editorActions;
     const {
-        handleCommandSelect, handleSkillSelect, handleSnippetSelect, snippetDraftText,
-        handleSnippetDraftSaved, handleFileSelect, handleAgentSelect, handleSessionSelect,
-        handleExtensionMentionSelect, handleEmojiSelect,
+        handleCommandSelect, handleSkillSelect, 
+        handleFileSelect, 
+        handleEmojiSelect,
     } = completions;
     const {
         handleDropCapture, handleDragEnter, handleDragOver, handleDragLeave, handleDrop, handleDragEnd,
@@ -239,12 +240,10 @@ export function renderComposerForm({
                             hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
                             projectRootBranchOption={projectRootBranchOption}
                             worktreeBranchOptions={worktreeBranchOptions}
-                            spaceBranchOptions={spaceBranchOptions}
                             branchItems={draftBranchItems}
                             showBranchSelector={shouldShowDraftBranchSelector}
                             onProjectChange={handleDraftProjectChange}
                             onDirectoryChange={handleDraftDirectoryChange}
-                            onRefreshTarget={refreshDraftTarget}
                             onCreateSpace={handleCreateSpace}
                             onCreateCustomWorktree={handleCreateCustomWorktree}
                             theme={currentTheme}
@@ -269,14 +268,7 @@ export function renderComposerForm({
                         isMobileExpanded && 'flex min-h-0 flex-1 flex-col',
                     )}
                 >
-                {messageSelectionActive && currentSessionId ? (
-                    <MessageSelectionBar
-                        sessionId={currentSessionId}
-                        directory={chatColumnSession?.directory ?? currentSessionDirectoryForSync ?? currentDirectory ?? null}
-                        isMobile={isMobile}
-                        radius={chatInputRadius}
-                    />
-                ) : mobileCommentActive && mobileComment.draft.status === 'open' ? (
+                {mobileCommentActive && mobileComment.draft.status === 'open' ? (
                     <MobileCommentComposer
                         key={mobileComment.draft.generation}
                         draft={mobileComment.draft}
@@ -305,7 +297,7 @@ export function renderComposerForm({
                         onPrimaryAction={handlePrimaryAction}
                         onPickLocalFiles={handlePickLocalFiles}
                         onOpenGitHubPicker={openGitHubPicker}
-                        repositoryProvider={repositoryProvider}
+                        repositoryProvider={repositoryProvider ?? undefined}
                         trackerPickers={trackerPickers}
                         onOpenAttachSheet={openMobileAttachSheet}
                         onStartDictation={toggleDictation}
@@ -331,19 +323,11 @@ export function renderComposerForm({
                         overlayPosition={autocompleteOverlayPosition}
                         commandRef={commandRef}
                         skillRef={skillRef}
-                        snippetRef={snippetRef}
                         mentionRef={mentionRef}
                         emojiRef={emojiRef}
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
-                        onSnippetSelect={handleSnippetSelect}
-                        snippetDraftText={snippetDraftText}
-                        onSnippetDraftSaved={handleSnippetDraftSaved}
                         onFileSelect={handleFileSelect}
-                        onAgentSelect={handleAgentSelect}
-                        onSessionSelect={isVSCode ? undefined : handleSessionSelect}
-                        onExtensionMentionSelect={isVSCode || isBtwActive ? undefined : handleExtensionMentionSelect}
-                        currentSessionId={currentSessionId}
                         onEmojiSelect={handleEmojiSelect}
                         onClose={closeAutocomplete}
                     />
@@ -411,11 +395,6 @@ export function renderComposerForm({
                     <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         {parallel.isActive ? <ParallelComposerStrip parallel={parallel} project={parallelProjectRef} /> : null}
                         {composerTopRows}
-                        {isVSCode && !isBtwActive ? (
-                            <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
-                                <ActiveEditorFileSuggestion />
-                            </div>
-                        ) : null}
                         {contextRows ? <div className="relative z-10 px-1.5">{contextRows}</div> : null}
                         <div
                             ref={dictationHeightHostRef}
@@ -479,13 +458,19 @@ export function renderComposerForm({
                         </div>
                     </div>
                     <ComposerFooter
+                        planRoleAvailable={footerModes.planRoleAvailable}
+                        goalModeEnabled={footerModes.goalModeEnabled}
+                        onDraftModeChange={footerModes.handleDraftModeChange}
+                        runActive={footerModes.runActive}
+                        isExpandedInput={footerModes.isExpandedInput}
+                        onToggleExpandedInput={footerModes.handleToggleExpandedInput}
+                        onQueueMessage={footerModes.handleQueueFromFooter}
                         isMobile={isMobile}
                         isVSCode={isVSCode}
                         escapeStops={abortShortcutReaches}
                         sessionId={currentSessionId}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}
-                        messageLength={goalObjectiveLength}
                         radius={chatInputRadius}
                         footerPaddingClass={footerPaddingClass}
                         footerGapClass={footerGapClass}
@@ -502,7 +487,7 @@ export function renderComposerForm({
                         onOpenSettings={onOpenSettings}
                         onPickLocalFiles={handlePickLocalFiles}
                         onOpenGitHubPicker={openGitHubPicker}
-                        repositoryProvider={repositoryProvider}
+                        repositoryProvider={repositoryProvider ?? undefined}
                         trackerPickers={trackerPickers}
                         attachGuests={isMobile ? NO_ATTACH_GUESTS : guestAttachItems}
                         onOpenGuestAttach={openGuestAttach}
@@ -573,7 +558,7 @@ export function renderComposerForm({
                 directory={currentSessionDirectoryForSync ?? currentDirectory ?? undefined}
                 hidden={newSessionDraftOpen || isBtwActive || isBtwPanelVisible || hasPendingPermission || isPromptHistorySearchOpen}
             />
-            {currentSessionId ? <BtwPanel parentSessionId={currentSessionId} panel={btwPanel} hidden={!isBtwPanelVisible} onExit={handleExitBtw} /> : null}
+            {currentSessionId ? <BtwPanel parentSessionId={currentSessionId} panel={btwPanel} onExit={handleExitBtw} /> : null}
         </form>
     );
 }

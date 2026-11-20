@@ -4,7 +4,7 @@ import React from 'react';
 import { workDraftIdOfComposerKey, type ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
-import { SessionDraftTooLargeError, useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
+import { useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import { useInputStore } from '@/sync/input-store';
 import { useComposerTextEffect, type ComposerText } from './composerText';
@@ -37,7 +37,7 @@ const publish = (snapshot: Snapshot, hadContent: boolean, onTooLarge: () => void
     return;
   }
   void drafts.save(snapshot.draftId, snapshot).catch((error) => {
-    if (error instanceof SessionDraftTooLargeError) onTooLarge();
+    if (error instanceof Error && error.message === 'The draft\'s attachments are too large to keep') onTooLarge();
   });
 };
 

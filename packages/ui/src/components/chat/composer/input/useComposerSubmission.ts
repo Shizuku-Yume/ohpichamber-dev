@@ -765,7 +765,7 @@ export function useComposerSubmission({
                 ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
                 ?? currentDirectory;
             if (linkTargetSessionId && getRuntimeKey() === submitRuntimeKey) {
-                void recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences).catch((error: unknown) => {
+                void Promise.resolve().then(() => recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences)).catch((error: unknown) => {
                     console.error('Session link update failed:', error);
                     toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
                 });
@@ -777,8 +777,8 @@ export function useComposerSubmission({
             // was started: a draft, a worktree made from the issue.
             if (!currentSessionId && linkTargetSessionId) {
                 for (const reference of linkedReferences) {
-                    if (reference.kind !== 'linear-issue' && reference.kind !== 'tracker-item') continue;
-                    void postTrackerSessionStarted(runtimeTrackers, reference.kind === 'linear-issue' ? 'linear' : reference.provider, {
+                    if (reference.kind !== 'tracker-item') continue;
+                    void postTrackerSessionStarted(runtimeTrackers, reference.provider, {
                         sessionId: linkTargetSessionId, identifier: reference.identifier,
                     });
                 }

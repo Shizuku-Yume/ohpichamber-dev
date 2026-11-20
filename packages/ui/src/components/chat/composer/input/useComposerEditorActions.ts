@@ -1,3 +1,4 @@
+import { useComposerTextValue } from '../../composer/state/composerText';
 import type { useI18n } from '@/lib/i18n';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
@@ -17,7 +18,7 @@ import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { getCycledPrimaryAgentName } from '../../mobileControlsUtils';
+import { getCycledAgentId } from '../../mobileControlsUtils';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { composerReferenceKey, withComposerReferences } from '../../composer/composerReferences';
 import type { FileMentionAutocompleteInputSource } from '../../fileMentionAutocompleteState';
@@ -57,7 +58,7 @@ export function useComposerEditorActions({
     const { isComposerExpanded } = expansion;
     const { getLargeTextPasteScope } = largePasteScope;
     const {
-        openAutocomplete, autocompleteQuery, mentionCompletion, setOpenAutocomplete,
+        openAutocomplete, mentionCompletion, setOpenAutocomplete,
         setAutocompleteQuery, completingMentionRef, closeAutocomplete,
     } = autocompleteState;
     const { composerText, setMessage, setEditorValueRevision, setInputMode } = draftText;
@@ -79,14 +80,14 @@ export function useComposerEditorActions({
     const { pastedSessionIds, linkPastedSessionId, setOpenSharedPageKey } = language;
     const { receivedPageBases, updateLinkedReferences } = referenceDrafts;
 
+    const autocompleteMessage = useComposerTextValue(composerText, (value) => value);
     const {
         position: autocompleteOverlayPosition,
         update: updateAutocompleteOverlayPosition,
     } = useAutocompletePosition({
-        fullWidth: isMobile,
+        enabled: !isMobile,
         openAutocomplete,
-        query: autocompleteQuery,
-        text: composerText,
+        message: autocompleteMessage,
         editorRef: composerRef,
         containerRef: dropZoneRef,
     });
@@ -106,7 +107,7 @@ export function useComposerEditorActions({
 
     const handleCycleAgent = React.useCallback((direction: 1 | -1 = 1) => {
         if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledPrimaryAgentName(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
+        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
         if (!nextAgentName) return;
 
         if (currentSessionId) {

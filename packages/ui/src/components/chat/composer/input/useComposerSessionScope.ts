@@ -14,7 +14,6 @@ import { useProjectActions } from '@/components/layout/projectActionsRunnerConte
 import { usePendingComposerReferences } from '../../composer/pendingComposerReferences';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useRetryModelPick } from '@/hooks/useRetryModelPick';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useComposerTextEffect } from '../../composer/state/composerText';
 import { useFolderMissing } from '@/components/session/sidebar/projects/useProjectFolderMissing';
@@ -78,11 +77,6 @@ export function useComposerSessionScope({
         : btwSessionId;
 
     const isBtwActive = Boolean(btwComposerSessionId) && !btwPanel.collapsed;
-
-    useRetryModelPick(
-        currentSessionId,
-        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
-    );
 
     const isBtwPanelVisible = Boolean(btwPanel.pending || btwPanel.ephemeralRecordId);
 
@@ -173,8 +167,6 @@ export function useComposerSessionScope({
 
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
 
-    const pendingDraftSubmit = useInputStore((s) => s.pendingDraftSubmit);
-
     const setPendingInputText = useInputStore((s) => s.setPendingInputText);
 
     const pendingGuestIssue = useInputStore((s) => s.pendingGuestIssue);
@@ -220,7 +212,7 @@ export function useComposerSessionScope({
         btwSessionId, isBtwPanelVisible, draftCaretModeRef, immediateBtwSubmitRef, pendingBtwComposerRequest,
         consumePendingBtwComposerRequest, btwDirectory, btwPanel, sendHeldByMissingFolderRef,
         consumePendingSyntheticParts, projectActionsRef, clearAttachedFiles, sendHeldByMissingFolder,
-        setReviewDialogOpen, sessionFolder, pendingPresetSubmit, pendingDraftSubmit,
+        setReviewDialogOpen, sessionFolder, pendingPresetSubmit,
         clearAbortPrompt, abortCurrentOperation, pickSessionAgent, addAttachedFile, setPendingInputText,
         pendingGuestIssue, consumePendingGuestIssue, pendingComposerReferenceCount, setNewSessionDraftTarget,
         hasPendingForm, currentManagementSessionId, draftPermissionMode,

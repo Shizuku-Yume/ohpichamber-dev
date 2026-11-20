@@ -51,7 +51,7 @@ export function useComposerCompletions({
     referenceDrafts, sessionScope, sendHandlers,
 }: Dependencies): ComposerCompletions {
     const { composerRef } = editorState;
-    const { completingMentionRef, closeAutocomplete, openAutocomplete, autocompleteQuery } = autocompleteState;
+    const { completingMentionRef, closeAutocomplete, autocompleteQuery } = autocompleteState;
     const { confirmedMentionsRef, composerText, setMessage, currentChatDraftIdentityRef } = draftText;
     const { t } = i18n;
     const { toMentionPath } = mentionPaths;
@@ -98,7 +98,7 @@ export function useComposerCompletions({
         const lastAtSymbol = message.substring(0, cursorPosition).lastIndexOf('@');
         const start = lastAtSymbol === -1 ? cursorPosition : lastAtSymbol;
         const inserted = `${sessionLinkText(session.sessionId)} `;
-        rememberSessionMentions([sessionReference(session)]);
+        rememberSessionMentions([sessionReference({ id: session.sessionId, title: session.title ?? '' })]);
         const newMessage = message.substring(0, start) + inserted + message.substring(cursorPosition);
         setMessage(newMessage);
         const nextCursor = start + inserted.length;
@@ -180,7 +180,7 @@ export function useComposerCompletions({
 
     const snippetDraftText = useComposerTextValue(
         composerText,
-        (text) => (openAutocomplete === 'snippet' ? withoutSnippetToken(text, autocompleteQuery) : undefined),
+        (): string | undefined => undefined,
     );
 
     const handleSnippetDraftSaved = useStableHandler((typedName: string) => {

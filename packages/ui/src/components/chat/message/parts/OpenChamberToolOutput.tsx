@@ -16,42 +16,68 @@ import { formatQuotaResetLabel, formatWindowLabel } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChatColumnActions } from '../../chatColumnSession';
-import { dispatchedSchema, workflowSavedSchema, workflowStoppedSchema, workflowResultSchema, workflowListedSchema, workflowCheckedSchema, browserResizedSchema, browserInspectedSchema, browserNavigatedSchema, browserScrolledSchema, browserSelectedSchema, browserTypedSchema, browserClickedSchema, browserSnapshotSchema, scheduleRanSchema, fileOpenedSchema, workNamedSchema, sessionMessagesSchema, sessionStatusSchema, knowledgeListedSchema, knowledgeSavedSchema, linkedSchema, unlinkedSchema, memoriesListedSchema, modelPreferencesSchema, modelsFoundSchema, movedSchema, pageOpenedSchema, projectsListedSchema, scheduledSchema, scheduleListedSchema, screenshotSchema, sessionsListedSchema, tightestWindow, readOpenChamberCallInput, usageSchema, type OpenChamberCallInput, type OpenChamberEnvelope } from './openChamberToolEnvelope';
+import {
+    dispatchedSchema,
+    workflowSavedSchema,
+    workflowStoppedSchema,
+    workflowResultSchema,
+    workflowListedSchema,
+    workflowCheckedSchema,
+    browserResizedSchema,
+    browserInspectedSchema,
+    browserNavigatedSchema,
+    browserScrolledSchema,
+    browserSelectedSchema,
+    browserTypedSchema,
+    browserClickedSchema,
+    browserSnapshotSchema,
+    scheduleRanSchema,
+    fileOpenedSchema,
+    workNamedSchema,
+    prWatchedSchema,
+    sessionMessagesSchema,
+    sessionStatusSchema,
+    knowledgeListedSchema,
+    knowledgeSavedSchema,
+    linkedSchema,
+    modelPreferencesSchema,
+    modelsFoundSchema,
+    movedSchema,
+    pageOpenedSchema,
+    projectsListedSchema,
+    scheduledSchema,
+    scheduleListedSchema,
+    screenshotSchema,
+    sessionsListedSchema,
+    tightestWindow,
+    readOpenChamberCallInput,
+    usageSchema,
+    type OpenChamberCallInput,
+    type OpenChamberEnvelope,
+} from './openChamberToolEnvelope';
 import { GeneratedImages } from './GeneratedImages';
 import { RawToggleContext, usePanelsAvailable } from './toolResultContext';
 import { Actions, Field, List, ListRow, Section, SessionLinkRow, Warning, WebLinkRow, type OpenActionInput } from './ToolResultParts';
 import type { ToolPopupContent } from '../types';
-import { PrWatchedBody, WaitListedBody, WaitStartedBody } from './WaitToolOutput';
 
+/**
+ * Whether the call worked on the chat's own project. A panel shows the chat's
+ * project, so an entry from another one stays readable in the row without a
+ * button that would open the wrong project's panel.
+ */
 const isOwnProject = (call: OpenChamberCallInput, directory: string): boolean => (
     !call.projectId && (!call.directory || call.directory === directory)
 );
 
-type LinkedEntry = z.infer<typeof linkedSchema>['linked'];
-
-const LinkedRow: React.FC<{ linked: LinkedEntry }> = ({ linked }) => {
-    const repository = linked.id?.includes('#') ? linked.id.slice(0, linked.id.indexOf('#')) : undefined;
-    const label = [linked.number ? `#${linked.number}` : undefined, linked.title].filter(Boolean).join(' ');
-    return <WebLinkRow url={linked.url} icon={linked.kind === 'issue' ? 'record-circle' : 'git-pull-request'} primary={label || linked.url} secondary={repository} />;
-};
-
 const LinkedBody: React.FC<{ data: unknown }> = ({ data }) => {
     const parsed = linkedSchema.safeParse(data);
     if (!parsed.success) return null;
+    const { linked } = parsed.data;
+    const repository = linked.id?.includes('#') ? linked.id.slice(0, linked.id.indexOf('#')) : undefined;
+    const label = [linked.number ? `#${linked.number}` : undefined, linked.title].filter(Boolean).join(' ');
     return (
         <>
-            <LinkedRow linked={parsed.data.linked} />
-            <Actions />
-        </>
-    );
-};
-
-const UnlinkedBody: React.FC<{ data: unknown }> = ({ data }) => {
-    const parsed = unlinkedSchema.safeParse(data);
-    if (!parsed.success) return null;
-    return (
-        <>
-            {parsed.data.unlinked.map((linked) => <LinkedRow key={linked.id ?? linked.url} linked={linked} />)}
+            <WebLinkRow url={linked.url} icon={linked.kind === 'issue' ? 'record-circle' : 'git-pull-request'} primary={label || linked.url} secondary={repository} />
             <Actions />
         </>
     );
@@ -266,6 +292,7 @@ const ModelsFoundBody: React.FC<{ data: unknown }> = ({ data }) => {
     const parsed = modelsFoundSchema.safeParse(data);
     if (!parsed.success) return null;
     const { models, total, next } = parsed.data;
+    // A later page of the search: what is left counts from where the next page starts.
     const more = total === undefined || next === undefined ? undefined : next === null ? 0 : total - next;
     return (
         <>
@@ -275,36 +302,6 @@ const ModelsFoundBody: React.FC<{ data: unknown }> = ({ data }) => {
                 ))}
             </List>
             <Actions />
-        </>
-    );
-};
-
-const MemoriesListedBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const parsed = memoriesListedSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memories, globalUnavailable, projectUnavailable } = parsed.data;
-    const open = () => {
-        const store = useUIStore.getState();
-        store.setProjectContextTab('memory');
-        store.openContextPanelTab(directory, { mode: 'notes' });
-    };
-    return (
-        <>
-            <Warning text={globalUnavailable ? t('chat.toolPart.openchamber.memory.globalUnavailable') : undefined} />
-            <Warning text={projectUnavailable ? t('chat.toolPart.openchamber.memory.projectUnavailable') : undefined} />
-            <List count={memories.length}>
-                {memories.map((memory) => (
-                    <ListRow
-                        key={`${memory.scope ?? ''}:${memory.memoryId}`}
-                        primary={memory.title ?? memory.memoryId}
-                        secondary={memory.scope === 'global' ? t('chat.toolPart.openchamber.memory.scope.global')
-                            : memory.scope === 'project' ? t('chat.toolPart.openchamber.memory.scope.project') : undefined}
-                    />
-                ))}
-            </List>
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: open } : null} />
         </>
     );
 };
@@ -387,6 +384,7 @@ const ScheduleListedBody: React.FC<{ data: unknown; call: OpenChamberCallInput; 
     );
 };
 
+/** The page a browser action worked on. */
 const PageLink: React.FC<{ url: string; title: string | undefined }> = ({ url, title }) => (
     <WebLinkRow url={url} icon="global" primary={title || url} secondary={title ? url : undefined} />
 );
@@ -415,30 +413,6 @@ const ScreenshotBody: React.FC<{ data: unknown; part: CanonicalToolView; onShowP
     );
 };
 
-const MemoryReadBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const describeKind = useMemoryKind();
-    const parsed = memoryReadSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memory } = parsed.data;
-    const kind = describeKind(memory);
-    return (
-        <>
-            {kind ? <div className="typography-meta text-muted-foreground">{kind}</div> : null}
-            {memory.title ? <div className="typography-meta font-medium text-foreground break-words">{memory.title}</div> : null}
-            {memory.body ? <div className="typography-meta whitespace-pre-wrap break-words text-foreground">{memory.body}</div> : null}
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />
-        </>
-    );
-};
-
-const MemoryDeletedBody: React.FC<{ directory: string; isMobile: boolean }> = ({ directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    return <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />;
-};
-
 const KnowledgeTouchedBody: React.FC<{ call: OpenChamberCallInput; directory: string; isMobile: boolean; tab: 'todos' | 'notes' | 'plans' }> = ({ call, directory, isMobile, tab }) => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile) && isOwnProject(call, directory);
@@ -465,6 +439,7 @@ const SessionStatusBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
+/** The messages the agent read from another session, oldest first, each shortened to a few lines. */
 const SessionMessagesBody: React.FC<{ data: unknown }> = ({ data }) => {
     const { t } = useI18n();
     const { openSession } = useChatColumnActions();
@@ -493,6 +468,29 @@ const SessionMessagesBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
+const PR_STATUS_KEYS = {
+    waking: 'chat.toolPart.openchamber.pr.status.waking',
+    unknown: 'chat.toolPart.openchamber.pr.status.unknown',
+    pending: 'chat.toolPart.openchamber.pr.status.pending',
+    passed: 'chat.toolPart.openchamber.pr.status.passed',
+    failed: 'chat.toolPart.openchamber.pr.status.failed',
+    open: 'chat.toolPart.openchamber.pr.status.open',
+} as const;
+
+const PrWatchedBody: React.FC<{ data: unknown }> = ({ data }) => {
+    const { t } = useI18n();
+    const parsed = prWatchedSchema.safeParse(data);
+    if (!parsed.success) return null;
+    const { url, number, title, status } = parsed.data.watching;
+    const label = [number ? `#${number}` : undefined, title || undefined].filter(Boolean).join(' ');
+    return (
+        <>
+            <WebLinkRow url={url} icon="git-pull-request" primary={label || url} secondary={status ? t(PR_STATUS_KEYS[status]) : undefined} />
+            <Actions />
+        </>
+    );
+};
+
 const WorkNamedBody: React.FC<{ data: unknown }> = ({ data }) => {
     const { t } = useI18n();
     const parsed = workNamedSchema.safeParse(data);
@@ -502,6 +500,7 @@ const WorkNamedBody: React.FC<{ data: unknown }> = ({ data }) => {
         <>
             {title ? <Field label={t('chat.toolPart.openchamber.field.title')}>{title}</Field> : null}
             {branch ? <Field label={t('chat.toolPart.openchamber.field.branch')}>{branch}</Field> : null}
+            {/* The task kept the name it had: the user's own, or the session's title. */}
             {!named ? <div className="typography-meta text-muted-foreground">{t('chat.toolPart.openchamber.work.kept')}</div> : null}
             <Actions />
         </>
@@ -573,6 +572,7 @@ const BrowserSnapshotBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
+/** A browser action on one element: what it acted on, then the page it left. */
 const BrowserElementBody: React.FC<{ label: string; target: string | undefined; url: string | undefined }> = ({ label, target, url }) => (
     <>
         {target ? <Field label={label}>{target}</Field> : null}
@@ -619,12 +619,14 @@ const BrowserInspectedBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
+/** What a workflow left, as text: an answer that is not text reads as its JSON. */
 const answerText = (value: JsonValue | undefined): string | undefined => {
     if (value === undefined) return undefined;
     const plain = z.string().safeParse(value);
     return plain.success ? plain.data : JSON.stringify(value, null, 2);
 };
 
+/** A run's state as the workflow card and the Workflows panel show it. */
 const WorkflowRunState: React.FC<{ state: WorkflowRun['state'] }> = ({ state }) => {
     const { t } = useI18n();
     const look = workflowRunLook(state);
@@ -636,6 +638,12 @@ const WorkflowRunState: React.FC<{ state: WorkflowRun['state'] }> = ({ state }) 
     );
 };
 
+/**
+ * Opens a run in the Workflows panel, where it is live; only where that panel
+ * opens beside the chat. The panel shows a project's runs, so the run's own
+ * folder decides which one: a session moved since keeps its old runs there.
+ * A run the store does not hold yet gets no link.
+ */
 const useOpenWorkflowRun = (isMobile: boolean, sessionId: string, runId: string | undefined): OpenActionInput | null => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile);
@@ -761,6 +769,12 @@ const WorkflowSavedBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
+/**
+ * What one of OpenChamber's own tools did, in its own terms: the pull
+ * request it linked, the session it started, the note it saved. `null`
+ * for an action without its own view, and for an answer this view cannot
+ * read, so the row falls back to the plain output.
+ */
 export const OpenChamberToolOutput: React.FC<{
     envelope: OpenChamberEnvelope;
     part: CanonicalToolView;
@@ -768,6 +782,7 @@ export const OpenChamberToolOutput: React.FC<{
     directory: string;
     isMobile: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
+    /** The switch to the raw answer; every view ends its actions row with it. */
     rawToggle: React.ReactNode;
 }> = ({ envelope, part, input, directory, isMobile, onShowPopup, rawToggle }) => (
     <RawToggleContext.Provider value={rawToggle}>
@@ -800,10 +815,7 @@ const OpenChamberView: React.FC<{
         case 'session.status': return <SessionStatusBody data={data} />;
         case 'session.messages': return <SessionMessagesBody data={data} />;
         case 'pr.watch': return <PrWatchedBody data={data} />;
-        case 'wait.start': return <WaitStartedBody data={data} />;
-        case 'wait.list': return <WaitListedBody data={data} />;
         case 'pr.unwatch':
-        case 'wait.stop':
         case 'browser.close': return <Actions />;
         case 'work.name': return <WorkNamedBody data={data} />;
         case 'file.open': return <FileOpenedBody data={data} />;
@@ -842,7 +854,6 @@ const OpenChamberView: React.FC<{
             return parsed.success ? <BrowserElementBody label={t('chat.toolPart.openchamber.field.viewport')} target={viewportText(parsed.data.viewport, t('chat.toolPart.openchamber.browser.viewportFill'))} url={undefined} /> : null;
         }
         case 'session.link': return <LinkedBody data={data} />;
-        case 'session.unlink': return <UnlinkedBody data={data} />;
         case 'session.create':
         case 'session.send':
         case 'session.fork':
@@ -857,3 +868,4 @@ const OpenChamberView: React.FC<{
         default: return null;
     }
 };
+

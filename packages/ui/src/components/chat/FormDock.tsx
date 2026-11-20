@@ -1,4 +1,3 @@
-import { FormDockModeContext } from './formsInChat';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import React from 'react';
@@ -45,9 +44,6 @@ interface FormDockProps {
 }
 
 const FormDockView: React.FC<FormDockProps> = ({ sessionId, directory, hidden }) => {
-    const mode = React.useContext(FormDockModeContext);
-    const inChat = mode === 'in-chat';
-    const readingHistory = mode === 'reading';
     const forms = useScopedBlockingForms(sessionId, directory);
     const form = forms[0];
     // Keyed on the request id so a different request starts clean and the
@@ -209,11 +205,10 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
             role="dialog"
             ariaLabel={title}
             compact={collapsed}
-            holdReserve={collapse === 'reading'}
             header={<>
                 <button
                     type="button"
-                    onClick={toggleCollapsed}
+                    onClick={() => setCollapsed((value) => !value)}
                     aria-expanded={!collapsed}
                     aria-label={collapsed ? t('chat.formDock.expandAria') : t('chat.formDock.collapseAria')}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"

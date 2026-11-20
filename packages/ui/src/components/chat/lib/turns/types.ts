@@ -35,8 +35,12 @@ export interface TurnDiffStats {
 
 export interface TurnChangedFile {
     file: string;
+    /** Absent when the tool result does not report line counts. */
     additions?: number;
     deletions?: number;
+}
+
+export interface TurnActivityGroup {
     id: string;
     anchorMessageId: string;
     afterToolPartId: string | null;
@@ -65,7 +69,6 @@ export interface TurnRecord {
     messages: TurnMessageRecord[];
     assistantMessageIds: string[];
     assistantMessages: ChatMessageEntry[];
-    waitingNotices?: ChatMessageEntry[];
     activityParts: TurnActivityRecord[];
     activitySegments: TurnActivityGroup[];
     summary: TurnSummaryRecord;
@@ -112,8 +115,7 @@ export interface TurnGroupingContext {
     activityOwnerMessageId?: string;
     isFirstAssistantInTurn: boolean;
     isLastAssistantInTurn: boolean;
-    opensAnswerText?: boolean;
-    earlierAssistantText?: boolean;
+    hasEarlierAssistantText?: boolean;
     isLatestTurn: boolean;
     summaryBody?: string;
     activityParts?: TurnActivityRecord[];
@@ -124,6 +126,7 @@ export interface TurnGroupingContext {
     diffStats?: TurnDiffStats;
     changedFiles?: TurnChangedFile[];
     userMessageCreatedAt?: number;
+    /** Model variant ("thinking" etc.) the turn ran with, read off its assistant messages. */
     assistantVariant?: string;
     isWorking: boolean;
     isGroupExpanded?: boolean;

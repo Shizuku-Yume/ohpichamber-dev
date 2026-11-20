@@ -10,6 +10,8 @@ import { toast } from '@/components/ui';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import type { IconName } from '@/components/icon/icons';
+import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
+import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { useI18n } from '@/lib/i18n';
 import { useAllLiveSessions, useAllSessionStatuses, useDirectorySync } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
@@ -28,6 +30,16 @@ import type { Subagent } from '@openchamber/agent-contract';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
 
+const SubagentDuration: React.FC<{ sessionId: string }> = ({ sessionId }) => {
+ const hasDuration = useHasSessionActivityDuration(sessionId, true);
+ return hasDuration ? <SessionActivityDuration sessionId={sessionId} running /> : null;
+};
+
+/**
+ * Running subagents and, more importantly, their blockers: a permission request
+ * raised by a child session has no representation in the transcript, so this
+ * panel is the only place it becomes visible.
+ */
 export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directory }) => {
  const { t } = useI18n();
  const [hubOpen, setHubOpen] = useState(false);

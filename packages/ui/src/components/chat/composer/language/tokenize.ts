@@ -32,6 +32,7 @@ export interface ComposerLanguageContext {
     fileIconVariant?: 'light' | 'dark';
     sessionLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
     sessionLinkOrigins?: readonly string[];
+    referenceLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
 }
 
 export function tokenizeMentions(

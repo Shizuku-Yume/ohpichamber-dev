@@ -7,16 +7,16 @@ import { useChatSessionSelection } from './chatColumnSession';
 import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 import { mergeCommandAutocompleteItems, rankCommandAutocompleteItems } from './commandAutocompleteItems';
 import { useGuestCommands } from '@/hooks/useGuestSurfaces';
-import { reservedComposerCommandNames } from './composer/submit/guestCommands';
 import { AutocompleteRowDetail } from './composer/ui/AutocompleteRowParts';
 import { useAutocompleteSelectionScroll } from './composer/ui/useAutocompleteSelectionScroll';
 
+// Skills are not here: they have their own `$` picker.
 type CommandSource = 'openchamber' | 'native' | 'extension';
 
 export interface CommandInfo {
@@ -29,8 +29,43 @@ export interface CommandInfo {
   isBuiltIn?: boolean;
   isOpenChamber?: boolean;
   scope?: string;
+  /** Name of the extension that contributed the command; shown as its badge. */
   extensionName?: string;
 }
+
+// Every name the composer runs itself; an extension command with one of
+// these names is dropped before it reaches the list.
+const LOCAL_COMMAND_NAMES = [
+  'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'handoff-review',
+  'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
+];
+// Descriptions resolve through the dictionary so a locale switch re-renders
+// every builtin command; `compact` already owns a key on the openchamber list.
+const BUILTIN_COMMAND_DESCRIPTION_KEYS: Record<string, I18nKey> = {
+  compact: 'chat.commandAutocomplete.command.compactDescription',
+  shake: 'chat.commandAutocomplete.command.shakeDescription',
+  todo: 'chat.commandAutocomplete.command.todoDescription',
+  jobs: 'chat.commandAutocomplete.command.jobsDescription',
+  usage: 'chat.commandAutocomplete.command.usageDescription',
+  context: 'chat.commandAutocomplete.command.contextDescription',
+  tools: 'chat.commandAutocomplete.command.toolsDescription',
+  handoff: 'chat.commandAutocomplete.command.handoffDescription',
+  retry: 'chat.commandAutocomplete.command.retryDescription',
+  rename: 'chat.commandAutocomplete.command.renameDescription',
+  effort: 'chat.commandAutocomplete.command.effortDescription',
+  model: 'chat.commandAutocomplete.command.modelDescription',
+  switch: 'chat.commandAutocomplete.command.switchDescription',
+  fast: 'chat.commandAutocomplete.command.fastDescription',
+  slow: 'chat.commandAutocomplete.command.slowDescription',
+  prewalk: 'chat.commandAutocomplete.command.prewalkDescription',
+  force: 'chat.commandAutocomplete.command.forceDescription',
+  pin: 'chat.commandAutocomplete.command.pinDescription',
+  fresh: 'chat.commandAutocomplete.command.freshDescription',
+  clear: 'chat.commandAutocomplete.command.clearDescription',
+  dirs: 'chat.commandAutocomplete.command.dirsDescription',
+  session: 'chat.commandAutocomplete.command.sessionDescription',
+  memory: 'chat.commandAutocomplete.command.memoryDescription',
+};
 
 export interface CommandAutocompleteHandle {
   handleKeyDown: (key: string) => void;
@@ -57,6 +92,9 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const isMobile = useUIStore((state) => state.isMobile);
   const canUseReviewHandoffFlow = hasSession && !isMobile && !isVSCodeRuntime();
 
+  // Commands belong to the directory the composer sends to — the session's
+  // own directory, or the Chats root for a chat draft — not to the project
+  // the app was on last.
   const effectiveDirectory = useEffectiveDirectory();
   const commandsWithMetadata = useCommandsStore((s) => selectCommandsForDirectory(s, effectiveDirectory));
   const builtinCommandNames = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, effectiveDirectory));
@@ -92,15 +130,20 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   }, [onClose]);
 
   React.useEffect(() => {
+    // Force refresh to get latest project context when mounting
     void refreshCommands();
   }, [refreshCommands]);
 
-  const reservedCommandNames = React.useMemo(
-    () => reservedComposerCommandNames(commandsWithMetadata),
-    [builtinCommandNames, commandsWithMetadata],
-  );
+  const reservedCommandNames = React.useMemo(() => {
+    const names = new Set<string>(LOCAL_COMMAND_NAMES);
+    for (const name of builtinCommandNames) names.add(name);
+    for (const command of commandsWithMetadata) names.add(command.name.toLowerCase());
+    return names;
+  }, [builtinCommandNames, commandsWithMetadata]);
   const guestCommands = useGuestCommands(reservedCommandNames);
 
+  // The list depends on the registries, not on what is typed: it is built
+  // once per registry change, and only the ranking follows the query.
   const allCommands = React.useMemo<CommandInfo[]>(() => {
     const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
       id: cmd.commandId ?? `cmd:${cmd.scope ?? 'global'}:${cmd.name}:${index}`,
@@ -128,7 +171,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.initDescription'), isBuiltIn: true }]
         : []
       ),
-      ...(hasSession
+      ...(hasSession  // Show when session exists, not when hasMessages
         ? [
             { id: 'openchamber:undo', name: 'undo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.undoDescription'), isBuiltIn: true },
             { id: 'openchamber:redo', name: 'redo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.redoDescription'), isBuiltIn: true },
@@ -265,6 +308,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                     "flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg typography-ui-label",
                     index === selectedIndex && "bg-interactive-selection"
                   )}
+                  // Block the focus transfer the tap would perform: the textarea
+                  // must stay focused so selecting a command doesn't dismiss the
+                  // soft keyboard (the blur raced the keyboard-hide trigger and
+                  // won against the deferred refocus).
                   onMouseDown={(event) => event.preventDefault()}
                   onPointerDown={(event) => {
                     if (event.pointerType !== 'touch') {
