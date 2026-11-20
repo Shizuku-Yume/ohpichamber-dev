@@ -306,7 +306,6 @@ route-deps	featureRoutesRuntime.registerRoutes.mergeFollowRuntime	## 2026-11-10 
 route-deps	featureRoutesRuntime.registerRoutes.workflowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	registerSettingsUtilityRoutes.refreshOpenCodeAfterConfigChange	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	registerSettingsUtilityRoutes.clientReloadDelayMs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	registerProjectIconRoutes.persistResolvedSettings	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	registerOpenChamberSessionRoutes.readSettingsFromDiskMigrated	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	registerOpenChamberSessionRoutes.sanitizeProjects	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	registerOpenChamberSessionRoutes.validateDirectoryPath	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture

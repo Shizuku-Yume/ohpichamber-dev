@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
+import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -77,6 +78,29 @@ try {
       if (result.ready !== true || result.engine !== 'omp') throw new Error('Native Agent Service is not ready');
     }
     console.log(`${label} ${route}: 200`);
+  }
+  if (sourceCli) {
+    const projectPath = path.join(root, 'project-with-favicon');
+    fs.mkdirSync(projectPath);
+    fs.writeFileSync(path.join(projectPath, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>');
+    const requestJson = (route, method, body) => fetch(`http://localhost:${port}${route}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const project = { id: 'project-with-favicon', path: projectPath, addedAt: Date.now(), lastOpenedAt: Date.now() };
+    const saved = await requestJson('/api/config/settings', 'PUT', { projects: [project], activeProjectId: project.id });
+    assert.equal(saved.status, 200, 'Project settings save');
+    const { activeProjectId } = await saved.json();
+    assert.ok(activeProjectId, 'Saved project has an active ID');
+    const discovered = await requestJson(`/api/projects/${encodeURIComponent(activeProjectId)}/icon/discover`, 'POST', { force: false });
+    assert.equal(discovered.status, 200, 'Favicon discovery');
+    const { settings } = await discovered.json();
+    const savedIcon = settings.projects.find(({ id }) => id === activeProjectId)?.iconImage;
+    assert.equal(savedIcon?.source, 'auto');
+    assert.equal(savedIcon?.mime, 'image/svg+xml');
+    console.log(`${label} project add and favicon discovery: 200; icon source=auto`);
   }
 } finally {
   child.kill('SIGTERM');

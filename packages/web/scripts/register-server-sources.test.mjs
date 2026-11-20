@@ -53,12 +53,13 @@ test('the plain Node source entry initializes its own resolver before loading th
   expect(result.stdout).toContain('source entry ready');
 });
 
-test('the source CLI serves Host health and Canonical readiness under Node', () => {
+test('the source CLI serves Host health, Canonical readiness and project favicon discovery under Node', () => {
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('./smoke-server-build.mjs', import.meta.url)), '--source-cli',
   ], { encoding: 'utf8', timeout: 90_000, windowsHide: true });
   expect(result.status, result.stdout + result.stderr).toBe(0);
   expect(result.stdout).toContain('Node source CLI /health: 200');
   expect(result.stdout).toContain('Node source CLI /api/agent/v1/ready: 200');
+  expect(result.stdout).toContain('Node source CLI project add and favicon discovery: 200; icon source=auto');
   expect(result.stdout).toContain('Server stopped; isolated data removed.');
 }, 95_000);
