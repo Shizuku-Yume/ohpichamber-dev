@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { reservePort, wait } from "../perf/cdp.mjs"
-import { startFixture } from "../perf/isolated-server.mjs"
+import { reservePort, wait } from "./cdp.mjs"
+import { startFixture } from "./isolated-server.mjs"
 
 test("profiling fixtures do not expose verification request controls", async () => {
   const port = await reservePort()
@@ -26,7 +26,7 @@ test("verification observes the actual follow-up request and clears closed reque
     controllers.push(controller)
     const response = await fetch(`${base}/v1/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-opencode-session-id": "session-a" },
+      headers: { "Content-Type": "application/json", "x-openchamber-fixture-session-id": "session-a" },
       body: JSON.stringify({ model, stream: true, messages: [{ role: "user", content: prompt }] }),
       signal: controller.signal,
     })
@@ -54,7 +54,7 @@ test("verification observes the actual follow-up request and clears closed reque
     assert.equal(await active("first prompt"), true)
     const auxiliary = await fetch(`${base}/v1/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-opencode-session-id": "session-a" },
+      headers: { "Content-Type": "application/json", "x-openchamber-fixture-session-id": "session-a" },
       body: JSON.stringify({ stream: false, messages: [{ role: "user", content: "queued follow up" }] }),
     })
     await auxiliary.json()
@@ -62,6 +62,8 @@ test("verification observes the actual follow-up request and clears closed reque
     await request([{ type: "text", text: "Context\nqueued follow up" }])
     assert.equal(await active("queued follow up"), true)
     assert.equal(await active("queued follow up", "another-session"), false)
+    assert.equal(await active(""), false)
+    assert.equal(await active("queued follow up", ""), false)
     globalThis.gc?.()
     controllers[0].abort()
     await waitInactive("first prompt")

@@ -1856,6 +1856,14 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Mine:** yes (records the existing fork fixture).
 - **Revisit when:** Upstream's fixture uses the same runtime-change event contract.
 
+## 2026-11-20 - Exclude the inherited OpenCode verification stand and orphan CI policy test
+
+- **Decided:** exclude `scripts/verify/**` and its root `verify` command. Keep the reusable fixture-request regression under `scripts/perf`, forwarding its opt-in control flag to the fixture process and using a fixture-owned request header. Remove `scripts/pr-checks.test.mjs` with the excluded `.github/scripts/pr-checks.cjs` policy it tests.
+- **Instead of:** restoring `bundled-opencode-server.mjs`, OpenCode environment/configuration, legacy session endpoints, or fork-excluded GitHub policy merely to load upstream tests.
+- **Because:** main has no `scripts/verify` stand; the imported stand configures an OpenCode server, drives `/api/session` and OpenCode CLI operations, and cannot exercise the fork's Host plus supervised OMP Agent Service without a new canonical scenario harness. The existing OMP-aware `scripts/perf/isolated-server.mjs` and canonical performance probes remain authoritative; deleting this inherited stand does not certify replacement behavior coverage.
+- **Mine:** yes, within the requested tooling exclusion option and the existing fork-owned scripts and `.github` exclusions.
+- **Revisit when:** a behavior harness drives `/api/agent/v1` and launches the same Host/Agent Service boundary as the retained runtime.
+
 ## 2026-11-20 - Require full retained-platform acceptance before merging the upstream sync
 
 - **Decided:** do not merge the sync until full acceptance on Web/PWA, Android, iOS, Windows and macOS. The owner and designated testers now own testing; this implementation handoff stops all test/build runs and records the existing evidence and open failures.

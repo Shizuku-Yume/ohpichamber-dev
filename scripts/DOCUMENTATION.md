@@ -2,6 +2,11 @@
 
 ## Ownership
 
+The fork's OMP runtime probes live in `perf/` and use its isolated Host/Agent
+Service setup. The upstream OpenCode-only `verify/` stand and the orphan test
+of `.github/scripts/pr-checks.cjs` are excluded; see the tooling exclusion
+decision in `.workflow/decisions.md`.
+
 `check-changed.mjs` runs the pre-commit checks and compares lint findings and file sizes with the branch base. Package scripts own the individual checks.
 
 ## Invariants

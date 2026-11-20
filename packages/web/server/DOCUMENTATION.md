@@ -351,7 +351,6 @@ bun run --cwd packages/vscode test
 bun run --cwd packages/vscode build:extension
 bun run build:server
 bun run --cwd packages/web smoke:server-build
-bun run verify -- --changed
 bun run check:changed
 ```
 
@@ -362,9 +361,9 @@ checks JavaScript consumers, source resolution and build regressions. VS Code's
 checks and extension build exercise its cross-package contracts and bundler.
 `build:server` proves declaration and JavaScript emission; `smoke:server-build`
 starts that emitted entry under Node with isolated data, checks UI, health and
-the diagnostic routes, then stops it. The behavior net selects mapped user
-flows; report any uncovered files it prints. The final gate also runs knip and
-the existing file-size and changed-file rules.
+the diagnostic routes, then stops it. The inherited OpenCode behavior stand is
+excluded; the fork's OMP-aware runtime probes live in `scripts/perf`. The final
+gate also runs knip and the existing file-size and changed-file rules.
 
 For the pilot, `scripts/server-types-bundle.test.mjs` additionally bundles and
 executes diagnostics with VS Code's esbuild flags, and

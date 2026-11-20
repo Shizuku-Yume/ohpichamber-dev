@@ -1,5 +1,7 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
 path	state	class	decision	reason
+scripts/verify/stand.mjs	upstream-only	decision	2026-11-20 - Exclude the inherited OpenCode verification stand and orphan CI policy test	Exclude the inherited scripts/verify harness, which configures and drives the retired OpenCode runtime; retain the fork's OMP-aware perf tooling.
+scripts/pr-checks.test.mjs	upstream-only	decision	2026-11-20 - Exclude the inherited OpenCode verification stand and orphan CI policy test	Remove the orphan test of fork-excluded .github/scripts/pr-checks.cjs rather than restore upstream CI policy.
 packages/ui/src/hooks/useWebNotificationStream.test.tsx	fork-differs	decision	2026-11-20 - Test notification stream retirement with the runtime-change event contract	Dispatch the real previous and next runtime URLs and keys before asserting that the old notification stream closes.
 packages/electron/scripts/after-pack.cjs	fork-differs	decision	2026-11-19 - Ship Windows Agent dependencies without archive links	Materialize native file aliases and defer dependency directory junctions until the installed runtime path is known; verify exact in-payload targets.
 packages/ui/src/components/views/FilesView.tsx		decision	2026-11-19 - Preserve file descriptor identity in code previews	Keep Pierre layout and rendered file identity aligned across parent rerenders and request registered theme names; preserve existing file-editor decisions.
