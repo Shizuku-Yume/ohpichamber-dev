@@ -1,4 +1,5 @@
 class	item	citation	effect
+runtime-constructor	createWorktreeInstanceDisposer	OMP packages/web/server/lib/openchamber-sessions/routes.ts	The upstream helper exclusively calls OpenCode debug.location.list/evict. Native session close, relocation and archive use supervised worker unload instead; constructing an OpenCode directory cache evictor would restore a retired engine authority.
 route-deps	registerOpenChamberSessionRoutes.worktreeBootstrapStore	OMP packages/web/server/lib/server-frame/feature-routes-runtime.ts	The late sessionWorktreeMoveBridge supplies bootstrapStore and waits for setup-ready before moving. Git registration fills the bridge after Canonical routes register; the eager route argument is not its owner.
 route-deps	registerOpenChamberSessionRoutes.hydrateWorktreeCheckout	OMP packages/web/server/lib/server-frame/feature-routes-runtime.ts	The late sessionWorktreeMoveBridge supplies networkOperations.hydrateBoundCheckout after Git registration. Session move tests cover late bridge availability and refusal before mutation.
 route-deps	createGlobalMessageStreamHub.isHiddenPayload	OMP packages/web/server/lib/host/agent-scope-runtime.js	The Canonical hub resolves every observed session through Host session bindings. Stateless classifier workers never acquire public session bindings; OpenCode synthetic-session payload filtering is not a second visibility authority.
@@ -352,7 +353,6 @@ route-deps	createOpenChamberControlService.workNaming	## 2026-11-10 - Merge upst
 route-deps	createOpenChamberControlService.loadQuota	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDeltaCoalescer	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createGuestAgentContext	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createServiceHostApi	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createServiceLifetime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createRepositoryIdResolver	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createLocalPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
@@ -576,7 +576,6 @@ runtime-constructor	createSessionActivityProbe	## 2026-11-11 - Product docs desc
 runtime-constructor	createMcpOAuthSignIn	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode MCP OAuth sign-in constructor retired with OpenCode runtime.
 runtime-constructor	createModelCatalogReader	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode model catalog reader retired in favor of OMP workspace model catalog.
 runtime-constructor	createSecretFiles	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	secret.request host tool retired; secret files manager uninstantiated.
-runtime-constructor	createServiceHostApi	OMP packages/web/server/lib/guests/service-host-api.ts	Guest service host API constructor; fork delegates via guest subsystem.
 runtime-constructor	createManagedConfigRuntime	OMP packages/web/server/lib/tunnels/managed-config.ts	Renamed in fork to createManagedTunnelConfigRuntime and called in index.js:386.
 runtime-constructor	gitWorktreeCreation.createWorktree	OMP packages/web/server/lib/git/worktree-creation.ts	Worktree creation constructor; fork instantiates createWorktreeCreation.
 runtime-constructor	createExtensionQuotaProviders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode extension quota provider constructor retired with OpenCode runtime.
