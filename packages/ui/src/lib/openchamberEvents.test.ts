@@ -40,6 +40,31 @@ describe('openchamber events', () => {
     Reflect.deleteProperty(globalThis, 'EventSource');
   });
 
+  test('publishes an empty Host policy snapshot but rejects malformed policy envelopes', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const policies: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type === 'permission-policy') policies.push(event.event);
+    });
+    try {
+      const source = MockEventSource.instances.at(-1)!;
+      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:permission-auto-accept.updated', properties,
+      }) });
+      send({ sessions: {}, modes: {}, revision: 4 });
+      expect(policies).toEqual([{
+        type: 'openchamber:permission-auto-accept.updated',
+        properties: { sessions: {}, modes: {}, revision: 4 },
+      }]);
+      send({ sessions: {}, modes: { session: 'invalid' }, revision: 5 });
+      send({ modes: {}, revision: 5 });
+      send({ sessions: {}, revision: -1 });
+      expect(policies).toHaveLength(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('keeps reconnect status until the replacement Host stream is ready', async () => {
     const {
       isOpenchamberEventsReconnecting,

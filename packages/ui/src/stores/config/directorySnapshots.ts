@@ -1,16 +1,9 @@
-import { type ConfigStore, type DirectoryScopedConfig, type ProviderWithModelList } from './types';
-import type { Agent } from '@openchamber/agent-contract';
+import { type DirectoryScopedConfig, type ProviderWithModelList } from "./types";
+import { type Model } from "@openchamber/agent-contract";
 
-export const hasLiveCatalog = (state: Pick<ConfigStore, 'directoryScoped'>, directoryKey: string): boolean => (
-    state.directoryScoped[directoryKey]?.providersLoaded === true
-);
-
-export const createEmptyDirectoryScopedConfig = (
-    providers: ProviderWithModelList[] = [],
-    agents: Agent[] = [],
-): DirectoryScopedConfig => ({
+export const createEmptyDirectoryScopedConfig = (providers: ProviderWithModelList[] = [], models: Model[] = []): DirectoryScopedConfig => ({
     providers,
-    agents,
+    models,
     currentProviderId: "",
     currentModelId: "",
     currentVariant: undefined,
@@ -18,8 +11,6 @@ export const createEmptyDirectoryScopedConfig = (
     selectedProviderId: "",
     agentModelSelections: {},
     defaultProviders: {},
-    opencodeDefaultAgent: undefined,
-    opencodeDefaultModel: undefined,
     selectionSource: "auto",
-    agentSelectionSource: "auto",
+    agentSelectionSource: "auto"
 });

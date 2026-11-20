@@ -1,22 +1,19 @@
-import { type ConfigRuntimeContext, isSameConfigRuntimeContext, isConfigRuntimeContextCurrent, captureConfigRuntimeContext } from './runtime';
-import { type DesktopSettings } from '@/lib/desktop';
-import { markStartupTrace } from '@/lib/startupTrace';
-import { loadDesktopSettings } from '@/lib/persistence';
-import { type ConfigSlice, type ConfigStore } from './types';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { fromDirectoryKey } from './directories';
-import { getProjectDefaultsForConfigDirectory } from './projectDefaults';
-import { resolveGitGenerationModelSelection } from './selectionResolution';
+import { type ConfigRuntimeContext, isSameConfigRuntimeContext, isConfigRuntimeContextCurrent, captureConfigRuntimeContext } from "./runtime";
+import { type DesktopSettings } from "@/lib/desktop";
+import { markStartupTrace } from "@/lib/startupTrace";
+import { loadDesktopSettings } from "@/lib/persistence";
+import { type ConfigSlice, type ConfigStore } from "./types";
+import { getProjectDefaultsForConfigDirectory } from "./projectDefaults";
+import { fromDirectoryKey } from "./directories";
+import { useSessionUIStore } from "@/sync/session-ui-store";
+import { resolveGitGenerationModelSelection } from "./selectionResolution";
+import { canonicalClient } from "@/api/canonicalClient";
 
 interface OpenChamberDefaults {
-    defaultModel?: string;
-    defaultVariant?: string;
-    defaultAgent?: string;
     autoCreateWorktree?: boolean;
     gitmojiEnabled?: boolean;
     defaultFileViewerPreview?: boolean;
     zenModel?: string;
-    messageStreamTransport?: 'auto' | 'ws' | 'sse';
     dictationEnabled?: boolean;
     dictationAutoSend?: boolean;
     sttProvider?: 'local' | 'openai-compatible';
@@ -28,37 +25,33 @@ interface OpenChamberDefaults {
     sttCorrectTranscript?: boolean;
 }
 
+// Directory activation re-reads the OpenChamber defaults, which are global,
+// not per directory: one request serves the switches that land inside this
+// window, and concurrent activations share the in-flight one.
 const OPENCHAMBER_DEFAULTS_FRESH_MS = 15_000;
-
 let openChamberDefaultsCache: {
     at: number;
     context: ConfigRuntimeContext;
     request: Promise<OpenChamberDefaults | null>;
 } | null = null;
-let openChamberDefaultsUserRevision = 0;
-
 export const invalidateOpenChamberDefaultsCache = (): void => {
     openChamberDefaultsCache = null;
 };
-
-const recordOpenChamberDefaultsChange = (): void => {
-    openChamberDefaultsUserRevision += 1;
-    invalidateOpenChamberDefaultsCache();
-};
-
 const fetchOpenChamberDefaults = (context: ConfigRuntimeContext): Promise<OpenChamberDefaults | null> => {
     const now = Date.now();
-    if (
-        openChamberDefaultsCache
-        && isSameConfigRuntimeContext(openChamberDefaultsCache.context, context)
-        && now - openChamberDefaultsCache.at < OPENCHAMBER_DEFAULTS_FRESH_MS
-    ) {
+    if (openChamberDefaultsCache && isSameConfigRuntimeContext(openChamberDefaultsCache.context, context) && now - openChamberDefaultsCache.at < OPENCHAMBER_DEFAULTS_FRESH_MS) {
         return openChamberDefaultsCache.request;
     }
     const request = requestOpenChamberDefaults(context);
-    const cacheEntry = { at: now, context, request };
+    const cacheEntry = {
+        at: now,
+        context,
+        request
+    };
     openChamberDefaultsCache = cacheEntry;
-    void request.then((result) => {
+    void request.then(result => {
+        // A failed settings read must not become a 15-second authoritative
+        // empty result. The next directory activation should retry it.
         if (result === null && openChamberDefaultsCache === cacheEntry) {
             openChamberDefaultsCache = null;
         }
@@ -67,22 +60,13 @@ const fetchOpenChamberDefaults = (context: ConfigRuntimeContext): Promise<OpenCh
     });
     return request;
 };
-
 const toOpenChamberDefaults = (data: DesktopSettings): OpenChamberDefaults => {
-    const defaultModel = data.defaultModel?.trim() ?? '';
-    const defaultVariant = data.defaultVariant?.trim() ?? '';
-    const defaultAgent = data.defaultAgent?.trim() ?? '';
     const zenModel = data.zenModel ?? '';
-
     return {
-        defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
-        defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
-        defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
         autoCreateWorktree: data.autoCreateWorktree,
         gitmojiEnabled: data.gitmojiEnabled,
         defaultFileViewerPreview: data.defaultFileViewerPreview,
         zenModel: zenModel.length > 0 ? zenModel : undefined,
-        messageStreamTransport: data.messageStreamTransport,
         dictationEnabled: data.dictationEnabled,
         dictationAutoSend: data.dictationAutoSend,
         sttProvider: data.sttProvider,
@@ -91,10 +75,9 @@ const toOpenChamberDefaults = (data: DesktopSettings): OpenChamberDefaults => {
         sttModel: data.sttModel,
         sttLocalModel: data.sttLocalModel,
         sttLanguage: data.sttLanguage,
-        sttCorrectTranscript: data.sttCorrectTranscript,
+        sttCorrectTranscript: data.sttCorrectTranscript
     };
 };
-
 const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promise<OpenChamberDefaults | null> => {
     markStartupTrace('config.defaults:start');
     const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -102,9 +85,7 @@ const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promis
         const ended = typeof performance !== 'undefined' ? performance.now() : Date.now();
         markStartupTrace('config.defaults:end', {
             source,
-            durationMs: Math.round(ended - started),
-            hasDefaultModel: Boolean(result?.defaultModel),
-            hasDefaultAgent: Boolean(result?.defaultAgent),
+            durationMs: Math.round(ended - started)
         });
         return result;
     };
@@ -116,114 +97,87 @@ const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promis
         if (!data) {
             return finish('settings-unavailable', null);
         }
-
         return finish('settings', toOpenChamberDefaults(data));
     } catch (error) {
-        markStartupTrace('config.defaults:error', { error: error instanceof Error ? error.message : String(error) });
+        markStartupTrace('config.defaults:error', {
+            error: error instanceof Error ? error.message : String(error)
+        });
         return finish('error', null);
     }
 };
-
-export const createSettingsDefaults: ConfigSlice<
-    | 'loadSessionDefaults'
-    | 'setSettingsDefaultModel'
-    | 'setSettingsDefaultVariant'
-    | 'setSettingsDefaultAgent'
-    | 'setSettingsAutoCreateWorktree'
-    | 'setSettingsGitmojiEnabled'
-    | 'setSettingsDefaultFileViewerPreview'
-    | 'setSettingsZenModel'
-    | 'setSettingsMessageStreamTransport'
-    | 'getResolvedGitGenerationModel'
-> = (set, get) => ({
+export const createSettingsDefaults: ConfigSlice<"loadSessionDefaults" | "setSettingsAutoCreateWorktree" | "setSettingsGitmojiEnabled" | "setSettingsDefaultFileViewerPreview" | "setSettingsZenModel" | "getResolvedGitGenerationModel" | "loadOmpSettings"> = (set, get) => ({
     loadSessionDefaults: async () => {
         const runtimeContext = captureConfigRuntimeContext();
-        const revision = openChamberDefaultsUserRevision;
         const defaults = await fetchOpenChamberDefaults(runtimeContext);
         if (!isConfigRuntimeContextCurrent(runtimeContext) || !defaults) return false;
-
-        set((state) => {
-            const edited = revision !== openChamberDefaultsUserRevision;
+        set(state => {
             const next: Partial<ConfigStore> = {
                 configRuntimeKey: runtimeContext.runtimeKey,
                 settingsDefaultsLoaded: true,
-                settingsDefaultModel: edited ? state.settingsDefaultModel : defaults.defaultModel,
-                settingsDefaultVariant: edited ? state.settingsDefaultVariant : defaults.defaultVariant,
-                settingsDefaultAgent: edited ? state.settingsDefaultAgent : defaults.defaultAgent,
                 settingsAutoCreateWorktree: defaults.autoCreateWorktree ?? false,
                 settingsGitmojiEnabled: defaults.gitmojiEnabled ?? false,
                 settingsDefaultFileViewerPreview: defaults.defaultFileViewerPreview ?? true,
                 settingsZenModel: defaults.zenModel,
-                settingsMessageStreamTransport: defaults.messageStreamTransport ?? state.settingsMessageStreamTransport,
                 dictationEnabled: typeof defaults.dictationEnabled === 'boolean' ? defaults.dictationEnabled : state.dictationEnabled,
                 dictationAutoSend: defaults.dictationAutoSend ?? state.dictationAutoSend,
                 sttProvider: defaults.sttProvider ?? state.sttProvider,
                 sttServerUrl: defaults.sttServerUrl ?? state.sttServerUrl,
-                sttModel: defaults.sttModel ?? state.sttModel,
                 sttEndpointPath: defaults.sttEndpointPath ?? state.sttEndpointPath,
+                sttModel: defaults.sttModel ?? state.sttModel,
                 sttLocalModel: defaults.sttLocalModel ?? state.sttLocalModel,
                 sttLanguage: defaults.sttLanguage ?? state.sttLanguage,
-                sttCorrectTranscript: defaults.sttCorrectTranscript ?? state.sttCorrectTranscript,
+                sttCorrectTranscript: defaults.sttCorrectTranscript ?? state.sttCorrectTranscript
             };
-            if (!useSessionUIStore.getState().currentSessionId && state.selectionSource === 'auto' && state.agentSelectionSource === 'auto' && next.settingsDefaultAgent) {
-                next.currentAgentName = next.settingsDefaultAgent;
-            }
             return next;
         });
         const state = get();
         const projectDefaults = getProjectDefaultsForConfigDirectory(fromDirectoryKey(state.activeDirectoryKey));
-        if (!useSessionUIStore.getState().currentSessionId && state.selectionSource === 'auto' && state.agentSelectionSource === 'auto'
-            && state.currentVariantSelection.override === undefined
-            && (projectDefaults.projectDefaultModel || state.settingsDefaultModel)) {
+        // An effort picked while the settings document was still loading
+        // is a choice too; re-applying the defaults would clear it.
+        if (!useSessionUIStore.getState().currentSessionId && state.selectionSource === 'auto' && state.agentSelectionSource === 'auto' && state.currentVariantSelection.override === undefined) {
             state.applyDefaultModelAgentSelection(projectDefaults);
         }
         markStartupTrace('config.defaults:published');
         return true;
     },
-
-     setSettingsDefaultModel: (model: string | undefined) => {
-         recordOpenChamberDefaultsChange();
-         set({ settingsDefaultModel: model });
-         if (!useSessionUIStore.getState().currentSessionId) get().applyDefaultModelAgentSelection();
-     },
-
-     setSettingsDefaultVariant: (variant: string | undefined) => {
-         recordOpenChamberDefaultsChange();
-         set({ settingsDefaultVariant: variant });
-         if (!useSessionUIStore.getState().currentSessionId) get().applyDefaultModelAgentSelection();
-     },
- 
-     setSettingsDefaultAgent: (agent: string | undefined) => {
-         recordOpenChamberDefaultsChange();
-         set({ settingsDefaultAgent: agent });
-         if (!useSessionUIStore.getState().currentSessionId) get().applyDefaultModelAgentSelection();
-     },
-
     setSettingsAutoCreateWorktree: (enabled: boolean) => {
-        set({ settingsAutoCreateWorktree: enabled });
+        set({
+            settingsAutoCreateWorktree: enabled
+        });
     },
-
     setSettingsGitmojiEnabled: (enabled: boolean) => {
-        set({ settingsGitmojiEnabled: enabled });
+        set({
+            settingsGitmojiEnabled: enabled
+        });
     },
-
     setSettingsDefaultFileViewerPreview: (enabled: boolean) => {
-        set({ settingsDefaultFileViewerPreview: enabled });
+        set({
+            settingsDefaultFileViewerPreview: enabled
+        });
     },
-
     setSettingsZenModel: (model: string | undefined) => {
-        set({ settingsZenModel: model });
+        set({
+            settingsZenModel: model
+        });
     },
-
-    setSettingsMessageStreamTransport: (transport: 'auto' | 'ws' | 'sse') => {
-        set({ settingsMessageStreamTransport: transport });
-    },
-
     getResolvedGitGenerationModel: () => {
         const state = get();
         return resolveGitGenerationModelSelection({
             providers: state.providers,
-            settingsZenModel: state.settingsZenModel,
+            settingsZenModel: state.settingsZenModel
         });
     },
+    loadOmpSettings: async (targetWorkspaceId?: string) => {
+        const wid = targetWorkspaceId || get().workspaceId;
+        if (!wid) return null;
+        try {
+            const settings = await canonicalClient.getOmpSettings(wid);
+            set({
+                ompSettings: settings
+            });
+            return settings;
+        } catch {
+            return null;
+        }
+    }
 });

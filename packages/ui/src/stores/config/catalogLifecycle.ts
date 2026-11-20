@@ -1,88 +1,45 @@
-import { type CatalogKind } from '@/lib/opencode/events';
-import { toConfigDirectoryKey, DIRECTORY_KEY_GLOBAL } from './directories';
-import { type ConfigRuntimeContext, isConfigRuntimeContextCurrent } from './runtime';
-import { type CachedCatalog, writeCachedCatalogWhenSettled } from '../configCatalogCache';
-import { useConfigStore } from '../useConfigStore';
-import { opencodeClient } from '@/lib/opencode/client';
-import { _inFlightProviders, _inFlightAgents, _agentsLoadGeneration } from './catalogRequests';
+import { type ConfigRuntimeContext, isConfigRuntimeContextCurrent } from "./runtime";
+import { type CachedCatalog, writeCachedCatalogWhenSettled, writeLocalCatalogSnapshot } from "../configCatalogCache";
+import { DIRECTORY_KEY_GLOBAL } from "./directories";
+import { _inFlightProviders } from "./catalogRequests";
+import { useConfigStore } from "../useConfigStore";
+import { invalidateAgentCatalogsForReload } from "../useAgentsStore";
 
+export const catalogLifecycle = { loadEpoch: 0 };
+
+export const invalidateConfigCatalogsForReload = (kinds: readonly ("provider" | "agent")[]): void => {
+    if (kinds.includes("provider")) {
+        catalogLifecycle.loadEpoch += 1;
+        _providersLoadedAt.clear();
+        _inFlightProviders.clear();
+    }
+    if (kinds.includes("agent")) invalidateAgentCatalogsForReload();
+    useConfigStore.setState(state => ({ catalogReloadRevision: state.catalogReloadRevision + 1 }));
+};
+
+// Runtime freshness tracking (NOT persisted) for the stale-while-revalidate
+// background refresh, keyed by config-directory key. Prevents re-fetching
+// catalogs we just loaded for the same project or worktree.
 export const _providersLoadedAt = new Map<string, number>();
-export const _agentsLoadedAt = new Map<string, number>();
 const CONFIG_REFRESH_TTL_MS = 30_000;
-
-const ALL_DIRECTORIES = '*';
-export const catalogLifecycle = { revision: 0, loadEpoch: 0 };
-export const _providersStaleAt = new Map<string, number>();
-export const _agentsStaleAt = new Map<string, number>();
-
-const markCatalogStale = (loadedAt: Map<string, number>, staleAt: Map<string, number>, directoryKey: string | null): void => {
-    catalogLifecycle.revision += 1;
-    if (directoryKey === null) {
-        loadedAt.clear();
-        staleAt.set(ALL_DIRECTORIES, catalogLifecycle.revision);
-        return;
-    }
-    loadedAt.delete(directoryKey);
-    staleAt.set(directoryKey, catalogLifecycle.revision);
-};
-
-const isCatalogStaleSince = (staleAt: Map<string, number>, directoryKey: string, loadRevision: number): boolean =>
-    Math.max(staleAt.get(directoryKey) ?? 0, staleAt.get(ALL_DIRECTORIES) ?? 0) > loadRevision;
-
-export const markCatalogLoaded = (
-    loadedAt: Map<string, number>,
-    staleAt: Map<string, number>,
-    directoryKey: string,
-    loadRevision: number,
-): void => {
-    if (isCatalogStaleSince(staleAt, directoryKey, loadRevision)) return;
-    loadedAt.set(directoryKey, Date.now());
-};
-
-export const markConfigCatalogStale = (kind: CatalogKind, directory: string | null): void => {
-    const directoryKey = directory ? toConfigDirectoryKey(directory) : null;
-    if (kind === 'provider' || kind === 'model' || kind === 'credential' || kind === 'config') {
-        markCatalogStale(_providersLoadedAt, _providersStaleAt, directoryKey);
-    }
-    if (kind === 'agent' || kind === 'config') {
-        markCatalogStale(_agentsLoadedAt, _agentsStaleAt, directoryKey);
-    }
-};
-export const persistLoadedCatalog = (
-    context: ConfigRuntimeContext,
-    directoryKey: string,
-    update: CachedCatalog,
-    staleAt: Map<string, number>,
-    loadRevision: number,
-): void => {
+const CATALOG_CACHE_RECHECK_SOURCE = 'catalogCacheRecheck';
+/** Persists settled canonical provider/model catalogs. */
+export const persistLoadedCatalog = (context: ConfigRuntimeContext, directoryKey: string, source: string, update: CachedCatalog, isEmpty: boolean, loadEpoch = catalogLifecycle.loadEpoch): void => {
     if (directoryKey === DIRECTORY_KEY_GLOBAL) return;
-    writeCachedCatalogWhenSettled(
-        context.runtimeKey,
-        directoryKey,
-        update,
-        () => !isConfigRuntimeContextCurrent(context) || isCatalogStaleSince(staleAt, directoryKey, loadRevision),
-    );
+    if (isEmpty && source !== CATALOG_CACHE_RECHECK_SOURCE) return;
+    writeCachedCatalogWhenSettled(context.runtimeKey, directoryKey, update, () => !isConfigRuntimeContextCurrent(context) || loadEpoch !== catalogLifecycle.loadEpoch);
+    // Mirror the same snapshot synchronously so the next startup paints before
+    // any async storage read. It is not a second authority: the live load
+    // replaces it and the IndexedDB record stays the durable owner.
+    if (!isEmpty) writeLocalCatalogSnapshot(context.runtimeKey, directoryKey, update);
 };
 
+/**
+  * Paints a cached catalog only where the live load has not published one. A
+  * present catalog is authoritative even when empty, so the cache never
+  * replaces it; a failed live load keeps the previous data untouched.
+  */
 export const isConfigFresh = (loadedAt: Map<string, number>, key: string): boolean => {
     const at = loadedAt.get(key);
     return typeof at === 'number' && Date.now() - at < CONFIG_REFRESH_TTL_MS;
-};
-
-export const invalidateConfigCatalogsForReload = (
-    kinds: readonly ("provider" | "agent")[],
-): void => {
-    catalogLifecycle.loadEpoch += 1;
-    if (kinds.includes("provider")) {
-        markConfigCatalogStale("provider", null);
-        _inFlightProviders.clear();
-        opencodeClient.clearProviderCatalogRequests();
-    }
-    if (kinds.includes("agent")) {
-        markConfigCatalogStale("agent", null);
-        _agentsLoadGeneration.clear();
-        _inFlightAgents.clear();
-        opencodeClient.clearAgentListRequests();
-    }
-    useConfigStore.setState((state) => ({ catalogReloadRevision: state.catalogReloadRevision + 1 }));
 };

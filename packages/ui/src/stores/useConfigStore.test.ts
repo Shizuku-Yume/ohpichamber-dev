@@ -1,7 +1,5 @@
 import { flushDeferredStorage } from './utils/safeStorage';
-import { invalidateConfigCatalogsForReload } from '@/stores/config/catalogLifecycle';
-import { selectConfigAgentsForDirectory } from '@/stores/config/selectors';
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { Agent } from '@openchamber/agent-contract';
 import type { DesktopSettings } from '@/lib/desktop';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -21,7 +19,6 @@ let liveAgents: TestAgent[] = [];
 let getAgentsImpl: ((directory?: string | null) => Promise<TestAgent[]>) | null = null;
 let getProvidersForConfigImpl: ((directory?: string | null) => Promise<TestProviderResponse>) | null = null;
 let resolvedWorkspaceDirectories: string[] = [];
-let configListener: ((event: { scopes: string[]; source?: string; timestamp: number }) => void | Promise<void>) | null = null;
 let persistedOpenChamberSettings: DesktopSettings | null = {};
 let settingsLoadCalls = 0;
 let checkReadyImpl = async () => true;
@@ -60,6 +57,11 @@ const seedConfig = (value: string) => {
 const persistedConfig = () => {
   flushDeferredStorage();
   return storage.get(STORAGE_KEY) ?? '{}';
+};
+
+const writePersistedConfig = (value: string) => {
+  flushDeferredStorage();
+  storage.set(STORAGE_KEY, value);
 };
 
 const model = (providerId: string, modelId: string, variantIds?: string[]) => ({
@@ -212,6 +214,7 @@ mock.module('@/lib/runtime-fetch', () => ({
 }));
 
 mock.module('@/lib/persistence', () => ({
+  invalidateSettingsCache: mock(() => undefined),
   updateDesktopSettings: mock(async () => ({ ok: true })),
   reportSettingsSaveState: () => undefined,
   // The store reads the shared document through this; an empty document
@@ -227,19 +230,6 @@ mock.module('@/lib/startupTrace', () => ({
   measureStartupTrace: mock(async (_name: string, callback: () => Promise<unknown>) => callback()),
 }));
 
-mock.module('@/lib/configSync', () => ({
-  emitConfigChange: mock(() => undefined),
-  scopeMatches: mock((event: { scopes: string[] }, scope: string) => event.scopes.includes('all') || event.scopes.includes(scope)),
-  subscribeToConfigChanges: mock((listener: typeof configListener) => {
-    configListener = listener;
-    return () => {
-      if (configListener === listener) {
-        configListener = null;
-      }
-    };
-  }),
-}));
-
 // Runtime-generation guards subscribe at module load. Use real event delivery
 // so A -> B -> A exercises the lifecycle, not just unequal runtime strings.
 Object.defineProperty(globalThis, 'window', {
@@ -250,14 +240,16 @@ Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: m
 Object.defineProperty(window, 'localStorage', { configurable: true, value: makeStorage() });
 const { useProjectsStore } = await import('./useProjectsStore');
 const { emitConfigChange } = await import('@/lib/configSync');
-const { invalidateSettingsCache, updateDesktopSettings } = await import('@/lib/persistence');
+const { invalidateSettingsCache } = await import('@/lib/persistence');
 
 const {
   useConfigStore,
   selectCatalogLoadedForDirectory,
   selectKnownCatalogModel,
+  selectProvidersForDirectory,
   invalidateOpenChamberDefaultsCache,
 } = await import('./useConfigStore');
+const { invalidateConfigCatalogsForReload } = await import('./config/catalogLifecycle');
 const { useSelectionStore } = await import('@/sync/selection-store');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useRoutingStore } = await import('@/stores/useRoutingStore');
@@ -269,10 +261,8 @@ test('configuration subscriptions stay singleton when setup is called again', as
   const { configRuntime } = await import('./config/runtime');
   const { useDirectoryStore } = await import('./useDirectoryStore');
   const configSync = await import('@/lib/configSync');
-  const syncRefs = await import('@/sync/sync-refs');
   const subscriptions = [
     spyOn(configSync, 'subscribeToConfigChanges'),
-    spyOn(syncRefs, 'subscribeToSyncConfigChanges'),
     spyOn(useDirectoryStore, 'subscribe'),
     spyOn(useRoutingStore, 'subscribe'),
     spyOn(useUIStore, 'subscribe'),
@@ -735,7 +725,7 @@ describe('useConfigStore provider persistence', () => {
         models: [model('cached-merged', 'cached-merged-model')],
       }],
     });
-    storage.set(STORAGE_KEY, JSON.stringify({
+    writePersistedConfig(JSON.stringify({
       state: {
         configRuntimeKey: getRuntimeKey(),
         activeDirectoryKey: OTHER_DIRECTORY,
@@ -1963,42 +1953,42 @@ describe('useConfigStore provider persistence', () => {
     slowRead.resolve(providerResponse('other-stale'));
     await staleLoad;
 
-    expect(selectProvidersForDirectory(useConfigStore.getState(), other).map((entry) => entry.id)).toEqual(['other-old']);
+    expect(selectProvidersForDirectory(useConfigStore.getState(), other).map((entry) => entry.providerId)).toEqual(['other-old']);
     expect(useConfigStore.getState().catalogReloadRevision).toBeGreaterThan(revision);
 
     await useConfigStore.getState().loadProviders({ directory: other });
-    expect(selectProvidersForDirectory(useConfigStore.getState(), other).map((entry) => entry.id)).toEqual(['other-new']);
+    expect(selectProvidersForDirectory(useConfigStore.getState(), other).map((entry) => entry.providerId)).toEqual(['other-new']);
   });
 
   test('a configuration reload retires an agent read that began before it', async () => {
     const slowRead = deferred<TestAgent[]>();
     let reads = 0;
-    listAgentsImpl = async () => {
+    getAgentsImpl = async () => {
       reads += 1;
       return reads === 1 ? slowRead.promise : [testAgent('new-agent')];
     };
-    const staleLoad = useConfigStore.getState().loadAgents({ directory: OTHER_DIRECTORY });
+    const staleLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     invalidateConfigCatalogsForReload(['agent']);
     slowRead.resolve([testAgent('stale-agent')]);
 
     expect(await staleLoad).toBe(false);
-    expect(selectConfigAgentsForDirectory(useConfigStore.getState(), OTHER_DIRECTORY)).toEqual([]);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY)).toEqual([]);
 
-    await useConfigStore.getState().loadAgents({ directory: OTHER_DIRECTORY });
-    expect(selectConfigAgentsForDirectory(useConfigStore.getState(), OTHER_DIRECTORY).map((entry) => entry.name)).toEqual(['new-agent']);
+    await useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY).map((entry) => entry.name)).toEqual(['new-agent']);
   });
 
   test('a configuration reload gives a joined agent read its replacement list', async () => {
     const slowRead = deferred<TestAgent[]>();
     let reads = 0;
-    listAgentsImpl = async () => {
+    getAgentsImpl = async () => {
       reads += 1;
       return reads === 1 ? slowRead.promise : [testAgent('new-agent')];
     };
-    const ownerLoad = useConfigStore.getState().loadAgents({ directory: OTHER_DIRECTORY });
-    const joinedLoad = useConfigStore.getState().loadAgents({ directory: OTHER_DIRECTORY });
+    const ownerLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    const joinedLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     invalidateConfigCatalogsForReload(['agent']);
@@ -2007,19 +1997,19 @@ describe('useConfigStore provider persistence', () => {
     expect(await ownerLoad).toBe(false);
     expect(await joinedLoad).toBe(true);
     expect(reads).toBe(2);
-    expect(selectConfigAgentsForDirectory(useConfigStore.getState(), OTHER_DIRECTORY).map((entry) => entry.name)).toEqual(['new-agent']);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY).map((entry) => entry.name)).toEqual(['new-agent']);
   });
 
   test('a configuration reload followed by a runtime switch starts no replacement agent read', async () => {
     switchRuntimeEndpoint({ apiBaseUrl: 'https://reload-a.example', runtimeKey: 'reload-a' });
     const slowRead = deferred<TestAgent[]>();
     let reads = 0;
-    listAgentsImpl = async () => {
+    getAgentsImpl = async () => {
       reads += 1;
       return reads === 1 ? slowRead.promise : [testAgent('replacement-agent')];
     };
-    const ownerLoad = useConfigStore.getState().loadAgents({ directory: OTHER_DIRECTORY });
-    const joinedLoad = useConfigStore.getState().loadAgents({ directory: OTHER_DIRECTORY });
+    const ownerLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    const joinedLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     invalidateConfigCatalogsForReload(['agent']);
@@ -2029,7 +2019,7 @@ describe('useConfigStore provider persistence', () => {
     expect(await ownerLoad).toBe(false);
     expect(await joinedLoad).toBe(false);
     expect(reads).toBe(1);
-    expect(selectConfigAgentsForDirectory(useConfigStore.getState(), OTHER_DIRECTORY)).toEqual([]);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY)).toEqual([]);
   });
 
   test('what other catalogs know fills in for a directory still starting', async () => {
@@ -2664,7 +2654,7 @@ describe('useConfigStore provider persistence', () => {
     // Clearing the store writes too, so the saved blob is put back before rehydrating.
     seedAgentCatalog([], useConfigStore.getState().activeDirectoryKey);
     useConfigStore.setState({ directoryScoped: {}, providers: [], currentModelId: '', currentAgentName: undefined });
-    storage.set(STORAGE_KEY, written);
+    writePersistedConfig(written);
 
     useAgentsStore.getState().resetForRuntimeSwitch();
     await useConfigStore.persist.rehydrate();

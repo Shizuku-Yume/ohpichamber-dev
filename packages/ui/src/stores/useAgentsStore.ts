@@ -59,7 +59,7 @@ const agentsLastLoadedAt = new Map<string, number>();
 const agentsLoadGeneration = new Map<string, number>();
 const agentsLoadInFlight = new Map<string, { generation: number; request: Promise<boolean> }>();
 let agentsGeneration = 0;
-const agentsReloadEpoch = 0;
+let agentsReloadEpoch = 0;
 
 const getAgentsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_AGENTS_CACHE_KEY;
@@ -70,6 +70,17 @@ export const invalidateAgentsLoadCache = (directory: string | null = getConfigDi
   agentsLastLoadedAt.delete(cacheKey);
   agentsLoadGeneration.set(cacheKey, (agentsLoadGeneration.get(cacheKey) ?? 0) + 1);
   // Retire reads started before a catalog mutation or notification.
+};
+
+export const invalidateAgentCatalogsForReload = (): void => {
+  agentsReloadEpoch += 1;
+  const keys = new Set([
+    ...Object.keys(useAgentsStore.getState().agentsByDirectory),
+    ...agentsLastLoadedAt.keys(),
+    ...agentsLoadInFlight.keys(),
+  ]);
+  agentsLastLoadedAt.clear();
+  for (const key of keys) agentsLoadGeneration.set(key, (agentsLoadGeneration.get(key) ?? 0) + 1);
 };
 
 interface AgentMutationResult { ok: boolean; error?: string; revision?: string }
@@ -192,6 +203,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       set({ agents: [], agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: {}, agentDraft: null, isLoading: false });
     },
     loadAgents: async (requestedDirectory) => {
+      const reloadEpoch = agentsReloadEpoch;
       const directory = resolveDirectory(requestedDirectory);
       const key = getAgentsCacheKey(directory);
       const runtimeGeneration = agentsGeneration;
@@ -236,7 +248,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       let loaded: boolean;
       try { loaded = await request; }
       finally { if (agentsLoadInFlight.get(key) === entry) agentsLoadInFlight.delete(key); }
-      if (!currentRuntime()) return false;
+      if (!currentRuntime() || reloadEpoch !== agentsReloadEpoch) return false;
       return current() ? loaded : get().loadAgents(directory);
     },
     retryAgentsWhenReady: async (requestedDirectory) => {
@@ -329,11 +341,3 @@ const syncAgentReadiness = (state: AgentReadinessState): void => {
 };
 
 registerAgentReadinessListener(syncAgentReadiness);
-
-export const isAgentHidden = (agent: Agent): boolean => {
-  const extended = agent as AgentWithExtras;
-  return extended.hidden === true || extended.options?.hidden === true;
-};
-
-export const filterVisibleAgents = (agents: Agent[]): Agent[] =>
-  agents.filter((agent) => !isAgentHidden(agent));

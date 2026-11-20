@@ -1,126 +1,98 @@
-import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { configRuntime } from './runtime';
-import { invalidateOpenChamberDefaultsCache } from './defaults';
-import {
-    _providersLoadedAt,
-    _agentsLoadedAt,
-    _providersStaleAt,
-    _agentsStaleAt,
-} from './catalogLifecycle';
-import { _inFlightProviders, _inFlightAgents, _agentsLoadGeneration } from './catalogRequests';
-import { _agentsLoadErrors } from './projectErrors';
-import { resetConfigInitialization } from './connection';
-import { resetModelsMetadataRequest } from './metadata';
-import { useConfigStore } from '../useConfigStore';
-import { type ModelMetadata } from '@/types';
-import { hydrateConfigCatalogFromCache } from './catalogHydration';
-import { toDirectoryKey, toConfigDirectoryKey } from './directories';
-import { isChatDraftOpen } from './projectDefaults';
-import { refreshKnownProviderDirectories } from './providers';
-import { subscribeToConfigChanges, scopeMatches } from '@/lib/configSync';
-import { opencodeClient } from '@/lib/opencode/client';
-import { subscribeToSyncConfigChanges } from '@/sync/sync-refs';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { markStartupTrace } from '@/lib/startupTrace';
-import { useRoutingStore } from '@/stores/useRoutingStore';
-import { useUIStore } from '@/stores/useUIStore';
+import { subscribeRuntimeEndpointChanged } from "@/lib/runtime-switch";
+import { configRuntime } from "./runtime";
+import { invalidateOpenChamberDefaultsCache } from "./defaults";
+import { _providersLoadedAt } from "./catalogLifecycle";
+import { _inFlightProviders } from "./catalogRequests";
+import { resetConfigInitialization } from "./connection";
+import { useConfigStore } from "../useConfigStore";
+import { registerAgentSelectionReader, notifyAgentReadiness } from "@/stores/agentConfigBridge";
+import { hydrateConfigCatalogFromCache } from "./catalogHydration";
+import { subscribeToConfigChanges, scopeMatches } from "@/lib/configSync";
+import { refreshKnownProviderDirectories } from "./providers";
+import { useDirectoryStore } from "@/stores/useDirectoryStore";
+import { toDirectoryKey, toConfigDirectoryKey } from "./directories";
+import { markStartupTrace } from "@/lib/startupTrace";
+import { useRoutingStore } from "@/stores/useRoutingStore";
+import { useUIStore } from "@/stores/useUIStore";
 
-let unsubscribeConfigRuntimeChanges: (() => void) | null = null;
 let unsubscribeConfigStoreChanges: (() => void) | null = null;
 let unsubscribeConfigStoreDirectoryChanges: (() => void) | null = null;
-let unsubscribeConfigStoreSyncConfigChanges: (() => void) | null = null;
+// Auto is only a model while the server says so. Whenever that answer changes
+// (routing state loaded or updated, the feature flag learned from settings,
+// settings defaults loaded), a selection this server cannot honour is replaced.
 let unsubscribeConfigStoreRoutingChanges: (() => void) | null = null;
-let configCatalogHydrationSubscribed = false;
-
+let runtimeSubscribed = false;
 export const subscribeConfigRuntimeChanges = (): void => {
-    if (unsubscribeConfigRuntimeChanges) return;
-    unsubscribeConfigRuntimeChanges = subscribeRuntimeEndpointChanged((detail) => {
+    if (runtimeSubscribed) return;
+    runtimeSubscribed = true;
+    subscribeRuntimeEndpointChanged(detail => {
         configRuntime.generation += 1;
         invalidateOpenChamberDefaultsCache();
         _providersLoadedAt.clear();
-        _agentsLoadedAt.clear();
-        _providersStaleAt.clear();
-        _agentsStaleAt.clear();
-        _agentsLoadErrors.clear();
         _inFlightProviders.clear();
-        _inFlightAgents.clear();
-        _agentsLoadGeneration.clear();
         resetConfigInitialization();
-        resetModelsMetadataRequest();
         if (detail.runtimeKey === detail.previousRuntimeKey) return;
-        configRuntime.instanceGeneration += 1;
         useConfigStore.setState({
             configRuntimeKey: detail.runtimeKey,
-            modelsMetadata: new Map<string, ModelMetadata>(),
             directoryScoped: {},
-            projectConfigErrors: {},
             lastInitFailure: null,
-            settingsOnlyProviders: {},
             providers: [],
-            agents: [],
+            models: [],
             providersLoaded: false,
-            agentsLoaded: false,
+            workspaceId: '',
             currentProviderId: '',
             currentModelId: '',
             currentAgentName: undefined,
             currentVariant: undefined,
-            currentVariantSelection: { override: undefined, inherited: undefined },
+            currentVariantSelection: {
+                override: undefined,
+                inherited: undefined
+            },
+            currentReasoningEffort: undefined,
             selectedProviderId: '',
             agentModelSelections: {},
             defaultProviders: {},
-            opencodeDefaultAgent: undefined,
-            opencodeDefaultModel: undefined,
             settingsDefaultModel: undefined,
-            settingsDefaultVariant: undefined,
-            settingsDefaultAgent: undefined,
+            settingsDefaultReasoningEffort: undefined,
             settingsDefaultsLoaded: false,
             settingsZenModel: undefined,
             selectionSource: 'auto',
             agentSelectionSource: 'auto',
             isInitialized: false,
-            isConnected: false,
+            isConnected: false
         });
     });
 };
-
+let storeSubscribed = false;
 export const subscribeConfigStoreChanges = (): void => {
-    if (typeof window !== "undefined") {
-        window.__zustand_config_store__ = useConfigStore;
-    }
+    if (storeSubscribed) return;
+    storeSubscribed = true;
+    // The agents store cannot import this module back. This store owns the
+    // connection state, so it supplies the selection reader catalog publication
+    // needs and forwards readiness transitions to the agents store hook.
+    registerAgentSelectionReader(() => useConfigStore.getState());
+    useConfigStore.subscribe((state, previous) => {
+        if (state.isInitialized === previous.isInitialized && state.connectionPhase === previous.connectionPhase) return;
+        notifyAgentReadiness(state);
+    });
 
-    if (typeof window !== "undefined" && !configCatalogHydrationSubscribed) {
-        configCatalogHydrationSubscribed = true;
+    // Show the last known catalogs of the active directory while the service starts.
+    // After persist hydration, which restores the active directory key.
+    if (typeof window !== "undefined") {
         const hydrateActiveCatalog = () => void hydrateConfigCatalogFromCache(useConfigStore.getState().activeDirectoryKey);
-        if (useConfigStore.persist.hasHydrated()) hydrateActiveCatalog();
-        else useConfigStore.persist.onFinishHydration(hydrateActiveCatalog);
+        if (useConfigStore.persist.hasHydrated()) hydrateActiveCatalog();else useConfigStore.persist.onFinishHydration(hydrateActiveCatalog);
     }
     if (!unsubscribeConfigStoreChanges) {
-        unsubscribeConfigStoreChanges = subscribeToConfigChanges(async (event) => {
+        unsubscribeConfigStoreChanges = subscribeToConfigChanges(async event => {
             const tasks: Promise<void>[] = [];
-
-            opencodeClient.clearConfigCache();
-
-            if (scopeMatches(event, "agents")) {
-                const { loadAgents } = useConfigStore.getState();
-                tasks.push(loadAgents({ source: 'configChange:agents' }).then(() => {}));
-            }
-
             if (scopeMatches(event, "providers")) {
                 tasks.push(refreshKnownProviderDirectories('configChange:providers'));
             }
-
             if (tasks.length > 0) {
                 await Promise.all(tasks);
             }
         });
     }
-
-    if (!unsubscribeConfigStoreSyncConfigChanges) {
-        unsubscribeConfigStoreSyncConfigChanges = subscribeToSyncConfigChanges((directory, config) => {
-            useConfigStore.getState().applyOpenCodeConfigDefaults(directory, 'syncConfig', config);
-        });
-    }
-
     if (typeof window !== "undefined" && !unsubscribeConfigStoreDirectoryChanges) {
         unsubscribeConfigStoreDirectoryChanges = useDirectoryStore.subscribe((state, prevState) => {
             const nextKey = toDirectoryKey(state.currentDirectory);
@@ -128,14 +100,18 @@ export const subscribeConfigStoreChanges = (): void => {
             if (nextKey === prevKey) {
                 return;
             }
-
-            markStartupTrace('directoryStore:changed', { previous: prevKey, next: nextKey });
-            if (isChatDraftOpen()) return;
+            markStartupTrace('directoryStore:changed', {
+                previous: prevKey,
+                next: nextKey
+            });
             void hydrateConfigCatalogFromCache(toConfigDirectoryKey(state.currentDirectory));
             void useConfigStore.getState().activateDirectory(state.currentDirectory);
         });
     }
 
+    // Auto is only a model while the server says so. Whenever that answer changes
+    // (routing state loaded or updated, the feature flag learned from settings,
+    // settings defaults loaded), a selection this server cannot honour is replaced.
     if (typeof window !== "undefined" && !unsubscribeConfigStoreRoutingChanges) {
         const drop = () => useConfigStore.getState().dropStaleAutoSelection();
         const unsubscribeRouting = useRoutingStore.subscribe(drop);

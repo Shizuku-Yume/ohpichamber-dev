@@ -33,6 +33,7 @@ import { useSkillsCatalogStore } from './useSkillsCatalogStore';
 import { useSkillsStore } from './useSkillsStore';
 import { useWebSearchStore } from './useWebSearchStore';
 import type { LoadPhase } from './loadPhase';
+import { policySnapshotFromWire } from './utils/permissionAutoAccept';
 
 type ServerStateBootEntry = {
   /** Stable id, also the key in the phase record. */
@@ -230,6 +231,6 @@ export const installServerStateBootEvents = (): (() => void) => {
 
 /** A mode change announced by any window, applied through the same gate as a read. */
 const applyPermissionPolicy = (event: PermissionPolicySyncEvent): void => {
-  if (event.type !== 'openchamber.permission-auto-accept') return;
-  usePermissionStore.getState().applySnapshot({ modes: event.properties.modes ?? {}, revision: event.properties.revision });
+  if (event.type !== 'openchamber:permission-auto-accept.updated') return;
+  usePermissionStore.getState().applySnapshot(policySnapshotFromWire(event.properties));
 };

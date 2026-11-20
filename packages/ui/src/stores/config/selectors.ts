@@ -1,20 +1,47 @@
-import { type ProviderWithModelList, type ConfigStore, type ProviderModel, type ConfigSlice } from './types';
-import { toConfigDirectoryKey } from './directories';
-import type { Agent } from '@openchamber/agent-contract';
-import { findCatalogModel } from '@/lib/opencode/model';
-import { isMissingFromCatalog, isStaleAutoSelection as resolveStaleAutoSelection } from './selectionResolution';
-import { hasLiveCatalog } from './directorySnapshots';
-import { useConfigStore } from '../useConfigStore';
-import { resolveModelMetadata } from './metadata';
-import { filterVisibleAgents } from '../useAgentsStore';
+import { isAutoModel } from "@/lib/routing/autoModel";
+import { useConfigStore } from "../useConfigStore";
+import { useUIStore } from "@/stores/useUIStore";
+import { useRoutingStore, selectAutoReady } from "@/stores/useRoutingStore";
+import { type ConfigStore, type ProviderWithModelList, type ProviderModel, type ConfigSlice } from "./types";
+import { toConfigDirectoryKey } from "./directories";
+import { type Model } from "@openchamber/agent-contract";
+import { buildModelMetadataKey, deriveModelMetadata } from "./metadata";
 
-export const isStaleAutoSelection = (providerId?: string | null, modelId?: string | null): boolean =>
-    resolveStaleAutoSelection(useConfigStore.getState().settingsDefaultsLoaded, providerId, modelId);
-
-export const selectProvidersForDirectory = (
-    state: Pick<ConfigStore, "providers" | "directoryScoped" | "activeDirectoryKey">,
-    directory?: string | null,
-): ProviderWithModelList[] => {
+export const isStaleAutoSelection = (providerId?: string | null, modelId?: string | null): boolean => {
+    if (!providerId || !modelId || !isAutoModel(providerId, modelId)) return false;
+    if (!useConfigStore.getState().settingsDefaultsLoaded) return false;
+    if (!useUIStore.getState().routingFeatureAvailable) return true;
+    const routing = useRoutingStore.getState();
+    return routing.loaded && !selectAutoReady(routing);
+};
+export const selectConfiguredModelPair = (state: Pick<ConfigStore, 'providers' | 'directoryScoped' | 'activeDirectoryKey' | 'currentProviderId' | 'currentModelId'>, directory?: string | null): {
+    inActiveDirectory: boolean;
+    providerId: string;
+    modelId: string;
+} => {
+    if (directory == null) {
+        return {
+            inActiveDirectory: false,
+            providerId: state.currentProviderId,
+            modelId: state.currentModelId
+        };
+    }
+    const directoryKey = toConfigDirectoryKey(directory);
+    if (directoryKey === state.activeDirectoryKey) {
+        return {
+            inActiveDirectory: true,
+            providerId: state.currentProviderId,
+            modelId: state.currentModelId
+        };
+    }
+    const scoped = state.directoryScoped[directoryKey];
+    return {
+        inActiveDirectory: false,
+        providerId: scoped?.currentProviderId ?? '',
+        modelId: scoped?.currentModelId ?? ''
+    };
+};
+export const selectProvidersForDirectory = (state: Pick<ConfigStore, "providers" | "directoryScoped" | "activeDirectoryKey">, directory?: string | null): ProviderWithModelList[] => {
     if (directory == null) return state.providers;
     const directoryKey = toConfigDirectoryKey(directory);
     if (directoryKey === state.activeDirectoryKey) {
@@ -22,51 +49,24 @@ export const selectProvidersForDirectory = (
     }
     return state.directoryScoped[directoryKey]?.providers ?? EMPTY_PROVIDERS;
 };
-
-export const EMPTY_PROVIDERS: ProviderWithModelList[] = [];
-const EMPTY_AGENTS: Agent[] = [];
-
-export const selectIsModelMissingFromCatalog = (
-    state: Pick<ConfigStore, "providers" | "directoryScoped" | "activeDirectoryKey">,
-    directory: string | null | undefined,
-    providerId: string,
-    modelId: string,
-): boolean => {
-    if (!providerId || !modelId) return false;
-    const directoryKey = directory == null ? state.activeDirectoryKey : toConfigDirectoryKey(directory);
-    return isMissingFromCatalog(
-        selectProvidersForDirectory(state, directory),
-        hasLiveCatalog(state, directoryKey),
-        providerId,
-        modelId,
-    );
+export const selectModelsForDirectory = (state: Pick<ConfigStore, "models" | "directoryScoped" | "activeDirectoryKey">, directory?: string | null): Model[] => {
+    if (directory == null) return state.models;
+    const directoryKey = toConfigDirectoryKey(directory);
+    if (directoryKey === state.activeDirectoryKey) return state.models;
+    return state.directoryScoped[directoryKey]?.models ?? EMPTY_MODELS;
 };
+const EMPTY_PROVIDERS: ProviderWithModelList[] = [];
+const EMPTY_MODELS: Model[] = [];
 
-export const selectSettingsOnlyProvidersForDirectory = (
-    state: Pick<ConfigStore, "settingsOnlyProviders" | "activeDirectoryKey">,
-    directory?: string | null,
-): ProviderWithModelList[] => {
-    const directoryKey = directory == null ? state.activeDirectoryKey : toConfigDirectoryKey(directory);
-    return state.settingsOnlyProviders[directoryKey] ?? EMPTY_PROVIDERS;
-};
-
-export const selectConfigAgentsForDirectory = (
-    state: Pick<ConfigStore, 'agents' | 'directoryScoped' | 'activeDirectoryKey'>,
-    directory?: string | null,
-): Agent[] => {
-    if (directory === undefined) return state.agents;
-    const key = toConfigDirectoryKey(directory);
-    return key === state.activeDirectoryKey ? state.agents : state.directoryScoped[key]?.agents ?? EMPTY_AGENTS;
-};
-
-export const selectKnownCatalogModel = (
-    state: Pick<ConfigStore, 'providers' | 'directoryScoped'>,
-    providerId: string,
-    modelId: string,
-): ProviderModel | undefined => {
-    if (!providerId || !modelId) return undefined;
-    const fromProviders = (providers: ProviderWithModelList[]) =>
-        findCatalogModel(providers.find((provider) => provider.id === providerId)?.models, modelId);
+/**
+  * A model as any loaded catalog lists it: the active directory's first, then
+  * the snapshots of the others. For display only. A directory OpenCode is still
+  * starting answers with a partial catalog for a second or two, and the
+  * composer keeps the name it already knows meanwhile instead of a raw id.
+  * Selection, variants and validation stay on the active catalog.
+  */
+export const selectKnownCatalogModel = (state: Pick<ConfigStore, 'providers' | 'directoryScoped'>, providerId: string, modelId: string): ProviderModel | undefined => {
+    const fromProviders = (providers: ProviderWithModelList[]) => providers.find(provider => provider.providerId === providerId)?.models.find(model => model.modelId === modelId);
     const active = fromProviders(state.providers);
     if (active) return active;
     for (const snapshot of Object.values(state.directoryScoped)) {
@@ -75,64 +75,57 @@ export const selectKnownCatalogModel = (
     }
     return undefined;
 };
-
-export const selectKnownAgent = (
-    state: Pick<ConfigStore, 'agents' | 'directoryScoped'>,
-    name: string,
-): Agent | undefined => {
-    if (!name) return undefined;
-    const active = state.agents.find((agent) => agent.name === name);
-    if (active) return active;
-    for (const snapshot of Object.values(state.directoryScoped)) {
-        const known = snapshot.agents.find((agent) => agent.name === name);
-        if (known) return known;
-    }
-    return undefined;
-};
-
-export const selectCatalogLoadedForDirectory = (
-    state: Pick<ConfigStore, 'agentsLoaded' | 'providersLoaded' | 'directoryScoped' | 'activeDirectoryKey'>,
-    resource: 'models' | 'agents',
-    directory?: string | null,
-): boolean => {
-    const field = resource === 'models' ? 'providersLoaded' : 'agentsLoaded';
-    if (directory === undefined) return state[field];
+export const selectCatalogLoadedForDirectory = (state: Pick<ConfigStore, 'providersLoaded' | 'directoryScoped' | 'activeDirectoryKey'>, _resource: 'models', directory?: string | null): boolean => {
+    if (directory === undefined) return state.providersLoaded;
     const key = toConfigDirectoryKey(directory);
-    return key === state.activeDirectoryKey ? state[field] : state.directoryScoped[key]?.[field] === true;
+    return key === state.activeDirectoryKey ? state.providersLoaded : state.directoryScoped[key]?.providersLoaded === true;
 };
-
-export const createConfigGetters: ConfigSlice<
-    | 'getCurrentProvider'
-    | 'getCurrentModel'
-    | 'getCurrentAgent'
-    | 'getModelMetadata'
-    | 'getVisibleAgents'
-> = (set, get) => ({
+export const createConfigGetters: ConfigSlice<"getCurrentProvider" | "getCurrentModel" | "getModelMetadata"> = (_set, get) => ({
     getCurrentProvider: () => {
-        const { providers, currentProviderId } = get();
-        return providers.find((p) => p.id === currentProviderId);
+        const {
+            providers,
+            currentProviderId
+        } = get();
+        return providers.find(p => p.providerId === currentProviderId);
     },
-
     getCurrentModel: () => {
         const provider = get().getCurrentProvider();
-        const { currentModelId } = get();
+        const {
+            currentModelId
+        } = get();
         if (!provider) {
             return undefined;
         }
-        return findCatalogModel(provider.models, currentModelId);
-    },
-
-    getCurrentAgent: () => {
-        const { agents, currentAgentName } = get();
-        if (!currentAgentName) return undefined;
-        return agents.find((a) => a.name === currentAgentName);
+        return provider.models.find(model => model.modelId === currentModelId);
     },
     getModelMetadata: (providerId: string, modelId: string) => {
-        const { modelsMetadata, providers } = get();
-        return resolveModelMetadata(modelsMetadata, providers, providerId, modelId);
-    },
-    getVisibleAgents: () => {
-        const { agents } = get();
-        return filterVisibleAgents(agents);
-    },
+        const key = buildModelMetadataKey(providerId, modelId);
+        if (!key) {
+            return undefined;
+        }
+        const {
+            modelsMetadata,
+            providers
+        } = get();
+        const cached = modelsMetadata.get(key);
+        const model = providers.find(p => p.providerId === providerId)?.models.find(entry => entry.modelId === modelId);
+
+        // The running OpenCode's limits win over the models.dev
+        // catalog: providers adjust them per auth (ChatGPT sign-in
+        // serves GPT models with a 400K window, the catalog says 1M+).
+        if (cached) {
+            if (!model || model.contextWindow <= 0) return cached;
+            return {
+                ...cached,
+                limit: {
+                    ...cached.limit,
+                    context: model.contextWindow,
+                    output: model.maxOutputTokens
+                }
+            };
+        }
+
+        // Fallback: derive metadata from provider model data (covers custom providers not in models.dev)
+        return model ? deriveModelMetadata(providerId, model) : undefined;
+    }
 });

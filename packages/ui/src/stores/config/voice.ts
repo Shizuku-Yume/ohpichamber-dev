@@ -1,78 +1,19 @@
-import { type ConfigSlice } from './types';
-import { EMPTY_VOICE_API_KEYS, updateVoiceApiKeys, migrateLegacyVoiceApiKeys, fetchVoiceApiKeys } from '@/lib/voiceKeysApi';
-import { getSafeStorage } from '../utils/safeStorage';
-import { getRuntimeKey } from '@/lib/runtime-switch';
-import { updateDesktopSettings } from '@/lib/persistence';
+import { type ConfigSlice } from "./types";
+import { EMPTY_VOICE_API_KEYS, updateVoiceApiKeys, migrateLegacyVoiceApiKeys, fetchVoiceApiKeys } from "@/lib/voiceKeysApi";
+import { getSafeStorage } from "../utils/safeStorage";
+import { getRuntimeKey } from "@/lib/runtime-switch";
+import { updateDesktopSettings } from "@/lib/persistence";
 
-let voiceApiKeysLoad: { runtimeKey: string; promise: Promise<void> } | null = null;
+/** The last read of which voice keys the server holds, per runtime (see refreshVoiceApiKeys). */
+let voiceApiKeysLoad: {
+    runtimeKey: string;
+    promise: Promise<void>;
+} | null = null;
 
-export const createVoiceSettings: ConfigSlice<
-    | 'voiceProvider'
-    | 'speechRate'
-    | 'speechPitch'
-    | 'speechVolume'
-    | 'sayVoice'
-    | 'localTtsVoiceId'
-    | 'localTtsModelId'
-    | 'ttsFollowTextLanguage'
-    | 'browserVoice'
-    | 'openaiVoice'
-    | 'voiceApiKeys'
-    | 'openaiCompatibleUrl'
-    | 'openaiCompatibleVoice'
-    | 'openaiCompatibleTtsModel'
-    | 'openaiCompatibleTtsEndpointPath'
-    | 'dictationEnabled'
-    | 'dictationAutoSend'
-    | 'sttProvider'
-    | 'sttServerUrl'
-    | 'sttModel'
-    | 'sttEndpointPath'
-    | 'sttLocalModel'
-    | 'sttLanguage'
-    | 'sttCorrectTranscript'
-    | 'showMessageTTSButtons'
-    | 'autoReadAloudEnabled'
-    | 'ttsInputMode'
-    | 'ttsChunkedMode'
-    | 'summarizeMessageTTS'
-    | 'summarizeVoiceConversation'
-    | 'summarizeCharacterThreshold'
-    | 'summarizeMaxLength'
-    | 'setVoiceProvider'
-    | 'setSpeechRate'
-    | 'setSpeechPitch'
-    | 'setSpeechVolume'
-    | 'setSayVoice'
-    | 'setLocalTtsVoiceId'
-    | 'setLocalTtsModelId'
-    | 'setTtsFollowTextLanguage'
-    | 'setBrowserVoice'
-    | 'setOpenaiVoice'
-    | 'setVoiceApiKey'
-    | 'refreshVoiceApiKeys'
-    | 'setOpenaiCompatibleUrl'
-    | 'setOpenaiCompatibleVoice'
-    | 'setOpenaiCompatibleTtsModel'
-    | 'setOpenaiCompatibleTtsEndpointPath'
-    | 'setDictationEnabled'
-    | 'setSttCorrectTranscript'
-    | 'setDictationAutoSend'
-    | 'setSttProvider'
-    | 'setSttServerUrl'
-    | 'setSttModel'
-    | 'setSttEndpointPath'
-    | 'setSttLocalModel'
-    | 'setSttLanguage'
-    | 'setShowMessageTTSButtons'
-    | 'setAutoReadAloudEnabled'
-    | 'setTtsInputMode'
-    | 'setTtsChunkedMode'
-    | 'setSummarizeMessageTTS'
-    | 'setSummarizeVoiceConversation'
-    | 'setSummarizeCharacterThreshold'
-    | 'setSummarizeMaxLength'
-> = (set) => ({
+// The first render must not show a loading picker when the synchronous catalog
+// snapshot for this runtime and directory already exists.
+export const createVoiceSettings: ConfigSlice<"voiceProvider" | "speechRate" | "speechPitch" | "speechVolume" | "sayVoice" | "localTtsVoiceId" | "localTtsModelId" | "ttsFollowTextLanguage" | "browserVoice" | "openaiVoice" | "voiceApiKeys" | "openaiCompatibleUrl" | "openaiCompatibleVoice" | "openaiCompatibleTtsModel" | "openaiCompatibleTtsEndpointPath" | "dictationEnabled" | "dictationAutoSend" | "sttProvider" | "sttServerUrl" | "sttEndpointPath" | "sttModel" | "sttLocalModel" | "sttLanguage" | "sttCorrectTranscript" | "showMessageTTSButtons" | "autoReadAloudEnabled" | "ttsInputMode" | "ttsChunkedMode" | "summarizeMessageTTS" | "summarizeVoiceConversation" | "summarizeCharacterThreshold" | "summarizeMaxLength" | "setVoiceProvider" | "setSpeechRate" | "setSpeechPitch" | "setSpeechVolume" | "setSayVoice" | "setLocalTtsVoiceId" | "setLocalTtsModelId" | "setTtsFollowTextLanguage" | "setBrowserVoice" | "setOpenaiVoice" | "setVoiceApiKey" | "refreshVoiceApiKeys" | "setOpenaiCompatibleUrl" | "setOpenaiCompatibleVoice" | "setOpenaiCompatibleTtsModel" | "setOpenaiCompatibleTtsEndpointPath" | "setDictationEnabled" | "setDictationAutoSend" | "setSttCorrectTranscript" | "setSttProvider" | "setSttServerUrl" | "setSttEndpointPath" | "setSttModel" | "setSttLocalModel" | "setSttLanguage" | "setShowMessageTTSButtons" | "setAutoReadAloudEnabled" | "setTtsInputMode" | "setTtsChunkedMode" | "setSummarizeMessageTTS" | "setSummarizeVoiceConversation" | "setSummarizeCharacterThreshold" | "setSummarizeMaxLength"> = (set, _get) => ({
+    // Voice provider preference - load from localStorage or default to 'browser'
     voiceProvider: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('voiceProvider');
@@ -80,6 +21,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'browser';
     })(),
+    // TTS settings - load from localStorage with defaults
     speechRate: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('speechRate');
@@ -110,6 +52,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 1;
     })(),
+    // macOS Say voice - load from localStorage or default to 'Samantha'
     sayVoice: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('sayVoice');
@@ -117,6 +60,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'Samantha';
     })(),
+    // Local (Kokoro) TTS speaker id - load from localStorage or default to 0
     localTtsVoiceId: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('localTtsVoiceId');
@@ -134,7 +78,6 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'kokoro-en-v0_19';
     })(),
-
     ttsFollowTextLanguage: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('ttsFollowTextLanguage');
@@ -142,6 +85,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return true;
     })(),
+    // Browser voice - load from localStorage or default to empty (auto-select)
     browserVoice: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('browserVoice');
@@ -149,6 +93,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return '';
     })(),
+    // OpenAI voice - load from localStorage or default to 'nova'
     openaiVoice: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('openaiVoice');
@@ -157,6 +102,7 @@ export const createVoiceSettings: ConfigSlice<
         return 'nova';
     })(),
     voiceApiKeys: EMPTY_VOICE_API_KEYS,
+    // OpenAI-compatible custom server URL
     openaiCompatibleUrl: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('openaiCompatibleUrl');
@@ -164,6 +110,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return '';
     })(),
+    // OpenAI-compatible custom server voice
     openaiCompatibleVoice: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('openaiCompatibleVoice');
@@ -171,6 +118,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'af_sky';
     })(),
+    // OpenAI-compatible custom server TTS model
     openaiCompatibleTtsModel: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('openaiCompatibleTtsModel');
@@ -179,6 +127,7 @@ export const createVoiceSettings: ConfigSlice<
         return 'kokoro';
     })(),
     openaiCompatibleTtsEndpointPath: getSafeStorage().getItem('openaiCompatibleTtsEndpointPath') ?? '',
+    // Voice input (dictation) master toggle - default enabled
     dictationEnabled: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('dictationEnabled');
@@ -186,11 +135,20 @@ export const createVoiceSettings: ConfigSlice<
         }
         return true;
     })(),
-    dictationAutoSend: getSafeStorage().getItem('dictationAutoSend') === 'true',
+    dictationAutoSend: (() => {
+        if (typeof window !== 'undefined') {
+            const saved = getSafeStorage().getItem('dictationAutoSend');
+            if (saved !== null) return saved === 'true';
+        }
+        return false;
+    })(),
+    // STT provider: 'local' (server-side sherpa-onnx) or 'openai-compatible'
     sttProvider: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('sttProvider');
             if (saved === 'local' || saved === 'openai-compatible') return saved;
+            // Migrate legacy providers: 'server' used an OpenAI-compatible
+            // endpoint; 'browser' and 'wasm' map to the local default.
             if (saved === 'server') return 'openai-compatible' as const;
         }
         return 'local' as const;
@@ -202,6 +160,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'http://localhost:8001/v1';
     })(),
+    sttEndpointPath: getSafeStorage().getItem('sttEndpointPath') ?? '',
     sttModel: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('sttModel');
@@ -209,13 +168,12 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'deepdml/faster-whisper-large-v3-turbo-ct2';
     })(),
-    sttEndpointPath: getSafeStorage().getItem('sttEndpointPath') ?? '',
     sttLocalModel: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('sttLocalModel');
             if (saved) return saved;
         }
-        return '';
+        return 'parakeet-tdt-0.6b-v2-int8';
     })(),
     sttLanguage: (() => {
         if (typeof window !== 'undefined') {
@@ -225,6 +183,7 @@ export const createVoiceSettings: ConfigSlice<
         return '';
     })(),
     sttCorrectTranscript: globalThis.localStorage?.getItem('sttCorrectTranscript') === 'true',
+    // Show TTS buttons on messages - disabled by default until user enables it
     showMessageTTSButtons: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('showMessageTTSButtons');
@@ -232,6 +191,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return false;
     })(),
+    // Read the final reply automatically when a turn ends - disabled by default
     autoReadAloudEnabled: (() => {
         const saved = globalThis.window?.localStorage?.getItem('autoReadAloudEnabled');
         return saved === 'true';
@@ -244,6 +204,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 'sanitized' as const;
     })(),
+    // Sentence-by-sentence server TTS synthesis - disabled by default
     ttsChunkedMode: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('ttsChunkedMode');
@@ -251,6 +212,7 @@ export const createVoiceSettings: ConfigSlice<
         }
         return false;
     })(),
+    // Summarization settings
     summarizeMessageTTS: (() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('summarizeMessageTTS');
@@ -285,91 +247,105 @@ export const createVoiceSettings: ConfigSlice<
         }
         return 500;
     })(),
-
     setVoiceProvider: (provider: 'browser' | 'local' | 'openai' | 'openai-compatible' | 'say') => {
-        set({ voiceProvider: provider });
+        set({
+            voiceProvider: provider
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('voiceProvider', provider);
         }
     },
-
     setSpeechRate: (rate: number) => {
         const clampedRate = Math.max(0.5, Math.min(2, rate));
-        set({ speechRate: clampedRate });
+        set({
+            speechRate: clampedRate
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('speechRate', String(clampedRate));
         }
     },
-
     setSpeechPitch: (pitch: number) => {
         const clampedPitch = Math.max(0.5, Math.min(2, pitch));
-        set({ speechPitch: clampedPitch });
+        set({
+            speechPitch: clampedPitch
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('speechPitch', String(clampedPitch));
         }
     },
-
     setSpeechVolume: (volume: number) => {
         const clampedVolume = Math.max(0, Math.min(1, volume));
-        set({ speechVolume: clampedVolume });
+        set({
+            speechVolume: clampedVolume
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('speechVolume', String(clampedVolume));
         }
     },
-
     setSayVoice: (voice: string) => {
-        set({ sayVoice: voice });
+        set({
+            sayVoice: voice
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('sayVoice', voice);
         }
     },
-
     setLocalTtsVoiceId: (voiceId: number) => {
-        set({ localTtsVoiceId: voiceId });
+        set({
+            localTtsVoiceId: voiceId
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('localTtsVoiceId', String(voiceId));
         }
     },
-
     setLocalTtsModelId: (modelId: string) => {
-        set({ localTtsModelId: modelId });
+        set({
+            localTtsModelId: modelId
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('localTtsModelId', modelId);
         }
     },
-
     setTtsFollowTextLanguage: (enabled: boolean) => {
-        set({ ttsFollowTextLanguage: enabled });
+        set({
+            ttsFollowTextLanguage: enabled
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('ttsFollowTextLanguage', String(enabled));
         }
     },
-
     setBrowserVoice: (voice: string) => {
-        set({ browserVoice: voice });
+        set({
+            browserVoice: voice
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('browserVoice', voice);
         }
     },
-
     setOpenaiVoice: (voice: string) => {
-        set({ openaiVoice: voice });
+        set({
+            openaiVoice: voice
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('openaiVoice', voice);
         }
     },
-
     setVoiceApiKey: async (kind, apiKey) => {
         try {
-            set({ voiceApiKeys: await updateVoiceApiKeys({ [kind]: apiKey }) });
+            set({
+                voiceApiKeys: await updateVoiceApiKeys({
+                    [kind]: apiKey
+                })
+            });
             return true;
         } catch (error) {
             console.warn('Failed to save voice API key:', error);
             return false;
         }
     },
-
-    refreshVoiceApiKeys: (options) => {
+    refreshVoiceApiKeys: options => {
+        // Every message's read-aloud button asks; one read per
+        // runtime answers them all.
         const runtimeKey = getRuntimeKey();
         if (!options?.force && voiceApiKeysLoad?.runtimeKey === runtimeKey) {
             return voiceApiKeysLoad.promise;
@@ -377,164 +353,209 @@ export const createVoiceSettings: ConfigSlice<
         const promise = (async () => {
             try {
                 const migrated = await migrateLegacyVoiceApiKeys();
-                const voiceApiKeys = migrated ?? await fetchVoiceApiKeys();
-                if (getRuntimeKey() === runtimeKey) set({ voiceApiKeys });
+                const voiceApiKeys = migrated ?? (await fetchVoiceApiKeys());
+                if (getRuntimeKey() === runtimeKey) set({
+                    voiceApiKeys
+                });
             } catch (error) {
-                if (getRuntimeKey() === runtimeKey) set({ voiceApiKeys: EMPTY_VOICE_API_KEYS });
+                // An offline server leaves keys unset, which offers setting one.
+                if (getRuntimeKey() === runtimeKey) set({
+                    voiceApiKeys: EMPTY_VOICE_API_KEYS
+                });
                 console.warn('Failed to read voice API keys:', error);
             }
         })();
-        voiceApiKeysLoad = { runtimeKey, promise };
+        voiceApiKeysLoad = {
+            runtimeKey,
+            promise
+        };
         return promise;
     },
-
     setOpenaiCompatibleUrl: (url: string) => {
-        set({ openaiCompatibleUrl: url });
+        set({
+            openaiCompatibleUrl: url
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('openaiCompatibleUrl', url);
         }
     },
-
-
     setOpenaiCompatibleVoice: (voice: string) => {
-        set({ openaiCompatibleVoice: voice });
+        set({
+            openaiCompatibleVoice: voice
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('openaiCompatibleVoice', voice);
         }
     },
-
     setOpenaiCompatibleTtsModel: (model: string) => {
-        set({ openaiCompatibleTtsModel: model });
+        set({
+            openaiCompatibleTtsModel: model
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('openaiCompatibleTtsModel', model);
         }
     },
-
     setOpenaiCompatibleTtsEndpointPath: (path: string) => {
-        set({ openaiCompatibleTtsEndpointPath: path });
+        set({
+            openaiCompatibleTtsEndpointPath: path
+        });
         getSafeStorage().setItem('openaiCompatibleTtsEndpointPath', path);
     },
-
     setDictationEnabled: (enabled: boolean) => {
-        set({ dictationEnabled: enabled });
+        set({
+            dictationEnabled: enabled
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('dictationEnabled', String(enabled));
         }
-        updateDesktopSettings({ dictationEnabled: enabled }).catch(() => {});
+        updateDesktopSettings({
+            dictationEnabled: enabled
+        }).catch(() => {});
     },
-
-    setSttCorrectTranscript: (enabled: boolean) => {
-        set({ sttCorrectTranscript: enabled });
-        globalThis.localStorage?.setItem('sttCorrectTranscript', String(enabled));
-        updateDesktopSettings({ sttCorrectTranscript: enabled }).catch(() => {});
-    },
-
     setDictationAutoSend: (enabled: boolean) => {
-        set({ dictationAutoSend: enabled });
+        set({
+            dictationAutoSend: enabled
+        });
         getSafeStorage().setItem('dictationAutoSend', String(enabled));
-        updateDesktopSettings({ dictationAutoSend: enabled }).catch(() => {});
+        updateDesktopSettings({
+            dictationAutoSend: enabled
+        }).catch(() => {});
     },
-
+    setSttCorrectTranscript: (enabled: boolean) => {
+        set({
+            sttCorrectTranscript: enabled
+        });
+        globalThis.localStorage?.setItem('sttCorrectTranscript', String(enabled));
+        updateDesktopSettings({
+            sttCorrectTranscript: enabled
+        }).catch(() => {});
+    },
     setSttProvider: (provider: 'local' | 'openai-compatible') => {
-        set({ sttProvider: provider });
+        set({
+            sttProvider: provider
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('sttProvider', provider);
         }
-        updateDesktopSettings({ sttProvider: provider }).catch(() => {});
+        updateDesktopSettings({
+            sttProvider: provider
+        }).catch(() => {});
     },
-
     setSttServerUrl: (url: string) => {
-        set({ sttServerUrl: url });
+        set({
+            sttServerUrl: url
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('sttServerUrl', url);
         }
-        updateDesktopSettings({ sttServerUrl: url }).catch(() => {});
+        updateDesktopSettings({
+            sttServerUrl: url
+        }).catch(() => {});
     },
-
-
+    setSttEndpointPath: (path: string) => {
+        set({
+            sttEndpointPath: path
+        });
+        getSafeStorage().setItem('sttEndpointPath', path);
+        updateDesktopSettings({
+            sttEndpointPath: path
+        }).catch(() => {});
+    },
     setSttModel: (model: string) => {
-        set({ sttModel: model });
+        set({
+            sttModel: model
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('sttModel', model);
         }
-        updateDesktopSettings({ sttModel: model }).catch(() => {});
+        updateDesktopSettings({
+            sttModel: model
+        }).catch(() => {});
     },
-
-    setSttEndpointPath: (path: string) => {
-        set({ sttEndpointPath: path });
-        getSafeStorage().setItem('sttEndpointPath', path);
-        updateDesktopSettings({ sttEndpointPath: path }).catch(() => {});
-    },
-
     setSttLocalModel: (model: string) => {
-        set({ sttLocalModel: model });
+        set({
+            sttLocalModel: model
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('sttLocalModel', model);
         }
-        updateDesktopSettings({ sttLocalModel: model }).catch(() => {});
+        updateDesktopSettings({
+            sttLocalModel: model
+        }).catch(() => {});
     },
-
     setSttLanguage: (lang: string) => {
-        set({ sttLanguage: lang });
+        set({
+            sttLanguage: lang
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('sttLanguage', lang);
         }
-        updateDesktopSettings({ sttLanguage: lang }).catch(() => {});
+        updateDesktopSettings({
+            sttLanguage: lang
+        }).catch(() => {});
     },
-
     setShowMessageTTSButtons: (show: boolean) => {
-        set({ showMessageTTSButtons: show });
+        set({
+            showMessageTTSButtons: show
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('showMessageTTSButtons', String(show));
         }
     },
-
     setAutoReadAloudEnabled: (enabled: boolean) => {
-        set({ autoReadAloudEnabled: enabled });
+        set({
+            autoReadAloudEnabled: enabled
+        });
         globalThis.window?.localStorage?.setItem('autoReadAloudEnabled', String(enabled));
     },
-
     setTtsInputMode: (mode: 'sanitized' | 'raw' | 'summarized') => {
-        set({ ttsInputMode: mode });
+        set({
+            ttsInputMode: mode
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('ttsInputMode', mode);
         }
     },
-
     setTtsChunkedMode: (enabled: boolean) => {
-        set({ ttsChunkedMode: enabled });
+        set({
+            ttsChunkedMode: enabled
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('ttsChunkedMode', String(enabled));
         }
     },
-
     setSummarizeMessageTTS: (enabled: boolean) => {
-        set({ summarizeMessageTTS: enabled });
+        set({
+            summarizeMessageTTS: enabled
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('summarizeMessageTTS', String(enabled));
         }
     },
-
     setSummarizeVoiceConversation: (enabled: boolean) => {
-        set({ summarizeVoiceConversation: enabled });
+        set({
+            summarizeVoiceConversation: enabled
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('summarizeVoiceConversation', String(enabled));
         }
     },
-
     setSummarizeCharacterThreshold: (threshold: number) => {
         const clamped = Math.max(50, Math.min(2000, threshold));
-        set({ summarizeCharacterThreshold: clamped });
+        set({
+            summarizeCharacterThreshold: clamped
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('summarizeCharacterThreshold', String(clamped));
         }
     },
-
     setSummarizeMaxLength: (maxLength: number) => {
         const clamped = Math.max(50, Math.min(2000, maxLength));
-        set({ summarizeMaxLength: clamped });
+        set({
+            summarizeMaxLength: clamped
+        });
         if (typeof window !== 'undefined') {
             localStorage.setItem('summarizeMaxLength', String(clamped));
         }
-    },
+    }
 });

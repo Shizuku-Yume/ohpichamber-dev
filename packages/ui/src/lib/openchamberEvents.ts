@@ -12,10 +12,9 @@ import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-w
 import { autoReviewUpdatedEventSchema, type AutoReviewUpdatedEvent } from '@/stores/useAutoReviewStore';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
-import type { SyncEvent } from './opencode/events';
 import { workflowRunSchema, type WorkflowRun } from './workflows/model';
-import { classifyStreamPayload } from '@/sync/event-pipeline';
 import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
+import { permissionPolicyWireSchema } from '@/stores/utils/permissionAutoAccept';
 
 type ScheduledTaskRanEvent = {
  type: 'scheduled-task-ran';
@@ -154,7 +153,21 @@ type RoutingDecisionEvent = { type: 'routing-decision'; decision: z.infer<typeof
 type RoutingPermissionHeldEvent = { type: 'routing-permission-held' } & z.infer<typeof routingPermissionHeldSchema>;
 type RoutingSafetySkippedEvent = { type: 'routing-safety-skipped' } & z.infer<typeof routingSafetySkippedSchema>;
 
-export type PermissionPolicySyncEvent = Extract<SyncEvent, { type: 'openchamber.permission-auto-accept' | 'openchamber.permission-left-for-user' }>;
+const permissionPolicyEventSchema = z.discriminatedUnion('type', [
+ z.object({
+  type: z.literal('openchamber:permission-auto-accept.updated'),
+  properties: permissionPolicyWireSchema,
+ }),
+ z.object({
+  type: z.literal('openchamber:permission-auto-accept.left-for-user'),
+  properties: z.object({
+   permissionId: z.string().min(1),
+   sessionId: z.string().min(1),
+   directory: z.string().nullable(),
+  }),
+ }),
+]);
+export type PermissionPolicySyncEvent = z.infer<typeof permissionPolicyEventSchema>;
 type PermissionPolicyEvent = { type: 'permission-policy'; event: PermissionPolicySyncEvent };
 
 /** Followed pull requests, merge requests or issues whose state the server saw move. */
@@ -525,11 +538,9 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  }
 
  if (envelope.type === 'openchamber:permission-auto-accept.updated' || envelope.type === 'openchamber:permission-auto-accept.left-for-user') {
-  const classified = classifyStreamPayload(envelope, undefined);
-  if (classified.kind !== 'events') return;
-  for (const { event } of classified.events) {
-   if (event.type !== 'openchamber.permission-auto-accept' && event.type !== 'openchamber.permission-left-for-user') continue;
-   for (const listener of listeners) listener({ type: 'permission-policy', event: event as PermissionPolicySyncEvent });
+  const parsed = permissionPolicyEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'permission-policy', event: parsed.data });
   }
   return;
  }
