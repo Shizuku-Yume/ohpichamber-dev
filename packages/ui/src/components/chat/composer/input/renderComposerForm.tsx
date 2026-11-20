@@ -328,9 +328,6 @@ export function renderComposerForm({
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
                         onFileSelect={handleFileSelect}
-                        onSessionSelect={isVSCode ? undefined : handleSessionSelect}
-                        onExtensionMentionSelect={isVSCode || isBtwActive ? undefined : handleExtensionMentionSelect}
-                        currentSessionId={currentSessionId}
                         onEmojiSelect={handleEmojiSelect}
                         onClose={closeAutocomplete}
                     />
