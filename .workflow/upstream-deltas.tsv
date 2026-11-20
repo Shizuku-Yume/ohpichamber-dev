@@ -1,6 +1,6 @@
 # The drift ledger's decision rows: a `fork-differs` path that is not owned by the
 path	state	class	decision	reason
-packages/web/bin/lib/cli-shell.test.js	fork-differs	decision	2026-11-20 - Keep portable and type-safe test harness fixes	Skips the /bin/sh POSIX quoting round-trip on Windows hosts, which have no /bin/sh.
+packages/web/bin/lib/cli-shell.test.js	fork-differs	decision	2026-11-21 - Skip the POSIX shell quoting round-trip on Windows	Skips the /bin/sh POSIX quoting round-trip on Windows hosts, which have no /bin/sh.
 packages/electron/startup-single-flight.test.mjs	fork-differs	decision	2026-11-20 - Keep portable and type-safe test harness fixes	Uses a file URL for the Node --import preload so Windows drive-letter paths resolve correctly (PR #78).
 packages/web/server/lib/git/storage-process.fixture.ts	fork-differs	decision	2026-11-20 - Keep portable and type-safe test harness fixes	Preserves Node readFileSync overloads through a proxy; the upstream overload wrapper fails TS2394 and TS2322 with the installed Node types.
 packages/electron/early-startup.test.mjs	fork-differs	decision	2026-11-11 - Keep the Electron shell on the in-process Host and the staged Agent Runtime	Pins development and packaged preload resolution for the retained guarded browser panel, including escaped paths and Windows URLs; runs without mocking the Electron module.

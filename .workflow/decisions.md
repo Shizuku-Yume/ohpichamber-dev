@@ -2,9 +2,9 @@
 
 ## 2026-11-20 - Keep portable and type-safe test harness fixes
 
-- **Decided:** retain file URLs for the Electron startup test's Node `--import` preload, the Git storage fixture's proxy around `readFileSync`, and the Windows skip on the CLI shell quoting test's `/bin/sh` round-trip.
+- **Decided:** retain file URLs for the Electron startup test's Node `--import` preload and the Git storage fixture's proxy around `readFileSync`.
 - **Instead of:** restoring the upstream baseline's filesystem-path preload and hand-written `readFileSync` overloads.
-- **Because:** Windows drive-letter paths are not valid preload URLs, Windows has no `/bin/sh`, and the baseline fixture's overloads fail TS2394 and TS2322 against the installed Node types. The proxy preserves the complete Node signature and the fixture's read delay.
+- **Because:** Windows drive-letter paths are not valid preload URLs, and the baseline fixture's overloads fail TS2394 and TS2322 against the installed Node types. The proxy preserves the complete Node signature and the fixture's read delay.
 - **Mine:** yes (requested drift classification)
 - **Revisit when:** upstream adopts these fixes or its harness no longer needs them.
 
@@ -1903,3 +1903,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Also retained:** the locale direction and dictionary contract, translated attachment regression, and standards-mode DOM setup used by math renderer tests.
 - **Instead of:** treating partial reads as proof of non-delivery, restoring retired state, or dropping behavior or regression coverage to match the upstream blob.
 - **Revisit when:** upstream supports equivalent scopes and state invariants or the corresponding fork feature is retired.
+
+## 2026-11-21 - Skip the POSIX shell quoting round-trip on Windows
+
+- **Decided:** keep the `process.platform === 'win32'` skip on the CLI shell quoting test's `/bin/sh` round-trip.
+- **Instead of:** restoring the upstream test, which runs `/bin/sh` on every host.
+- **Because:** Windows hosts have no `/bin/sh`, so the upstream test fails there without exercising `shellQuote`; macOS and Linux still run the round-trip.
+- **Mine:** yes (requested drift classification)
+- **Revisit when:** upstream gates the test itself or the CLI quoting gains a Windows-native round-trip test.
