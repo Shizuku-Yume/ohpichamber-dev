@@ -1,4 +1,3 @@
-import { problemMessage } from '@/lib/problemMessage';
 import { MessageSliceContext } from "./message/messageSliceContext";
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -34,6 +33,7 @@ import { useI18n } from '@/lib/i18n';
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
 import { useChatColumnActions } from './chatColumnSession';
+import { problemMessage } from '@/lib/problemMessage';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 
@@ -67,22 +67,6 @@ function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undef
 
     return value ?? stickyValue;
 }
-
-const copyAssistantText = async (text: string) => {
-    const { renderMarkdownForExport } = await import('./markdown/renderMarkdownForExport');
-    const root = await renderMarkdownForExport(text, { purpose: 'copy' });
-    const plainText = useUIStore.getState().copyMessagesAsPlainText
-        ? (await import('./markdown/selectionMarkdown')).serializeRenderedMarkdown(root, 'plain')
-        : undefined;
-    return copyMarkdownToClipboard(text, root.innerHTML, { plainText });
-};
-
-const getMessageInfoProp = (info: unknown, key: string): unknown => {
-    if (typeof info === 'object' && info !== null) {
-        return (info as Record<string, unknown>)[key];
-    }
-    return undefined;
-};
 
 interface ChatMessageProps {
     message: ChatMessageEntry;
@@ -207,6 +191,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 createdAt: messageCreatedAt,
                 role: isUser ? 'user' : 'assistant',
             }, !isPinnedIntoContext);
+            // Return focus to the composer so the user can keep typing right
+            // after adding the message to context.
             requestAnimationFrame(focusColumnInput);
         } catch (error) {
             console.error('[chat-message] failed to update context pin', error);
@@ -266,12 +252,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const shouldShowHeader = React.useMemo(() => {
         if (isUser) return true;
-
         const headerMessageId = assistantHeaderMessageId ?? turnGroupingContext?.headerMessageId;
         if (headerMessageId) {
-            const isFirstAssistantInTurn = message.messageId === headerMessageId;
+            return message.messageId === headerMessageId;
         }
-
         return true;
     }, [assistantHeaderMessageId, isUser, message.messageId, turnGroupingContext?.headerMessageId]);
 
@@ -293,8 +277,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [displayParts, isUser]);
 
     const hasTextContent = messageTextContent.length > 0;
-
-    const earlierAssistantText = isUser ? undefined : turnGroupingContext?.earlierAssistantText;
 
     const handleCopyMessage = React.useCallback(async () => {
         let result;
@@ -410,8 +392,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             respectReducedMotion
                         >
                             <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
-                                <div
-                                    className={cn('flex max-w-[85%] flex-col items-end', showStickyInlineHoverRow ? 'pb-11' : undefined, chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
+                                {/* The hover action row hangs below the bubble (absolute,
+                                    `top-full` + `pt-5`, 26px tall), so the user row reserves
+                                    the whole 44px gap to the assistant block here. The list's
+                                    row containers paint-contain their content: anything that
+                                    pokes past the row is cut, which showed as a half-visible
+                                    action row while the reply had not started yet.
+                                    peek: the action row is suppressed, so reserve only its
+                                    gap to the next message, OUTSIDE the bubble background. */}
+                                <div className={cn('flex max-w-[85%] flex-col items-end', showStickyInlineHoverRow ? 'pb-11' : undefined, chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
                                     <div
                                         style={{
                                             backgroundColor: 'var(--chat-user-message-bg)',
@@ -443,8 +432,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             onCopyMessage={handleCopyMessage}
                                             onCopyLink={handleCopyLink}
                                             copiedMessage={copiedMessage}
-                                           
-                                                showReasoningTraces={showReasoningTraces}
+                                            showReasoningTraces={showReasoningTraces}
                                             onRevert={handleRevert}
                                             onFork={handleFork}
                                             contextPinned={isPinnedIntoContext}
@@ -478,8 +466,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             onCopyMessage={handleCopyMessage}
                                             onCopyLink={handleCopyLink}
                                             copiedMessage={copiedMessage}
-                                           
-                                        showReasoningTraces={showReasoningTraces}
+                                            showReasoningTraces={showReasoningTraces}
                                             onRevert={handleRevert}
                                             onFork={handleFork}
                                             contextPinned={isPinnedIntoContext}
@@ -527,7 +514,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 footerModelName={headerModelName}
                                 isDarkTheme={isDarkTheme}
                                 extraActions={guestMessageActions}
-                               
                             />
                         </div>
                     )}
