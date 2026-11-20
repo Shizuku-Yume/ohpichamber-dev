@@ -14,6 +14,12 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 
 ## Which file controls what
 
+- `SecretRequestCard.tsx`
+  - Native `{ action, input }` arguments are read from the canonical tool part by `pageRenderView`; upstream flat and `parameters` forms remain supported.
+  - Renders the memory-only `secret.run` form from canonical calls in `ShownToolCard`. The Host field lookup selects inputs and remembered-field labels; lookup failures remain visible and retry. Only submitted field values and remembered field names go to the Host answer route, never to chat or browser storage.
+  - Completion, decline, expiry, unmount, and runtime switching remove the inputs. Transport errors use generic localized messages, never echoed response bodies. File-mode `secret.request` is refusal-only and cannot collect a value.
+  - Shared web/PWA, Electron, hosted mobile, and Capacitor surfaces use authenticated `runtimeFetch` against their connected Host; mobile does not execute commands locally.
+
 - `ProgressiveGroup.tsx`
   - Renders grouped Activity rows and grouped static tools.
   - Contains `StaticToolRow`.

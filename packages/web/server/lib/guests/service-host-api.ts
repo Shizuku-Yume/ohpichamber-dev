@@ -8,14 +8,19 @@ import type { GuestCapability } from 'ohpichamber-sdk';
 import type { z } from 'zod';
 import type { GuestRecord } from './contracts.js';
 import type { HostCallbackRoute } from './host-callback.js';
-import type { createOpenChamberControlService } from '../openchamber-control/service.js';
 import type { SessionControlExecute, SessionReadAction } from '../openchamber-control/contracts.js';
 import type { createGuestInstructions } from './instructions.js';
 import type { createGuestMarks } from './marks.js';
 import { hasErrorMessage } from './input-guards.js';
 
-export type ServiceHostControl = Pick<ReturnType<typeof createOpenChamberControlService>,
-  'resolveSessionDirectory' | 'stopSession' | 'answerPermission' | 'answerForm' | 'dismissOpenForms'> & { execute: SessionControlExecute };
+export interface ServiceHostControl {
+  execute: SessionControlExecute;
+  resolveSessionDirectory: (sessionId: string) => Promise<string | null>;
+  stopSession: (sessionId: string) => Promise<boolean>;
+  answerPermission: (input: Extract<ServiceHostCall, { method: 'sessions.answerPermission' }>['input']) => Promise<void>;
+  answerForm: (input: Extract<ServiceHostCall, { method: 'sessions.answerForm' }>['input']) => Promise<void>;
+  dismissOpenForms: (sessionId: string) => Promise<void>;
+}
 
 export interface ServiceHostApiOptions {
   listGuests: () => Promise<GuestRecord[]>;
@@ -43,7 +48,7 @@ const ok = <Result>(result: Result) => ({ status: 200, body: { result } });
 const controlFailure = (cause: unknown) => {
   const status = hasIntegerStatusCode(cause) ? cause.statusCode : 500;
   const message = hasErrorMessage(cause) ? cause.message : undefined;
-  if (status >= 500) console.warn('[service-host] a session call failed:', message ?? cause);
+  if (status >= 500) console.warn('[service-host] a session call failed');
   return fail(status, 'SESSION_FAILED', status >= 500 ? 'OhPiChamber could not reach the session.' : String(message ?? 'The call was refused.'));
 };
 
@@ -111,8 +116,8 @@ export const createServiceHostApi = ({ listGuests, control, instructions, readSe
         const refused = needs(guest, 'sessionControl');
         if (refused) return refused;
         if (!mayPrompt(guest.id)) return tooManyPrompts();
-        const result = await control.execute('session.create', input, undefined, { startedByExtension: guest.id });
-        return ok({ sessionId: result.sessionId, directory: result.directory ?? null });
+        const result = await control.execute('session.create', input);
+        return ok({ sessionId: result.sessionId, directory: await control.resolveSessionDirectory(result.sessionId) });
       }
       case 'sessions.send': {
         const refused = needs(guest, 'sessionControl');
@@ -152,18 +157,13 @@ export const createServiceHostApi = ({ listGuests, control, instructions, readSe
       case 'sessions.answerPermission': {
         const refused = mayAnswer(guest);
         if (refused) return refused;
-        await control.answerPermission({
-          sessionID: input.sessionId,
-          requestID: input.requestId,
-          decision: input.decision === 'allow' ? 'once' : 'reject',
-          message: input.decision === 'deny' ? input.message : undefined,
-        });
+        await control.answerPermission(input);
         return ok({ answered: true });
       }
       case 'sessions.answerForm': {
         const refused = mayAnswer(guest);
         if (refused) return refused;
-        await control.answerForm({ sessionID: input.sessionId, formID: input.formId, answer: input.values, message: input.message });
+        await control.answerForm(input);
         return ok({ answered: true });
       }
       case 'instructions.set': {

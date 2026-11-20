@@ -4,6 +4,78 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+PR #68 integration merges `origin/devin/upstream-sync-1795118808` at `a7aee9947`
+without replacing either feature set. The only conflict was this progress
+record; both the secret/Guest evidence and upstream test-repair entry remain.
+Contract/service/SDK builds pass on the combined tree. Nine focused web suites
+pass 169 tests; supervisor/tool/interaction suites pass 36 and both actual SDK
+secret approval cases pass. Nine isolated UI suites pass 100 tests, including
+the incoming mobile rename, PR target and attachment repairs. Server lint and
+server/service/UI type checks pass. Evidence: `/home/ubuntu/secret-merge-checks/`.
+These are focused tests, not a full-suite or visual verification claim.
+
+PR #68 review: secret-run card parsing now accepts the native `{ action, input }`
+envelope preserved by worker projection and the canonical tool join, alongside
+upstream forms. Canonical-join regressions include malformed native arguments.
+Parser and card suites pass 15 tests; full UI lint exits 0 (unchanged-file hook
+warnings), and UI type-check passes 4,234 files across two projects. Evidence:
+`/home/ubuntu/secret-review-checks/`. Visual verification remains unclaimed.
+
+The same review exposed a two-minute IPC deadline covering both secret entry
+and command execution despite the Host's five-minute command budget. Both IPC
+ends now share a private-protocol deadline policy: only `secret.run` waits for
+completion or cancellation without a transport timer. Host execution retains
+its bounded command timeout; abort, disconnect and shutdown still cancel the
+action. Other actions retain two minutes and authorization retains five
+seconds. Supervisor/tool suites pass 16 tests; four focused Host/control suites
+pass 57 tests, including three minutes of real secret collection followed by
+five minutes of simulated execution, cancellation and unchanged ordinary-action
+deadlines. Contract/service/SDK builds, server/service lint and both type checks
+pass. Evidence: `/home/ubuntu/secret-review-checks/`. The long-duration tests use
+fake clocks and the Host integration injects the command runner; this is not a
+real-provider or elapsed-eight-minute runtime claim.
+
+Secret-tool Step A restores v2.7.3 memory-only command execution behind the
+authenticated worker Host action and exact-command Canonical Bash receipt.
+Public control cannot authorize it; file-mode requests refuse. Secret answers
+stay in Host memory and child environments, with ten-minute session leases and
+redacted results. Focused Host/Guest tests (91), worker tool/interaction tests
+(30), and native SDK approval/persistence tests pass, including cancellation of
+a child process tree and absence of submitted values in SDK session files,
+Canonical projections, provider requests and wait events. Contract/service/SDK
+builds, server/service lint and both server/service type checks pass. The
+environment required a frozen-lockfile dependency repair before these checks.
+Guest Step B now mounts the private service Host callback route from runtime
+composition and unregisters it after Guest shutdown. The Guest owner translates
+abort and approval/question replies through Canonical operations using current
+snapshot identities and CAS, without restoring OpenCode runtime methods. Private
+settings use auth-store, instructions retain their file owner, marks reuse the
+singleton, and configuration notes invalidate the catalog. Service events now
+reach the existing Guest frame subscriber through the validated UI broadcast
+parser. Real callback-listener HTTP tests use a Host-spawned service's bearer
+and exercise every callback, empty/stale/error cases, revocation, disposal and
+private-value log exclusion. Seven focused web suites pass 93 tests; the UI event
+suite passes 29 tests. Contract/service/SDK builds, server lint and server type
+check pass. The UI event suite emits filesystem/identity request warnings from
+its existing boot-side-effect tests and partial HTTP fixtures; it has no failed
+tests. Evidence: `/home/ubuntu/secret-step-b-checks/`.
+
+Secret-tool Step C restores the upstream multi-field command card on canonical
+tool views. Authenticated, uncached Host field lookup selects requested inputs
+and remembered-field labels; failures are visible and retry. Answers carry only
+session/call identity, requested values and remembered field names, or decline.
+Inputs stay in component memory and disappear after answer, expiry, unmount or
+runtime switching. Errors never display response bodies; file-mode requests
+show only a localized refusal. All 15 locales include refusal and recovery copy.
+Shared web/PWA, Electron, hosted mobile and Capacitor use their connected Host;
+mobile does not execute commands locally. Five focused UI suites pass 48 tests
+(card interactions, canonical parsing, Host transport, locale completeness and
+existing runtime-fetch coverage). Contract/service/SDK builds pass. Full UI
+lint exits 0 with 97 hook-dependency warnings in unchanged files; no changed-file
+diagnostics. Full UI type-check passes 4,234 files across two projects. Evidence:
+`/home/ubuntu/secret-step-c-checks/`. No visual verification or real-provider run
+is claimed.
+
 2026-11-21 upstream-sync test repair: mobile Changes now keeps rename paths in
 comparison rows, shows the destination basename in detail, forwards the previous
 path for working-tree reads and renders unchanged-rename summaries. Retired

@@ -50,6 +50,21 @@ other.
 
 ## Invariants
 
+- `openchamber_secret` carries the calling session and tool call id over the
+  authenticated worker channel. Before `secret.run`, the worker asks the
+  Canonical Bash approval owner for the exact command and reauthorizes its
+  one-shot receipt against Host policy. Public control calls cannot authorize
+  secret execution. The Host runs directly in the captured workspace, kills
+  the process tree on cancellation or timeout, and redacts secret values from
+  stdout, stderr and execution errors before returning them.
+- Secret card values travel only through `POST /api/openchamber/secret/answer`
+  into Host memory and the approved child's environment. The fields endpoint
+  returns only environment names for the exact waiting session/call. Optional
+  ten-minute leases are session-scoped and memory-only; `secret.forget` clears
+  them. `secret.request` file mode always refuses: no secret files are written.
+  Tool arguments, results, wait events and application persistence contain no
+  submitted values. An explicitly approved command itself is not a sandbox.
+
 - `terminal.list` and `terminal.read` use the Host terminal owner on all four
   retained client surfaces. They require the explicit, default-off terminal
   reading preference. Agent calls cannot select another workspace, and a read

@@ -1,10 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import express from 'express';
+import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SessionJournal } from '../../../../agent-service/src/projection/journal.ts';
 import { createOpenChamberControlService } from './service.js';
+import { registerOpenChamberControlRoutes } from './routes.js';
 import { createPrWatchRuntime, parsePullRequestUrl } from '../pr-watch/runtime.js';
 import { trackedItemKey } from '../tracked-items/items.js';
 import { createUploadStore } from '../browser-control/uploads.js';
@@ -90,6 +93,53 @@ const createHarness = (settings = {
 };
 
 describe('OhPiChamber control service canonical consumers', () => {
+  it('refuses public secret authority and runs only the scoped worker call with private card answers', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'secret-control-'));
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace, cwd: directory };
+    const waiting = Promise.withResolvers();
+    const changes = [];
+    const { control, requests } = createHarness(undefined, {
+      resolveSessionScope: async () => scope,
+      onPageWaitChange: change => { changes.push(change); if (change.type === 'waiting') waiting.resolve(); },
+    });
+    const app = express();
+    registerOpenChamberControlRoutes(app, { controlService: control });
+    const input = {
+      program: process.execPath, args: ['-e', 'console.log(process.env.TOKEN)'],
+      reason: 'Sign in', inputs: [{ env: 'TOKEN', label: 'Token' }],
+      authorized: true, sessionId: 'session-1', callId: 'call-secret',
+    };
+    try {
+      await request(app).post('/api/openchamber/control').send({
+        action: 'secret.run', input, authorized: true,
+        contextSessionId: 'session-1', contextCallId: 'call-secret',
+      }).expect(403);
+      await expect(control.execute('secret.run', input, directory, { authorized: true })).rejects.toMatchObject({ statusCode: 403 });
+      expect(changes).toEqual([]);
+      const invocation = { toolName: 'openchamber_secret', action: 'secret.run', input, sessionId: 'session-1', toolCallId: 'call-secret' };
+      await expect(control.invokeHostAction({ ...scope, workspaceId: 'other' }, invocation)).resolves.toMatchObject({ ok: false, status: 403 });
+      const pending = control.invokeHostAction(scope, invocation);
+      await waiting.promise;
+      const fields = await request(app).get('/api/openchamber/secret/fields').query({ sessionId: 'session-1', callId: 'call-secret' }).expect(200);
+      expect(fields.body).toEqual({ fields: ['TOKEN'], reused: [] });
+      expect(fields.headers['cache-control']).toBe('no-store');
+      const malformed = await request(app).post('/api/openchamber/secret/answer').set('Content-Type', 'application/json').send('{"values":"private-value"').expect(400);
+      expect(JSON.stringify(malformed.body)).not.toContain('private-value');
+      await request(app).post('/api/openchamber/secret/answer').send({ sessionId: 'other', callId: 'call-secret', values: { TOKEN: 'private-value' } }).expect(404);
+      const answer = await request(app).post('/api/openchamber/secret/answer').send({ sessionId: 'session-1', callId: 'call-secret', values: { TOKEN: 'private-value' }, remember: ['TOKEN'] }).expect(200);
+      const result = await pending;
+      expect(result).toMatchObject({ ok: true, value: { stdout: '[secret:TOKEN]\n', remembered: ['TOKEN'] } });
+      expect(JSON.stringify([result, answer.body, changes])).not.toContain('private-value');
+      expect(await fs.readdir(directory)).toEqual([]);
+      expect(requests).toEqual([]);
+      await request(app).get('/api/openchamber/secret/fields').query({ sessionId: 'session-1', callId: 'call-secret' }).expect(404);
+      await expect(control.invokeHostAction(scope, { ...invocation, action: 'secret.forget', input: {} })).resolves.toMatchObject({ ok: true, value: { forgotten: 1 } });
+      await request(app).post('/api/openchamber/control').send({ action: 'secret.request', input: { label: 'Token', reason: 'Sign in' } }).expect(403);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('reads opted-in terminal output only within the captured workspace and hides Host directory fields', async () => {
     const runtime = {
       listTerminals: vi.fn(() => [{ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, status: 'running' }]),

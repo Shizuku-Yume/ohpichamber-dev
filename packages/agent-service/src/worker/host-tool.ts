@@ -11,6 +11,7 @@ export type HostToolName =
   | 'openchamber_knowledge'
   | 'notify'
   | 'openchamber_render'
+  | 'openchamber_secret'
   | 'openchamber_workflow';
 
 export const HOST_TOOL_NAMES: readonly HostToolName[] = [
@@ -19,6 +20,7 @@ export const HOST_TOOL_NAMES: readonly HostToolName[] = [
   'openchamber_knowledge',
   'notify',
   'openchamber_render',
+  'openchamber_secret',
   'openchamber_workflow',
 ] as const;
 
@@ -28,6 +30,7 @@ const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Ob
   openchamber_knowledge: true,
   notify: false,
   openchamber_render: true,
+  openchamber_secret: true,
   openchamber_workflow: true,
 });
 const HostToolEnablementInputSchema = z.record(z.string(), z.boolean().optional().catch(undefined)).optional();
@@ -48,6 +51,7 @@ export function normalizeHostToolEnablement(input?: HostToolEnablementInput) {
   if (record.agentKnowledgeToolEnabled !== undefined) result.openchamber_knowledge = record.agentKnowledgeToolEnabled;
   if (record.agentNotifyToolEnabled !== undefined) result.notify = record.agentNotifyToolEnabled;
   if (record.agentRenderToolEnabled !== undefined) result.openchamber_render = record.agentRenderToolEnabled;
+  if (record.agentSecretToolEnabled !== undefined) result.openchamber_secret = record.agentSecretToolEnabled;
   if (record.agentWorkflowToolEnabled !== undefined) result.openchamber_workflow = record.agentWorkflowToolEnabled;
   return result;
 }
@@ -68,6 +72,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
     + 'knowledge.show opens a plan for the user. knowledge.delete requires kind and id.',
   web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
   notify: 'Invoke notify.send for an authorized OhPiChamber notification.',
+  openchamber_secret: 'Run one approved command with secrets supplied privately by the user. secret.run requires program, args (optional), reason, and inputs: [{env,label,placeholder?}]. Values enter only the child environment, never tool arguments; stdout and stderr are redacted. Remembered values last ten minutes in memory; secret.forget clears this session. secret.request file mode is disabled because secrets must not be saved to disk.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
     + 'With answerLater, for a decision the rest of the task does not wait on, the call returns at once and the page stays open, across restarts, until the user answers or declines; the answer arrives later as a message in this session. '
@@ -82,7 +87,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
  * caller reads.
  */
 function envelopeFor(toolName: HostActionRequest['toolName'], action: string, value: JsonValue): JsonObject | null {
-  if (toolName === 'openchamber_render') {
+  if (toolName === 'openchamber_render' || toolName === 'openchamber_secret') {
     const data = JsonObjectSchema.safeParse(value);
     if (!data.success) return null;
     const answer = JsonObjectSchema.safeParse(data.data.answer);
@@ -119,10 +124,12 @@ export function createHostToolController({
   scope,
   invoke,
   initialEnablement,
+  approveSecretRun,
 }: {
   scope: HostToolScope;
   invoke: (request: HostToolInvocation) => Promise<JsonValue>;
   initialEnablement?: Partial<Record<HostToolName, boolean>> | ((tool: HostToolName) => boolean);
+  approveSecretRun?: (toolCallId: string, command: JsonObject, signal: AbortSignal) => Promise<void>;
 }): HostToolController {
   const captured: HostToolScope = { ...scope };
   const enablement: Record<HostToolName, boolean> = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
@@ -148,7 +155,7 @@ export function createHostToolController({
       label: toolName,
       description: HOST_TOOL_DESCRIPTIONS[toolName],
       parameters,
-      approval: 'exec',
+      approval: toolName === 'openchamber_secret' ? { tier: 'exec', policy: 'allow', reason: 'Secret commands require a separate exact-command Bash receipt at execution' } : 'exec',
       loadMode: 'essential',
       async execute(toolCallId, params, signal) {
         const cancellation = signal ?? new AbortController().signal;
@@ -170,8 +177,18 @@ export function createHostToolController({
           toolName,
           action: action.data,
           input: toolInput.data,
-          ...(toolName === 'openchamber_render' && toolCallId ? { toolCallId } : {}),
+          ...((toolName === 'openchamber_render' || toolName === 'openchamber_secret') && toolCallId ? { toolCallId } : {}),
         });
+        if (parsed.toolName === 'openchamber_secret' && parsed.action === 'secret.run') {
+          const command = z.object({
+            program: z.string().trim().min(1).refine(value => !value.includes('\0')),
+            args: z.array(z.string().refine(value => !value.includes('\0'))).max(64).default([]),
+          }).parse(parsed.input);
+          if (!approveSecretRun) throw new Error('Secret command approval is unavailable');
+          const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+          await approveSecretRun(toolCallId, { command: [command.program, ...command.args].map(quote).join(' ') }, cancellation);
+          cancellation.throwIfAborted();
+        }
         const value = await invoke({ ...captured, request: parsed, signal: cancellation });
         cancellation.throwIfAborted();
         const envelope = envelopeFor(toolName, parsed.action, value);

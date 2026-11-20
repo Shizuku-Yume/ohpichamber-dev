@@ -58,7 +58,23 @@ export const registerOpenChamberControlRoutes = (app, { controlService, laterPag
 
   // The user saved or declined a secret an agent asked for (secret.request).
   // The body carries the secret: it is never logged or echoed back.
-  app.post('/api/openchamber/secret/answer', express.json({ limit: '64kb' }), async (req, res) => {
+  app.get('/api/openchamber/secret/fields', (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      return res.json(controlService.secretFields(req.query ?? {}));
+    } catch (error) {
+      const controlError = asControlError(error, 'Could not read the secret card');
+      return res.status(controlError.statusCode).json({ error: controlError.message });
+    }
+  });
+
+  const parseSecretAnswer = express.json({ limit: '512kb' });
+  app.post('/api/openchamber/secret/answer', (req, res, next) => {
+    parseSecretAnswer(req, res, (error) => {
+      if (error) return res.status(400).json({ error: 'The secret answer must be valid JSON within 512kb' });
+      return next();
+    });
+  }, async (req, res) => {
     try {
       return res.json(await controlService.answerSecret(req.body ?? {}));
     } catch (error) {

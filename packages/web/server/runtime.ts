@@ -186,6 +186,7 @@ import { createExtensionWaitsRuntime } from './lib/extension-waits/runtime.js';
 import { createClientPushAccess } from './lib/notifications/client-push-access.js';
 import { proxyGuestServiceRequest } from './lib/guests/service.js';
 import { setHostCallbackRoute } from './lib/guests/host-callback.js';
+import { registerGuestServiceHost } from './lib/guests/service-host.js';
 // Background CLI launches enter here in a fresh process, without CLI defaults.
 applyConnectAttemptTimeout();
 applySystemCertificates();
@@ -602,6 +603,7 @@ const resolveHostTools = async () => {
   openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
   notify: settings?.agentNotifyToolEnabled === true,
   openchamber_render: settings?.agentRenderToolEnabled !== false,
+  openchamber_secret: settings?.agentSecretToolEnabled !== false,
   openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
  };
 };
@@ -1586,6 +1588,12 @@ const openChamberControlService = createOpenChamberControlService({
   updateMetadata: updateSessionMetadataWith,
   createError: (message, status) => new OpenChamberControlError(message, status),
  }),
+ isSecretToolEnabled: async () => (await readSettingsFromDiskMigrated())?.agentSecretToolEnabled !== false,
+ hasUnreadChat: async (sessionId) => {
+  const scope = await hostAgentRuntime.resolveSessionScope(sessionId);
+  const queue = await promptQueueStore.getState({ sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId });
+  return queue.items.length > 0;
+ },
  dispatchResults: dispatchResultsRuntime,
  prWatch: prWatchRuntime,
  extensionWaits: extensionWaitsRuntime,
@@ -1593,6 +1601,15 @@ const openChamberControlService = createOpenChamberControlService({
  sharePages: sharePagesRuntime,
  archiveStore: openChamberSessionService.archiveStore,
  workflowRuntime: workflowsModule.workflowRuntime,
+});
+
+const guestServiceHost = registerGuestServiceHost({
+ dataDir: OPENCHAMBER_DATA_DIR,
+ listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ control: openChamberControlService,
+ sessions: openChamberSessionService,
+ request: (pathname, init) => hostAgentRuntime.service.request(pathname, init),
+ broadcast: broadcastOpenChamberUiEvent,
 });
 
 const ensureGlobalWatcherStarted = async () => {
@@ -1658,7 +1675,9 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  scheduledTasksRuntime,
  hostSessionState,
  beginGuestServiceShutdown,
- stopAllGuestServices,
+ stopAllGuestServices: async () => {
+  try { await stopAllGuestServices(); } finally { guestServiceHost.dispose(); }
+ },
  getGuestSurfaceRuntime: () => guestSurfaceRuntime,
  getRealtimeProxyRuntime: () => realtimeProxyRuntime,
  getDictationRuntime: () => dictationRuntime,
@@ -2222,6 +2241,7 @@ async function main(options = {}) {
      openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
      notify: settings?.agentNotifyToolEnabled === true,
      openchamber_render: settings?.agentRenderToolEnabled !== false,
+     openchamber_secret: settings?.agentSecretToolEnabled !== false,
      openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
     };
     await hostAgentRuntime.service.request('/internal/workers/host-tools', {

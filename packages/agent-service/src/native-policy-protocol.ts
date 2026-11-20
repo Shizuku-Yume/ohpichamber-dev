@@ -79,6 +79,7 @@ const HostToolActions = {
   openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],
   openchamber_render: ['render.page'],
+  openchamber_secret: ['secret.run', 'secret.forget', 'secret.request'],
   openchamber_workflow: ['workflow.check', 'workflow.run', 'workflow.status', 'workflow.result', 'workflow.stop', 'workflow.resume', 'workflow.save', 'workflow.list', 'workflow.answer'],
 } as const;
 export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
@@ -89,6 +90,7 @@ export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   // A page that waits for the user's answer is resolved by its own call, so
   // the call's identity travels with the request.
   z.strictObject({ toolName: z.literal('openchamber_render'), action: z.enum(HostToolActions.openchamber_render), input: JsonObjectSchema, sessionId: EntityIdSchema, toolCallId: EntityIdSchema.optional() }),
+  z.strictObject({ toolName: z.literal('openchamber_secret'), action: z.enum(HostToolActions.openchamber_secret), input: JsonObjectSchema, sessionId: EntityIdSchema, toolCallId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('openchamber_workflow'), action: z.enum(HostToolActions.openchamber_workflow), input: JsonObjectSchema, sessionId: EntityIdSchema }),
 ]);
 export type HostActionRequest = z.infer<typeof HostActionRequestSchema>;
