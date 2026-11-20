@@ -167,6 +167,7 @@ export class AgentService {
       workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       capacityPolicy: options.workerCapacityPolicy,
       isSessionIdle: rootSessionId => this.sessions?.isIdleForEviction(rootSessionId) ?? false,
+      sessionOpening: rootSessionId => this.sessions?.openingPromise(rootSessionId),
       isSessionKeptWarm: rootSessionId => this.sessionWarming?.isKeptWarm(rootSessionId) ?? false,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {

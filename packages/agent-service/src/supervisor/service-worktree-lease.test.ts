@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import type { WorkerBootstrap } from '../protocol.ts';
+import { SessionRegistry } from '../sessions/registry.ts';
 import { AgentService } from './service.ts';
 import { WORKER_CAPACITY_POLICY, WorkerOperationError, WorkerRegistry, type WorkerCapacityPolicy, type WorkerRegistryOptions } from './workers.ts';
 
@@ -169,6 +170,56 @@ test('an active run refuses the lease with RUN_ACTIVE, and the idle worker stops
     await registry.releaseWorktreeLease('lease-run');
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
+  }
+}, 30_000);
+
+test('a completed run and a newly opening draft do not prevent a worktree lease', async () => {
+  const tree = await workspace('opening-session');
+  const opening = Promise.withResolvers<void>();
+  const observedOpening = Promise.withResolvers<void>();
+  let draftIdle = false;
+  const registry = newRegistry({
+    callbacks: {
+      onOpened: (...args) => sessions.onOpened(...args),
+      onEvents: (...args) => sessions.onEvents(...args),
+      onExit: (...args) => sessions.onExit(...args),
+    },
+    isSessionIdle: id => id === 'draft-session' ? draftIdle : sessions.isIdleForEviction(id),
+    sessionOpening: id => {
+      if (id !== 'draft-session') return;
+      observedOpening.resolve();
+      return opening.promise;
+    },
+  });
+  const sessions = new SessionRegistry(tree.stateDirectory, registry);
+  try {
+    await sessions.initialize();
+    await sessions.open({ ...sessionBootstrap('root-session', tree), displayPath: 'workspace' });
+    const worker = registry.info('root-session');
+    if (!worker) throw new Error('Expected a running worker');
+    sessions.onEvents('root-session', worker.workerGeneration, [
+      { timestamp: 1, event: { type: 'run.started', runId: 'run-1', origin: 'host', createdAt: 1 } },
+    ]);
+    expect(sessions.isIdleForEviction('root-session')).toBe(false);
+    sessions.onEvents('root-session', worker.workerGeneration, [
+      { timestamp: 2, event: { type: 'run.completed', runId: 'run-1', finishedAt: 2 } },
+    ]);
+    expect(sessions.isIdleForEviction('root-session')).toBe(true);
+
+    await registry.start(sessionBootstrap('draft-session', tree));
+    const acquisition = registry.acquireWorktreeLease('lease-opening', tree.cwd);
+    await Promise.race([observedOpening.promise, acquisition]);
+    expect(registry.info('draft-session')?.state).toBe('ready');
+
+    draftIdle = true;
+    opening.resolve();
+    expect(await acquisition).toEqual({ leaseId: 'lease-opening', released: ['root-session', 'draft-session'] });
+    expect(registry.info('root-session')).toBeUndefined();
+    expect(registry.info('draft-session')).toBeUndefined();
+    await registry.releaseWorktreeLease('lease-opening');
+  } finally {
+    opening.resolve();
+    try { await sessions.close(); } finally { await tree.remove(); }
   }
 }, 30_000);
 
