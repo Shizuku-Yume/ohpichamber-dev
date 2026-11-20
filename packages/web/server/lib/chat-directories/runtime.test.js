@@ -4,15 +4,23 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createChatDirectoryCleanupRuntime } from './runtime.js';
+import { runtimeSession, snapshot, event, scope } from '../event-stream/canonical-test-fixtures.js';
 
 const temporaryRoots = [];
 const runtimes = [];
-const page = (data, next) => ({ data, cursor: next === undefined ? {} : { next } });
-const session = (id, directory, fields = {}) => ({ id, location: { directory }, ...fields });
-const created = (id, directory) => ({ type: 'session.created', properties: { info: { id, directory } } });
-const forked = (sessionID, parentID) => ({ type: 'session.forked', properties: { sessionID, parentID } });
-const moved = (id, directory) => ({ type: 'session.updated', properties: { info: { id, directory } } });
-const deleted = (sessionID) => ({ type: 'session.deleted', properties: { sessionID } });
+const locations = new Map();
+const page = (items, errors = {}) => ({ items, errors });
+const session = (sessionId, directory, fields = {}) => {
+  locations.set(sessionId, { ...scope, rootSessionId: sessionId, cwd: directory });
+  return { ...runtimeSession({ sessionId, rootSessionId: sessionId, ...fields }), metadata: null, metadataRevision: '0', archiveRevision: '0' };
+};
+const created = (sessionId, directory) => {
+  session(sessionId, directory);
+  return [snapshot([], [], { sessionId, rootSessionId: sessionId }), locations.get(sessionId)];
+};
+const forked = (sessionId) => created(sessionId, locations.get(sessionId).cwd);
+const moved = created;
+const deleted = (sessionId, deletedSessionIds = [sessionId]) => event(1, { type: 'session.deleted', sessionId, deletedSessionIds });
 const quarantined = async (chats) => (await fs.readdir(chats)).filter((name) => name.startsWith('.reclaiming-'));
 const exists = async (directory) => fs.lstat(directory).then(() => true, (error) => {
   if (error.code === 'ENOENT') return false;
@@ -30,38 +38,30 @@ const fixture = async () => {
 };
 
 const makeRuntime = ({ roots, sessions = [] }) => {
-  const state = { sessions, owner: Symbol('managed OpenCode') };
-  const list = vi.fn(async (input) => {
-    // Match the SDK filters so accidentally excluding archives or subagents
-    // loses a real reference in the filesystem assertions below.
-    const records = state.sessions.filter((record) => (
-      (input.archived === undefined || Boolean(record.time?.archived) === input.archived)
-      && (input.parentID === undefined || (record.parentID ?? null) === input.parentID)
-    ));
-    const start = input.cursor ? Number(input.cursor) : 0;
-    const end = start + input.limit;
-    const data = records.slice(start, end);
-    return page(data, data.length ? String(end) : undefined);
-  });
+  const state = { sessions, owner: Symbol('Native Host') };
+  const list = vi.fn(async () => page(state.sessions));
   const logger = { warn: vi.fn() };
-  const get = vi.fn(async ({ sessionID }) => {
-    const record = state.sessions.find((session) => session.id === sessionID);
-    if (!record) throw Object.assign(new Error('Session not found'), { _tag: 'SessionNotFoundError' });
-    return record;
+  const open = vi.fn(async (sessionId) => {
+    const record = state.sessions.find((session) => session.sessionId === sessionId);
+    if (!record) throw Object.assign(new Error('Session not found'), { code: 'SESSION_NOT_FOUND' });
+    return snapshot([], [], { sessionId, rootSessionId: sessionId });
   });
+  const resolveSessionScope = vi.fn(async (sessionId) => locations.get(sessionId));
   const runtime = createChatDirectoryCleanupRuntime({
     roots,
-    createClient: () => ({ session: { list, get } }),
+    sessionService: { list, open },
+    resolveSessionScope,
     getOwner: () => state.owner,
     logger,
   });
   runtimes.push(runtime);
-  return { runtime, state, list, get, logger };
+  return { runtime, state, list, open, resolveSessionScope, logger };
 };
 
 afterEach(async () => {
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));
   await Promise.all(temporaryRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
+  locations.clear();
 });
 
 describe('managed chat directory cleanup', () => {
@@ -71,9 +71,9 @@ describe('managed chat directory cleanup', () => {
     const project = path.join(root, 'project');
     await fs.mkdir(childDirectory);
     await fs.mkdir(project);
-    const fork = session('fork', directory, { time: { archived: 1 } });
+    const fork = session('fork', directory, { archivedAt: 1 });
     const parent = session('project-parent', project);
-    const child = session('subagent', childDirectory, { parentID: parent.id });
+    const child = session('subagent', childDirectory, { parentSessionId: parent.sessionId });
     const { runtime, state } = makeRuntime({
       roots: [chats], sessions: [session('root', directory), fork, parent],
     });
@@ -97,8 +97,8 @@ describe('managed chat directory cleanup', () => {
     const { runtime, list } = makeRuntime({ roots: [chats] });
     await runtime.onConnected();
     list.mockClear();
-    runtime.processPayload(created('root', directory));
-    runtime.processPayload(created('child', directory));
+    runtime.processSnapshot(...created('root', directory));
+    runtime.processSnapshot(...created('child', directory));
     const rootDeletion = runtime.processPayload(deleted('root'));
     const childDeletion = runtime.processPayload(deleted('child'));
     await Promise.all([rootDeletion, childDeletion]);
@@ -116,73 +116,85 @@ describe('managed chat directory cleanup', () => {
     const { runtime, state } = makeRuntime({ roots: [chats], sessions: [source] });
     await runtime.onConnected();
     state.sessions = [source, fork];
-    await runtime.processPayload(forked('fork', 'source'));
+    await runtime.processSnapshot(...forked('fork'));
     state.sessions = [session('source', project), fork];
-    runtime.processPayload(moved('source', project));
+    runtime.processSnapshot(...moved('source', project));
     state.sessions = [session('source', project)];
     await runtime.processPayload(deleted('fork'));
     expect(await exists(directory)).toBe(false);
     expect(await exists(project)).toBe(true);
   });
 
-  it('waits for fork directory evidence when deletion arrives during its record read', async () => {
+  it('does not learn a directory from a snapshot with a mismatched Host scope', async () => {
     const { root, chats, directory } = await fixture();
     const project = path.join(root, 'project');
     await fs.mkdir(project);
     const source = session('source', project);
-    const fork = session('fork', directory);
-    const { runtime, state, get } = makeRuntime({ roots: [chats], sessions: [source] });
+    const { runtime } = makeRuntime({ roots: [chats], sessions: [source] });
     await runtime.onConnected();
-    state.sessions = [source, fork];
-    const read = Promise.withResolvers();
-    const started = Promise.withResolvers();
-    get.mockImplementationOnce(async () => { started.resolve(); return read.promise; });
-    const learning = runtime.processPayload(forked('fork', 'source'));
-    await started.promise;
-    state.sessions = [source];
-    const cleanup = runtime.processPayload(deleted('fork'));
-    read.resolve(fork);
-    await Promise.all([learning, cleanup]);
-    expect(await exists(directory)).toBe(false);
+    const [record, location] = created('fork', directory);
+    runtime.processSnapshot(record, { ...location, workspaceId: 'another-workspace' });
+    await runtime.processPayload(deleted('fork'));
+    expect(await exists(directory)).toBe(true);
     expect(await exists(project)).toBe(true);
   });
 
-  it('uses a newer move when an older fork directory lookup completes', async () => {
+  it('does not learn a directory from a malformed snapshot', async () => {
+    const { chats, directory, screenshot } = await fixture();
+    const { runtime } = makeRuntime({ roots: [chats] });
+    await runtime.onConnected();
+    const [record, location] = created('root', directory);
+    runtime.processSnapshot({ ...record, session: null }, location);
+    await runtime.processPayload(deleted('root'));
+    expect(await exists(screenshot)).toBe(true);
+  });
+
+  it('handles a canonical cascading deletion in one event', async () => {
+    const { chats, directory } = await fixture();
+    const { runtime, state } = makeRuntime({ roots: [chats], sessions: [
+      session('root', directory), session('child', directory, { parentSessionId: 'root' }),
+    ] });
+    await runtime.onConnected();
+    state.sessions = [];
+    await runtime.processPayload(deleted('root', ['root', 'child']));
+    expect(await exists(directory)).toBe(false);
+  });
+
+  it('learns a full canonical session update only with its matching Host scope', async () => {
+    const { chats, directory } = await fixture();
+    const { runtime } = makeRuntime({ roots: [chats] });
+    await runtime.onConnected();
+    const [record, location] = created('root', directory);
+    runtime.processPayload(event(1, { type: 'session.updated', sessionId: 'root', session: record.session }), location);
+    await runtime.processPayload(deleted('root'));
+    expect(await exists(directory)).toBe(false);
+  });
+
+  it('uses the latest scoped snapshot after a session moves', async () => {
     const first = await fixture();
     const second = await fixture();
     const source = session('source', first.directory);
     const fork = session('fork', first.directory);
-    const { runtime, state, get } = makeRuntime({ roots: [first.chats, second.chats], sessions: [source] });
+    const { runtime, state } = makeRuntime({ roots: [first.chats, second.chats], sessions: [source] });
     await runtime.onConnected();
     state.sessions = [source, fork];
-    const read = Promise.withResolvers();
-    const started = Promise.withResolvers();
-    get.mockImplementationOnce(async () => { started.resolve(); return read.promise; });
-    const learning = runtime.processPayload(forked('fork', 'source'));
-    await started.promise;
+    runtime.processSnapshot(...forked('fork'));
     state.sessions = [source, session('fork', second.directory)];
-    runtime.processPayload(moved('fork', second.directory));
-    read.resolve(fork);
-    await learning;
+    runtime.processSnapshot(...moved('fork', second.directory));
     state.sessions = [source];
     await runtime.processPayload(deleted('fork'));
     expect(await exists(second.directory)).toBe(false);
     expect(await exists(first.screenshot)).toBe(true);
   });
 
-  it('follows a short page cursor before deciding that a folder is unused', async () => {
+  it('uses the complete native inventory including archived references', async () => {
     const { root, chats, directory, screenshot } = await fixture();
     const project = path.join(root, 'project');
     await fs.mkdir(project);
     const { runtime, state, list } = makeRuntime({ roots: [chats], sessions: [session('root', directory)] });
     await runtime.onConnected();
-    state.sessions = [session('archived-fork', directory, { time: { archived: 1 } })];
-    list.mockImplementation(async ({ cursor }) => {
-      if (cursor === undefined) return page([session('other', project)], 'next-page');
-      if (cursor === 'next-page') return page(state.sessions, state.sessions.length ? 'terminal-page' : undefined);
-      if (cursor === 'terminal-page') return page([]);
-      throw new Error('Unexpected session cursor');
-    });
+    state.sessions = [session('archived-fork', directory, { archivedAt: 1 })];
+    list.mockImplementation(async () => page([session('other', project), ...state.sessions]));
     await runtime.processPayload(deleted('root'));
     expect(await exists(screenshot)).toBe(true);
     state.sessions = [];
@@ -191,11 +203,11 @@ describe('managed chat directory cleanup', () => {
   });
 
   for (const [name, answer] of [
-    ['failed page', () => { throw new Error('OpenCode unavailable'); }],
-    ['malformed record', () => page([{ id: 'unresolved-session' }])],
-    ['missing cursor', () => ({ data: [] })],
-    ['empty continuation page', () => page([], 'another-page')],
-    ['repeated cursor', (call) => page([session(`session-${call}`, '/missing/project')], 'same-cursor')],
+    ['failed inventory', () => { throw new Error('Agent Service unavailable'); }],
+    ['malformed record', () => page([{ sessionId: 'unresolved-session' }])],
+    ['missing error state', () => ({ items: [] })],
+    ['partial workspace result', () => page([], { workspace: 'SERVICE_UNAVAILABLE' })],
+    ['invalid problem code', () => page([], { workspace: 'unexpected' })],
   ]) {
     it(`keeps files after a ${name} and retries on reconnect`, async () => {
       const { chats, directory, screenshot } = await fixture();
@@ -213,13 +225,12 @@ describe('managed chat directory cleanup', () => {
     });
   }
 
-  it('rejects a failed later page without using the earlier page as a complete inventory', async () => {
+  it('rejects partial native aggregation without using its successful records as a complete inventory', async () => {
     const { chats, directory, screenshot } = await fixture();
     const { runtime, state, list } = makeRuntime({ roots: [chats], sessions: [session('root', directory)] });
     await runtime.onConnected();
     state.sessions = [];
-    list.mockImplementationOnce(async () => page([session('other', '/missing/project')], 'unavailable-page'));
-    list.mockImplementationOnce(async () => { throw new Error('Later page failed'); });
+    list.mockImplementationOnce(async () => page([session('other', '/missing/project')], { 'unavailable-workspace': 'SERVICE_UNAVAILABLE' }));
     await runtime.processPayload(deleted('root'));
     expect(await exists(screenshot)).toBe(true);
     await runtime.onConnected();
@@ -261,7 +272,7 @@ describe('managed chat directory cleanup', () => {
     const alias = path.join(root, 'chat-alias');
     await fs.symlink(directory, alias, 'junction');
     const missingChild = path.join(alias, 'removed-project');
-    const archived = session('archived', missingChild, { time: { archived: 1 } });
+    const archived = session('archived', missingChild, { archivedAt: 1 });
     const { runtime, state } = makeRuntime({ roots: [chats], sessions: [session('root', directory), archived] });
     await runtime.onConnected();
     state.sessions = [archived];
@@ -320,7 +331,7 @@ describe('managed chat directory cleanup', () => {
     const cleanup = runtime.processPayload(deleted('root'));
     await started.promise;
     state.sessions = [session('new-session', directory)];
-    runtime.processPayload(created('new-session', directory));
+    runtime.processSnapshot(...created('new-session', directory));
     read.resolve(page([]));
     await cleanup;
     expect(await exists(screenshot)).toBe(true);
@@ -334,7 +345,7 @@ describe('managed chat directory cleanup', () => {
     const { runtime, state, list } = makeRuntime({ roots: [chats], sessions: [session('root', directory)] });
     await runtime.onConnected();
     state.sessions = [];
-    list.mockImplementationOnce(async () => { throw new Error('OpenCode unavailable'); });
+    list.mockImplementationOnce(async () => { throw new Error('Agent Service unavailable'); });
     await runtime.processPayload(deleted('root'));
     const previous = `${directory}-preserved`;
     await fs.rename(directory, previous);
@@ -398,7 +409,7 @@ describe('managed chat directory cleanup', () => {
       await fs.mkdir(path.dirname(screenshot), { recursive: true });
       await fs.writeFile(screenshot, 'replacement during inspection');
       state.sessions = [source, fork];
-      const learning = runtime.processPayload(forked(fork.id, source.id));
+      const learning = runtime.processSnapshot(...forked(fork.sessionId));
       release.resolve();
       await Promise.all([cleanup, learning]);
       expect(await fs.readFile(screenshot, 'utf8')).toBe('replacement during inspection');
@@ -444,7 +455,7 @@ describe('managed chat directory cleanup', () => {
           await fs.mkdir(path.dirname(screenshot), { recursive: true });
           await fs.writeFile(screenshot, 'new owner files');
         }
-        runtime.processPayload(created('new', directory));
+        runtime.processSnapshot(...created('new', directory));
         const newDeletion = runtime.processPayload(deleted('new'));
         release.resolve();
         await Promise.all([oldDeletion, newDeletion]);
@@ -465,7 +476,7 @@ describe('managed chat directory cleanup', () => {
     });
   }
 
-  for (const change of ['shutdown', 'external OpenCode', 'another managed process']) {
+  for (const change of ['shutdown', 'unavailable Host', 'another Host owner']) {
     it(`preserves files when ${change} overtakes an inventory read`, async () => {
       const { chats, directory, screenshot } = await fixture();
       const { runtime, state, list } = makeRuntime({ roots: [chats], sessions: [session('root', directory)] });
@@ -477,52 +488,36 @@ describe('managed chat directory cleanup', () => {
       const cleanup = runtime.processPayload(deleted('root'));
       await started.promise;
       const stopping = change === 'shutdown' ? runtime.stop() : null;
-      if (change !== 'shutdown') state.owner = change === 'external OpenCode' ? null : Symbol('new process');
+      if (change !== 'shutdown') state.owner = change === 'unavailable Host' ? null : Symbol('new process');
       read.resolve(page([]));
       await Promise.all([cleanup, stopping]);
       expect(await exists(screenshot)).toBe(true);
     });
   }
-  // OpenCode pages sessions by (time.updated, id) with an anchor cursor; a
-  // write moves the session to the newest end between two pages.
-  const orderedList = (state, afterFirstPage) => {
-    let pages = 0;
-    return async ({ cursor, order, limit }) => {
-      const anchor = cursor ? JSON.parse(cursor) : { order: order ?? 'desc' };
-      const sign = anchor.order === 'asc' ? 1 : -1;
-      const compare = (left, right) => sign * (left.time.updated - right.time.updated
-        || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
-      const sorted = [...state.sessions].sort(compare);
-      const after = cursor ? sorted.filter((record) => compare(record, { id: anchor.id, time: { updated: anchor.time } }) > 0) : sorted;
-      const data = after.slice(0, limit);
-      if (++pages === 1) afterFirstPage?.();
-      const last = data.at(-1);
-      return page(data, last ? JSON.stringify({ order: anchor.order, time: last.time.updated, id: last.id }) : undefined);
-    };
-  };
-
   for (const change of ['archived', 'renamed']) {
-    it(`keeps a folder whose ${change} reference crosses the page cursor`, async () => {
+    it(`keeps a folder whose reference is ${change} during native aggregation`, async () => {
       const { root, chats, directory, screenshot } = await fixture();
       const project = path.join(root, 'project');
       await fs.mkdir(project);
       const others = Array.from({ length: 250 }, (_, index) => (
-        session(`other-${String(index).padStart(3, '0')}`, project, { time: { updated: 1_000 + index } })
+        session(`other-${String(index).padStart(3, '0')}`, project, { updatedAt: 1_000 + index })
       ));
-      // Older than the 200 newest sessions: the second page when read newest first.
-      const fork = session('fork', directory, { time: { updated: 1_020 } });
+      const fork = session('fork', directory, { updatedAt: 1_020 });
       const { runtime, state, list } = makeRuntime({ roots: [chats], sessions: [session('root', directory), fork, ...others] });
       await runtime.onConnected();
       state.sessions = [fork, ...others];
-      list.mockImplementation(orderedList(state, () => {
-        fork.time = change === 'archived' ? { updated: 2_000, archived: 2_000 } : { updated: 2_000 };
+      list.mockImplementationOnce(async () => {
+        const items = structuredClone(state.sessions);
+        fork.updatedAt = 2_000;
+        if (change === 'archived') fork.archivedAt = 2_000;
         if (change === 'renamed') fork.title = 'Renamed';
-      }));
+        runtime.processPayload(event(1, { type: 'session.updated', sessionId: 'fork', title: 'Updated' }));
+        return page(items);
+      });
       await runtime.processPayload(deleted('root'));
       expect(await fs.readFile(screenshot, 'utf8')).toBe('screenshot bytes');
 
       state.sessions = others;
-      list.mockImplementation(orderedList(state));
       await runtime.processPayload(deleted('fork'));
       expect(await exists(directory)).toBe(false);
       expect(await quarantined(chats)).toEqual([]);
@@ -531,17 +526,16 @@ describe('managed chat directory cleanup', () => {
 
   it('reads a session the stream wrote to during the inventory when the list missed it', async () => {
     const { chats, directory, screenshot } = await fixture();
-    const fork = session('fork', directory, { time: { archived: 1 } });
-    const { runtime, state, list, get } = makeRuntime({ roots: [chats], sessions: [session('root', directory), fork] });
+    const fork = session('fork', directory, { archivedAt: 1 });
+    const { runtime, state, list, open } = makeRuntime({ roots: [chats], sessions: [session('root', directory), fork] });
     await runtime.onConnected();
     state.sessions = [fork];
-    // The archive moved the fork across the cursor; only the raw event names it.
     list.mockImplementationOnce(async () => {
-      runtime.observeWirePayload({ type: 'session.archived', data: { sessionID: 'fork' } });
+      runtime.processPayload(event(1, { type: 'session.updated', sessionId: 'fork', archivedAt: 1, archiveRevision: '1' }));
       return page([]);
     });
     await runtime.processPayload(deleted('root'));
-    expect(get).toHaveBeenCalledWith({ sessionID: 'fork' }, expect.anything());
+    expect(open).toHaveBeenCalledWith('fork', expect.anything());
     expect(await fs.readFile(screenshot, 'utf8')).toBe('screenshot bytes');
   });
 

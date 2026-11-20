@@ -508,9 +508,9 @@ const createCanonicalSessionService = (dependencies) => {
       throw error;
     }
   };
-  const open = async (id) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
+  const open = async (id, { signal }: { signal?: AbortSignal } = {}) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`, { signal })); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
   const history = async (id, query = '') => { const scope = await scopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
-  const list = async (workspaceId) => {
+  const list = async (workspaceId?: string, { signal }: { signal?: AbortSignal } = {}) => {
     const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (listWorkspaceScopes instanceof Function ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
     const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);
     const pages = await Promise.all(parsedScopes.items.map(async ({ workspaceId: id }) => {
@@ -518,7 +518,7 @@ const createCanonicalSessionService = (dependencies) => {
         const workspace = await resolveWorkspaceScope(id);
         if (!workspace) throw new OpenChamberControlError('Workspace scope is unavailable during global session listing', workspaceId ? 404 : 503, { code: workspaceId ? 'SESSION_NOT_FOUND' : 'SERVICE_UNAVAILABLE' });
         return await withSessionAdmission(workspace, 'discovery', id, async () => {
-          const raw = NativeSessionListSchema.parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
+          const raw = NativeSessionListSchema.parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`, { signal }));
           const sessionResults = await Promise.all(raw.items.map(async session => {
             try {
               if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });

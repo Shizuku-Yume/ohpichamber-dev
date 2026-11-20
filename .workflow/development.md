@@ -4,6 +4,25 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Native chat-directory cleanup now consumes complete Canonical inventories,
+scoped snapshots/updates and cascading deletion events instead of SDK records.
+Its 40 filesystem/lifecycle tests pass and changed-source lint passes. The
+controller is not yet wired into the Native bootstrap; automatic cleanup is not
+runtime-certified. Native session snapshot/inventory readers now forward optional
+cancellation signals; their new regression test cannot collect yet.
+
+The latest scoped server check has one diagnostic: dictation correction still
+needs an authorized workspace ID instead of a retired directory argument.
+Separately, rebuilding the Agent Service exposes a real module-import failure in
+`agent-service/src/projection/protocol.ts`: refined Canonical schemas are merged
+then omitted/picked. Installed Zod 4.6.7 preserves those refinements and throws
+`.omit() cannot be used on object schemas containing refinements`. The same
+construction succeeds with installed 4.3.6. A Node import from the Web package
+reproduces it after the build has finished, so this is not a concurrent-build
+artifact. Both native session-route suites stop at collection. The projection
+schema fix is outside the current Web/sync/store ownership; preserve all
+Canonical validation rather than stripping refinements or downgrading Zod.
+
 The upstream `1928155551` merge remains in progress, not accepted. The maintainer
 selected Host-only queue delivery: edit/send-now are disabled for every entry,
 store take/restore calls reject without mutation, and ordinary sends never drain

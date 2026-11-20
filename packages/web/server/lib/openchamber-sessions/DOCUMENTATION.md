@@ -27,6 +27,10 @@ checkout creation, bootstrap and removal.
 
 ## Domain boundaries
 
+- Snapshot and inventory reads accept an optional cancellation signal. Failed
+  workspace reads remain explicit inventory errors, never confirmed empty
+  workspaces. Host cleanup must reject partial inventories before removing files.
+
 - Linked-item updates operate on the authoritative record at write time rather
   than replacing it with a client snapshot. Stable link identity and provider
   matching preserve unrelated fields and reject ambiguous unlink requests.
