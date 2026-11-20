@@ -602,6 +602,7 @@ const resolveHostTools = async () => {
   openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
   notify: settings?.agentNotifyToolEnabled === true,
   openchamber_render: settings?.agentRenderToolEnabled !== false,
+  openchamber_secret: settings?.agentSecretToolEnabled !== false,
   openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
  };
 };
@@ -1586,6 +1587,12 @@ const openChamberControlService = createOpenChamberControlService({
   updateMetadata: updateSessionMetadataWith,
   createError: (message, status) => new OpenChamberControlError(message, status),
  }),
+ isSecretToolEnabled: async () => (await readSettingsFromDiskMigrated())?.agentSecretToolEnabled !== false,
+ hasUnreadChat: async (sessionId) => {
+  const scope = await hostAgentRuntime.resolveSessionScope(sessionId);
+  const queue = await promptQueueStore.getState({ sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId });
+  return queue.items.length > 0;
+ },
  dispatchResults: dispatchResultsRuntime,
  prWatch: prWatchRuntime,
  extensionWaits: extensionWaitsRuntime,
@@ -2222,6 +2229,7 @@ async function main(options = {}) {
      openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
      notify: settings?.agentNotifyToolEnabled === true,
      openchamber_render: settings?.agentRenderToolEnabled !== false,
+     openchamber_secret: settings?.agentSecretToolEnabled !== false,
      openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
     };
     await hostAgentRuntime.service.request('/internal/workers/host-tools', {

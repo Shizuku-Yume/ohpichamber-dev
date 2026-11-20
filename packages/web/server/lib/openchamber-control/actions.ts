@@ -106,6 +106,8 @@ export const OPENCHAMBER_RENDER_ACTIONS = Object.freeze(
   OPENCHAMBER_RENDER_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
+export const OPENCHAMBER_SECRET_ACTIONS = Object.freeze(['secret.run', 'secret.forget', 'secret.request']);
+
 /**
  * Workflows fan a large task out to many agents. They ship dark behind
  * OPENCHAMBER_WORKFLOWS_ENABLE; a build without the runtime answers 503.
@@ -181,6 +183,7 @@ const ACTIONS_BY_TOOL = Object.freeze({
   openchamber_knowledge: OPENCHAMBER_KNOWLEDGE_ACTIONS,
   openchamber_notify: OPENCHAMBER_NOTIFY_ACTIONS,
   openchamber_render: OPENCHAMBER_RENDER_ACTIONS,
+  openchamber_secret: OPENCHAMBER_SECRET_ACTIONS,
   openchamber_workflow: OPENCHAMBER_WORKFLOW_ACTIONS,
   [WORKFLOW_ANSWER_TOOL]: OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS,
 });
@@ -232,6 +235,7 @@ export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
   ...OPENCHAMBER_KNOWLEDGE_ACTIONS,
   ...OPENCHAMBER_NOTIFY_ACTIONS,
   ...OPENCHAMBER_RENDER_ACTIONS,
+  ...OPENCHAMBER_SECRET_ACTIONS,
   ...OPENCHAMBER_WORKFLOW_ACTIONS,
   ...OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS,
 ]);

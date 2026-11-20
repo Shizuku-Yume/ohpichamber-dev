@@ -9,12 +9,14 @@ import {
  OPENCHAMBER_KNOWLEDGE_ACTIONS,
  OPENCHAMBER_NOTIFY_ACTIONS,
  OPENCHAMBER_RENDER_ACTIONS,
+ OPENCHAMBER_SECRET_ACTIONS,
  OPENCHAMBER_WORKFLOW_ACTIONS,
 } from './actions.js';
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
 import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploads.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
+import { createSecretRequests } from './secret-request.js';
 import { createTerminalReadAction } from './terminal-read.js';
 import { redactGitText } from '../git/redaction.js';
 import type { PageAnswerInput } from './render-page.js';
@@ -31,6 +33,7 @@ const TOOL_ACTIONS = new Map([
  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
  ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
  ['openchamber_render', new Set(OPENCHAMBER_RENDER_ACTIONS)],
+ ['openchamber_secret', new Set(OPENCHAMBER_SECRET_ACTIONS)],
  ['openchamber_workflow', new Set(OPENCHAMBER_WORKFLOW_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
@@ -271,6 +274,8 @@ export const createOpenChamberControlService = (dependencies) => {
   isKnowledgeToolEnabled = async () => true,
   sessionLinks = null,
   isRenderToolEnabled = async () => true,
+  isSecretToolEnabled = async () => true,
+  hasUnreadChat = async () => false,
   // Hears when a page an agent shows starts and stops waiting for the
   // user's answer (render.page with awaitAnswer).
   onPageWaitChange = () => { },
@@ -433,6 +438,7 @@ export const createOpenChamberControlService = (dependencies) => {
  };
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
+ const secretRequests = createSecretRequests({ isEnabled: isSecretToolEnabled, onWaitChange: onPageWaitChange, hasUnreadChat });
  const readTerminal = createTerminalReadAction({ readSettings: readSettingsFromDiskMigrated, getTerminalRuntime });
  const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, readSession: (sessionId) => sessionService.getMetadata(sessionId), laterPages, sharePages });
  const answerPage = async (input: PageAnswerInput) => {
@@ -944,6 +950,8 @@ export const createOpenChamberControlService = (dependencies) => {
 
  const execute = async (action, input = {}, contextDirectory, options = {}) => {
   try {
+   if (action === 'secret.request') return await secretRequests.request();
+   if (OPENCHAMBER_SECRET_ACTIONS.includes(action)) throw new OpenChamberControlError('Secret execution requires the authenticated openchamber_secret worker tool and command approval', 403);
    if (!CONTROL_ACTIONS.has(action)) {
     throw new OpenChamberControlError(`Unsupported OhPiChamber action: ${action || "missing"}`, 400);
    }
@@ -1189,7 +1197,11 @@ export const createOpenChamberControlService = (dependencies) => {
    const input = request.input ?? {};
    // The call that asked travels with the request: a page that waits for the
    // user's answer is resolved by its own call, not by the session alone.
-   const value = await execute(request.action, input, scope.cwd, {
+   const value = request.toolName === 'openchamber_secret'
+    ? request.action === 'secret.run'
+     ? await secretRequests.run(input, { sessionId: request.sessionId, callId: request.toolCallId, directory: scope.cwd, signal })
+     : request.action === 'secret.forget' ? secretRequests.forget(request.sessionId) : await secretRequests.request()
+    : await execute(request.action, input, scope.cwd, {
     signal, contextSessionId: request.sessionId,
     contextCallId: typeof request.toolCallId === 'string' ? request.toolCallId : undefined,
    });
@@ -1207,5 +1219,5 @@ export const createOpenChamberControlService = (dependencies) => {
   }
  };
 
- return { execute, invokeHostAction, resolveSessionDirectory, answerPage };
+ return { execute, invokeHostAction, resolveSessionDirectory, answerPage, answerSecret: secretRequests.answer, secretFields: secretRequests.fields };
 };

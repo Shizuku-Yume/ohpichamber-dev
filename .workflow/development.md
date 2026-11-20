@@ -4,6 +4,19 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Secret-tool Step A restores v2.7.3 memory-only command execution behind the
+authenticated worker Host action and exact-command Canonical Bash receipt.
+Public control cannot authorize it; file-mode requests refuse. Secret answers
+stay in Host memory and child environments, with ten-minute session leases and
+redacted results. Focused Host/Guest tests (91), worker tool/interaction tests
+(30), and native SDK approval/persistence tests pass, including cancellation of
+a child process tree and absence of submitted values in SDK session files,
+Canonical projections, provider requests and wait events. Contract/service/SDK
+builds, server/service lint and both server/service type checks pass. The
+environment required a frozen-lockfile dependency repair before these checks.
+Guest callback mounting and the multi-field UI card remain separate steps;
+no visual verification or real-provider run is claimed for this backend step.
+
 2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
 branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages
 removed 113 stale gap exceptions and reconciled all 260 contradicted ledger

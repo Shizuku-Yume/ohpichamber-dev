@@ -56,6 +56,13 @@ A tool result belongs to the message that authored its `tool_call`: the projecti
 
 Host tools (`openchamber`, `openchamber_knowledge`, `web`, `memory`, `notify`, `openchamber_image`, `openchamber_render`) are registered by `worker/host-tool.ts`; `openchamber_render` sends the tool call id so a waiting page can be answered, and returns its answer under `details.openchamber`, which the projection also hoists to the result's top level for the render card.
 
+`openchamber_secret` is a Host-owned tool with call identity. `secret.run`
+requests Canonical Bash approval for its executable and arguments, then
+consumes the one-shot receipt through the existing Host Bash authorizer before
+calling the private Host action channel. The Host alone collects values; no
+submitted secret enters the worker, SDK transcript or canonical tool result.
+`secret.request` refuses file mode and `secret.forget` clears Host memory leases.
+
 ## OMP TUI timeline notices and compaction projection
 
 `WorkerProjection` projects OMP timeline notices into canonical `NoticePart` items via `persistAndPublishNotice()`:

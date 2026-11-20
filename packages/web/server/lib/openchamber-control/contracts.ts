@@ -12,6 +12,7 @@ export type PublicSessionStatus = { type: 'idle' | 'waiting' | 'busy' };
 export interface ControlOptions {
   signal?: AbortSignal | undefined;
   contextSessionId?: string | null | undefined;
+  contextCallId?: string | null | undefined;
 }
 
 export interface TextMessage {
