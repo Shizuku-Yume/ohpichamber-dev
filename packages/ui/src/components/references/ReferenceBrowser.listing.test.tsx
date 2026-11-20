@@ -89,8 +89,13 @@ beforeEach(() => {
   shown = null;
   localStorage.clear();
   const realFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+  globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/git/status') return Response.json({ current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true });
+    if (url.pathname === '/api/git/projects') {
+      const request: { directories: string[] } = JSON.parse(String(init?.body));
+      return Response.json({ projects: request.directories.map((directory) => ({ directory, isGitRepository: true })) });
+    }
     if (url.pathname.endsWith('/issues/list')) {
       const page = Number(url.searchParams.get('page') ?? '1');
       const labels = url.searchParams.getAll('label');
@@ -113,7 +118,7 @@ afterEach(async () => {
 const flush = async () => {
   for (let round = 0; round < 4; round += 1) {
     for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 35)); });
   }
 };
 

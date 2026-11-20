@@ -138,6 +138,7 @@ export function useComposerDraftHistory({
         migrateDraft,
     } = useComposerDraft({
         persistEnabled: persistChatDraft,
+        newSessionDraftId: newSessionDraftOpen ? newSessionDraft.draftId : null,
         text: composerText,
         setMessage,
         confirmedMentionsRef,

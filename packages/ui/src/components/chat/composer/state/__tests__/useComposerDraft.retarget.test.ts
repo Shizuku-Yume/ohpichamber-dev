@@ -45,11 +45,11 @@ function renderComposer(initialText: string) {
     const mentionsRef: React.RefObject<Set<string>> = { current: new Set() };
     const result = { text: '', mentionsRef, restored };
 
-    function Probe({ identity }: { identity: ChatDraftIdentity; draftId: number | null }) {
+    function Probe({ identity, draftId }: { identity: ChatDraftIdentity; draftId: number | null }) {
         const { text, setMessage } = useProbeText(initialText);
         const confirmedMentionsRef = React.useRef(new Set(initialText.includes('@a.ts') ? ['a.ts'] : []));
         useComposerDraft({
-            text, setMessage, confirmedMentionsRef, identity,
+            text, setMessage, confirmedMentionsRef, identity, newSessionDraftId: draftId,
             initialDraft: { text: '', identity: projectDraft },
             persistEnabled: true,
             onDraftRestored: (reason) => { result.restored.push(reason); },

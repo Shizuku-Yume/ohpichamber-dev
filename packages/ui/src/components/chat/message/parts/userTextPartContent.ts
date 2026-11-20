@@ -1,3 +1,8 @@
+import type { Root, RootContent } from 'mdast';
+import remarkParse from 'remark-parse';
+import { defaultRemarkPlugins } from 'streamdown';
+import { unified } from 'unified';
+import { markdownMath, remarkLiteralText } from '../../markdown/streamdownPlugins';
 import type { AgentMentionInfo } from '../types';
 import {
     buildAgentHref,
@@ -105,6 +110,39 @@ const applyHardLineBreaks = (markdown: string): string => {
 // a bare marker dot instead of the sign the user typed.
 const LONE_LIST_MARKER_PATTERN = /^\s*([+*-])\s*$/;
 
+const literalSourceParser = unified().use(remarkParse).use(remarkLiteralText).use([defaultRemarkPlugins.gfm, markdownMath.remarkPlugin]);
+const LITERAL_SOURCE_NODES: ReadonlySet<string> = new Set(['code', 'inlineCode', 'math', 'inlineMath', 'image', 'definition']);
+
+const literalSourceRanges = (markdown: string): Array<[number, number]> => {
+    const ranges: Array<[number, number]> = [];
+    const walk = (node: Root | RootContent): void => {
+        const start = node.position?.start.offset;
+        const end = node.position?.end.offset;
+        if (start === undefined || end === undefined) return;
+        if (LITERAL_SOURCE_NODES.has(node.type) || (node.type === 'link' && markdown[start] !== '[')) {
+            ranges.push([start, end]);
+            return;
+        }
+        if ('children' in node) node.children.forEach(walk);
+        if (node.type === 'link') ranges.push([node.children.at(-1)?.position?.end.offset ?? start + 1, end]);
+    };
+    walk(literalSourceParser.parse(markdown));
+    return ranges;
+};
+
+const doubleBackslashRuns = (text: string): string => text.replace(/\\+(?=[.?])/g, (run) => run + run);
+
+const escapeBackslashesBeforePunctuation = (text: string): string => {
+    if (!/\\[.?]/.test(text)) return text;
+    let output = '';
+    let cursor = 0;
+    for (const [start, end] of literalSourceRanges(text)) {
+        output += doubleBackslashRuns(text.slice(cursor, start)) + text.slice(start, end);
+        cursor = end;
+    }
+    return output + doubleBackslashRuns(text.slice(cursor));
+};
+
 export const prepareUserMarkdownContent = ({
     textContent,
     agentMention,
@@ -122,7 +160,7 @@ export const prepareUserMarkdownContent = ({
     const loneListMarker = LONE_LIST_MARKER_PATTERN.exec(textContent);
     if (loneListMarker) return `\\${loneListMarker[1]}`;
 
-    let content = mapNonFencedSegments(textContent, (segment) => mapNonInlineCode(segment, (part) => withSessionMentionLinks(
+    let content = mapNonFencedSegments(escapeBackslashesBeforePunctuation(textContent), (segment) => mapNonInlineCode(segment, (part) => withSessionMentionLinks(
         part,
         sessionMentions,
         (rest) => escapeWithAttachmentCitations(rest, attachments),

@@ -24,8 +24,16 @@ Object.assign(globalThis, {
   getComputedStyle: browser.getComputedStyle.bind(browser), requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
   cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser), IS_REACT_ACT_ENVIRONMENT: true,
 });
-// The browser's imports pull in app stores that load on import; their requests never answer.
-globalThis.fetch = Object.assign(() => new Promise<Response>(() => {}), globalThis.fetch);
+// Only Git repository discovery answers the stores' startup reads.
+globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = new URL(String(input), 'http://localhost');
+  if (url.pathname === '/api/git/status') return Response.json({ current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true });
+  if (url.pathname === '/api/git/projects') {
+    const request: { directories: string[] } = JSON.parse(String(init?.body));
+    return Response.json({ projects: request.directories.map((directory) => ({ directory, isGitRepository: true })) });
+  }
+  return new Promise<Response>(() => {});
+}, globalThis.fetch);
 
 let root: Root;
 let host: HTMLDivElement;
@@ -85,7 +93,7 @@ const setNoProviders = async () => {
 
 const flush = async () => {
   for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 35)); });
 };
 
 type Shown = {

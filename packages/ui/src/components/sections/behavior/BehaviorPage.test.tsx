@@ -98,11 +98,9 @@ test('a slow prompt save preserves and then persists the newer blurred draft', a
   await act(async () => { writes[0].finish(); });
   expect(prompt.value).toBe('newer');
 
-  // A settings write happens only for the page's own preferences: AGENTS.md is
-  // the sole authority, so the prompt is never mirrored into settings.
+  // AGENTS.md is the sole authority; prompt edits never write settings.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
-  expect(settingsWrites).toHaveLength(1);
-  await act(async () => { settingsWrites[0](); });
+  expect(settingsWrites).toHaveLength(0);
   await settle();
   expect(writes.map((write) => write.content)).toEqual(['older\n', 'newer\n']);
   // Each write names the file it replaces, so an edit made elsewhere is refused.
