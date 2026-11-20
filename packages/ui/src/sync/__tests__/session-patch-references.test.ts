@@ -1,86 +1,47 @@
-import { createEventRoutingIndex } from '@/sync/event-routing-index';
-import { afterEach, describe, expect, test } from "bun:test"
-import type { SyncEvent } from "@/lib/opencode/events"
-import type { Message, Part, Session } from '@openchamber/agent-contract';
-import { getRuntimeKey } from "@/lib/runtime-switch"
-import { ChildStoreManager } from "../child-store"
-import { setActionRefs } from "../session-actions"
-import { handleEvent } from "../sync-context"
+import { describe, expect, test } from 'bun:test';
+import type { CanonicalEvent } from '@openchamber/agent-contract';
+import { applyDirectoryEvent, installSessionMetadata } from '../event-reducer';
+import { INITIAL_STATE, type State } from '../types';
+import { nativeSnapshot } from '../session-message-loader-test-fixtures';
 
-const cleanups: Array<() => void> = []
-afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup() })
+const state = (): State => {
+  const snapshot = nativeSnapshot();
+  return {
+    ...INITIAL_STATE,
+    session: [{ ...snapshot.session, metadata: null, metadataRevision: '0', archiveRevision: '0' }],
+    snapshot: { 'session-a': snapshot },
+    message: { 'session-a': snapshot.messages },
+    sessionEpoch: { 'session-a': 'epoch-a' },
+    sessionCursor: { 'session-a': snapshot.cursor },
+    permission: {}, form: {},
+  };
+};
 
-let run = 0
+describe('native session projection references', () => {
+  test('a canonical title update leaves message and request maps untouched', () => {
+    const before = state();
+    const event: CanonicalEvent = {
+      type: 'session.updated', sessionId: 'session-a', epoch: 'epoch-a', sequence: '5', timestamp: 3, title: 'Renamed',
+    };
+    const result = applyDirectoryEvent(before, event);
+    expect(result.kind).toBe('applied');
+    const after = result.state;
+    expect(after.session).not.toBe(before.session);
+    expect(after.session[0]?.title).toBe('Renamed');
+    expect(after.message).toBe(before.message);
+    expect(after.permission).toBe(before.permission);
+    expect(after.form).toBe(before.form);
+    expect(applyDirectoryEvent(after, event).state).toBe(after);
+  });
 
-const session = (directory: string): Session => ({
-  sessionId: "ses_1",
-  projectID: "prj_1",
-  directory,
-  title: "Streaming",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-})
-const user: Message = { messageId: "msg_u", sessionID: "ses_1", role: "user", time: { created: 1 } }
-const text: Part = { partId: "prt_u", messageID: "msg_u", sessionID: "ses_1", type: "text", text: "hi" }
-
-function setup() {
-  run += 1
-  const directory = `/patch-references-${run}`
-  const childStores = new ChildStoreManager()
-  const store = childStores.ensureChild(directory, { bootstrap: false })
-  store.setState({
-    session: [session(directory)],
-    sessionTotal: 1,
-    session_status: { ses_1: { type: "busy" } },
-    message: { ses_1: [user] },
-    part: { msg_u: [text] },
-    permission: {},
-    form: {},
-  })
-  setActionRefs(childStores, () => directory)
-  cleanups.push(() => childStores.disposeAll())
-  const routingIndex = createEventRoutingIndex()
-  const receive = (event: SyncEvent) => handleEvent(directory, event, childStores, routingIndex, getRuntimeKey())
-  return { store, receive }
-}
-
-describe("session.patched", () => {
-  test("a usage patch publishes the session list and leaves every other map untouched", () => {
-    const { store, receive } = setup()
-    const before = store.getState()
-
-    receive({
-      type: "session.patched",
-      properties: {
-        sessionID: "ses_1",
-        patch: { cost: 0.5, tokens: { input: 10, output: 5, reasoning: 0, cache: { read: 0, write: 0 } }, time: { updated: 2 } },
-      },
-    })
-
-    const after = store.getState()
-    expect(after.session).not.toBe(before.session)
-    expect(after.session[0]).toMatchObject({ cost: 0.5, time: { updated: 2 } })
-    expect(after.message).toBe(before.message)
-    expect(after.part).toBe(before.part)
-    expect(after.permission).toBe(before.permission)
-    expect(after.form).toBe(before.form)
-    expect(after.session_status).toBe(before.session_status)
-  })
-
-  test("an archive clears the session's caches without editing the published maps", () => {
-    const { store, receive } = setup()
-    const before = store.getState()
-
-    receive({ type: "session.patched", properties: { sessionID: "ses_1", patch: { time: { archived: 3, updated: 3 } } } })
-
-    const after = store.getState()
-    expect(after.session).toHaveLength(0)
-    expect(after.message.ses_1).toBe(undefined)
-    expect(after.part.msg_u).toBe(undefined)
-    expect(after.session_status.ses_1).toBe(undefined)
-    expect(before.message.ses_1).toEqual([user])
-    expect(before.part.msg_u).toEqual([text])
-    expect(before.session_status.ses_1).toEqual({ type: "busy" })
-  })
-})
+  test('Host metadata changes preserve messages and reject an obsolete revision', () => {
+    const before = state();
+    const after = installSessionMetadata(before, { sessionId: 'session-a', revision: '2', metadata: { notes: 'Updated' } });
+    expect(after.session).not.toBe(before.session);
+    expect(after.session[0]?.metadata?.notes).toBe('Updated');
+    expect(after.message).toBe(before.message);
+    expect(after.permission).toBe(before.permission);
+    expect(after.form).toBe(before.form);
+    expect(installSessionMetadata(after, { sessionId: 'session-a', revision: '1', metadata: { notes: 'Old' } })).toBe(after);
+  });
+});

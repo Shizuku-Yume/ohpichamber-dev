@@ -187,7 +187,11 @@ const notificationPropertiesSchema = z.object({
   requireHidden: z.boolean().optional(),
   showWhenFocused: z.boolean().optional(),
   toastOnly: z.boolean().optional(),
+  desktopNotificationDelivered: z.boolean().optional(),
+  desktopStdoutActive: z.boolean().optional(),
 });
+
+export type HostNotification = z.infer<typeof notificationPropertiesSchema>;
 
 type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
 type OpenChamberEvent =
@@ -813,8 +817,3 @@ export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => 
   }
  };
 };
-
-export type ControlStreamSyncEvent = Extract<SyncEvent, {
-  type: 'openchamber.page-waiting' | 'openchamber.page-settled' | 'openchamber.session-assist' | 'session.patched'
-    | 'openchamber.workflow-run' | 'openchamber.workflow-run-removed';
-}>;

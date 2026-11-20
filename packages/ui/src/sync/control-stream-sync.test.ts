@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
@@ -19,6 +19,7 @@ class EventSourceFixture {
 // module's own imports lead back to.
 await import('./sync-context');
 const { subscribeControlStreamSync } = await import('./control-stream-sync');
+const { toast } = await import('@/components/ui');
 
 test('toasts an answer to a shared page from the control stream, and nothing else', () => {
   const dom = new Window({ url: 'http://control.test' });
@@ -28,7 +29,11 @@ test('toasts an answer to a shared page from the control stream, and nothing els
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
   const toasts: string[] = [];
-  const unsubscribe = subscribeControlStreamSync(getRuntimeKey(), () => {}, (shown) => { toasts.push(`${shown.title}|${shown.id}`); });
+  const shown = spyOn(toast, 'info').mockImplementation((title, options) => {
+    toasts.push(`${title}|${options?.id}`);
+    return options?.id ?? 'notification';
+  });
+  const unsubscribe = subscribeControlStreamSync(getRuntimeKey());
   try {
     const source = EventSourceFixture.instances.at(-1);
     const emit = (properties: { kind: string; title: string; tag: string; sessionId?: string; directory?: string; toastOnly?: boolean }) => source?.onmessage?.({ data: JSON.stringify({ type: 'openchamber:notification', properties }) });
@@ -37,6 +42,7 @@ test('toasts an answer to a shared page from the control stream, and nothing els
     expect(toasts).toEqual(['Yulia answered “Schema”|share-ses_1']);
   } finally {
     unsubscribe();
+    shown.mockRestore();
     for (const [name, descriptor] of originals) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
       else Reflect.deleteProperty(globalThis, name);

@@ -2,7 +2,8 @@ import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useWorkflowRunsStore } from '@/lib/workflows/store';
 import { seedGlobalSessionStatusFromHost } from './host-session-status-seed';
-import { shareAnswerToastFor } from './share-answer-toast';
+import { shareAnswerToastFor, showShareAnswerToast } from './share-answer-toast';
+import { handleUiNotificationEvent } from './surface-notifications';
 
 export const subscribeControlStreamSync = (
   runtimeKey: string,
@@ -10,7 +11,8 @@ export const subscribeControlStreamSync = (
   if (runtimeKey !== getRuntimeKey()) return;
   if (event.type === 'notification') {
     const shareAnswer = shareAnswerToastFor(event.payload);
-    if (shareAnswer) showShareAnswer(shareAnswer);
+    if (shareAnswer) showShareAnswerToast(shareAnswer);
+    handleUiNotificationEvent(event.payload);
   } else if (event.type === 'event-stream-ready') {
     useWorkflowRunsStore.getState().reloadLoaded();
     void seedGlobalSessionStatusFromHost().catch(() => undefined);

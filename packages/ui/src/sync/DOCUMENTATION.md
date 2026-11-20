@@ -42,6 +42,18 @@ Cold snapshots remain worker-free and do not subscribe to worker-owned events. A
 
 Web/PWA, Electron, hosted mobile and Capacitor share this behavior through the Canonical Client; Guest SDK and transport/auth contracts are unchanged.
 
+The canonical pipeline owns gap recovery and pending-request snapshots. There
+is no parallel SDK event dispatcher, SDK active-status poller or interrupted-tool
+repair layer. Session updates preserve unrelated message/request references;
+Host metadata uses its own monotonic revisions. Cross-directory status seeding
+reads canonical sessions and never overwrites observed live status.
+
+Host notifications arrive on the separate control stream. The Host envelope is
+validated before presentation, including desktop-delivery flags. Shared-answer
+and focused plugin toasts retain their existing UI components; device delivery
+uses `RuntimeAPIs.notifications`. Local desktop delivery is not duplicated, and
+a remote Host's desktop delivery does not suppress notifications on this client.
+
 ## Host operational metadata authority
 
 The Host owns session operational metadata (pins, color, icon, notes), workspace associations, archive state, and folder membership; OMP owns session titles directly in session storage. Execution session records and persisted UI caches are not metadata fallbacks. Metadata responses and change events carry decimal-string revisions; the metadata patch route (`PATCH /api/agent/v1/sessions/:sessionId/metadata`) requires a `{ changes: { ... } }` wrapper and returns `SessionMetadataState` (`{ sessionId, revision, metadata }`).
