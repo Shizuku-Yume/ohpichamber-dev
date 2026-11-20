@@ -1,6 +1,7 @@
 import { formatShortcutForDisplay } from '@/lib/shortcuts/bindings';
 import { getEffectiveShortcutCombo } from '@/lib/shortcuts/schema';
 import { sessionEvents } from '@/lib/sessionEvents';
+import { useUIStore } from '@/stores/useUIStore';
 import { GlassRedrawGuard } from '@/components/ui/glass-redraw-guard';
 import { DraftsHerePicker, MobileDraftsHerePicker } from './DraftsHerePicker';
 /**
@@ -50,6 +51,8 @@ import { useKeybind } from '@/hooks/useKeybind';
 import type { Theme } from '@/types/theme';
 import { normalizePath } from '../attachments/filePaths';
 import { getProjectDisplayLabel, type DraftTargetProject } from '../state/useDraftTarget';
+
+const ADD_PROJECT_ITEM = '__add_project__';
 
 interface BranchOption {
     value: string;
@@ -139,6 +142,7 @@ export function ProjectLabel({ project, theme }: { project: DraftTargetProject; 
 
 function DraftTargetSelectorsView(props: DraftTargetProps) {
     const { t } = useI18n();
+    const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
     const {
         projects,
         selectedProject,
