@@ -27,8 +27,23 @@ private-value log exclusion. Seven focused web suites pass 93 tests; the UI even
 suite passes 29 tests. Contract/service/SDK builds, server lint and server type
 check pass. The UI event suite emits filesystem/identity request warnings from
 its existing boot-side-effect tests and partial HTTP fixtures; it has no failed
-tests. Evidence: `/home/ubuntu/secret-step-b-checks/`. The multi-field secret UI
-card remains Step C; no visual verification or real-provider run is claimed.
+tests. Evidence: `/home/ubuntu/secret-step-b-checks/`.
+
+Secret-tool Step C restores the upstream multi-field command card on canonical
+tool views. Authenticated, uncached Host field lookup selects requested inputs
+and remembered-field labels; failures are visible and retry. Answers carry only
+session/call identity, requested values and remembered field names, or decline.
+Inputs stay in component memory and disappear after answer, expiry, unmount or
+runtime switching. Errors never display response bodies; file-mode requests
+show only a localized refusal. All 15 locales include refusal and recovery copy.
+Shared web/PWA, Electron, hosted mobile and Capacitor use their connected Host;
+mobile does not execute commands locally. Five focused UI suites pass 48 tests
+(card interactions, canonical parsing, Host transport, locale completeness and
+existing runtime-fetch coverage). Contract/service/SDK builds pass. Full UI
+lint exits 0 with 97 hook-dependency warnings in unchanged files; no changed-file
+diagnostics. Full UI type-check passes 4,234 files across two projects. Evidence:
+`/home/ubuntu/secret-step-c-checks/`. No visual verification or real-provider run
+is claimed.
 
 2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
 branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages

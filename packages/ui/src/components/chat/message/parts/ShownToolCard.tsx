@@ -3,12 +3,12 @@ import React from 'react';
 import type { ToolCallPart, ToolResultPart, TextPart } from '@openchamber/agent-contract';
 import AssistantTextPart from './AssistantTextPart';
 import { PageAskStatus } from './PageAskStatus';
-import { generatedImagePaths, isSettledAsk, proposedWorkflowRunId, renderedPage, requestedSecret } from './pageRenderView';
+import { generatedImagePaths, isSettledAsk, proposedWorkflowRunId, renderedPage, requestedSecret, requestedSecretRun } from './pageRenderView';
 import { WorkflowRunCard } from '@/components/chat/workflows/WorkflowRunCard';
 import type { ToolPopupContent } from '../types';
 import { GeneratedImages } from './GeneratedImages';
 import { ShownPage } from './HtmlRenderFrame';
-import { SecretRequestCard } from './SecretRequestCard';
+import { SecretRequestCard, SecretRunCard } from './SecretRequestCard';
 import { toToolView, type CanonicalToolView } from './toolView';
 
 /**
@@ -34,9 +34,11 @@ export function ShownToolCard({ part, result, sessionId, messageId, onShowPopup 
     const runId = React.useMemo(() => proposedWorkflowRunId(view), [view]);
     const images = React.useMemo(() => generatedImagePaths(view), [view]);
     const secret = React.useMemo(() => requestedSecret(view), [view]);
+    const secretRun = React.useMemo(() => requestedSecretRun(view), [view]);
     if (runId) return <WorkflowRunCard sessionId={sessionId} runId={runId} />;
     if (images.length > 0) return <GeneratedImages part={view} paths={images} onShowPopup={onShowPopup} />;
     if (secret) return <SecretRequestCard part={view} request={secret} />;
+    if (secretRun) return <SecretRunCard key={`${sessionId}:${view.callID}`} part={view} run={secretRun} />;
     return <ShownPage part={view} />;
 }
 

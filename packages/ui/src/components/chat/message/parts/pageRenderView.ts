@@ -214,7 +214,7 @@ const secretRunCommandLine = (program: string, args: readonly string[]): string 
 };
 
 /** The card a running `secret.run` call asks on, else null. */
-const requestedSecretRun = (view: CanonicalToolView): RequestedSecretRun | null => {
+export const requestedSecretRun = (view: CanonicalToolView): RequestedSecretRun | null => {
     if (view.tool !== OPENCHAMBER_SECRET_TOOL || view.state.status !== 'running') return null;
     const parsed = secretRunInputSchema.parse(view.state.input ?? {});
     if (parsed.action !== 'secret.run' && parsed.action !== 'run') return null;
