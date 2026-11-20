@@ -6,7 +6,7 @@ const environment = directoryEnvironment({ fakeTimers: false });
 const browserWindow = window;
 const storage = new Map<string, string>();
 let storageSetCount = 0;
-const runtimeKey = 'runtime-a';
+let runtimeKey = 'runtime-a';
 type TestFolder = { id: string; name: string; sessionIds: string[]; createdAt: number; parentId: string | null };
 type TestFoldersMap = { [scopeKey: string]: TestFolder[] };
 /** Whatever the fake Host answers: a folder snapshot, a write result or an error. */
@@ -63,6 +63,11 @@ const runtime: SessionFoldersRuntime = {
 };
 
 const { store: useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = createSessionFoldersStore(runtime);
+
+const activateRuntime = (key: string) => {
+  runtimeKey = key;
+  useSessionFoldersStore.getState().resetForRuntimeSwitch(key);
+};
 
 const waitForPersist = () => new Promise((resolve) => setTimeout(resolve, 350));
 

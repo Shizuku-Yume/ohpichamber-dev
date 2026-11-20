@@ -220,6 +220,7 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
       } catch (error) {
         patchEntry(projectId, {
           todos: previous,
+          loaded: false,
           error: errorMessage(error, 'Failed to save project todos'),
         });
         return false;

@@ -19,11 +19,17 @@ export interface ApnsTokenPayload {
   pushKey?: string;
 }
 
+export type NativePushStatus =
+  | { available: true }
+  | { available: false; reason: 'relay-url-missing'; relaySetting: string }
+  | { available: false; reason: 'direct-config-missing'; relaySetting: string; disabledSetting: string };
+
 export interface PushAPI {
   getVapidPublicKey(): Promise<{ publicKey: string } | null>;
   subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
   unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;
   setVisibility(payload: { visible: boolean; platform?: string }): Promise<{ ok: true } | null>;
+  nativeStatus(): Promise<NativePushStatus | null>;
   registerApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
   unregisterApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
   getDeliveryStatus(): Promise<{ localOnly: boolean } | null>;

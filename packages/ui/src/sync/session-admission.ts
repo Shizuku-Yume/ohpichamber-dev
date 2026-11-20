@@ -80,10 +80,9 @@ const tryAdmitSession = (sessionId: string, directory: string): Promise<string |
     const currentId = currentSession();
     if (!currentId) return null;
     if (isSessionAdmitted(normalized)) return normalized;
-    const confirmed = normalizePath(await useProjectsStore.getState().adoptSessionProject(
-      currentId, normalized, (directory) => currentSession(normalizePath(directory)) !== null,
-    ));
-    if (!confirmed) return null;
+    const adopted = await useProjectsStore.getState().adoptSessionProject(currentId, normalized, () => currentSession() !== null);
+    if (!adopted) return null;
+    const confirmed = normalized;
     if (confirmed !== normalized && !await waitUntilRecordedIn(currentId, confirmed)) return null;
     if (!isSessionAdmitted(confirmed)) await waitUntilAdmitted(confirmed);
     return isSessionAdmitted(confirmed) ? confirmed : null;
@@ -120,7 +119,7 @@ export const subscribeSessionAdmission = (): (() => void) => {
     });
   };
   const stopMoves = subscribeGlobalSessionMoves(({ sessionId, from, to }) => {
-    if (!current() || isVSCodeRuntime() || !isSessionAdmitted(from) || isSessionAdmitted(to)) return;
+    if (!current() || !isSessionAdmitted(from) || isSessionAdmitted(to)) return;
     forgetAttempt(to);
     const attempt: AdmissionAttempt = { sessionId, retries: 0, timer: null };
     attempted.set(to, attempt);

@@ -1,17 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { nativeSnapshot } from './session-message-loader-test-fixtures';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { resolveAdmittedLineageDirectory } from './session-admission-rule';
 
-const session = (id: string, directory: string, parentID?: string): Session => ({
-  sessionId: id,
-  parentSessionId: parentID,
-  projectID: 'project',
-  directory,
-  title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-});
+const session = (id: string, directory: string, parentID?: string): Session => {
+  const record = { ...nativeSnapshot(id, []).session, workspaceId: `workspace-${directory}`, parentSessionId: parentID, metadata: {}, metadataRevision: '0', archiveRevision: '0' };
+  registerWorkspaceDirectory(record.workspaceId, directory);
+  return record;
+};
 
 describe('resolveAdmittedLineageDirectory', () => {
   const records = new Map([

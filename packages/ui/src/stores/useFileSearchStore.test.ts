@@ -1,5 +1,5 @@
 import { directoryEnvironment } from './test-support/directoryEnvironment';
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -29,12 +29,11 @@ environment.respond(async (url) => {
   return Response.json({ data: files.map((file) => ({ path: file.path.replace(/^\/project\//, '') })) });
 });
 
-mock.module('@/lib/host-filesystem', () => ({
-  hostFilesystem: {
-    searchFiles: searchFilesMock,
-  },
-}));
-mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
+const { hostFilesystem } = await import('@/lib/host-filesystem');
+const searchFilesMock = spyOn(hostFilesystem, 'searchFiles');
+const runtimeSwitch = await import('@/lib/runtime-switch');
+mock.module('@/lib/runtime-switch', () => ({ ...runtimeSwitch, getRuntimeKey: () => runtimeKey }));
+const setRuntime = (key: string) => { runtimeKey = key; };
 
 const { useFileSearchStore } = await import('./useFileSearchStore');
 

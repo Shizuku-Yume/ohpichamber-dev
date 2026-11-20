@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
-import { opencodeClient } from "@/lib/opencode/client"
+import * as workspaceAttachments from "@/lib/workspace-attachments"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { ImageSaveForTextModelError, imagesAsPathNotes, modelCannotReadImages } from "./text-model-images"
 
@@ -17,11 +17,11 @@ const image = { type: "file" as const, mime: "image/jpeg", url: `data:image/jpeg
 const text = { type: "file" as const, mime: "text/plain", url: `data:text/plain;base64,${btoa("notes")}`, filename: "notes.txt" }
 
 describe("images for a model that cannot read them", () => {
-  test("an image becomes a note naming the file OpenCode saved, under the same name", async () => {
+  test("an image becomes a note naming the file the Host saved, under the same name", async () => {
     const written: Array<{ filename: string; bytes: string }> = []
-    const write = spyOn(opencodeClient, "writeOpenCodeTempFiles").mockImplementation(async (_directory, files) => {
+    const write = spyOn(workspaceAttachments, "saveWorkspaceAttachments").mockImplementation(async (_directory, files) => {
       written.push(...files.map(({ filename, bytes }) => ({ filename, bytes: new TextDecoder().decode(bytes) })))
-      return files.map(({ filename }) => ({ filename, path: `/tmp/opencode/openchamber/abc/${filename}` }))
+      return files.map(({ filename }) => ({ filename, path: `/workspace/.ohpichamber/attachments/abc/${filename}` }))
     })
     restores.push(() => write.mockRestore())
 
@@ -31,11 +31,11 @@ describe("images for a model that cannot read them", () => {
     expect(untouched).toBe(text)
     expect(convertedImage.filename).toBe("browser-annotation-1.jpg")
     expect(convertedImage.mime).toBe("text/plain")
-    expect(noteText(convertedImage.url)).toContain("/tmp/opencode/openchamber/abc/browser-annotation-1.jpg")
+    expect(noteText(convertedImage.url)).toContain("/workspace/.ohpichamber/attachments/abc/browser-annotation-1.jpg")
   })
 
   test("an image already on disk names its own path without a copy", async () => {
-    const write = spyOn(opencodeClient, "writeOpenCodeTempFiles")
+    const write = spyOn(workspaceAttachments, "saveWorkspaceAttachments")
     restores.push(() => write.mockRestore())
 
     const [converted] = await imagesAsPathNotes([{ ...image, url: "file:///Users/me/shots/a%20b.png", mime: "image/png" }], "/repo")
@@ -44,7 +44,7 @@ describe("images for a model that cannot read them", () => {
     expect(noteText(converted.url)).toContain("/Users/me/shots/a b.png")
   })
 
-  test("an image file VS Code attached by path counts as an image", async () => {
+  test("an image file attached by path counts as an image", async () => {
     const [converted] = await imagesAsPathNotes([{ ...text, url: "file:///repo/docs/diagram.png", filename: "diagram.png" }], "/repo")
 
     expect(noteText(converted.url)).toContain("/repo/docs/diagram.png")
@@ -52,7 +52,7 @@ describe("images for a model that cannot read them", () => {
 
   test("two images under one name land in separate files", async () => {
     let folder = 0
-    const write = spyOn(opencodeClient, "writeOpenCodeTempFiles").mockImplementation(async (_directory, files) => {
+    const write = spyOn(workspaceAttachments, "saveWorkspaceAttachments").mockImplementation(async (_directory, files) => {
       folder += 1
       return files.map(({ filename }) => ({ filename, path: `/tmp/openchamber/${folder}/${filename}` }))
     })
@@ -65,7 +65,7 @@ describe("images for a model that cannot read them", () => {
   })
 
   test("an image that could not be saved fails the send and names the file", async () => {
-    const write = spyOn(opencodeClient, "writeOpenCodeTempFiles").mockImplementation(async (_directory, files) => (
+    const write = spyOn(workspaceAttachments, "saveWorkspaceAttachments").mockImplementation(async (_directory, files) => (
       files.map(({ filename }) => ({ filename, error: new Error("disk full") }))
     ))
     restores.push(() => write.mockRestore())

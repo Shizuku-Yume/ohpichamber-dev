@@ -116,6 +116,6 @@ stream traffic out of the parser. Property guards also retain inherited properti
 and arbitrary thrown values when reading error messages and filesystem error codes.
 
 Directory headers are percent-encoded because raw non-ASCII header values are
-rejected by the client transport in `@opencode/client` 2.3.0. A newly written
+not valid HTTP header values. A newly written
 record must remain present after trimming; a missing record still throws rather
 than announcing an invented directory.

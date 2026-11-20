@@ -211,9 +211,9 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       const currentRuntime = () => runtimeGeneration === agentsGeneration && runtimeKey === getRuntimeKey();
       if (!get().errorsByDirectory[key] && get().revisionsByDirectory[key] !== undefined && Date.now() - (agentsLastLoadedAt.get(key) ?? 0) < AGENTS_LOAD_CACHE_TTL_MS) return true;
       const inFlight = agentsLoadInFlight.get(key);
-      if (inFlight) {
+      if (inFlight && inFlight.generation === (agentsLoadGeneration.get(key) ?? 0)) {
         const loaded = await inFlight.request;
-        if (!currentRuntime()) return false;
+        if (!currentRuntime() || reloadEpoch !== agentsReloadEpoch) return false;
         return inFlight.generation === (agentsLoadGeneration.get(key) ?? 0) ? loaded : get().loadAgents(directory);
       }
       const generation = agentsLoadGeneration.get(key) ?? 0;

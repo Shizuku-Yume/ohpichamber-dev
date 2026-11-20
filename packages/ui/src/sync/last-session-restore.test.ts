@@ -331,7 +331,7 @@ describe('beginLastSessionRestore', () => {
         registerWorkspaceDirectory('workspace-moved', '/repo/.worktrees/moved');
         const list = holdSessionList();
         try {
-            const attempt = beginLastSessionRestore({ selectNow: true });
+            const attempt = beginLastSessionRestore({ selectNow: true, refresh: true });
             const result = attempt();
             list.answer([session('ses_open', 'workspace-moved')]);
             expect(await result).toBe('restored');

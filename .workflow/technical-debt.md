@@ -30,6 +30,46 @@ An entry leaves this file in one of two ways:
 
 ## Entries
 
+## Interrupted sends lack durable Canonical receipts
+
+- **Where:** Canonical prompt submission and `packages/ui/src/sync/send-failure-classification.ts`.
+- **Added:** 2026-11-20
+- **Priority:** worth-doing
+- **Problem:** losing the response does not prove whether a prompt was accepted; there is no durable receipt query keyed by the caller's correlation/idempotency ID.
+- **Impact:** an unconfirmed send must remain pending. Automatically restoring its draft can duplicate an accepted turn.
+- **Solution:** persist Canonical interrupted-send receipts keyed by caller correlation/idempotency ID and expose authoritative reconciliation. Keep unconfirmed sends pending without auto-restore until then.
+- **Cost:** Agent Contract, service persistence, retry semantics and UI reconciliation tests.
+
+## Guest marks and quota providers lack Host change producers
+
+- **Where:** Host guest marks/quota providers and the shared UI control stream.
+- **Added:** 2026-11-20
+- **Priority:** worth-doing
+- **Problem:** Host producers for `guest-marks-changed` and `quota-providers-changed` are not implemented.
+- **Impact:** connected clients cannot receive targeted invalidation; the UI reloads on `event-stream-ready` meanwhile.
+- **Solution:** emit validated, scoped change events from successful Host writes and consume them through the shared control stream.
+- **Cost:** producer wiring, event contracts and cross-client tests.
+
+## Last-turn diff lacks a Canonical per-turn diff contract
+
+- **Where:** Canonical turn/message DTOs and Last-turn diff presentation.
+- **Added:** 2026-11-20
+- **Priority:** worth-doing
+- **Problem:** workspace diffs are not authoritative per-turn edits; Canonical has no per-turn diff contract.
+- **Impact:** Last-turn diff shows unsupported rather than substituting a workspace diff or guessing from tool history.
+- **Solution:** define and implement a Canonical per-turn diff contract before restoring the surface.
+- **Cost:** contract/service provenance and UI normal, empty, unsupported and failure tests.
+
+## ChatContainer still owns the pre-ChatViewport timeline
+
+- **Where:** `packages/ui/src/components/chat/ChatContainer.tsx` and upstream `ChatViewport`/timeline owners.
+- **Added:** 2026-11-20
+- **Priority:** worth-doing
+- **Problem:** the full ChatContainer-to-upstream ChatViewport/timeline cutover is deferred.
+- **Impact:** the retained container does not yet share upstream's extracted viewport/timeline ownership.
+- **Solution:** port Canonical/Host behavior into the upstream owners, then retain the thin controller without parallel state owners.
+- **Cost:** streaming, scroll anchoring, pagination, runtime-switch and visual regression verification.
+
 
 
 ## Cold new-chat first token waits on OMP session construction

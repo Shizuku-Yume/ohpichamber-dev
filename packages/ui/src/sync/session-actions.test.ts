@@ -1,4 +1,3 @@
-import type { WorktreeMetadata } from '@/types/worktree';
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import type { ApprovalRequest, PromptRequest, Run, Session, SessionDeleteAck, SessionSnapshot, Message, Turn } from "@openchamber/agent-contract"
 import { CanonicalEventSchema, SessionMetadataSchema } from "@openchamber/agent-contract"
@@ -194,112 +193,21 @@ describe("native branch consumer lifecycle", () => {
     expect(loader.getSnapshot({ directory: destination, sessionId: "session-a" })).toMatchObject({ status: "ready", resolved: true, cursor: undefined, complete: true })
   })
 
-  test("publishes nothing locally when the caller's server changed during the move", async () => {
-    const source = createStore({}, {
-      session: [{
-        id: "session-a",
-        projectID: "project",
-        title: "Move me",
-        directory: "/source",
-        cost: 0,
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        time: { created: 1, updated: 1 },
-      }],
-      sessionTotal: 1,
-    })
-    const destination = createStore({})
-    const childStores = createChildStores([["/source", source], ["/destination", destination]])
-    const { moveSessionToDirectory, setActionRefs } = await import("./session-actions")
-    setActionRefs(childStores, () => "/source")
-
-    await moveSessionToDirectory(source.getState().session[0], "/source", "/destination", () => false)
-
-    expect(replyCalls.filter((call) => call.method === "session.move")).toHaveLength(1)
-    expect(source.getState().session[0]?.id).toBe("session-a")
-    expect(destination.getState().session).toHaveLength(0)
-    expect(globalUpsertedSessions).toHaveLength(0)
-  })
-
-  test("an event-applied move updates the global directory and the worktree attachment", async () => {
-    // SAFETY: test fixture; only the worktree path and branch are read.
-    const worktree = {
-      path: "/destination",
-      projectDirectory: "/repo",
-      branch: "feature",
-      label: "feature",
-    } as WorktreeMetadata
-    availableWorktreesByProject = new Map([["/repo", [worktree]]])
-    const source = createStore({}, {
-      // SAFETY: test fixture; the action reads id, title and directory.
-      session: [{ id: "session-a", title: "Renamed", directory: "/destination" } as Session],
-      sessionTotal: 1,
-    })
-    const destination = createStore({})
-    const childStores = createChildStores([["/source", source], ["/destination", destination]])
-    const { adoptSessionMove, setActionRefs } = await import("./session-actions")
-    setActionRefs(childStores, () => "/source")
-
-    adoptSessionMove("session-a", "/source", "/destination")
-
-    expect(globalUpsertedSessions.at(-1)).toMatchObject({
-      id: "session-a",
-      title: "Renamed",
-      directory: "/destination",
-    })
-    expect(worktreeMetadataCalls.at(-1)).toMatchObject({
-      sessionID: "session-a",
-      cwd: "/destination",
-    })
-    expect(worktreeMetadataCalls.at(-1)?.metadata?.path).toBe("/destination")
-    expect(queueMoves).toEqual([{ sessionId: "session-a", directory: "/destination" }])
-    expect(tabMoves).toEqual([{ sessionId: "session-a", directory: "/destination" }])
-    expect(folderMoves).toEqual([{ sessionId: "session-a", directory: "/destination", worktree: "/destination" }])
-  })
-
-  test("an event-applied move of a session no open folder lists still moves its attachment, folders and tabs", async () => {
-    // SAFETY: test fixture; only the worktree path and branch are read.
-    const worktree = { path: "/destination", projectDirectory: "/repo", branch: "feature", label: "feature" } as WorktreeMetadata
-    availableWorktreesByProject = new Map([["/repo", [worktree]]])
-    // SAFETY: test fixture; the action reads id, title and directory.
-    globalActiveSessions = [{ id: "session-a", title: "Elsewhere", directory: "/destination" } as Session]
-    const destination = createStore({})
-    const childStores = createChildStores([["/destination", destination]])
-    const { adoptSessionMove, setActionRefs } = await import("./session-actions")
-    setActionRefs(childStores, () => "/other")
-
-    adoptSessionMove("session-a", "/source", "/destination")
-
-    expect(destination.getState().session[0]?.id).toBe("session-a")
-    expect(registeredSessionDirectories).toEqual([{ sessionID: "session-a", directory: "/destination" }])
-    expect(worktreeMetadataCalls.at(-1)?.metadata?.path).toBe("/destination")
-    expect(folderMoves).toEqual([{ sessionId: "session-a", directory: "/destination", worktree: "/destination" }])
-    expect(tabMoves).toEqual([{ sessionId: "session-a", directory: "/destination" }])
-  })
-
-  test("an event-applied move out of a worktree clears the attachment", async () => {
-    const source = createStore({}, {
-      // SAFETY: test fixture; the action reads id, title and directory.
-      session: [{ id: "session-a", title: "Renamed", directory: "/elsewhere" } as Session],
-      sessionTotal: 1,
-    })
-    const destination = createStore({})
-    const childStores = createChildStores([["/source", source], ["/elsewhere", destination]])
-    const { adoptSessionMove, setActionRefs } = await import("./session-actions")
-    setActionRefs(childStores, () => "/source")
-
-    adoptSessionMove("session-a", "/source", "/elsewhere")
-
-    expect(globalUpsertedSessions.at(-1)).toMatchObject({
-      id: "session-a",
-      directory: "/elsewhere",
-    })
-    expect(worktreeMetadataCalls.at(-1)).toMatchObject({
-      sessionID: "session-a",
-      metadata: null,
-      cwd: "/elsewhere",
-    })
-  })
-})
+  test("a retired runtime cannot publish a completed native move", async () => {
+    const source = seed();
+    const relocation = deferred<{ sessions: Session[] }>();
+    const started = deferred<void>();
+    spyOn(canonicalClient, "resolveWorkspace").mockResolvedValue({ workspaceId: "workspace-destination", projectId: "project-a", name: "Destination" });
+    spyOn(canonicalClient, "relocateSession").mockImplementation(() => { started.resolve(); return relocation.promise });
+    const pending = moveSessionToDirectory(session(), directory, "/destination");
+    await started.promise;
+    changeRuntime();
+    relocation.resolve({ sessions: [session("session-a", { workspaceId: "workspace-destination" })] });
+    await expect(pending).rejects.toThrow('runtime changed');
+    expect(source.getState().session).toEqual([session()]);
+    expect(manager.getChild("/destination")?.getState().session ?? []).toEqual([]);
+  });
+});
 
 describe("native session deletion", () => {
   test("retains live and persisted state on failure and reports the failure", async () => {

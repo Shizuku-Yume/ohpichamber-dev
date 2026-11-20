@@ -13,7 +13,7 @@ export const OVERVIEW_UNTRACKED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
  * What keeps a session's turn open (see `useSessionTurnActivity`), or that the
  * user asked to follow a pull request from it.
  */
-export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'pullRequest';
+export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'extensionWait' | 'pullRequest';
 
 export type OverviewBlocking = 'permission' | 'question';
 

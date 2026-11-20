@@ -45,7 +45,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import type { DesktopSettings } from '@/lib/settings/registry';
 import type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
 import type { PushAPI } from './push';
-export type { PushAPI, PushSubscribePayload, PushUnsubscribePayload, ApnsTokenPayload } from './push';
+export type { PushAPI, NativePushStatus, PushSubscribePayload, PushUnsubscribePayload, ApnsTokenPayload } from './push';
 import type {
   ChangeRequest,
   ChangeRequestContext,

@@ -4,7 +4,7 @@ import type { AttachIssueRequest } from 'ohpichamber-sdk'
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import type { InlineCommentDraftTarget } from "@/stores/useInlineCommentDraftStore"
-import { prepareAttachmentFiles } from "./attachment-files";
+import { HeicConversionError, prepareAttachmentFiles } from "./attachment-files";
 import { getChatDraftIdentityKey, subscribeChatDraftDeletion, type ChatDraftIdentity } from "@/lib/chatDraftPersistence"
 import { pathForDroppedFile } from "@/lib/desktop"
 import { attachmentBasename } from "@/lib/attachmentIdentity";
@@ -181,7 +181,7 @@ type InputState = {
  setPendingSyntheticParts: (parts: SyntheticContextPart[] | null, target?: string | null) => void
  consumePendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
  getPendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
- addAttachedFile: (file: File, target?: ChatDraftIdentity | null) => Promise<boolean>
+ addAttachedFile: (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void) => Promise<boolean>
  removeAttachedFile: (id: string) => void
  setAttachedFiles: (files: AttachedFile[], target?: ChatDraftIdentity | null) => void
  clearAttachedFiles: (target?: ChatDraftIdentity | null) => void
@@ -328,13 +328,14 @@ export const useInputStore = create<InputState>()((set, get) => ({
   target === null ? get().pendingSyntheticParts : get().pinnedSyntheticParts.get(target) ?? null
  ),
 
- addAttachedFile: async (file: File, target?: ChatDraftIdentity | null) => {
+ addAttachedFile: async (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void) => {
   const generation = attachmentReadGeneration
   const referencePath = INTAKE_REDACTED_FILENAME.test(file.name) ? null : pathForDroppedFile(file)
   const attachReference = async (path: string): Promise<boolean> => {
    const reference = await prepareFileReference(file, path)
    if (generation !== attachmentReadGeneration) return false
    set((state) => appendAttachedFiles(state, [reference], target))
+   onPrepared?.([reference])
    return true
   }
 
@@ -354,8 +355,8 @@ export const useInputStore = create<InputState>()((set, get) => ({
    let attachedFiles: AttachedFile[] | undefined
    try {
     attachedFiles = await prepareLocalAttachments(file, reservedFilenames)
-   } catch {
-    return false
+   } catch (error) {
+    return error instanceof HeicConversionError && referencePath ? attachReference(referencePath) : false
    }
    if (generation !== attachmentReadGeneration) return false
    if (!attachedFiles) return referencePath ? attachReference(referencePath) : false
@@ -364,6 +365,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
    if (hasGeneratedFilenameCollision(generatedFilenames, attachedFilesFor(get(), target))) continue
 
    set((state) => appendAttachedFiles(state, attachedFiles, target))
+   onPrepared?.(attachedFiles)
    return true
   }
   return false

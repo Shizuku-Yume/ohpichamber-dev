@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 let fetchImpl: (input: string, init?: RequestInit) => Promise<Response>;
 const runtimeFetchModule = await import('@/lib/runtime-fetch');
@@ -101,7 +101,7 @@ describe('permission store server policy', () => {
     const oldResponse = new Promise<Response>((resolve) => { resolveOld = resolve; });
     fetchImpl = async () => oldResponse;
     const oldHydration = usePermissionStore.getState().hydrate();
-    await environment.settle();
+    await Promise.resolve();
 
     usePermissionStore.getState().reset();
     fetchImpl = async () => json({ sessions: { current: true }, revision: 2 });
@@ -116,7 +116,7 @@ describe('permission store server policy', () => {
     let resolveOld!: (response: Response) => void;
     fetchImpl = async () => new Promise<Response>((resolve) => { resolveOld = resolve; });
     const mutation = usePermissionStore.getState().setSessionMode('stale', 'auto');
-    await environment.settle();
+    await Promise.resolve();
 
     usePermissionStore.getState().reset();
     resolveOld(json({ sessions: { stale: true }, revision: 1 }));
@@ -131,7 +131,7 @@ describe('permission store server policy', () => {
     fetchImpl = async () => new Promise<Response>((resolve) => { resolvers.push(resolve); });
     const first = usePermissionStore.getState().setSessionMode('first', 'auto');
     const second = usePermissionStore.getState().setSessionMode('second', 'auto');
-    await environment.settle();
+    await Promise.resolve();
 
     resolvers[1](json({ sessions: { first: true, second: true }, revision: 2 }));
     await second;

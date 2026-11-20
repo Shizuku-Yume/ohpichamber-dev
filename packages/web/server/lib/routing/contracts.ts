@@ -1,4 +1,3 @@
-import type { OpenCode } from '@opencode/client';
 import type { JsonValue } from '../shared/json-values.js';
 import type { CustomEndpoint, RoutingCategory, RoutingConfig, createRoutingStore } from './store.js';
 import type { readPinnedCustomEndpoint } from './classifier.js';
@@ -71,7 +70,6 @@ export interface CacheHoldInput extends SessionScope {
   lastAnswer: RoutingHistory['lastAnswer'];
 }
 
-type Client = ReturnType<typeof OpenCode.make>;
 export interface ProviderKeys {
   zenKey: string | null;
   openrouterKey: string | null;
@@ -81,8 +79,6 @@ export interface ProviderKeys {
 
 export interface RoutingRuntimeOptions {
   dataDir: string;
-  buildOpenCodeUrl: (route: string, query: string) => string;
-  getOpenCodeAuthHeaders: () => Record<string, string>;
   broadcastGlobalUiEvent?: (event: { type: string; properties: RoutingBroadcastProperties }) => void;
   fetchImpl?: typeof fetch;
   store?: ReturnType<typeof createRoutingStore>;
@@ -93,7 +89,7 @@ export interface RoutingRuntimeOptions {
   readPinnedEndpoint?: typeof readPinnedCustomEndpoint;
   listCatalogModels?: ((directory: SessionScope['directory']) => Promise<{ providerID: string; modelID: string; variants: { id: string }[] }[]>) | null;
   readSessionHistory?: ((scope: SessionScope) => Promise<RoutingHistory>) | null;
-  readConfigEntries?: ((directory: SessionScope['directory']) => ReturnType<Client['config']['get']>) | null;
+  readConfigEntries?: ((directory: SessionScope['directory']) => Promise<unknown>) | null;
   readSessionAgent?: ((scope: SessionScope) => Promise<string | null>) | null;
   isSessionWarm?: (sessionId: string, cacheLifetimeMs: number) => boolean;
   now?: () => number;

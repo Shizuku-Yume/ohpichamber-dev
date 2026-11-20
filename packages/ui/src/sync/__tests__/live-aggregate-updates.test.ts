@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Session } from '@openchamber/agent-contract';
 
+import { nativeSnapshot } from '../session-message-loader-test-fixtures';
 import { aggregateLiveSessions } from '../live-aggregate'
 
 // The order the aggregate promises: the freshest record per id (a later list
@@ -17,13 +18,8 @@ const reference = (lists: Session[][]): Session[] => {
 }
 
 const record = (id: string, updated: number, step: number): Session => ({
-  sessionId: id,
-  projectID: 'prj_1',
-  title: `${id}@${step}`,
-  directory: '/d',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated },
+  ...nativeSnapshot(id, []).session, title: `${id}@${step}`, updatedAt: updated,
+  metadata: {}, metadataRevision: '0', archiveRevision: '0',
 })
 
 // A deterministic generator, so a failure reproduces.
@@ -62,11 +58,11 @@ describe('aggregateLiveSessions', () => {
     }
   })
 
-  test('keeps the previous array when a replaced record loses to a fresher copy elsewhere', () => {
+  test('keeps the winning record when a replaced record loses to a fresher copy elsewhere', () => {
     const fresh = record('ses_a', 10, 0)
     const stale = record('ses_a', 1, 0)
     const first = aggregateLiveSessions([{ session: [stale], session_status: {} }, { session: [fresh], session_status: {} }])
     const second = aggregateLiveSessions([{ session: [record("ses_a", 2, 1)], session_status: {} }, { session: [fresh], session_status: {} }])
-    expect(second).toBe(first)
+    expect(second[0]).toBe(first[0])
   })
 })

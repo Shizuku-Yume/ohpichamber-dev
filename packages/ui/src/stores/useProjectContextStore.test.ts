@@ -17,6 +17,7 @@ interface ContextPayload {
 }
 
 const emptyPayload = (): ContextPayload => ({ notes: [], todos: [], plans: [] });
+const savedStores: Array<string | null> = [];
 
 const note = (overrides: Partial<NotePayload> = {}): NotePayload => ({
   id: 'n1',

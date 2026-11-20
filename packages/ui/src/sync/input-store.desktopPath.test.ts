@@ -236,8 +236,8 @@ for (const extension of ['heic', 'heif']) {
 
 test('a HEIC the decoder cannot read still goes as a note naming its path on desktop', async () => {
   const { useInputStore } = await import('./input-store');
-  const { opencodeClient } = await import('@/lib/opencode/client');
-  const write = spyOn(opencodeClient, 'writeOpenCodeTempFiles');
+  const attachments = await import('@/lib/workspace-attachments');
+  const write = spyOn(attachments, 'saveWorkspaceAttachments');
   useInputStore.getState().clearAttachedFiles();
   decodeHeic = async () => {
     throw new Error('ERR_LIBHEIF format not supported');
