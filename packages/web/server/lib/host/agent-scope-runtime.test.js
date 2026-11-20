@@ -11,6 +11,7 @@ import { createSettingsNormalizationRuntime } from '../settings/settings-normali
 import { createProjectDirectoryRuntime } from '../projects/project-directory-runtime.js';
 import { getWorktrees } from '../git/service.js';
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
+import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes.js';
 import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
 import { SessionReferences } from '../../../../agent-service/src/sessions/references.ts';
 
@@ -58,6 +59,45 @@ const admittedSession = (scope, sessionId = 'native-session') => ({
 });
 
 describe('configured Host scope authority', () => {
+  it('archives sessions while their checkout is registered but refuses a left-over folder after Git unregisters it', async () => {
+    const { root, projectDirectory, owner, runtime } = await fixture();
+    const git = (...args) => execFileSync('git', ['-C', projectDirectory, ...args]);
+    git('init', '-q');
+    git('-c', 'user.name=Scope fixture', '-c', 'user.email=scope@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'scope fixture');
+    const worktreeDirectory = path.join(root, 'linked-worktree');
+    git('worktree', 'add', '-q', '--detach', worktreeDirectory);
+    const { workspaceId } = await runtime.resolveWorkspaceDirectory(worktreeDirectory);
+    const scope = await runtime.resolveWorkspaceScope(workspaceId);
+    const { sessionId } = admittedSession(scope);
+    await runtime.registerSessionScope(admittedSession(scope));
+    const app = express();
+    registerOpenChamberSessionRoutes(app, {
+      service: { request: async () => { throw new Error('Session archive is Host-owned'); } },
+      resolveWorkspaceScope: runtime.resolveWorkspaceScope,
+      resolveSessionScope: runtime.resolveSessionScope,
+      resolveHostSessionScope: runtime.resolveSessionScope,
+      registerSessionScope: runtime.registerSessionScope,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => {},
+      onPromptAccepted: async () => {},
+      directCommandAdmissionStore: owner.directCommandAdmissionStore,
+      archiveStore: owner.archiveStore,
+      sessionMetadataStore: owner.sessionMetadataStore,
+      isRequestOriginAllowed: () => true,
+    });
+    const archive = () => request(app).post('/api/openchamber/sessions/archive').send({ ids: [sessionId] });
+    await archive().expect(200);
+    await request(app).post('/api/openchamber/sessions/unarchive').send({ ids: [sessionId] }).expect(200);
+
+    git('worktree', 'remove', worktreeDirectory);
+    fs.mkdirSync(worktreeDirectory);
+    expect(await owner.agentScopeStore.getSession(sessionId)).toMatchObject({ workspaceId, cwd: worktreeDirectory });
+    const denied = await archive().expect(404);
+    expect(denied.body).toMatchObject({ code: 'SESSION_NOT_FOUND', detail: 'Session scope was not found' });
+    expect(await owner.archiveStore.getState(sessionId)).toMatchObject({ archivedAt: null });
+  });
+
   it('selects the registered owner for a nested repository without admitting it or an outside path', async () => {
     const { root, projectDirectory, runtime } = await fixture();
     const nested = path.join(projectDirectory, 'api');
