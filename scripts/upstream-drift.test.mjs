@@ -165,6 +165,7 @@ check('the boundary and the exclusions are separate classes', () => {
   assert.equal(isExcludedPath('nix/module.nix'), true);
   assert.equal(isExcludedPath('changelog/1.0.1.md'), true);
   assert.equal(isExcludedPath('packages/vscode/package.json'), true);
+  assert.equal(isExcludedPath('scripts/verify/stand.mjs'), true);
   assert.equal(isExcludedPath('Dockerfile'), true);
   assert.equal(isExcludedPath('flake.nix'), true);
   assert.equal(isExcludedPath('packages/web/server/lib/host/x.js'), false);

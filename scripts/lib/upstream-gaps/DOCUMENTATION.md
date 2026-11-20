@@ -14,6 +14,10 @@ count as using a constructor or mounting routes.
 The route audit follows source imports from the server entry, including `.js`
 specifiers whose source owner is TypeScript. A reachable route module must still
 be used, and a mounted 404 fallback is not endpoint coverage.
+Express calls with TypeScript type arguments count as registrations, and
+converted `.ts` router owners keep the same mount prefixes as their `.js` owners.
+Request-method inference reads only that request's options object, not a later
+request in the same source file.
 
 The settings audit follows relative store imports so split type, action and
 persistence owners retain their checks. A setter declaration without an

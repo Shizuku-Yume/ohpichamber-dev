@@ -130,6 +130,41 @@ test('the default comparison uses the committed upstream pin instead of a histor
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
 });
 
+test('typed Express calls and converted canonical router owners retain route coverage', () => {
+  const files = baseFiles();
+  files['packages/web/server/index.js'] += `\nimport { registerQueueRoutes } from './lib/message-queue/runtime.js';\nregisterQueueRoutes(app);\n`;
+  files['packages/web/server/lib/message-queue/runtime.ts'] = `export function registerQueueRoutes(router) {
+    router.get<unknown, { id: string; name: string }>('/sessions/:id/queue', (_req, res) => res.json({}));
+  }\n`;
+  files['packages/ui/src/api/queue.ts'] = `export const load = () => fetch('/api/agent/v1/sessions/session/queue');\n`;
+  const fixture = makeFixture(files);
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/web/server/lib/message-queue/runtime.ts', 'export function registerQueueRoutes(router) {}\n');
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /\[ui-call-no-route\] \/api\/agent\/v1\/sessions\/session\/queue/);
+});
+
+test('request method inference stops at its own options instead of the next request', () => {
+  const files = baseFiles();
+  files['packages/ui/src/api/tracker.ts'] = `
+    export const read = () => fetch('/api/tracker/things', { signal: undefined });
+    export const remove = () => fetch('/api/tracker/removed', { method: 'DELETE' });
+  `;
+  files['packages/web/server/lib/trackers/routes.js'] += `export function registerRemovalRoutes(app) {
+    app.delete('/api/tracker/removed', (_req, res) => res.json({}));
+  }\n`;
+  files['packages/web/server/index.js'] += `\nimport { registerRemovalRoutes } from './lib/trackers/routes.js';\nregisterRemovalRoutes(app);\n`;
+  const fixture = makeFixture(files);
+  const covered = runGuardrail(fixture);
+  assert.equal(covered.status, 0, covered.output);
+  fixture.fork('packages/web/server/lib/trackers/routes.js', files['packages/web/server/lib/trackers/routes.js'].replace("app.get('/api/tracker/things', (_req, res) => {\n    res.json({ things: [] });\n  });", ''));
+  const missing = runGuardrail(fixture);
+  assert.equal(missing.status, 1, missing.output);
+  assert.match(missing.output, /\[ui-call-no-route\] \/api\/tracker\/things/);
+});
+
 test('a public Host constructor can be owned by Electron without an unused-export exemption', () => {
   const files = baseFiles();
   files['packages/web/server/lib/native-host.js'] = 'export const createNativeHost = () => ({});\n';

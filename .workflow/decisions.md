@@ -1871,3 +1871,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** the owner expanded the merge bar to every retained platform and explicitly transferred testing ownership.
 - **Mine:** no; owner instruction.
 - **Scope:** acceptance and verification ownership only. Canonical `/api/agent/v1`, OMP 19, the Host/Agent Service boundary and Guest MessagePort v2 remain unchanged.
+
+## 2026-11-20 - Retain runtime-equivalent source compatibility cleanup
+
+- **Decided:** retain removal of unused default React imports under the automatic JSX transform, source formatting and type-only Host/Canonical contract repairs where the normalized runtime output is unchanged. Package renames remain owned by the first-release naming decision, not this exception.
+- **Instead of:** reverting mechanically equivalent source solely to match the new upstream baseline, or treating every type-related change as equivalent.
+- **Because:** the JSX/import-only rows have identical source after removing the unused React default import and blank-line differences; the remaining compatibility rows emit identical JavaScript under the same Bun transpiler after the separately recorded package rename. Neither comparison licenses deleting a route, setting, feature or assertion.
+- **Mine:** yes, limited to the mechanically compared source rows in the audit reconciliation.
+- **Revisit when:** the upstream source converges, or a row gains a behavioral difference requiring its own review.
