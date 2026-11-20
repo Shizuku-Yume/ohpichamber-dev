@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
+import { linkFixtureNodeModules } from './fixture-node-modules.mjs';
 import { writeServerCheckProjects } from './server-check-scope.mjs';
 
 const compiler = fileURLToPath(new URL('../../../node_modules/typescript/bin/tsc', import.meta.url));
@@ -13,7 +14,7 @@ test('only explicit legacy roots use declarations; new roots stay strict even ac
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-server-check-scope-'));
   try {
     fs.mkdirSync(path.join(root, 'server'));
-    fs.symlinkSync(fileURLToPath(new URL('../node_modules', import.meta.url)), path.join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+    linkFixtureNodeModules(fileURLToPath(new URL('../node_modules', import.meta.url)), path.join(root, 'node_modules'));
     fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}');
     fs.writeFileSync(path.join(root, 'tsconfig.server-check.json'), JSON.stringify({ extends: base }));
     const legacy = path.join(root, 'server/legacy.ts');

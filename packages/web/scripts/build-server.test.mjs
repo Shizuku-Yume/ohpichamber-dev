@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test, expect } from 'vitest';
 import { buildServer } from './build-server.mjs';
+import { linkFixtureNodeModules } from './fixture-node-modules.mjs';
 
 test('emits server and CLI with declarations, inline source maps and runtime siblings only', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-server-build-'));
@@ -47,10 +48,9 @@ test('emits server and CLI with declarations, inline source maps and runtime sib
     expect(map.sourcesContent[0].length).toBeGreaterThan(0);
     expect(map.sources[0]).toMatch(/server\/index.js$/);
     await fs.copyFile(new URL('../package.json', import.meta.url), path.join(packageRoot, 'package.json'));
-    await fs.symlink(
+    linkFixtureNodeModules(
       fileURLToPath(new URL('../node_modules', import.meta.url)),
       path.join(packageRoot, 'node_modules'),
-      process.platform === 'win32' ? 'junction' : 'dir',
     );
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
       await import(${JSON.stringify(pathToFileURL(path.join(output, 'server/index.js')).href)});
