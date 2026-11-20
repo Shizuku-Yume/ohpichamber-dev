@@ -7,6 +7,7 @@ import { SessionJournal } from '../../../../agent-service/src/projection/journal
 import { createOpenChamberControlService } from './service.js';
 import { createPrWatchRuntime, parsePullRequestUrl } from '../pr-watch/runtime.js';
 import { trackedItemKey } from '../tracked-items/items.js';
+import { createUploadStore } from '../browser-control/uploads.js';
 
 const scopeForWorkspace = {
   projectId: 'project-1',
@@ -345,6 +346,48 @@ describe('browser.close over the browser control bridge', () => {
     const { control } = createHarness(undefined, { browserControl: { request } });
     await expect(control.execute('browser.close', { tabId: 'tab-1' }, '/repo/app')).resolves.toEqual({ closed: true });
     expect(request).toHaveBeenCalledWith('browser.close', { tabId: 'tab-1' }, expect.objectContaining({ timeoutMs: 20_000 }));
+  });
+});
+
+describe('browser.upload over the browser control bridge', () => {
+  it('stages session files in the same store the download route reads', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-upload-'));
+    try {
+      await fs.writeFile(path.join(directory, 'a.txt'), 'hello');
+      const browserUploads = createUploadStore();
+      const request = vi.fn(async () => ({ uploaded: true }));
+      const { control } = createHarness(undefined, { browserControl: { request }, browserUploads });
+      await expect(control.execute('browser.upload', { selector: '#file', paths: ['a.txt'], directory: '/ignored' }, directory))
+        .resolves.toEqual({ uploaded: true });
+      const [action, parameters, options] = request.mock.calls[0];
+      expect(action).toBe('browser.upload');
+      expect(parameters.selector).toBe('#file');
+      expect(parameters.upload.files).toEqual([{ name: 'a.txt', size: 5 }]);
+      expect(browserUploads.get(parameters.upload.token, 0).bytes.toString()).toBe('hello');
+      expect(options).toMatchObject({ timeoutMs: 45_000, context: { directory } });
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses empty paths, missing context and escaping files before dispatch', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-upload-'));
+    try {
+      await fs.mkdir(path.join(directory, 'session'));
+      await fs.writeFile(path.join(directory, 'outside.txt'), 'private');
+      await fs.symlink(path.join(directory, 'outside.txt'), path.join(directory, 'session', 'link.txt'));
+      const request = vi.fn();
+      const { control } = createHarness(undefined, { browserControl: { request }, browserUploads: createUploadStore() });
+      for (const paths of [[], ['../outside.txt'], ['link.txt'], ['absent']]) {
+        await expect(control.execute('browser.upload', { selector: '#file', paths }, path.join(directory, 'session')))
+          .rejects.toMatchObject({ statusCode: 400 });
+      }
+      await expect(control.execute('browser.upload', { paths: ['outside.txt'] }, directory)).rejects.toMatchObject({ statusCode: 400 });
+      await expect(control.execute('browser.upload', { selector: '#file', paths: ['outside.txt'] })).rejects.toMatchObject({ statusCode: 400 });
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

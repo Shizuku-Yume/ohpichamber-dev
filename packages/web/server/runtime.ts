@@ -136,6 +136,7 @@ import { createBrowserControlRouter } from './lib/browser-control/provider.js';
 import { createDevServerScanner } from './lib/dev-servers/routes.js';
 import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
+import { createUploadStore, registerUploadRoute } from './lib/browser-control/uploads.js';
 import { createOpenChamberSessionService, registerCanonicalSessionRoutes } from './lib/openchamber-sessions/routes.js';
 import { createHostSessionState } from './lib/host/session-state.js';
 import { createHostAgentScopeRuntime } from './lib/host/agent-scope-runtime.js';
@@ -1456,6 +1457,7 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
  broadcastUiNotification,
 });
 
+const browserUploads = createUploadStore();
 const openChamberControlService = createOpenChamberControlService({
  readSettingsFromDiskMigrated,
  service: hostAgentRuntime.service,
@@ -1466,6 +1468,7 @@ const openChamberControlService = createOpenChamberControlService({
  sessionService: openChamberSessionService,
  scheduledTaskService,
  browserControl: browserControlRouter,
+ browserUploads,
  fileOpen: fileOpenRequester,
  // The tool is off by default; a plugin generated before it was switched off
  // must not keep paging the user.
@@ -2102,6 +2105,7 @@ async function main(options = {}) {
  relayService.registerRoutes(app);
 
  registerBrowserControlRoutes(app, { express, broker: browserControlBroker });
+ registerUploadRoute(app, { store: browserUploads });
 
  // One scanner backs both discovery and the tunnel allowlist, so a port the
  // user can see is exactly a port the tunnel will dial.

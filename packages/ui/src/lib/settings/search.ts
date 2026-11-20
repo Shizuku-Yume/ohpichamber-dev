@@ -1234,6 +1234,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['worktree', 'branch', 'repository'],
   },
   {
+    id: 'projects.worktree.create',
+    page: 'projects',
+    titleKey: 'settings.openchamber.worktrees.create.title',
+    descriptionKey: 'settings.openchamber.worktrees.create.info',
+    keywords: ['worktree', 'create', 'commands', 'bootstrap'],
+  },
+  {
     id: 'projects.worktree.directory',
     page: 'projects',
     titleKey: 'settings.openchamber.worktrees.directory.label',

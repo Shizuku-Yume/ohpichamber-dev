@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-11-21 - Restore audit-discovered upload and settings reachability
+
+- **Decided:** compose one Host upload store into browser control and its authenticated download route; expose the existing file-input upload driver as `browser.upload`. Resolve files only inside the captured session folder, never a model-supplied directory or an OpenCode temporary directory. Keep the existing token expiry and file limits.
+- **Settings:** restore the mobile Return-key checkbox that still has live composer/comment consumers, and index the existing worktree-creation command section. No stores, sync infrastructure, sidebar/search or router ownership changes.
+- **Surfaces:** browser bytes stay on the connected Host for Web/PWA, Electron and mobile clients; browser driving remains subject to the existing renderer/provider capability. The Return-key checkbox is mobile-only, matching its search guard.
+- **Remaining:** extension waits is separately owned. Other missing capabilities are not waived by this decision.
+
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here

@@ -44,6 +44,7 @@ const OPENCHAMBER_WEB_ACTION_DEFINITIONS = Object.freeze([
   { action: 'browser.click', title: 'Click on the open page', description: 'Click an element; give selector, or text to match a link or button by its visible label' },
   { action: 'browser.type', title: 'Type into the open page', description: 'Type value into the field matched by selector; set submit to press Enter afterwards' },
   { action: 'browser.select', title: 'Select an option on the open page', description: 'One exact option by label or value in the native select matched by selector' },
+  { action: 'browser.upload', title: 'Upload files to the open page', description: 'Attach files from the session folder to the file input matched by selector; paths is a list of file paths' },
   { action: 'browser.scroll', title: 'Scroll the open page', description: 'Scroll the page; direction is up, down, top, or bottom, or pass selector to bring one element into view' },
   { action: 'browser.back', title: 'Go back in the browser panel', description: 'Return to the previous page in this tab; no parameters' },
   { action: 'browser.forward', title: 'Go forward in the browser panel', description: 'Move forward again in this tab; no parameters' },

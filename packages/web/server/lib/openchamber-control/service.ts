@@ -13,6 +13,7 @@ import {
 } from './actions.js';
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
+import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploads.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
 import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
@@ -252,6 +253,7 @@ export const createOpenChamberControlService = (dependencies) => {
   listProjects,
   scheduledTaskService,
   browserControl = null,
+  browserUploads = null,
   fileOpen = null,
   notifyUser = null,
   // Notes, todos and plans behind the `openchamber_knowledge` tool.
@@ -861,10 +863,26 @@ export const createOpenChamberControlService = (dependencies) => {
    if (direction) parameters.direction = direction;
   }
 
+  if (action === 'browser.upload') {
+   const selector = asNonEmptyString(input.selector);
+   if (!selector) throw new OpenChamberControlError('selector is required for browser.upload', 400);
+   if (!browserUploads) throw new OpenChamberControlError('Uploads are not available on this server', 503);
+   const directory = asNonEmptyString(contextDirectory);
+   let files;
+   try {
+    files = await resolveUploadFiles({ paths: input.paths, directory, tempDirectory: directory ?? undefined });
+   } catch (error) {
+    if (error instanceof UploadRefusedError) throw new OpenChamberControlError(error.message, 400);
+    throw error;
+   }
+   parameters.selector = selector;
+   parameters.upload = browserUploads.put(files);
+  }
+
   // Opening a page waits for the navigation to settle, so its budget has to
   // exceed the client's own wait; sharing one timeout with the quick actions
   // made a slow page indistinguishable from an unreachable browser.
-  const timeoutMs = action === 'browser.open' ? 45_000 : 20_000;
+  const timeoutMs = action === 'browser.open' || action === 'browser.upload' ? 45_000 : 20_000;
   // Where the call came from, for a provider that keeps one browser per
   // project or chat. Filled by the tool plugin, never by the model.
   const context = {

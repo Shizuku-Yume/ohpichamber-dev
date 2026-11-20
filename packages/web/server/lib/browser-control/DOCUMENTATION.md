@@ -17,6 +17,10 @@ itself; it can only ask and wait.
 - `uploads.js` decides which files `browser.upload` may send and holds them
   under a short-lived token for the client that attaches them
   (`GET /api/browser-control/uploads/:token/:index`).
+  The runtime shares one upload store between this route and the control
+  service. Uploads read only the calling session's folder, including realpath
+  checks; model-supplied directory overrides cannot widen that grant. The route
+  remains behind normal Host authentication and returns uncached bytes.
 - `../../index.js` supplies `emitRequest`, which writes the request to the
   OpenChamber SSE clients and returns how many were reached. The event carries
   the same `context` (`directory`, `sessionId`, each `null` when unknown) the

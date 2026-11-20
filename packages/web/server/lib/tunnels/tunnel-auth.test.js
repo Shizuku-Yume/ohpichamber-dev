@@ -24,6 +24,19 @@ const activeAuth = () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('tunnel authentication lifecycle', () => {
+  it('does not grant local scope to remote forwarded clients while a tunnel is active', () => {
+    const auth = activeAuth();
+    const local = { headers: { host: 'localhost' }, hostname: 'localhost', socket: { remoteAddress: '127.0.0.1' } };
+    expect(auth.classifyRequestScope(local)).toBe('local');
+    for (const forwarded of ['203.0.113.10', '127.0.0.1, 203.0.113.10', ['::1', '203.0.113.10']]) {
+      expect(auth.classifyRequestScope({ ...local, headers: { ...local.headers, 'x-forwarded-for': forwarded } })).toBe('unknown-public');
+    }
+    expect(auth.classifyRequestScope({ ...local, headers: { ...local.headers, 'x-forwarded-for': '127.0.0.1, ::1' } })).toBe('local');
+    expect(auth.classifyRequestScope({ ...local, headers: { ...local.headers, 'x-forwarded-for': '' } })).toBe('local');
+    auth.clearActiveTunnel();
+    expect(auth.classifyRequestScope({ ...local, headers: { ...local.headers, 'x-forwarded-for': '203.0.113.10' } })).toBe('local');
+  });
+
   it('exchanges a bootstrap token once, reads its cookie and revokes the session', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const auth = activeAuth();
