@@ -51,6 +51,8 @@ Use the directory sync stores for live session, message, approval, and question 
 
 Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryable failures stop immediately, exhausted failures preserve prior state and report a loader error, and retired loads stop before another request. Every adopted snapshot reaches the existing event pipeline through `onSnapshot`.
 
+Discovery also recovers materialized root sessions when a newer head or epoch reports different run control than the cached snapshot. It requests a canonical snapshot through the same loader rather than replacing live activity with a list row. Older discovery cannot displace newer live state, and a failed recovery preserves the cached transcript and activity. Stop requests snapshot recovery when its authoritative read finds no active run, so an already-idle server can clear stale client controls without relaunching.
+
 Cold snapshots remain worker-free and do not subscribe to worker-owned events. A normal send whose starting snapshot was cold or absent requests a recovery snapshot only after native acceptance. SyncProvider queues this recovery behind any in-flight load and requires an available worker snapshot within the same startup budget before attachment. Snapshot errors never replay or reject an accepted send. The pipeline attaches from the returned cursor so already-completed replies come from the snapshot and later deltas come from the stream. Manual history retry followed by send takes the same path.
 
 Web/PWA, Electron, hosted mobile and Capacitor share this behavior through the Canonical Client; Guest SDK and transport/auth contracts are unchanged.

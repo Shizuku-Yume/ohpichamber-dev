@@ -4,6 +4,19 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+Shared UI discovery now requests canonical snapshot recovery when a newer
+session head or epoch disagrees with cached run control. Stop also refreshes
+when the server has no active run. This closes two paths that kept cached
+working/Stop state alive after a missed terminal update, including after an
+abort, follow-up and session revisit. Failed reads preserve activity and can
+recover on the next poll; stale discovery still cannot replace newer live
+state. Focused isolated UI coverage passes 170 tests and worker projection
+coverage passes 33; contract, SDK and Agent Service builds and UI typecheck
+pass. The supplied iOS host log has no per-run event trace, so the original
+terminal-delivery failure is not established. The recovery regression needs
+neither app relaunch nor a missing session scope. Live-provider and on-device
+visual verification remain outstanding.
+
 Prepared-session ownership now transfers on authorized use by ID as well as
 normal create. Timeout, discard and shutdown share the claim and cannot delete
 an adopted session; inventory behavior is unchanged. The regression failed

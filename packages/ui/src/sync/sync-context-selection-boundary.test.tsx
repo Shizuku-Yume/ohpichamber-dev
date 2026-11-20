@@ -3,7 +3,7 @@ import React, { act } from "react"
 import { createRoot } from "react-dom/client"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import type { CanonicalEvent, Message, Session, SessionSnapshot, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
-import { SyncProvider, useChildStoreManager, useSyncDirectory, useSyncRuntime, handleEvents } from "./sync-context"
+import { SyncProvider, useChildStoreManager, useSyncDirectory, useSyncRuntime, handleEvents, setActiveSession } from "./sync-context"
 import { useGlobalSessionStatusStore, applyGlobalSessionStatusEvents } from "./global-session-status"
 import { installSessionSnapshot } from "./event-reducer"
 import { usePrefetchSessionMessages } from "./use-sync"
@@ -13,7 +13,7 @@ import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
-import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
+import { deferred, nativeClient as createCanonicalClient, nativeMessage, nativeSnapshot } from './session-message-loader-test-fixtures'
 import { fileTreeChanges, subscribeFileTreeChanges } from "@/lib/fileTreeChanges"
 import { sendMessage } from "./session-actions"
 import { useConfigStore } from "@/stores/useConfigStore"
@@ -259,6 +259,59 @@ describe("SyncProvider native scope and selection boundaries", () => {
       expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(true)
     } finally {
       await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+
+  test.each([false, true])("polling recovers a missed terminal event after abort, follow-up, and session revisit (read fails=%s)", async fails => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/missed-terminal"
+    const listed = session("missed-terminal-session", workspace(directory).workspaceId)
+    const client = createNativeClient()
+    let discovered = listed
+    client.listSessions = async () => ({ items: [discovered], errors: {} })
+    const messages = [nativeMessage(listed.sessionId, "completed-follow-up", 5, "assistant")]
+    const terminal = { ...nativeSnapshot(listed.sessionId, messages), session: { ...listed, headSequence: "4" }, cursor: `${listed.epoch}:4` }
+    const read = spyOn(client, "getSnapshot").mockResolvedValue(terminal)
+    if (fails) read.mockRejectedValue(new Error("Snapshot refused"))
+    const interval = spyOn(globalThis, "setInterval")
+    let manager: ChildStoreManager | undefined
+    const Probe = () => { manager = useChildStoreManager(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      const poll = interval.mock.calls.find((call) => call[1] === 15_000)?.[0]
+      if (!manager || !poll) throw new Error("Discovery poll was not mounted")
+      const store = manager.ensureChild(directory, { bootstrap: false })
+      manager.pin(directory)
+      store.setState((state) => installSessionSnapshot(state, { ...nativeSnapshot(listed.sessionId, messages), session: listed, cursor: `${listed.epoch}:0` }))
+      const target = { directory, sessionId: listed.sessionId }
+      const envelope = { sessionId: listed.sessionId, epoch: listed.epoch, timestamp: 2 }
+      expect(handleEvents(target, [
+        { ...envelope, type: "run.started", sequence: "1", runId: "aborted-run", createdAt: 2 },
+        { ...envelope, type: "run.cancelled", sequence: "2", runId: "aborted-run", finishedAt: 3 },
+        { ...envelope, type: "run.started", sequence: "3", runId: "follow-up-run", createdAt: 4 },
+      ], manager)).toBe(true)
+      setActiveSession(directory, listed.sessionId)
+      setActiveSession(directory, "session-b")
+      setActiveSession(directory, listed.sessionId)
+      discovered = terminal.session
+      await act(async () => { poll(); await Promise.resolve(); await Promise.resolve() })
+      expect(read).toHaveBeenCalledTimes(1)
+      expect(store.getState().session_status[listed.sessionId]).toBe(fails ? "running" : "idle")
+      expect(store.getState().snapshot[listed.sessionId]?.session.activeRunId).toBe(fails ? "follow-up-run" : null)
+      expect(store.getState().message[listed.sessionId]).toEqual(messages)
+      expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(fails)
+      read.mockResolvedValue(terminal)
+      await act(async () => { poll(); await Promise.resolve(); await Promise.resolve() })
+      expect(read).toHaveBeenCalledTimes(fails ? 2 : 1)
+      expect(store.getState().session_status[listed.sessionId]).toBe("idle")
+      expect(store.getState().snapshot[listed.sessionId]?.session.activeRunId).toBeNull()
+    } finally {
+      setActiveSession("", "")
+      await act(async () => root.unmount())
+      interval.mockRestore()
+      read.mockRestore()
       dom.restore()
     }
   })

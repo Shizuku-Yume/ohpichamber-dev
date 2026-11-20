@@ -623,6 +623,27 @@ describe("native delivery and execution controls", () => {
     expect(abort).toHaveBeenCalledTimes(1)
   })
 
+  test.each([false, true])("Stop reconciles cached busy state when the authoritative run is already idle (refresh fails=%s)", async fails => {
+    const store = seed()
+    const live = nativeSnapshot("session-a", [])
+    live.session = { ...live.session, runtimeStatus: "running", activeRunId: run.runId }
+    live.activeRun = run
+    store.setState((state) => ({
+      ...state,
+      snapshot: { "session-a": live },
+      session_status: { "session-a": "running" },
+      session: [{ ...state.session[0]!, ...live.session }],
+    }))
+    const read = spyOn(canonicalClient, "getSnapshot").mockResolvedValue(nativeSnapshot("session-a", []))
+    if (fails) read.mockResolvedValueOnce(nativeSnapshot("session-a", [])).mockRejectedValueOnce(new Error("Snapshot refused"))
+    const abort = spyOn(canonicalClient, "abortSession")
+    if (fails) await expect(abortCurrentOperation("session-a")).rejects.toThrow("Snapshot refused")
+    else await abortCurrentOperation("session-a")
+    expect(abort).not.toHaveBeenCalled()
+    expect(store.getState().session_status["session-a"]).toBe(fails ? "running" : "idle")
+    expect(store.getState().snapshot["session-a"]?.session.activeRunId).toBe(fails ? run.runId : null)
+  })
+
   test("cancels authoritative compaction without requiring an active run", async () => {
     const store = seed()
     const live = nativeSnapshot("session-a", [])
