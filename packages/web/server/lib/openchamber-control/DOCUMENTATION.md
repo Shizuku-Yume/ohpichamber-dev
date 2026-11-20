@@ -9,6 +9,10 @@ other.
 
 ## Boundaries
 
+Waiting render pages and secret requests share the Host's scoped queued-message
+check. An earlier user message prevents starting either human-input wait; a failed
+queue read does not admit a wait as if the queue were empty.
+
 - `service.js` validates and executes the fixed project, model, session, and
   scheduled-task action allowlist. `actions.js` marks CLI-only actions with
   `agentExposed: false` (currently `schedule.status`); the agent tool consumes

@@ -273,6 +273,11 @@ Plan mode keeps its own tool set. When `OPENCHAMBER_PLAN_ALLOW_AGENTS` is set in
 
 ## Native goal mode
 
+The three-run native goal fixture disables `suggestion.generator`: background
+composer predictions reuse the provider and its tool catalog but are not goal
+runs. Its scripted response counter must count only foreground goal requests;
+suggestion generation has its own driver tests.
+
 Session control accepts `goal` operations `create`, `pause`, `resume`, and `drop`. Creation requires a nonempty objective and accepts a positive integer token budget (or `null` for no budget). The Host authorizes the session scope and forwards the operation; it stores no native goal state. Create and resume refuse an active run; pause and drop remain available during execution.
 
 Each session worker owns an unchanged OMP `RpcGoalController`, enables the session-local `rpc` continuation mode, and feeds it every native event. Continuation submissions become canonical `origin: 'goal'` runs through the same worker-run projection used by plan approval. Abort stops the controller before aborting the native session. Reopened active goals restore paused rather than silently starting work.

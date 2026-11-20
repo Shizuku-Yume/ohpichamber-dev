@@ -1018,6 +1018,18 @@ describe('useUIStore closeContextPanelTabs bulk', () => {
 describe('useUIStore zone sizes', () => {
   const directory = '/repo';
 
+  test('expanded chat sizes round valid values and ignore non-finite updates', () => {
+    const store = useUIStore.getState();
+    store.setContextZoneExpandedChatSize('right', 400.4);
+    expect(useUIStore.getState().contextZoneExpandedChatSizes).toEqual({ right: 400 });
+    for (const size of [NaN, Infinity, -Infinity]) {
+      store.setContextZoneExpandedChatSize('right', size);
+      expect(useUIStore.getState().contextZoneExpandedChatSizes).toEqual({ right: 400 });
+    }
+    store.setContextZoneExpandedChatSize('right', -1);
+    expect(useUIStore.getState().contextZoneExpandedChatSizes).toEqual({ right: 0 });
+  });
+
   test('a resize sets one clamped size for the zone, whatever surface it shows', () => {
     const store = useUIStore.getState();
     store.openContextPanelTab(directory, { mode: 'diff' });

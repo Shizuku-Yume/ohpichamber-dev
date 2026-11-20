@@ -84,9 +84,16 @@ retained behavior; the settings registry fixture now includes the supported
 terminal-tool toggle. The isolated CI tests job passes SDK (36 files), UI (1,407
 files), agent-contract (274 tests), Electron (80 files) and Web (615 files,
 9 skipped; 9,768 tests, 127 skipped). Scripts remain 35/38 because of the known
-PIDFD environment limitation. Agent Service remains red at the native RPC
-three-turn goal test (682 passed, one failed, 12 skipped); its cause is unresolved
-and its original assertion is unchanged. No message-queue UI failure reproduced.
+PIDFD environment limitation. The native RPC three-turn goal test also fails on
+`origin/main` (`8de18dc0b`): after the first native `agent_end`, the Host suggestion
+driver sends an ephemeral composer-prediction request with the same tool catalog.
+That request advances the fixture's foreground counter, causing completion in the
+second goal run. The fixture now disables its session-local `suggestion.generator`
+without changing the three-run assertion or production behavior. Five isolated
+runs pass; the full Agent Service suite passes 683 tests with 12 skipped and zero
+failures. Trace evidence is in `/home/ubuntu/ci-logs/final-goal-trace.log`; suite
+evidence is in `final-agent-suite.log` in the same directory. No message-queue UI
+failure reproduced.
 The Git smudge-filter boundary test failed intermittently on an execution marker,
 then passed alone, with all 205 network-operation tests and in the full Web run;
 no Git security assertion or implementation was changed. `bun run build` exits 0.

@@ -134,6 +134,7 @@ export const createWorkspaceActions: UIStoreSlice<
   },
 
   setContextZoneExpandedChatSize: (zone, size) => {
+    if (!Number.isFinite(size)) return;
     set(state => ({
       contextZoneExpandedChatSizes: {
         ...state.contextZoneExpandedChatSizes,

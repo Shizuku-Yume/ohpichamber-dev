@@ -440,7 +440,7 @@ export const createOpenChamberControlService = (dependencies) => {
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
  const secretRequests = createSecretRequests({ isEnabled: isSecretToolEnabled, onWaitChange: onPageWaitChange, hasUnreadChat });
  const readTerminal = createTerminalReadAction({ readSettings: readSettingsFromDiskMigrated, getTerminalRuntime });
- const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, readSession: (sessionId) => sessionService.getMetadata(sessionId), laterPages, sharePages });
+ const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, hasUnreadChat, readSession: (sessionId) => sessionService.getMetadata(sessionId), laterPages, sharePages });
  const answerPage = async (input: PageAnswerInput) => {
   try {
    return pageAnswers.answer(input);
