@@ -1847,3 +1847,11 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Instead of:** Clearing every session-keyed error after a healthy root listing, or adding another child polling owner.
 - **Because:** Canonical session lists contain roots, not the result of `listSubagents(parentId)`. Root success cannot establish that a missing child tree recovered. Known children and unrelated scope failures must survive unsuccessful retries and runtime changes must retire old completions.
 - **Surfaces:** Web/PWA, Electron, hosted mobile and Capacitor share the global store. Guest SDK and native admission are unchanged. Existing bounded root-listing startup retries and scoped root-error clearing remain in place.
+
+## 2026-11-20 - Test notification stream retirement with the runtime-change event contract
+
+- **Decided:** Pass the previous and next runtime URLs and keys when the notification stream test simulates switching runtimes.
+- **Instead of:** Dispatching a detail-free event after changing the URL resolver.
+- **Because:** Without the runtime identities, the listener cannot distinguish a switch from an event for the active runtime.
+- **Mine:** yes (records the existing fork fixture).
+- **Revisit when:** Upstream's fixture uses the same runtime-change event contract.
