@@ -216,7 +216,9 @@ export const listUsagePageProviders = () => Object.entries(registry)
  * Provider selections are supplied by the Host's selected workspace catalog.
  * This registry never enumerates or reads a credential store itself.
  */
-export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => {
+export const listConfiguredQuotaProviders = async ({ selections = [] }: {
+  selections?: { quotaProviderId?: string; providerId?: string }[];
+} = {}) => {
   const providerIds = new Set();
   for (const selection of selections) {
     const providerId = selection?.quotaProviderId ?? selection?.providerId;
