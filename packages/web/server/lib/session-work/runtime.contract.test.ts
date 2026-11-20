@@ -13,9 +13,10 @@ it('exposes only the checked final assistant as present', async () => {
   });
   if (!context) throw new Error('Expected a completed context');
   const turn = context.turns.at(-1);
-  expectTypeOf(turn.assistant.text).toEqualTypeOf<string>();
+  expectTypeOf(context.last.text).toEqualTypeOf<string>();
   expectTypeOf(context.turns.at(0)).toEqualTypeOf<AssistTurn | undefined>();
-  expect(turn.assistant.text).toBe('Finished.');
+  expect(context.last.text).toBe('Finished.');
+  expect(turn?.assistant?.text).toBe('Finished.');
   expect(turn).not.toHaveProperty('changedFiles');
   expect(context.last).not.toHaveProperty('providerID');
   expect(context.last).not.toHaveProperty('modelID');

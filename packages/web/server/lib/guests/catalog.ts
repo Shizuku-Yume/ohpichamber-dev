@@ -18,6 +18,8 @@ import type { GuestCapability } from 'ohpichamber-sdk';
 import type { GuestPackage, GuestRecord } from './contracts.js';
 import { hasErrorMessage, isString } from './input-guards.js';
 
+export type PublicGuest = ReturnType<typeof toPublicGuest>;
+
 const builtInsByStore = new Map<string, Awaited<ReturnType<typeof readBuiltInRegistry>>>();
 
 export const registerBuiltInGuests = async ({ persistPath, root }: { persistPath: string; root?: string | undefined }) => {

@@ -400,7 +400,7 @@ export const createSharePagesRuntime = ({
       recipient.answer = readAnswer(await openJson(keys.encKey, fromBase64Url(ciphertext), ANSWER_AAD));
       recipient.status = 'answered';
       recipient.error = null;
-      recipient.delivery = { messageId: createMessageId(now()), delivered: false };
+      recipient.delivery = { messageId: createMessageId(), delivered: false };
     } catch {
       Object.assign(recipient, { status: 'failed', error: 'The answer could not be decrypted' });
     }

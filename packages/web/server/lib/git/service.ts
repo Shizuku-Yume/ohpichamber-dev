@@ -1466,7 +1466,7 @@ export const inspectContributorCheckoutActions = async (directory, provenance) =
  if (head !== provenance.sourceSha) throw Object.assign(new Error('Contributor worktree HEAD changed'), { code: 'STALE_CONFIG', status: 409 });
  const hook = await inspectPostCheckoutHook(directory);
  const setupCommand = String(provenance.setupCommand || '').trim();
- const actions = [];
+ const actions: (PostCheckoutHookAction | { kind: 'setup-command'; command: string })[] = [];
  if (hook) actions.push(hook);
  if (setupCommand) actions.push({ kind: 'setup-command', command: setupCommand });
  const digestActions = actions.map((action) => action.kind === 'post-checkout-hook' ? {

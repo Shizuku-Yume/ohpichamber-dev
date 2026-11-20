@@ -4,9 +4,9 @@ import { fetchMistralUsage } from './mistral-billing.js';
 
 export const providerId = 'mistral';
 export const providerName = 'Mistral';
-export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const isConfigured = (credential: unknown) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ credential } = {}) => {
+export const fetchQuota = async ({ credential }: { credential?: unknown } = {}) => {
   const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });

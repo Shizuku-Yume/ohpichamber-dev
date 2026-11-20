@@ -5,7 +5,7 @@ const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '::1'];
 
 const readVariable = (env: NodeJS.ProcessEnv, name: string) => String(env[name] ?? env[name.toLowerCase()] ?? '').trim();
 
-interface ProxyEnv {
+interface ProxyEnv extends NodeJS.ProcessEnv {
   NO_PROXY: string;
   HTTP_PROXY?: string;
   HTTPS_PROXY?: string;

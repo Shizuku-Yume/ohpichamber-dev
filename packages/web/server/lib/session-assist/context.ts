@@ -1,3 +1,5 @@
+import type { AssistMessage, AssistTurn } from './contracts.js';
+
 const TURN_LIMIT = 3;
 const PAGE_SIZE = 50;
 const MAX_PAGES = 8;
@@ -33,7 +35,7 @@ export function newestContentId(records) {
 
 
 /** Read canonical Message text and derive completion from its Turn. */
-function readMessage(message, completedTurnIds) {
+function readMessage(message, completedTurnIds: Set<string>): AssistMessage {
   const role = message.role;
   const text = message.parts
     .filter((part) => part.type === 'text')
@@ -55,8 +57,8 @@ function readMessage(message, completedTurnIds) {
 }
 
 /** A turn is a user message followed by its assistant reply. */
-function collectTurns(messages, limit = TURN_LIMIT) {
-  const turns = [];
+function collectTurns(messages, limit = TURN_LIMIT): AssistTurn[] {
+  const turns: AssistTurn[] = [];
   let active = null;
   for (const message of messages) {
     if (message.transparent) continue;
@@ -85,7 +87,7 @@ const settledTurns = (messages) => collectTurns(messages, Infinity)
  * session has no settled turn yet.
  */
 export async function loadSettledTurns({ readPage, signal }) {
-  let messages = [];
+  let messages: AssistMessage[] = [];
   let cursor;
   const cursors = new Set();
   const ids = new Set();
@@ -98,7 +100,7 @@ export async function loadSettledTurns({ readPage, signal }) {
     for (const turn of page.turns) {
       if (turn.status === 'completed') completedTurnIds.add(turn.turnId);
     }
-    const current = [];
+    const current: AssistMessage[] = [];
     for (const record of page.messages) {
       const id = record.messageId;
       if (!id || ids.has(id)) continue;
@@ -118,7 +120,7 @@ export async function loadSettledTurns({ readPage, signal }) {
 
 /** Failure is thrown; null means no eligible final answer within bounded history. */
 export async function loadAssistContext({ readPage, signal }) {
-  let messages = [];
+  let messages: AssistMessage[] = [];
   let cursor;
   const cursors = new Set();
   const ids = new Set();
@@ -130,7 +132,7 @@ export async function loadAssistContext({ readPage, signal }) {
     for (const turn of page.turns) {
       if (turn.status === 'completed') completedTurnIds.add(turn.turnId);
     }
-    const current = [];
+    const current: AssistMessage[] = [];
     for (const record of page.messages) {
       const id = record.messageId;
       if (!id || ids.has(id)) continue;

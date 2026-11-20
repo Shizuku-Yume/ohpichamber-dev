@@ -20,3 +20,8 @@ persistence, and `evaluateTurn` suggestion gates have been deleted.
 - `prompt.js` contains assist system prompt formatting helpers.
 - `runtime.js` provides `createSessionAssistRuntime`, which observes canonical
   events to trigger `onTurnSettled` for stream lease teardown.
+
+The normalized records retain canonical message IDs and creation times, not SDK
+file snapshots or per-turn diffs. `loadAssistContext` checks the final message
+before exposing it as `last`. Array lookups remain optional, and an earlier
+human turn can have no assistant reply.
