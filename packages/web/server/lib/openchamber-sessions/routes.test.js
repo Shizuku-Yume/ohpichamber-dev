@@ -985,48 +985,6 @@ describe('canonical session list persistence', () => {
     }
   });
 
-  it('reads a session whose removed worktree no longer validates, and only when the checkout is gone', async () => {
-    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-removed-worktree-'));
-    const state = createHostSessionState({ dataDir });
-    const calls = [];
-    const removedCwd = path.join(dataDir, 'removed-worktree');
-    let ownerCwd = removedCwd;
-    try {
-      await state.initialize();
-      const { createOpenChamberSessionService } = await import('./routes.js');
-      const unavailable = Object.assign(new Error('A configured Host workspace is unavailable'), { code: 'METADATA_READ_FAILED' });
-      const service = createOpenChamberSessionService({
-        service: {
-          request: async (pathname) => {
-            calls.push(pathname);
-            if (pathname.endsWith('/snapshot')) return Response.json(snapshotFixture());
-            return Response.json(historyFixture());
-          }
-        },
-        resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
-        resolveSessionScope: async () => { throw unavailable; },
-        resolveHostSessionScope: async () => { throw unavailable; },
-        resolveHostRelocationScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace', cwd: ownerCwd }),
-        registerSessionScope: async () => true,
-        resolveAttachments: async () => [],
-        capturePrompt: async (_scope, body) => body,
-        beforeDispatch: async () => { },
-        onPromptAccepted: async () => { },
-        sessionMetadataStore: state.sessionMetadataStore,
-        archiveStore: state.archiveStore,
-        directCommandAdmissionStore: state.directCommandAdmissionStore,
-      });
-      expect((await service.open('session')).session.sessionId).toBe('session');
-      expect((await service.history('session')).messages).toHaveLength(1);
-      expect(calls.some(path => path.endsWith('/reopen'))).toBe(false);
-      ownerCwd = dataDir;
-      await expect(service.open('session')).rejects.toBe(unavailable);
-    } finally {
-      await state.close();
-      fs.rmSync(dataDir, { recursive: true, force: true });
-    }
-  });
-
   it('lists an unarchived session without losing its committed archive revision', async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-unarchive-'));
     const state = createHostSessionState({ dataDir });

@@ -855,6 +855,23 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       return rows.map((row) => row.workspaceId);
     } catch (error) { throw readFailure(error); }
   });
+  const listWorkspacesWithArchivedSessions = () => lifecycle.run(() => {
+    try {
+      const rows = db.prepare(`SELECT DISTINCT s.workspace_id AS workspaceId
+        FROM host_agent_sessions s
+        JOIN session_archive a ON a.session_id = s.session_id
+        WHERE a.archived_at IS NOT NULL`).all();
+      return rows.map((row) => row.workspaceId);
+    } catch (error) { throw readFailure(error); }
+  });
+  const hasArchivedSessions = (workspaceId) => lifecycle.run(() => {
+    try {
+      const row = db.prepare(`SELECT 1 FROM host_agent_sessions s
+        JOIN session_archive a ON a.session_id = s.session_id
+        WHERE s.workspace_id = ? AND a.archived_at IS NOT NULL LIMIT 1`).get(workspaceId);
+      return Boolean(row);
+    } catch (error) { throw readFailure(error); }
+  });
   const isWorktreeArchived = (workspaceId) => lifecycle.run(() => {
     try {
       const row = db.prepare(`SELECT 1 FROM host_worktree_archive_sessions s
@@ -885,5 +902,5 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       return { items, errors };
     } catch (error) { throw readFailure(error); }
   });
-  return { ensureWorkspace, getWorkspace, bindSession, getSession, removeSessionFamily, listSessionFamily, rebindSessionRoot, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, listArchivedWorktreeWorkspaces, isWorktreeArchived, createWorktreeArchive, getWorktreeArchive, claimWorktreeArchive, pinWorktreeRestore, markWorktreeRestoreAttempted, releaseWorktreeArchiveClaim, markWorktreeRestoreMove, completeWorktreeRestoreFamily, reserveWorktreeArchiveDeleteFamily, completeWorktreeArchiveDeleteFamily, recheckWorktreeArchive, setWorktreeArchivePhase, archiveWorktreeSessions, rollbackWorktreeSessions, finishWorktreeArchive, markWorktreeArchiveDeleteFinalizing, markWorktreeArchiveDeleteCasCompleted, markWorktreeArchiveRestoreCasStarted, markWorktreeArchiveRestoreCasCompleted, discardWorktreeArchive, checkWorktreeScope, assertSessionWritable, reserveSessionDelete, releaseSessionDelete, reserveSessionAdmission, releaseSessionAdmission, markSessionAdmissionUncertain, listPriorCreateAdmissions, flush: lifecycle.flush, close: lifecycle.close };
+  return { ensureWorkspace, getWorkspace, bindSession, getSession, removeSessionFamily, listSessionFamily, rebindSessionRoot, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, listArchivedWorktreeWorkspaces, listWorkspacesWithArchivedSessions, hasArchivedSessions, isWorktreeArchived, createWorktreeArchive, getWorktreeArchive, claimWorktreeArchive, pinWorktreeRestore, markWorktreeRestoreAttempted, releaseWorktreeArchiveClaim, markWorktreeRestoreMove, completeWorktreeRestoreFamily, reserveWorktreeArchiveDeleteFamily, completeWorktreeArchiveDeleteFamily, recheckWorktreeArchive, setWorktreeArchivePhase, archiveWorktreeSessions, rollbackWorktreeSessions, finishWorktreeArchive, markWorktreeArchiveDeleteFinalizing, markWorktreeArchiveDeleteCasCompleted, markWorktreeArchiveRestoreCasStarted, markWorktreeArchiveRestoreCasCompleted, discardWorktreeArchive, checkWorktreeScope, assertSessionWritable, reserveSessionDelete, releaseSessionDelete, reserveSessionAdmission, releaseSessionAdmission, markSessionAdmissionUncertain, listPriorCreateAdmissions, flush: lifecycle.flush, close: lifecycle.close };
 };

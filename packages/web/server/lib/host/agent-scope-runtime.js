@@ -146,7 +146,10 @@ export const createHostAgentScopeRuntime = ({
       } catch (error) { errors[workspaceId] = failureCode(error); }
     }
     if (typeof store.listArchivedWorktreeWorkspaces === 'function') {
-      const archivedWorkspaces = await store.listArchivedWorktreeWorkspaces();
+      const archivedWorkspaces = [...new Set([
+        ...await store.listArchivedWorktreeWorkspaces(),
+        ...(typeof store.listWorkspacesWithArchivedSessions === 'function' ? await store.listWorkspacesWithArchivedSessions() : []),
+      ])];
       for (const workspaceId of archivedWorkspaces) {
         try {
           const scope = await store.getWorkspace(workspaceId);
@@ -181,7 +184,10 @@ export const createHostAgentScopeRuntime = ({
       await store.checkWorktreeScope(scope.cwd, claimId);
       return { ...scope, displayPath: '.' };
     }
-    if (typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) {
+    const removedWithArchivedSessions = async () => typeof store.hasArchivedSessions === 'function'
+      && await fsPromises.lstat(scope.cwd).then(() => false, (cause) => cause?.code === 'ENOENT')
+      && await store.hasArchivedSessions(scope.workspaceId);
+    if ((typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) || await removedWithArchivedSessions()) {
       const project = projects.find((item) => item.id === scope.hostProjectId);
       if (!project) return null;
       const projectDirectory = await validateDirectory(project.path);
