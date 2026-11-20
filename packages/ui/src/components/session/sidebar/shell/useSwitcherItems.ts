@@ -148,15 +148,8 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
     for (const session of activeSessions) {
       const parentId = session.parentSessionId;
       if (!parentId) continue;
-<<<<<<< HEAD
       if (session.archivedAt !== undefined) continue;
       // A workflow run can start a hundred agents; its card lists them.
-||||||| bc50ba56aa
-      if (session.time?.archived) continue;
-      // A workflow run can start a hundred agents; its card lists them.
-=======
-      if (session.time?.archived) continue;
->>>>>>> upstream/main
       if (isWorkflowAgentSession(session)) continue;
       const bucket = childrenByParent.get(parentId);
       if (bucket) {
@@ -177,17 +170,8 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
       currentSessionId,
       (session) => findProjectForDirectory(resolveGlobalSessionDirectory(session))?.id ?? null,
       maxParents,
-<<<<<<< HEAD
       // btw forks stay hidden until promoted to a full session
       (session) => isVSCode && isChatDirectoryPath(resolveGlobalSessionDirectory(session)),
-||||||| bc50ba56aa
-      // btw forks stay hidden until promoted to a full session
-      (session) => isBtwSession(session) || (isVSCode && !isVSCodeWithoutWorkspace() && isChatDirectoryPath(resolveGlobalSessionDirectory(session)))
-        || !isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session), projects, availableWorktreesByProject),
-=======
-      (session) => isBtwSession(session) || (isVSCode && !isVSCodeWithoutWorkspace() && isChatDirectoryPath(resolveGlobalSessionDirectory(session)))
-        || !isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session), projects, availableWorktreesByProject),
->>>>>>> upstream/main
     );
 
     const buildNode = (session: Session): SessionNode => {

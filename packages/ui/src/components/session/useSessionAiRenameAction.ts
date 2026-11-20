@@ -12,24 +12,12 @@ export function useSessionAiRenameAction(sessionID: string, directory: string | 
   const { prepare, rename } = useSessionAiRename(sessionID, directory);
   const pending = useIsSessionAiRenamePending(sessionID, directory);
   const [availability, setAvailability] = useState<'checking' | 'ready' | 'empty' | 'error'>('checking');
-<<<<<<< HEAD
   const [prepared, setPrepared] = useState<{ sessionId: string; directory: string; scope: SmallModelAvailabilityScope }>();
   const scope = prepared?.sessionId === sessionID && prepared.directory === directory ? prepared.scope : undefined;
   // Renaming runs on the small model; without one the item is disabled with
   // the reason rather than failing after the click.
   const smallModel = useSmallModelAvailability(directory, open && availability === 'ready' && Boolean(scope), scope);
   const noSmallModel = availability === 'ready' && Boolean(scope) && smallModel === 'unavailable';
-||||||| bc50ba56aa
-  const unsupported = isVSCodeRuntime();
-  // Renaming runs on the small model; without one the item is disabled with
-  // the reason rather than failing after the click.
-  const smallModel = useSmallModelAvailability(directory, open && !unsupported);
-  const noSmallModel = smallModel === 'unavailable';
-=======
-  const unsupported = isVSCodeRuntime();
-  const smallModel = useSmallModelAvailability(directory, open && !unsupported);
-  const noSmallModel = smallModel === 'unavailable';
->>>>>>> upstream/main
 
   useEffect(() => {
     if (!open || !directory || pending) return;

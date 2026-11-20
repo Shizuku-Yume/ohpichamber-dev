@@ -61,15 +61,8 @@ export function useRunWork(run: MultiRunSummary, laneNodes: readonly SessionNode
         for (const session of inWorkSessions) {
           await setSessionWorkState(session.sessionId, normalizePath(resolveGlobalSessionDirectory(session) ?? null), 'done');
         }
-<<<<<<< HEAD
         // Done work leaves the working set, as it does for a session.
         leaveFinishedSessions(inWorkSessions.map((session) => session.sessionId));
-||||||| bc50ba56aa
-        // Done work leaves the working set, as it does for a session.
-        leaveFinishedSessions(inWorkSessions.map((session) => session.id));
-=======
-        leaveFinishedSessions(inWorkSessions.map((session) => session.id));
->>>>>>> upstream/main
       } else {
         const first = laneNodes[0]?.session;
         if (first) await setSessionWorkState(first.sessionId, normalizePath(resolveGlobalSessionDirectory(first) ?? null), 'open');

@@ -268,7 +268,6 @@ type UseSessionProjectCollectionArgs = {
   isVisible: boolean;
 };
 
-<<<<<<< HEAD
 // The collection owns the global-first/live-gap merge and lifecycle ordering.
 // Selection state intentionally never enters this boundary: rows subscribe to
 // active state themselves, leaving this projection referentially stable.
@@ -287,12 +286,6 @@ type UseSessionProjectCollectionResult = {
   sessionById: Map<string, Session>;
 };
 
-||||||| bc50ba56aa
-// The collection owns the global-first/live-gap merge and lifecycle ordering.
-// Selection state intentionally never enters this boundary: rows subscribe to
-// active state themselves, leaving this projection referentially stable.
-=======
->>>>>>> upstream/main
 export const useSessionProjectCollection = ({
   knownDirectories,
   isVSCode,

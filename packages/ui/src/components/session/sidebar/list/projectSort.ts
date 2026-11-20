@@ -60,22 +60,7 @@ export const rankByLatestActivity = <T>(
   ranked.sort((left, right) => right.at - left.at);
   return ranked.map((entry) => entry.item);
 };
-<<<<<<< HEAD
-/**
- * `items` sorted by `rankById` (project id to position). Items without a rank
- * stay ahead in their incoming order: the composer lists its Chat target
- * before the projects.
- */
-||||||| bc50ba56aa
 
-/**
- * `items` sorted by `rankById` (project id to position). Items without a rank
- * stay ahead in their incoming order: the composer lists its Chat target
- * before the projects.
- */
-=======
-
->>>>>>> upstream/main
 export const orderByProjectRank = <T extends { id: string }>(
   items: readonly T[],
   rankById: ReadonlyMap<string, number>,
@@ -84,21 +69,6 @@ export const orderByProjectRank = <T extends { id: string }>(
   return [...items].sort((left, right) => rankOf(left) - rankOf(right));
 };
 
-<<<<<<< HEAD
-
-/**
- * Keep `items` in a previously shown order. Items in `heldIds` keep their
- * place; items that appeared since follow in their live order. Used to stop
- * the "recent" sort from reshuffling projects under the pointer.
- */
-||||||| bc50ba56aa
-/**
- * Keep `items` in a previously shown order. Items in `heldIds` keep their
- * place; items that appeared since follow in their live order. Used to stop
- * the "recent" sort from reshuffling projects under the pointer.
- */
-=======
->>>>>>> upstream/main
 export const holdOrder = <T>(
   items: readonly T[],
   heldIds: readonly string[],

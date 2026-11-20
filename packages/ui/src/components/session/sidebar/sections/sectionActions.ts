@@ -39,28 +39,6 @@ export const updateSectionDraft = (draft: CustomSidebarSection): void => useSide
 export const discardSectionDraft = (): void => useSidebarSectionsUiStore.setState({ draft: null, draftIsNew: false, draftMatchCount: null });
 
 export const requestNewPinList = (pin: (listId: string) => void): void => useSidebarSectionsUiStore.setState({ pinListRequest: { pin } });
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/**
- * The phone's swipe Pin: with no pin lists it pins to Pinned or unpins at
- * once, as before; with lists it asks which one.
- */
-export const requestPinTo = (request: PinToRequest): void => {
-  if (useSessionDisplayStore.getState().pinLists.length === 0) {
-    if (request.current) request.unpin(); else request.pin(null);
-    return;
-  }
-  useSidebarSectionsUiStore.setState({ pinToRequest: request });
-};
-=======
-export const requestPinTo = (request: PinToRequest): void => {
-  if (useSessionDisplayStore.getState().pinLists.length === 0) {
-    if (request.current) request.unpin(); else request.pin(null);
-    return;
-  }
-  useSidebarSectionsUiStore.setState({ pinToRequest: request });
-};
->>>>>>> upstream/main
 export const closePinToRequest = (): void => useSidebarSectionsUiStore.setState({ pinToRequest: null });
 export const closePinListRequest = (): void => useSidebarSectionsUiStore.setState({ pinListRequest: null });
 

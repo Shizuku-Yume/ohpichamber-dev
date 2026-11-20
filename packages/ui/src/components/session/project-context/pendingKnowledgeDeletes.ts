@@ -27,13 +27,6 @@ export const planDeleteKey = (projectRef: ProjectRef, planId: string) => (
   `plan:${resolveProjectContextId(projectRef)}:${planId}`
 );
 
-<<<<<<< HEAD
-||||||| bc50ba56aa
-/** Memory ids are unique per store, and the global store is shared by every project. */
-export const memoryDeleteKey = (scope: AgentMemoryScope, memoryId: string) => `memory:${scope}:${memoryId}`;
-=======
-export const memoryDeleteKey = (scope: AgentMemoryScope, memoryId: string) => `memory:${scope}:${memoryId}`;
->>>>>>> upstream/main
 
 export const usePendingKnowledgeDeletes = (): ReadonlySet<string> => (
   React.useSyncExternalStore(subscribe, () => snapshot, () => snapshot)

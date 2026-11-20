@@ -21,13 +21,6 @@ export const useProjectsInSidebarOrder = <T extends { id: string }>(
   items: readonly T[],
   enabled = true,
 ): readonly T[] => {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-  // Every sidebar sorts projects by the stored order, in either grouping.
-  const isVSCode = React.useMemo(() => getSettingsSurface() === 'vscode', []);
-=======
-  const isVSCode = React.useMemo(() => getSettingsSurface() === 'vscode', []);
->>>>>>> upstream/main
   const projects = useProjectsStore((state) => (enabled ? state.projects : NO_PROJECTS));
   const manualOrder = useProjectsStore((state) => (enabled ? state.manualProjectOrder : NO_IDS));
   const order = useSessionDisplayStore((state) => (enabled ? state.projectSortOrder : 'manual'));

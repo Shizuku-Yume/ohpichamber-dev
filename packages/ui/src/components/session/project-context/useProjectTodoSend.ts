@@ -97,29 +97,6 @@ export const useProjectTodoSend = (options: {
       setSendingTodoId(pendingSendTarget.todoId);
 
       try {
-<<<<<<< HEAD
-||||||| bc50ba56aa
-        // The todo's project owns the prompts, also when the session lands in a new worktree.
-        const prompts = await loadMagicPrompts(projectRef.path);
-        const visiblePrompt = prompts.render('plan.todo.visible', {
-          todo_text: pendingSendTarget.todoText,
-        });
-        const instructionsText = prompts.render('plan.todo.instructions', {
-          todo_text: pendingSendTarget.todoText,
-        });
-        const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
-
-=======
-        const prompts = await loadMagicPrompts(projectRef.path);
-        const visiblePrompt = prompts.render('plan.todo.visible', {
-          todo_text: pendingSendTarget.todoText,
-        });
-        const instructionsText = prompts.render('plan.todo.instructions', {
-          todo_text: pendingSendTarget.todoText,
-        });
-        const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
-
->>>>>>> upstream/main
         routeToChat();
 
         let sessionId: string | null = null;

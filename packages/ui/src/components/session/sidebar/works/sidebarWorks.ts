@@ -129,17 +129,9 @@ export const orderInWorkWorks = (
   rootOf: ReadonlyMap<string, string>,
   isChatDirectory: (directory: string | null | undefined) => boolean,
 ): SidebarWorkRef[] => orderSidebarWorks(orderedSessions, index, (session) => (
-<<<<<<< HEAD
   // A subagent's own work state never puts its run in work: the user works
   // in the sessions they started, as the Done button on a row reads it.
   !session.parentSessionId && session.archivedAt === undefined && !isChatDirectory(session.displayPath) && isSessionInWork(session)
-||||||| bc50ba56aa
-  // A subagent's own work state never puts its run in work: the user works
-  // in the sessions they started, as the Done button on a row reads it.
-  !session.parentID && !session.time?.archived && !isChatDirectory(session.directory) && isSessionInWork(session)
-=======
-  !session.parentID && !session.time?.archived && !isChatDirectory(session.directory) && isSessionInWork(session)
->>>>>>> upstream/main
 ), EMPTY_ANCHORS, rootOf);
 
 export const buildWorktreeArchiveAnchors = ({

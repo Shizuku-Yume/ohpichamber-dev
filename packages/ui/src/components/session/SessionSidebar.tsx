@@ -582,21 +582,11 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     <SidebarSearchEmptyState />
   ), []);
 
-<<<<<<< HEAD
   // Web/desktop route archived sessions to the Archive page; only the VS Code
   // compact webview keeps inline archived buckets behind its toggle.
   const showInlineArchived = false;
   // The projects view always groups by worktree (parallel-work overview).
   // VS Code has no worktree groups, so it renders the merged per-project list.
-||||||| bc50ba56aa
-  // Web/desktop route archived sessions to the Archive page; only the VS Code
-  // compact webview keeps inline archived buckets behind its toggle.
-  const showInlineArchived = isVSCode && showArchivedSessions;
-  // The projects view always groups by worktree (parallel-work overview).
-  // VS Code has no worktree groups, so it renders the merged per-project list.
-=======
-  const showInlineArchived = isVSCode && showArchivedSessions;
->>>>>>> upstream/main
   const useGroupedSections = !isVSCode;
   const desktopHeaderActionButtonClass =
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed';
@@ -757,16 +747,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         hideDirectoryControls={hideDirectoryControls}
         showProjectDisplayControls={!isVSCode}
         showSectionControls={!isVSCode}
-<<<<<<< HEAD
-        handleOpenDirectoryDialog={handleOpenDirectoryDialog}
-        showSourceBoard={!mobileVariant && !isVSCode}
-||||||| bc50ba56aa
-        handleOpenDirectoryDialog={handleOpenDirectoryDialog}
-        // A desktop page: phones have their own shell, VS Code no source pickers.
-        showSourceBoard={!mobileVariant && !isVSCode}
-=======
         showPagesSection={!mobileVariant && !isVSCode}
->>>>>>> upstream/main
         headerActionIconClass={headerActionIconClass}
         headerActionButtonClass={headerActionButtonClass}
         listControlsSlot={listControlsSlot}

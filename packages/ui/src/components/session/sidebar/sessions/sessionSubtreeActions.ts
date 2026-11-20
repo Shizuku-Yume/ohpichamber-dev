@@ -25,33 +25,6 @@ type SessionSubtreeOutcome = {
  failedIds: string[];
 };
 
-<<<<<<< HEAD
-/**
- * Every descendant an archive or delete should reach, resolved when the user
- * acts rather than while rows render.
- *
- * `knownDescendantIds` is what the surface already sees: a row's `parentID`
- * children on desktop, the active list on mobile. Both stop at an archived child, so an
- * active subagent under an archived intermediate stayed behind (an edge #2580
- * pointed out). The global cache holds active and archived sessions together,
- * so walking it from the root reaches through archived intermediates. Archived
- * sessions are then dropped for archive, which must not retimestamp them, and
- * kept for delete, which removes the whole subtree.
- */
-||||||| bc50ba56aa
-/**
- * Every descendant an archive or delete should reach, resolved when the user
- * acts rather than while rows render.
- *
- * `knownDescendantIds` is what the surface already sees: a row's `parentID`
- * children on desktop, the active list on mobile. Both stop at an archived child, so an
- * active subagent under an archived intermediate stayed behind (an edge #2580
- * pointed out). The global lineage reaches through archived intermediates:
- * archive takes the active sessions below, since it must not restamp archived
- * ones, and delete takes the whole subtree.
- */
-=======
->>>>>>> upstream/main
 export const collectSessionSubtreeIds = (
  rootId: string,
  knownDescendantIds: readonly string[],
@@ -135,30 +108,6 @@ export const archiveUndoToastOptions = (
  };
 };
 
-<<<<<<< HEAD
-/**
- * Archive or hard-delete a session together with its descendants.
- *
- * The server does not cascade archive state, so a parent archived on its own
- * leaves its subagents active as orphan roots. Desktop sidebar rows, Recent,
- * managed Chats, and the mobile sessions sheet resolve the subtree first and
- * run it through here, so the calls made and the outcome the user sees stay
- * the same: a lone session keeps the singular copy, a subtree reports counts,
- * and a partial failure says how many sessions were left behind.
- */
-||||||| bc50ba56aa
-/**
- * Archive or hard-delete a session together with its descendants.
- *
- * The server does not cascade `time.archived`, so a parent archived on its own
- * leaves its subagents active as orphan roots. Desktop sidebar rows, Recent,
- * managed Chats, and the mobile sessions sheet resolve the subtree first and
- * run it through here, so the calls made and the outcome the user sees stay
- * the same: a lone session keeps the singular copy, a subtree reports counts,
- * and a partial failure says how many sessions were left behind.
- */
-=======
->>>>>>> upstream/main
 export const runSessionSubtreeAction = async (
  action: SessionSubtreeAction,
  session: Session,
@@ -183,7 +132,6 @@ export const runSessionSubtreeAction = async (
   return { succeededIds: [], failedIds: [session.sessionId] };
  }
 
-<<<<<<< HEAD
  const ids = [session.sessionId, ...descendantIds];
  if (hardDelete) {
   // Delete root + all descendants individually. If the server
@@ -197,36 +145,6 @@ export const runSessionSubtreeAction = async (
     : t('sessions.sidebar.bulkActions.deletedPlural', { count: totalDeleted }));
   } else {
    toast.error(t('sessions.sidebar.session.delete.error'), failureDescription(failedIds, t));
-||||||| bc50ba56aa
-  const ids = [session.id, ...descendantIds];
-  if (hardDelete) {
-    // Delete root + all descendants individually. If the server
-    // cascade-deletes some children before we get to them, 404 is
-    // treated as success by deleteSession and no rollback occurs.
-    const { deletedIds, failedIds } = await store.deleteSessions(ids);
-    if (failedIds.length === 0) {
-      const totalDeleted = deletedIds.length;
-      toast.success(totalDeleted === 1
-        ? t('sessions.sidebar.bulkActions.deletedSingle', { count: totalDeleted })
-        : t('sessions.sidebar.bulkActions.deletedPlural', { count: totalDeleted }));
-    } else {
-      toast.error(t('sessions.sidebar.session.delete.error'), failureDescription(failedIds, t));
-    }
-    return { succeededIds: deletedIds, failedIds };
-=======
-  const ids = [session.id, ...descendantIds];
-  if (hardDelete) {
-    const { deletedIds, failedIds } = await store.deleteSessions(ids);
-    if (failedIds.length === 0) {
-      const totalDeleted = deletedIds.length;
-      toast.success(totalDeleted === 1
-        ? t('sessions.sidebar.bulkActions.deletedSingle', { count: totalDeleted })
-        : t('sessions.sidebar.bulkActions.deletedPlural', { count: totalDeleted }));
-    } else {
-      toast.error(t('sessions.sidebar.session.delete.error'), failureDescription(failedIds, t));
-    }
-    return { succeededIds: deletedIds, failedIds };
->>>>>>> upstream/main
   }
   return { succeededIds: deletedIds, failedIds };
  }

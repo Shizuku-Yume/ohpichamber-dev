@@ -22,26 +22,6 @@ export type SessionNodeRenderExtras<TNode = SessionNode> = SessionNodeChildRende
   childRenderExtrasFor?: (child: TNode) => SessionNodeChildRenderExtras;
 };
 
-<<<<<<< HEAD
-/**
- * Walk `nodes` and add `node.session.sessionId` to `result` for every node
- * whose subtree contains `targetId`. This is used to precompute, once
- * per SessionGroupSection render, which rows need to update when
- * `editingId` changes. With M visible rows, this
- * turns an O(M × subtree-depth) walk inside `SessionNodeItem.areEqual`
- * into a single O(M) `Set.has` per row.
- */
-||||||| bc50ba56aa
-/**
- * Walk `nodes` and add `node.session.id` to `result` for every node
- * whose subtree contains `targetId`. This is used to precompute, once
- * per SessionGroupSection render, which rows need to update when
- * `editingId` changes. With M visible rows, this
- * turns an O(M × subtree-depth) walk inside `SessionNodeItem.areEqual`
- * into a single O(M) `Set.has` per row.
- */
-=======
->>>>>>> upstream/main
 export const collectSubtreeContainingId = (
   nodes: SessionNode[],
   targetId: string | null,

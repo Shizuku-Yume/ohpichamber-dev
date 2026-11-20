@@ -89,15 +89,8 @@ const collectWorkSessions = (ref: SidebarWorkRef, context: FactsContext) => {
       stack.push(...(context.childrenMap.get(session.sessionId) ?? []));
     }
   }
-<<<<<<< HEAD
   // A subagent's own state never counts for the work, as in In work.
   return { all, top: all.filter((session) => !session.parentSessionId) };
-||||||| bc50ba56aa
-  // A subagent's own state never counts for the work, as in In work.
-  return { all, top: all.filter((session) => !session.parentID) };
-=======
-  return { all, top: all.filter((session) => !session.parentID) };
->>>>>>> upstream/main
 };
 
 export const buildSidebarWorkFacts = (ref: SidebarWorkRef, context: FactsContext): SidebarWorkFacts => {

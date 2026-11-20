@@ -48,15 +48,8 @@ export const collectWorkSessions = (nodes: readonly SessionNode[]): Session[] =>
   return sessions;
 };
 
-<<<<<<< HEAD
 /** A session that grew out of another one (a review, a fork, a promoted `/btw`), not the work itself. */
 const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.metadata?.openchamber?.originalSessionID);
-||||||| bc50ba56aa
-/** A session that grew out of another one (a review, a fork, a promoted `/btw`), not the work itself. */
-const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.fork?.sessionID);
-=======
-const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.fork?.sessionID);
->>>>>>> upstream/main
 
 export const pickWorkSessionToOpen = (nodes: readonly SessionNode[]): Session | null => (
   nodes.find((node) => !isOffshoot(node.session))?.session ?? nodes[0]?.session ?? null
