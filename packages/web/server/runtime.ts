@@ -150,6 +150,21 @@ import { readMergedSettingsSync } from './lib/host/settings-files.js';
 import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
+import { createLaterPages } from './lib/openchamber-control/later-pages.js';
+import { createSyntheticDelivery } from './lib/openchamber-control/synthetic-delivery.js';
+import { createSharePagesRuntime } from './lib/share-pages/runtime.js';
+import { createSharePageStore } from './lib/share-pages/store.js';
+import {
+ createRelayShareSigner,
+ createShareRelayClient,
+ createShareViewerClient,
+ isRelayBaseAllowed,
+ isSharingAvailable,
+ resolveShareRelayBase,
+} from './lib/share-pages/relay-client.js';
+import { allowedReceiveBases } from './lib/share-pages/received-link.js';
+import { createReceivedPagesRuntime } from './lib/share-pages/received-runtime.js';
+import { createReceivedPageStore } from './lib/share-pages/received-store.js';
 import { createWorkflowsModule } from './lib/workflows/routes.js';
 import { isWorkflowFeatureAvailable } from './lib/workflows/routes.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
@@ -1003,6 +1018,40 @@ const extensionWaitsRuntime = createExtensionWaitsRuntime({
  insideSpace: Boolean(process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE),
 });
 extensionWaitsRuntime.start(globalMessageStreamHub);
+const postSyntheticToSession = createSyntheticDelivery({ sessionService: openChamberSessionService });
+const laterPagesRuntime = createLaterPages({
+ dataDir: OPENCHAMBER_DATA_DIR,
+ postSynthetic: postSyntheticToSession,
+ broadcastUiEvent: broadcastOpenChamberUiEvent,
+ readArchiveState: async (sessionID) => (await openChamberSessionService.archiveStore.isArchived(sessionID) ? 'archived' : 'active'),
+});
+laterPagesRuntime.start(globalMessageStreamHub);
+const sharePagesRuntime = createSharePagesRuntime({
+ crypto,
+ store: createSharePageStore({ fsPromises, path, dataDir: OPENCHAMBER_DATA_DIR }),
+ relay: createShareRelayClient({ getSigner: createRelayShareSigner({ crypto, relayKeyStore }) }),
+ postSynthetic: postSyntheticToSession,
+ onAnswerDelivered: (answer) => notificationTriggerRuntime.notifyShareAnswer(answer),
+ broadcast: (event) => broadcastOpenChamberUiEvent(event),
+ isAvailable: isSharingAvailable,
+ isRelayBaseAllowed,
+ resolveRelayBase: async () => resolveShareRelayBase(await readSettingsFromDiskMigrated().catch(() => null)),
+});
+void sharePagesRuntime.start().catch((error) => {
+ console.warn('[share-pages] failed to start:', error?.message ?? error);
+});
+globalMessageStreamHub.subscribeStatus((status) => {
+ if (status?.type === 'connect') void sharePagesRuntime.poll();
+});
+const receivedPagesRuntime = createReceivedPagesRuntime({
+ crypto,
+ store: createReceivedPageStore({ fsPromises, path, dataDir: OPENCHAMBER_DATA_DIR }),
+ relay: createShareViewerClient(),
+ isAvailable: isSharingAvailable,
+ isEnterpriseMode: () => isEnterpriseMode(),
+ allowedBases: async () => allowedReceiveBases(await readSettingsFromDiskMigrated().catch(() => null)),
+ broadcast: (event) => broadcastOpenChamberUiEvent(event),
+});
 // Jev model routing and the permission safety net. Every failure keeps the
 // user's own model or the auto-accept reply it was asked about.
 const routingRuntime = createRoutingRuntime({
@@ -1537,6 +1586,8 @@ const openChamberControlService = createOpenChamberControlService({
  dispatchResults: dispatchResultsRuntime,
  prWatch: prWatchRuntime,
  extensionWaits: extensionWaitsRuntime,
+ laterPages: process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE ? null : laterPagesRuntime,
+ sharePages: sharePagesRuntime,
  archiveStore: openChamberSessionService.archiveStore,
  workflowRuntime: workflowsModule.workflowRuntime,
 });
@@ -2097,6 +2148,9 @@ async function main(options = {}) {
   writeSettingsToDisk,
   relayKeyStore,
   remoteClientAuthRuntime,
+  onShareState: (shareId) => {
+   void sharePagesRuntime.handleShareState(shareId).catch(() => undefined);
+  },
   getLocalPort: () => tunnelRuntimeContext.getActivePort(),
   // One relay host per machine: every instance sharing this data dir shares
   // the relay identity (serverId), so concurrent hosts evict each other at
@@ -2183,6 +2237,9 @@ async function main(options = {}) {
   autoReviewRuntime,
   prWatchRuntime,
   extensionWaitsRuntime,
+  laterPagesRuntime,
+  sharePagesRuntime,
+  receivedPagesRuntime,
   persistResolvedSettings: (...args) => settingsRuntime.persistResolvedSettings(...args),
   environmentStore,
   environmentRuntime,

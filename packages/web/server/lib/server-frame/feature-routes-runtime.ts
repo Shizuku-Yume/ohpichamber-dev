@@ -52,6 +52,7 @@ import { registerNotificationChannelRoutes } from '../notifications/channel-rout
 import { registerAutoReviewRoutes } from '../auto-review/runtime.js';
 import { registerPrWatchRoutes } from '../pr-watch/runtime.js';
 import { registerExtensionWaitsRoutes } from '../extension-waits/runtime.js';
+import { registerReceivedPageRoutes, registerSharePageRoutes } from '../share-pages/routes.js';
 import { registerProviderLogoRoutes } from '../appearance/provider-logo-routes.js';
 import { createSshPassphraseStore } from '../git/ssh-passphrases.js';
 import { setHostCallbackRoute } from '../guests/host-callback.js';
@@ -277,7 +278,9 @@ export const createFeatureRoutesRuntime = () => {
       sessionService: openChamberSessionService,
     });
 
-    registerOpenChamberControlRoutes(app, { controlService: openChamberControlService });
+    registerOpenChamberControlRoutes(app, { controlService: openChamberControlService, laterPages: routeDependencies.laterPagesRuntime ?? null });
+    if (routeDependencies.sharePagesRuntime) registerSharePageRoutes(app, routeDependencies.sharePagesRuntime);
+    if (routeDependencies.receivedPagesRuntime) registerReceivedPageRoutes(app, routeDependencies.receivedPagesRuntime);
 
     // Agent workflows, present only in a build with OPENCHAMBER_WORKFLOWS_ENABLE.
     routeDependencies.workflows?.register(app);

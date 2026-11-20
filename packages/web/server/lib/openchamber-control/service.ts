@@ -17,6 +17,7 @@ import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploa
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
 import { createTerminalReadAction } from './terminal-read.js';
 import { redactGitText } from '../git/redaction.js';
+import type { PageAnswerInput } from './render-page.js';
 import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
@@ -280,6 +281,8 @@ export const createOpenChamberControlService = (dependencies) => {
   // (`pr.watch`); absent where pull request watches are not available.
   prWatch = null,
   extensionWaits = null,
+  laterPages = null,
+  sharePages = null,
   // Archive lives in OpenChamber's own store now.
   archiveStore = null,
   // Agent workflows (../workflows/runtime.js); absent where they are not
@@ -430,8 +433,16 @@ export const createOpenChamberControlService = (dependencies) => {
  };
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
- const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers });
  const readTerminal = createTerminalReadAction({ readSettings: readSettingsFromDiskMigrated, getTerminalRuntime });
+ const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, laterPages, sharePages });
+ const answerPage = async (input: PageAnswerInput) => {
+  try {
+   return pageAnswers.answer(input);
+  } catch (error) {
+   if (!laterPages || error?.statusCode !== 404) throw error;
+   return laterPages.answer(input);
+  }
+ };
 
  // 2 for a favorite, 1 for a recent model, absent for the rest.
  const PREFERENCE_BY_RANK = { 2: 'favorite', 1: 'recent' };
@@ -1196,5 +1207,5 @@ export const createOpenChamberControlService = (dependencies) => {
   }
  };
 
- return { execute, invokeHostAction, resolveSessionDirectory, answerPage: pageAnswers.answer };
+ return { execute, invokeHostAction, resolveSessionDirectory, answerPage };
 };

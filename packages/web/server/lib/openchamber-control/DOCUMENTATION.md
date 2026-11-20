@@ -25,6 +25,17 @@ other.
   answer keyed by session and tool call id (`pageAnswers`). Every inner host
   action request for `openchamber_render` carries that `toolCallId`, so an
   answer reaches the call that showed the page.
+  With `answerLater` the call returns at once and `later-pages.js` keeps the
+  page, across restarts, in `render-later-pages.json`; `GET
+  /api/openchamber/render/later` serves its snapshot and the answer route
+  falls back to it when no call waits. With `share` the page goes to
+  `../share-pages/runtime.js` (see its DOCUMENTATION.md).
+- `synthetic-delivery.js` posts a later or shared page's answer into the
+  author's session as synthetic context through the canonical session
+  service: a send keyed by the answer's message id when the session is idle, a
+  steer into its active run on `RUN_ACTIVE`. A message with `resume: false`
+  (an archived session) is not posted, since a canonical send always starts a
+  run; the answer still shows under the page.
 - `../agent-tool/runtime.js` is the managed-tool adapter. It wraps service
   results in the versioned native-tool envelope and uses a separate ephemeral
   loopback credential.
