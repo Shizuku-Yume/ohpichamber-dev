@@ -46,7 +46,6 @@ const attachmentState = {
   attachments: new Map<string, { worktreeStatus: 'pending' | 'ready'; worktreeRoot: string }>(),
 };
 
-<<<<<<< HEAD
 // The shape `fetchProjectSetup` answers with: no shared commands, so nothing
 // asks for trust; an empty teardown, so the removal carries none.
 const EMPTY_PROJECT_SETUP = {
@@ -82,17 +81,8 @@ const EMPTY_PROJECT_SETUP = {
 };
 
 const realOpenchamberConfig = await import('@/lib/openchamberConfig');
-||||||| bc50ba56aa
-=======
-let createCommand = '';
->>>>>>> upstream/main
 mock.module('@/lib/openchamberConfig', () => ({
-<<<<<<< HEAD
   ...realOpenchamberConfig,
-||||||| bc50ba56aa
-=======
-  getWorktreeCreateCommand: async () => createCommand,
->>>>>>> upstream/main
   substituteCommandVariables: (command: string) => command,
   // Removal asks the project what to run before the worktree goes; nothing
   // configured means no teardown, and no trust prompt either.

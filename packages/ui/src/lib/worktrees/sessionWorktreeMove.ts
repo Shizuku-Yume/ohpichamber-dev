@@ -14,15 +14,6 @@ import { isAmbiguousSendFailure } from '@/sync/send-failure-classification';
 import { getSessionLiveActivity, isSessionBusyNow, moveSessionToDirectory } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { WorktreeMetadata } from '@/types/worktree';
-<<<<<<< HEAD
-||||||| bc50ba56aa
-import { waitForWorktreeGitReady } from '@/lib/worktrees/worktreeBootstrap';
-=======
-import { waitForWorktreeGitReady } from '@/lib/worktrees/worktreeBootstrap';
-import { moveSessionsThenRemoveWorktree, WorktreeKeepStoppedError, type WorktreeKeepStop } from '@/lib/worktrees/worktreeRemovalFlow';
-import { captureRuntimeInstance } from '@/lib/runtime-switch';
-import { opencodeClient } from '@/lib/opencode/client';
->>>>>>> upstream/main
 import { create } from 'zustand';
 
 export type SessionTreeMoveMessages = {
@@ -64,14 +55,6 @@ export type SessionTreeMoveIntent =
       messages: SessionTreeMoveMessages;
     }
   | {
-<<<<<<< HEAD
-      // A chat promoted into a project: the conversation moves to the
-      // project's root folder; files the chat wrote stay where they are.
-||||||| bc50ba56aa
-      // The conversation moves to a folder the user picked, usually a
-      // project's root; files the session wrote stay where they are.
-=======
->>>>>>> upstream/main
       kind: 'project';
       root: Session;
       descendants: Session[];
@@ -124,7 +107,6 @@ const resolveSourceBranch = async (directory: string, projectDirectory: string):
   throw new Error('Unable to determine the current branch');
 };
 
-<<<<<<< HEAD
 // Scans every child store instead of the source directory's: a session's live
 // status can be reported by a directory other than the one that wins the
 // directory dedup, and a directory-scoped read would then see no status at all
@@ -135,21 +117,6 @@ const assertSessionsIdle = (sessions: Session[]): void => {
     if (activity === 'unknown') throw new Error('Session status is unavailable');
     if (activity === 'active') throw new Error('Session is not idle');
   }
-||||||| bc50ba56aa
-// A session's live status can be reported by a directory other than the one
-// that wins the directory dedup, so the answer covers every child store. The
-// source directory only picks the server asked when no store knows: the host,
-// or the isolated space that holds it.
-const assertSessionsIdle = async (sessions: Session[], sourceDirectory: string): Promise<void> => {
-  const activity = await readSessionsLiveActivity(sessions.map((session) => session.id), sourceDirectory);
-  if (activity === 'unknown') throw new Error('Session status is unavailable');
-  if (activity === 'active') throw new Error('Session is not idle');
-=======
-const assertSessionsIdle = async (sessions: Session[], sourceDirectory: string): Promise<void> => {
-  const activity = await readSessionsLiveActivity(sessions.map((session) => session.id), sourceDirectory);
-  if (activity === 'unknown') throw new Error('Session status is unavailable');
-  if (activity === 'active') throw new Error('Session is not idle');
->>>>>>> upstream/main
 };
 
 type RollbackFailure = {
@@ -193,31 +160,13 @@ const rollbackMovedSessions = async (
 ): Promise<RollbackFailure[]> => {
   const failures: RollbackFailure[] = [];
   for (const session of [...sessions].reverse()) {
-<<<<<<< HEAD
     if (isSessionBusyNow(session.sessionId)) {
       failures.push({ sessionId: session.sessionId, error: new Error('Session is not idle') });
-||||||| bc50ba56aa
-    if (isSessionBusyNow(session.id)) {
-      failures.push({ sessionId: session.id, error: new Error('Session is not idle') });
-=======
-    if (!isCurrent()) break;
-    if (isSessionBusyNow(session.id)) {
-      failures.push({ sessionId: session.id, error: new Error('Session is not idle') });
->>>>>>> upstream/main
       continue;
     }
     try {
-<<<<<<< HEAD
       await moveSessionToDirectory(session, worktreeDirectory, sourceDirectory);
       useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, previousMetadata.get(session.sessionId) ?? null, sourceDirectory);
-||||||| bc50ba56aa
-      await moveSessionToDirectory(session, worktreeDirectory, sourceDirectory);
-      useSessionUIStore.getState().setWorktreeMetadata(session.id, previousMetadata.get(session.id) ?? null, sourceDirectory);
-=======
-      await moveSessionToDirectory(session, worktreeDirectory, sourceDirectory, isCurrent);
-      if (!isCurrent()) break;
-      useSessionUIStore.getState().setWorktreeMetadata(session.id, previousMetadata.get(session.id) ?? null, sourceDirectory);
->>>>>>> upstream/main
     } catch (error) {
       failures.push({
         sessionId: session.sessionId,
@@ -253,18 +202,7 @@ const moveSessionTreeTransaction = async (
     isCurrent?: () => boolean;
   } = {},
 ): Promise<string> => {
-<<<<<<< HEAD
   if (useSessionMoveState.getState().pendingSessionIds.has(input.root.sessionId)) {
-||||||| bc50ba56aa
-  if (useSessionMoveState.getState().pendingSessionIds.has(input.root.id)) {
-=======
-  const assertIdle = options.assertIdle ?? ((sessions: Session[]) => assertSessionsIdle(sessions, input.sourceDirectory));
-  const isCurrent = options.isCurrent ?? (() => true);
-  const assertCurrent = () => {
-    if (!isCurrent()) throw new TreeMoveOwnerChangedError();
-  };
-  if (useSessionMoveState.getState().pendingSessionIds.has(input.root.id)) {
->>>>>>> upstream/main
     throw new Error('Session move already in progress');
   }
   setSessionMovePending(input.root.sessionId, true);
@@ -277,14 +215,7 @@ const moveSessionTreeTransaction = async (
         useSessionUIStore.getState().getWorktreeMetadata(session.sessionId),
       ]),
     );
-<<<<<<< HEAD
     assertSessionsIdle(sessions);
-||||||| bc50ba56aa
-    await assertSessionsIdle(sessions, input.sourceDirectory);
-=======
-    await assertIdle(sessions);
-    assertCurrent();
->>>>>>> upstream/main
 
     let destination: Awaited<ReturnType<typeof prepareDestination>> | null = null;
     const moved: Session[] = [];
@@ -292,21 +223,10 @@ const moveSessionTreeTransaction = async (
     try {
       destination = await prepareDestination();
       for (const [index, session] of sessions.entries()) {
-<<<<<<< HEAD
         // Setup and earlier moves can take long enough for a not-yet-moved
         // session to start running, so re-check the remaining source tree
         // immediately before each move. The root moves last.
         assertSessionsIdle(sessions.slice(index));
-||||||| bc50ba56aa
-        // Setup and earlier moves can take long enough for a not-yet-moved
-        // session to start running, so re-check the remaining source tree
-        // immediately before each move. The root moves last.
-        await assertSessionsIdle(sessions.slice(index), input.sourceDirectory);
-=======
-        assertCurrent();
-        await assertIdle(sessions.slice(index));
-        assertCurrent();
->>>>>>> upstream/main
         try {
           await moveSessionToDirectory(session, input.sourceDirectory, destination.directory, isCurrent);
         } catch (error) {
@@ -314,17 +234,8 @@ const moveSessionTreeTransaction = async (
           throw error;
         }
         moved.push(session);
-<<<<<<< HEAD
         if (session.sessionId === input.root.sessionId) continue;
         useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
-||||||| bc50ba56aa
-        if (session.id === input.root.id) continue;
-        useSessionUIStore.getState().setWorktreeMetadata(session.id, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
-=======
-        assertCurrent();
-        if (session.id === input.root.id) continue;
-        useSessionUIStore.getState().setWorktreeMetadata(session.id, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
->>>>>>> upstream/main
       }
     } catch (error) {
       const moveError = error instanceof Error ? error : new Error(String(error));
@@ -352,14 +263,7 @@ const moveSessionTreeTransaction = async (
       }
       throw moveError;
     }
-<<<<<<< HEAD
     useSessionUIStore.getState().setWorktreeMetadata(input.root.sessionId, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
-||||||| bc50ba56aa
-    useSessionUIStore.getState().setWorktreeMetadata(input.root.id, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
-=======
-    assertCurrent();
-    useSessionUIStore.getState().setWorktreeMetadata(input.root.id, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null, destination.directory);
->>>>>>> upstream/main
 
     await refreshMovedDirectories(input.sourceDirectory, destination.directory);
     return destination.directory;
@@ -404,7 +308,6 @@ const moveSessionTreeToProject = async (input: {
   return moveSessionTreeTransaction(input, async () => ({ directory: input.projectDirectory, metadata: null }));
 };
 
-<<<<<<< HEAD
 /**
  * The session tree moves into a worktree the Host makes for it: the Host
  * creates the checkout, carries whatever the caller names, and relocates the
@@ -413,113 +316,6 @@ const moveSessionTreeToProject = async (input: {
  * descendant that stays behind is its own session, not a broken tree.
  */
 const moveSessionTreeToNewWorktree = async (input: {
-||||||| bc50ba56aa
-const moveSessionTreeToQuickWorktree = async (input: {
-=======
-const assertSessionsIdleToKeep = (sourceDirectory: string) => async (sessions: Session[]): Promise<void> => {
-  const activity = await readSessionsLiveActivity(sessions.map((session) => session.id), sourceDirectory);
-  if (activity === 'unknown') throw new WorktreeKeepStoppedError('unknown');
-  if (activity === 'active') throw new WorktreeKeepStoppedError('busy');
-};
-
-const MOVE_CONFIRM_TIMEOUT_MS = 10_000;
-const MOVE_CONFIRM_POLL_MS = 200;
-
-// external: https://github.com/anomalyco/opencode/blob/v2.3.0/packages/core/src/session/move.ts OpenCode acknowledges queued session moves before their destination is applied.
-const waitUntilSessionsMoved = async (
-  targets: readonly { sessionId: string; directory: string }[],
-  isCurrent: () => boolean,
-  timeoutMs = MOVE_CONFIRM_TIMEOUT_MS,
-): Promise<boolean> => {
-  const startedAt = Date.now();
-  const deadline = new AbortController();
-  const expired = new Promise<false>((resolve) => {
-    deadline.signal.addEventListener('abort', () => resolve(false), { once: true });
-  });
-  const timer = setTimeout(() => deadline.abort(), timeoutMs);
-  const readPlaced = async (target: { sessionId: string; directory: string }): Promise<boolean> => {
-    try {
-      const session = await opencodeClient.getSession(target.sessionId, target.directory, deadline.signal);
-      return normalizePath(session.directory) === normalizePath(target.directory);
-    } catch {
-      return false;
-    }
-  };
-  try {
-    let pending = [...targets];
-    while (pending.length > 0) {
-      if (!isCurrent()) return false;
-      const reads = await Promise.race([Promise.all(pending.map(readPlaced)), expired]);
-      if (!reads || !isCurrent()) return false;
-      pending = pending.filter((_, index) => !reads[index]);
-      if (pending.length === 0) return true;
-      if (deadline.signal.aborted || Date.now() - startedAt >= timeoutMs) return false;
-      const resumed = await Promise.race([
-        new Promise<true>((resolve) => setTimeout(() => resolve(true), MOVE_CONFIRM_POLL_MS)),
-        expired,
-      ]);
-      if (!resumed) return false;
-    }
-    return true;
-  } finally {
-    clearTimeout(timer);
-    deadline.abort();
-  }
-};
-
-export const moveWorktreeSessionsThenRemove = (input: {
-  worktreePath: string;
-  projectDirectory: string;
-  readSessions: () => readonly Session[];
-  removeWorktree: () => Promise<boolean>;
-}): Promise<{ removed: boolean }> => {
-  const worktreePath = normalizePath(input.worktreePath) ?? input.worktreePath;
-  const isCurrent = captureRuntimeInstance();
-  return moveSessionsThenRemoveWorktree({
-    worktreePath,
-    readSessions: input.readSessions,
-    readActivity: (sessions) => readSessionsLiveActivity(sessions.map((session) => session.id), worktreePath),
-    resolveDestination: async (directory) => {
-      const projectPath = normalizePath((await resolveFolderProjectRef(directory))?.path ?? null);
-      return projectPath && !checkoutHoldsDirectory(worktreePath, projectPath) ? projectPath : input.projectDirectory;
-    },
-    moveTree: async (tree) => {
-      try {
-        await moveSessionTreeTransaction(
-          tree,
-          async () => ({ directory: tree.projectDirectory, metadata: null }),
-          { assertIdle: assertSessionsIdleToKeep(tree.sourceDirectory), isCurrent },
-        );
-      } catch (error) {
-        if (!isCurrent()) throw new WorktreeKeepStoppedError('switched');
-        const moveError = error instanceof IncompleteRollbackError ? error.moveError : error;
-        if (moveError instanceof Error && isAmbiguousSendFailure(moveError)) throw new SessionMoveOutcomeUnknownError(moveError);
-        throw error;
-      }
-    },
-    confirmMoves: (moves) => waitUntilSessionsMoved(moves.flatMap((move) => [move.root, ...move.descendants]
-      .map((session) => ({ sessionId: session.id, directory: move.projectDirectory }))), isCurrent),
-    removeWorktree: input.removeWorktree,
-    isCurrent,
-  });
-};
-
-const KEEP_STOP_KEYS = {
-  busy: 'sessions.sidebar.work.archive.keptRunning',
-  unknown: 'sessions.sidebar.work.archive.keptUnknown',
-  added: 'sessions.sidebar.dialogs.worktreeDelete.keepAdded',
-  unconfirmed: 'sessions.sidebar.dialogs.worktreeDelete.keepUnconfirmed',
-  switched: 'sessions.sidebar.dialogs.worktreeDelete.keepSwitched',
-} satisfies Record<WorktreeKeepStop, I18nKey>;
-
-export const describeWorktreeKeepError = (error: Error, t: (key: I18nKey) => string): string | null => {
-  if (error instanceof WorktreeKeepStoppedError) return t(KEEP_STOP_KEYS[error.reason]);
-  if (error instanceof SessionMoveOutcomeUnknownError) return t('sessions.sidebar.dialogs.worktreeDelete.keepOutcomeUnknown');
-  return null;
-};
-
-const moveSessionTreeToQuickWorktree = async (input: {
->>>>>>> upstream/main
   root: Session;
   sourceDirectory: string;
   carry: readonly string[];
@@ -530,59 +326,10 @@ const moveSessionTreeToQuickWorktree = async (input: {
     const sourceBranch = await checkIsGitRepository(input.sourceDirectory)
       ? await resolveSourceBranch(input.sourceDirectory, project.path)
       : null;
-<<<<<<< HEAD
     const name = generateBranchName();
     const result = await canonicalClient.moveSessionToWorktree(input.root.sessionId, {
       worktree: sourceBranch ? { name, startRef: sourceBranch } : { name },
       carry: [...input.carry],
-||||||| bc50ba56aa
-    const worktree = await createQuickWorktree(project, sourceBranch ? { startRef: sourceBranch } : {});
-    if (!worktree) throw new Error('Worktree creation cancelled');
-    try {
-      await waitForWorktreeGitReady(worktree.path);
-    } catch (error) {
-      const setupError = error instanceof Error ? error : new Error(String(error));
-      return removeFailedWorktree(project, worktree, setupError);
-    }
-    // The worktree belongs to the project that owns the list; the session keeps its own project's folder.
-    const folderProject = await resolveFolderProjectRef(input.sourceDirectory) ?? project;
-    return {
-      directory: await resolveWorktreeStartDirectory(folderProject, worktree.path),
-      metadata: worktree,
-      // removeFailedWorktree force-deletes the worktree and its branch; the
-      // session's files never move, so nothing of the user's is in it yet.
-      // Called only for a definite rejection; the transaction keeps the
-      // worktree when the move outcome is unknown.
-      onMoveFailure: async (error) => removeFailedWorktree(project, worktree, error),
-    };
-  });
-  // Seed from the current session title. Generated titles stay agent-owned so
-  // work.name can replace them; an explicit user title keeps its ownership.
-  const taskTitle = input.root.title?.trim();
-  if (taskTitle) {
-    await setGitWorktreeTitle(directory, taskTitle, carriedWorkTitleOwner(input.root.metadata)).catch((error) => {
-      console.warn('[session-worktree-move] Failed to carry the task name into the new worktree', error);
-=======
-    const worktree = await createQuickWorktree(project, sourceBranch ? { startRef: sourceBranch } : {});
-    if (!worktree) throw new Error('Worktree creation cancelled');
-    try {
-      await waitForWorktreeGitReady(worktree.path);
-    } catch (error) {
-      const setupError = error instanceof Error ? error : new Error(String(error));
-      return removeFailedWorktree(project, worktree, setupError);
-    }
-    const folderProject = await resolveFolderProjectRef(input.sourceDirectory) ?? project;
-    return {
-      directory: await resolveWorktreeStartDirectory(folderProject, worktree.path),
-      metadata: worktree,
-      onMoveFailure: async (error) => removeFailedWorktree(project, worktree, error),
-    };
-  });
-  const taskTitle = input.root.title?.trim();
-  if (taskTitle) {
-    await setGitWorktreeTitle(directory, taskTitle, carriedWorkTitleOwner(input.root.metadata)).catch((error) => {
-      console.warn('[session-worktree-move] Failed to carry the task name into the new worktree', error);
->>>>>>> upstream/main
     });
     // The Host answers with the relocated sessions; adopt them and the new
     // checkout before the next listing, so the sidebar shows where they are.

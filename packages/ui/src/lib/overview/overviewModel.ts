@@ -9,49 +9,15 @@ export const OVERVIEW_STALLED_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 export const OVERVIEW_STALE_WORKTREE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 export const OVERVIEW_UNTRACKED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
-<<<<<<< HEAD
 /**
  * What keeps a session's turn open (see `useSessionTurnActivity`), or that the
  * user asked to follow a pull request from it.
  */
 export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'pullRequest';
-||||||| bc50ba56aa
-/** What keeps a session's turn open (see `useSessionTurnActivity`). */
-export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'image' | 'pullRequest';
-=======
-export type OverviewActivity = 'running' | 'subagent' | 'shell' | 'image' | 'pullRequest' | 'extensionWait';
->>>>>>> upstream/main
 
 export type OverviewBlocking = 'permission' | 'question';
 
 export type OverviewSessionFacts = {
-<<<<<<< HEAD
- session: Session;
- activity: OverviewActivity | null;
- /** A request of the session or of a subagent below it. */
- blocking: OverviewBlocking | null;
- /** The worktree branch's PR and the PRs linked to the session, whose state is known. */
- prs: readonly PrVisualSummary[];
- /** One of those PRs has no known state yet; a merged neighbour then proves nothing. */
- prsPending: boolean;
- /** Linked issues and tickets: open, completed, dropped (not planned, canceled), or null while unknown. */
- issues: ReadonlyArray<'open' | 'completed' | 'dropped' | null>;
- /** Uncommitted files in the session's own linked worktree; null outside one or before git answered. */
- worktreeDirty: boolean | null;
-||||||| bc50ba56aa
-  session: Session;
-  activity: OverviewActivity | null;
-  /** A request of the session or of a subagent below it. */
-  blocking: OverviewBlocking | null;
-  /** The worktree branch's PR and the PRs linked to the session, whose state is known. */
-  prs: readonly PrVisualSummary[];
-  /** One of those PRs has no known state yet; a merged neighbour then proves nothing. */
-  prsPending: boolean;
-  /** Linked issues and tickets: open, completed, dropped (not planned, canceled), or null while unknown. */
-  issues: ReadonlyArray<'open' | 'completed' | 'dropped' | null>;
-  /** Uncommitted files in the session's own linked worktree; null outside one or before git answered. */
-  worktreeDirty: boolean | null;
-=======
   session: Session;
   activity: OverviewActivity | null;
   blocking: OverviewBlocking | null;
@@ -59,7 +25,6 @@ export type OverviewSessionFacts = {
   prsPending: boolean;
   issues: ReadonlyArray<'open' | 'completed' | 'dropped' | null>;
   worktreeDirty: boolean | null;
->>>>>>> upstream/main
 };
 
 export type OverviewWaitingReason = 'permission' | 'question' | 'error' | 'checks' | 'conflict' | 'finished';
@@ -67,26 +32,10 @@ export type OverviewDoneSignal = 'merged' | 'issueClosed' | 'issueDropped' | 'hi
 export type OverviewVeto = 'failed' | 'suggestion' | 'uncommitted';
 
 export type OverviewSessionRow =
-<<<<<<< HEAD
- /** `pr` is the blocked change request behind a `conflict` or `checks` reason, so the page can open it. */
- | { section: 'waiting'; session: Session; reason: OverviewWaitingReason; pr: PrVisualSummary | null }
- | { section: 'running'; session: Session; activity: OverviewActivity }
- | { section: 'done'; session: Session; signal: OverviewDoneSignal }
- /** In work and idle, with no done signal or a veto against it. `stalled` once nothing happened for days. */
- | { section: 'working'; session: Session; signal: OverviewDoneSignal | null; veto: OverviewVeto | null; stalled: boolean };
-||||||| bc50ba56aa
-  /** `pr` is the blocked change request behind a `conflict` or `checks` reason, so the page can open it. */
-  | { section: 'waiting'; session: Session; reason: OverviewWaitingReason; pr: PrVisualSummary | null }
-  | { section: 'running'; session: Session; activity: OverviewActivity }
-  | { section: 'done'; session: Session; signal: OverviewDoneSignal }
-  /** In work and idle, with no done signal or a veto against it. `stalled` once nothing happened for days. */
-  | { section: 'working'; session: Session; signal: OverviewDoneSignal | null; veto: OverviewVeto | null; stalled: boolean };
-=======
   | { section: 'waiting'; session: Session; reason: OverviewWaitingReason; pr: PrVisualSummary | null }
   | { section: 'running'; session: Session; activity: OverviewActivity }
   | { section: 'done'; session: Session; signal: OverviewDoneSignal }
   | { section: 'working'; session: Session; signal: OverviewDoneSignal | null; veto: OverviewVeto | null; stalled: boolean };
->>>>>>> upstream/main
 
 const sessionKind = (session: Session): string | null => session.metadata?.openchamber?.kind ?? null;
 
@@ -120,20 +69,9 @@ export function classifyOverviewSession(
  facts: OverviewSessionFacts,
  context: { workEnabled: boolean; now: number },
 ): OverviewSessionRow | null {
-<<<<<<< HEAD
  const { session } = facts;
  const kind = sessionKind(session);
  if (session.parentSessionId || session.archivedAt !== undefined) return null;
-||||||| bc50ba56aa
-  const { session } = facts;
-  const kind = sessionKind(session);
-  // A `/btw` side question belongs to the session it was asked in.
-  if (session.parentID || session.time.archived !== undefined || kind === 'btw') return null;
-=======
-  const { session } = facts;
-  const kind = sessionKind(session);
-  if (session.parentID || session.time.archived !== undefined || kind === 'btw') return null;
->>>>>>> upstream/main
 
  if (facts.blocking) return { section: 'waiting', session, reason: facts.blocking, pr: null };
  if (facts.activity) return { section: 'running', session, activity: facts.activity };
@@ -170,29 +108,11 @@ const updatedAt = (session: Session): number => session.updatedAt;
 const newestFirst = (left: { session: Session }, right: { session: Session }) => updatedAt(right.session) - updatedAt(left.session);
 
 export type OverviewSessionSections = {
-<<<<<<< HEAD
- waiting: Array<Extract<OverviewSessionRow, { section: 'waiting' }>>;
- running: Array<Extract<OverviewSessionRow, { section: 'running' }>>;
- done: Array<Extract<OverviewSessionRow, { section: 'done' }>>;
- /** In work, idle, not done, recent. */
- working: Array<Extract<OverviewSessionRow, { section: 'working' }>>;
- /** In work, idle, not done, untouched for days. */
- stalled: Array<Extract<OverviewSessionRow, { section: 'working' }>>;
-||||||| bc50ba56aa
-  waiting: Array<Extract<OverviewSessionRow, { section: 'waiting' }>>;
-  running: Array<Extract<OverviewSessionRow, { section: 'running' }>>;
-  done: Array<Extract<OverviewSessionRow, { section: 'done' }>>;
-  /** In work, idle, not done, recent. */
-  working: Array<Extract<OverviewSessionRow, { section: 'working' }>>;
-  /** In work, idle, not done, untouched for days. */
-  stalled: Array<Extract<OverviewSessionRow, { section: 'working' }>>;
-=======
   waiting: Array<Extract<OverviewSessionRow, { section: 'waiting' }>>;
   running: Array<Extract<OverviewSessionRow, { section: 'running' }>>;
   done: Array<Extract<OverviewSessionRow, { section: 'done' }>>;
   working: Array<Extract<OverviewSessionRow, { section: 'working' }>>;
   stalled: Array<Extract<OverviewSessionRow, { section: 'working' }>>;
->>>>>>> upstream/main
 };
 
 export function buildOverviewSessionSections(
@@ -226,33 +146,6 @@ export type OverviewWorktreeLosses = { uncommittedFiles: number; unpushed: boole
 export const isNothingLost = (losses: OverviewWorktreeLosses): boolean => losses.uncommittedFiles === 0 && losses.unpushed === false;
 
 export type OverviewWorktreeFacts = {
-<<<<<<< HEAD
- worktree: WorktreeMetadata;
- project: { id: string; path: string };
- /** The branch's change request, or `unknown` while its state has not been read. */
- pr: 'merged' | 'open' | 'closed' | 'none' | 'unknown';
- /** The merged change request's last commit; removal checks nothing is past it. */
- mergedHeadSha: string | null;
- /** Sessions working there, subsessions included. */
- sessions: readonly Session[];
- /** A session there is running or on screen, or the worktree is the directory on screen. */
- inUse: boolean;
- /** Null until git answered; nothing is offered on a guess. */
- git: { losses: OverviewWorktreeLosses; lastCommitAt: number | null } | null;
-||||||| bc50ba56aa
-  worktree: WorktreeMetadata;
-  project: { id: string; path: string };
-  /** The branch's change request, or `unknown` while its state has not been read. */
-  pr: 'merged' | 'open' | 'closed' | 'none' | 'unknown';
-  /** The merged change request's last commit; removal checks nothing is past it. */
-  mergedHeadSha: string | null;
-  /** Sessions working there, subsessions included. */
-  sessions: readonly Session[];
-  /** A session there is running or on screen, or the worktree is the directory on screen. */
-  inUse: boolean;
-  /** Null until git answered; nothing is offered on a guess. */
-  git: { losses: OverviewWorktreeLosses; lastCommitAt: number | null } | null;
-=======
   worktree: WorktreeMetadata;
   project: { id: string; path: string };
   pr: 'merged' | 'open' | 'closed' | 'none' | 'unknown';
@@ -260,7 +153,6 @@ export type OverviewWorktreeFacts = {
   sessions: readonly Session[];
   inUse: boolean;
   git: { losses: OverviewWorktreeLosses; lastCommitAt: number | null } | null;
->>>>>>> upstream/main
 };
 
 export type OverviewCleanupRow = {
