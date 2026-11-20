@@ -184,16 +184,16 @@ export const createHostAgentScopeRuntime = ({
       await store.checkWorktreeScope(scope.cwd, claimId);
       return { ...scope, displayPath: '.' };
     }
-    const removedWithArchivedSessions = async () => typeof store.hasArchivedSessions === 'function'
-      && await fsPromises.lstat(scope.cwd).then(() => false, (cause) => cause?.code === 'ENOENT')
+    const checkoutRemoved = await fsPromises.lstat(scope.cwd).then(() => false, (cause) => cause?.code === 'ENOENT');
+    const removedWithArchivedSessions = checkoutRemoved && typeof store.hasArchivedSessions === 'function'
       && await store.hasArchivedSessions(scope.workspaceId);
-    if ((typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) || await removedWithArchivedSessions()) {
+    if ((typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) || removedWithArchivedSessions) {
       const project = projects.find((item) => item.id === scope.hostProjectId);
       if (!project) return null;
       const projectDirectory = await validateDirectory(project.path);
       if (projectDirectory !== scope.projectDirectory || scope.agentDirectory !== selectedAgentDirectory) return null;
       await store.checkWorktreeScope(scope.cwd, claimId);
-      return { ...scope, displayPath: displayPath(scope) };
+      return { ...scope, displayPath: displayPath(scope), ...(checkoutRemoved ? { checkoutRemoved } : {}) };
     }
     const project = projects.find((item) => item.id === scope.hostProjectId);
     if (!project) return null;

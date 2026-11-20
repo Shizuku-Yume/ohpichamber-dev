@@ -93,6 +93,8 @@ export function createHostAgentRuntime({
   });
   skillFileOwner = createSkillFileOwner({ service });
   const admitWorkspace = async (scope) => {
+    // Archived sessions of a removed checkout stay readable; without a registered workspace the Agent Service refuses execution.
+    if (scope.checkoutRemoved) return { ...scope, env: {} };
     const env = isEnterpriseMode(enterprisePolicyOptions)
       ? {} : await getEnvironmentForDirectory(scope.cwd);
     // The workspace catalog answers from this admission, so the Host's current
