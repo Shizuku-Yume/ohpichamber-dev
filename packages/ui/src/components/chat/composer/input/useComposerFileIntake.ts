@@ -34,7 +34,7 @@ export function useComposerFileIntake({
     const { pendingPastedAttachmentFilenamesRef, pendingAttachWorkRef } = attachmentWork;
     const { insertTextAtSelection } = editorActions;
     const { currentModelMetadata, currentModelId, currentProviderId } = selection;
-    const { currentDirectory, addAttachedFile, chatDraftIdentity, attachedFiles } = sessionScope;
+    const { currentDirectory, addAttachedFile } = sessionScope;
 
     const insertCitationAtSelection = React.useCallback((citationText: string, leadingText: string) => {
         if (!citationText && !leadingText) return;
@@ -193,7 +193,7 @@ export function useComposerFileIntake({
                 ? otherFiles[index]
                 : renameFileForAttachmentCitation(otherFiles[index], otherNames[index]);
             try {
-                let landedName = file.name;
+                const landedName = file.name;
                 if (await addAttachedFile(file)) {
                     attached = true;
                     attachedOtherNames.push(landedName);

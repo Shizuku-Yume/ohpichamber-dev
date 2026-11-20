@@ -111,7 +111,7 @@ export function renderComposerForm({
 }: Dependencies) {
     const { setPromptHistorySearchForm, promptHistorySearch } = historySearchState;
     const { largeTextPasteGesture, largeTextPasteOffer } = largePasteState;
-    const { chatColumnSession, columnPinned } = column;
+    const { columnPinned } = column;
     const {
         openAutocomplete, autocompleteQuery, commandRef, skillRef, mentionRef, emojiRef,
         closeAutocomplete,
@@ -124,7 +124,7 @@ export function renderComposerForm({
     const {
         isBtwActive, claimAttachmentSlot, messageSelectionActive, currentSessionId,
         currentSessionDirectoryForSync, currentDirectory, newSessionDraftOpen, inputMode,
-        btwComposerSessionId, isBtwPanelVisible, hasPendingPermission, btwPanel,
+        isBtwPanelVisible, hasPendingPermission, btwPanel,
     } = sessionScope;
     const { handleExitBtw } = sessionLifecycle;
     const { isPromptHistorySearchOpen, historyValues } = draftHistory;
@@ -144,14 +144,14 @@ export function renderComposerForm({
         showDraftTargetSelectors, selectedDraftProject, draftProjects, selectedDraftDirectory,
         selectedDraftBranchLabel, selectedDraftBranchIsKnown,
         selectedDraftDirectoryHasUncommittedChanges, projectRootBranchOption, worktreeBranchOptions,
-        spaceBranchOptions, draftBranchItems, shouldShowDraftBranchSelector, handleDraftProjectChange,
-        handleDraftDirectoryChange, refreshDraftTarget, handleCreateSpace, handleCreateCustomWorktree,
+        draftBranchItems, shouldShowDraftBranchSelector, handleDraftProjectChange,
+        handleDraftDirectoryChange, handleCreateSpace, handleCreateCustomWorktree,
         handleMobileDraftPickerChange,
     } = draftTarget;
     const {
         abortShortcutReaches, pillText, footerIconButtonClass, iconSizeClass, sendIconSizeClass,
         stopIconSizeClass, openMobileAttachSheet, toggleDictation, desktopDictating,
-        iconButtonBaseClass, goalObjectiveLength, footerPaddingClass, shownPermissionMode,
+        iconButtonBaseClass, footerPaddingClass, shownPermissionMode,
         isPermissionAutoAcceptInteractive, handlePermissionModeCycle, setDesktopDictating,
         waitingForAgent, footerGapClass,
     } = controls;
@@ -169,9 +169,9 @@ export function renderComposerForm({
         dictationHeightLimit, useCompactChatPlaceholder, handleDictationContentHeightChange,
     } = editorActions;
     const {
-        handleCommandSelect, handleSkillSelect, handleSnippetSelect, snippetDraftText,
-        handleSnippetDraftSaved, handleFileSelect, handleAgentSelect, handleSessionSelect,
-        handleExtensionMentionSelect, handleEmojiSelect,
+        handleCommandSelect, handleSkillSelect, 
+        handleFileSelect, 
+        handleEmojiSelect,
     } = completions;
     const {
         handleDropCapture, handleDragEnter, handleDragOver, handleDragLeave, handleDrop, handleDragEnd,

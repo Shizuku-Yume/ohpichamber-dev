@@ -91,7 +91,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     useComposerGitStatus(sessionScope.currentDirectory, runtime.runtimeGit);
     const reviewFlow = useComposerReviewFlow({ sessionScope });
     const language = useComposerLanguage({
-        selection, sessionScope, column, i18n, draftText, editorState, attachmentWork, preferences,
+        selection, sessionScope, i18n, draftText, editorState, attachmentWork, preferences,
         largePasteScope,
     });
     const mentionAttachments = useComposerMentionAttachments({
@@ -156,7 +156,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     useComposerFocus({ props, sessionScope, preferences, column, editorState, mobilePanels });
     useComposerAbortPrompt({ sessionScope });
     const fileDrop = useComposerFileDrop({
-        mentionPaths, draftText, i18n, dropState, editorState, sessionScope, selection, editorActions,
+        draftText, dropState, editorState, sessionScope, editorActions,
         fileIntake,
     });
     const filePicker = useComposerFilePicker({ fileIntake, runtime, i18n });

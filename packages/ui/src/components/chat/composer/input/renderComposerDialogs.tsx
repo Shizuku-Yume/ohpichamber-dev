@@ -73,7 +73,7 @@ export function renderComposerDialogs({
         showDraftTargetSelectors, selectedDraftProject, draftProjects, selectedDraftDirectory,
         selectedDraftBranchLabel, selectedDraftBranchIsKnown,
         selectedDraftDirectoryHasUncommittedChanges, projectRootBranchOption, worktreeBranchOptions,
-        spaceBranchOptions, draftBranchItems, shouldShowDraftBranchSelector, handleDraftProjectChange,
+        draftBranchItems, shouldShowDraftBranchSelector, handleDraftProjectChange,
         handleDraftDirectoryChange, handleCreateSpace, handleCreateCustomWorktree,
         handleMobileDraftPickerChange, newSpaceProject, setNewSpaceProject, newWorktreeProject,
         setNewWorktreeProject, handleCustomWorktreeCreated,

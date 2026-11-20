@@ -40,7 +40,6 @@ const EMPTY_COMPOSER_SKILLS: [] = [];
 type Dependencies = {
     selection: Pick<ReturnType<typeof useComposerSelection>, 'agents'>;
     sessionScope: Pick<ReturnType<typeof useComposerSessionScope>, 'currentDirectory' | 'currentSessionId' | 'newSessionDraftOpen' | 'newSessionDraft' | 'attachedFiles' | 'chatDraftIdentity' | 'currentSessionDirectoryForSync' | 'inputMode'>;
-    column: Pick<ReturnType<typeof useComposerColumn>, 'columnPinned'>;
     i18n: Pick<ReturnType<typeof useI18n>, 't'>;
     draftText: Pick<ReturnType<typeof useComposerDraftText>, 'composerText' | 'confirmedMentionsRef'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
@@ -50,14 +49,13 @@ type Dependencies = {
 };
 
 export function useComposerLanguage({
-    selection, sessionScope, column, i18n, draftText, editorState, attachmentWork, preferences, largePasteScope,
+    selection, sessionScope, i18n, draftText, editorState, attachmentWork, preferences, largePasteScope,
 }: Dependencies) {
     const { agents } = selection;
     const {
-        currentDirectory, currentSessionId, newSessionDraftOpen, newSessionDraft, attachedFiles,
+        currentDirectory, attachedFiles,
         chatDraftIdentity, currentSessionDirectoryForSync, inputMode,
     } = sessionScope;
-    const { columnPinned } = column;
     const { t } = i18n;
     const { composerText, confirmedMentionsRef } = draftText;
     const { composerRef } = editorState;
@@ -80,7 +78,6 @@ export function useComposerLanguage({
 
     const availableCommands = useCommandsStore((s) => selectCommandsForComposer(s, commandsTarget));
 
-    const commandsDirectory = commandsTarget.status === 'resolved' ? commandsTarget.directory : null;
 
     const availableSkills = useSkillsStore((s) => commandsTarget.status === 'pending'
         ? EMPTY_COMPOSER_SKILLS

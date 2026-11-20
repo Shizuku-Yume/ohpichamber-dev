@@ -58,7 +58,7 @@ export function useComposerEditorActions({
     const { isComposerExpanded } = expansion;
     const { getLargeTextPasteScope } = largePasteScope;
     const {
-        openAutocomplete, autocompleteQuery, mentionCompletion, setOpenAutocomplete,
+        openAutocomplete, mentionCompletion, setOpenAutocomplete,
         setAutocompleteQuery, completingMentionRef, closeAutocomplete,
     } = autocompleteState;
     const { composerText, setMessage, setEditorValueRevision, setInputMode } = draftText;

@@ -51,7 +51,7 @@ export function useComposerCompletions({
     referenceDrafts, sessionScope, sendHandlers,
 }: Dependencies): ComposerCompletions {
     const { composerRef } = editorState;
-    const { completingMentionRef, closeAutocomplete, openAutocomplete, autocompleteQuery } = autocompleteState;
+    const { completingMentionRef, closeAutocomplete, autocompleteQuery } = autocompleteState;
     const { confirmedMentionsRef, composerText, setMessage, currentChatDraftIdentityRef } = draftText;
     const { t } = i18n;
     const { toMentionPath } = mentionPaths;
