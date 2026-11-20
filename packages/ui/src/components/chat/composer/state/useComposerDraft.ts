@@ -1,4 +1,4 @@
-import type { ComposerText } from './composerText';
+import { useComposerTextEffect, type ComposerText } from './composerText';
 import { isBtwPendingComposerKey } from "@/lib/btw";
 import { isMentionEntryInText } from '../language/mentions';
 /**
@@ -208,9 +208,8 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     }), [clearPending, confirmedMentionsRef, setMessage]);
 
     // Debounced write while typing.
-    React.useEffect(() => {
+    useComposerTextEffect(text, (draftSnapshot) => {
         if (!persistEnabled) return;
-
         if (skipNextPersistRef.current) {
             skipNextPersistRef.current = false;
             return;
@@ -224,7 +223,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         }, PERSIST_DEBOUNCE_MS);
 
         return clearPending;
-    }, [clearPending, identity, message, persistEnabled, persistNow]);
+    }, [clearPending, identity, persistEnabled, persistNow]);
 
     React.useEffect(() => {
         const flush = () => {
@@ -253,7 +252,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         const existing = isCurrent
             ? { text: text.get(), confirmedMentions: confirmedMentionsRef.current }
             : (targetKey && draftMemoryRef.current.get(targetKey)) || (isBtwPendingComposerKey(target?.sessionId) ? null : persistEnabled ? readChatDraft(target) : null);
-        const text = existing?.text && existing.text !== draft ? `${existing.text}\n\n${draft}` : draft;
+        const merged = existing?.text && existing.text !== draft ? `${existing.text}\n\n${draft}` : draft;
         const mentions = new Set([...(existing?.confirmedMentions ?? []), ...confirmedMentions]);
         if (targetKey) draftMemoryRef.current.set(targetKey, { text: merged, confirmedMentions: mentions });
         if (isCurrent) {
@@ -261,8 +260,8 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             setMessage(merged);
         }
         if (persistEnabled && target && !isBtwPendingComposerKey(target.sessionId)) {
-            writeChatDraft(target, text, mentions);
-            lastPersistedRef.current.set(getChatDraftIdentityKey(target), draftSignature(text, mentions));
+            writeChatDraft(target, merged, mentions);
+            lastPersistedRef.current.set(getChatDraftIdentityKey(target), draftSignature(merged, mentions));
         }
     }, [confirmedMentionsRef, text, persistEnabled, setMessage]);
 

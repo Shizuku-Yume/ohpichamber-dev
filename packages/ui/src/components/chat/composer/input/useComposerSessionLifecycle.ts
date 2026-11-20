@@ -24,7 +24,7 @@ type Dependencies = {
     column: Pick<ReturnType<typeof useComposerColumn>, 'focusColumnInput' | 'columnPinned'>;
     editorState: Pick<ReturnType<typeof useComposerEditorState>, 'composerRef'>;
     mobilePanels: Pick<ReturnType<typeof useComposerMobilePanels>, 'setMobileControlsPanel'>;
-    draftText: Pick<ReturnType<typeof useComposerDraftText>, 'setInputMode' | 'composerText' | 'setMessage'>;
+    draftText: Pick<ReturnType<typeof useComposerDraftText>, 'composerText' | 'setMessage'>;
     preferences: Pick<ReturnType<typeof useComposerPreferences>, 'isMobile'>;
     selection: Pick<ReturnType<typeof useComposerSelection>, 'mailboxTarget' | 'shownSessionId'>;
 };
@@ -41,7 +41,7 @@ export function useComposerSessionLifecycle({
     const { focusColumnInput, columnPinned } = column;
     const { composerRef } = editorState;
     const { setMobileControlsPanel } = mobilePanels;
-    const { setInputMode, composerText, setMessage } = draftText;
+    const { composerText, setMessage } = draftText;
     const { isMobile } = preferences;
     const { mailboxTarget, shownSessionId } = selection;
 
@@ -120,16 +120,13 @@ export function useComposerSessionLifecycle({
 
     const focusComposer = React.useCallback(() => composerRef.current?.focus(), [composerRef]);
 
-    const leaveShellMode = React.useCallback(() => setInputMode('normal'), [setInputMode]);
-
     usePendingComposerText({
+        enabled: !isBtwActive,
         target: mailboxTarget,
         sessionId: shownSessionId,
         text: composerText,
         setMessage,
         focus: focusComposer,
-        holdSlashCommand: isBtwActive,
-        onSlashCommand: leaveShellMode,
     });
 
     return {
