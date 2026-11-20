@@ -158,12 +158,22 @@ test('settings sanitizer coverage follows its TypeScript owner after relocation'
   files['packages/web/server/lib/host/settings-helpers.js'] = helpers;
   const fixture = makeFixture(files);
   fixture.fork('packages/web/server/lib/settings/settings-registry.json', registry);
-  fixture.fork('packages/web/server/lib/settings/settings-helpers.ts', helpers);
+  const typedHelpers = `const SESSION_BOOLEAN_SETTINGS: readonly string[] = Object.freeze(['terminalCloseOnExit']);
+export const sanitizeSettingsUpdate = (candidate: Record<string, unknown>) => {
+  const result: Record<string, boolean> = {};
+  for (const key of SESSION_BOOLEAN_SETTINGS) {
+    if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
+  }
+  return result;
+};
+const normalizeProject = (candidate) => { const result = []; return candidate.id || result.findIndex(() => true); };
+`;
+  fixture.fork('packages/web/server/lib/settings/settings-helpers.ts', typedHelpers);
   fixture.remove('packages/web/server/lib/host/settings-registry.json');
   fixture.remove('packages/web/server/lib/host/settings-helpers.js');
   const covered = runGuardrail(fixture);
   assert.equal(covered.status, 0, covered.output);
-  fixture.fork('packages/web/server/lib/settings/settings-helpers.ts', 'export const sanitizeSettingsUpdate = () => ({});\n');
+  fixture.fork('packages/web/server/lib/settings/settings-helpers.ts', typedHelpers.replace('for (const key of SESSION_BOOLEAN_SETTINGS)', 'for (const key of [])'));
   const missing = runGuardrail(fixture);
   assert.equal(missing.status, 1, missing.output);
   assert.match(missing.output, /missing from settings-helpers.js sanitizer/);

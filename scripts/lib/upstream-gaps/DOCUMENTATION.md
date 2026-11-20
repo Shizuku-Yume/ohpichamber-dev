@@ -19,6 +19,9 @@ The settings audit follows relative store imports so split type, action and
 persistence owners retain their checks. A setter declaration without an
 implementation is a gap. Sanitizers are read from their current `settings/`
 owner or the historical Host/OpenCode location when comparing older revisions.
+Named sanitizer key lists support TypeScript annotations and count only when
+the sanitizer iterates them. A declared but unused list is not coverage, and
+properties of unrelated project-normalization helpers are not settings keys.
 
 Run `node --test scripts/upstream-gaps.test.mjs` and
 `node scripts/upstream-gaps.mjs --check`.
