@@ -23,9 +23,6 @@ type RelocationDeps = {
   moveSession: (session: Session, sourceDirectory: string, destinationDirectory: string) => Promise<void>;
 };
 
-// The project a session belongs to, the way the sidebar groups it: by its
-// display path first, then by its canonical project identity. The second step
-// matters here, since a removed worktree's path matches nothing.
 const resolveProjectRootFromStores = (session: Session): string | null => {
   const projects = useProjectsStore.getState().projects.flatMap((project) => {
     const normalizedPath = normalizePath(project.path);
@@ -49,8 +46,6 @@ const defaultDeps: RelocationDeps = {
   moveSession: moveSessionToDirectory,
 };
 
-// Subsessions working in the same directory move with their root, deepest
-// first, the way the sidebar's Move to worktree moves a tree.
 const collectDescendantsInDirectory = (
   root: Session,
   sessions: readonly Session[],
@@ -74,15 +69,6 @@ const collectDescendantsInDirectory = (
   return descendants;
 };
 
-/**
- * A session restored from the archive may still point at a worktree that was
- * removed meanwhile. OpenCode cannot run a prompt there (it answers 500), so
- * the session moves to its project root, where it works again. OpenCode
- * records the move and tells the model its working directory changed.
- *
- * Only a directory the server confirms missing triggers the move; an
- * unreachable server or an unknown answer leaves the session where it is.
- */
 export async function relocateRestoredSessionIfDirectoryMissing(
   sessionId: string,
   deps: RelocationDeps = defaultDeps,
@@ -112,11 +98,6 @@ const projectLabelFor = (projectRoot: string): string => {
   return project?.label?.trim() || projectRoot.split('/').filter(Boolean).pop() || projectRoot;
 };
 
-/**
- * Restores the session's working directory after an unarchive and tells the
- * user why it moved: the worktree folder is gone, which this app did not
- * necessarily do (it may have been removed by hand or by git).
- */
 export async function relocateRestoredSessionWithNotice(sessionId: string): Promise<void> {
   const result = await relocateRestoredSessionIfDirectoryMissing(sessionId);
   const dictionary = useI18nStore.getState().dictionary;

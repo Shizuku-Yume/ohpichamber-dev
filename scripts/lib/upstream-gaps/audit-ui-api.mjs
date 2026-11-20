@@ -52,8 +52,23 @@ function isNotFoundFallback(src, callIdx) {
 }
 
 // Only an explicit `method: '...'` in the call's options constrains the route method.
-function inferMethod(src, litStart) {
-  const window = src.slice(litStart, litStart + 300);
+function inferMethod(src, literal) {
+  const suffix = src.slice(literal.end);
+  const options = /^\s*,\s*\{/.exec(suffix);
+  if (!options) return null;
+  let depth = 1;
+  let quote = null;
+  let end = options[0].length;
+  for (; end < suffix.length && depth > 0; end++) {
+    const ch = suffix[end];
+    if (quote) {
+      if (ch === '\\') end++;
+      else if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'" || ch === '`') quote = ch;
+    else if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+  }
+  const window = suffix.slice(options[0].length, end);
   const m = /\bmethod\s*:\s*['"`]([A-Za-z]+)['"`]/.exec(window);
   return m ? m[1].toUpperCase() : null;
 }
@@ -68,7 +83,8 @@ function methodMatches(route, method) {
 function resolveLocalImport(fromFile, spec) {
   if (!spec.startsWith('.')) return null;
   const base = path.resolve(path.dirname(fromFile), spec);
-  const candidates = [base, `${base}.js`, `${base}.mjs`, `${base}.cjs`, path.join(base, 'index.js')];
+  const stem = base.replace(/\.[cm]?js$/, '');
+  const candidates = [base, ...['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts'].flatMap((ext) => [`${base}${ext}`, `${stem}${ext}`]), path.join(base, 'index.js'), path.join(base, 'index.ts')];
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
   }
@@ -128,7 +144,7 @@ const FILE_PREFIX_MAP = new Map([
 ]);
 
 for (const file of activeServerFiles.filter(isMountedFile)) {
-  const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
+  const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/').replace(/\.ts$/, '.js');
   const src = fs.readFileSync(file, 'utf8');
   const filePrefix = FILE_PREFIX_MAP.get(rel) ?? '';
 
@@ -141,7 +157,7 @@ for (const file of activeServerFiles.filter(isMountedFile)) {
   }
 
   // 1. app.<method>('...', ...) or router.<method>('...', ...)
-  const routeCallRe = /\b(app|router|expressApp|apiRouter)\.(get|post|put|patch|delete|all|options|head|use)\s*\(\s*(['"`])([^'"`]+)\3/g;
+  const routeCallRe = /\b(app|router|expressApp|apiRouter)\.(get|post|put|patch|delete|all|options|head|use)\s*(?:<[^\n()]*>)?\s*\(\s*(['"`])([^'"`]+)\3/g;
   let m;
   while ((m = routeCallRe.exec(src)) !== null) {
     const targetObj = m[1];
@@ -170,13 +186,13 @@ for (const file of activeServerFiles.filter(isMountedFile)) {
   }
 
   // 1b. app.<method>(CONST_NAME, ...)
-  const varRouteRe = /\b(app|router|expressApp|apiRouter)\.(get|post|put|patch|delete|all|options|head)\s*\(\s*([A-Za-z_$][\w$]*)\s*,/g;
+  const varRouteRe = /\b(app|router|expressApp|apiRouter)\.(get|post|put|patch|delete|all|options|head)\s*(?:<[^\n()]*>)?\s*\(\s*([A-Za-z_$][\w$]*)\s*,/g;
   while ((m = varRouteRe.exec(src)) !== null) {
     const varPath = constRoutes.get(m[3]);
     if (varPath) addRoute(m[2], varPath, file, lineOf(src, m.index), 'var-route');
   }
   // 1c. app.<method>(/^\/api\/.../, ...)
-  const literalRegexRouteRe = /\b(app|router|expressApp|apiRouter)\.(get|post|put|patch|delete|all|options|head)\s*\(\s*(\/)/g;
+  const literalRegexRouteRe = /\b(app|router|expressApp|apiRouter)\.(get|post|put|patch|delete|all|options|head)\s*(?:<[^\n()]*>)?\s*\(\s*(\/)/g;
   while ((m = literalRegexRouteRe.exec(src)) !== null) {
     let idx = m.index + m[0].length;
     let inClass = false;
@@ -238,7 +254,7 @@ for (const file of activeServerFiles.filter(isMountedFile)) {
   }
 
   // 3. Array of paths or tuple lists of `/api/...` routes inside files with app.<method>(routeVar, ...)
-  const arrRe = /\b(app|router)\.(get|post|put|patch|delete|all)\s*\(\s*\[([^\]]+)\]/g;
+  const arrRe = /\b(app|router)\.(get|post|put|patch|delete|all)\s*(?:<[^\n()]*>)?\s*\(\s*\[([^\]]+)\]/g;
   while ((m = arrRe.exec(src)) !== null) {
     const method = m[2];
     const items = [...m[3].matchAll(/(['"`])([^'"`]+)\1/g)].map((x) => x[2]);
@@ -248,7 +264,7 @@ for (const file of activeServerFiles.filter(isMountedFile)) {
   }
 
   // 4. Regex path: app.<method>(/^\/api\/.../)
-  const regRouteRe = /\b(app|router)\.(get|post|put|patch|delete|all|use)\s*\(\s*\/(\^?\\\/api\\\/[^\n]+)\//g;
+  const regRouteRe = /\b(app|router)\.(get|post|put|patch|delete|all|use)\s*(?:<[^\n()]*>)?\s*\(\s*\/(\^?\\\/api\\\/[^\n]+)\//g;
   while ((m = regRouteRe.exec(src)) !== null) {
     const method = m[2];
     const rawReg = m[3];
@@ -267,7 +283,7 @@ for (const file of activeServerFiles.filter(isMountedFile)) {
   }
 
   // 5. Template literal route: app.get(`${PREFIX}/...`)
-  const tmplRouteRe = /\b(app|router)\.(get|post|put|patch|delete|all|use)\s*\(\s*`([^`]+)`/g;
+  const tmplRouteRe = /\b(app|router)\.(get|post|put|patch|delete|all|use)\s*(?:<[^\n()]*>)?\s*\(\s*`([^`]+)`/g;
   while ((m = tmplRouteRe.exec(src)) !== null) {
     const method = m[2];
     const resolved = m[3].replace(/\$\{(\w+)\}/g, (_, varName) => constRoutes.get(varName) ?? ':param');
@@ -374,7 +390,7 @@ function extractStringAndTemplateLiterals(src) {
         val += c;
         i++;
       }
-      out.push({ start, quote, value: val });
+      out.push({ start, end: i, quote, value: val });
       continue;
     }
     if (ch === '`') {
@@ -426,7 +442,7 @@ function readTemplate(src, startIdx) {
             sVal += src[i];
             i++;
           }
-          literals.push({ start: sStart, quote: q, value: sVal });
+          literals.push({ start: sStart, end: i, quote: q, value: sVal });
           continue;
         }
         if (ec === '`') {
@@ -444,7 +460,7 @@ function readTemplate(src, startIdx) {
     val += ch;
     i++;
   }
-  literals.unshift({ start: startIdx, quote: '`', value: val });
+  literals.unshift({ start: startIdx, end: i, quote: '`', value: val });
   return { literals, end: i };
 }
 
@@ -495,7 +511,7 @@ for (const file of callerFiles) {
       raw: apiSub,
       normalized: norm,
       lineText,
-      method: inferMethod(src, lit.start),
+      method: inferMethod(src, lit),
     });
   }
 }

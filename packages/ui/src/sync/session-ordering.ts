@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import type { Session } from '@openchamber/agent-contract';
 import { isSessionPinned } from '@/lib/sessionPins';
@@ -52,6 +53,7 @@ export const reconcileSessionActivitySnapshot = (activeSessionIds: Iterable<stri
     const previous = phaseById.get(id); phaseById.set(id, phase);
     if (previous !== undefined && previous !== phase) promoted.push(id);
   }
+
   promoteSessions(promoted, true);
 };
 export const removeSessionOrdering = (sessionId: string): void => applySessionOrderingMutations([{ type: 'remove', sessionId }]);
@@ -69,6 +71,7 @@ const baselineRank = (session: Session, pinned: boolean): number => {
   baselineRankById.set(session.sessionId, { ...existing, [key]: rank });
   return rank;
 };
+
 export const raiseSessionOrderingBaselines = (sessions: Iterable<Session>): void => {
   const current = useSessionOrderingStore.getState().rankById;
   let next: Map<string, number> | null = null;
@@ -139,3 +142,11 @@ export const orderSessionsByLifecycleScopes = (sessions: Session[], pinnedSessio
   for (const session of sessions.filter((item) => !visited.has(item.sessionId)).sort(compare)) append(session);
   return ordered;
 };
+
+const finiteTime = (value: unknown): number => (
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
+);
+
+export const getSessionActivityTime = (session: Session): number => (
+  finiteTime(session.metadata?.openchamber?.workbench?.lastIdleAt) || finiteTime(session.updatedAt) || finiteTime(session.createdAt)
+);

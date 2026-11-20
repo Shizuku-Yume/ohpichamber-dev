@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { Message, RuntimeSession } from '@openchamber/agent-contract';
@@ -18,17 +18,18 @@ const session: RuntimeSession & { metadata: null; metadataRevision: '0'; archive
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const usage = { input: 100, output: 20, cacheRead: 40, cacheWrite: 0, totalTokens: 160, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 } };
-const messages: Message[] = [
-  { messageId: 'user-1', sessionId, turnId: 'turn-1', role: 'user', createdAt: 1000, parts: [] },
-  { messageId: 'assistant-final', sessionId, turnId: 'turn-1', role: 'assistant', createdAt: 7000, providerId: 'test', modelId: 'test', usage, parts: [] },
-];
+const user: Message = { messageId: 'user-1', sessionId, turnId: 'turn-1', role: 'user', createdAt: 1000, parts: [] };
+const assistant: Message = { messageId: 'assistant-final', sessionId, turnId: 'turn-1', role: 'assistant', createdAt: 7000, providerId: 'test', modelId: 'test', usage, parts: [] };
+const messages: Message[] = [user, assistant];
+const timedAssistant: Message = { ...assistant, timing: { startedAt: 1000, firstTokenAt: 3000, completedAt: 5000 } };
+const freeAssistant: Message = { ...timedAssistant, modelId: 'free', usage: { ...usage, cost: { ...usage.cost, total: 0 } } };
 
 describe('mounted turn telemetry with canonical sync stores', () => {
   let root: Root;
   let container: HTMLElement;
   let restore: () => void;
-  const render = async (selectedSession = sessionId) => act(async () => root.render(
-    <SyncProvider directory={directory}>
+  const render = async (selectedSession: string | null = sessionId) => act(async () => root.render(
+    selectedSession === null ? null : <SyncProvider directory={directory}>
       <I18nProvider><WorkStatusTelemetrySection sessionId={selectedSession} directory={directory} /></I18nProvider>
     </SyncProvider>,
   ));
@@ -44,7 +45,8 @@ describe('mounted turn telemetry with canonical sync stores', () => {
     for (const [name, value] of Object.entries(values)) Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
     restore = () => { for (const [name, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else Reflect.deleteProperty(globalThis, name); } void win.happyDOM.close(); };
     ({ WorkStatusTelemetrySection } = await import('./WorkStatusTelemetrySection'));
-    useUIStore.setState({ workStatusExpandedSections: {} });
+    // Most cases follow a user who opened the section; it starts folded (see below).
+    useUIStore.setState({ workStatusExpandedSections: { telemetry: true } });
     container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
     await render();
     await publish({ session: [session], sessionTotal: 1, sessionStatusReady: true, session_status: { [sessionId]: 'idle' }, message: { [sessionId]: messages } });
@@ -71,7 +73,8 @@ describe('mounted turn telemetry with canonical sync stores', () => {
     expect(container.textContent).toContain('Turn stats');
     const heading = container.querySelector('button');
     if (!heading) throw new Error('Expected section heading');
-    expect(heading.textContent).toBe('Turn stats');
+    // No response speed without text parts; elapsed time and cost still show.
+    expect(heading.textContent).toBe('Turn stats6.0s · $0.01');
     expect(heading.querySelectorAll('svg').length).toBe(2);
     expect(container.querySelectorAll('svg').length).toBe(2);
   });
@@ -84,11 +87,36 @@ describe('mounted turn telemetry with canonical sync stores', () => {
     expect(container.textContent).toContain('100 ↑ · 20 ↓');
   });
 
+  test('starts folded with time and cost in its heading, and keeps the user\'s choice', async () => {
+    await render(null);
+    await act(async () => {
+      useUIStore.setState({ workStatusExpandedSections: {} });
+    });
+    await render();
+    await publish({ session: [session], session_status: { [sessionId]: 'idle' }, message: { [sessionId]: [user, timedAssistant] } });
+    const heading = () => container.querySelector('button');
+    expect(heading()?.getAttribute('aria-expanded')).toBe('false');
+    expect(heading()?.textContent).toBe('Turn stats6.0s · $0.01');
+    expect(container.textContent).not.toContain('100 ↑ · 20 ↓');
+    await act(async () => heading()?.click());
+    await render(null);
+    await render();
+    expect(heading()?.getAttribute('aria-expanded')).toBe('true');
+    await publish({ session: [session], session_status: { [sessionId]: 'idle' }, message: { [sessionId]: [user, timedAssistant] } });
+    expect(container.textContent).toContain('100 ↑ · 20 ↓');
+  });
+
   test('collapsed remount keeps a usable header and reopening reads fresh data', async () => {
     const button = container.querySelector('button');
     if (!button) throw new Error('Expected collapse button');
     await act(async () => button.click());
-    expect(container.textContent).toContain('Turn stats');
+    expect(container.querySelector('button')?.getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('button')?.textContent).toBe('Turn stats6.0s · $0.01');
+    expect(container.textContent).not.toContain('100 ↑ · 20 ↓');
+    const reopen = container.querySelector('button');
+    if (!reopen) throw new Error('Expected reopen button');
+    await act(async () => reopen.click());
+    expect(container.textContent).toContain('100 ↑ · 20 ↓');
   });
 
   test('busy and waiting updates reuse the retained stats instead of re-aggregating', async () => {
@@ -119,12 +147,22 @@ describe('mounted turn telemetry with canonical sync stores', () => {
   });
 
   test('the heading never fabricates response or whole-turn speed from canonical messages', async () => {
-    await publish({ sessionStatusReady: true });
-    expect(container.querySelector('button')?.textContent).toContain('Turn stats');
+    await publish({ message: { [sessionId]: [user, freeAssistant] } });
+    expect(container.querySelector('button')?.textContent).toBe('Turn stats~10 tok/s · 6.0s');
+    await publish({ message: { [sessionId]: [user, { ...freeAssistant, timing: undefined }] } });
+    expect(container.querySelector('button')?.textContent).toBe('Turn stats6.0s');
     expect(container.textContent).not.toContain('Whole turn');
-    await publish({ sessionStatusReady: true });
-    expect(container.querySelector('button')?.textContent).toBe('Turn stats');
-    expect(container.textContent).not.toContain('Whole turn');
+  });
+
+  test('the folded heading carries two figures: time and cost for a paid turn, speed and time for a free one', async () => {
+    await act(async () => {
+      useUIStore.getState().setWorkStatusSectionExpanded('telemetry', false);
+    });
+    await publish({ message: { [sessionId]: [user, timedAssistant] } });
+    const heading = () => container.querySelector('button')?.textContent;
+    expect(heading()).toBe('Turn stats6.0s · $0.01');
+    await publish({ message: { [sessionId]: [user, freeAssistant] } });
+    expect(heading()).toBe('Turn stats~10 tok/s · 6.0s');
   });
 
   test('every metric has a full-row focus target and hover waits 750ms', async () => {

@@ -3,7 +3,6 @@ import type { CapturedSendOptions, Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { getMultiRunMembership, multiRunMembershipPatch, withMultiRunMembership, type MultiRunIdentity } from './identity';
 
-/** Bind the server-assigned ID before dispatch. Copied markers cannot join. */
 export async function createMultiRunSession(
   input: {
     title: string;
@@ -34,7 +33,6 @@ export async function createMultiRunSession(
     if (!getMultiRunMembership(bound)) throw new Error('Multi-run membership was not saved');
     return bound;
   } catch (error) {
-    // Never delete through a switched runtime. The pending marker remains ineligible.
     assertCurrent();
     try {
       await canonicalClient.deleteSession(session.sessionId);

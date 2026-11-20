@@ -1,12 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 
-import {
-    assignImageAttachmentFilenames,
-    buildAttachmentCitationText,
-    findAttachmentCitationRanges,
-    isGenericImageFilename,
-    nextPastedContextFilename,
-} from '../attachmentCitations';
+import { assignImageAttachmentFilenames, buildAttachmentCitationText, buildImagePathCitationText, findAttachmentCitationRanges, findLocalFileLinks, isGenericImageFilename, nextPastedContextFilename } from '../attachmentCitations';
+
+const decodeHeic = async (): Promise<Blob> => new Blob(['jpeg-data'], { type: 'image/jpeg' });
+
+mock.module('heic2any', () => ({
+    default: async () => decodeHeic(),
+}));
 
 describe('attachment citations', () => {
     test('keeps meaningful image names', () => {
@@ -59,5 +59,19 @@ describe('attachment citations', () => {
         expect(nextPastedContextFilename([])).toBe('pasted-context-1.txt');
         expect(nextPastedContextFilename(['pasted-context-1.txt', 'notes.md'])).toBe('pasted-context-2.txt');
         expect(nextPastedContextFilename(['PASTED-CONTEXT-2.TXT'])).toBe('pasted-context-1.txt');
+    });
+});
+
+describe('links to files on disk', () => {
+    test('finds the saved-image links the composer writes, plain and in angle brackets', () => {
+        const text = `see ${buildImagePathCitationText([{ filename: 'a.png', path: '/tmp/oc/a.png' }, { filename: 'b.png', path: 'C:\\Temp dir\\b.png' }])}`;
+        expect(findLocalFileLinks(text).map(({ name, path }) => ({ name, path }))).toEqual([
+            { name: 'a.png', path: '/tmp/oc/a.png' },
+            { name: 'b.png', path: 'C:/Temp dir/b.png' },
+        ]);
+    });
+
+    test('leaves links to the web alone', () => {
+        expect(findLocalFileLinks('[docs](https://example.com/a.png)')).toEqual([]);
     });
 });

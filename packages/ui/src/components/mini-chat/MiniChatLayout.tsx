@@ -216,7 +216,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
       {usesFramelessChrome && windowControlsSide === 'left' ? (
         <WindowsWindowControls visible position="left" />
       ) : null}
-      <SessionSwitcherDropdown>
+      <SessionSwitcherDropdown recentOnly>
         <button
           type="button"
           aria-label={t('sessions.switcher.openAria')}

@@ -15,7 +15,6 @@ const resolveMessageLinkForm = (): MessageLinkForm => {
     return { kind: 'web', origin: window.location.origin, pathname: window.location.pathname };
 };
 
-/** "Copy link" for a message, or undefined where this surface has no message links. */
 export const useCopyMessageLink = (sessionId: string | undefined, messageId: string): (() => void) | undefined => {
     const { t } = useI18n();
     return React.useMemo(() => {

@@ -1,3 +1,5 @@
+import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
+import type { Theme } from '@/types/theme';
 import React from 'react';
 import { z } from 'zod';
 import { Icon } from '@/components/icon/Icon';
@@ -8,7 +10,6 @@ import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { DatePicker, TimePill } from '@/components/ui/date-time';
 import { Input as FieldInput } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useCalendarPreferences } from '@/components/ui/useCalendarPreferences';
 import { useI18n as useBaseI18n } from '@/lib/i18n';
 const useI18n = () => {
@@ -22,6 +23,7 @@ const useI18n = () => {
 import { KIT_SHARED_CSS, kitVariables, seriesColor } from '../lib/visualKit';
 import { cn } from '@/lib/utils';
 import { MarkdownContent } from '../MarkdownRenderer';
+import { MarkdownPresentationContext } from '../markdown/MarkdownPresentationContext';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { axisTicks } from './axisTicks';
 import { ExtensionBlockFrame } from './ExtensionBlockFrame';
@@ -31,25 +33,8 @@ import {
  answeringFrame,
  NO_EXTENSION_BLOCKS, type ExtensionBlocks, blockDecisions, blockFields, cardDecision, choiceOption, DEFAULT_TIME, decisionOf, decisionTitles, blockName, blockNode, blockPath, blockProps, noteSlot, parseUiBlock, sliderStart, type BlockName, type BlockPath, type BlockValue, tones,
 } from './catalog';
-import {
- describeUiBlockAnswer,
- describeUiBlockReplyAnswer,
- type UiBlockAnswer,
- type UiBlockAnswerData,
- type UiBlockFieldValue,
- type UiBlockReplyAnswerData,
-} from './answer';
+import { describeUiBlockAnswer, describeUiBlockReplyAnswer, type UiBlockAnswer, type UiBlockAnswerData, type UiBlockFieldValue, type UiBlockReplyAnswerData } from './answer';
 
-/**
- * Where a block's answer goes. Without `submit` the fields and buttons show
- * but do nothing (a reply still streaming, a page that no longer waits);
- * `answered` restores an answer already given.
- *
- * - `page`: a block an agent waits on. A press answers that call at once.
- * - `reply`: a block in a finished reply. Presses only choose, one button per
- *   decision; once every decision has a choice, or the user sends what they
- *   chose, the choices go to the agent in one piece and start its next turn.
- */
 export type UiBlockHost =
  | { kind: 'page'; submit: ((answer: UiBlockAnswer) => Promise<void>) | null; answered: UiBlockAnswerData | null }
  | {
@@ -60,12 +45,7 @@ export type UiBlockHost =
 
 const noHost: UiBlockHost = { kind: 'reply', submit: null, answered: null };
 
-/**
- * The answer per decision; a decision is the value its buttons share. A
- * decision answered with its note alone has no button (null).
- */
 type Chosen = ReadonlyMap<string, string | null>;
-/** The user's note per decision, on a card in a reply. */
 type Notes = ReadonlyMap<string, string>;
 
 const chosenFrom = (host: UiBlockHost): Chosen => {
@@ -79,21 +59,17 @@ const notesFrom = (host: UiBlockHost): Notes => (host.kind === 'reply' && host.a
  : new Map());
 
 type FormState = {
- values: Record<string, UiBlockFieldValue>;
- setValue: (name: string, value: UiBlockFieldValue) => void;
- press: (button: string, value?: string) => void;
- disabled: boolean;
- chosen: Chosen;
- /** A reply's decision cards fold once answered and take a note each. */
- folds: boolean;
- /** The card titles that name a decision (`decisionTitles`). */
- titles: ReadonlySet<string>;
- notes: Notes;
- setNote: (decision: string, note: string) => void;
- /** Answers a decision with its note and no button. */
- answerWithNote: (decision: string) => void;
- /** Clears a decision's answer, so its card opens again. */
- reopen: (decision: string) => void;
+  values: Record<string, UiBlockFieldValue>;
+  setValue: (name: string, value: UiBlockFieldValue) => void;
+  press: (button: string, value?: string) => void;
+  disabled: boolean;
+  chosen: Chosen;
+  folds: boolean;
+  titles: ReadonlySet<string>;
+  notes: Notes;
+  setNote: (decision: string, note: string) => void;
+  answerWithNote: (decision: string) => void;
+  reopen: (decision: string) => void;
 };
 
 const FormContext = React.createContext<FormState>({
@@ -110,12 +86,6 @@ const FormContext = React.createContext<FormState>({
  reopen: () => { },
 });
 
-/**
- * Draws one `openui-lang` block of an assistant reply. Every node reads its
- * props through its component's schema. While the block streams, a node's
- * props can be cut mid-value; it then keeps drawing its last props that
- * parsed, and a node that never parsed yet draws nothing.
- */
 
 type Tone = (typeof tones)[number];
 type NodeProps = { props: BlockValue };
@@ -135,18 +105,12 @@ const toneFill = {
  error: 'bg-[var(--status-error-background)]',
 } satisfies Record<Tone, string>;
 
-// Grouped for reading, never rounded: a table or a stat shows the value the agent gave.
-// Groups split by a narrow space in every UI language: the agent writes in
-// its own language, and "2,318" next to its "184 200" read as two formats.
 const numberFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 20 });
 const formatNumber = (value: number) => numberFormat.format(value).replace(/,/g, ' ');
-/** A chart's unit follows its number, so "126 k" or "42%" reads as one value. */
 const unitSuffix = (unit?: string) => (!unit ? '' : /^[%°]/.test(unit) ? unit : ` ${unit}`);
-// Dollars and pounds are written before the amount.
 const unitLeads = (unit?: string) => unit === '$' || unit === '£';
 const formatWithUnit = (value: number, unit?: string) => (unitLeads(unit) ? `${unit}${formatNumber(value)}` : `${formatNumber(value)}${unitSuffix(unit)}`);
 const number = z.number();
-/** A value as the reader sees it: numbers grouped, text as written. */
 const display = (value: string | number) => {
  const parsed = number.safeParse(value);
  return parsed.success ? formatNumber(parsed.data) : String(value);
@@ -159,29 +123,27 @@ function useBlockProps<S extends z.ZodType>(schema: S, props: BlockValue): z.inf
  return last.current;
 }
 
-// A block draws in a reply and on a page an agent showed, so it reads the
-// directory itself instead of the reply's Markdown context.
 function Markdown({ source, className }: { source?: string; className?: string }) {
- const directory = useEffectiveDirectory() ?? '';
+ const presentation = React.useContext(MarkdownPresentationContext);
  if (!source) return null;
+ if (presentation?.purpose) return <MarkdownContent content={source} mode="static" settled directory={presentation.directory}
+  className={className} purpose={presentation.purpose} theme={presentation.theme} enableFileReferences={false}
+  preparedHighlights={presentation.preparedHighlights} onExportCode={presentation.onExportCode} />;
+ return <ScopedMarkdown source={source} className={className} />;
+}
+
+function ScopedMarkdown({ source, className }: { source: string; className?: string }) {
+ const directory = useEffectiveDirectory() ?? '';
  return <MarkdownContent content={source} mode="static" settled directory={directory} className={className} />;
 }
 
 const isButtonNode = (value: BlockValue) => blockNode.safeParse(value).data?.typeName === 'Button';
 
-// The path of the node whose children are drawing (`blockPath`).
 const PathContext = React.createContext<BlockPath>('');
-/** Something the block itself adds to the tree, drawn before the child at `index` of the node at `parent`. */
-/** `trailing` goes at the end of that child when it is a run of buttons, on their line. */
 type Slot = { parent: BlockPath; index: number; element: React.ReactNode; trailing?: React.ReactNode };
 const SlotContext = React.createContext<Slot | null>(null);
-/** What a Row of buttons draws after its own children (`Slot.trailing`). */
 const RowTrailingContext = React.createContext<React.ReactNode>(null);
 
-/**
- * Buttons next to each other share a row, whether or not the agent wrapped
- * them in one. The first `skip` nodes are drawn by the parent elsewhere.
- */
 function Children({ nodes, skip = 0 }: { nodes: BlockValue[]; skip?: number }) {
  const path = React.useContext(PathContext);
  const slot = React.useContext(SlotContext);
@@ -220,34 +182,28 @@ function Stack({ props }: NodeProps) {
 }
 
 function Row({ props }: NodeProps) {
- const value = useBlockProps(blockProps.Row, props);
- const trailing = React.useContext(RowTrailingContext);
- // Cards, tables and charts share the row's width and its height; badges and
- // buttons keep their own size.
- if (!value) return null;
- // Stats sit in equal columns: in a wrapping flex row the last one alone on
- // its line grew to the full width.
- const stats = value.children.length > 0 && value.children.every((child) => blockNode.safeParse(child).data?.typeName === 'Stat');
- return (
-  <div
-   className={stats
-    ? 'grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3 [&>div]:w-full'
-    : 'flex flex-wrap items-stretch gap-3 [&>div]:min-w-[12rem] [&>div]:flex-1 [&>button]:self-center [&>span]:self-center'}
-  >
-   <RowTrailingContext.Provider value={null}><Children nodes={value.children} /></RowTrailingContext.Provider>
-   {trailing}
-  </div>
- );
+  const value = useBlockProps(blockProps.Row, props);
+  const trailing = React.useContext(RowTrailingContext);
+  if (!value) return null;
+  const stats = value.children.length > 0 && value.children.every((child) => blockNode.safeParse(child).data?.typeName === 'Stat');
+  return (
+    <div
+      className={stats
+        ? 'grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3 [&>div]:w-full'
+        : 'flex flex-wrap items-stretch gap-3 [&>div]:min-w-[12rem] [&>div]:flex-1 [&>button]:self-center [&>span]:self-center'}
+    >
+      <RowTrailingContext.Provider value={null}><Children nodes={value.children} /></RowTrailingContext.Provider>
+      {trailing}
+    </div>
+  );
 }
 
 const isBadgeNode = (value: BlockValue) => blockNode.safeParse(value).data?.typeName === 'Badge';
 
-/** A card's title takes inline Markdown, so an issue or a pull request in it can be a link. */
 function CardTitle({ title, className }: { title: string; className?: string }) {
  return <Markdown source={title} className={cn('font-medium', className)} />;
 }
 
-/** The title of the card a node sits in; it names the decision of the card's buttons (`decisionOf`). */
 const CardTitleContext = React.createContext('');
 
 function Card({ props }: NodeProps) {
@@ -285,59 +241,50 @@ function Card({ props }: NodeProps) {
  );
 }
 
-/**
- * A decision card's note goes before its buttons, so it is written before one
- * of them is pressed; a note alone answers the card too.
- */
 function CardNoteSlot({ decision, card, children }: { decision: string; card: BlockValue; children: React.ReactNode }) {
- const { t } = useI18n();
- const form = React.useContext(FormContext);
- const path = React.useContext(PathContext);
- const note = form.notes.get(decision) ?? '';
- const [open, setOpen] = React.useState(note !== '');
- const place = noteSlot(card);
- if (!place || (form.disabled && !note)) return <>{children}</>;
- // The note opens above the buttons; its toggle, then the way to answer
- // with the note alone, sit at the end of their line, so a card is no taller
- // until the user wants a note.
- const element = open ? (
-  <ShortTextarea
-   value={note}
-   placeholder={t('chat.uiBlock.note.placeholder')}
-   aria-label={t('chat.uiBlock.note.label')}
-   disabled={form.disabled}
-   onChange={(event) => form.setNote(decision, event.target.value)}
-   // Notes on several cards are a line or two each.
-   rows={1}
-   autoFocus
-  />
- ) : null;
- const trailing = form.disabled ? null : !open ? (
-  <UiButton
-   type="button"
-   variant="ghost"
-   size="icon"
-   className="text-muted-foreground hover:bg-transparent hover:text-foreground"
-   aria-label={t('chat.uiBlock.note.add')}
-   title={t('chat.uiBlock.note.add')}
-   onClick={() => setOpen(true)}
-  >
-   <Icon name="sticky-note" className="size-4" />
-  </UiButton>
- ) : (
-  // Shown with the field, so the row does not change once typing starts.
-  <UiButton
-   type="button"
-   variant="ghost"
-   className="text-muted-foreground hover:bg-transparent hover:text-foreground"
-   disabled={!note.trim()}
-   onClick={() => form.answerWithNote(decision)}
-  >
-   {t('chat.uiBlock.note.answerOnly')}
-  </UiButton>
- );
- const slot = { parent: place.parent ? `${path}/${place.parent}` : path, index: place.index, element, trailing };
- return <SlotContext.Provider value={slot}>{children}</SlotContext.Provider>;
+  const { t } = useI18n();
+  const form = React.useContext(FormContext);
+  const path = React.useContext(PathContext);
+  const note = form.notes.get(decision) ?? '';
+  const [open, setOpen] = React.useState(note !== '');
+  const place = noteSlot(card);
+  if (!place || (form.disabled && !note)) return <>{children}</>;
+  const element = open ? (
+    <ShortTextarea
+      value={note}
+      placeholder={t('chat.uiBlock.note.placeholder')}
+      aria-label={t('chat.uiBlock.note.label')}
+      disabled={form.disabled}
+      onChange={(event) => form.setNote(decision, event.target.value)}
+      rows={1}
+      autoFocus
+    />
+  ) : null;
+  const trailing = form.disabled ? null : !open ? (
+    <UiButton
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="text-muted-foreground hover:bg-transparent hover:text-foreground"
+      aria-label={t('chat.uiBlock.note.add')}
+      title={t('chat.uiBlock.note.add')}
+      onClick={() => setOpen(true)}
+    >
+      <Icon name="sticky-note" className="size-4" />
+    </UiButton>
+  ) : (
+    <UiButton
+      type="button"
+      variant="ghost"
+      className="text-muted-foreground hover:bg-transparent hover:text-foreground"
+      disabled={!note.trim()}
+      onClick={() => form.answerWithNote(decision)}
+    >
+      {t('chat.uiBlock.note.answerOnly')}
+    </UiButton>
+  );
+  const slot = { parent: place.parent ? `${path}/${place.parent}` : path, index: place.index, element, trailing };
+  return <SlotContext.Provider value={slot}>{children}</SlotContext.Provider>;
 }
 
 function NoteToggle({ onOpen }: { onOpen: () => void }) {
@@ -356,7 +303,6 @@ function NoteToggle({ onOpen }: { onOpen: () => void }) {
  );
 }
 
-/** A decision card once answered: one line with the answer, and its note under it. */
 function AnsweredCard({ title, decision }: { title: string; decision: string }) {
  const { t } = useI18n();
  const form = React.useContext(FormContext);
@@ -393,21 +339,15 @@ function Text({ props }: NodeProps) {
 }
 
 function Badge({ props }: NodeProps) {
- const value = useBlockProps(blockProps.Badge, props);
- if (!value) return null;
- return (
-  // The badge HTML pages draw too (../lib/visualKit.ts); a flex column would stretch it without w-fit.
-  <span className="oc-badge w-fit" data-tone={value.tone && value.tone !== 'neutral' ? value.tone : undefined}>
-   {value.label}
-  </span>
- );
+  const value = useBlockProps(blockProps.Badge, props);
+  if (!value) return null;
+  return (
+    <span className="oc-badge w-fit" data-tone={value.tone && value.tone !== 'neutral' ? value.tone : undefined}>
+      {value.label}
+    </span>
+  );
 }
 
-/**
- * Only a warning or an error is a tinted banner with its title in the tone,
- * as the git and MCP banners are; a note, info or success is an icon and text
- * with no box, so a reply with several of them does not turn into stripes.
- */
 function Callout({ props }: NodeProps) {
  const value = useBlockProps(blockProps.Callout, props);
  if (!value) return null;
@@ -425,44 +365,31 @@ function Callout({ props }: NodeProps) {
  );
 }
 
-/**
- * Labels in one column, values at the end of the other, joined by a dotted
- * leader, as the shortcuts dialog lists keys; narrow, so the eye does not
- * cross a wide reply. A long value wraps within its column: moved to a line
- * of its own, it dangled under the label.
- */
 function KeyValue({ props }: NodeProps) {
- const value = useBlockProps(blockProps.KeyValue, props);
- if (!value) return null;
- return (
-  <dl className="m-0 grid max-w-lg grid-cols-[fit-content(55%)_minmax(0,1fr)] gap-y-0.5">
-   {value.items.map((item, index) => (
-    <React.Fragment key={index}>
-     <dt className="flex min-w-0 items-baseline gap-3 text-muted-foreground">
-      <span className="min-w-0 [overflow-wrap:anywhere]">{item.label}</span>
-      <span aria-hidden className="min-w-4 flex-1 border-b border-dotted border-border" />
-     </dt>
-     {/* The leader runs on to a short value at the end; a long one takes the column and wraps there. */}
-     <dd className="m-0 flex min-w-0 items-baseline">
-      <span aria-hidden className="min-w-0 flex-1 border-b border-dotted border-border" />
-      <span className="ps-3 text-end tabular-nums [overflow-wrap:anywhere]">{display(item.value)}</span>
-     </dd>
-    </React.Fragment>
-   ))}
-  </dl>
- );
+  const value = useBlockProps(blockProps.KeyValue, props);
+  if (!value) return null;
+  return (
+    <dl className="m-0 grid max-w-lg grid-cols-[fit-content(55%)_minmax(0,1fr)] gap-y-0.5">
+      {value.items.map((item, index) => (
+        <React.Fragment key={index}>
+          <dt className="flex min-w-0 items-baseline gap-3 text-muted-foreground">
+            <span className="min-w-0 [overflow-wrap:anywhere]">{item.label}</span>
+            <span aria-hidden className="min-w-4 flex-1 border-b border-dotted border-border" />
+          </dt>
+          <dd className="m-0 flex min-w-0 items-baseline">
+            <span aria-hidden className="min-w-0 flex-1 border-b border-dotted border-border" />
+            <span className="ps-3 text-end tabular-nums [overflow-wrap:anywhere]">{display(item.value)}</span>
+          </dd>
+        </React.Fragment>
+      ))}
+    </dl>
+  );
 }
 
 const tableCell = (cell: string | number | undefined) => (cell === undefined ? '' : number.safeParse(cell).success
- ? display(cell)
- // A pipe splits a GFM cell, also inside code, unless an odd run of
- // backslashes escapes it; backslashes are otherwise the cell's own text.
- : String(cell).replace(/(\\*)\|/g, (match, slashes: string) => (slashes.length % 2 ? match : `${slashes}\\|`)).replace(/\r?\n/g, ' '));
+  ? display(cell)
+  : String(cell).replace(/(\\*)\|/g, (match, slashes: string) => (slashes.length % 2 ? match : `${slashes}\\|`)).replace(/\r?\n/g, ' '));
 
-/**
- * The chat's own Markdown table: the same column fitting, copy and download
- * as a table written straight into a reply.
- */
 function Table({ props }: NodeProps) {
  const value = useBlockProps(blockProps.Table, props);
  if (!value || value.columns.length === 0) return null;
@@ -475,12 +402,6 @@ function Table({ props }: NodeProps) {
  return <TableMarkdown source={lines.join('\n')} />;
 }
 
-/**
- * In a card the table spans the card and drops its own frame and column
- * lines: the card is the frame, rows keep their dividers. Elsewhere it is the
- * chat's table as written in a reply. The chat's table rules are unlayered,
- * so these overrides need `!`.
- */
 const TABLE_IN_CARD = [
  '[&_[data-streamdown=table-wrapper]]:w-full! [&_[data-streamdown=table]]:w-full!',
  '[&_[data-streamdown=table-wrapper]>div]:border-0! [&_[data-streamdown=table-wrapper]>div]:bg-transparent!',
@@ -493,73 +414,62 @@ function TableMarkdown({ source }: { source: string }) {
  return <Markdown source={source} className={inCard ? TABLE_IN_CARD : undefined} />;
 }
 
-/** A delta's direction from its sign; the agent's tone says whether that is good. */
 const deltaDirection = (delta: string) => (/^\+/.test(delta) ? 'up' : /^[-\u2212]/.test(delta) ? 'down' : null);
 
 function Stat({ props }: NodeProps) {
- const value = useBlockProps(blockProps.Stat, props);
- if (!value) return null;
- const direction = value.delta ? deltaDirection(value.delta) : null;
- return (
-  // Alone it keeps its own width; in a Row it shares the row (Row's flex-1 wins over w-fit).
-  <div className="oc-box flex w-fit min-w-[10rem] flex-col gap-1">
-   <span className="typography-meta text-muted-foreground">{value.label}</span>
-   <span className="text-[1.625rem] font-semibold leading-tight tracking-[-0.01em] tabular-nums">{display(value.value)}</span>
-   {value.delta && (
-    // The badge of the shared kit, so a page and a block show a change alike.
-    <span className="oc-badge w-fit gap-0.5 tabular-nums" data-tone={value.tone && value.tone !== 'neutral' ? value.tone : undefined}>
-     {direction && <Icon name={direction === 'up' ? 'arrow-up' : 'arrow-down'} className="size-3" />}
-     {direction ? value.delta.slice(1) : value.delta}
-    </span>
-   )}
-  </div>
- );
+  const value = useBlockProps(blockProps.Stat, props);
+  if (!value) return null;
+  const direction = value.delta ? deltaDirection(value.delta) : null;
+  return (
+    <div className="oc-box flex w-fit min-w-[10rem] flex-col gap-1">
+      <span className="typography-meta text-muted-foreground">{value.label}</span>
+      <span className="text-[1.625rem] font-semibold leading-tight tracking-[-0.01em] tabular-nums">{display(value.value)}</span>
+      {value.delta && (
+        <span className="oc-badge w-fit gap-0.5 tabular-nums" data-tone={value.tone && value.tone !== 'neutral' ? value.tone : undefined}>
+          {direction && <Icon name={direction === 'up' ? 'arrow-up' : 'arrow-down'} className="size-3" />}
+          {direction ? value.delta.slice(1) : value.delta}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function Progress({ props }: NodeProps) {
- const { t } = useI18n();
- const value = useBlockProps(blockProps.Progress, props);
- if (!value) return null;
- const max = value.max ?? 100;
- const share = Math.max(0, Math.min(1, value.value / max));
- const done = share >= 1;
- // Never 100% before it is done. Multiplying first keeps 29 of 100 at 29
- // (29 / 100 * 100 is 28.999…).
- const percent = done ? 100 : Math.max(0, Math.min(99, Math.floor((value.value * 100) / max)));
- return (
-  <div className="flex flex-col gap-1.5">
-   <div className="flex items-baseline justify-between gap-3">
-    <span className="min-w-0 truncate">{value.label}</span>
-    <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-     {/* Out of 100 the count says what the percent already does. */}
-     {max !== 100 && (
-      <span className="typography-meta text-muted-foreground">
-       {t('chat.uiBlock.progress.ofTotal', { value: formatNumber(value.value), max: formatNumber(max) })}
-      </span>
-     )}
-     <span className={cn('flex items-center gap-0.5 font-semibold', done && 'text-[var(--status-success)]')}>
-      {done && <Icon name="check" className="size-3.5" />}
-      {percent}%
-     </span>
-    </span>
-   </div>
-   <div className="oc-track h-2 overflow-hidden rounded-full" role="progressbar" aria-valuenow={value.value} aria-valuemax={max} aria-label={value.label}>
-    <div
-     className="oc-bar-grow h-full rounded-full"
-     style={{ width: `${share * 100}%`, background: done ? 'var(--status-success)' : seriesColor(0) }}
-    />
-   </div>
-  </div>
- );
+  const { t } = useI18n();
+  const value = useBlockProps(blockProps.Progress, props);
+  if (!value) return null;
+  const max = value.max ?? 100;
+  const share = Math.max(0, Math.min(1, value.value / max));
+  const done = share >= 1;
+  const percent = done ? 100 : Math.max(0, Math.min(99, Math.floor((value.value * 100) / max)));
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate">{value.label}</span>
+        <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+          {max !== 100 && (
+            <span className="typography-meta text-muted-foreground">
+              {t('chat.uiBlock.progress.ofTotal', { value: formatNumber(value.value), max: formatNumber(max) })}
+            </span>
+          )}
+          <span className={cn('flex items-center gap-0.5 font-semibold', done && 'text-[var(--status-success)]')}>
+            {done && <Icon name="check" className="size-3.5" />}
+            {percent}%
+          </span>
+        </span>
+      </div>
+      <div className="oc-track h-2 overflow-hidden rounded-full" role="progressbar" aria-valuenow={value.value} aria-valuemax={max} aria-label={value.label}>
+        <div
+          className="oc-bar-grow h-full rounded-full"
+          style={{ width: `${share * 100}%`, background: done ? 'var(--status-success)' : seriesColor(0) }}
+        />
+      </div>
+    </div>
+  );
 }
 
 type StepStatus = z.infer<typeof blockProps.Steps>['items'][number]['status'];
 
-/**
- * A step's mark on the line. The current step holds still: an accent disc
- * with a halo, no pulse. A block can stay on screen for a whole session, and a
- * loop that never ends keeps the compositor busy all that time.
- */
 function StepMark({ status, index }: { status: StepStatus; index: number }) {
  const base = 'flex size-[1.125rem] shrink-0 items-center justify-center rounded-full';
  if (status === 'done') {
@@ -576,7 +486,7 @@ function StepMark({ status, index }: { status: StepStatus; index: number }) {
   );
  }
  return (
-  <span className={cn(base, 'typography-micro tabular-nums text-muted-foreground shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--foreground)_22%,transparent)]')}>
+  <span className={cn(base, 'typography-micro tabular-nums shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--foreground)_22%,transparent)]', status === 'todo' ? 'text-muted-foreground' : 'text-foreground')}>
    {index + 1}
   </span>
  );
@@ -589,13 +499,10 @@ const stepTitleTone = {
  todo: 'text-muted-foreground',
 } satisfies Record<NonNullable<StepStatus>, string>;
 
-/** The line from a step to the next: green once the step is done. */
 const stepLine = (status: StepStatus) => (status === 'done' ? 'bg-[var(--status-success)]' : 'bg-[color-mix(in_srgb,var(--foreground)_12%,transparent)]');
 
-/** The minimum width of a step in a row, in rem (`useStepsFitRow`). */
 const STEP_MIN_WIDTH_REM = 7;
 
-/** Whether a row of `count` steps fits the width it has, each at its minimum. */
 function useStepsFitRow(count: number) {
  const ref = React.useRef<HTMLDivElement>(null);
  const [fits, setFits] = React.useState(true);
@@ -616,25 +523,21 @@ function useStepsFitRow(count: number) {
 }
 
 function Steps({ props }: NodeProps) {
- const value = useBlockProps(blockProps.Steps, props);
- const [ref, fits] = useStepsFitRow(value?.direction === 'row' ? value.items.length : 0);
- if (!value) return null;
- // A row that does not fit the width falls back to a column: scrolled
- // sideways, the steps past the edge went unseen.
- // The current mark's 3px halo reaches past the block's edge, where the reply
- // clips it: the steps leave that much room before and above them.
- return <div ref={ref} className="ps-[3px] pt-[3px]">{value.direction === 'row' && fits ? <StepsRow items={value.items} /> : <StepsColumn items={value.items} />}</div>;
+  const value = useBlockProps(blockProps.Steps, props);
+  const [ref, fits] = useStepsFitRow(value?.direction === 'row' ? value.items.length : 0);
+  if (!value) return null;
+  return <div ref={ref} className="ps-[3px] pt-[3px]">{value.direction === 'row' && fits ? <StepsRow items={value.items} /> : <StepsColumn items={value.items} />}</div>;
 }
 
 type StepItems = z.infer<typeof blockProps.Steps>['items'];
 
 function StepText({ item }: { item: StepItems[number] }) {
- return (
-  <>
-   <div className={cn('font-medium', stepTitleTone[item.status ?? 'todo'])}>{item.title}</div>
-   <Markdown source={item.markdown} className="typography-meta text-muted-foreground" />
-  </>
- );
+  return (
+    <>
+      <div className={cn('font-medium', item.status ? stepTitleTone[item.status] : '')}>{item.title}</div>
+      <Markdown source={item.markdown} className="typography-meta text-muted-foreground" />
+    </>
+  );
 }
 
 function StepsRow({ items }: { items: StepItems }) {
@@ -644,8 +547,8 @@ function StepsRow({ items }: { items: StepItems }) {
    {items.map((item, index) => (
     <div key={index} className="flex min-w-0 flex-col gap-1.5" role="listitem">
      <div className="flex items-center">
-      <StepMark status={item.status ?? 'todo'} index={index} />
-      {index < items.length - 1 && <span className={cn('mx-1.5 h-0.5 flex-1 rounded-full', stepLine(item.status ?? 'todo'))} />}
+      <StepMark status={item.status} index={index} />
+      {index < items.length - 1 && <span className={cn('mx-1.5 h-0.5 flex-1 rounded-full', stepLine(item.status))} />}
      </div>
      <div className="min-w-0 pe-3"><StepText item={item} /></div>
     </div>
@@ -661,8 +564,8 @@ function StepsColumn({ items }: { items: StepItems }) {
    {items.map((item, index) => (
     <div key={index} className="flex gap-2.5" role="listitem">
      <div className="flex flex-col items-center pt-[3px]">
-      <StepMark status={item.status ?? 'todo'} index={index} />
-      {index < items.length - 1 && <span className={cn('my-1 min-h-3 w-0.5 flex-1 rounded-full', stepLine(item.status ?? 'todo'))} />}
+      <StepMark status={item.status} index={index} />
+      {index < items.length - 1 && <span className={cn('my-1 min-h-3 w-0.5 flex-1 rounded-full', stepLine(item.status))} />}
      </div>
      <div className={cn('min-w-0 flex-1', index < items.length - 1 && 'pb-3')}><StepText item={item} /></div>
     </div>
@@ -673,60 +576,48 @@ function StepsColumn({ items }: { items: StepItems }) {
 
 type Series = z.infer<typeof blockProps.Series>;
 
-/** Series that have arrived whole; a streaming one joins once it parses. */
 const seriesOf = (nodes: BlockValue[]): Series[] => nodes.flatMap((node) => {
  const series = blockProps.Series.safeParse(blockNode.safeParse(node).data?.props);
  return series.success ? [series.data] : [];
 });
 
-/**
- * Which series a chart brings forward: the one under the pointer, else the one
- * the user picked in the legend (a tap, where there is no hover). null keeps
- * them all equal.
- */
 type SeriesFocus = {
- focused: number | null;
- picked: number | null;
- /** The legend: brings a series forward at once, it is pointed at on purpose. */
- hover: (index: number | null) => void;
- /** A line: only once the pointer rests on it, so sweeping across the plot does not flicker. */
- rest: (index: number | null) => void;
- toggle: (index: number) => void;
+  focused: number | null;
+  picked: number | null;
+  hover: (index: number | null) => void;
+  rest: (index: number | null) => void;
+  toggle: (index: number) => void;
 };
 
 const LINE_FOCUS_DELAY_MS = 200;
 const LINE_UNFOCUS_DELAY_MS = 120;
 
 function useSeriesFocus(count: number): SeriesFocus {
- const [hovered, setHovered] = React.useState<number | null>(null);
- const [picked, setPicked] = React.useState<number | null>(null);
- const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
- const cancel = () => {
-  if (timer.current) clearTimeout(timer.current);
-  timer.current = null;
- };
- React.useEffect(() => cancel, []);
- // A chart that now has fewer series (another tab, a streamed edit) drops a focus past its end.
- const inRange = (index: number | null) => (index !== null && index < count ? index : null);
- return {
-  focused: inRange(hovered) ?? inRange(picked),
-  picked: inRange(picked),
-  hover: (index) => {
-   cancel();
-   setHovered(index);
-  },
-  // Leaving lets go a moment later too: a pointer that slips off a line and
-  // back keeps its focus instead of blinking.
-  rest: (index) => {
-   cancel();
-   if (index === hovered) return;
-   timer.current = setTimeout(() => setHovered(index), index === null ? LINE_UNFOCUS_DELAY_MS : LINE_FOCUS_DELAY_MS);
-  },
-  toggle: (index) => setPicked((current) => (current === index ? null : index)),
- };
+  const [hovered, setHovered] = React.useState<number | null>(null);
+  const [picked, setPicked] = React.useState<number | null>(null);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  React.useEffect(() => cancel, []);
+  const inRange = (index: number | null) => (index !== null && index < count ? index : null);
+  return {
+    focused: inRange(hovered) ?? inRange(picked),
+    picked: inRange(picked),
+    hover: (index) => {
+      cancel();
+      setHovered(index);
+    },
+    rest: (index) => {
+      cancel();
+      if (index === hovered) return;
+      timer.current = setTimeout(() => setHovered(index), index === null ? LINE_UNFOCUS_DELAY_MS : LINE_FOCUS_DELAY_MS);
+    },
+    toggle: (index) => setPicked((current) => (current === index ? null : index)),
+  };
 }
 
-/** Series names when there are several. */
 function ChartHeader({ series, focus }: { series: Series[]; focus?: SeriesFocus }) {
  if (series.length < 2) return null;
  return (
@@ -762,32 +653,23 @@ function ChartHeader({ series, focus }: { series: Series[]; focus?: SeriesFocus 
  );
 }
 
-// A card already frames what it holds.
 const InCardContext = React.createContext(false);
 
-/** A chart outside a card gets a frame of its own, so two charts in a row never read as one. */
 function ChartFrame({ className, ...props }: React.ComponentProps<'div'>) {
  const inCard = React.useContext(InCardContext);
  return <div {...props} className={cn(className, !inCard && 'oc-box')} />;
 }
 
-/** The unit by a large figure: after it at text size, so the number stays the thing read first, or a currency sign before it. */
 function HeadlineUnit({ unit, leading = false }: { unit?: string; leading?: boolean }) {
- if (!unit || unitLeads(unit) !== leading) return null;
- // A leading currency sign reads as part of the amount, at its size.
- if (leading) return unit;
- return <span className="typography-meta font-normal text-muted-foreground">{unitSuffix(unit)}</span>;
+  if (!unit || unitLeads(unit) !== leading) return null;
+  if (leading) return unit;
+  return <span className="typography-meta font-normal text-muted-foreground">{unitSuffix(unit)}</span>;
 }
 
-/** A share as a whole percent; a sliver that rounds to nothing still shows it is there. */
 const formatShare = (share: number) => (share > 0 && share < 0.005 ? '<1%' : `${Math.round(share * 100)}%`);
 
 const pointsOf = (series: Series[]) => series.flatMap((item) => item.values.filter((point) => point !== null));
 
-/**
- * What a single series of bars sums up to at a glance: its largest value and
- * the average, or for parts of a whole the total and the largest.
- */
 function BarSummary({ points, unit, total }: { points: number[]; unit?: string; total: number | null }) {
  const { t } = useI18n();
  const average = points.reduce((sum, point) => sum + point, 0) / points.length;
@@ -816,12 +698,6 @@ function BarSummary({ points, unit, total }: { points: number[]; unit?: string; 
  );
 }
 
-/**
- * A ranked list: each category's name and value on one line, a thin bar under
- * them across the full width, so long names never cut into the bars. One
- * series takes the accent colour, stronger as the value grows, and its largest
- * value in bold; several series each keep their colour.
- */
 function BarChart({ props }: NodeProps) {
  const value = useBlockProps(blockProps.BarChart, props);
  if (!value) return null;
@@ -893,7 +769,6 @@ function BarChart({ props }: NodeProps) {
  );
 }
 
-/** Splits a series at its missing points, so the line breaks there instead of dropping to zero. */
 const segmentsOf = (values: Array<number | null>): Array<Array<{ index: number; point: number }>> => {
  const segments: Array<Array<{ index: number; point: number }>> = [];
  let current: Array<{ index: number; point: number }> = [];
@@ -909,7 +784,6 @@ const segmentsOf = (values: Array<number | null>): Array<Array<{ index: number; 
  return segments;
 };
 
-// Dots on every point while they stay apart; past this the line alone reads better.
 const MAX_DOTTED_POINTS = 12;
 
 const lastPoint = (values: Array<number | null>) => {
@@ -920,10 +794,6 @@ const lastPoint = (values: Array<number | null>) => {
  return null;
 };
 
-/**
- * A single trend leads with where it ended and how far it moved: the last
- * value large, then its change from the first point.
- */
 function TrendHeader({ series, labels, unit }: { series: Series; labels: string[]; unit?: string }) {
  const { t } = useI18n();
  const values = series.values.slice(0, labels.length);
@@ -1146,13 +1016,6 @@ function LineChart({ props }: NodeProps) {
  );
 }
 
-/**
- * The form an agent waits on, for the nodes drawn in it; null in a reply and on
- * a page that only shows data. Its Tabs step through their tabs with Next, as
- * the question tool does, and the form's own Send, with the note before it,
- * sits on the last tab of the Tabs at `endPath`: the Tabs the form ends with,
- * when it has no buttons of its own.
- */
 const WaitingFormContext = React.createContext<{ endPath: BlockPath | null; end: React.ReactNode } | null>(null);
 
 function Tabs({ props }: NodeProps) {
@@ -1228,11 +1091,6 @@ function Tabs({ props }: NodeProps) {
  );
 }
 
-/**
- * Options as the question tool draws them: one per line with our Radio or
- * Checkbox, so one or several is told by the control. The row itself gets no
- * fill on hover or when chosen; the control and a heavier label show the choice.
- */
 function Choice({ props }: NodeProps) {
  const value = useBlockProps(blockProps.Choice, props);
  const form = React.useContext(FormContext);
@@ -1278,11 +1136,6 @@ function Choice({ props }: NodeProps) {
  );
 }
 
-/**
- * A short text box, as the note on a decision card draws one: the app's own
- * field, a line or two tall. It already takes what the user types as typed
- * and offers emoji on `:`.
- */
 function ShortTextarea(props: React.ComponentProps<typeof Textarea>) {
  return <Textarea className="min-h-10" maxLength={4000} {...props} />;
 }
@@ -1304,55 +1157,51 @@ function Input({ props }: NodeProps) {
  );
 }
 
-/** A date as the scheduled task editor asks for one, with the time beside it when the agent wants it. */
 function DateInput({ props }: NodeProps) {
- const value = useBlockProps(blockProps.DateInput, props);
- const form = React.useContext(FormContext);
- const { t } = useI18n();
- const { use24Hour } = useCalendarPreferences();
- const current = value ? form.values[value.name] : undefined;
- const text = Array.isArray(current) ? '' : current ?? '';
- const date = text.slice(0, 10);
- // The time waits here until a date is picked, then travels with it.
- const [pendingTime, setPendingTime] = React.useState(DEFAULT_TIME);
- if (!value) return null;
- const time = text.slice(11, 16) || pendingTime;
- const set = (nextDate: string, nextTime: string) => {
-  if (!form.disabled) form.setValue(value.name, value.time ? `${nextDate}T${nextTime}` : nextDate);
- };
- return (
-  <div className="flex flex-col gap-1">
-   {value.label && <span className="typography-meta font-medium text-foreground">{value.label}</span>}
-   {/* A fieldset disables the time's own inputs and menu with the form. */}
-   <fieldset disabled={form.disabled} className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
-    <DatePicker
-     value={date}
-     onChange={(nextDate) => set(nextDate, time)}
-     placeholder={t('sessions.scheduledTasks.editor.date.placeholder')}
-     ariaLabel={value.label || value.name}
-     disabled={form.disabled}
-    />
-    {value.time && (
-     <TimePill
-      value={time}
-      use24Hour={use24Hour}
-      hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
-      minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
-      periodAriaLabel={t('sessions.scheduledTasks.editor.time.periodAria')}
-      amLabel={t('sessions.scheduledTasks.editor.time.period.am')}
-      pmLabel={t('sessions.scheduledTasks.editor.time.period.pm')}
-      onChange={(nextTime) => {
-       setPendingTime(nextTime);
-       if (date) set(date, nextTime);
-      }}
-     />
-    )}
-   </fieldset>
-  </div>
- );
+  const value = useBlockProps(blockProps.DateInput, props);
+  const form = React.useContext(FormContext);
+  const { t } = useI18n();
+  const { use24Hour } = useCalendarPreferences();
+  const current = value ? form.values[value.name] : undefined;
+  const text = Array.isArray(current) ? '' : current ?? '';
+  const date = text.slice(0, 10);
+  const [pendingTime, setPendingTime] = React.useState(DEFAULT_TIME);
+  if (!value) return null;
+  const time = text.slice(11, 16) || pendingTime;
+  const set = (nextDate: string, nextTime: string) => {
+    if (!form.disabled) form.setValue(value.name, value.time ? `${nextDate}T${nextTime}` : nextDate);
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      {value.label && <span className="typography-meta font-medium text-foreground">{value.label}</span>}
+      <fieldset disabled={form.disabled} className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
+        <DatePicker
+          value={date}
+          onChange={(nextDate) => set(nextDate, time)}
+          placeholder={t('sessions.scheduledTasks.editor.date.placeholder')}
+          ariaLabel={value.label || value.name}
+          disabled={form.disabled}
+        />
+        {value.time && (
+          <TimePill
+            value={time}
+            use24Hour={use24Hour}
+            hourAriaLabel={t('sessions.scheduledTasks.editor.time.hourAria')}
+            minuteAriaLabel={t('sessions.scheduledTasks.editor.time.minuteAria')}
+            periodAriaLabel={t('sessions.scheduledTasks.editor.time.periodAria')}
+            amLabel={t('sessions.scheduledTasks.editor.time.period.am')}
+            pmLabel={t('sessions.scheduledTasks.editor.time.period.pm')}
+            onChange={(nextTime) => {
+              setPendingTime(nextTime);
+              if (date) set(date, nextTime);
+            }}
+          />
+        )}
+      </fieldset>
+    </div>
+  );
 }
 
-/** The voice settings' slider, with the value it stands at beside the label and the range under the track. */
 const SLIDER_CLASS = 'h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--interactive-border)] disabled:cursor-not-allowed disabled:opacity-50 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[var(--primary-base)]';
 
 function Slider({ props }: NodeProps) {
@@ -1385,7 +1234,6 @@ function Slider({ props }: NodeProps) {
  );
 }
 
-/** A section folded under its title, as Markdown folds `<details>`: a chevron that turns, the content under it. */
 function Details({ props }: NodeProps) {
  const value = useBlockProps(blockProps.Details, props);
  const [open, setOpen] = React.useState(false);
@@ -1412,32 +1260,28 @@ function Details({ props }: NodeProps) {
 }
 
 function Button({ props }: NodeProps) {
- const value = useBlockProps(blockProps.Button, props);
- const form = React.useContext(FormContext);
- const cardTitle = React.useContext(CardTitleContext);
- if (!value) return null;
- // A page answers at once, so there its buttons are told apart by value alone.
- const decision = form.folds ? decisionOf(form.titles, cardTitle, value.value) : value.value ?? '';
- const chosen = form.chosen.get(decision) === value.label;
- // A primary button is the agent's pick and stays tinted until the decision
- // has an answer; then only the chosen one is, with a check.
- const recommended = value.variant === 'primary' && !form.chosen.has(decision);
- return (
-  <UiButton
-   type="button"
-   variant={chosen || recommended ? 'default' : 'outline'}
-   className="w-fit"
-   aria-pressed={chosen}
-   disabled={form.disabled}
-   onClick={() => form.press(value.label, form.folds ? decision : value.value)}
-  >
-   {chosen && <Icon name="check" className="size-3.5" />}
-   {value.label}
-  </UiButton>
- );
+  const value = useBlockProps(blockProps.Button, props);
+  const form = React.useContext(FormContext);
+  const cardTitle = React.useContext(CardTitleContext);
+  if (!value) return null;
+  const decision = form.folds ? decisionOf(form.titles, cardTitle, value.value) : value.value ?? '';
+  const chosen = form.chosen.get(decision) === value.label;
+  const recommended = value.variant === 'primary' && !form.chosen.has(decision);
+  return (
+    <UiButton
+      type="button"
+      variant={chosen || recommended ? 'default' : 'outline'}
+      className="w-fit"
+      aria-pressed={chosen}
+      disabled={form.disabled}
+      onClick={() => form.press(value.label, form.folds ? decision : value.value)}
+    >
+      {chosen && <Icon name="check" className="size-3.5" />}
+      {value.label}
+    </UiButton>
+  );
 }
 
-// Tab and Series draw inside their parents.
 const renderers = {
  Stack, Row, Card, Tabs, Details, Text, Badge, Callout, KeyValue, Table, Stat, Progress, Steps, BarChart, LineChart, Choice, Input,
  DateInput, Slider, Button,
@@ -1447,7 +1291,6 @@ const drawn = blockName.extract([
  'LineChart', 'Choice', 'Input', 'DateInput', 'Slider', 'Button',
 ]);
 
-/** The active extensions' components, and whether the block is finished: only a finished one mounts their pages. */
 const ExtensionBlocksContext = React.createContext<{
  blocks: ExtensionBlocks;
  complete: boolean;
@@ -1472,13 +1315,9 @@ function Node({ value }: { value: BlockValue }) {
  return <Renderer props={node.data.props} />;
 }
 
-/**
- * A block that could not be drawn: why, and its source folded away. Unfolded,
- * a long program filled the reply, and the reasons were nowhere.
- */
-function NotDrawn({ source, errors, partial = false }: { source: string; errors: string[]; partial?: boolean }) {
+function NotDrawn({ source, errors, partial = false, showSourceInitially = false }: { source: string; errors: string[]; partial?: boolean; showSourceInitially?: boolean }) {
  const { t } = useI18n();
- const [open, setOpen] = React.useState(false);
+ const [open, setOpen] = React.useState(showSourceInitially);
  const panelId = React.useId();
  // An agent's block outlives the extension that drew it; the parser's wording is for the agent.
  const shown = errors.map((error) => (/Unknown component "[A-Z]/.test(error) ? t('chat.uiBlocks.extensionBlock.unavailable') : error));
@@ -1488,6 +1327,7 @@ function NotDrawn({ source, errors, partial = false }: { source: string; errors:
    {[...new Set(shown)].map((error) => <div key={error} className="text-muted-foreground">{error}</div>)}
    <button
     type="button"
+    data-export-ignore
     aria-expanded={open}
     aria-controls={panelId}
     onClick={() => setOpen((current) => !current)}
@@ -1501,11 +1341,6 @@ function NotDrawn({ source, errors, partial = false }: { source: string; errors:
  );
 }
 
-/**
- * A block that fails to draw shows why and its source. The next source text clears
- * the failure without remounting a working tree, so a streamed update keeps
- * the user's chosen tab.
- */
 class BlockErrorBoundary extends React.Component<
  { source: string; fallback: React.ReactNode; onFailed?: (errors: string[]) => void; children: React.ReactNode },
  { failed: boolean; source: string }
@@ -1529,7 +1364,6 @@ class BlockErrorBoundary extends React.Component<
  }
 }
 
-/** The kit's CSS (badges, boxes, bars) that HTML pages carry in their own document, added to the app's once. */
 function addKitStyles() {
  if (document.querySelector('style[data-oc-visual-kit]')) return;
  const style = document.createElement('style');
@@ -1538,21 +1372,24 @@ function addKitStyles() {
  document.head.append(style);
 }
 
-export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }: {
- source: string;
- complete: boolean;
- host?: UiBlockHost;
- /** The host's own controls, under the block on every tab: after the form's Send in the same row, or alone when Send sits on the last tab. */
- actions?: React.ReactNode;
- /** Hears why a finished block could not be drawn: the parser's errors, or a drawing failure. */
- onNotDrawn?: (errors: string[]) => void;
+export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions, theme, isImageExport = false }: {
+  source: string;
+  complete: boolean;
+  host?: UiBlockHost;
+  actions?: React.ReactNode;
+  onNotDrawn?: (errors: string[]) => void;
+  theme?: Theme;
+  isImageExport?: boolean;
 }) {
  const { t } = useI18n();
- const { currentTheme } = useThemeSystem();
+ const themeContext = useOptionalThemeSystem();
+ const currentTheme = theme ?? themeContext?.currentTheme;
+ if (!currentTheme) throw new Error('UiBlock requires a theme');
  // A broken page goes back to the agent, which draws it again, so only a
  // reply, which has no such second try, draws what it can.
  const salvage = host.kind === 'reply';
- const extensionBlocks = useExtensionBlocks();
+ const availableExtensions = useExtensionBlocks();
+ const extensionBlocks = isImageExport ? NO_EXTENSION_BLOCKS : availableExtensions;
  const parsed = React.useMemo(() => parseUiBlock(source, complete, salvage, extensionBlocks), [source, complete, salvage, extensionBlocks]);
  // The kit's variables (series colours, tones) land on the block's root before paint, and follow a theme switch.
  const blockRef = React.useRef<HTMLDivElement>(null);
@@ -1749,7 +1586,7 @@ export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }
  // has no decision that would ever send them.
  const replyForm = host.kind === 'reply' && complete && decisions.length === 0 && fields.length > 0 && Boolean(host.submit || sent);
  const hasValue = Object.values(answerValues).some((value) => (Array.isArray(value) ? value.length > 0 : value.trim() !== ''));
- const fallback = <NotDrawn source={source} errors={notDrawnErrors ?? []} />;
+ const fallback = <NotDrawn source={source} errors={notDrawnErrors ?? []} showSourceInitially={isImageExport} />;
  // A form that ends with Tabs sends from their last tab, where Next stood on the
  // others. A frame's Send comes with the first letter of its note, and moving
  // the note there would take the field away mid-word, so a frame's form stays
@@ -1824,7 +1661,7 @@ export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }
      ) : null}
     </div>
    ) : null}
-   {parsed.dropped.length > 0 ? <div className="mt-2"><NotDrawn source={source} errors={parsed.dropped} partial /></div> : null}
+   {parsed.dropped.length > 0 ? <div className="mt-2"><NotDrawn source={source} errors={parsed.dropped} partial showSourceInitially={isImageExport} /></div> : null}
   </div>
  );
 }

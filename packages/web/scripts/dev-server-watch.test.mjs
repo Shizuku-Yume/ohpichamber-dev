@@ -1,8 +1,46 @@
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 
 import { createDevServerWatchCommand } from './dev-server-watch.mjs';
 
 describe('createDevServerWatchCommand', () => {
+  it('prepares compiled native package exports before either source server command', async () => {
+    const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(scripts['dev:server:prepare']).toBe('bun run --cwd ../agent-contract build && bun run --cwd ../agent-service build');
+    for (const command of ['dev:server', 'dev:server:watch']) {
+      expect(scripts[command]).toMatch(/^bun run dev:server:prepare && /);
+    }
+  });
+  it('preserves the injected desktop dev data directory for the HMR server', () => {
+    const command = createDevServerWatchCommand({
+      platform: 'linux', bunExecutable: 'bun',
+      env: {
+        OPENCHAMBER_ELECTRON_DEV: '1',
+        OPENCHAMBER_DATA_DIR: '/dev-data',
+        OPENCHAMBER_ELECTRON_DEV_DATA_DIR: '/dev-data',
+        OPENCHAMBER_INJECTED_ENV: 'OPENCHAMBER_DATA_DIR,OPENCHAMBER_UI_PASSWORD',
+        OPENCHAMBER_UI_PASSWORD: 'secret',
+      },
+    });
+    expect(command.spawnOptions.env.OPENCHAMBER_DATA_DIR).toBe('/dev-data');
+    expect(command.spawnOptions.env.OPENCHAMBER_INJECTED_ENV).toBe('OPENCHAMBER_DATA_DIR');
+    expect(command.spawnOptions.env.OPENCHAMBER_UI_PASSWORD).toBeUndefined();
+    expect(command.spawnOptions.env.OPENCHAMBER_ELECTRON_DEV_DATA_DIR).toBeUndefined();
+  });
+
+  it('retains an explicitly supplied desktop data directory without marking it injected', () => {
+    const command = createDevServerWatchCommand({
+      platform: 'linux', bunExecutable: 'bun',
+      env: {
+        OPENCHAMBER_ELECTRON_DEV: '1',
+        OPENCHAMBER_DATA_DIR: '/custom',
+        OPENCHAMBER_ELECTRON_DEV_DATA_DIR: '/custom',
+      },
+    });
+    expect(command.spawnOptions.env.OPENCHAMBER_DATA_DIR).toBe('/custom');
+    expect(command.spawnOptions.env.OPENCHAMBER_INJECTED_ENV).toBeUndefined();
+    expect(command.spawnOptions.env.OPENCHAMBER_ELECTRON_DEV_DATA_DIR).toBeUndefined();
+  });
   it('uses the package default port and disables relay hosting by default', () => {
     const command = createDevServerWatchCommand({
       platform: 'win32',
@@ -38,7 +76,7 @@ describe('createDevServerWatchCommand', () => {
     })).toThrow(/Invalid OPENCHAMBER_PORT/);
   });
 
-  it('preserves the nodemon watcher command outside Windows', () => {
+  it('watches JavaScript and TypeScript server changes outside Windows', () => {
     const command = createDevServerWatchCommand({
       platform: 'linux',
       env: { OPENCHAMBER_PORT: '4200' },
@@ -52,7 +90,7 @@ describe('createDevServerWatchCommand', () => {
       '--watch',
       'server',
       '--ext',
-      'js',
+      'js,ts',
       '--exec',
       'bun server/index.js --port 4200',
     ]);

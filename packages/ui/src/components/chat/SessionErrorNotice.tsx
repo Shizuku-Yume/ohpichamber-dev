@@ -60,13 +60,6 @@ const useLastMessageState = (sessionId: string, directory?: string): LastMessage
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
-/**
- * Shows what the canonical runtime reported when it stopped a turn without
- * producing a reply. Rendered under the last message, only while that turn is
- * the latest one: sending again moves the last message past the error and
- * hides it. Canonical turn failures survive reloads without replaying live
- * notifications or reconstructing legacy outcome metadata.
- */
 export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionId, directory }) => {
   const { t } = useI18n();
   const liveError = useLatestSessionError(sessionId);
@@ -104,10 +97,6 @@ export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionI
     return () => window.clearTimeout(timer);
   }, [unansweredSince]);
   const unansweredDue = unansweredSince !== null && Math.max(now, Date.now()) - unansweredSince >= UNANSWERED_AFTER_MS;
-  // Looking unanswered is only a guess: the live stream may have dropped the
-  // reply. Re-read the session first and show the notice only once a read has
-  // settled with the prompt still last. The key ties that verdict to this
-  // session and prompt, so a new send or a session switch starts unverified.
   const unansweredKey = unansweredDue && sessionId ? `${sessionId}:${unansweredSince}` : null;
   const [verifiedKey, setVerifiedKey] = React.useState<string | null>(null);
   React.useEffect(() => {

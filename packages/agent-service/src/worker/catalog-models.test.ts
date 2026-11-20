@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import os, { tmpdir } from 'node:os';
-import path, { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
 import { YAML } from 'bun';
 import { getBundledModel } from '@oh-my-pi/pi-catalog';
 import { buildModel } from '@oh-my-pi/pi-catalog/build';
@@ -827,11 +827,11 @@ test('openNativeRuntime validates profile agentDirectory and activates requested
   const cwd = join(root, 'workspace');
   await mkdir(cwd, { recursive: true });
   const profileName = `test-profile-${Date.now()}`;
-  const expectedDerived = path.join(os.homedir(), '.omp', 'profiles', profileName, 'agent');
-  await mkdir(expectedDerived, { recursive: true });
-
   const oldProfile = process.env.OMP_PROFILE;
   process.env.OMP_PROFILE = profileName;
+  setProfile(profileName);
+  const expectedDerived = getAgentDir();
+  await mkdir(expectedDerived, { recursive: true });
   try {
     const runtime = await openNativeRuntime({ cwd, agentDirectory: expectedDerived });
     expect(runtime.modelsPath).toBe(join(expectedDerived, 'models.yml'));

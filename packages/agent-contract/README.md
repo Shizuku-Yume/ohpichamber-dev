@@ -1,5 +1,11 @@
 # @openchamber/agent-contract
 
+`SessionUpdatedPayloadSchema` and `SessionStatusPayloadSchema` own the same
+cross-field refinements for unstamped worker projections and stamped Canonical
+events. Adding the event envelope uses `safeExtend`, without dropping checks.
+`SessionSnapshotStateSchema` shares branch/selection/compacting/todo fields with
+projection seeds; full snapshot cursor, run and window checks remain on snapshots.
+
 Shared JSON wire types and Zod validation for the Canonical Agent API at `/api/agent/v1`. The Host, Agent Service and clients import this package; OMP SDK objects stay private to the Agent Service. The separate `ohpichamber-sdk` package remains the Guest extension contract.
 
 `questions.ts` owns the `omp.ask` control schema. Native HTML forms are parsed inside the worker into optional/required controls, immutable option identifiers with separate display labels, disabled choices, initial values and safe Markdown context. Raw HTML is never mounted. Native hidden fields, numeric conversion and constraint validation stay worker-private. Historical questions without these optional fields retain their existing behavior. `QuestionReply.action: "update"` saves current form values in the worker without answering and advances the pending CAS version. Only native form drafts with `timeoutResetAt` may advance their version while pending. It resets the native inactivity timeout (`timeoutResetAt`); a new-version `question.requested` event updates the countdown without publishing draft contents. Timeout submits the worker's last accepted values, including defaults and incomplete controls, to OMP. A form with no native timeout waits for a reply or run cancellation. All retained clients use this same Host Gateway flow; Guest SDK and remote mobile process ownership are unchanged.

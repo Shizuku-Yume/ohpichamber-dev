@@ -36,5 +36,3 @@ export function useSessionGoal(sessionId: string, directory?: string): SessionGo
     running: session?.activeRunId != null || session?.continuationPending === true,
   };
 }
-
-

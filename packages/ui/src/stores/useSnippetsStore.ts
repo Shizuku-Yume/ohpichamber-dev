@@ -15,7 +15,6 @@ export type SnippetScope = FileResourceScope;
 interface SnippetQuickCreate {
   name?: string;
   content: string;
-  /** Runs once the snippet is saved, with the name it got. */
   onSaved?: (name: string) => void;
 }
 type SnippetInput = Omit<PromptTemplateCreateRequest, 'expectedRevision'>;

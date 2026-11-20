@@ -27,8 +27,6 @@ type LoadState =
   | { state: 'ready'; environment: ProjectEnvironment }
   | { state: 'failed' };
 
-// Reasons the server reports for a failed run; one it adds later reads as a
-// plain failure.
 const failureKey = (reason: string): I18nKey => {
   switch (reason) {
     case 'timeout': return 'settings.projects.environment.status.timeout';
@@ -48,7 +46,6 @@ const useStatusText = (status: EnvironmentCommandStatus | null): string | null =
       : t('settings.projects.environment.status.appliedPlural', { count: status.count });
   }
   if (status.reason === 'exit') {
-    // No exit code means a signal ended the command.
     return status.exitCode === null || status.exitCode === undefined
       ? t('settings.projects.environment.status.stopped')
       : t('settings.projects.environment.status.exitCode', { code: status.exitCode });
@@ -56,11 +53,6 @@ const useStatusText = (status: EnvironmentCommandStatus | null): string | null =
   return t(failureKey(status.reason));
 };
 
-/**
- * A project's variables and its environment command (direnv, devenv), for
- * Git, the terminal and project actions in the project and its worktrees.
- * The managed OpenCode serves every project at once, so it never gets these.
- */
 export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = ({ projectRef }) => {
   const { t } = useI18n();
   const [load, setLoad] = React.useState<LoadState>({ state: 'loading' });
@@ -107,8 +99,6 @@ export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = (
     setBusy(true);
     try {
       const saved = await save({ command: commandDraft.trim() || null });
-      // A new command runs right away, so its outcome shows without waiting
-      // for the next Git or terminal start.
       if (saved && commandDraft.trim()) {
         applyEnvironment(await reloadProjectEnvironment(projectRef.id));
       }
@@ -136,7 +126,6 @@ export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = (
 
   return (
     <SettingsSection
-      divider={false}
       title={t('settings.projects.environment.title')}
       info={t('settings.projects.environment.info')}
       settingsItem="projects.environment"
@@ -167,7 +156,6 @@ export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = (
               <Input
                 value={commandDraft}
                 onChange={(event) => setCommandDraft(event.target.value)}
-                // A command, not prose: the same in every language.
                 placeholder="direnv export json"
                 aria-label={t('settings.projects.environment.command.label')}
                 disabled={disabled}

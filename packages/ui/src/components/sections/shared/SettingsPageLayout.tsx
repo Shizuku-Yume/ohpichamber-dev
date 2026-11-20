@@ -12,40 +12,23 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 
 interface SettingsPageLayoutProps {
-  /** Page content */
   children: React.ReactNode;
-  /** Optional page title shown above settings content. */
   title?: React.ReactNode;
-  /** Optional content rendered before a string/number page title. */
   titleLeading?: React.ReactNode;
-  /** Optional content rendered after a string/number page title. */
   titleAccessory?: React.ReactNode;
-  /** Optional supporting description under the page title. */
   description?: React.ReactNode;
-  /** Optional content rendered at the end of the header row (before save status). */
   headerEnd?: React.ReactNode;
-  /** Show persistence feedback for instant-save settings. */
   showSaveStatus?: boolean;
   /**
    * Commit-on-blur for autosaving pages: fires for every focus leaving the
    * page content, so a text field does not need its own handler.
    */
   onBlurCapture?: React.FocusEventHandler;
-  /** Additional className for the content container */
   className?: string;
-  /** Additional className for the outer ScrollableOverlay */
   outerClassName?: string;
-  /**
-   * The content is at least as tall as the pane, so a `flex-1` child (an
-   * editor) takes the height left under the fields; taller content scrolls.
-   */
   fillHeight?: boolean;
 }
 
-/**
- * Standard layout wrapper for settings page content.
- * UI Kit: max-width 840px, padding 32px vertical / 48px horizontal.
- */
 export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
   children,
   className,
@@ -60,8 +43,6 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
   fillHeight = false,
 }) => {
   const scrollbarTopClearance = React.useContext(SettingsScrollbarTopClearanceContext);
-  // The phone's header row already names the page. The heading stays for
-  // screen readers and as the focus target of a page that opens.
   const { isMobile } = useDeviceInfo();
   const hasHeader = title != null || description != null || headerEnd != null || showSaveStatus;
   const isPlainTitle = typeof title === 'string' || typeof title === 'number';
@@ -78,8 +59,6 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
         className={cn(
           'mx-auto max-w-[840px] space-y-0 px-6 py-6 @3xl:px-12 @3xl:py-8',
           fillHeight && 'flex w-full flex-1 flex-col',
-          // The first visible section never needs the top divider, no matter
-          // which platform-conditional sections above it rendered null.
           '[&>section:first-of-type]:border-t-0 [&>section:first-of-type]:pt-0',
           className
         )}
@@ -92,7 +71,7 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
           // the actions drop to their own line instead.
           <div className={cn(
             'flex flex-wrap items-start justify-between gap-x-4 gap-y-3',
-            isMobile && description == null ? 'mb-0' : 'mb-2 pb-6',
+            isMobile && description == null && headerEnd == null && !hasTitleChrome ? 'mb-0' : 'mb-2 pb-6',
           )}>
             <div className="min-w-0 flex-1 basis-64 space-y-1">
               {title != null ? (
@@ -101,8 +80,6 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
                     <div className="flex min-w-0 items-center gap-2">
                       {titleLeading}
                       <h1 data-settings-page-heading tabIndex={-1} className={cn(SETTINGS_PAGE_TITLE_CLASS, 'min-w-0 truncate')}>{title}</h1>
-                      {/* A status badge carries a fixed word; compressing it
-                          wraps the text inside its own pill. */}
                       <span className="shrink-0">{titleAccessory}</span>
                     </div>
                   ) : (
@@ -132,8 +109,6 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
   );
 };
 
-// Only saves slower than this surface a "Saving…" spinner — local writes
-// finish instantly and stay silent; remote/mobile connections get feedback.
 const SAVE_SPINNER_DELAY_MS = 500;
 
 const SettingsSaveStatus: React.FC = () => {

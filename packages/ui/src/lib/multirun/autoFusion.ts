@@ -21,9 +21,6 @@ export const resolveFusionJudge = (selection: FusionJudge): FusionJudge => {
 };
 
 const startedRunKeys = new Set<string>();
-// Lanes seen running on this page. A lane is finished only after it was seen
-// running and then left the live busy set with an outcome: persisted history
-// or a missing status entry never counts as finished.
 const seenRunningLaneIds = new Set<string>();
 // A parent idling for a subagent must record a newer idle time before its
 // answer can be fused; a resumed parent may finish again in the same batch.
@@ -124,7 +121,6 @@ function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): 
   }, [activeSessionIds, observedById, index, sessionById]);
 }
 
-/** Mounted once per shell that can launch runs. */
 export function RunAutoFusion(): null {
   const { t } = useI18n();
   useRunAutoFusion(React.useCallback((failure: AutoFusionFailure) => {

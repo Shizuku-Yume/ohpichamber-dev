@@ -4,7 +4,7 @@
 
 There is no OpenCode code in this directory any more. Normal agent execution uses the Bun Agent Service through Canonical `/api/agent/v1` routes, and isolated spaces run no agent runtime until the OMP space runtime is built (`.workflow/decisions.md: 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime`).
 
-`proxy.js`, its three unit suites (`proxy.test.js`, `proxy-agent-wiring.test.js`, `proxy-host-metadata.test.js`) and its two isolated-space live imports were deleted with task 38. The proxy was never mounted by the production server; it existed only as a test fixture, and the spaces tests now use the in-space OpenChamber routes (`packages/web/server/lib/spaces/places/DOCUMENTATION.md`). The `@opencode/client` and `@opencode/schema` dependencies were removed from `packages/web/package.json` with it.
+`proxy.js`, its three unit suites (`proxy.test.js`, `proxy-agent-wiring.test.js`, `proxy-host-metadata.test.js`) and its two isolated-space live imports were deleted with task 38. The proxy was never mounted by the production server; it existed only as a test fixture, and the spaces tests now use the in-space OpenChamber routes (`packages/web/server/lib/spaces/places/DOCUMENTATION.md`). The retired OpenCode SDK dependencies were removed from `packages/web/package.json` with it.
 
 ## What Remains
 

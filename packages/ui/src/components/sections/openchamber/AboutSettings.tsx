@@ -75,7 +75,7 @@ export const AboutSettings: React.FC = () => {
 
   return (
     <>
-      <SettingsSection divider={false}>
+      <SettingsSection>
         <div className="flex items-center gap-4">
           <AboutLogo size={48} />
           <div className="min-w-0 space-y-1">

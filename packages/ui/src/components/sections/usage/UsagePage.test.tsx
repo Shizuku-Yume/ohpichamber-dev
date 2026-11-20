@@ -1,4 +1,3 @@
-import React from 'react';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ProviderResult } from '@/types';

@@ -29,14 +29,10 @@ type SidebarSessionPartitions = {
   chatSessions: Session[];
 };
 
-// A row nests under its subagent parent or under the session it grew out of
-// (an auto-review, a `/btw` side conversation), see `lib/sessionWorkLineage`.
 const nestingParentResolver = (sessionById: ReadonlyMap<string, Session>) => (
   (session: Session): string | null => resolveSessionNestingParentId(session, (id) => sessionById.get(id))
 );
 
-// This boundary owns session visibility before Recent or projects take
-// ownership. Temporary /btw forks never leak into any sidebar projection.
 export const partitionSidebarSessions = (
   sessions: readonly Session[],
   isVSCode: boolean,
@@ -61,8 +57,6 @@ const isKnownActiveSessionDirectory = (
   knownDirectories: Set<string>,
   isVSCode: boolean,
 ): boolean => {
-  // Filtering this projection never removes records from the global cache.
-  // Unregistered destinations are assessed and registered by session admission.
   const normalized = normalizePath(resolveGlobalSessionDirectory(session));
   const directory = isVSCode ? normalized?.toLowerCase() : normalized;
   if (!directory) return false;
@@ -71,8 +65,26 @@ const isKnownActiveSessionDirectory = (
   return knownDirectories.has(directory) || (!isVSCode && [...knownDirectories].some((root) => directory.startsWith(root.endsWith('/') ? root : `${root}/`)));
 };
 
-// Global sessions provide complete sidebar coverage; initialized directory
-// stores only fill gaps until the global cache catches up.
+const keepKnownSessionsWithDescendants = (
+  sessions: readonly Session[],
+  isKnown: (session: Session) => boolean,
+  anchors: readonly Session[],
+): Session[] => {
+  const sessionById = new Map([...anchors, ...sessions].map((session) => [session.sessionId, session]));
+  const nestingParentOf = nestingParentResolver(sessionById);
+  const kept = new Map<string, boolean>(anchors.map((anchor) => [anchor.sessionId, true]));
+  const keeps = (session: Session): boolean => {
+    const cached = kept.get(session.sessionId);
+    if (cached !== undefined) return cached;
+    kept.set(session.sessionId, false);
+    const parent = isKnown(session) ? null : sessionById.get(nestingParentOf(session) ?? '');
+    const result = parent === null || Boolean(parent && keeps(parent));
+    kept.set(session.sessionId, result);
+    return result;
+  };
+  return sessions.filter(keeps);
+};
+
 export const projectSidebarActiveSessions = ({
   globalActiveSessions,
   liveSessions,
@@ -88,8 +100,12 @@ export const projectSidebarActiveSessions = ({
     sessions.push(session);
   }
 
-  return partitionSidebarSessions(sessions, isVSCode).projectSessions
-    .filter((session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode));
+  const partition = partitionSidebarSessions(sessions, isVSCode);
+  return keepKnownSessionsWithDescendants(
+    partition.projectSessions,
+    (session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode),
+    partition.chatSessions,
+  );
 };
 
 export const projectSidebarCollection = (args: ProjectSidebarActiveSessionsArgs): Session[] => {
@@ -110,8 +126,6 @@ const mergeSidebarSessionSources = (
   return sessions;
 };
 
-// The collection owns hierarchy membership. Consumers receive this narrow
-// resolver instead of retaining the collection's mutable indexing detail.
 export const getDescendantIds = (
   childrenMap: ReadonlyMap<string, readonly Session[]>,
   sessionId: string,
@@ -130,12 +144,6 @@ export const getDescendantIds = (
   return descendants;
 };
 
-// Recent and managed Chats render their rows from this tree, and the row's
-// archive/delete actions collect descendants from it as well. Building it to
-// full depth here keeps a grandchild reachable everywhere: a projection that
-// stopped at direct children rendered correctly but left grandchildren active
-// after their root was archived. Archived children are cut at every depth,
-// as they were for direct children before.
 export const buildActiveSessionNode = (
   childrenMap: ReadonlyMap<string, readonly Session[]>,
   session: Session,
@@ -175,8 +183,11 @@ const buildSidebarSessionStructure = ({
   const visibleSessions = mergeSidebarSessionSources(indexedGlobalSessions, liveSessions);
   const partition = partitionSidebarSessions(visibleSessions, isVSCode);
   const knownDirectoryKeys = new Set([...knownDirectories].map((directory) => isVSCode ? directory.toLowerCase() : directory));
-  const projectSessions = partition.projectSessions
-    .filter((session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode));
+  const projectSessions = keepKnownSessionsWithDescendants(
+    partition.projectSessions,
+    (session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode),
+    partition.chatSessions,
+  );
   const sessions = [...projectSessions, ...partition.chatSessions];
   const sessionById = new Map(sessions.map((session) => [session.sessionId, session]));
   return {
@@ -190,6 +201,8 @@ const buildSidebarSessionStructure = ({
     } : undefined,
   };
 };
+
+const EMPTY_PINNED_SESSION_IDS = new Set<string>();
 
 const orderSidebarSessionStructure = (
   structure: ReturnType<typeof buildSidebarSessionStructure>,
@@ -263,6 +276,7 @@ type UseSessionProjectCollectionResult = {
   childrenMap: Map<string, Session[]>;
   chatSessions: Session[];
   getDescendantIds: (sessionId: string, options: { includeArchived: boolean }) => string[];
+  getTimeOrderedSessions: () => readonly Session[];
   hasAuthoritativeGlobalSessions: boolean;
   nestedSessionIds: Set<string>;
   orderedSessions: Session[];
@@ -297,9 +311,6 @@ export const useSessionProjectCollection = ({
     () => new Set([...globalActiveSessions, ...rawArchivedSessions].map((session) => session.sessionId)),
     [globalActiveSessions, rawArchivedSessions],
   );
-  // Only the live sessions the global cache does not hold yet: the merge drops
-  // a covered session's live copy, so its live bumps (`time.updated` on every
-  // streamed step) neither re-render the sidebar nor rebuild the structure.
   const liveGapSessions = useLiveSessionsExcluding(globalSessionIds);
   const structure = React.useMemo(() => buildSidebarSessionStructure({
     globalActiveSessions,
@@ -313,6 +324,14 @@ export const useSessionProjectCollection = ({
     [pinnedSessionIds, sessionOrderRanks, structure],
   );
   const { chatSessions, orderedSessions } = ordering;
+  const getTimeOrderedSessions = React.useMemo(() => {
+    let cached: Session[] | null = null;
+    return (): readonly Session[] => {
+      if (pinnedSessionIds.size === 0) return orderedSessions;
+      cached ??= orderSidebarSessionStructure(structure, EMPTY_PINNED_SESSION_IDS, sessionOrderRanks).orderedSessions;
+      return cached;
+    };
+  }, [orderedSessions, pinnedSessionIds, sessionOrderRanks, structure]);
   const sessionById = React.useMemo(() => new Map(
     [...structure.sessions, ...archivedSessions].map((session) => [session.sessionId, session]),
   ), [archivedSessions, structure.sessions]);
@@ -327,9 +346,6 @@ export const useSessionProjectCollection = ({
     }
     return children;
   }, [archivedSessions, ordering.childrenMap]);
-  // A missing parent may temporarily leave its child as a root. Once either
-  // the active or archived cache supplies that parent, the child is no longer
-  // a root in its own project bucket.
   const nestedSessionIds = React.useMemo(() => {
     const nested = new Set<string>();
     for (const [parentId, children] of childrenMap) {
@@ -364,6 +380,7 @@ export const useSessionProjectCollection = ({
     hasAuthoritativeGlobalSessions,
     nestedSessionIds,
     orderedSessions,
+    getTimeOrderedSessions,
     pinnedSessionIds,
     sessionOrderRanks,
     sessions,

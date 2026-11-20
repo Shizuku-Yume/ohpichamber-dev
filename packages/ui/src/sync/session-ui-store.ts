@@ -1,16 +1,5 @@
-/**
- * Session UI Store — ephemeral UI state only.
- *
- * Domain data (sessions, messages with inline native parts, permissions,
- * questions, status) lives in sync child stores. This store owns ONLY transient
- * UI concerns: current selection, draft state, viewport anchors, model/agent
- * preferences, voice state, abort prompts, attached files, worktree metadata.
- *
- * Session↔worktree attachments are the authoritative exception: they live in
- * session-worktree-store (shared sync), and session-ui-store routes through it.
- *
- * SDK-calling actions that need domain data read it from sync-refs.
- */
+
+import type { InputHistorySubmission } from '@/stores/useInputHistoryStore';
 
 export type CanonicalSkillMentions = {
   names: readonly string[]
@@ -59,6 +48,7 @@ import {
   type SessionDirectorySources,
 } from "./session-directory-resolution"
 import { markSessionViewed } from "./notification-store"
+import { releaseKeptUnreadMarks } from "./session-unread"
 import { setActiveSession } from "./sync-context"
 import { registerSessionDirectory } from "./sync-refs"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
@@ -101,15 +91,11 @@ import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
 import {
   createInputHistoryIdentity,
   useInputHistoryStore,
-  type InputHistorySubmission,
 } from '@/stores/useInputHistoryStore'
 
 export type { AttachedFile }
 
 
-// ---------------------------------------------------------------------------
-// Send routing — shell mode, slash commands, or normal prompt
-// ---------------------------------------------------------------------------
 
 /**
  * Build the native prompt selection captured at submit time. Session records
@@ -413,9 +399,6 @@ type AssistantMessageSessionSource = {
 
 
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type NewSessionDraftTarget = "chat" | "project"
 
@@ -429,7 +412,6 @@ export type NewSessionDraftState = {
   open: boolean
   selectedProjectId?: string | null
   directoryOverride: string | null
-  /** Chosen with the composer's shield button; absent means the new session takes the default from Settings. */
   permissionMode?: PermissionMode
   /** Chosen with the composer's mode dropdown; applied after the session is created. */
   mode?: DraftSessionMode
@@ -472,7 +454,6 @@ export type SessionUIState = {
 
   // Non-Git mode: dismissed signature hash per session, hides bar until new turn arrives
 
-  // Actions — UI state management
   setCurrentSession: (
     id: string | null,
     directoryHint?: string | null,
@@ -491,7 +472,6 @@ export type SessionUIState = {
   setDraftProjectContextPin: (kind: "note" | "plan", id: string, pinned: boolean) => void
   acknowledgeSessionAbort: (sessionId: string) => void
   clearAbortPrompt: () => void
-  /** Arms "press Esc again to stop" for `sessionId`, the selected session by default. */
   armAbortPrompt: (durationMs?: number, sessionId?: string) => number | null
   clearError: () => void
   markSessionAsOpenChamberCreated: (sessionId: string) => void
@@ -503,7 +483,6 @@ export type SessionUIState = {
   setPendingDraftWorktreeRequest: (requestId: string | null) => void
   getWorktreeMetadata: (sessionId: string) => WorktreeMetadata | undefined
 
-  // Actions — SDK-calling operations (read domain data from sync-refs)
   sendMessage: (
     content: string,
     providerID: string,
@@ -544,7 +523,6 @@ export type SessionUIState = {
   forkAfterMessage: (sessionId: string, messageId: string) => Promise<void>
   createSessionFromAssistantMessage: (source: AssistantMessageSessionSource, execution: AssistantMessageSessionExecution) => Promise<void>
 
-  // Data access helpers (read from sync)
   getSessionsByDirectory: (directory: string) => Session[]
   getDirectoryForSession: (sessionId: string) => string | null
   getLastUserChoice: (sessionId: string) => { agent?: string; providerId?: string; modelId?: string; variant?: string } | null
@@ -568,9 +546,6 @@ export type SessionUIState = {
   adoptAuthoritativeSessionDirectory: (sessionId?: string) => void
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 
 const resolveDirectoryKey = (session: Session): string | null => {
@@ -581,10 +556,6 @@ const resolveDirectoryKey = (session: Session): string | null => {
 const safeStorage = getDeferredSafeStorage()
 const DRAFT_TARGET_STORAGE_KEY = "oc.chatInput.lastDraftTarget"
 
-// `target` records which side of the composer's target selector the user last
-// worked on, so a plain "new session" reopens there instead of always landing
-// on Chat. Records written before this field existed carry no kind — they stay
-// `null` and leave the Chat default in place rather than guessing one.
 type PersistedDraftTarget = {
   projectId: string | null
   directory: string | null
@@ -619,11 +590,6 @@ const getAttachmentForSession = (sessionId: string | null | undefined): SessionW
   return useSessionWorktreeStore.getState().getAttachment(sessionId)
 }
 
-/**
- * Resolve the Host directory for a native session without reading a path from
- * the Session DTO. The admitted workspace mapping is authoritative; the sync
- * ownership index is the live-store fallback when that mapping is unavailable.
- */
 const getAuthoritativeSessionDirectory = (sessionId: string): string | null => {
   const target = getAllSyncSessions().find((s) => s.sessionId === sessionId)
   const recordDirectory = target ? resolveDirectoryKey(target) : null
@@ -635,12 +601,6 @@ const getAuthoritativeSessionDirectory = (sessionId: string): string | null => {
   return owningDirectory ? normalizePath(owningDirectory) : null
 }
 
-/**
- * Directory remembered for a session in this runtime, plus the one persisted
- * across restarts. Exported for diagnostics: a stale persisted directory is the
- * hardest source to observe and the one that survives reloads, so a report that
- * cannot show it cannot rule it out.
- */
 export const getRememberedSessionDirectory = (sessionId: string): {
   runtime: string | null
   persisted: string | null
@@ -654,12 +614,6 @@ export const getRememberedSessionDirectory = (sessionId: string): {
   }
 }
 
-/**
- * Session whose `currentSessionDirectory` is only the active directory, used
- * because the session's own directory was not known at selection time. Such a
- * value must never outrank a worktree assignment or reach persistence — it is
- * a guess, not a selection.
- */
 let guessedSelectionSessionId: string | null = null
 
 const collectSessionDirectorySources = (
@@ -674,13 +628,6 @@ const collectSessionDirectorySources = (
   remembered: getRememberedSessionDirectory(sessionId).runtime,
 })
 
-/**
- * Conflicts already warned about, so a stale directory logs once instead of on
- * every keystroke. Keyed by runtime *and* the exact pair of directories: the
- * same session ID means a different thing in another runtime, and a conflict
- * that reappears after being resolved is news worth logging again. Bounded so
- * a long-lived session cannot grow it without limit.
- */
 const reportedDirectoryConflicts = new Set<string>()
 const MAX_REPORTED_DIRECTORY_CONFLICTS = 200
 
@@ -953,9 +900,6 @@ const resolveCreatableDraftDirectory = async (
   const currentDraft = useSessionUIStore.getState().newSessionDraft
   const currentDirectory = normalizePath(currentDraft.directoryOverride)
   const capturedDirectory = normalizePath(draftDirectory)
-  // openNewSessionDraft may rewrite the same implicit draft to this fallback
-  // while createSession's probe is still in flight. That is the intended
-  // destination, not a user change, so do not abort the create.
   const recoveredToActiveProject = currentDirectory === activeProjectDirectory
     && capturedDirectory !== activeProjectDirectory
   const draftChanged = !currentDraft.open
@@ -975,9 +919,6 @@ const resolveCreatableDraftDirectory = async (
 }
 
 const recoverStaleDraftDirectory = async (openedDraft: NewSessionDraftState): Promise<void> => {
-  // A managed Chat deliberately has no project directory. Its live directory
-  // may still point at an unregistered external path, which is not a stale
-  // project target for this recovery to repair.
   if (openedDraft.target !== "project") return
 
   const resolved = await resolveCreatableDraftDirectory(openedDraft, openedDraft.directoryOverride)
@@ -1058,16 +999,6 @@ const createSessionWithDraftLifecycle = async (
   }
 }
 
-/**
- * The effort a send should record for its session.
- *
- * A send carries `undefined` both when no effort was ever chosen and when the
- * user explicitly picked "Default", so the sent value alone cannot tell the two
- * apart, and recording it raw clears a real "Default". The live selection can
- * tell them apart, because its `override` keeps `null` for "Default" — but only
- * while it still describes the agent and model being sent to. Otherwise the
- * send's own value is all there is to go on.
- */
 const resolveVariantToRecord = (
   agentName: string | undefined,
   providerID: string,
@@ -1216,15 +1147,6 @@ export async function materializeOpenDraftSession(selection: {
 // Store
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Persisted worktree map (stale-while-revalidate)
-//
-// Worktree discovery is async (git), so the worktree→project map isn't ready at
-// startup. Persist it so (a) the sidebar worktree list paints instantly, and
-// (b) useConfigStore.resolveConfigDirectory can map a worktree to its project on
-// the FIRST launch — yielding a single project-scoped config load instead of a
-// worktree+project double-load. Discovery refreshes it in the background.
-// ---------------------------------------------------------------------------
 const flattenWorktreeMap = (map: Map<string, WorktreeMetadata[]>): WorktreeMetadata[] => {
   const out: WorktreeMetadata[] = []
   for (const list of map.values()) out.push(...list)
@@ -1291,10 +1213,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     const fallbackDir = directoryState.currentDirectory ?? null
     const knownDir = (directoryHint ? normalizePath(directoryHint) : null) ?? sessionDir
     const resolvedDir = knownDir ?? fallbackDir
-    // `fallbackDir` is the active directory, not this session's directory. It
-    // keeps routing usable while the owning directory store bootstraps, but it
-    // must never be remembered: a persisted guess outlives the race that
-    // produced it and survives reloads and restarts.
     const isGuessedDir = knownDir === null
     const projectsState = useProjectsStore.getState()
     const sessionProject = resolvedDir
@@ -1305,18 +1223,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       )
       : null
 
-    // Start the message fetch before publishing the selection. React flushes
-    // the discrete-event render in a microtask queued by `set`, so a fetch
-    // started after it would only leave the browser once that whole render
-    // finished. Started first, the request is on the wire while the render
-    // runs. Fire-and-forget: any transient failure is retried by the reactive
-    // path in ChatContainer.
     if (id) {
       void fetchMessagesForSession(id, resolvedDir)
     }
 
-    // Set the directory together with the session id so chat hooks read the
-    // same child store that send/SSE events will update during startup races.
     set({
       currentSessionId: id,
       currentSessionDirectory: id ? resolvedDir ?? null : null,
@@ -1324,9 +1234,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     guessedSelectionSessionId = isGuessedDir && id ? id : null
     const rememberedDir = isGuessedDir ? null : resolvedDir ?? null
     writeRuntimeSessionMemory(key, { sessionId: id, directory: rememberedDir })
-    // Keep the last NON-null session per runtime across app restarts (cold
-    // mobile launches reopen it after the instance reconnects). Going back to
-    // a draft intentionally does not erase it.
     if (id) {
       persistLastActiveSession(key, { sessionId: id, directory: rememberedDir })
     }
@@ -1341,18 +1248,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       useSessionDisplayStore.getState().setSingleProjectId(sessionProject.id)
     }
 
-    // Defer viewport anchor save for previous session — not needed for the
-    // skeleton to render and reads messages which can be expensive.
     if (previousSessionId && previousSessionId !== id) {
       const prevId = previousSessionId
       const newId = id
-      // queueMicrotask runs after the current synchronous call stack (and
-      // before the next macrotask / setTimeout(0) / paint), so the previous
-      // session's anchor is saved before the new session's restoreSnapshot
-      // effect fires. This eliminates the race where save and restore
-      // interleave against the same viewport store entry.
       queueMicrotask(() => {
-        // Bail if the user already switched again — save is now stale.
         const current = get().currentSessionId
         if (getRuntimeKey() !== runtimeKey || current !== newId) return
         const memState = getViewportSessionMemory(prevId)
@@ -1365,8 +1264,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       });
     }
 
-    // Mark session viewed in notification store + update active session ref
     if (id) {
+      if (previousSessionId !== id) releaseKeptUnreadMarks()
       markSessionViewed(id)
       setActiveSession(resolvedDir ?? "", id)
     } else {
@@ -1381,8 +1280,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   prepareForRuntimeSwitch: (apiBaseUrl?: string | null) => {
     const key = runtimeMemoryKey(apiBaseUrl)
-    // Not remembered: an unknown directory, which would pin the host to "/"
-    // when restored, and anything under a key that names no host.
     const directoryState = useDirectoryStore.getState()
     const directory = isTransientRuntimeKey(key) || isDirectoryUnknown(directoryState)
       ? null
@@ -1416,10 +1313,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     if (restoredDirectory) {
       useDirectoryStore.getState().setDirectory(restoredDirectory, { showOverlay: false })
     } else if (previousRuntimeKey && previousRuntimeKey !== key && !isTransientRuntimeKey(previousRuntimeKey)) {
-      // Nothing is remembered here and the directory was in use on the host
-      // just left, so it is forgotten instead of carried over. Coming from no
-      // host (a cold launch that connects through a switch) the directory is
-      // the one this window started with and stays.
       useDirectoryStore.getState().resetForRuntimeSwitch()
     }
     set({
@@ -1441,19 +1334,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     }
   },
 
-  // ---------------------------------------------------------------------------
-  // openNewSessionDraft
-  // ---------------------------------------------------------------------------
 
 
   openNewSessionDraft: (options) => {
     if (!options?.automatic) admissionNavigationRevision += 1
-    // A USER-initiated draft open is a navigation choice: the next cold launch
-    // should land on the draft, not re-open the session left behind — drop the
-    // persisted last-session pointer for this runtime. `automatic: true` marks
-    // programmatic fallback opens (e.g. ChatContainer's "no session active"
-    // auto-draft at boot), which must NOT consume the pointer — the cold-launch
-    // restore races exactly that auto-open.
     if (!options?.automatic) {
       clearLastActiveSession(runtimeMemoryKey())
     }
@@ -1478,11 +1362,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       : null
     const persistedProjectByDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, persistedTarget?.directory ?? null)
     const currentDirProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, currentDirectory)
-    // A user-initiated implicit open from an external path outside every
-    // project is a Chat for this draft: forcing the live path into a project
-    // draft is wrong, and the live location is not a target choice that should
-    // erase the project the user last picked. A managed chat scratch directory
-    // is not external; the recorded project still reopens from it.
     const isImplicitExternalChatFallback = currentDirectory !== null
       && !isChatDirectoryPath(currentDirectory)
       && currentDirProject === null
@@ -1554,8 +1433,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       warmChatsRootDirectory()
     }
 
-    // An unregistered live path falls back to managed Chat for this draft, but
-    // it is not a user choice that should discard the recorded project target.
     if (!(target === "chat" && isImplicitExternalChatFallback)) {
       persistDraftTarget({ projectId: selectedProject?.id ?? null, directory, target })
     }
@@ -1604,12 +1481,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       useInputStore.getState().setPendingInputText(options.initialPrompt)
     }
 
-    // Config (providers/agents/default model+agent) lives at the PROJECT level. When the user
-    // came from a worktree session, `directory` is the worktree path, whose provider list does
-    // not include project/global-scoped providers (e.g. the default agent's non-opencode model)
-    // — resolving defaults against it would wrongly fall back to opencode/big-pickle. Activate
-    // the project's config instead so the default cascade matches app startup, then re-apply it
-    // (a fresh draft must start from defaults, not inherit the previous session's selection).
     applyDraftTargetSelectionDefaults(nextDraft, availableWorktreesByProject, selectedProject)
 
     if (directory && directory !== useDirectoryStore.getState().currentDirectory) {
@@ -1660,9 +1531,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     return pending
   },
 
-  // ---------------------------------------------------------------------------
-  // closeNewSessionDraft
-  // ---------------------------------------------------------------------------
   closeNewSessionDraft: () => {
     const currentDraft = get().newSessionDraft
     if (currentDraft.preparedChatDirectory) {
@@ -1749,8 +1617,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     applyDraftTargetSelectionDefaults(get().newSessionDraft, get().availableWorktreesByProject, undefined, previousDraft)
 
     const nextDraft = get().newSessionDraft
-    // Persist the chosen draft target so reopening the composer restores the
-    // last side the user worked on.
     persistDraftTarget({
       projectId: nextDraft.target === "chat" ? null : nextDraft.selectedProjectId ?? null,
       directory: normalizePath(nextDraft.directoryOverride ?? null),
@@ -1833,7 +1699,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
 
   setWorktreeMetadata: (sessionId, metadata, cwd) => {
-    // Write to authoritative session-worktree-store
     if (metadata) {
       useSessionWorktreeStore.getState().setAttachment(sessionId, {
         worktreeRoot: metadata.worktreeRoot ?? metadata.path ?? null,
@@ -1849,7 +1714,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     } else {
       useSessionWorktreeStore.getState().clearAttachment(sessionId)
     }
-    // Also keep local map for backward compatibility
     set((s) => {
       const map = new Map(s.worktreeMetadata)
       if (metadata) map.set(sessionId, metadata)
@@ -1917,10 +1781,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   getWorktreeMetadata: (sessionId) => get().worktreeMetadata.get(sessionId),
 
-  // ---------------------------------------------------------------------------
-  // sendMessage — calls SDK, reads domain data from sync
-  // ---------------------------------------------------------------------------
-  // Armed goal: capture its objective and budget with the submitted prompt.
   sendMessage: async (
     content: string,
     providerID: string,
@@ -2171,15 +2031,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     })
   },
 
-  // ---------------------------------------------------------------------------
-  // createSession
-  // ---------------------------------------------------------------------------
   createSession: (title, directoryOverride, metadata, selection) =>
     createSessionWithDraftLifecycle(title, directoryOverride, metadata, undefined, selection),
 
-  // ---------------------------------------------------------------------------
-  // deleteSession — calls SDK, SSE event updates child store
-  // ---------------------------------------------------------------------------
   deleteSession: async (id, options) => deleteSessionAction(id, options),
 
   deleteSessions: async (ids, options) => {
@@ -2196,12 +2050,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   unarchiveSessions: (ids, options) => unarchiveSessionsAction(ids, options),
 
-  // ---------------------------------------------------------------------------
-  // updateSessionTitle — calls SDK, SSE event updates child store
-  // ---------------------------------------------------------------------------
   updateSessionTitle: async (sessionId, title) => {
     await updateSessionTitleAction(sessionId, title)
   },
+
   revertToMessage: async (sessionId, messageId) => {
     const runtimeKey = getRuntimeKey()
     await refetchSessionMessages(sessionId)
@@ -2243,10 +2095,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     toast.success(formatMessage(dictionary, "chat.revert.toast.redo"))
   },
 
-
-  // ---------------------------------------------------------------------------
-  // forkFromMessage — delegates to session-actions (handles text + sidebar)
-  // ---------------------------------------------------------------------------
   forkFromMessage: async (sessionId, messageId) => {
     const sessions = getSyncSessions()
     const existingSession = sessions.find((session) => session.sessionId === sessionId)
@@ -2280,9 +2128,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     }
   },
 
-  // ---------------------------------------------------------------------------
-  // createSessionFromAssistantMessage — uses the rendered source context
-  // ---------------------------------------------------------------------------
   createSessionFromAssistantMessage: async (source, execution) => {
     const runtimeKey = getRuntimeKey()
     const draftSnapshot = cloneDraft(get().newSessionDraft)
@@ -2402,9 +2247,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   },
 
-  // ---------------------------------------------------------------------------
-  // Data access helpers — read from sync
-  // ---------------------------------------------------------------------------
   getSessionsByDirectory: (directory) => {
     const nd = normalizePath(directory)
     if (!nd) return []
@@ -2413,12 +2255,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   },
 
   getDirectoryForSession: (sessionId) => {
-    // The selection-time directory participates in resolution, it does not
-    // short-circuit it. For a worktree session selected before its directory
-    // store finished bootstrapping, that value is a startup fallback pointing
-    // at the parent repository; letting it win would route every send, queue
-    // key, and send-confirmation lookup to a directory that does not own the
-    // session.
     const selected = sessionId === get().currentSessionId ? get().currentSessionDirectory : null
     const resolved = resolveSessionDirectory(
       sessionId,
@@ -2471,17 +2307,12 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   adoptAuthoritativeSessionDirectory: (sessionId) => {
     const target = sessionId ?? get().currentSessionId
-    // Only a guess is promoted. A confirmed selection outranks anything sync
-    // learns later, and a selection that has since moved on must not be
-    // rewritten by a directory that finished bootstrapping in the background.
     if (!target || target !== guessedSelectionSessionId) return
     if (target !== get().currentSessionId) return
 
     const authoritative = getAuthoritativeSessionDirectory(target)
     if (!authoritative) return
 
-    // The selection stops being a guess even when the directory is unchanged:
-    // the value has now been confirmed by the store that owns the session.
     guessedSelectionSessionId = null
     if (authoritative !== get().currentSessionDirectory) {
       set({ currentSessionDirectory: authoritative })
@@ -2577,11 +2408,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   },
 }))
 
-// Write-through persist of the worktree map whenever discovery refreshes it.
-// Reference-equality guard filters hot session updates; the serialized
-// comparison avoids redundant localStorage writes when the Map reference
-// changed but the content is identical (e.g., re-discovery that found the
-// same worktrees).
 const lastPersistedWorktreeSerializedByRuntime = new Map<string, string>()
 useSessionUIStore.subscribe((state, prev) => {
   if (state.availableWorktreesByProject !== prev.availableWorktreesByProject) {

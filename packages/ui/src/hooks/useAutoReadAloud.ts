@@ -23,14 +23,6 @@ export interface AutoReadAloudOptions {
  claim?: (messageId: string) => Promise<boolean>;
 }
 
-/**
- * Reads the answer to the newest prompt after a turn this surface watched run.
- *
- * The newest canonical turn decides. Only its own open status counts as
- * watched, so a session flag that lags behind, history that arrives finished,
- * a page of older turns, or an answer that becomes newest again after a revert
- * never starts speech. One observed id plus one handled id is the whole state.
- */
 export const useAutoReadAloud = ({
  sessionKey,
  ready,
@@ -54,40 +46,39 @@ export const useAutoReadAloud = ({
   if (!enabled) backgroundEpochRef.current += 1;
  }, [enabled]);
 
- useEffect(() => {
-  let disposed = false;
-  let removeNativeListener: (() => void) | undefined;
-  const onVisibility = () => {
-   if (document.visibilityState === 'hidden') backgroundEpochRef.current += 1;
-  };
-  if (nativeMobile) {
-   document.addEventListener('visibilitychange', onVisibility);
-   void import('@capacitor/app').then(async ({ App }) => {
-    let stateChanged = false;
-    const listener = await App.addListener('appStateChange', ({ isActive }) => {
-     stateChanged = true;
-     foregroundRef.current = isActive;
-     if (!isActive) backgroundEpochRef.current += 1;
-    });
-    if (disposed) {
-     void listener.remove();
-     return;
-    }
-    removeNativeListener = () => void listener.remove();
-    const state = await App.getState();
-    if (!disposed && !stateChanged) foregroundRef.current = state.isActive;
-   }).catch(() => {
-    // Unknown native state must not authorize automatic speech.
-    foregroundRef.current = false;
-   });
-  }
-  return () => {
-   disposed = true;
-   backgroundEpochRef.current += 1;
-   if (nativeMobile) document.removeEventListener('visibilitychange', onVisibility);
-   removeNativeListener?.();
-  };
- }, [nativeMobile]);
+    useEffect(() => {
+        let disposed = false;
+        let removeNativeListener: (() => void) | undefined;
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') backgroundEpochRef.current += 1;
+        };
+        if (nativeMobile) {
+            document.addEventListener('visibilitychange', onVisibility);
+            void import('@capacitor/app').then(async ({ App }) => {
+                let stateChanged = false;
+                const listener = await App.addListener('appStateChange', ({ isActive }) => {
+                    stateChanged = true;
+                    foregroundRef.current = isActive;
+                    if (!isActive) backgroundEpochRef.current += 1;
+                });
+                if (disposed) {
+                    void listener.remove();
+                    return;
+                }
+                removeNativeListener = () => void listener.remove();
+                const state = await App.getState();
+                if (!disposed && !stateChanged) foregroundRef.current = state.isActive;
+            }).catch(() => {
+                foregroundRef.current = false;
+            });
+        }
+        return () => {
+            disposed = true;
+            backgroundEpochRef.current += 1;
+            if (nativeMobile) document.removeEventListener('visibilitychange', onVisibility);
+            removeNativeListener?.();
+        };
+    }, [nativeMobile]);
 
  useEffect(() => {
   if (activeSessionKeyRef.current !== sessionKey) {

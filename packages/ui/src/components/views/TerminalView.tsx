@@ -46,11 +46,9 @@ import { useZoneInteractive } from '@/components/layout/zoneInteractiveContext';
 import { ZoneMoveMenuItems } from '@/components/layout/ZoneMoveMenuItems';
 
 type TerminalViewProps = {
- visible?: boolean;
- directory?: string | null;
- /** Closing the last tab closes the terminal surface instead of opening a
-     fresh tab; the host removes it, and reopening starts a new terminal. */
- onLastTabClosed?: () => void;
+    visible?: boolean;
+    directory?: string | null;
+    onLastTabClosed?: () => void;
 };
 
 const FALLBACK_TERMINAL_SIZE = { cols: 80, rows: 24 } as const;
@@ -74,12 +72,6 @@ type TerminalTabViewportProps = {
  clipboard: RuntimeAPIs['clipboard'];
 };
 
-/**
- * One mounted emulator per tab. Inactive tabs stay mounted but hidden so
- * switching back shows the last drawn screen at once instead of rebuilding
- * the WASM terminal, re-measuring fonts and replaying history from scratch.
- * Only the active tab holds a stream; its buffer refresh replays in place.
- */
 const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
  directory, tabId, isActive, isTerminalVisible, registerController,
  onInput, onReply, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll, clipboard,
@@ -115,7 +107,6 @@ const resolveTabIconName = (iconKey: string | null): IconName => {
  return matchedIcon?.Icon ?? 'terminal-box';
 };
 
-/** A project action that starts, runs or stops shows the shared spinner on its tab. */
 const TerminalTabIcon: React.FC<{ iconName: IconName; active: boolean }> = ({ iconName, active }) => (
  active ? <Spinner className="h-4 w-4 text-muted-foreground" /> : <Icon name={iconName} className="h-4 w-4" />
 );

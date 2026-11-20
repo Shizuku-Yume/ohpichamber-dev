@@ -29,7 +29,6 @@ export type WorkStatusSectionLayout = {
   allSectionsHidden: boolean;
 };
 
-/** What the panel, or the phone's Status tab, shows and in which order. */
 export const useWorkStatusSectionLayout = (): WorkStatusSectionLayout => {
   const { hidden } = useWorkStatusHiddenSections();
   const storedOrder = useUIStore((state) => state.workStatusSectionOrder);

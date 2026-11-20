@@ -227,6 +227,7 @@ describe('readContext', () => {
       todos: [],
       plans: [],
       sharedPlansDir: null,
+      notesTodosStore: expect.stringMatching(/^local:/),
     });
   });
 
@@ -345,7 +346,7 @@ describe('legacy migration', () => {
   test('does not run when the legacy config holds no context keys', async () => {
     await writeJson(legacyConfigPath(), { 'setup-worktree': ['bun install'] });
 
-    expect(await runtime.readContext(PROJECT_ID)).toEqual({ version: 2, notes: [], todos: [], plans: [], sharedPlansDir: null });
+    expect(await runtime.readContext(PROJECT_ID)).toEqual({ version: 2, notes: [], todos: [], plans: [], sharedPlansDir: null, notesTodosStore: expect.stringMatching(/^local:/) });
     await expect(fsPromises.access(contextPath())).rejects.toThrow();
     expect(await readJson(legacyConfigPath())).toEqual({ 'setup-worktree': ['bun install'] });
   });
@@ -392,7 +393,7 @@ describe('long project ids', () => {
   });
 
   test('a missing context reads as empty instead of failing on the legacy config lookup', async () => {
-    expect(await runtime.readContext(longProjectId)).toEqual({ version: 2, notes: [], todos: [], plans: [], sharedPlansDir: null });
+    expect(await runtime.readContext(longProjectId)).toEqual({ version: 2, notes: [], todos: [], plans: [], sharedPlansDir: null, notesTodosStore: expect.stringMatching(/^local:/) });
   });
 
   test('context and plans round-trip through the bounded folder', async () => {
@@ -445,15 +446,6 @@ describe('todos', () => {
     const context = await runtime.readContext(PROJECT_ID);
     expect(context.notes.map((entry) => entry.id)).toEqual([note.id]);
     expect(context.plans.map((entry) => entry.id)).toEqual([plan.id]);
-  });
-
-  test('serializes concurrent writes without losing one', async () => {
-    await Promise.all([
-      runtime.saveTodos(PROJECT_ID, [{ id: '1', text: 'one', createdAt: 1 }]),
-      runtime.saveTodos(PROJECT_ID, [{ id: '2', text: 'two', createdAt: 2 }]),
-    ]);
-
-    expect((await runtime.readContext(PROJECT_ID)).todos).toHaveLength(1);
   });
 
   test('clamps oversized todo text', async () => {

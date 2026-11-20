@@ -1,14 +1,14 @@
 {
-  "status": "historical",
-  "supersededBy": ".workflow/upstream-refresh-2026-10-27.json",
-  "supersededDate": "2026-10-27",
-  "note": "Historical record for upstream baseline 1f9320062 adopted on 2026-10-10. Authoritative baseline for upstream refresh is .workflow/upstream-refresh-2026-10-27.json (pinned at 0056bf6a9).",
+  "status": "merge-in-progress",
+  "supersededBy": null,
+  "supersededDate": null,
+  "note": "Upstream pin refreshed to v2.7.3 (cf18602cc7) by a real merge after 1928155551. archiveSha256 hashes git archive --format=tar --prefix=openchamber-cf18602cc77146f35e26e103dbee1ab8e218b663/ of this revision. Comparison, dispositions, source audit, toolchain and verification prerequisites below remain historical evidence for the 2026-10-10 baseline 1f9320062, not current merge validation or OMP runtime acceptance. Current scope is .workflow/specs/upstream-rebaseline.md; path decisions are recorded in .workflow/upstream-deltas.tsv and the merge resolution ledger.",
   "upstream": {
     "repository": "https://github.com/openchamber/openchamber",
-    "revision": "1f9320062c9a3c70925cf3243f1ee0c6e5f16765",
-    "updated": "2026-10-10T14:10:39Z",
-    "archiveSha256": "c313d38cb93bbcef0a67a2de575c6a5bf00ee2ef97eab7513e7b191c7a933cf6",
-    "metadataVersion": "2.2.0"
+    "revision": "cf18602cc77146f35e26e103dbee1ab8e218b663",
+    "updated": "2026-11-19T23:43:57+02:00",
+    "archiveSha256": "78fcacbf516a6df67bc7074a2cd39ac0301f698f832cd785fbb704d5a34806e1",
+    "metadataVersion": "2.7.3"
   },
   "comparison": {
     "snapshotSha256": "f86264de488395ae430cb2b067937e52d39498d180617c2eb2286b9a8a69e029",

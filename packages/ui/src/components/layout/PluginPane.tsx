@@ -101,45 +101,25 @@ import type { Session } from '@openchamber/agent-contract';
 import { GuestPopover } from './GuestPopover';
 
 type PluginPaneProps = {
- mode: PluginContextPanelMode;
- surface?: GuestHostSurface;
- /**
-  * The item this surface was opened for (`ready.item`). The dialog passes
-  * it explicitly; the rail pane takes it from `useGuestItemStore` when this
-  * prop is left undefined.
-  */
- item?: GuestItem | null;
- /**
-  * Mounted off-screen to answer a command or action: never takes a parked
-  * item and never clears the badge, because the user did not open it.
-  */
- headless?: boolean;
- backgroundAction?: GuestBackgroundAction;
- onDismiss?: () => void;
- onAttach?: (issue: AttachIssueRequest) => void;
- onSessionStarted?: () => void;
- /** `surface="block"` only: what the agent wrote, the page that draws it, and how it answers. */
- block?: { call: GuestBlockCall; entry: string; answer: (text: string) => Promise<void> };
- /** The guest asked for this content height (`setHeight`). The Work Status section sizes its frame from it. */
- onResize?: (height: number) => void;
- onStatusControls?: (binding: GuestStatusControlBinding | null) => void;
- /** The Work Status panel's own directory; null deliberately means no project. */
- statusDirectory?: string | null;
- /**
-  * `surface="file"` only: the editor (`contributes.fileEditors[].id`) to load
-  * and the channel that hands it the file. Required together.
-  */
- fileEditor?: { editorId: string; channel: GuestFileChannel };
- /** An overlay child inherits its owner's actual directory, never the current selection. */
- pinnedDirectory?: string;
- /** Host-only context for a sandboxed popover child. */
- popover?: GuestPopoverContext;
- /** Captured by the owner; guest code cannot select an overlay entry or directory. */
- popoverHost?: { entry: string; directory: string; context: GuestPopoverContext; activation: GuestPopoverActivation; focus: boolean };
- /** Synchronous owner lifecycle authority for popover children. */
- isActive?: () => boolean;
- onPopoverClosed?: (event: GuestPopoverClosedEvent) => void;
- onPopoverActivity?: (active: boolean) => void;
+  mode: PluginContextPanelMode;
+  surface?: GuestHostSurface;
+  item?: GuestItem | null;
+  headless?: boolean;
+  backgroundAction?: GuestBackgroundAction;
+  onDismiss?: () => void;
+  onAttach?: (issue: AttachIssueRequest) => void;
+  onSessionStarted?: () => void;
+  block?: { call: GuestBlockCall; entry: string; answer: (text: string) => Promise<void> };
+  onResize?: (height: number) => void;
+  onStatusControls?: (binding: GuestStatusControlBinding | null) => void;
+  statusDirectory?: string | null;
+  fileEditor?: { editorId: string; channel: GuestFileChannel };
+  pinnedDirectory?: string;
+  popover?: GuestPopoverContext;
+  popoverHost?: { entry: string; directory: string; context: GuestPopoverContext; activation: GuestPopoverActivation; focus: boolean };
+  isActive?: () => boolean;
+  onPopoverClosed?: (event: GuestPopoverClosedEvent) => void;
+  onPopoverActivity?: (active: boolean) => void;
 };
 
 // Sandboxed frames without allow-same-origin have an opaque origin. The
@@ -149,11 +129,10 @@ const closeTransferredPort = (port: MessagePort): void => {
 };
 const handledGuestBootstrapEvents = new WeakSet<MessageEvent>();
 
-const HOST_FONT_FALLBACK = '"SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
-const HOST_MONO_FALLBACK = 'ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace';
 const HOST_RADIUS_FALLBACK = '0.5625rem';
+const HOST_FONT_FALLBACK = 'system-ui, sans-serif';
+const HOST_MONO_FALLBACK = 'ui-monospace, monospace';
 
-// Sent to the guest, not shown by the host; the guest decides how to surface it.
 const NOT_GRANTED_MESSAGE = 'The user has not allowed this capability for the extension.';
 
 const withOwnProviderId = (message: GuestMessage, guestId: string): GuestMessage => {
@@ -252,9 +231,10 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  const takePendingItem = useGuestItemStore((state) => state.takePendingItem);
  const [railItem, setRailItem] = React.useState<GuestItem | null>(null);
  React.useEffect(() => {
-  if (headless || itemProp !== undefined || !pendingItem) return;
-  setRailItem(takePendingItem(guestId));
- }, [guestId, headless, itemProp, pendingItem, takePendingItem]);
+  if (surface !== 'panel' || headless || itemProp !== undefined || !pendingItem) return;
+  const taken = takePendingItem(guestId);
+  if (taken) setRailItem(taken);
+ }, [guestId, headless, itemProp, pendingItem, surface, takePendingItem]);
  const item = headless ? null : itemProp !== undefined ? itemProp : railItem;
  // The user opened this guest's panel: whatever it counted is seen.
  const clearBadge = useGuestBadgeStore((state) => state.clearBadge);
@@ -348,13 +328,12 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   return payload;
  }, [block, connection, currentTheme, pageColors, readableColors, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, sessionSnapshot, surface]);
 
- const fileEditorEntry = surface === 'file' && fileEditor
-  ? guest?.fileEditors?.find((editor) => editor.id === fileEditor.editorId)?.entry ?? null
-  : null;
- // Origins the user approved for this list; the frame policy opens them.
- const approvedOrigins = guest?.capabilities.granted.includes('origins') ? guest.origins ?? [] : [];
- const revision = surface === 'file' ? 0 : guest?.revision ?? 0;
- const frameKey = `${guestId}:${guest?.storageId ?? ''}:${guest?.version ?? ''}:rev-${revision}:${guestEnabled}:grants-${guest?.capabilities.granted.join(',') ?? ''}:service-${guest?.service?.granted ? '1' : '0'}:origins-${approvedOrigins.join(',')}:${guest?.entry ?? ''}:${guest?.backgroundEntry ?? ''}:${guest?.statusEntry ?? ''}:${guest?.pageEntry ?? ''}:${guest?.attachEntry ?? ''}:${fileEditorEntry ?? ''}:${block?.entry ?? ''}:popover-${popoverHost?.context.id ?? popover?.id ?? ''}`;
+  const fileEditorEntry = surface === 'file' && fileEditor
+    ? guest?.fileEditors?.find((editor) => editor.id === fileEditor.editorId)?.entry ?? null
+    : null;
+  const approvedOrigins = guest?.capabilities.granted.includes('origins') ? guest.origins ?? [] : [];
+  const revision = surface === 'file' ? 0 : guest?.revision ?? 0;
+  const frameKey = `${guestId}:${guest?.storageId ?? ''}:${guest?.version ?? ''}:rev-${revision}:${guestEnabled}:grants-${guest?.capabilities.granted.join(',') ?? ''}:service-${guest?.service?.granted ? '1' : '0'}:origins-${approvedOrigins.join(',')}:${guest?.entry ?? ''}:${guest?.backgroundEntry ?? ''}:${guest?.statusEntry ?? ''}:${guest?.pageEntry ?? ''}:${guest?.attachEntry ?? ''}:${fileEditorEntry ?? ''}:${block?.entry ?? ''}:popover-${popoverHost?.context.id ?? popover?.id ?? ''}`;
 
  // Scoped auth is minted per mount/version/grant and renewed if an existing
  // iframe navigates after expiry. Healthy documents retain their local state.
@@ -718,6 +697,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    const requestDocument = frameDocumentRef.current;
 
    const bridgeEffects: Parameters<typeof answerGuestMessage>[1] & { answerBlock?: (text: string) => Promise<void> } = {
+    microphoneOpen: async () => { throw new HostRequestError('UNSUPPORTED', 'This frame does not advertise microphone capture.'); },
+    microphoneClose: () => {},
     workspaceRead: (query) => { requireSessions(); return readGuestWorkspace(query, guestIdRef.current); },
     workspaceSubscribe: ({ subscriptionId, query }) => {
      requireSessions();

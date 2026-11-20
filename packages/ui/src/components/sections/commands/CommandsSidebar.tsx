@@ -63,8 +63,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     deleteCommand: s.deleteCommand,
     loadCommands: s.loadCommands,
   })));
-  // Settings browses whichever project its own selector points at; the app
-  // stays where it is.
   const settingsDirectory = useSettingsDirectory();
   const commands = useCommandsStore((state) => selectCommandsForDirectory(state, settingsDirectory));
   React.useEffect(() => { void loadCommands(settingsDirectory); }, [loadCommands, settingsDirectory]);
@@ -75,7 +73,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const bgClass = 'bg-background';
 
   const handleCreateNew = () => {
-    // Generate unique name
     const baseName = 'new-command';
     let newName = baseName;
     let counter = 1;
@@ -127,7 +124,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       newName = `${baseName}-copy-${copyNumber}`;
     }
 
-    // Set draft with prefilled values from source command
     setCommandDraft({
       name: newName,
       scope: command.scope === 'workspace' ? 'workspace' : 'agent',
@@ -263,7 +259,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         </Dialog>
       ) : null}
 
-      {/* Rename Dialog */}
       <Dialog open={renameDialogCommand !== null} onOpenChange={(open) => !open && setRenameDialogCommand(null)}>
         <DialogContent>
           <DialogHeader>

@@ -1,5 +1,6 @@
+import { z } from 'zod';
 import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { Window } from 'happy-dom';
 import type { fetchProjectContext, ProjectNote } from '@/lib/projectContextApi';
 
@@ -18,7 +19,7 @@ const browser = new Window({ url: 'http://runtime.test' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
 for (const [name, value] of Object.entries({
   window: browser,
-  document: browser.document,
+  document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent,
   navigator: browser.navigator,
   localStorage: browser.localStorage,
   HTMLElement: browser.HTMLElement,
@@ -40,7 +41,7 @@ for (const [name, value] of Object.entries({
 }
 
 type Context = Awaited<ReturnType<typeof fetchProjectContext>>;
-const emptyContext = (): Context => ({ notes: [], todos: [], plans: [], sharedPlansDir: null });
+const emptyContext = (): Context => ({ notes: [], todos: [], plans: [], sharedPlansDir: null, notesTodosStore: 'local' });
 const peerNote: ProjectNote = {
   id: 'peer-note', body: 'Peer note', source: 'manual', pinned: false, createdAt: 1, updatedAt: 1,
 };
@@ -49,10 +50,28 @@ let readFailed = false;
 let readContext = async (): Promise<Response> => Response.json(serverContext);
 let reads = 0;
 const noteWrites: string[] = [];
+let noteCreateGate: Promise<void> = Promise.resolve();
+let noteCreateFails = false;
+const todoWrites: string[] = [];
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
   if (url.pathname.startsWith('/api/project-context/')) {
+    const todoId = url.pathname.match(/\/todos\/([^/]+)$/)?.[1];
+    if (todoId && init?.method === 'PATCH') {
+      todoWrites.push(`${todoId} ${String(init.body)}`);
+      const { completed } = z.object({ completed: z.boolean() }).parse(JSON.parse(String(init.body)));
+      serverContext = { ...serverContext, todos: serverContext.todos.map(todo => todo.id === todoId ? { ...todo, completed } : todo) };
+      return Response.json(serverContext);
+    }
+    if (url.pathname.endsWith('/notes') && init?.method === 'POST') {
+      await noteCreateGate;
+      if (noteCreateFails) return Response.json({ error: 'offline' }, { status: 503 });
+      const { body } = z.object({ body: z.string() }).parse(JSON.parse(String(init.body)));
+      const created = { ...peerNote, id: `note-${serverContext.notes.length + 1}`, body };
+      serverContext = { ...serverContext, notes: [...serverContext.notes, created] };
+      return Response.json({ note: created, context: serverContext });
+    }
     if (init?.method === 'PATCH') {
       noteWrites.push(String(init.body));
       const saved = { ...peerNote, body: 'Local autosave draft', updatedAt: 2 };
@@ -91,8 +110,8 @@ const announce = async (projectId = resolveProjectContextId(project)) => {
     await new Promise(resolve => setTimeout(resolve, 0));
   });
 };
-const render = async (visible = true) => {
-  await act(async () => root?.render(<I18nProvider><ProjectNotesTodoPanel projectRef={project} visible={visible} /></I18nProvider>));
+const render = async (visible = true, projectRef = project) => {
+  await act(async () => root?.render(<I18nProvider><ProjectNotesTodoPanel projectRef={projectRef} visible={visible} /></I18nProvider>));
   await settle();
 };
 /** Opens the only note from the list and returns its editor. */
@@ -117,6 +136,9 @@ beforeEach(() => {
   readContext = async () => Response.json(serverContext);
   reads = 0;
   noteWrites.length = 0;
+  todoWrites.length = 0;
+  noteCreateGate = Promise.resolve();
+  noteCreateFails = false;
   Object.defineProperty(browser.document, 'visibilityState', { value: 'visible', configurable: true });
   Object.defineProperty(browser.navigator, 'onLine', { value: true, configurable: true });
   useProjectContextStore.getState().reset();
@@ -281,4 +303,128 @@ test('bursts share one read and changes during that read earn only one trailing 
   });
   expect(reads).toBe(initialReads + 2);
   expect(host.textContent).toContain('Peer note');
+});
+
+test('search opens from its button, filters the list, and closing it clears the filter', async () => {
+  serverContext = { ...serverContext, notes: [peerNote, { ...peerNote, id: 'other-note', body: 'Release checklist' }] };
+  await mount();
+  expect(host.querySelectorAll('li')).toHaveLength(2);
+
+  const searchButton = host.querySelector<HTMLButtonElement>('button[aria-label="Search chats"]');
+  if (!searchButton) throw new Error('Search button missing');
+  await act(async () => searchButton.click());
+  expect(searchButton.getAttribute('aria-pressed')).toBe('true');
+
+  const input = Array.from(browser.document.querySelectorAll('input'))
+    .find(element => element.getAttribute('aria-label') === 'Search chats');
+  const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
+  if (!input || !setter) throw new Error('Search field missing');
+  await act(async () => {
+    setter.call(input, 'Release');
+    input.dispatchEvent(new browser.Event('input', { bubbles: true }));
+  });
+  expect(host.querySelectorAll('li')).toHaveLength(1);
+
+  const close = host.querySelector<HTMLButtonElement>('button[aria-label="Close search"]');
+  if (!close) throw new Error('Close control missing');
+  await act(async () => close.click());
+  expect(host.querySelector('[role="search"]')).toBeNull();
+  expect(host.querySelectorAll('li')).toHaveLength(2);
+});
+
+test('going back from an open note returns to where the list was', async () => {
+  serverContext = { ...serverContext, notes: [peerNote, { ...peerNote, id: 'second-note', body: 'Second note' }] };
+  await mount();
+  const scroller = host.querySelector<HTMLElement>('ul')?.closest<HTMLElement>('.overflow-y-auto');
+  if (!scroller) throw new Error('List scroller missing');
+  scroller.scrollTop = 120;
+
+  const card = host.querySelector<HTMLElement>('li[data-knowledge-entry-id="second-note"]');
+  if (!card) throw new Error('Note card missing');
+  await act(async () => card.click());
+  // A browser drops the offset while the short note view fills the scroller.
+  scroller.scrollTop = 0;
+  const back = host.querySelector<HTMLButtonElement>('button[aria-label="Back to notes"]');
+  if (!back) throw new Error('Back control missing');
+  await act(async () => back.click());
+
+  expect(scroller.scrollTop).toBe(120);
+  expect(browser.document.activeElement?.getAttribute('data-knowledge-entry-id')).toBe('second-note');
+});
+
+/** The add field of the open section. */
+const field = () => {
+  const element = host.querySelector<HTMLTextAreaElement>('textarea');
+  if (!element) throw new Error('Add field missing');
+  return element;
+};
+const type = (text: string) => act(async () => {
+  const element = browser.document.querySelector('textarea');
+  const setter = Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, 'value')?.set;
+  if (!element || !setter) throw new Error('Add field missing');
+  setter.call(element, text);
+  element.dispatchEvent(new browser.Event('input', { bubbles: true }));
+});
+const openTab = async (label: string) => {
+  const tab = Array.from(host.querySelectorAll<HTMLButtonElement>('nav button'))
+    .find(button => button.textContent?.startsWith(label));
+  if (!tab) throw new Error(`${label} tab missing`);
+  await act(async () => tab.click());
+};
+
+test('a new note keeps its unsaved text per project through a tab switch and a remount, until it is added', async () => {
+  await mount();
+  await type('Half-written note');
+  await openTab('Todo');
+  await type('Half-written todo');
+  await openTab('Notes');
+  expect(field().value).toBe('Half-written note');
+
+  // Another project has its own, empty field; the first keeps its text.
+  const other = { id: 'other', path: '/fixture/other' };
+  await render(true, other);
+  expect(field().value).toBe('');
+  await render();
+  expect(field().value).toBe('Half-written note');
+
+  // A remount stands for a reload: the text comes back from storage.
+  await act(async () => root?.unmount());
+  root = createRoot(host);
+  await render();
+  expect(field().value).toBe('Half-written note');
+  await openTab('Todo');
+  expect(field().value).toBe('Half-written todo');
+  await openTab('Notes');
+
+  const send = host.querySelector<HTMLButtonElement>('button[aria-label="Add note"]');
+  if (!send) throw new Error('Send button missing');
+  await act(async () => send.click());
+  await settle();
+  expect(serverContext.notes.map(note => note.body)).toEqual(['Half-written note']);
+  expect(field().value).toBe('');
+
+  await act(async () => root?.unmount());
+  root = createRoot(host);
+  await render();
+  expect(field().value).toBe('');
+});
+
+test('a failed add puts the text back into its own project, not the one open meanwhile', async () => {
+  await mount();
+  await type('Note for this project');
+  let release = () => {};
+  noteCreateGate = new Promise((resolve) => { release = resolve; });
+  noteCreateFails = true;
+  const send = host.querySelector<HTMLButtonElement>('button[aria-label="Add note"]');
+  if (!send) throw new Error('Send button missing');
+  await act(async () => send.click());
+  expect(field().value).toBe('');
+
+  await render(true, { id: 'other', path: '/fixture/other' });
+  await act(async () => { release(); await new Promise(resolve => setTimeout(resolve, 0)); });
+  await settle();
+  expect(field().value).toBe('');
+
+  await render();
+  expect(field().value).toBe('Note for this project');
 });

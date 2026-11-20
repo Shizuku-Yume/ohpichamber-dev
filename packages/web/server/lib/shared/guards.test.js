@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 
 import {
   asNonEmptyString,
@@ -25,11 +26,15 @@ const label = (value) => {
 };
 
 describe('isString', () => {
-  it('accepts primitive and boxed strings, including the empty string', () => {
+  it('accepts primitive strings, including the empty string', () => {
     expect(isString('s')).toBe(true);
     expect(isString('')).toBe(true);
     expect(isString('   ')).toBe(true);
-    expect(isString(boxedString)).toBe(true);
+  });
+
+  it('rejects objects that only claim to be strings', () => {
+    expect(isString(boxedString)).toBe(false);
+    expect(isString({ [Symbol.toStringTag]: 'String' })).toBe(false);
   });
 
   it('rejects every non-string value', () => {
@@ -114,6 +119,9 @@ describe('re-exported public APIs', () => {
     expect(validation.isPlainObject).toBe(isPlainObject);
   });
 
+  it('does not restore the retired OpenCode configuration reader', async () => {
+    expect(existsSync(new URL('../opencode/config-v2.js', import.meta.url))).toBe(false);
+  });
 
   it('quota/utils/transformers.js re-exports the shared asNonEmptyString', async () => {
     const transformers = await import('../quota/utils/transformers.js');

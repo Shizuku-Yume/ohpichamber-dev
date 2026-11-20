@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Serializable } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
-import { HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema, HostWorkerActionReplySchema, HostWorkerActionRequestSchema, type HostAuthorizationScope, type NativeOperationDescriptor, type HostActionRequest, type HostActionResult } from './host-authorization-protocol.ts';
+import { hostActionTimeoutMs, HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema, HostWorkerActionReplySchema, HostWorkerActionRequestSchema, type HostAuthorizationScope, type NativeOperationDescriptor, type HostActionRequest, type HostActionResult } from './host-authorization-protocol.ts';
 import type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 
 const unavailable = (): WorkerPolicyResult & { allowed: false } => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host authorization channel is unavailable' });
@@ -11,7 +11,7 @@ const actionUnavailable = (): HostActionResult => ({ ok: false, code: 'SERVICE_U
 export class HostWorkerAuthorization {
   private closed = false;
   private readonly pending = new Map<string, { scope: HostAuthorizationScope; resolve: (result: WorkerPolicyResult) => void; timer: NodeJS.Timeout }>();
-  private readonly actions = new Map<string, { scope: HostAuthorizationScope; resolve: (result: HostActionResult) => void; timer: NodeJS.Timeout; signal: AbortSignal; abort: () => void }>();
+  private readonly actions = new Map<string, { scope: HostAuthorizationScope; resolve: (result: HostActionResult) => void; timer: NodeJS.Timeout | undefined; signal: AbortSignal; abort: () => void }>();
   private current(scope: HostAuthorizationScope): boolean {
     try { return isDeepStrictEqual(this.resolveScope(scope.rootSessionId), scope); } catch { return false; }
   }
@@ -64,7 +64,8 @@ export class HostWorkerAuthorization {
       this.actions.delete(requestId); clearTimeout(pending.timer); signal.removeEventListener('abort', abort);
       this.cancel('worker.action.cancel', requestId); pending.resolve(actionUnavailable());
     };
-    this.actions.set(requestId, { scope, resolve, signal, abort, timer: setTimeout(abort, 120_000) });
+    const timeoutMs = hostActionTimeoutMs(message.data.request);
+    this.actions.set(requestId, { scope, resolve, signal, abort, timer: timeoutMs === undefined ? undefined : setTimeout(abort, timeoutMs) });
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
     else process.send!(message.data, error => { if (error) abort(); });

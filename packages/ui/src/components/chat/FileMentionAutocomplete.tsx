@@ -83,7 +83,6 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const [marqueeWidth, setMarqueeWidth] = React.useState(360);
-  // Only the selected row scrolls an overflowing path, so only it is measured.
   const [selectedOverflow, setSelectedOverflow] = React.useState<{ index: number; duration: number } | null>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const labelRefs = React.useRef<(HTMLSpanElement | null)[]>([]);

@@ -1,11 +1,11 @@
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { setGitWorktreePinned } from '@/lib/gitApiHttp';
 import React from 'react';
 import { DEFAULT_PIN_LIST } from '@/lib/sidebarSections';
 import { toast } from '@/components/ui';
 import { canArchiveWorktrees, setGitWorktreeTitle } from '@/lib/gitApi';
 import { useI18n } from '@/lib/i18n';
 import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { spaceOfCreationRequest } from '@/lib/spaces/space-creation-requests';
 import { useSessionDraftsStore } from '@/stores/useSessionDraftsStore';
@@ -13,7 +13,8 @@ import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useFirstSessionWithOpenTurn } from '@/sync/global-session-status';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { isSessionUnread } from '@/sync/session-unread';
+import { markSessionRead } from '@/sync/notification-store';
+import { canSessionBeUnread, isSessionUnread, markSessionUnread } from '@/sync/session-unread';
 import { useCollapsedSessionActivityState } from '../sessions/collapsedActivityState';
 import { useGroupRefs } from '../projects/useGroupRefs';
 import type { SessionGroup } from '../types';
@@ -23,28 +24,44 @@ import type { ProjectEntry } from '@/lib/api/types';
 import type { Session } from '@openchamber/agent-contract';
 import { formatProjectLabel, isPathWithinProject, normalizePath } from '../utils';
 import type { CollapsedActivityState } from '../sessions/collapsedActivityState';
-import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork } from './workActions';
+import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork, type FinishWorktreeWorkOutcome } from './workActions';
 import { problemMessage } from '@/lib/problemMessage';
 
 const CURRENT_SESSION = '\u0000session';
 
+export const toastFinishWorkOutcome = (
+  outcome: FinishWorktreeWorkOutcome,
+  label: string,
+  t: ReturnType<typeof useI18n>['t'],
+): void => {
+  switch (outcome.kind) {
+    case 'done':
+    case 'cancelled':
+      break;
+    case 'archived':
+      toast.success(t('sessions.sidebar.work.archive.done'), { description: label });
+      break;
+    case 'busy':
+      toast.info(t('sessions.sidebar.work.archive.kept'), { description: t('sessions.sidebar.work.archive.keptRunning') });
+      break;
+    case 'unknown':
+      toast.info(t('sessions.sidebar.work.archive.kept'), { description: t('sessions.sidebar.work.archive.keptUnknown') });
+      break;
+    case 'failed':
+      toast.error(outcome.doneFailed > 0 ? t('sessions.sidebar.work.done.failed') : t('sessions.sidebar.work.archive.failed'), {
+        description: outcome.error.message,
+      });
+      break;
+  }
+};
+
 type Args = {
   group: SessionGroup;
   projectId: string | null;
-  /** Its sessions are hidden: the work's row is then the one that shows the selection. */
   collapsed: boolean;
-  /** Called when the row opens something, after the project is made active: closes a phone's list. */
   onNavigate: () => void;
 };
 
-/**
- * What a worktree's or a space's work row knows and does, whatever draws it:
- * the desktop row with hover actions and menus, the phone's with swipe
- * actions. The row reads like a session row (live state, the task's name, its
- * reference) and opens what the user last worked on there. A space's task
- * name lives on the space record, its own name stands where a branch would, it has
- * no pin or archive, and its Done leaves the space as it is.
- */
 export type UseWorktreeWorkResult = {
   worktree: WorktreeMetadata | null | undefined;
   space: SpaceMark | null;
@@ -67,7 +84,12 @@ export type UseWorktreeWorkResult = {
   finishing: boolean;
   canArchive: boolean;
   pinned: boolean;
-  canPin: false;
+  canPin: boolean;
+  openDirectory: string | null;
+  canMarkUnread: boolean;
+  hasUnread: boolean;
+  toggleRead: () => void;
+  setPin: (pin: boolean, list?: string | null) => Promise<void>;
   pinList: string | null;
   workAction: boolean;
   activityState: CollapsedActivityState;
@@ -99,11 +121,8 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
   const projectLabel = project ? formatProjectLabel(project.label?.trim() || project.path) : null;
   const refs = useGroupRefs(group, sessions, true);
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const inWork = sessionWorkEnabled && isWorkInWork(sessions);
-  // Where the user is: the open session (`CURRENT_SESSION`) or the open
-  // draft (its id, '' before it has one) in this worktree; null elsewhere.
-  // A space's draft waits on the project root while the space is made, and
-  // names it by its creation request.
+  const pinned = worktree?.pinnedAt !== undefined;
+  const inWork = sessionWorkEnabled && !pinned && isWorkInWork(sessions);
   const current = useSessionUIStore((state): string | null => {
     if (state.currentSessionId) return sessions.some((session) => session.sessionId === state.currentSessionId) ? CURRENT_SESSION : null;
     if (!state.newSessionDraft.open) return null;
@@ -111,38 +130,26 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     if (!draftForThisSpace && !isPathWithinProject(state.newSessionDraft.directoryOverride, directory)) return null;
     return state.newSessionDraft.workDraftId ?? '';
   });
-  // A draft with nothing in it yet has no row of its own.
   const openDraftHasRow = useSessionDraftsStore((state) => (
     Boolean(current) && current !== CURRENT_SESSION && state.drafts.some((draft) => draft.id === current)
   ));
-  // A run's overview covers the session, and then the run's row is the selected one.
   const runOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
   const isCurrent = current !== null && !runOverviewOpen;
-  // The work's row is selected while nothing under it shows the selection:
-  // folded, or on a draft that has no row yet (a worktree just made).
   const selected = isCurrent && (collapsed || (current !== CURRENT_SESSION && !openDraftHasRow));
   const [finishing, setFinishing] = React.useState(false);
 
   const title = worktree?.title?.trim() || null;
   const branch = group.branch?.trim() || worktree?.branch?.trim() || null;
-  // The space's own name stands where a worktree's branch does: under the
-  // task's name, and the row's name until there is a task.
   const spaceName = space ? group.label : null;
-  // The row is named by its task, or by its branch (a space's name) when the
-  // user reads worktrees by branch. Never by one of its sessions: a worktree
-  // not named yet would read as a session and change name with each one.
   const nameByBranch = useSessionDisplayStore((state) => state.worktreeNameByBranch);
   const ownName = space ? spaceName : branch;
   const label = (nameByBranch ? ownName ?? title : title ?? ownName) ?? group.label;
-  // The other name, under the row's name; null when there is none.
   const secondName = [title, ownName].find((name) => name && name !== label) ?? null;
   const sessionToOpen = React.useMemo(() => pickWorkSessionToOpen(group.sessions), [group.sessions]);
   const canRename = true;
   const canNewChat = !spaceTakesNoNewSession;
 
   const prepare = (): void => {
-    // Leaves a full-page surface (a run's overview, Archive), as selecting a
-    // session row does, even when the session is already the current one.
     useUIStore.getState().closeMainSurfaces();
     if (projectId && projectId !== useProjectsStore.getState().activeProjectId) useProjectsStore.getState().setActiveProjectIdOnly(projectId);
     onNavigate();
@@ -152,6 +159,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     prepare();
     useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: projectId, directoryOverride: group.directory });
   };
+  const openDirectory = (sessionToOpen ? resolveGlobalSessionDirectory(sessionToOpen) : null) ?? directory;
   const open = (): void => {
     const session = sessionToOpen;
     if (!session) {
@@ -159,15 +167,20 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
       return;
     }
     prepare();
-    useSessionUIStore.getState().setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session) ?? directory);
+    useSessionUIStore.getState().setCurrentSession(session.sessionId, openDirectory);
   };
-  // The pin lives in the branch's config, so a detached worktree has none.
-  // The row moves once the server's topology event lists the change. The fork's
-  // Git runtime contract has no worktree read/unpin write yet, so the row
-  // reports the state it is given and offers no write.
-  const pinned = worktree?.pinnedAt !== undefined;
   const pinList = pinned ? worktree?.pinList ?? DEFAULT_PIN_LIST : null;
-  const canPin = false;
+  const canPin = Boolean(group.directory && worktree?.branch?.trim()) && !worktreeRemoving;
+  const setPin = async (pin: boolean, list: string | null = null): Promise<void> => {
+    if (!group.directory || !canPin) return;
+    try {
+      await setGitWorktreePinned(group.directory, pin, list);
+    } catch (error) {
+      toast.error(pin ? t('sessions.sidebar.work.pin.failed') : t('sessions.sidebar.work.unpin.failed'), {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
   const saveTitle = async (next: string): Promise<void> => {
     if (!group.directory || !next.trim() || next.trim() === (title ?? '')) return;
     try {
@@ -176,9 +189,6 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
       toast.error(t('sessions.sidebar.work.rename.failed'), { description: error instanceof Error ? error.message : undefined });
     }
   };
-  // Archive and Done both end the work: in-work sessions are marked done. Archive
-  // always archives the worktree; Done only when the user turned that on. VS
-  // Code keeps its own list, without archives.
   const canArchive = canArchiveWorktrees() && Boolean(worktree) && !worktreeRemoving;
   const archiveOnDone = useUIStore((state) => state.worktreeArchiveOnDoneEnabled);
   const finishWork = (archive: boolean) => {
@@ -193,31 +203,12 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     if (!pending) return;
     setFinishing(true);
     try {
-      const outcome = await pending;
-      switch (outcome.kind) {
-        case 'done':
-          break;
-        case 'archived':
-          toast.success(t('sessions.sidebar.work.archive.done'), { description: label });
-          break;
-        case 'busy':
-          toast.info(t('sessions.sidebar.work.archive.kept'), { description: t('sessions.sidebar.work.archive.keptRunning') });
-          break;
-        case 'unknown':
-          toast.info(t('sessions.sidebar.work.archive.kept'), { description: t('sessions.sidebar.work.archive.keptUnknown') });
-          break;
-        case 'failed':
-          toast.error(outcome.doneFailed > 0 ? t('sessions.sidebar.work.done.failed') : t('sessions.sidebar.work.archive.failed'), {
-            description: outcome.error.message,
-          });
-          break;
-      }
+      toastFinishWorkOutcome(await pending, label, t);
     } finally {
       setFinishing(false);
     }
   };
-  /** Done or Track: present while the feature is on and there is a session to track. */
-  const workAction = sessionWorkEnabled && (inWork || sessions.length > 0);
+  const workAction = sessionWorkEnabled && !pinned && (inWork || sessions.length > 0);
   const toggleWork = (): void => {
     if (inWork) {
       void finish(archiveOnDone);
@@ -228,14 +219,38 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     void trackWork(session).catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.work.track.failed'))));
   };
 
-  // Its sessions' live state, as a session row shows its own, with the
-  // turn's duration at the end.
   const activityState = useCollapsedSessionActivityState({ nodes: group.sessions });
   const workSessionIds = React.useMemo(() => sessions.flatMap((session) => (session.parentSessionId ? [] : [session.sessionId])), [sessions]);
   const runningSessionId = useFirstSessionWithOpenTurn(workSessionIds);
   const unreadSessionId = useGlobalSessionsStore(React.useCallback((state) => (
     workSessionIds.find((id) => isSessionUnread(state.entityById.get(id))) ?? null
   ), [workSessionIds]));
+
+  const toggleRead = (): void => {
+    const records = useGlobalSessionsStore.getState().entityById;
+    if (unreadSessionId) {
+      for (const id of workSessionIds) {
+        if (isSessionUnread(records.get(id))) markSessionRead(id);
+      }
+      return;
+    }
+    let target: string | null = null;
+    let targetRank: [number, number] = [-1, -1];
+    for (const id of workSessionIds) {
+      const record = records.get(id);
+      if (!canSessionBeUnread(record)) continue;
+      const idleAt = record.metadata?.openchamber?.workbench?.lastIdleAt;
+      const rank: [number, number] = idleAt !== undefined ? [1, idleAt] : [0, record.updatedAt];
+      if (rank[0] > targetRank[0] || (rank[0] === targetRank[0] && rank[1] > targetRank[1])) {
+        target = id;
+        targetRank = rank;
+      }
+    }
+    if (!target) return;
+    void markSessionUnread(target).then((saved: boolean) => {
+      if (!saved) toast.error(t('sessions.sidebar.session.unread.markFailed'));
+    });
+  };
 
   return {
     worktree,
@@ -244,6 +259,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     canRename,
     canNewChat,
     directory,
+    openDirectory,
     worktreeRemoving,
     sessions,
     project,
@@ -260,10 +276,14 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     canArchive,
     pinned,
     canPin,
+    setPin,
     workAction,
     activityState,
     runningSessionId,
     durationSessionId: runningSessionId ?? unreadSessionId,
+    hasUnread: unreadSessionId !== null,
+    canMarkUnread: workSessionIds.length > 0,
+    toggleRead,
     open,
     newChat,
     saveTitle,

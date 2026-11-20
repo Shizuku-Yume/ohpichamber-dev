@@ -14,6 +14,13 @@ itself; it can only ask and wait.
   result, a timeout, or an abort signal. It knows nothing about transports.
 - `routes.js` is the result callback (`POST /api/browser-control/result`). It
   validates the envelope and hands the outcome to the broker.
+- `uploads.js` decides which files `browser.upload` may send and holds them
+  under a short-lived token for the client that attaches them
+  (`GET /api/browser-control/uploads/:token/:index`).
+  The runtime shares one upload store between this route and the control
+  service. Uploads read only the calling session's folder, including realpath
+  checks; model-supplied directory overrides cannot widen that grant. The route
+  remains behind normal Host authentication and returns uncached bytes.
 - `../../index.js` supplies `emitRequest`, which writes the request to the
   OpenChamber SSE clients and returns how many were reached. The event carries
   the same `context` (`directory`, `sessionId`, each `null` when unknown) the
@@ -76,10 +83,56 @@ itself; it can only ask and wait.
   When the named tab is gone, a client with the panel mounted answers
   "no such tab" after the claim delay rather than leaving the agent to time out.
 
+## Annotation overlay
+
+The user's annotation (`annotationOverlay.ts`, driven by `annotationSession.ts`
+and `BrowserPane`) runs through the same desktop driver, in an isolated world
+of its own per session (`annotate` in `browser-panel-driver.mjs`). Its comment
+box takes dictation: the overlay asks the app for the microphone through a
+`Runtime.addBinding` function scoped to that world's name, and the app answers
+through `annotationSend`; `annotationMessage` is the app's long poll for the
+overlay's requests. A desktop app without the driver, or a page the debugger
+cannot attach to, runs the overlay in the page's own world, without a
+microphone. Annotation of a page shown in a frame (`useFrameAnnotation`) has
+no isolated world and no microphone either.
+
+### Why an isolated world and not `webview.executeJavaScript`
+
+In the page's own world every script of the page can call whatever the overlay
+calls, so a page could start the app's microphone and read the transcript
+from the comment box. A binding exposed to an isolated world is a function the
+page has no reference to and no way to call. `Runtime` is enabled only while a
+session runs, since it streams every console call of the page, and each
+session's world has a new name so a binding removed at the end cannot linger
+in a world the next session reuses. A `postMessage` or console channel from
+the page's world was rejected for the same reason: any page script can forge
+it. Polling the isolated world for the overlay's requests would avoid
+enabling `Runtime`, but adds latency to every button and polls for the whole
+session. The mic sits in the comment box, where the user types; a mic button
+in the app's toolbar would be safe too, but away from the comment and without
+the dictation shortcut inside the page.
+
+### Why a PDF gets an input layer
+
+Chromium draws a PDF in a viewer frame of its own: pointer and key input over
+it never reaches the document the overlay lives in, so marks could not be
+drawn. A transparent layer over the viewer takes the input for the session.
+The wheel still scrolls the PDF: Chromium routes it to the viewer past the
+layer. A PDF has no elements to pick, so the overlay offers Region and Draw
+only.
+
+### Why a stroke is drawn as short paths
+
+Rewriting one path's `d` on every pointer move costs time with the stroke's
+length, and a long stroke stalled the pointer. The stroke is a group of paths
+of at most 64 points, each starting where the last ended, so a move rewrites
+only the last one.
+
 ## Running the panel's code
 
 The agent tool reaches the panel of the app the agent works from, so a change
-to `BrowserPane`, `controlClient` or `pageActions` shows there only after that
+to `BrowserPane`, `controlClient`, `pageActions`, `pageDriver` or the desktop
+driver shows there only after that
 app is rebuilt. Run it in `electron:dev` instead and send the actions to that
 instance's API port, the one its log prints after `OpenChamber server
 listening on`; the route has no session, so name the tab after the open:
@@ -125,6 +178,17 @@ what the actions alone do not show (frame rate, animations).
   re-checked against the catalog on every action, and the grant list handed to
   the service proxy is the catalog's effective list, so a version that widened
   its permissions is refused until re-approved.
+- `isBrowserProviderGuest` mirrors what the Settings dropdown offers: enabled,
+  fully approved, and declaring the browser role. Full approval implies the
+  `service` grant, so the check does not look at it separately.
+- `browserProvider` is sanitized when written (trimmed, a non-empty string), so
+  this module only has to decide builtin or not.
+- A caller without a scope (tests, the CLI) is unknown, not empty: its
+  `directory` and `sessionId` reach the provider as null, and nothing invents
+  them.
+- Agent-facing failure text is written for the model that reads it, not the
+  user: it states what happened and whether the page changed, and leaves the
+  decision to the agent instead of naming a step only the user could take.
 - The provider's answer shapes are the desktop panel's own
   (`packages/sdk/src/service-providers.ts`); `browser.capture` still returns
   `base64`/`mime` and the control service writes the file, so the agent sees

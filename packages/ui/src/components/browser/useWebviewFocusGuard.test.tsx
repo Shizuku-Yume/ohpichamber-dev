@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
@@ -138,5 +138,14 @@ describe('webview focus guard', () => {
       holdPageFocus();
     });
     expect(document.activeElement).toBe(webview);
+  });
+
+  test('a field the user picks while an action runs keeps focus when it ends', async () => {
+    const other = document.createElement('input');
+    document.body.appendChild(other);
+    await guardAgentAction(async () => {
+      other.focus();
+    });
+    expect(document.activeElement).toBe(other);
   });
 });

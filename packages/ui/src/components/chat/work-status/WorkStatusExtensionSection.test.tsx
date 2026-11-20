@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, OPENCHAMBER_SDK_API_VERSION } from 'ohpichamber-sdk';
@@ -362,8 +362,12 @@ test('a status frame keeps subscriptions and storage alive while project changes
 
     await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-1', payload: { height: 96 } }); await tick(); });
     expect(box.style.height).toBe('96px');
+    const privatePort = iframePorts.get(frame);
+    if (!privatePort) throw new Error('Owner guest port is missing');
+    await act(async () => { privatePort.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'resize', id: 'h-mid', payload: { height: 400 } }); await tick(); });
+    expect(box.style.height).toBe('96px');
     await act(async () => { send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resize', id: 'h-2', payload: { height: 2000 } }); await tick(); });
-    expect(box.style.height).toBe('320px');
+    expect(box.style.height).toBe('480px');
     expect(messages.some((message) => message.type === 'result' && message.id === 'h-2' && message.ok)).toBe(true);
     // Status-only: the catalog has no panel entry, and that must not tear the section down.
     expect(container.querySelector('iframe')).not.toBeNull();
@@ -374,7 +378,7 @@ test('a status frame keeps subscriptions and storage alive while project changes
     expect(container.querySelector('iframe')).toBeNull();
     // Reopening starts at the height the page last asked for, not the manifest default.
     await act(async () => header.click());
-    expect(container.querySelector('iframe')?.parentElement?.style.height).toBe('320px');
+    expect(container.querySelector('iframe')?.parentElement?.style.height).toBe('480px');
 
     // Changing either installation identity or approved origins replaces the
     // frame, so stale header bindings cannot address the new installation.

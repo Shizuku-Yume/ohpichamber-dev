@@ -43,6 +43,11 @@ runtime rather than inlining it, or the handoff would see two copies.
 Window state is saved only while the main window is not minimized, so transient
 minimized bounds cannot replace the last normal size or maximized state.
 
+Linux startup enables Chromium's speech-dispatcher backend before `ready` for
+Browser read-aloud. It uses the host's `libspeechd` and speech-dispatcher service
+with an installed synthesis module, such as espeak-ng. The shell does not install
+or manage those system services. Windows and macOS keep their native speech backends.
+
 Login-shell environment discovery starts as soon as `main.mjs` runs and
 proceeds asynchronously, so shell startup files run while the window comes up.
 Startup callers share one probe and await its result before reading
@@ -76,6 +81,11 @@ request headers) do not exist yet, so that document ends with a parser-blocking
 `<script src="/__runtime-config.js">`; main answers it once `activateMainWindow`
 has the resolved runtime (`packaged-runtime-config.mjs`). Module scripts run only
 after parsing ends, so no application code runs before the values are set.
+The entry loads the application with a dynamic import, which the document's
+own preload list does not follow, so the web build adds the application's
+chunks to a preload list that applies on this scheme only
+(`packages/web/vite-preload-app-graph.ts`): they are fetched during the wait
+instead of after it.
 Remote, SSH, environment-target, HMR and background launches keep the previous
 order: resolve, then navigate, with the splash reporting the connection attempt.
 
@@ -281,11 +291,11 @@ token. Older servers without identity metadata remain supported. HTTP 401 and
 403 mean authentication is required, not that the instance is offline. Only
 local trusted UI may invoke the probe; remote page IPC rejects it before the
 main process makes a request.
-`/api/version` must advertise `api.runtime-url.v1` and report an
-`openchamberVersion` of 2 or later, or the host is Incompatible and the app
-refuses to open it. A server before 2.0 runs OpenCode 1.x with the same API
-version and capabilities, so its own version is the only thing that tells it
-apart. A version that does not parse does not block.
+`/api/version` must advertise `api.runtime-url.v1`. Compatibility follows the
+Host API version and minimum client API version, not the application's release
+major: OhPiChamber 1.x has its own version sequence. A compatible handshake
+still requires an authenticated `/auth/session` response before the Host is
+reported as available.
 
 There is no way to update a remote host from the desktop app: the host's update
 routes and the desktop command that called them are gone with the rest of the
@@ -304,6 +314,10 @@ bun run electron:dev
 ```
 
 `bun run electron:dev` starts the web dev server with HMR, then launches Electron against `packages/electron/entry.mjs`. An in-app restart under this script skips `app.relaunch()`: Electron exits with the code the script passes in `OPENCHAMBER_ELECTRON_DEV_RELAUNCH_EXIT_CODE`, and the script starts Electron again while the HMR server keeps running. On Windows, the HMR launcher resolves npm's `bun.cmd` shim to the underlying `bun.exe` before spawning Bun child processes.
+
+Unpackaged desktop and its HMR server default to `~/.config/openchamber-dev` for OhPiChamber data. An explicit `OPENCHAMBER_DATA_DIR` takes precedence. OpenCode's own data is unchanged. The existing custom-data-directory migration copies projects, themes and speech models when they are absent from the new directory; it does not copy `settings.json`.
+
+The HMR launcher starts the Electron splash while it resolves the login-shell environment and starts the dev server. It passes the resolved data directory through a temporary start file after the API is healthy. Electron waits for that file before loading main, so its settings and the HMR server use the same directory without racing an in-process fallback server.
 
 The Electron workspace package trusts Electron's install script so `bun install` downloads the platform runtime in fresh checkouts and worktrees.
 
@@ -412,7 +426,7 @@ The variables Desktop sets for the in-process server (`OPENCHAMBER_RUNTIME`, `OP
 
 The AppImage launcher also prepends its own directories to `PATH`, `LD_LIBRARY_PATH`, `GSETTINGS_SCHEMA_DIR` and `XDG_DATA_DIRS`, leaving a trailing `:` when a variable was unset. Desktop keeps them in its own process and removes them only from the integrated terminal and the git environment the server builds (`stripAppImageLauncherEnv` in `packages/web/server/lib/inherited-env.js`), so user tools, agent commands and git hooks started from those paths see the user's values (#4177). `XDG_DATA_DIRS` keeps the standard system directories the launcher adds around the user's value.
 
-Linux updates are supported when the packaged app runs from a writable AppImage or from an installed `.deb` or `.rpm`. electron-updater picks its installer from `resources/package-type`, which electron-builder writes into the packages: the AppImage is replaced in place by electron-updater. A package is downloaded by electron-updater but installed by `linux-package-install.mjs`: one `pkexec` call running `apt install` for a `.deb`, or the first of `zypper`/`dnf`/`yum`/`rpm` for an `.rpm`, so the system asks for the administrator password once. It runs asynchronously because electron-updater's installers use `spawnSync`, which freezes every window through the prompt and the install, and because its dpkg path retries a cancelled `dpkg -i` with `apt-get install -f`, a second prompt. Package installs relaunch through `linux-relaunch.mjs` instead of `app.relaunch()`: Chromium starts the relaunched process with `no_new_privs`, which every later `pkexec` refuses ("must be setuid root"), so the next update would fail without a prompt. A failed install after the backend stopped, a cancelled prompt included, relaunches the current version on every platform. Update checks, downloads, and installation report an actionable error when neither an AppImage nor a package type is found, or the AppImage is invalid or read-only; a missing release feed (`latest-linux.yml` 404 before the first Linux publish) is treated as “no update available”. Authenticated Web clients connected to the embedded Desktop Host use this same `electron-updater` check, download, and restart flow rather than a package-manager command, except on a `.deb` or `.rpm` host: its password prompt would appear only on the host's screen while its server is down, so the check reports `installBlocked: 'desktop-host'` and the install route refuses with 409, and clients tell the user to update on that computer. Release builds keep `latest-linux.yml` (x64) and `latest-linux-arm64.yml` separate; each lists that architecture's AppImage, `.deb` and `.rpm`, each updater takes the file of its own format, and `verify-update-manifest.mjs` checks every listed file against its bytes before upload. Linux updates download full files (no `.blockmap` differential channel yet).
+Linux updates are supported when the packaged app runs from a writable AppImage or from an installed `.deb` or `.rpm`. electron-updater picks its installer from `resources/package-type`, which electron-builder writes into the packages: the AppImage is replaced in place by electron-updater. A package is downloaded by electron-updater but installed by `linux-package-install.mjs`: one `pkexec` call running `apt install` for a `.deb`, or the first of `zypper`/`dnf`/`yum`/`rpm` for an `.rpm`, so the system asks for the administrator password once. It runs asynchronously because electron-updater's installers use `spawnSync`, which freezes every window through the prompt and the install, and because its dpkg path retries a cancelled `dpkg -i` with `apt-get install -f`, a second prompt. Package installs relaunch through `linux-relaunch.mjs` instead of `app.relaunch()`: Chromium starts the relaunched process with `no_new_privs`, which every later `pkexec` refuses ("must be setuid root"), so the next update would fail without a prompt. A failed install after the backend stopped, a cancelled prompt included, relaunches the current version on every platform. Update checks, downloads, and installation report an actionable error when neither an AppImage nor a package type is found, or the AppImage is invalid or read-only; a missing release feed (`latest-linux.yml` 404 before the first Linux publish) is a failed check, not an authoritative no-update result. Authenticated Web clients connected to the embedded Desktop Host use this same `electron-updater` check, download, and restart flow rather than a package-manager command, except on a `.deb` or `.rpm` host: its password prompt would appear only on the host's screen while its server is down, so the check reports `installBlocked: 'desktop-host'` and the install route refuses with 409, and clients tell the user to update on that computer. Release builds keep `latest-linux.yml` (x64) and `latest-linux-arm64.yml` separate; each lists that architecture's AppImage, `.deb` and `.rpm`, each updater takes the file of its own format, and `verify-update-manifest.mjs` checks every listed file against its bytes before upload. Linux updates download full files (no `.blockmap` differential channel yet).
 
 `desktop_restart` does not answer the renderer before the install is decided. On the apply-update path it calls `quitAndInstall()` and keeps the IPC call open until the app quits or `autoUpdater` emits `error`, which the platform installers do asynchronously (a rejected code signature, or a Squirrel session disabled by an earlier failure). A failed install rejects the IPC call and rolls back the quit/install flags. A failure before backend shutdown leaves the app running; one after it relaunches the current version, because the in-process server does not restart in place. A Linux package install runs its own async install in place of `quitAndInstall()` and detaches the `error` listener first, so an unrelated update-check error during the password prompt cannot relaunch the app under a running install. A still-running app after the grace period resolves the call. The installer grace period starts after backend cleanup, so a slow terminal shutdown cannot remove the error listener before installation begins.
 
@@ -420,7 +434,7 @@ Linux updates are supported when the packaged app runs from a writable AppImage 
 
 Updater checks preserve downloaded payloads for the same version. Feed errors
 preserve an existing pending record; a missing feed with no pending record
-keeps the first-release "no update" behavior. An authoritative no-update
+reports a failed check rather than "no update". An authoritative no-update
 response clears the record. Downloads for the same version share one process-wide
 promise until the payload is on disk, including cached downloads without an event.
 A request for another version fails as busy until that promise settles. Both the
@@ -508,6 +522,9 @@ Find in files (the contents mode of the sidebar's file search) runs ripgrep. Thi
 
 - Floating Mini Chat windows. Each new one opens pinned on top of other
   windows; its pin button unpins that window only, and nothing is persisted.
+  The window is shown the moment it is created, in the theme colour
+  (`resolveSplashBackgroundColor`, as the main window), and its document
+  paints into it; it does not wait for `ready-to-show`.
 - Quake Mode (Windows Terminal-style): one configurable global hotkey
   (``Ctrl+` `` by default, deliberately without the Win key) toggles the existing
   main window between hidden and a top-attached dropdown on the display holding
@@ -555,6 +572,7 @@ Find in files (the contents mode of the sidebar's file search) runs ripgrep. Thi
 - Tunnel lifecycle integration through the web server runtime.
 - Remote dev-server previews use a direct WebSocket tunnel when the instance has an HTTP address. Relay-only instances keep the encrypted relay transport in the renderer and bridge its raw bytes to the browser panel through a local Electron listener.
 - Auto-update checks, downloads, and restart/apply flow.
+- Browser keys and mouse buttons for a page in the browser panel (`browser-panel-navigation.mjs`): Cmd+R (Ctrl+R off macOS) reloads the page, with Shift past the cache, and a mouse's side buttons go back and forward in that page's history. A focused page takes the keyboard before the app's shortcuts and menu, so main reads these on the page's own `before-input-event` and `before-mouse-event`. The toolbar's Cmd+R is handled in the renderer (`BrowserPane.tsx`). Off macOS the View menu's Reload still reloads the whole window when the focus is outside the page.
 - The browser panel's own session (`persist:openchamber-browser`): its storage is
   cleared only through the scoped clear-data command, and camera, microphone,
   location, and device-picker requests from pages shown there are denied. A focused
@@ -618,7 +636,7 @@ Add new native capabilities in this order:
 
 The desktop app has one update channel: the latest full release of this fork on GitHub Releases, published from `Shizuku-Yume/ohpichamber` (the `github` provider of electron-updater, set in `build.publish` of `package.json`). There is no channel switch and no mirror: a check reads `latest.yml` from the repository's newest release, and Linux reads `latest-linux.yml` or `latest-linux-arm64.yml`.
 
-`applyUpdaterFeed` (`main.mjs`) sets the feed URL before every check. Windows ARM64 builds set electron-updater's `channel` to `latest-arm64`, because the release publishes that architecture's manifest beside `latest.yml`; every other platform reads the default `latest`. `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself, keeps a downloaded payload across checks, and treats a missing manifest before the first release as "no update". Electron is the only updater: the web and CLI update checks are gone.
+`applyUpdaterFeed` (`main.mjs`) sets the feed URL before every check. Windows ARM64 builds set electron-updater's `channel` to `latest-arm64`, because the release publishes that architecture's manifest beside `latest.yml`; every other platform reads the default `latest`. `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself, keeps a downloaded payload across failed checks, and reports missing releases, unavailable manifests and network failures as check errors. Electron is the only updater: the web and CLI update checks are gone.
 
 The shipped OMP SDK upgrades with the app, not via a separate OMP feed. On Windows, writable Linux AppImages and macOS apps in Applications, the app checks for and downloads updates in the background by default. A staged update installs when the user quits or restarts, without interrupting a running session. Uncheck **Automatic Updates** in the app menu to opt out; **Check for Updates** still works. Settings → About shows the installed version and bundled release notes.
 

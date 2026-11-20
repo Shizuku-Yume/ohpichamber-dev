@@ -1,7 +1,10 @@
+import { useCallback } from 'react';
+
 import { create } from 'zustand';
 import type { CanonicalEvent, ShellJob, ShellJobIdentity, ShellSnapshot } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { compareCounters } from './event-reducer';
+import { subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 
 export type RunningShell = Extract<ShellJob, { status: 'running' }>;
 export type TrackedShell = RunningShell & { directory: string };
@@ -37,6 +40,7 @@ const withEnded = (ended: ReadonlyMap<string, EndedShell>, added: readonly Ended
 };
 const publish = (byId: Map<string, TrackedShell>, ended: ReadonlyMap<string, EndedShell> | null): void => {
   const state = useBackgroundShellsStore.getState(); useBackgroundShellsStore.setState({ byId, sessionIds: sessionIdsOf(byId, state.sessionIds), ended: ended ?? state.ended });
+  settleKnownWaiters();
 };
 export const applyBackgroundShellEvents = (rawDirectory: string, payloads: readonly CanonicalEvent[]): void => {
   const directory = normalizePath(rawDirectory);
@@ -134,10 +138,59 @@ export const refreshBackgroundShells = async (rawDirectory: string, listShells: 
 };
 export const directoriesWithRunningShells = (): string[] => [...new Set([...useBackgroundShellsStore.getState().byId.values()].map((shell) => shell.directory))];
 export const hasRunningShell = (sessionId: string): boolean => useBackgroundShellsStore.getState().sessionIds.has(sessionId);
-export const resetBackgroundShells = (): void => { generation += 1; revision = 0; pendingRefreshes = 0; touchedAt.clear(); snapshotByDirectory.clear(); latestRefreshByDirectory.clear(); useBackgroundShellsStore.setState({ byId: new Map(), sessionIds: EMPTY_SESSION_IDS, ended: new Map() }); };
+export const resetBackgroundShells = (): void => { generation += 1; revision = 0; pendingRefreshes = 0; touchedAt.clear(); snapshotByDirectory.clear(); latestRefreshByDirectory.clear(); for (const waiter of [...settleWaiters.values()]) waiter.reject(new Error('The runtime changed.')); useBackgroundShellsStore.setState({ byId: new Map(), sessionIds: EMPTY_SESSION_IDS, ended: new Map() }); };
 export const sessionsInTree = (sessionIds: Iterable<string>, rootId: string, parentOf: (sessionId: string) => string | undefined): string[] => {
   const result: string[] = [];
   for (const sessionId of sessionIds) { const seen = new Set<string>(); let current: string | undefined = sessionId; while (current && !seen.has(current)) { if (current === rootId) { result.push(sessionId); break; } seen.add(current); current = parentOf(current); } }
   return result.sort();
 };
 export const backgroundShellsOfSessions = (byId: ReadonlyMap<string, TrackedShell>, sessionIds: ReadonlySet<string>): TrackedShell[] => [...byId.values()].filter((shell) => shell.background && sessionIds.has(shell.sessionId)).sort((left, right) => left.startedAt - right.startedAt || left.jobId.localeCompare(right.jobId));
+
+type SettleOutcome = 'background' | 'ended';
+type SettleWaiter = { identity: ShellJobIdentity; resolve: (outcome: SettleOutcome) => void; reject: (error: Error) => void };
+export type ShellSettleWait = { settled: Promise<SettleOutcome>; cancel: () => void };
+const settleWaiters = new Map<string, SettleWaiter>();
+const settleKey = (identity: ShellJobIdentity): string => `${keyFor(identity)}\n${identity.epoch}`;
+
+function settleKnownWaiters(): void {
+  const { byId, ended } = useBackgroundShellsStore.getState();
+  for (const waiter of [...settleWaiters.values()]) {
+    const key = keyFor(waiter.identity);
+    const terminal = ended.get(key);
+    const running = byId.get(key);
+    if (terminal && sameIdentity(terminal, waiter.identity)) waiter.resolve('ended');
+    else if (running?.background && sameIdentity(running, waiter.identity)) waiter.resolve('background');
+  }
+}
+
+export const waitForShellSettle = (identity: ShellJobIdentity, timeoutMs: number): ShellSettleWait => {
+  const key = settleKey(identity);
+  settleWaiters.get(key)?.reject(new Error('Replaced by a newer wait for the same command.'));
+  let cancel = (): void => {};
+  const settled = new Promise<SettleOutcome>((resolve, reject) => {
+    const finish = (settle: () => void) => {
+      clearTimeout(timer);
+      if (settleWaiters.get(key) === waiter) settleWaiters.delete(key);
+      settle();
+    };
+    const waiter: SettleWaiter = {
+      identity,
+      resolve: (outcome) => finish(() => resolve(outcome)),
+      reject: (error) => finish(() => reject(error)),
+    };
+    const timer = setTimeout(() => waiter.reject(new Error('The command did not move to the background in time.')), timeoutMs);
+    settleWaiters.set(key, waiter);
+    cancel = () => waiter.reject(new Error('Cancelled.'));
+  });
+  settleKnownWaiters();
+  return { settled, cancel };
+};
+
+export const useRunningShell = (identity: ShellJobIdentity | undefined): TrackedShell | undefined => (
+  useBackgroundShellsStore(useCallback((state) => {
+    const shell = identity ? state.byId.get(keyFor(identity)) : undefined;
+    return shell && identity && sameIdentity(shell, identity) ? shell : undefined;
+  }, [identity]))
+);
+
+subscribeRuntimeEndpointWillChange(resetBackgroundShells);

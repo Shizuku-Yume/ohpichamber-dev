@@ -32,6 +32,10 @@ mock.module('@/stores/permissionStore', () => ({
 }));
 mock.module('@/stores/useConfigStore', () => ({
   markConfigCatalogStale: () => undefined,
+  invalidateConfigCatalogsForReload: () => undefined,
+  selectCatalogLoadedForDirectory: () => false,
+  selectConfigAgentsForDirectory: () => [],
+  invalidateConfigAgentsLoad: () => undefined,
   useConfigStore: {
     getState: () => ({ isConnected: true, hasEverConnected: true }),
     setState: () => undefined,

@@ -1,6 +1,3 @@
-// Minimal type declarations for bun:test to satisfy tsc.
-// Only the subset used by our test files is declared.
-
 declare module "bun:test" {
   export type TestBody = (...args: never[]) => void | Promise<void>;
   export interface EachCase {
@@ -114,7 +111,6 @@ declare module "bun:test" {
   }
 }
 
-// Vite asset-query imports need a URL loader when real UI modules run in Bun.
 declare module "bun" {
   export function gc(force?: boolean): void;
   export function plugin(options: {

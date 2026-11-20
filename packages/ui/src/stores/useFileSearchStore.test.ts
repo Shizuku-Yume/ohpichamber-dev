@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { directoryEnvironment } from './test-support/directoryEnvironment';
+import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -19,18 +20,25 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve, reject };
 };
 
-const searchFilesMock = mock(() => {
+const environment = directoryEnvironment();
+environment.respond(async (url) => {
+  if (url.pathname !== '/api/fs/search') throw new Error(`Unexpected request: ${url}`);
   const request = createDeferred<Array<{ path: string }>>();
   searchRequests.push(request);
-  return request.promise;
+  const files = await request.promise;
+  const directory = url.searchParams.get('directory') ?? '';
+  return Response.json(files.map((file) => ({
+    name: file.path.split('/').at(-1),
+    path: file.path.startsWith('/') ? file.path : `${directory}/${file.path}`,
+    relativePath: file.path.replace(`${directory}/`, ''),
+  })));
 });
 
-mock.module('@/lib/host-filesystem', () => ({
-  hostFilesystem: {
-    searchFiles: searchFilesMock,
-  },
-}));
-mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
+const { hostFilesystem } = await import('@/lib/host-filesystem');
+const searchFilesMock = spyOn(hostFilesystem, 'searchFiles');
+const runtimeSwitch = await import('@/lib/runtime-switch');
+mock.module('@/lib/runtime-switch', () => ({ ...runtimeSwitch, getRuntimeKey: () => runtimeKey }));
+const setRuntime = (key: string) => { runtimeKey = key; };
 
 const { useFileSearchStore } = await import('./useFileSearchStore');
 
@@ -58,6 +66,7 @@ describe('useFileSearchStore', () => {
       includeHidden: true,
       respectGitignore: false,
     });
+    await environment.settle();
     searchRequests[0].resolve([]);
     await searchPromise;
   });
@@ -71,6 +80,7 @@ describe('useFileSearchStore', () => {
       includeHidden: false,
       respectGitignore: true,
     });
+    await environment.settle();
     searchRequests[0].resolve([]);
     await searchPromise;
   });
@@ -82,6 +92,7 @@ describe('useFileSearchStore', () => {
     useFileSearchStore.getState().invalidateDirectory('/project');
     expect(Object.keys(useFileSearchStore.getState().inFlight)).toHaveLength(0);
 
+    await environment.settle();
     searchRequests[0].resolve([{ path: 'stale.ts' }]);
     await searchPromise;
 
@@ -98,6 +109,7 @@ describe('useFileSearchStore', () => {
       updateCount += 1;
     });
 
+    await environment.settle();
     searchRequests[0].resolve([{ path: 'stale.ts' }]);
     await searchPromise;
     unsubscribe();
@@ -109,7 +121,7 @@ describe('useFileSearchStore', () => {
     const stalePromise = useFileSearchStore.getState().searchFiles('/project', 'foo');
     useFileSearchStore.getState().invalidateDirectory('/project');
     const freshPromise = useFileSearchStore.getState().searchFiles('/project', 'foo');
-
+    await environment.settle();
     searchRequests[0].resolve([{ path: 'stale.ts' }]);
     await stalePromise;
 
@@ -120,34 +132,38 @@ describe('useFileSearchStore', () => {
 
     const cacheEntries = Object.values(useFileSearchStore.getState().cache);
     expect(cacheEntries).toHaveLength(1);
-    expect(cacheEntries[0]?.files).toEqual([{ path: 'fresh.ts' }]);
+    expect(cacheEntries[0]?.files).toMatchObject([{ path: '/project/fresh.ts' }]);
   });
 
   test('keeps directory and query separators from colliding in cache keys', async () => {
     const firstPromise = useFileSearchStore.getState().searchFiles('/project::nested', 'foo');
+    await environment.settle();
     searchRequests[0].resolve([{ path: 'first.ts' }]);
     await firstPromise;
 
     const secondPromise = useFileSearchStore.getState().searchFiles('/project', 'nested::foo');
+    await environment.settle();
     expect(searchRequests).toHaveLength(2);
 
     searchRequests[1].resolve([{ path: 'second.ts' }]);
-    expect(await secondPromise).toEqual([{ path: 'second.ts' }]);
+    expect(await secondPromise).toMatchObject([{ path: '/project/second.ts' }]);
   });
 
   test('isolates cache and in-flight ownership by runtime', async () => {
     const firstPromise = useFileSearchStore.getState().searchFiles('/project', 'foo');
-    runtimeKey = 'runtime-b';
+    await environment.settle();
+    setRuntime('runtime-b');
     const secondPromise = useFileSearchStore.getState().searchFiles('/project', 'foo');
+    await environment.settle();
     expect(searchRequests).toHaveLength(2);
 
     searchRequests[1].resolve([{ path: 'runtime-b.ts' }]);
-    expect(await secondPromise).toEqual([{ path: 'runtime-b.ts' }]);
+    expect(await secondPromise).toMatchObject([{ path: '/project/runtime-b.ts' }]);
     searchRequests[0].resolve([{ path: 'runtime-a.ts' }]);
     await firstPromise;
 
-    runtimeKey = 'runtime-b';
-    expect(await useFileSearchStore.getState().searchFiles('/project', 'foo')).toEqual([{ path: 'runtime-b.ts' }]);
+    setRuntime('runtime-b');
+    expect(await useFileSearchStore.getState().searchFiles('/project', 'foo')).toMatchObject([{ path: '/project/runtime-b.ts' }]);
     expect(searchRequests).toHaveLength(2);
   });
 });

@@ -7,7 +7,6 @@ import { useSmallModelAvailability } from '@/hooks/useSmallModelAvailability';
 import type { SmallModelAvailabilityScope } from '@/stores/useSmallModelStore';
 import { problemMessage } from '@/lib/problemMessage';
 
-/** Menus and mobile swipe actions check history only while their controls are open. */
 export function useSessionAiRenameAction(sessionID: string, directory: string | null | undefined, open: boolean) {
   const { t } = useI18n();
   const { prepare, rename } = useSessionAiRename(sessionID, directory);

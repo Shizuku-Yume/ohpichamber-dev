@@ -39,6 +39,16 @@ const input = (overrides: Partial<OutgoingMessageInput> = {}): OutgoingMessageIn
     ...overrides,
 });
 
+describe('a share link in the text', () => {
+    test('leaves without its key, in the composer text and in queued text', () => {
+        const link = 'https://share.openchamber.dev/p/AbCdEfGhIjKlMnOpQrStUv';
+        const out = buildOutgoingMessage(input({ composerText: `[pick](${link}#Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE)`, queued: [{ text: `${link}#Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE` }] }), deps());
+        expect(out.primaryText).not.toContain('Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE');
+        expect(out.primaryText).toBe(link);
+        expect(out.additionalParts.some((part) => part.text.includes(`[pick](${link})`))).toBe(true);
+    });
+});
+
 describe('the composer text alone', () => {
     test('becomes the primary message', () => {
         const result = buildOutgoingMessage(input({ composerText: 'hello' }), deps());
@@ -192,7 +202,7 @@ describe('context drafts', () => {
             .toEqual(contextPayloadFromDraft(commentDraft()));
         expect(result.additionalParts[1].metadata?.[CONTEXT_METADATA_KEY])
             .toEqual(contextPayloadFromDraft(commentDraft({ id: 'icd-2', source: 'file', side: undefined })));
-        expect(result.additionalParts[0].text).toContain('Comment on `src/app.ts` lines 3-5 (modified):');
+        expect(result.additionalParts[0].text).toContain('The user selected `src/app.ts` lines 3-5 (modified):');
         expect(result.additionalParts[0].text).toContain('fix this');
     });
 
@@ -202,7 +212,7 @@ describe('context drafts', () => {
             inlineComments: [commentDraft()],
             syntheticTexts: ['conflict note'],
         }), deps());
-        expect(result.additionalParts.map((p) => p.text.startsWith('Comment on') ? 'comment' : p.text))
+        expect(result.additionalParts.map((p) => p.text.startsWith('The user selected') ? 'comment' : p.text))
             .toEqual(['comment', 'conflict note']);
     });
 
@@ -239,7 +249,7 @@ describe('synthetic context', () => {
     test('a linked Linear issue is sent as context', () => {
         const result = buildOutgoingMessage(input({
             composerText: 'fix it',
-            references: [{ kind: 'linear-issue', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12', contextText: 'linear body' }],
+            references: [{ kind: 'tracker-item', provider: 'linear', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12', contextText: 'linear body' }],
         }), deps());
         expect(result.additionalParts).toHaveLength(1);
         expect(result.additionalParts[0].text).toBe('linear body');
@@ -368,7 +378,7 @@ describe('several references', () => {
         const result = buildOutgoingMessage(input({
             composerText: 'compare',
             references: [
-                { kind: 'linear-issue', identifier: 'ENG-1', title: 'A', url: 'https://linear.app/x/issue/ENG-1', contextText: 'linear' },
+                { kind: 'tracker-item', provider: 'linear', identifier: 'ENG-1', title: 'A', url: 'https://linear.app/x/issue/ENG-1', contextText: 'linear' },
                 { kind: 'repository-issue', number: 3, title: 'Bug', url: 'https://x/issues/3', contextText: 'issue 3' },
                 { kind: 'repository-issue', number: 4, title: 'Bug', url: 'https://x/issues/4', contextText: 'issue 4' },
                 { kind: 'guest', providerId: 'jira', id: 'OPS-2', title: 'Ops', url: 'https://jira/OPS-2', contextText: 'jira' },
@@ -387,7 +397,7 @@ describe('full assembly order', () => {
             references: [
                 { kind: 'repository-issue', number: 3, title: 'Bug', url: 'https://x/issues/3', contextText: 'issue' },
                 { kind: 'change-request', provider: 'github', number: 7, title: 'PR', url: 'https://x/pr/7', context: 'pr-diff' },
-                { kind: 'linear-issue', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12', contextText: 'linear' },
+                { kind: 'tracker-item', provider: 'linear', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12', contextText: 'linear' },
             ],
         }), deps());
 
@@ -419,13 +429,13 @@ describe('capturing composer context for the queue', () => {
             references: [
                 { kind: 'repository-issue', number: 3, title: 'Bug', url: 'https://x/issues/3', contextText: 'issue' },
                 { kind: 'change-request', provider: 'github', number: 7, title: 'PR', url: 'https://x/pr/7', context: 'pr-diff' },
-                { kind: 'linear-issue', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12', contextText: 'linear' },
+                { kind: 'tracker-item', provider: 'linear', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12', contextText: 'linear' },
             ],
         }), 'use: deploy');
 
         expect(context.map((part) => part.kind)).toEqual(['context', 'synthetic', 'context', 'context', 'context', 'instruction']);
         expect(context[0]?.kind).toBe('context');
-        expect(context[0]?.text).toContain('Comment on `src/app.ts` lines 3-5 (modified):');
+        expect(context[0]?.text).toContain('The user selected `src/app.ts` lines 3-5 (modified):');
         expect(context[0]?.kind === 'context' ? context[0].metadata[CONTEXT_METADATA_KEY] : null)
             .toEqual(contextPayloadFromDraft(commentDraft()));
         expect(context[3]).toEqual({
@@ -470,7 +480,7 @@ describe('composer reference assembly', () => {
         const onlyLinked: Partial<OutgoingMessageInput>[] = [
             { references: [{ kind: 'repository-issue', number: 12, title: 'Attached', url: 'https://github.com/acme/app/issues/12', contextText: 'body' }] },
             { references: [{ kind: 'change-request', provider: 'github', number: 34, title: 'Attached', url: 'https://github.com/acme/app/pull/34', context: 'body' }] },
-            { references: [{ kind: 'linear-issue', identifier: 'ENG-1', title: 'Attached', url: 'https://linear.app/acme/issue/ENG-1', contextText: 'body' }] },
+            { references: [{ kind: 'tracker-item', provider: 'linear', identifier: 'ENG-1', title: 'Attached', url: 'https://linear.app/acme/issue/ENG-1', contextText: 'body' }] },
             { references: [{ kind: 'guest', providerId: 'guest.example', id: 'guest-1', title: 'Attached', url: 'https://example.com/issues/1', contextText: 'body' }] },
         ];
 

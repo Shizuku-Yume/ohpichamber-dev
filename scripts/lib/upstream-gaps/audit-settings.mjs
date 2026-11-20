@@ -20,6 +20,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { stripModuleSyntax } from './source.mjs';
 
 const REPO_ROOT = process.cwd();
 
@@ -497,13 +498,14 @@ function extractSettingsRegistry(ref) {
 // 3. settings-sanitizer extractor
 // ---------------------------------------------------------------------------
 function extractSettingsSanitizer(ref) {
-  const dir = readFileAt(ref, 'packages/web/server/lib/host/settings-helpers.js')
-    ? 'packages/web/server/lib/host'
-    : 'packages/web/server/lib/opencode';
+  const dir = ['settings', 'host', 'opencode'].map((name) => `packages/web/server/lib/${name}`)
+    .find((candidate) => readFileAt(ref, `${candidate}/settings-registry.json`));
   const registryJsonPath = `${dir}/settings-registry.json`;
-  const helpersPath = `${dir}/settings-helpers.js`;
-  const normPath = `${dir}/settings-normalization-runtime.js`;
-  const runtimePath = `${dir}/settings-runtime.js`;
+  const modulePath = (name) => ['.ts', '.js'].map((ext) => `${dir}/${name}${ext}`)
+    .find((file) => readFileAt(ref, file)) ?? `${dir}/${name}.js`;
+  const helpersPath = modulePath('settings-helpers');
+  const normPath = modulePath('settings-normalization-runtime');
+  const runtimePath = modulePath('settings-runtime');
 
   const registryJsonRaw = readFileAt(ref, registryJsonPath);
   const helpersRaw = readFileAt(ref, helpersPath);
@@ -531,13 +533,29 @@ function extractSettingsSanitizer(ref) {
 
   if (helpersRaw) {
     const src = stripComments(helpersRaw);
-    const boolM = src.match(/\bREGISTRY_BOOLEAN_SETTINGS\s*=\s*Object\.freeze\(\s*\[/);
-    if (boolM) {
-      const start = boolM.index + boolM[0].length - 1;
+    const implementationRanges = ['sanitizeSettingsUpdate', 'formatSettingsResponse', 'mergePersistedSettings'].flatMap((name) => {
+      const declaration = new RegExp(`\\b${name}\\s*=\\s*\\(`).exec(src);
+      if (!declaration) return [];
+      const parameterEnd = findMatching(src, declaration.index + declaration[0].length - 1, '(', ')');
+      if (parameterEnd === -1) return [];
+      const arrow = src.indexOf('=>', parameterEnd);
+      const start = arrow === -1 ? -1 : src.indexOf('{', arrow + 2);
+      if (start === -1) return [];
+      const end = findMatching(src, start, '{', '}');
+      return end === -1 ? [] : [{ name, start, end }];
+    });
+    const sanitizer = implementationRanges.find(({ name }) => name === 'sanitizeSettingsUpdate');
+    const namedLoops = new Set(sanitizer ? [...src.slice(sanitizer.start, sanitizer.end)
+      .matchAll(/for\s*\(\s*const\s+\w+\s+of\s+([A-Za-z_$][\w$]*)\b/g)].map((match) => match[1]) : []);
+    const lists = /\b([A-Za-z_$][\w$]*)(?:\s*:\s*[^=;]+)?\s*=\s*(?:Object\.freeze\(\s*)?\[/g;
+    let list;
+    while ((list = lists.exec(src)) !== null) {
+      if (!namedLoops.has(list[1])) continue;
+      const start = list.index + list[0].length - 1;
       const end = findMatching(src, start, '[', ']');
       if (end > start) {
         for (const lit of extractQuotedLiterals(src.slice(start, end))) {
-          addSanKey(lit, 'REGISTRY_BOOLEAN_SETTINGS', helpersPath, lineAt(src, start));
+          addSanKey(lit, 'passthrough-array', helpersPath, lineAt(src, start));
         }
       }
     }
@@ -560,14 +578,16 @@ function extractSettingsSanitizer(ref) {
     const propRe = /\b(candidate|result|settings|changes|current)\s*\??\.\s*([A-Za-z_$][\w$]*)\b/g;
     let pm;
     while ((pm = propRe.exec(src)) !== null) {
+      const owner = implementationRanges.find(({ start, end }) => pm.index > start && pm.index < end)?.name;
+      if (!owner) continue;
       const obj = pm[1];
       const prop = pm[2];
       // Skip JS built-in methods / irrelevant names
       if (['trim', 'length', 'filter', 'map', 'hasOwnProperty', 'toString', 'keys', 'entries'].includes(prop)) continue;
-      if (obj === 'candidate') addSanKey(prop, 'sanitizeSettingsUpdate:candidate', helpersPath, lineAt(src, pm.index));
-      else if (obj === 'result') addSanKey(prop, 'sanitizeSettingsUpdate:result', helpersPath, lineAt(src, pm.index));
-      else if (obj === 'settings') addSanKey(prop, 'formatSettingsResponse:settings', helpersPath, lineAt(src, pm.index));
-      else if (obj === 'changes' || obj === 'current') addSanKey(prop, `mergePersistedSettings:${obj}`, helpersPath, lineAt(src, pm.index));
+      if (owner === 'sanitizeSettingsUpdate' && obj === 'candidate') addSanKey(prop, 'sanitizeSettingsUpdate:candidate', helpersPath, lineAt(src, pm.index));
+      else if (owner === 'sanitizeSettingsUpdate' && obj === 'result') addSanKey(prop, 'sanitizeSettingsUpdate:result', helpersPath, lineAt(src, pm.index));
+      else if (owner === 'formatSettingsResponse' && obj === 'settings') addSanKey(prop, 'formatSettingsResponse:settings', helpersPath, lineAt(src, pm.index));
+      else if (owner === 'mergePersistedSettings' && (obj === 'changes' || obj === 'current')) addSanKey(prop, `mergePersistedSettings:${obj}`, helpersPath, lineAt(src, pm.index));
     }
 
     // formatSettingsResponse return { ...sanitized, ... }
@@ -659,13 +679,44 @@ function blankRanges(src, ranges) {
   return out;
 }
 
+function storeSources(ref, entry) {
+  const sources = new Map();
+  const pending = [entry];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (sources.has(file)) continue;
+    const raw = readFileAt(ref, file);
+    if (!raw) continue;
+    sources.set(file, raw);
+    const imports = raw.matchAll(/\b(?:import|export)\s+[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g);
+    for (const match of imports) {
+      if (!match[1].startsWith('.')) continue;
+      const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1])).replace(/\.[cm]?js$/, '');
+      if (!base.startsWith('packages/ui/src/stores/')) continue;
+      const resolved = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}/index.ts`]
+        .find((candidate) => /\.[jt]sx?$/.test(candidate) && readFileAt(ref, candidate));
+      if (resolved && !sources.has(resolved)) pending.push(resolved);
+    }
+  }
+  return sources;
+}
+
 function extractStoreMembers(ref) {
   const result = new Map();
 
   for (const spec of STORE_SPECS) {
-    const raw = readFileAt(ref, spec.file);
+    const sources = [...storeSources(ref, spec.file)];
+    const raw = sources.map(([, text]) => text).join('\n');
     if (!raw) continue;
     const src = stripComments(raw);
+    const originAt = (index) => {
+      let offset = index;
+      for (const [file, text] of sources) {
+        if (offset <= text.length) return { file, line: lineAt(text, offset) };
+        offset -= text.length + 1;
+      }
+      return { file: spec.file, line: 1 };
+    };
     const fields = new Map(); // name -> { line, isFunctionType }
     const partializeKeys = new Set();
     const typeRanges = [];
@@ -686,7 +737,7 @@ function extractStoreMembers(ref) {
         const sigM = trimmed.match(/^(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*(?:\(([\s\S]*)\)\s*:\s*([\s\S]+)|:\s*([\s\S]+))$/);
         if (!sigM) continue;
         const name = sigM[1];
-        const ln = lineAt(src, start + 1 + entry.offset + entry.text.search(/\S/));
+        const origin = originAt(start + 1 + entry.offset + entry.text.search(/\S/));
         let isFn = false;
         if (sigM[2] !== undefined) {
           isFn = true;
@@ -704,7 +755,7 @@ function extractStoreMembers(ref) {
             }
           }
         }
-        fields.set(name, { line: ln, isFunctionType: isFn });
+        fields.set(name, { ...origin, isFunctionType: isFn });
       }
     }
 
@@ -724,7 +775,7 @@ function extractStoreMembers(ref) {
 
     // Implementation = the store's own code. Type declarations are blanked first, so
     // an interface line such as `setX: (value) => void` is never taken for an implementation.
-    const implementationSrc = blankRanges(src, typeRanges);
+    const implementationSrc = stripModuleSyntax(blankRanges(src, typeRanges));
     // Object-literal property or method, a local declaration, or a shorthand property.
     const isImplemented = (name) =>
       new RegExp(
@@ -743,7 +794,7 @@ function extractStoreMembers(ref) {
       result.set(`${spec.store}.${name}`, {
         id: `${spec.store}.${name}`,
         store: spec.store,
-        file: spec.file,
+        file: info.file,
         line: info.line,
         member: name,
         kind: info.isFunctionType ? 'action' : 'field',

@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { flushDeferredStorage } from './utils/safeStorage';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { Agent } from '@openchamber/agent-contract';
 import type { DesktopSettings } from '@/lib/desktop';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -18,7 +19,6 @@ let liveAgents: TestAgent[] = [];
 let getAgentsImpl: ((directory?: string | null) => Promise<TestAgent[]>) | null = null;
 let getProvidersForConfigImpl: ((directory?: string | null) => Promise<TestProviderResponse>) | null = null;
 let resolvedWorkspaceDirectories: string[] = [];
-let configListener: ((event: { scopes: string[]; source?: string; timestamp: number }) => void | Promise<void>) | null = null;
 let persistedOpenChamberSettings: DesktopSettings | null = {};
 let settingsLoadCalls = 0;
 let checkReadyImpl = async () => true;
@@ -50,6 +50,19 @@ const makeStorage = (): Storage => ({
     return storage.size;
   },
 }) as Storage;
+const seedConfig = (value: string) => {
+  flushDeferredStorage();
+  storage.set(STORAGE_KEY, value);
+};
+const persistedConfig = () => {
+  flushDeferredStorage();
+  return storage.get(STORAGE_KEY) ?? '{}';
+};
+
+const writePersistedConfig = (value: string) => {
+  flushDeferredStorage();
+  storage.set(STORAGE_KEY, value);
+};
 
 const model = (providerId: string, modelId: string, variantIds?: string[]) => ({
   modelId,
@@ -125,32 +138,9 @@ const deferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
-mock.module('@/stores/utils/safeStorage', () => ({
-  getDeferredSafeStorage: () => makeStorage(),
-  getSafeStorage: () => makeStorage(),
-  getSafeSessionStorage: () => makeStorage(),
-  createDeferredSafeJSONStorage: () => {
-    const testStorage = makeStorage();
-    return {
-      getItem: (name: string) => {
-        const value = testStorage.getItem(name);
-        return value === null ? null : JSON.parse(value);
-      },
-      setItem: (name: string, value: unknown) => {
-        testStorage.setItem(name, JSON.stringify(value));
-      },
-      removeItem: (name: string) => {
-        testStorage.removeItem(name);
-      },
-    };
-  },
-}));
-
-mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: {
-    getState: () => projectsState,
-  },
-}));
+const settle = async () => {
+  for (let step = 0; step < 40; step += 1) await Promise.resolve();
+};
 
 let directoryAvailability: 'available' | 'missing' | 'unknown' = 'available';
 
@@ -224,6 +214,7 @@ mock.module('@/lib/runtime-fetch', () => ({
 }));
 
 mock.module('@/lib/persistence', () => ({
+  invalidateSettingsCache: mock(() => undefined),
   updateDesktopSettings: mock(async () => ({ ok: true })),
   reportSettingsSaveState: () => undefined,
   // The store reads the shared document through this; an empty document
@@ -239,19 +230,6 @@ mock.module('@/lib/startupTrace', () => ({
   measureStartupTrace: mock(async (_name: string, callback: () => Promise<unknown>) => callback()),
 }));
 
-mock.module('@/lib/configSync', () => ({
-  emitConfigChange: mock(() => undefined),
-  scopeMatches: mock((event: { scopes: string[] }, scope: string) => event.scopes.includes('all') || event.scopes.includes(scope)),
-  subscribeToConfigChanges: mock((listener: typeof configListener) => {
-    configListener = listener;
-    return () => {
-      if (configListener === listener) {
-        configListener = null;
-      }
-    };
-  }),
-}));
-
 // Runtime-generation guards subscribe at module load. Use real event delivery
 // so A -> B -> A exercises the lifecycle, not just unequal runtime strings.
 Object.defineProperty(globalThis, 'window', {
@@ -259,17 +237,53 @@ Object.defineProperty(globalThis, 'window', {
   value: Object.assign(new EventTarget(), { location: new URL('https://config-tests.example') }),
 });
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: makeStorage() });
+Object.defineProperty(window, 'localStorage', { configurable: true, value: makeStorage() });
+const { useProjectsStore } = await import('./useProjectsStore');
+const { emitConfigChange } = await import('@/lib/configSync');
+const { invalidateSettingsCache } = await import('@/lib/persistence');
 
 const {
   useConfigStore,
   selectCatalogLoadedForDirectory,
   selectKnownCatalogModel,
+  selectProvidersForDirectory,
   invalidateOpenChamberDefaultsCache,
 } = await import('./useConfigStore');
+const { invalidateConfigCatalogsForReload } = await import('./config/catalogLifecycle');
 const { useSelectionStore } = await import('@/sync/selection-store');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useRoutingStore } = await import('@/stores/useRoutingStore');
 const { useUIStore } = await import('@/stores/useUIStore');
+let testRuntime = 0;
+
+test('configuration subscriptions stay singleton when setup is called again', async () => {
+  const { subscribeConfigRuntimeChanges, subscribeConfigStoreChanges } = await import('./config/subscriptions');
+  const { configRuntime } = await import('./config/runtime');
+  const { useDirectoryStore } = await import('./useDirectoryStore');
+  const configSync = await import('@/lib/configSync');
+  const subscriptions = [
+    spyOn(configSync, 'subscribeToConfigChanges'),
+    spyOn(useDirectoryStore, 'subscribe'),
+    spyOn(useRoutingStore, 'subscribe'),
+    spyOn(useUIStore, 'subscribe'),
+    spyOn(useConfigStore, 'subscribe'),
+  ];
+  try {
+    const registrationCounts = subscriptions.map((subscription) => subscription.mock.calls.length);
+    subscribeConfigStoreChanges();
+    subscribeConfigStoreChanges();
+    for (const [index, subscription] of subscriptions.entries()) {
+      expect(subscription.mock.calls.length).toBe(registrationCounts[index]);
+    }
+  } finally {
+    for (const subscription of subscriptions) subscription.mockRestore();
+  }
+  subscribeConfigRuntimeChanges();
+  subscribeConfigRuntimeChanges();
+  const generation = configRuntime.generation;
+  switchRuntimeEndpoint({ apiBaseUrl: 'https://singleton.example', runtimeKey: 'singleton' });
+  expect(configRuntime.generation).toBe(generation + 1);
+});
 
 // Import after boundary mocks so native catalog requests use this test host.
 const { useAgentsStore, selectAgentsForDirectory, selectAgentCatalogStatus, invalidateAgentsLoadCache } = await import('./useAgentsStore');
@@ -294,7 +308,11 @@ const refreshComposerCatalog = async (directory = DIRECTORY): Promise<boolean> =
 };
 
 describe('useConfigStore provider persistence', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://config-tests.example', runtimeKey: `config-test-${++testRuntime}` });
+    await settle();
+    flushDeferredStorage();
+    invalidateSettingsCache();
     storage = new Map<string, string>();
     useAgentsStore.getState().resetForRuntimeSwitch();
     projectsState = {
@@ -304,6 +322,8 @@ describe('useConfigStore provider persistence', () => {
         { id: 'other', path: OTHER_DIRECTORY, label: 'Other' },
       ],
     };
+    useProjectsStore.setState(projectsState);
+    canonicalResponsePromises.clear();
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: makeStorage(),
@@ -601,7 +621,7 @@ describe('useConfigStore provider persistence', () => {
   });
 
   test('hydrates a legacy blob with catalogs for instant paint, refreshes to live data, then writes it slim', async () => {
-    storage.set(STORAGE_KEY, JSON.stringify({
+    seedConfig(JSON.stringify({
       state: {
         configRuntimeKey: getRuntimeKey(),
         activeDirectoryKey: DIRECTORY,
@@ -660,7 +680,7 @@ describe('useConfigStore provider persistence', () => {
     expect(reloaded.currentProviderId).toBe('fresh');
     expect(reloaded.currentModelId).toBe('fresh-model');
 
-    const rewritten = JSON.parse(storage.get(STORAGE_KEY) ?? '{}');
+    const rewritten = JSON.parse(persistedConfig());
     expect(rewritten.version).toBe(1);
     expect(rewritten.state.providers).toBeUndefined();
     expect(rewritten.state.directoryScoped[DIRECTORY].providers).toBeUndefined();
@@ -705,7 +725,7 @@ describe('useConfigStore provider persistence', () => {
         models: [model('cached-merged', 'cached-merged-model')],
       }],
     });
-    storage.set(STORAGE_KEY, JSON.stringify({
+    writePersistedConfig(JSON.stringify({
       state: {
         configRuntimeKey: getRuntimeKey(),
         activeDirectoryKey: OTHER_DIRECTORY,
@@ -763,7 +783,7 @@ describe('useConfigStore provider persistence', () => {
       models: [{ ...model('legacy', 'legacy-model'), variants: { high: {} } }],
     };
     const validProvider = provider('valid', 'valid-model', ['low']);
-    storage.set(STORAGE_KEY, JSON.stringify({
+    seedConfig(JSON.stringify({
       state: {
         configRuntimeKey: getRuntimeKey(),
         activeDirectoryKey: DIRECTORY,
@@ -877,8 +897,8 @@ describe('useConfigStore provider persistence', () => {
       [DIRECTORY, 'active-live'],
       [OTHER_DIRECTORY, 'inactive-live'],
     ]);
-    expect(configListener).not.toBeNull();
-    await configListener?.({ scopes: ['providers'], timestamp: Date.now() });
+    emitConfigChange('providers');
+    await settle();
 
     const state = useConfigStore.getState();
     expect(getProvidersCalls).toBe(4);
@@ -1001,7 +1021,7 @@ describe('useConfigStore provider persistence', () => {
       },
     });
 
-    const persisted = JSON.parse(storage.get(STORAGE_KEY) ?? '{}');
+    const persisted = JSON.parse(persistedConfig());
     expect(persisted.state.selectedProviderId).toBe('');
     expect(persisted.state.directoryScoped[DIRECTORY].selectedProviderId).toBe('');
   });
@@ -1630,8 +1650,8 @@ describe('useConfigStore provider persistence', () => {
       return [testAgent('new-agent')];
     };
 
-    const ownerLoad = refreshComposerCatalog(DIRECTORY);
-    const joinedLoad = refreshComposerCatalog(DIRECTORY);
+    const ownerLoad = useAgentsStore.getState().loadAgents(DIRECTORY);
+    const joinedLoad = useAgentsStore.getState().loadAgents(DIRECTORY);
     await Promise.resolve();
     expect(calls).toBe(1);
 
@@ -1767,13 +1787,11 @@ describe('useConfigStore provider persistence', () => {
   });
 
   test('rejects a persisted config snapshot belonging to another runtime', async () => {
-    storage.set(STORAGE_KEY, JSON.stringify({
-      state: {
-        configRuntimeKey: 'some-other-instance',
-        settingsDefaultModel: 'foreign/model',
-        providers: [provider('foreign')],
-      }, version: 0
-    }));
+    seedConfig(JSON.stringify({ state: {
+      configRuntimeKey: 'some-other-instance',
+      settingsDefaultModel: 'foreign/model',
+      providers: [provider('foreign')],
+    }, version: 0 }));
     await useConfigStore.persist.rehydrate();
     expect(useConfigStore.getState().settingsDefaultModel).toBeUndefined();
     expect(useConfigStore.getState().providers).toEqual([]);
@@ -1914,6 +1932,96 @@ describe('useConfigStore provider persistence', () => {
     expect(catalogIds()).toEqual(['builtin', 'plugin']);
   });
 
+  test('a configuration reload retires a pre-reload provider read and keeps the loaded snapshot', async () => {
+    const other = OTHER_DIRECTORY;
+    liveProviderIdsByDirectory.set(DIRECTORY, 'active-catalog');
+    liveProviderIdsByDirectory.set(other, 'other-old');
+    await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
+    await useConfigStore.getState().loadProviders({ directory: other });
+    const revision = useConfigStore.getState().catalogReloadRevision;
+
+    const slowRead = deferred<TestProviderResponse>();
+    let reads = 0;
+    getProvidersForConfigImpl = async () => {
+      reads += 1;
+      return reads === 1 ? slowRead.promise : providerResponse('other-new');
+    };
+    const staleLoad = useConfigStore.getState().loadProviders({ directory: other });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    invalidateConfigCatalogsForReload(['provider', 'agent']);
+    slowRead.resolve(providerResponse('other-stale'));
+    await staleLoad;
+
+    expect(selectProvidersForDirectory(useConfigStore.getState(), other).map((entry) => entry.providerId)).toEqual(['other-old']);
+    expect(useConfigStore.getState().catalogReloadRevision).toBeGreaterThan(revision);
+
+    await useConfigStore.getState().loadProviders({ directory: other });
+    expect(selectProvidersForDirectory(useConfigStore.getState(), other).map((entry) => entry.providerId)).toEqual(['other-new']);
+  });
+
+  test('a configuration reload retires an agent read that began before it', async () => {
+    const slowRead = deferred<TestAgent[]>();
+    let reads = 0;
+    getAgentsImpl = async () => {
+      reads += 1;
+      return reads === 1 ? slowRead.promise : [testAgent('new-agent')];
+    };
+    const staleLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    invalidateConfigCatalogsForReload(['agent']);
+    slowRead.resolve([testAgent('stale-agent')]);
+
+    expect(await staleLoad).toBe(false);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY)).toEqual([]);
+
+    await useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY).map((entry) => entry.name)).toEqual(['new-agent']);
+  });
+
+  test('a configuration reload gives a joined agent read its replacement list', async () => {
+    const slowRead = deferred<TestAgent[]>();
+    let reads = 0;
+    getAgentsImpl = async () => {
+      reads += 1;
+      return reads === 1 ? slowRead.promise : [testAgent('new-agent')];
+    };
+    const ownerLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    const joinedLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    invalidateConfigCatalogsForReload(['agent']);
+    slowRead.resolve([testAgent('stale-agent')]);
+
+    expect(await ownerLoad).toBe(false);
+    expect(await joinedLoad).toBe(true);
+    expect(reads).toBe(2);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY).map((entry) => entry.name)).toEqual(['new-agent']);
+  });
+
+  test('a configuration reload followed by a runtime switch starts no replacement agent read', async () => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://reload-a.example', runtimeKey: 'reload-a' });
+    const slowRead = deferred<TestAgent[]>();
+    let reads = 0;
+    getAgentsImpl = async () => {
+      reads += 1;
+      return reads === 1 ? slowRead.promise : [testAgent('replacement-agent')];
+    };
+    const ownerLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    const joinedLoad = useAgentsStore.getState().loadAgents(OTHER_DIRECTORY);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    invalidateConfigCatalogsForReload(['agent']);
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://reload-b.example', runtimeKey: 'reload-b' });
+    slowRead.resolve([testAgent('runtime-a-agent')]);
+
+    expect(await ownerLoad).toBe(false);
+    expect(await joinedLoad).toBe(false);
+    expect(reads).toBe(1);
+    expect(selectAgentsForDirectory(useAgentsStore.getState(), OTHER_DIRECTORY)).toEqual([]);
+  });
+
   test('what other catalogs know fills in for a directory still starting', async () => {
     const worktree = '/workspace/known-catalog-worktree';
     liveAgents = [testAgent('build')];
@@ -1993,7 +2101,11 @@ describe('useConfigStore provider persistence', () => {
 
   test('does not choose Big Pickle while catalog defaults are still loading', async () => {
     useConfigStore.setState({ settingsDefaultsLoaded: false });
-    getProvidersForConfigImpl = async () => (providerResponse('opencode', 'big-pickle'));
+    getProvidersForConfigImpl = async () => ({
+      providers: [providerInfo('opencode'), providerInfo('sidecar')],
+      models: [model('opencode', 'big-pickle'), model('sidecar', 'chosen')],
+      default: { providerID: 'opencode', id: 'big-pickle' },
+    });
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
     useConfigStore.getState().applyDefaultModelAgentSelection();
     expect(useConfigStore.getState().currentModelId).toBe('');
@@ -2312,7 +2424,7 @@ describe('useConfigStore provider persistence', () => {
       },
     });
 
-    const persisted = JSON.parse(storage.get(STORAGE_KEY) ?? '{}');
+    const persisted = JSON.parse(persistedConfig());
     expect(persisted.state.providers).toBeUndefined();
     expect(persisted.state.agents).toBeUndefined();
     for (const directory of [DIRECTORY, OTHER_DIRECTORY]) {
@@ -2334,12 +2446,12 @@ describe('useConfigStore provider persistence', () => {
   test('persisted config is written as version 1', () => {
     useConfigStore.setState({ activeDirectoryKey: DIRECTORY, currentModelId: 'live-model' });
 
-    const persisted = JSON.parse(storage.get(STORAGE_KEY) ?? '{}');
+    const persisted = JSON.parse(persistedConfig());
     expect(persisted.version).toBe(1);
   });
 
   test('a persisted snapshot without catalogs hydrates its selections and empty catalogs', async () => {
-    storage.set(STORAGE_KEY, JSON.stringify({
+    seedConfig(JSON.stringify({
       state: {
         configRuntimeKey: getRuntimeKey(),
         activeDirectoryKey: DIRECTORY,
@@ -2397,10 +2509,13 @@ describe('useConfigStore provider persistence', () => {
     });
 
     class CountingMap extends Map<string, string> {
-      configWrites = 0;
+      private writes = 0;
+
+      get configWrites() { flushDeferredStorage(); return this.writes; }
+      set configWrites(value: number) { flushDeferredStorage(); this.writes = value; }
 
       override set(key: string, value: string) {
-        if (key === STORAGE_KEY) this.configWrites += 1;
+        if (key === STORAGE_KEY) this.writes += 1;
         return super.set(key, value);
       }
     }
@@ -2432,6 +2547,7 @@ describe('useConfigStore provider persistence', () => {
           },
         },
       });
+      flushDeferredStorage();
       const counting = new CountingMap(storage);
       storage = counting;
       return counting;
@@ -2534,11 +2650,11 @@ describe('useConfigStore provider persistence', () => {
     });
     useConfigStore.getState().setModel('live-model');
     useConfigStore.getState().setAgent('build');
-    const written = storage.get(STORAGE_KEY) ?? '';
+    const written = persistedConfig();
     // Clearing the store writes too, so the saved blob is put back before rehydrating.
     seedAgentCatalog([], useConfigStore.getState().activeDirectoryKey);
     useConfigStore.setState({ directoryScoped: {}, providers: [], currentModelId: '', currentAgentName: undefined });
-    storage.set(STORAGE_KEY, written);
+    writePersistedConfig(written);
 
     useAgentsStore.getState().resetForRuntimeSwitch();
     await useConfigStore.persist.rehydrate();

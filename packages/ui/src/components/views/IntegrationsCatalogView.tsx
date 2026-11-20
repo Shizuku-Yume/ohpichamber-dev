@@ -59,7 +59,6 @@ import {
   type CatalogSkillComponent,
 } from '@/lib/integrations-catalog/registry';
 
-/** Unique within an entry: an entry may bundle several skills or plugins. */
 const catalogComponentKey = (component: CatalogComponent): string => {
   if (component.kind === 'skill') return `skill:${component.subpath}`;
   if (component.kind === 'plugin') return `plugin:${component.spec}`;
@@ -67,7 +66,6 @@ const catalogComponentKey = (component: CatalogComponent): string => {
   return 'mcp';
 };
 
-/** Where a component can be viewed: the skill's folder on GitHub, the plugin on npm. */
 const catalogComponentHref = (component: CatalogComponent): string | null => {
   if (component.kind === 'skill') return `https://github.com/${component.source}/tree/HEAD/${component.subpath}`;
   if (component.kind === 'plugin') return `https://www.npmjs.com/package/${catalogPluginPackageName(component.spec)}`;
@@ -124,7 +122,6 @@ const CATEGORY_LABEL_KEY = {
   other: 'integrationsCatalog.category.other',
 } satisfies Record<CatalogCategory, I18nKey>;
 
-/** What a card's status pill shows. */
 type CatalogCardStatus = { label: string; tone: IntegrationCatalogStatusTone };
 
 /**
@@ -159,11 +156,6 @@ const TILE_SIZE = {
   lg: { tile: 'size-16 rounded-2xl', glyph: 'size-9' },
 } as const;
 
-/**
- * The entry's mark: its official glyph on a tile in the brand's own color,
- * else the vendor's own app icon, else the generic sprite icon on a neutral
- * tile.
- */
 function BrandTile({ entry, size }: { entry: CatalogEntry; size: keyof typeof TILE_SIZE }): React.ReactNode {
   const brand = brandIconFor(entry.id);
   const logo = brand ? undefined : vendorLogoFor(entry.id);
@@ -187,7 +179,6 @@ function BrandTile({ entry, size }: { entry: CatalogEntry; size: keyof typeof TI
   );
 }
 
-/** A section heading with its count, set off by a rule. */
 function SectionHeading({ title, count }: { title: string; count?: number }): React.ReactNode {
   return (
     <h2 className="flex items-baseline gap-2 border-b border-[var(--interactive-border)] pb-2.5 text-base font-semibold text-foreground">
@@ -259,8 +250,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     setAutoStartEntryId(current => (current !== null && current !== id ? null : current));
   }, []);
 
-  // Browse and detail share one scroller: a detail page opens at its top,
-  // and going back returns the browse list to where it was left.
   const scrollerRef = React.useRef<HTMLElement | null>(null);
   const browseScrollTopRef = React.useRef(0);
   React.useLayoutEffect(() => {
@@ -269,7 +258,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     scroller.scrollTop = selectedId ? 0 : browseScrollTopRef.current;
   }, [selectedId]);
   const [query, setQuery] = React.useState('');
-  /** The category chip the browse view is narrowed to; null shows every section. */
   const [category, setCategory] = React.useState<CatalogCategory | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [confirm, setConfirm] = React.useState<ConfirmRequest | null>(null);
@@ -344,9 +332,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
       .map((plugin) => plugin.target.name)),
     [pluginCatalog],
   );
-  // A skill counts when the Agent Service authored it in the same folder under
-  // a writable scope; a same-named skill the user keeps elsewhere is not the
-  // catalog's to show or delete.
   const catalogSkillKeys = React.useMemo(
     () => new Set(skills.flatMap((skill) => skill.readOnly || !skill.authoredSkillId
       ? []
@@ -372,7 +357,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const isExtensionInstalled = React.useCallback((guestId: string): boolean =>
     installedGuestIds.has(guestId), [installedGuestIds]);
 
-  /** Every installable part of the integration is present. */
   const isComponentInstalled = React.useCallback((entry: CatalogEntry, component: CatalogComponent): boolean => {
     if (component.kind === 'mcp') return isMcpInstalled(entry);
     if (component.kind === 'plugin') return isPluginInstalled(component);
@@ -380,18 +364,9 @@ export function IntegrationsCatalogView(): React.ReactNode {
     return isSkillInstalled(component);
   }, [isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled]);
 
-  /**
-   * The integration is set up once its main part is: the MCP server when it
-   * ships one, else its first part. Bundled skills are extras; a missing one
-   * gets its own Install on the detail page.
-   */
   const isEntryInstalled = React.useCallback((entry: CatalogEntry): boolean =>
     isComponentInstalled(entry, catalogMcpComponent(entry) ?? entry.components[0]), [isComponentInstalled]);
 
-  /**
-   * Entries with any part installed, for the rail: a bundle whose MCP server
-   * is set up but whose skills are not yet is still one the user works with.
-   */
   const installedEntries = React.useMemo(
     () => CATALOG_ENTRIES.filter((entry) => entry.components.some((component) => isComponentInstalled(entry, component))),
     [isComponentInstalled],
@@ -434,11 +409,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     setSettingsDialogOpen(true);
   }, [setSettingsDialogOpen, setSelectedMcp, setSettingsPage]);
 
-  /**
-   * Opens Settings on the page that owns one component: MCP → its server page,
-   * plugin → its entry, skill → the skills catalog, extension → the
-   * extensions page.
-   */
   const configureComponent = React.useCallback((entry: CatalogEntry, component: CatalogComponent) => {
     if (component.kind === 'mcp') {
       setSettingsPage('mcp');
@@ -796,7 +766,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     promptInstall(entry);
   };
 
-  /** The end of a browse row: install, progress, or where the entry stands. */
   const renderRowAction = (entry: CatalogEntry): React.ReactNode => {
     if (busyId === entry.id) {
       return (
@@ -806,7 +775,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
       );
     }
     const status = statusOf(entry);
-    // A failed or switched-off server outranks a bundle part still missing.
     if (status.tone === 'warning') {
       return <span className={cn('shrink-0 typography-micro', statusTextClass(status.tone))}>{status.label}</span>;
     }
@@ -973,7 +941,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     </div>
   );
 
-  /** The rail: back to browsing, then every installed integration with its state. */
   const renderRail = (): React.ReactNode => (
     <aside className="flex w-56 shrink-0 flex-col border-e border-border/50">
       <div className="flex-1 overflow-y-auto p-2">
@@ -1022,7 +989,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     </aside>
   );
 
-  /** Token field, env values, picker inputs and prerequisites, shown before the first install. */
   const renderSetup = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const needsToken = mcp.auth === 'token' && Boolean(mcp.remote);
     const envInputs = mcp.local?.envInputs ?? [];
@@ -1106,7 +1072,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
-  /** Where the installed MCP server stands, with the sign-in when it is an OAuth server. */
   const renderConnection = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const runtime = mcpStatusOf(mcpStatuses[entry.id]);
     const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
@@ -1150,7 +1115,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
-  /** One part of the integration: what it is, where it comes from, and whether it is installed. */
   const renderComponentRow = (entry: CatalogEntry, component: CatalogComponent): React.ReactNode => {
     const componentInstalled = isComponentInstalled(entry, component);
     const href = catalogComponentHref(component);
@@ -1240,7 +1204,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
-  /** Install for an entry not yet installed; Manage and a menu with Uninstall once it is. */
   const renderHeaderActions = (entry: CatalogEntry): React.ReactNode => {
     const isBusy = busyId === entry.id;
     if (!isEntryInstalled(entry)) {

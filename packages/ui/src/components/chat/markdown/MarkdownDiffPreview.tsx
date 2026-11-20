@@ -6,13 +6,12 @@ type DiffSection = { name: string; patch: string };
 
 const fileNames = (patch: string): string[] => {
   try {
-    return parsePatchFiles(patch, 'markdown-diff', true).flatMap((parsed) => parsed.files.map((file) => file.name));
+    return parsePatchFiles(patch, { cacheKeyPrefix: 'markdown-diff', throwOnError: true }).flatMap((parsed) => parsed.files.map((file) => file.name));
   } catch {
     return [];
   }
 };
 
-/** Split a fenced diff into one patch per file so each renders its own header. */
 /** Split a fenced diff into one patch per file so each renders its own header. */
 const splitPatch = (patch: string, snippet: boolean): DiffSection[] => {
   // A headerless +/- snippet has no file to validate: give the renderer a
@@ -41,8 +40,6 @@ const splitPatch = (patch: string, snippet: boolean): DiffSection[] => {
   return sections.every((section) => fileNames(section.patch).length > 0) ? sections : [];
 };
 export default function MarkdownDiffPreview({ source }: { source: string }) {
-  // Models also propose +/- snippets without file or hunk headers. Supply
-  // parser-only coordinates; copying always uses the unmodified fence source.
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const snippet = lines.some((line) => /^[+-]/.test(line))
     && lines.every((line) => /^[ +-]/.test(line))

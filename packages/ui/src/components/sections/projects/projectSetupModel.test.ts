@@ -49,11 +49,13 @@ const setupWith = (options: {
     setupWorktreeMode: options.replace ? 'replace' : 'append',
     worktreeDirectory: null,
     teardownWorktree: options.personalTeardown ?? [],
+    createWorktreeCommand: '',
     projectActions: options.personal ?? [],
     projectActionsPrimaryId: null,
     draftStarters: [],
     hiddenSharedActionIds: options.hidden ?? [],
     sharedTrust: null,
+    notesTodosInRepository: false,
   },
 });
 

@@ -5,12 +5,9 @@ import { setSessionOpener } from '@/sync/session-navigation';
 import { requestMessageFocus } from './messageFocus';
 
 export type SessionOpenOptions = {
- /** The owning directory when the caller already knows it (a desktop event or a notification carries one). */
- directory?: string | null;
- /** The message a link names. */
- messageId?: string | null;
- /** Native jump-list entries may outlive their session. Unknown IDs do not select anything. */
- requireKnownSession?: boolean;
+  directory?: string | null;
+  messageId?: string | null;
+  requireKnownSession?: boolean;
 };
 
 const resolveSessionDir = (session: Session | undefined): string | null => {
@@ -27,9 +24,6 @@ const selectSession = (sessionId: string, directoryHint: string | null): void =>
  }
 };
 
-/**
- * Opens the session a route, a link, a notification, or a toast names.
- */
 export async function openSession(sessionId: string, options: SessionOpenOptions = {}): Promise<void> {
  const requestedId = sessionId.trim();
  if (!requestedId) return;
@@ -65,22 +59,14 @@ export async function openSession(sessionId: string, options: SessionOpenOptions
  latest.setCurrentSession(requestedId, directory);
 }
 
-/**
- * Opens a session link and, for a message link, asks the session's timeline
- * to show that message: on entry, or right away if the session is open.
- */
 export function openSessionLink(sessionId: string, messageId: string | null): Promise<void> {
  return openSession(sessionId, { messageId });
 }
 
-/**
- * Select a session named by `/?session=`.
- */
 export function openSessionFromRoute(sessionId: string): Promise<void> {
  return openSession(sessionId);
 }
 
-// Register here to keep the session store independent of the router.
 setSessionOpener((sessionId, directory) => {
  void openSession(sessionId, { directory });
 });

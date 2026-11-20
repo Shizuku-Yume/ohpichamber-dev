@@ -5,12 +5,12 @@
   "type": "module",
   "exports": {
     "./private-protocol": {
-      "types": "./src/supervisor/host-authorization-protocol.ts",
+      "types": "./dist/supervisor/host-authorization-protocol.d.ts",
       "default": "./dist/supervisor/host-authorization-protocol.js"
     }
   },
   "scripts": {
-    "build": "bun build --target=bun --packages=external --root=src --outdir=dist src/index.ts src/worker/index.ts src/supervisor/host-authorization-protocol.ts",
+    "build": "bun build --target=bun --packages=external --root=src --outdir=dist src/index.ts src/worker/index.ts src/supervisor/host-authorization-protocol.ts && tsc -p tsconfig.protocol.json",
     "type-check": "bun scripts/prepare-sdk-types.mjs && tsc -p node_modules/.cache/omp-types/tsconfig.json",
     "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src scripts",
     "test": "bun test --timeout 15000 src"

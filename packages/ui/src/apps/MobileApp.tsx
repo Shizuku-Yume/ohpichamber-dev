@@ -1,3 +1,10 @@
+import { connectMobileWorkspaceOpener } from '@/lib/mobileWorkspaceTabs';
+import { PluginPane } from '@/components/layout/PluginPane';
+import { flushSync } from 'react-dom';
+import { useGuestPages } from '@/hooks/useGuestSurfaces';
+import type { MobileChangesCommitRequest } from './mobileChangesCommitRequest';
+import { pluginModeFromId } from '@/lib/surfaces/modes';
+import { GuestHosts } from '@/components/layout/GuestHosts';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -37,7 +44,7 @@ import { isOpenchamberEventsReconnecting, markOpenchamberEventsUnreachable, retr
 import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAuthoritativeSessionCleanup } from '@/components/session/sidebar/list/useAuthoritativeSessionCleanup';
-import { restoreLastActiveSession } from '@/sync/last-session-restore';
+import { beginLastSessionRestore } from '@/sync/last-session-restore';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
@@ -57,6 +64,7 @@ import {
 } from '@/lib/worktrees/worktreeManager';
 import { refreshWorktreeTopologyForChange } from '@/lib/worktrees/worktreeTopologyRefresh';
 import { useUIStore } from '@/stores/useUIStore';
+import { useChatWidthAttribute } from '@/hooks/useChatWidthAttribute';
 import { closeTopmostBackLayer } from '@/lib/mobileBackLayers';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SyncProvider } from '@/sync/sync-context';
@@ -95,6 +103,8 @@ import {
   IPAD_WORKSPACE_SIDEBAR_MAX_WIDTH,
   useIpadSidebarResize,
 } from './ipadSidebarResize';
+import { ReceivedPagePanel } from '@/components/chat/sharePages/received/ReceivedPagePanel';
+import { focusChatInput } from '@/components/chat/composer/editor/dom';
 
 type MobileAppProps = {
   apis: RuntimeAPIs;
@@ -115,7 +125,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
   // are idle-reaped by the server while the workspace drawer is closed.
   useTerminalSessionKeepalive();
   const [sessionsSheetOpen, setSessionsSheetOpen] = React.useState(false);
-  // The run overview covers the chat; selecting any session returns to it.
   React.useEffect(() => useSessionUIStore.subscribe((state, prev) => {
     if (state.currentSessionId && state.currentSessionId !== prev.currentSessionId) {
       useUIStore.getState().setRunOverviewKey(null);
@@ -126,8 +135,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     if (runOverviewOpen) setSessionsSheetOpen(false);
   }, [runOverviewOpen]);
   const [activeSurface, setActiveSurface] = React.useState<MobileSurface | null>(null);
-  // Phone right drawer with the workspace tabs; the tab persists across
-  // open/close so the right-edge swipe reopens where the user left off.
   const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
   const [workspaceTab, setWorkspaceTab] = React.useState<MobileWorkspaceTab>(() => {
     const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
@@ -136,16 +143,25 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
   // A plan opened from the workspace drawer's Notes tab, shown as a fullscreen
   // layer on top of it (back returns to the notes).
   const [openPlan, setOpenPlan] = React.useState<{ id: string; title: string; projectRef: ProjectRef } | null>(null);
+  const [openReceivedPage, setOpenReceivedPage] = React.useState<{ receivedId: string; title: string } | null>(null);
+
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   // When set, the Changes surface opens directly into the per-file diff for this path.
-  const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean } | null>(null);
+  const [changesRequest, setChangesRequest] = React.useState<
+    { diff: { path: string; staged: boolean; scope?: 'turn' } } | { commit: MobileChangesCommitRequest } | null
+  >(null);
+  const pendingChangesDiff = changesRequest && 'diff' in changesRequest ? changesRequest.diff : null;
+  const pendingChangesCommit = changesRequest && 'commit' in changesRequest ? changesRequest.commit : null;
+  const openGuestPageId = useUIStore((state) => state.openGuestPageId);
+  const guestPages = useGuestPages();
+  const guestPage = guestPages.find((guest) => guest.id === openGuestPageId) ?? null;
+  const closeGuestPage = React.useCallback(() => useUIStore.getState().setOpenGuestPage(null), []);
+  React.useEffect(() => {
+    if (openGuestPageId && !guestPage) closeGuestPage();
+  }, [closeGuestPage, guestPage, openGuestPageId]);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
-  const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled);
   const showCapacitorOnlyFeatures = React.useMemo(() => isCapacitorMobileApp(), []);
 
-  // NOTE: pendingChangesDiff is intentionally NOT cleared on close — it keys
-  // the persistent Changes pane in the workspace drawer, and clearing it would
-  // remount the pane (losing its navigation) on every close.
   const closeSurface = React.useCallback(() => {
     setActiveSurface(null);
     setOpenPlan(null);
@@ -190,16 +206,11 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
   }, [isTabletLayout]);
 
   const openFilesSurface = React.useCallback(() => {
-    setPendingChangesDiff(null);
+    setChangesRequest(null);
     setWorkspaceTab('files');
     setWorkspaceOpen(true);
   }, []);
 
-  // The agent asked for a file to be shown: open the files drawer and stage
-  // the path the way a chat file link does, so the surface routes to it. A
-  // session the user is not looking at only announces the file, and staging
-  // waits for the tap: a stored path would send the files drawer of the session
-  // on screen to that file the next time it opens.
   React.useEffect(() => subscribeOpenchamberEvents((event) => {
     if (event.type !== 'file-open-request') return;
     const directory = event.directory ?? useDirectoryStore.getState().currentDirectory;
@@ -213,8 +224,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
       showFile();
       return;
     }
-    // A subagent can ask before its session reaches the global list, so a
-    // session the list does not know is read from the Host.
     const readSession = async (id: string) => useGlobalSessionsStore.getState().entityById.get(id)
       ?? (await canonicalClient.getSession(id).catch(() => null))?.session ?? null;
     void sessionLineage(sessionId, readSession).then((lineage) => {
@@ -249,11 +258,20 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     });
   }), [closeSurface, isTabletLayout, openFilesSurface, t]);
 
-  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean } | null = null) => {
-    setPendingChangesDiff(diff);
+  const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean; scope?: 'turn' } | null = null) => {
+    setChangesRequest(diff ? { diff } : null);
     setWorkspaceTab('changes');
     setWorkspaceOpen(true);
   }, []);
+
+  React.useEffect(() => connectMobileWorkspaceOpener((request) => {
+    useUIStore.getState().setOpenGuestPage(null);
+    if (request.tab === 'changes' && request.commit) {
+      setChangesRequest({ commit: { scope: 'commit', directory: request.commit.directory } });
+    }
+    setWorkspaceTab(request.tab);
+    setWorkspaceOpen(true);
+  }), []);
 
   const leftResize = useIpadSidebarResize('left', 'openchamber.ipad.leftSidebarWidth', IPAD_LEFT_SIDEBAR_WIDTH);
   const rightResize = useIpadSidebarResize(
@@ -271,9 +289,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
   const workspacePanelWidth = workspaceAsPanel && workspaceOpen ? rightResize.width : 0;
   const sidebarWidth = isTabletLayout && sidebarOpen ? leftResize.width : 0;
 
-  // Publish the chat column's insets so overlays portaled to <body> (model
-  // picker, directory picker, every MobileOverlayPanel) can center on the CHAT
-  // rather than on the window. Zero on phones, where the two are the same.
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
@@ -285,22 +300,8 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     };
   }, [sidebarWidth, workspacePanelWidth]);
 
-  // Wide chat layout: the shared chat columns key off this root class, but only
-  // the desktop App set it — so on a tablet, where the chat column is finally
-  // wide enough for the setting to mean something, it did nothing. Applied for
-  // every mobile surface; on a phone the viewport is narrower than even the
-  // normal clamp, so it is a no-op there.
-  React.useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const root = document.documentElement;
-    root.classList.toggle('wide-chat-layout', wideChatLayoutEnabled);
-    return () => root.classList.remove('wide-chat-layout');
-  }, [wideChatLayoutEnabled]);
+  useChatWidthAttribute();
 
-  // The draft screen keeps its starter chips while the keyboard is up when
-  // there is room for both: a tablet in portrait, or any tablet orientation
-  // with a hardware keyboard (then no software keyboard eats the screen at
-  // all). Landscape on the software keyboard still hides them — see mobile.css.
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
     const keep = isTabletLayout && (isPortrait || hasHardwareKeyboard);
@@ -311,20 +312,18 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
 
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
-      openChanges: ({ diffPath, staged } = {}) => {
-        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true } : null);
+      openChanges: ({ diffPath, staged, scope } = {}) => {
+        openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, scope } : null);
       },
       openFiles: () => openFilesSurface(),
-      openPlan: (plan) => setOpenPlan(plan),
+      openPlan: setOpenPlan,
+      openReceivedPage: setOpenReceivedPage,
       openSettings: () => openSettingsSurface('nav'),
       openSourceBoard: () => openSurface('board'),
     }),
     [openChangesSurface, openFilesSurface, openSettingsSurface, openSurface],
   );
 
-  // Expose the shell's panel-opening actions to the deep-link layer so ohpichamber:// URLs
-  // (and notification taps / widgets) can navigate to these surfaces. Session and
-  // new-session intents resolve directly against the store, so they aren't wired here.
   const deepLinkHandlers = React.useMemo(
     () => ({
       openSessions: () => {
@@ -336,7 +335,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
           openFilesSurface();
           return;
         }
-        // MCP lives in the Status tab now; old links to it land there.
         if (target === 'mcp') {
           setWorkspaceTab('status');
           setWorkspaceOpen(true);
@@ -356,8 +354,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
   );
   useDeepLinkHandlers(deepLinkHandlers);
 
-  // Edge swipes on the chat: left edge opens the sessions drawer (the
-  // persistent sidebar on a tablet), right edge the workspace drawer.
   const chatMainRef = React.useRef<HTMLElement>(null);
   useEdgeSwipe(chatMainRef, {
     onLeftEdgeSwipe: () => {
@@ -367,9 +363,8 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     onRightEdgeSwipe: () => setWorkspaceOpen(true),
   });
 
-  // Settings owns a drill-down of its own (nav → page list → item), so the
-  // hardware back button asks it to step up before the shell closes it.
   const settingsBackRef = React.useRef<(() => boolean) | null>(null);
+  const previewBackRef = React.useRef<(() => boolean) | null>(null);
   const registerSettingsBackHandler = React.useCallback((handler: (() => boolean) | null) => {
     settingsBackRef.current = handler;
   }, []);
@@ -378,17 +373,24 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     workspaceBackRef.current = handler;
   }, []);
 
-  // Top-most layer first: a plan or fullscreen surface can sit ABOVE a drawer
-  // (opened from the drawer footer / workspace tabs), so they close before the
-  // drawers underneath.
+  const registerPreviewBackHandler = React.useCallback((handler: (() => boolean) | null) => {
+    previewBackRef.current = handler;
+  }, []);
+
   const handleNativeBack = React.useCallback(() => {
-    // A sheet, dialog, select or menu open on top of everything goes first,
-    // so back inside a surface's editor does not close the whole surface.
     if (closeTopmostBackLayer()) {
+      return true;
+    }
+    if (openReceivedPage) {
+      setOpenReceivedPage(null);
       return true;
     }
     if (openPlan) {
       setOpenPlan(null);
+      return true;
+    }
+    if (guestPage) {
+      closeGuestPage();
       return true;
     }
     if (activeSurface === 'settings' && settingsBackRef.current?.()) {
@@ -408,13 +410,11 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
       return true;
     }
     return false;
-  }, [activeSurface, closeSurface, closeWorkspace, openPlan, sessionsSheetOpen, workspaceOpen]);
+  }, [activeSurface, closeGuestPage, closeSurface, closeWorkspace, guestPage, openPlan, openReceivedPage, sessionsSheetOpen, workspaceOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
 
-  // Mobile web has no back button event: the same ladder runs from the
-  // browser's Back, off a history guard held while a layer is open.
-  useMobileWebBackButton(handleNativeBack, Boolean(openPlan || activeSurface || workspaceOpen || sessionsSheetOpen));
+  useMobileWebBackButton(handleNativeBack, Boolean(openPlan || openReceivedPage || guestPage || activeSurface || workspaceOpen || sessionsSheetOpen));
 
   // Tablets pack the app-level pages (settings, instances, a plan) into a
   // centered dialog instead of covering the whole screen.
@@ -435,15 +435,12 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
     [openSettingsSurface, openSurface, showCapacitorOnlyFeatures],
   );
 
-  // A started run or a loop file to edit replaces the page: back to the chat,
-  // with the files drawer on top for a loop file.
   const leaveScheduledTasks = React.useCallback((reason: ScheduledTasksLeaveReason) => {
     closeSurface();
     setSessionsSheetOpen(false);
     if (reason === 'file') openFilesSurface();
   }, [closeSurface, openFilesSurface]);
 
-  // A session started from the board replaces the page: back to the chat.
   const leaveSourceBoard = React.useCallback(() => {
     closeSurface();
     setSessionsSheetOpen(false);
@@ -513,9 +510,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
                 <MobileSessionsSheet
                   open
                   variant="sidebar"
-                  // The surface asks to close after picking a session/project
-                  // or creating a worktree: give the space back to the chat
-                  // where the sidebar is a guest, keep it put where it is not.
                   onOpenChange={(value) => {
                     if (!value && !roomyForPanels) setSidebarOpen(false);
                   }}
@@ -523,8 +517,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
                 />
               </ErrorBoundary>
             </div>
-            {/* After the content, not before it: panes stack their own overlays
-                and the handle has to sit above every one of them. */}
             {sidebarOpen ? (
               <IpadSidebarResizeHandle
                 side="left"
@@ -553,9 +545,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
           </main>
         </div>
 
-        {/* Mounted permanently on phones (parked off-screen while closed) so
-            the sessions/worktree state stays warm and the drawer opens with
-            data already on screen — see MobileSessionsDrawerContainer. */}
         {!isTabletLayout ? (
           <MobileSessionsSheet
             open={sessionsSheetOpen}
@@ -564,10 +553,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
           />
         ) : null}
 
-        {/* Keep the workspace in the same tree position across size classes.
-            Keyboard resizing and folding can both cross the tablet threshold;
-            neither should discard the open editor, its draft, or its focus.
-            Outside panel mode the drawer portals out and this aside stays at 0. */}
         <aside
           ref={rightResize.asideRef}
           className={cn(
@@ -603,8 +588,11 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
                 registerBackHandler={registerWorkspaceBackHandler}
                 tab={workspaceTab}
                 onTabChange={setWorkspaceTab}
+                registerPreviewBackHandler={registerPreviewBackHandler}
                 pendingChangesDiff={pendingChangesDiff}
+                pendingChangesCommit={pendingChangesCommit}
                 onOpenPlan={setOpenPlan}
+                onOpenReceivedPage={setOpenReceivedPage}
                 variant={workspaceAsPanel ? 'panel' : 'drawer'}
                 reconnectBanner={workspaceCoversChat ? reconnectBanner : null}
               />
@@ -620,7 +608,6 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
           ) : null}
         </aside>
 
-        {/* Layered above the workspace drawer's Notes tab, which opened it. */}
         {openPlan ? (
           <MobileFullscreenSurface
             open
@@ -640,6 +627,51 @@ const MobileShell: React.FC<{ reconnecting: boolean; onActiveConnectionDeleted: 
             </ErrorBoundary>
           </MobileFullscreenSurface>
         ) : null}
+
+        {openReceivedPage ? (
+          <MobileFullscreenSurface
+            open
+            variant={surfaceVariant}
+            onClose={() => setOpenReceivedPage(null)}
+            ariaLabel={openReceivedPage.title}
+            title={openReceivedPage.title}
+          >
+            <ErrorBoundary>
+              <ReceivedPagePanel
+                receivedId={openReceivedPage.receivedId}
+                onAddedToChat={() => {
+                  flushSync(() => {
+                    setOpenReceivedPage(null);
+                    closeWorkspace();
+                  });
+                  const pill = document.querySelector<HTMLElement>('[data-composer-morph-prompt="true"]');
+                  if (pill) pill.click();
+                  else focusChatInput();
+                }}
+              />
+            </ErrorBoundary>
+          </MobileFullscreenSurface>
+        ) : null}
+
+        {guestPage ? (
+          <MobileFullscreenSurface
+            open
+            variant={surfaceVariant}
+            dialogAlign="app"
+            onClose={closeGuestPage}
+            ariaLabel={guestPage.pageTitle ?? guestPage.name}
+            title={guestPage.pageTitle ?? guestPage.name}
+            disableEscapeDismiss
+          >
+            <ErrorBoundary>
+              <React.Suspense fallback={null}>
+                <PluginPane key={guestPage.id} mode={pluginModeFromId(guestPage.id)} surface="page" />
+              </React.Suspense>
+            </ErrorBoundary>
+          </MobileFullscreenSurface>
+        ) : null}
+
+        <ErrorBoundary><GuestHosts /></ErrorBoundary>
 
         {activeSurface === 'instances' && showCapacitorOnlyFeatures ? (
           <MobileFullscreenSurface
@@ -780,17 +812,9 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   useAuthoritativeSessionCleanup({ hasAuthoritativeGlobalSessions, sessions: cleanupSessions });
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
   const [showConnectionRecovery, setShowConnectionRecovery] = React.useState(false);
-  // Cold-launch auto-connect to the last instance: 'pending'/'attempting' hold the
-  // splash so we don't flash the connect screen; 'done' means we either connected or
-  // exhausted the attempt (then the connect screen shows).
   const [autoConnectPhase, setAutoConnectPhase] = React.useState<'pending' | 'attempting' | 'done'>('pending');
-  // Why the cold-launch auto-connect fell through to the connect screen.
   const [autoConnectNotice, setAutoConnectNotice] = React.useState<MobileConnectionNotice | null>(null);
-  // The instance the splash says we are connecting to. Read once on mount —
-  // auto-connect targets the most-recent saved connection from the same list.
   const autoConnectLabel = React.useMemo(() => getAutoConnectTargetLabel(), []);
-  // Bumped to force a re-render after a same-device transport swap so the
-  // sync layer can reconnect without remounting.
   const [, bumpTransportSwitch] = React.useReducer((count: number) => count + 1, 0);
   const isNativeMobileApp = React.useMemo(() => isCapacitorMobileApp(), []);
   const eventStreamReconnecting = React.useSyncExternalStore(subscribeOpenchamberEventsConnection, isOpenchamberEventsReconnecting, () => false);
@@ -806,18 +830,12 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
       && getRuntimeKey() === runtimeKey && getRuntimeApiBaseUrl() === apiBaseUrl;
 
     if (!apiBaseUrl) {
-      // With no runtime selected, resume/online can retry the last saved instance.
       logMobileConnectEvent('resume:auto-connect', {});
       void autoConnectLastInstance();
       return;
     }
     logMobileConnectEvent('resume:reprobe', {});
 
-    // Re-probe the active device's transports on resume: the network may have
-    // changed while the app slept, so hot-switch LAN⇄relay if a better transport
-    // is now reachable — no re-pairing. A 'switched' outcome already fired the
-    // runtime-endpoint-changed subscription (which re-bootstraps the app), so we
-    // only refresh in place when the transport is 'unchanged'.
     const refreshInPlace = () => {
       retryOpenchamberEventsNow();
       void initializeApp();
@@ -869,7 +887,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
       lastNativeResumeSyncEventAtRef.current = now;
       window.dispatchEvent(new Event('openchamber:system-resume'));
     }
-  }, [apis.sourceControl, apis.trackers, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshSourceControlProviders]);
+  }, [apis.sourceControl, apis.trackers, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshSourceControlProviders, setConnectionEpoch]);
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);
@@ -909,18 +927,11 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     };
   }, [isNativeMobileApp, handleNativeResume]);
 
-  // A confirmed mid-session auth expiry (classified centrally from live 401
-  // traffic) runs the same seq-guarded re-probe the resume path uses: it ends
-  // in needs-login → the native welcome screen with the auth-expired notice.
-  // The shared web banner never renders on native (the session gate is not
-  // mounted here), so this is the only surface reacting to the signal.
   React.useEffect(() => {
     if (!isNativeMobileApp) return;
     return useAuthSessionStore.subscribe((store, previous) => {
       if (store.state === 'expired' && previous.state !== 'expired') {
         handleNativeResume();
-        // The probe ladder owns the outcome from here; the shared store goes
-        // back to 'ok' so a later expiry can signal again.
         useAuthSessionStore.getState().markAuthenticated();
       }
     });
@@ -931,32 +942,15 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     return () => registerRuntimeAPIs(null);
   }, [apis]);
 
-  // Switching instances (or disconnecting) only changes the runtime endpoint; the
-  // stores still hold the previous instance's data. Mirror the web App.tsx reset
-  // sequence so the UI fully re-bootstraps against the new server instead of going
-  // stale. The SyncProvider is keyed by runtimeEndpointEpoch so it remounts too.
   React.useEffect(() => {
     return subscribeRuntimeEndpointChanged((detail) => {
-      // Catch-all trail entry: EVERY endpoint change lands here regardless of
-      // which code path triggered it, so a "kicked to the connect screen"
-      // report always shows what dropped the runtime even when the trigger
-      // itself is not instrumented.
       logMobileConnectEvent('endpoint:changed', {
         runtimeKey: detail.runtimeKey || 'none',
         previousRuntimeKey: detail.previousRuntimeKey || 'none',
         connected: Boolean(detail.apiBaseUrl),
       });
-      // A LAN⇄relay swap for the SAME device keeps the runtime key stable. Treat
-      // that as a transport-only change: rebind the sync layer to the new
-      // transport but keep the user's session/connection state — no reconnecting
-      // screen, no bounce back to the draft. Only a real instance switch (key
-      // change) does the full reset.
       const sameDevice = Boolean(detail.runtimeKey) && detail.runtimeKey === detail.previousRuntimeKey;
       if (sameDevice) {
-        // Transport-only swap for the same device: reconnect the active sync
-        // transport and force a re-render without remounting, preserving the
-        // message pagination refs, open session, and whole view.
-        // No key bump, no flash, no bounce to the draft.
         reconnectAppForTransportSwitch();
         bumpTransportSwitch();
         return;
@@ -965,14 +959,8 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
       setRuntimeEndpointEpoch((epoch) => epoch + 1);
       setConnectionEpoch((epoch) => epoch + 1);
     });
-  }, []);
+  }, [setConnectionEpoch]);
 
-  // On cold launch, silently reconnect to the most-recent saved instance so a
-  // returning user — and notification deep-links — land in the app instead of the
-  // connect screen. The splash is held while we try (see render below). If there's
-  // no saved instance, it's unreachable, or it needs a (re)login, we fall through
-  // to the connect screen. A successful switchRuntimeEndpoint fires the endpoint-
-  // changed subscription above, which bumps the epochs and bootstraps the app.
   React.useEffect(() => {
     if (!isNativeMobileApp || isConnected || getRuntimeApiBaseUrl()) {
       setAutoConnectPhase('done');
@@ -993,14 +981,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
       } else if (outcome.status === 'needs-login') {
         setAutoConnectNotice({ kind: 'auth-expired', label: outcome.label });
       }
-      // Release the splash on the fast verdict — a dead server must not pin
-      // the logo for the full connect budget. The fast probe races a
-      // just-woken network/relay (WireGuard re-handshake, relay TLS + WS +
-      // E2EE cold start), so a false "unreachable" is common right after
-      // launch: retry once IN THE BACKGROUND with the full budget. A success
-      // switches the runtime and the app moves in from the connect screen on
-      // its own; a manual connect the user started meanwhile wins via
-      // skipIfConnected.
       setAutoConnectPhase('done');
       if (outcome.status === 'unreachable') {
         void autoConnectLastInstance({ fast: false, skipIfConnected: true }).catch(() => null);
@@ -1009,20 +989,10 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     return () => {
       cancelled = true;
     };
-    // Run once on mount — auto-connect is a cold-launch concern only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cold launch with a PERSISTED runtime endpoint (the auto-connect effect
-  // above skips this case): the app used to just sit on the recovery splash
-  // for 8s while bootstrap failed, then show a vague "unable to reach server"
-  // screen. Classify the failure with a fast re-probe instead: unreachable or
-  // rejected auth drops straight to the connect screen with a banner saying
-  // why; a switched/alive transport lets bootstrap proceed as usual.
   React.useEffect(() => {
-    // NOTE: do NOT gate on isConnected here — the persisted store can claim a
-    // stale `isConnected: true` at mount, which would skip the classification
-    // exactly when it's needed. Check it at resolution time instead.
     if (!isNativeMobileApp || !getRuntimeApiBaseUrl()) return;
     let cancelled = false;
     const dropToConnectScreen = (notice: MobileConnectionNotice | null) => {
@@ -1033,7 +1003,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     };
     void reprobeActiveConnection().then(async (outcome) => {
       if (cancelled) return;
-      // A genuinely live connection established itself while we probed.
       if (outcome === 'switched' || outcome === 'unchanged') return;
       const label = getAutoConnectTargetLabel();
       if (outcome === 'needs-login') {
@@ -1041,14 +1010,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
         return;
       }
       if (outcome === 'unreachable') {
-        // A fast probe racing the just-woken network/relay produces false
-        // "unreachable" verdicts (seen in the field: the same LAN candidate
-        // refuses on launch and answers 200 two minutes later). Show the
-        // connect screen on the fast verdict — no splash hostage — and retry
-        // once in the background with the full budget; a success reconnects
-        // the app from the connect screen on its own. A relay refusal over its
-        // limits gets no such retry: dialing again at once only counts against
-        // the same limits.
         dropToConnectScreen(label ? { kind: 'unreachable', label } : null);
         void autoConnectLastInstance({ fast: false, skipIfConnected: true }).catch(() => null);
         return;
@@ -1057,9 +1018,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
         dropToConnectScreen(label ? { kind: 'relay-limit', label } : null);
         return;
       }
-      // 'no-connection': at cold start the runtime key may not map to a saved
-      // connection yet — fall back to the auto-connect path, which both
-      // classifies the failure and connects when everything is actually fine.
       const fallback = await autoConnectLastInstance().catch((): AutoConnectOutcome => ({ status: 'no-candidate' }));
       if (cancelled || fallback.status === 'connected') return;
       if (fallback.status === 'needs-login') {
@@ -1075,9 +1033,7 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     return () => {
       cancelled = true;
     };
-    // Run once on mount — a cold-launch classification only; live drops are
-    // handled by the resume/online re-probe paths.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
@@ -1085,11 +1041,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   }, [setIsMobile]);
 
   React.useEffect(() => {
-    // Never bootstrap without a runtime endpoint on native: with apiBaseUrl ''
-    // the resolver falls back to the webview's own origin, where Capacitor's
-    // static server answers every request with index.html — the bootstrap
-    // "succeeds" against a fake backend and flips isConnected back on, leaving
-    // the user in an empty shell after a disconnect.
     if (isNativeMobileApp && !getRuntimeApiBaseUrl()) return;
     void initializeApp();
   }, [connectionEpoch, initializeApp, isNativeMobileApp]);
@@ -1123,34 +1074,27 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     void loadAgents(currentDirectory);
   }, [currentDirectory, isConnected, loadAgents, loadProviders, providersLoaded]);
 
-  // Cold-launch continuity: after the launch instance connects, reopen the
-  // session that was open on this instance last time — but only after an
-  // authoritative sessions snapshot confirms it still exists, and only if the
-  // user hasn't opened a session in the meantime. An open new-session draft
-  // does NOT block the restore: ChatContainer auto-opens the draft whenever no
-  // session is active, so at this point it reflects the boot default, not a
-  // user choice. Runs once per successful launch connect; in-app instance
-  // switches keep using the in-memory per-runtime session memory instead.
   const lastSessionRestoreDoneRef = React.useRef(false);
-  // While true, a logo overlay covers the shell so the user never sees the
-  // intermediate auto-opened draft before the restore decision lands.
   const [lastSessionRestorePending, setLastSessionRestorePending] = React.useState(isNativeMobileApp);
   React.useEffect(() => {
     if (!isNativeMobileApp || !isConnected || lastSessionRestoreDoneRef.current) return;
     let cancelled = false;
-    // Safety valve: the overlay must never strand the user on the splash if
-    // the snapshot hangs — fall through to the draft after a bounded wait.
     const overlayTimeoutId = window.setTimeout(() => setLastSessionRestorePending(false), 6000);
+    const attempt = beginLastSessionRestore({ selectNow: true, refresh: true });
+    const showSelectedSession = () => {
+      if (useSessionUIStore.getState().currentSessionId) setLastSessionRestorePending(false);
+    };
+    const stopWatchingSelection = useSessionUIStore.subscribe(showSelectedSession);
+    showSelectedSession();
     void (async () => {
-      const result = await restoreLastActiveSession({ refresh: true });
+      const result = await attempt();
       if (cancelled) return;
-      // A failed list read keeps the ref unset so the next connect (a stale
-      // persisted isConnected can fire this early) retries the restore.
       if (result !== 'failed') lastSessionRestoreDoneRef.current = true;
       setLastSessionRestorePending(false);
     })();
     return () => {
       cancelled = true;
+      stopWatchingSelection();
       window.clearTimeout(overlayTimeoutId);
     };
   }, [connectionEpoch, isConnected, isNativeMobileApp]);
@@ -1160,15 +1104,12 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     hostFilesystem.setDirectory(currentDirectory);
   }, [currentDirectory, isConnected]);
 
-  // Gated on isConnected (and re-run on reconnect/instance switch): probing the
-  // Source-control auth status before the runtime is reachable cached a "not connected"
-  // answer that stuck until something else forced a re-check.
   React.useEffect(() => {
     if (!isConnected) return;
     void refreshSourceControlProviders(apis.sourceControl);
     void refreshSourceControlAuth(apis.sourceControl, { force: true });
     void refreshTrackers(apis.trackers);
-  }, [apis.sourceControl, apis.trackers, isConnected, refreshSourceControlAuth, refreshSourceControlProviders]);
+  }, [apis.sourceControl, apis.trackers, isConnected, refreshSourceControlAuth, refreshSourceControlProviders, setConnectionEpoch]);
 
   // Discover all worktrees for every known project so the draft session's
   // worktree/branch dropdown can list every available branch — not only the
@@ -1248,17 +1189,11 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   }, [clearError, error]);
 
   React.useEffect(() => {
-    // Native: only while an instance is selected and reconnecting. Browser: the
-    // runtime is same-origin (no explicit base URL), so any not-connected spell
-    // counts — the splash holds until this fires, then the error screen shows.
     const waitingOnConnection = !isConnected && (isNativeMobileApp ? Boolean(getRuntimeApiBaseUrl()) : true);
     if (!waitingOnConnection) {
       setShowConnectionRecovery(false);
       return;
     }
-    // Native decides faster: the cold-start classification has usually already
-    // resolved by then, so this is the "server picked but bootstrap won't
-    // finish" fallback (e.g. older servers where auth can't be probed).
     const timeout = window.setTimeout(() => {
       setShowConnectionRecovery(true);
     }, isNativeMobileApp ? 4000 : 8000);
@@ -1278,11 +1213,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   }, [isInitialized]);
   React.useEffect(() => installServerStateBootEvents(), []);
   useRouter();
-  // APNs is the only notification channel on the native app (background-capable,
-  // focus-suppressed server-side via the visibility beacon). Local notifications are
-  // intentionally disabled — they can't tell foreground from background in a WKWebView
-  // (document.hasFocus() is unreliable) and leaked while the app was open; the in-app SSE
-  // notification dispatch is no-op'd for native in renderMobileApp.
   useNativePushRegistration({ enabled: isNativeMobileApp && isConnected });
   // Single native deep-link entry point: notification taps AND the ohpichamber:// URL
   // scheme (widgets, Live Activities, external links). Registered unconditionally so a
@@ -1291,13 +1221,9 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   useDeepLinkSource({ ready: isNativeMobileApp && isConnected && isInitialized, onPairing });
   const fontsReady = useFontsReady();
 
-  // Keep an existing shell mounted on bootstrap health failures. The Host
-  // control stream also detects live drops independently of bootstrap.
   const isReconnecting = !isConnected && connectionPhase === 'reconnecting';
   const showReconnectBanner = isNativeMobileApp && (isReconnecting || eventStreamReconnecting);
 
-  // Hold a logo splash until the UI web font is loaded, so the first UI the user sees
-  // already uses the real font instead of flashing the fallback and reflowing (FOUT).
   if (!fontsReady) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[var(--splash-background,var(--surface-background))] text-foreground">
@@ -1306,15 +1232,9 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
     );
   }
 
-  // No runtime endpoint on native = explicitly disconnected (last instance
-  // deleted, revoked token, unreachable). The connect screen is the only valid
-  // UI then — regardless of what a stale isConnected flag claims (the store can
-  // be poisoned by a bootstrap that ran against the webview's own origin).
   const hasRuntimeEndpoint = Boolean(getRuntimeApiBaseUrl());
 
   if (isNativeMobileApp && (!hasRuntimeEndpoint || (!isConnected && !isReconnecting))) {
-    // A runtime endpoint is already selected (first connect or switching instances):
-    // show a loader while it re-bootstraps instead of flashing the onboarding screen.
     if (hasRuntimeEndpoint) {
       return (
         <main className="flex min-h-dvh items-center justify-center bg-[var(--splash-background,var(--surface-background))] px-6 text-center text-foreground">
@@ -1344,15 +1264,10 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
         </main>
       );
     }
-    // Cold-launch auto-connect is still resolving — hold the splash instead of
-    // flashing the connect screen. Only show the connect screen once we've finished
-    // (no saved instance, unreachable, or needs re-login).
     if (autoConnectPhase !== 'done') {
       return (
         <main className="relative flex min-h-dvh items-center justify-center bg-[var(--splash-background,var(--surface-background))] text-foreground">
           <OpenChamberLogo width={120} height={120} isAnimated variant="splash" />
-          {/* Absolutely positioned below the (still perfectly centered) logo so
-              the text never pushes it up. 50% + half the 120px logo + a gap. */}
           {autoConnectLabel ? (
             <div className="absolute inset-x-0 top-[calc(50%+84px)] flex flex-col items-center gap-0.5 px-6 text-center">
               <p className="text-muted-foreground">{t('mobile.connect.splash.connectingTo')}</p>
@@ -1376,9 +1291,6 @@ function MobileAppContent({ apis, connectionEpoch, setConnectionEpoch, onPairing
   }
 
   if (!isConnected && !isReconnecting) {
-    // Browser: the initial connect takes a beat — hold the logo splash instead
-    // of flashing the unreachable-server error while it resolves. The error
-    // only shows once the recovery delay has expired (genuinely unreachable).
     if (!showConnectionRecovery) {
       return (
         <main className="flex min-h-dvh items-center justify-center bg-[var(--splash-background,var(--surface-background))] text-foreground">

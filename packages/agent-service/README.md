@@ -8,6 +8,10 @@ Application execution is not activated by this package's presence. Task 22 compo
 
 Build with `bun run build`. The built entrypoint is `dist/index.js`, with its worker at `dist/worker/index.js`. The service starts only under the Host supervisor; an IPC-less start exits with code 1 without listening.
 
+The build also emits declarations for the private Host authorization protocol.
+The `private-protocol` package export resolves types from `dist`, so the Host's
+TypeScript program consumes declarations without compiling Agent Service sources.
+
 The Host generates a 256-bit token and answers the service's private spawn-IPC request with it; the service accepts only a 64-hex value and gives up after 10 seconds. The token never appears in the environment, arguments, URLs or logs. Every request requires `X-Internal-Secret` and a loopback peer. The listener binds only `127.0.0.1`; stdout publishes one `{ "type": "agent-service.listening", "port": ... }` line for endpoint discovery, not readiness. After that handshake an IPC `disconnect` stops the service beside SIGTERM/SIGINT, so a hard-killed Host does not leave the detached service and its unrelated workers running.
 
 `GET /api/agent/v1/ready` returns `{ "ready": true, "engine": "omp", "version": "1.0.0" }` only after a dedicated worker initializes the real SDK public factory, disposes its session and exits successfully. The probe owns an ephemeral profile and workspace, removed after it exits. IPC stop is followed immediately by the normal process-tree termination attempt. On Windows only, when that attempt fails and the readiness worker is still live, the probe allows up to one second for a cooperative exit before the direct SIGTERM fallback. On Windows the readiness stop also snapshots the worker's descendants (Toolhelp process snapshot with PID and creation time) before the IPC stop, then force-terminates each snapshot process whose identity is still live once the worker has stopped; an inspection failure, an unreadable identity or a surviving descendant fails readiness. A signalled or nonzero exit still fails readiness. Other worker stops are unchanged. Startup is bounded to 15 seconds; orderly stop gets 5 seconds before forced termination.
@@ -88,11 +92,13 @@ Always-allow resolves OMP's native `allow_always` handle in the worker's per-ses
 
 ## Private Host Action RPC bridge
 
-Builtin Host tools (`openchamber`, `web`, `memory`, `notify`) are registered in the worker via `createHostToolExtension`:
+Builtin Host tools are registered in the worker via `createHostToolExtension`:
 - `openchamber`: project and model discovery, session management (`list`, `create`, `send`, `fork`, `status`, `messages`, `link`), schedule tasks, and `file.open`.
 - `web`: browser navigation, page inspection, screenshot capture, clicking, typing, and scrolling. Browser credentials remain with the Host.
-- `memory`: session memory read, list, save, and delete.
+- `openchamber_knowledge`: project notes, todos and plans.
 - `notify`: notification delivery.
+- `openchamber_render`: HTML or native UI pages, including awaited user answers. Its tool description carries the generated built-in UI-block catalog guidance from `src/worker/ui-blocks-guidance.ts`; regenerate with `bun run --cwd packages/ui ui-blocks:generate`. The worker imports no renderer or UI catalog package. Disabled tools do not deliver their descriptions.
+- `openchamber_workflow`: Host workflow proposals, execution and observation.
 
 `WorkerHostActions` dispatches these requests across private child IPC (`action.request`, `action.result`, `action.cancel`). The Host executes the action through `invokeHostAction` within the captured workspace root. AbortSignal cancellation dispatches `action.cancel`, aborting pending Host execution.
 

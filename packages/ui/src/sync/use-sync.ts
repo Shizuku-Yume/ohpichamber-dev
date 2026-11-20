@@ -1,3 +1,4 @@
+import { buildSessionMessageRecordsSnapshot } from './sync-context';
 import { useCallback, useMemo } from "react"
 import type { Message } from "@openchamber/agent-contract"
 import { getRuntimeKey } from "@/lib/runtime-switch"
@@ -94,6 +95,16 @@ export function usePrefetchSessionMessages() {
     if (getRuntimeKey() !== runtimeKey) return
     await messageLoader.prefetch({ directory, sessionId })
   }, [messageLoader, runtimeKey])
+}
+
+export function useLoadedSessionMessageRecords(): (target: { directory: string; sessionID: string }) => Message[] | null {
+  const { childStores, runtimeKey } = useSyncRuntime()
+
+  return useCallback(({ directory, sessionID }: { directory: string; sessionID: string }) => {
+    if (getRuntimeKey() !== runtimeKey) return null
+    const store = childStores.getChild(directory)
+    return store ? buildSessionMessageRecordsSnapshot(store.getState(), sessionID).list : null
+  }, [childStores, runtimeKey])
 }
 
 export function useSessionMessageRecordsForExport() {

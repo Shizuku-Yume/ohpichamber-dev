@@ -1,14 +1,3 @@
-// Streaming hold: only a still-growing GFM table row.
-//
-// OMP holds exactly one thing back while a reply streams: the last line, when
-// it is an unfinished table row. A renderer sizes table columns by every row it
-// receives, so a half-streamed row (an unclosed link shows its whole URL) would
-// rewrap the table on each frame. Everything else — a paragraph, a list item, an
-// open code fence — only appends, so it renders as it arrives and the reader
-// sees the first token immediately.
-//
-// The hold keeps the newline before the held line, so the result is a prefix of
-// the input and of the result for every append: streaming stays append-only.
 
 // A line holding an unescaped `|`: a GFM table line needs no outer pipes.
 const PIPE_IN_LINE_AT = /[^\n]*?(?<!\\)\|/y;

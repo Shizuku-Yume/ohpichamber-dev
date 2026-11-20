@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitStatus } from '@/lib/api/types';
@@ -38,7 +38,12 @@ const STATUS: GitStatus = { current: 'feature-17', tracking: null, ahead: 0, beh
 // B-1: the binding route answers 422 for a folder outside a repository, so the
 // Changes view must not ask it there. It opens on the shared not-a-repository
 // state (Git's own probe is the only git call it makes).
-test('a non-repository directory asks no repository binding', async () => {
+for (const scenario of [
+  { name: 'a non-repository directory asks no repository binding', scope: 'working', sessionId: null, intent: false, failedStatus: false },
+  { name: 'Last turn without a session is unsupported, not an empty diff', scope: 'turn', sessionId: null, intent: false, failedStatus: false },
+  { name: 'Last turn consumes a file intent without falling back to Changed', scope: 'turn', sessionId: 'ses_unsupported', intent: true, failedStatus: false },
+  { name: 'Last turn remains unsupported when Git status fails', scope: 'turn', sessionId: 'ses_unsupported', intent: false, failedStatus: true },
+] as const) test(scenario.name, async () => {
   const dom = new Window({ url: 'http://localhost' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   const globals = {
@@ -59,6 +64,9 @@ test('a non-repository directory asks no repository binding', async () => {
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
     paths.push(url.pathname);
+    if (scenario.failedStatus && (url.pathname === '/api/git/projects' || url.pathname === '/api/git/status')) {
+      return new Response('Git status unavailable', { status: 500 });
+    }
     if (url.pathname === '/api/git/projects') {
       return Response.json({ projects: [{ directory: '/chats', isGitRepository: false, status: null }] });
     }
@@ -73,19 +81,39 @@ test('a non-repository directory asks no repository binding', async () => {
   const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
   const { createWebAPIs } = await import('../../../../web/src/api/index');
   const { DiffView } = await import('./DiffView');
+  const { useSessionUIStore } = await import('@/sync/session-ui-store');
+  const { useUIStore } = await import('@/stores/useUIStore');
+  const initialSessionUI = useSessionUIStore.getState();
+  const initialUI = useUIStore.getState();
+  useSessionUIStore.setState({ currentSessionId: scenario.sessionId, currentSessionDirectory: '/chats' });
+  useUIStore.setState({ pendingTurnDiffFile: scenario.intent ? { sessionId: scenario.sessionId, file: '/chats/file.txt' } : null });
+  const scopeChanges: string[] = [];
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
   try {
     await act(async () => {
       root.render(<SyncProvider client={client} directory="/chats"><I18nProvider><RuntimeAPIContext.Provider value={createWebAPIs()}>
-        <DiffView directory="/chats" diffScope="working" />
+        <DiffView directory="/chats" diffScope={scenario.scope} onDiffScopeChange={(scope) => scopeChanges.push(scope)} />
       </RuntimeAPIContext.Provider></I18nProvider></SyncProvider>);
     });
     for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     expect(paths).not.toContain('/api/source-control/binding');
+    if (scenario.scope === 'turn') {
+      const unsupported = container.querySelector('[data-diff-unsupported="turn"]');
+      expect(unsupported?.textContent).toContain('Last turn');
+      expect(unsupported?.textContent).toContain('Not available in this app.');
+      expect(unsupported?.querySelector('button')).toBeNull();
+      expect(container.textContent).not.toContain('No changes in the last turn');
+      expect(container.querySelector('.animate-spin')).toBeNull();
+      expect(paths.filter((path) => /\/(?:session|sessions)\/.*\/diff$/.test(path))).toEqual([]);
+      expect(scopeChanges).not.toContain('working');
+      expect(useUIStore.getState().pendingTurnDiffFile).toBeNull();
+    }
   } finally {
     await act(async () => root.unmount());
+    useSessionUIStore.setState(initialSessionUI);
+    useUIStore.setState(initialUI);
     globalThis.fetch = originalFetch;
     await dom.happyDOM.abort();
     for (const [name, value] of originals) {

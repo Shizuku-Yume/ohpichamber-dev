@@ -27,8 +27,6 @@ type InitRecoveryDescriptionKey =
   | 'startup.initRecovery.loadAgentsFailed'
   | 'startup.initRecovery.unexpected';
 
-// Only a network failure asks the user to check the server; every other
-// failure names what went wrong so a live server is not blamed.
 export const getInitRecoveryDescriptionKey = (
   diagnostics: StartupDiagnostics | null,
   failure: InitFailure | null,

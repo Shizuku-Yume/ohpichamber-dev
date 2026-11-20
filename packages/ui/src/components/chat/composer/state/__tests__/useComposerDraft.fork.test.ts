@@ -7,6 +7,7 @@ import { clearChatDraft, readChatDraft, writeChatDraft, type ChatDraftIdentity }
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { useInputStore } from '@/sync/input-store';
 import { useComposerDraft } from '../useComposerDraft';
+import { createComposerText } from '../composerText';
 
 const source: ChatDraftIdentity = { runtimeKey: 'runtime-a', directory: '/repo', sessionId: 'source' };
 const fork: ChatDraftIdentity = { ...source, sessionId: 'fork' };
@@ -28,16 +29,16 @@ function renderComposer(persistEnabled: boolean) {
     const result = { text: '', mentions: new Set<string>(), restored };
 
     function Probe({ identity }: { identity: ChatDraftIdentity }) {
-        const [message, setMessage] = React.useState('source draft @source.ts');
-        const messageRef = React.useRef(message);
+        const [text] = React.useState(() => createComposerText('source draft @source.ts'));
+        const [, setRevision] = React.useState(0);
+        const setMessage = React.useCallback((next: string) => { text.set(next); setRevision((value) => value + 1); }, [text]);
         const confirmedMentionsRef = React.useRef(new Set(['source.ts']));
-        React.useEffect(() => { messageRef.current = message; }, [message]);
         useComposerDraft({
-            message, messageRef, setMessage, confirmedMentionsRef, identity, persistEnabled,
+            text, setMessage, confirmedMentionsRef, identity, persistEnabled,
             initialDraft: { text: '', identity: source },
             onDraftRestored: (reason) => { result.restored.push(reason); },
         });
-        result.text = message;
+        result.text = text.get();
         result.mentions = confirmedMentionsRef.current;
         return null;
     }
@@ -86,7 +87,8 @@ describe('fork composer restoration', () => {
                 expect(useInputStore.getState().pendingComposerRestore).not.toBeNull();
 
                 composer.render(fork);
-                expect(composer.result.text).toBe('replay prompt');
+                // Each restored file gets its chip: a send takes only the files its text cites.
+                expect(composer.result.text).toBe('replay prompt [replay.txt]');
                 expect(composer.result.mentions.size).toBe(0);
                 expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(['replay.txt']);
                 expect(useInputStore.getState().pendingComposerRestore).toBeNull();
@@ -97,7 +99,7 @@ describe('fork composer restoration', () => {
                 composer.render(source);
                 expect(composer.result.text).toBe('source draft @source.ts');
                 expect(useInputStore.getState().attachedFiles).toBe(sourceFiles);
-                expect(readChatDraft(fork).text).toBe(persistEnabled ? 'replay prompt' : '');
+                expect(readChatDraft(fork).text).toBe(persistEnabled ? 'replay prompt [replay.txt]' : '');
             } finally {
                 composer.teardown();
             }
@@ -151,7 +153,7 @@ describe('fork composer restoration', () => {
                 useInputStore.setState({ pendingComposerRestore: { target: fork, text: '', files: [replayFile] } });
             });
             composer.render(fork);
-            expect(composer.result.text).toBe('');
+            expect(composer.result.text).toBe('[replay.txt]');
             expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(['replay.txt']);
             act(() => {
                 useInputStore.setState({ pendingComposerRestore: { target: fork, text: '', files: [] } });
@@ -176,7 +178,7 @@ describe('attachment draft ownership', () => {
                 const sourceFiles = useInputStore.getState().attachedFiles;
                 for (const identity of [
                     fork,
-                    { ...source, directory: '/other' },
+                    { ...source, sessionId: 'other', directory: '/other' },
                     { ...source, runtimeKey: 'runtime-b' },
                     { ...source, sessionId: null },
                     { ...source, sessionId: 'btw-pending:source' },

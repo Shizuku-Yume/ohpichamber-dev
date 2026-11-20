@@ -78,6 +78,24 @@ describe('getRuntimeKey caching', () => {
     expect(getRuntimeKey()).toBe('local');
   });
 
+  test('a legacy VS Code flag cannot activate the transient default key', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'vscode-webview://panel' } },
+    });
+    expect(getRuntimeKey()).toBe('url:default');
+    expect(isTransientRuntimeKey('url:default')).toBe(true);
+
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'vscode-webview://panel' }, __VSCODE_CONFIG__: { panelType: 'chat' } },
+    });
+    expect(getRuntimeKey()).toBe('url:default');
+    expect(isTransientRuntimeKey('url:default')).toBe(true);
+    expect(isTransientRuntimeKey('mobile-disconnected')).toBe(true);
+    expect(isTransientRuntimeKey('')).toBe(true);
+  });
+
   test('initializes a hosted HTTP page without an injected API base', () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

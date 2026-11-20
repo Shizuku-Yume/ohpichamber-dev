@@ -4,25 +4,25 @@ import { devtools } from 'zustand/middleware';
 import { getDeferredSafeStorage, getSafeStorage } from './utils/safeStorage';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { folderScopeKeepsMovedSession } from '@/lib/sessionFolders/folderScopes';
 import type { LoadPhase } from './loadPhase';
 import {
   applyFolderChange,
   applyFolderChanges,
   collectFolderSubtree,
+  chatPlacement,
   folderChangeSchema,
   folderSnapshotSchema,
   type FolderChange,
   type FolderSnapshot,
 } from '@/lib/sessionFolders/folderChanges';
 
-// --- Types ---
 
 export interface SessionFolder {
   id: string;
   name: string;
   sessionIds: string[];
   createdAt: number;
-  /** If set, this folder is a sub-folder of the parent folder with this id */
   parentId?: string | null;
 }
 
@@ -40,7 +40,6 @@ interface SessionFoldersState {
 
 interface SessionFoldersActions {
   getFoldersForScope: (scopeKey: string) => SessionFolder[];
-  /** `id` fixes the folder's id, so every client creating the same folder makes one. */
   createFolder: (scopeKey: string, name: string, parentId?: string | null, id?: string) => SessionFolder;
   renameFolder: (scopeKey: string, folderId: string, name: string) => void;
   deleteFolder: (scopeKey: string, folderId: string) => void;
@@ -49,7 +48,7 @@ interface SessionFoldersActions {
   removeSessionFromFolder: (scopeKey: string, sessionId: string) => void;
   removeSessionEverywhere: (runtimeKey: string, sessionId: string) => void;
   removeSessionsFromFolders: (scopeKey: string, sessionIds: string[]) => void;
-  /** Drop every folder of these scopes, for a project that was closed. */
+  followSessionMove: (sessionId: string, destination: string, destinationWorktree: string | null) => void;
   forgetScopes: (scopeKeys: string[]) => void;
   toggleFolderCollapse: (folderId: string) => void;
   getSessionFolderId: (scopeKey: string, sessionId: string) => string | null;
@@ -58,7 +57,6 @@ interface SessionFoldersActions {
 
 type SessionFoldersStore = SessionFoldersState & SessionFoldersActions;
 
-// --- Storage ---
 
 // This device's copy of the server's folders, shown at once on the next start
 // and while the server cannot be reached. The server's copy replaces it.
@@ -338,30 +336,24 @@ export const createSessionFoldersStore = (runtime: SessionFoldersRuntime) => {
     return `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   };
 
-  /** Collapse marks of folders that no longer exist, dropped; null when none was. */
-  const pruneCollapsed = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): Set<string> | null => {
-    if (collapsedFolderIds.size === 0) return null;
-    const known = new Set(Object.values(foldersMap).flatMap((folders) => folders.map((folder) => folder.id)));
-    let next: Set<string> | null = null;
-    for (const folderId of collapsedFolderIds) {
-      if (known.has(folderId)) continue;
-      next ??= new Set(collapsedFolderIds);
-      next.delete(folderId);
-    }
-    return next;
-  };
+const pruneCollapsed = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): Set<string> | null => {
+  if (collapsedFolderIds.size === 0) return null;
+  const known = new Set(Object.values(foldersMap).flatMap((folders) => folders.map((folder) => folder.id)));
+  let next: Set<string> | null = null;
+  for (const folderId of collapsedFolderIds) {
+    if (known.has(folderId)) continue;
+    next ??= new Set(collapsedFolderIds);
+    next.delete(folderId);
+  }
+  return next;
+};
 
-  // --- Server sync ---
-  //
-  // The server stores the folders and is the authority; this copy is the
-  // server's last answer with this device's not-yet-stored changes laid over it.
 
-  /** The server's answer, or why there is none. `legacy` is a server from before shared folders. */
-  type ServerResult =
-    | { kind: 'snapshot'; snapshot: FolderSnapshot }
-    | { kind: 'legacy' }
-    | { kind: 'rejected' }
-    | { kind: 'failed' };
+type ServerResult =
+  | { kind: 'snapshot'; snapshot: FolderSnapshot }
+  | { kind: 'legacy' }
+  | { kind: 'rejected' }
+  | { kind: 'failed' };
 
   const readServerResult = async (request: Promise<Response>): Promise<ServerResult> => {
     const response = await request.catch(() => null);
@@ -739,6 +731,15 @@ export const createSessionFoldersStore = (runtime: SessionFoldersRuntime) => {
           removeSessionEverywhere: (runtimeKey: string, sessionId: string): void => {
             if (!runtimeKey || runtimeKey !== activeFolderRuntimeKey || runtimeKey !== runtime.runtimeKey() || !sessionId) return;
             commit({ type: 'forget-sessions', sessionIds: [sessionId] });
+          },
+
+          followSessionMove: (sessionId: string, destination: string, destinationWorktree: string | null): void => {
+            if (!sessionId || !destination) return;
+            for (const [scopeKey, folders] of Object.entries(get().foldersMap)) {
+              if (!folders.some((folder) => folder.sessionIds.includes(sessionId))) continue;
+              if (folderScopeKeepsMovedSession(scopeKey, destination, destinationWorktree)) continue;
+              commit({ type: 'unassign', scopeKey, sessionIds: [sessionId], from: chatPlacement(folders, [sessionId]) });
+            }
           },
 
           forgetScopes: (scopeKeys: string[]): void => {

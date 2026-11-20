@@ -1,7 +1,6 @@
 import type { Part } from '@openchamber/agent-contract';
 import { extractTerminalContexts } from './terminalContext';
 
-/** Preserve both the source and the reply when a model context needs a limit. */
 export function excerptMarkdown(text: string, limit: number): string {
   if (text.length <= limit) return text;
   const marker = '\n\n[Content omitted]\n\n';

@@ -1,12 +1,8 @@
+
 import { create } from 'zustand';
 
 export type ChatSettingsTab = 'messages' | 'composer' | 'assistance';
 
-/**
- * The tab the Settings Chat page shows. It lives outside the page so a
- * Settings search result can open the tab that holds its target before the
- * page highlights it, and so leaving the page and coming back keeps the tab.
- */
 export const useChatSettingsTabStore = create<{
   tab: ChatSettingsTab;
   setTab: (tab: ChatSettingsTab) => void;
@@ -23,7 +19,7 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.changed-files', 'messages'],
   ['chat.streaming-auto-follow', 'messages'],
   ['chat.message-appearance', 'messages'],
-  ['chat.wide-layout', 'messages'],
+  ['chat.width', 'messages'],
   ['chat.prompt-navigator', 'messages'],
   ['chat.collapsible-user-messages', 'messages'],
   ['chat.sticky-user-header', 'messages'],
@@ -46,7 +42,9 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.message-search-reasoning', 'messages'],
   ['chat.composer', 'composer'],
   ['chat.enter-to-send', 'composer'],
+  ['chat.mobile-return-key-sends', 'composer'],
   ['chat.follow-up-behavior', 'composer'],
+  ['chat.questions-placement', 'composer'],
   ['chat.large-text-paste', 'composer'],
   ['chat.subagent-read-only-banner', 'composer'],
   ['chat.spellcheck', 'composer'],
@@ -83,3 +81,6 @@ export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | nu
   }
   return null;
 };
+
+export const chatSettingsTabAnchors = (tab: ChatSettingsTab): string[] =>
+  [...SEARCH_TARGET_TABS].filter(([, owner]) => owner === tab).map(([id]) => id);

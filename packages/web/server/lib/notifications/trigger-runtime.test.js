@@ -32,6 +32,20 @@ const approval = (sequence, type = 'approval.requested') => event(sequence, { ty
     ...(type.endsWith('resolved') ? { resolvedAt: 2, resolution: { decision: 'approve' } } : {}) } });
 
 describe('canonical notification triggers', () => {
+  it('wires persistent tags into native badge counts and clears restored session notifications', async () => {
+    let saved = { version: 1, tags: [] };
+    const store = { read: async () => saved, write: async (state) => { saved = structuredClone(state); } };
+    const first = fixture({}, { openPushTagsStore: store });
+    await first.runtime.processCanonicalEvent(terminal(), scope);
+    expect(saved.tags).toHaveLength(1);
+    const clearApnsNotifications = vi.fn(async () => {});
+    const restored = fixture({}, { openPushTagsStore: store, clearApnsNotifications });
+    await restored.runtime.clearSessionPushNotifications('session');
+    expect(clearApnsNotifications).toHaveBeenCalledWith({ tags: ['ready-session'], badge: 0 });
+    expect(saved.tags).toEqual([]);
+    await restored.runtime.clearSessionPushNotifications('session');
+    expect(clearApnsNotifications).toHaveBeenCalledTimes(1);
+  });
   it('announces only an outer run completion, not a cancelled run or historical records', async () => {
     const f = fixture();
     await f.runtime.processCanonicalEvent(event(1, { type: 'run.cancelled', runId: 'run', finishedAt: 2 }), scope);

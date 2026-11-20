@@ -21,7 +21,6 @@ interface UpdateDialogProps {
   info: UpdateInfo | null;
   downloading: boolean;
   downloaded: boolean;
-  /** Desktop install is being applied — the restart is already in flight */
   installing?: boolean;
   progress: UpdateProgress | null;
   error: string | null;
@@ -141,8 +140,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-5 border-[var(--interactive-border)]" showCloseButton={true}>
-
-        {/* Header Section */}
+        
         <div className="flex items-center mb-1">
           <DialogTitle className="flex items-center gap-2.5">
             <Icon name="download-cloud" className="h-5 w-5 text-[var(--primary-base)]" />
@@ -151,7 +149,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             </span>
           </DialogTitle>
 
-          {/* Version Diff */}
           {(info?.currentVersion || info?.version) && (
             <div className="flex items-center gap-2 font-mono text-sm ms-3">
               {info?.currentVersion && (
@@ -167,12 +164,10 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           )}
         </div>
 
-        {/* Content Body */}
         <div className="space-y-2">
 
-          {/* Changelog Rendering */}
           {changelog && (
-            <div className="rounded-lg border border-border bg-surface-elevated/20 overflow-hidden">
+              <div className="rounded-lg border border-border bg-surface-elevated/20 overflow-hidden">
               <ScrollableOverlay
                 className="max-h-[400px] p-0"
                 fillContainer={false}
@@ -228,7 +223,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             </div>
           )}
 
-          {/* Desktop progress bar */}
           {downloading && (
             <div className="space-y-2 mt-4">
               <div className="flex items-center justify-between text-sm">
@@ -251,7 +245,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           )}
         </div>
 
-        {/* Action Footer */}
         <div className="mt-4 flex items-center justify-between gap-4">
           <a
             href={releaseUrl}

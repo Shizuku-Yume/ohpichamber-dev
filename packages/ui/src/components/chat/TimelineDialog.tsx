@@ -31,8 +31,6 @@ interface TimelineDialogProps {
     onLoadEarlier?: () => void;
 }
 
-// Locale-keyed formatters: constructing an Intl formatter is far more
-// expensive than formatting with one, and every row formats two timestamps.
 const dateGroupFormatters = new Map<string, Intl.DateTimeFormat>();
 const messageTimeFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -55,13 +53,6 @@ const formatDateGroup = (timestamp: number): string =>
 const formatMessageTime = (timestamp: number): string =>
     getFormatter(messageTimeFormatters, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
 
-/**
- * The dialog shell stays mounted with the chat. Everything that reads the
- * session's messages lives in `TimelineDialogBody`, which the dialog popup
- * mounts only while open or animating closed, so a closed timeline does no
- * work while a reply streams. The search query lives here so reopening the
- * dialog keeps it.
- */
 export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     open,
     onOpenChange,
@@ -121,14 +112,12 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
     const pendingLoadAnchorRef = React.useRef<{ messageId: string; top: number } | null>(null);
     const preservingLoadPositionRef = React.useRef(false);
 
-    // Timeline actions are only valid for user messages.
     const userMessages = React.useMemo(() => {
         return messages
             .filter((message) => message.role === 'user')
             .map((message) => ({ message }));
     }, [messages]);
 
-    // Filter by search query using all text parts in each user message.
     const filteredMessages = React.useMemo(() => {
         const trimmedQuery = searchQuery.trim();
         if (!trimmedQuery) return userMessages;
@@ -140,8 +129,6 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
         });
     }, [userMessages, searchQuery]);
 
-    // The body mounts on open, so start on the row the reset below would pick;
-    // starting at 0 would scroll the first row into view after the open scroll.
     const [selectedIndex, setSelectedIndex] = React.useState(() => (
         searchQuery.trim() ? 0 : Math.max(0, filteredMessages.length - 1)
     ));
@@ -176,8 +163,6 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
         preservingLoadPositionRef.current = false;
     }, [filteredMessages.length, isLoadingEarlier]);
 
-    // Opening the dialog mounts the body: start at the latest message unless
-    // a search query is active.
     const openedWithQueryRef = React.useRef(searchQuery.trim() !== '');
     React.useLayoutEffect(() => {
         const container = listRef.current;
@@ -262,7 +247,6 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
         }
     }, [filteredMessages, navigateToMessage, selectedIndex]);
 
-    // Handle fork with loading state and session refresh
     const handleFork = async (messageId: string) => {
         setForkingMessageId(messageId);
         try {

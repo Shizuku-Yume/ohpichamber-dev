@@ -1,15 +1,3 @@
-/**
- * Small, non-React state machine for dictation streaming.
- *
- * Responsibilities:
- * - Maintain an ordered buffer of base64 PCM segments
- * - Start/restart a dictation stream (dictationId)
- * - Send missing segments (seq) when connected
- * - Finish/cancel the stream
- *
- * Segments are retained until the dictation completes, which enables replay
- * after a connection drop (`resetStreamForReplay()` + `finish()`).
- */
 
 import type { DictationClient, DictationStartOptions } from './dictation-client';
 
@@ -33,7 +21,7 @@ export class DictationStreamSender {
     private readonly client: DictationClient;
     private readonly format: string;
     private readonly createDictationId: () => string;
-    private getStartOptions: () => DictationStartOptions;
+    private getStartOptions: () => DictationStartOptions | Promise<DictationStartOptions>;
 
     private dictationId: string | null = null;
     private sendSeq = 0;
@@ -47,7 +35,7 @@ export class DictationStreamSender {
 
     constructor(params: {
         client: DictationClient;
-        getStartOptions: () => DictationStartOptions;
+        getStartOptions: () => DictationStartOptions | Promise<DictationStartOptions>;
         format?: string;
         createDictationId?: () => string;
     }) {
@@ -141,7 +129,9 @@ export class DictationStreamSender {
         this.streamReady = false;
 
         const start = (async () => {
-            await this.client.startDictationStream(dictationId, this.format, this.getStartOptions());
+            const options = await this.getStartOptions();
+            if (this.startGeneration !== generation || this.dictationId !== dictationId) return;
+            await this.client.startDictationStream(dictationId, this.format, options);
             if (this.startGeneration !== generation) {
                 return;
             }
@@ -152,7 +142,6 @@ export class DictationStreamSender {
             this.flush();
         })()
             .catch((error) => {
-                // Keep segments for retry, but clear the stream so finish can error cleanly.
                 if (this.startGeneration === generation && this.dictationId === dictationId) {
                     this.dictationId = null;
                     this.streamReady = false;

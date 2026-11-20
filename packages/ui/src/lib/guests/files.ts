@@ -15,7 +15,6 @@ import {
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-/** Body of `POST /api/guests/:id/files`. One request per host message type. */
 export type GuestFileRequest =
   | { op: 'read'; path: string }
   | { op: 'write'; path: string; content: string }
@@ -72,11 +71,6 @@ const parseGuestFileResponse = async (response: Response): Promise<GuestFileProx
   return { ok: true, result: parsed.data.result };
 };
 
-/**
- * Runs one guest file operation on the server. `directory` is the open
- * project; relative paths resolve against it, so it travels as the
- * `directory` query.
- */
 export const guestFileOperation = async (
   guestId: string,
   request: GuestFileRequest,

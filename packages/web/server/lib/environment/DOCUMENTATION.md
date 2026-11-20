@@ -65,7 +65,7 @@ token, PATH entries it needs) are applied after the user's variables and win.
   five minutes is used by the next user action while a fresh run happens in
   the background. Editing the project's settings drops what was kept, and a
   run that started before the edit is not kept.
-- `refresh-scope.js`: the AsyncLocalStorage flag behind `runAsUserAction` /
+- `refresh-scope.ts`: the AsyncLocalStorage flag behind `runAsUserAction` /
   `isUserAction`, so the Git service needs no extra argument between route
   and spawn.
 - **The command is personal.** It is read only from `environment.json`, never

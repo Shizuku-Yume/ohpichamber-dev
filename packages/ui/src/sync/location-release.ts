@@ -31,7 +31,6 @@ type LocationReleaseDeps<T> = {
 }
 
 export type LocationRelease = {
-  /** The user moved from `previous` to `next`. */
   directoryChanged: (previous: string | null | undefined, next: string | null | undefined) => void
   dispose: () => void
 }
@@ -58,8 +57,6 @@ export function createLocationRelease<T>(deps: LocationReleaseDeps<T>): Location
     if (disposed || deps.isCurrentDirectory(directory)) return
     const use = deps.directoryUse(directory)
     if (use === "unknown") return
-    // Work still running, or waiting on the user, is looked at again later:
-    // it usually finishes while the user is elsewhere.
     if (use === "busy") {
       schedule(directory, delayMs)
       return
@@ -85,11 +82,6 @@ export function createLocationRelease<T>(deps: LocationReleaseDeps<T>): Location
   }
 }
 
-/**
- * Whether anything in `directory` still needs its location: active native
- * execution, a pending approval/question, or a background command.
- * `state` is the directory's store; without one the answer is unknown.
- */
 export function directoryUse(
   directory: string,
   state: Pick<State, "session_status" | "permission" | "form"> | undefined,
@@ -114,7 +106,6 @@ export function directoryUse(
   return shellRuns ? "busy" : "free"
 }
 
-/** Whether `directory` is a known worktree of a project, not the project root itself. */
 export function isWorktreeDirectory(
   directory: string,
   availableWorktreesByProject: ReadonlyMap<string, readonly WorktreeMetadata[]>,

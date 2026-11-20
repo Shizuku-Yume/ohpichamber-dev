@@ -36,15 +36,6 @@ import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from 
 import { getWebSearchProviderName } from './websearchProviderName';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 
-/**
- * Settings → Web search: which native search provider the agent uses, the
- * fallback chain, the request timeout, and the write-only credential each
- * provider takes. Configuration belongs to the selected agent directory; the
- * worker is authoritative and every write is applied with a revision CAS.
- *
- * The page opens on the mode (default, off) and a card per provider; a card
- * opens the provider, where its key is added and it is chosen for search.
- */
 
 /** OMP's native `providers.webSearchTimeoutSeconds` default, used by the reset action. */
 const DEFAULT_TIMEOUT_SECONDS = 60;
@@ -396,7 +387,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
       titleLeading={<SettingsBackButton label={t('settings.webSearch.detail.back')} onClick={onBack} />}
       showSaveStatus
     >
-      <SettingsSection divider={false}>
+      <SettingsSection>
         <div className="space-y-2">
           {useLine ? <p className="typography-meta text-foreground">{useLine}</p> : null}
           {provider.configured && !inUse ? (
@@ -480,15 +471,6 @@ export const WebSearchPage: React.FC = () => {
   const load = useWebSearchStore((store) => store.load);
   const [openId, setOpenId] = React.useState<string | null>(null);
 
-  // The boot registry read the snapshot; this only re-reads when the page is
-  // opened for another project or runtime (the snapshot is scoped to both).
-  //
-  // The dependency is the scope string and the state's KIND, never the state
-  // object: `load()` publishes a fresh `{ kind: 'loading' }` on every call, so
-  // depending on the object re-ran this effect for its own write and the page
-  // resolved the workspace thousands of times without ever reading the
-  // snapshot. A kind that is already loading or failed is left alone; the
-  // store's own retry button owns the failed case.
   const scope = getWebSearchScopeKey();
   const stateKind = state.kind;
   // A read is only "already running" for the scope it started in. A scope

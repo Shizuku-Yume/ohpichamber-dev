@@ -54,7 +54,6 @@ const ClassificationCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   const { t } = useI18n();
   const available = useRoutingStore((state) => state.available);
   const jevAvailable = useRoutingStore((state) => state.jevAvailable);
-  // Off is a choice, not a problem to fix, so it gets no warning.
   const off = useRoutingStore((state) => state.classifier?.selected === 'off');
   if (!available) return null;
   return (
@@ -83,12 +82,7 @@ const EnvironmentPill: React.FC<{ environment: ProviderEnvironmentStatus | null 
   return <SettingsCardPill tone="neutral">{label}</SettingsCardPill>;
 };
 
-/**
- * The card's badges: its state, plus the environment source whenever a
- * variable backs the provider. Both show while a stored key wins, because the
- * key being used and the variable still being set are separate facts.
- */
-const StatusPills: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
+const StatusPill: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
   const { t } = useI18n();
   if (status.kind === 'environment') {
     return <EnvironmentPill environment={status.environment} />;
@@ -132,18 +126,15 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
 }) => {
   const { t } = useI18n();
   const [query, setQuery] = React.useState('');
-  // Alphabetical by name, so a card is found by scanning rather than in the
-  // order the providers happened to be configured.
+  const modelCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const model of models) counts.set(model.provider, (counts.get(model.provider) ?? 0) + 1);
+    return counts;
+  }, [models]);
   const alphabetical = React.useMemo(() => [...providers].sort((a, b) =>
     (a.name || a.providerId).localeCompare(b.name || b.providerId, undefined, { sensitivity: 'base' })), [providers]);
   const filtered = rankByQuery(alphabetical, query, (provider) => [provider.name || provider.providerId, provider.providerId]);
   const hasQuery = query.trim().length > 0;
-  const modelCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const model of models) counts[model.provider] = (counts[model.provider] ?? 0) + 1;
-    return counts;
-  }, [models]);
-  // The Host refuses new providers and credentials; this only keeps the way in hidden.
   const locked = useEnterpriseMode();
 
   return (
@@ -174,7 +165,6 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
       ) : null}
 
       <div className={SETTINGS_CARD_GRID_CLASS}>
-        {/* The one way in to connecting a provider, so it leads the grid. */}
         {hasQuery || locked ? null : (
           <SettingsAddCard
             label={t('settings.providers.grid.connect')}
@@ -186,7 +176,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
         {hasQuery ? null : <ClassificationCard onOpen={onOpenClassification} />}
         {filtered.map((provider) => {
           const status = getProviderCardStatus(provider);
-          const count = modelCounts[provider.providerId] ?? 0;
+          const count = modelCounts.get(provider.providerId) ?? 0;
           // An environment-backed credential can still be outranked by a key
           // saved here, so those cards offer the key form directly. Enterprise
           // mode refuses credential writes, so the way in stays hidden.
@@ -197,7 +187,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
               key={provider.providerId}
               icon={<ProviderLogo providerId={provider.providerId} className="size-5" />}
               title={name}
-              badges={status ? <StatusPills status={status} /> : null}
+              badges={status ? <StatusPill status={status} /> : null}
               footer={(
                 <span
                   className="inline-flex items-center gap-1"

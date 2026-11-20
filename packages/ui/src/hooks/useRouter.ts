@@ -25,18 +25,6 @@ export const takeHeldContextSurface = (
  return mode;
 };
 
-/**
- * Hook that provides bidirectional URL routing for OpenChamber.
- *
- * On mount:
- * - Parses URL parameters and applies them to app state
- * - Sets up subscriptions to sync state changes back to URL
- * - Listens for browser back/forward navigation
- *
- * Works in:
- * - Web: Full bidirectional sync
- * - Desktop: Full bidirectional sync
- */
 export function useRouter(): void {
  // Track initialization to avoid duplicate applies
  const initializedRef = React.useRef(false);

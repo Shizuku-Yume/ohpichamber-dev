@@ -1,21 +1,23 @@
+import { memoizeSessionListProjection } from '@/stores/sessionListProjection';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { readMultiRunIdentity } from './runs';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAllLiveSessions } from '@/sync/sync-context';
-import { buildMultiRunIndex, readMultiRunIdentity, type MultiRunIndex, type MultiRunSummary } from './runs';
+import { buildMultiRunIndex, readMultiRunIdentityWith, type MultiRunIndex, type MultiRunSummary } from './runs';
 
 export type MultiRunSessions = {
   index: MultiRunIndex;
   sessionById: ReadonlyMap<string, Session>;
 };
 
-const resolveLegacyScope = (session: Session): string => session.projectId;
+const resolveLegacyScope = (session: Session): string => (
+  useSessionUIStore.getState().worktreeMetadata.get(session.sessionId)?.projectDirectory
+    ?? resolveGlobalSessionDirectory(session)
+    ?? session.workspaceId
+);
 
-/**
- * Runs across every project, from the global session cache overlaid with the
- * live per-directory records (fresher metadata and timestamps). Surfaces that
- * are not the sidebar (overview, tabs, mobile sheet, auto-fusion) share this.
- */
 export function useMultiRunSessions(): MultiRunSessions {
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const liveSessions = useAllLiveSessions();
@@ -29,43 +31,51 @@ export function useMultiRunSessions(): MultiRunSessions {
 
 const isActiveRoot = (session: Session): boolean => !session.archivedAt && !session.parentSessionId;
 
-/**
- * Title of a run, read straight from the global session cache. A primitive
- * result keeps always-mounted chrome (the header) from re-rendering on
- * unrelated session updates; with no run key it does no work.
- */
 export function useMultiRunTitle(runKey: string | null): string | null {
-  return useGlobalSessionsStore(React.useCallback((state) => {
-    if (!runKey) return null;
-    let title: string | null = null;
-    let members = 0;
-    for (const session of state.activeSessions) {
-      if (!isActiveRoot(session)) continue;
-      const identity = readMultiRunIdentity(session, resolveLegacyScope(session));
-      if (identity?.key !== runKey) continue;
-      members += 1;
-      title = identity.title ?? title ?? identity.groupSlug;
-    }
-    return members >= 2 ? title : null;
-  }, [runKey]));
+  const selectTitle = React.useMemo(() => {
+    const title = memoizeSessionListProjection((
+      sessions: Session[],
+      key: string,
+      _worktrees: ReturnType<typeof useSessionUIStore.getState>['worktreeMetadata'],
+    ) => {
+      let found: string | null = null;
+      let members = 0;
+      for (const session of sessions) {
+        if (!isActiveRoot(session)) continue;
+        const identity = readMultiRunIdentityWith(session, resolveLegacyScope);
+        if (identity?.key !== key) continue;
+        members += 1;
+        found = identity.title ?? found ?? identity.groupSlug;
+      }
+      return members >= 2 ? found : null;
+    });
+    return (state: ReturnType<typeof useGlobalSessionsStore.getState>): string | null => (
+      runKey ? title(state.activeSessions, runKey, useSessionUIStore.getState().worktreeMetadata) : null
+    );
+  }, [runKey]);
+  return useGlobalSessionsStore(selectTitle);
 }
 
-/**
- * Ids of every active member of the run `sessionId` belongs to, or an empty
- * list. Joined into one string inside the selector so the caller re-renders
- * only when membership changes.
- */
 export function useMultiRunMemberIds(sessionId: string | null): readonly string[] {
-  const joined = useGlobalSessionsStore(React.useCallback((state) => {
-    if (!sessionId) return '';
-    const own = state.activeSessions.find((session) => session.sessionId === sessionId);
-    const key = own && isActiveRoot(own) ? readMultiRunIdentity(own, resolveLegacyScope(own))?.key : undefined;
-    if (!key) return '';
-    const ids = state.activeSessions
-      .filter((session) => isActiveRoot(session) && readMultiRunIdentity(session, resolveLegacyScope(session))?.key === key)
-      .map((session) => session.sessionId);
-    return ids.length >= 2 ? ids.join('\n') : '';
-  }, [sessionId]));
+  const selectJoined = React.useMemo(() => {
+    const project = memoizeSessionListProjection((
+      sessions: Session[],
+      targetId: string,
+      _worktrees: ReturnType<typeof useSessionUIStore.getState>['worktreeMetadata'],
+    ) => {
+      const own = sessions.find((session) => session.sessionId === targetId);
+      const key = own && isActiveRoot(own) ? readMultiRunIdentity(own, resolveLegacyScope(own))?.key : undefined;
+      if (!key) return '';
+      const ids = sessions
+        .filter((session) => isActiveRoot(session) && readMultiRunIdentity(session, resolveLegacyScope(session))?.key === key)
+        .map((session) => session.sessionId);
+      return ids.length >= 2 ? ids.join('\n') : '';
+    });
+    return (state: ReturnType<typeof useGlobalSessionsStore.getState>) => sessionId
+      ? project(state.activeSessions, sessionId, useSessionUIStore.getState().worktreeMetadata)
+      : '';
+  }, [sessionId]);
+  const joined = useGlobalSessionsStore(selectJoined);
   return React.useMemo(() => (joined ? joined.split('\n') : []), [joined]);
 }
 

@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { createTranscriptCorrector, isPlausibleCorrection } from './transcript-correction.js';
 
 describe('createTranscriptCorrector', () => {
+  it('preserves an opaque workspace identity exactly', async () => {
+    const calls = [];
+    const correct = createTranscriptCorrector({ generate: async (args) => {
+      calls.push(args);
+      return { text: 'hello world' };
+    } });
+    await correct('hello word', { workspaceId: ' workspace ' });
+    expect(calls[0].workspaceId).toBe(' workspace ');
+  });
   it('returns the model text and tells it the language', async () => {
     const calls = [];
     const correct = createTranscriptCorrector({
@@ -11,7 +20,8 @@ describe('createTranscriptCorrector', () => {
         return { text: ' Який їхав, такий і здибав. ' };
       },
     });
-    expect(await correct('Який їхав, таку з дибав', { language: 'uk' })).toBe('Який їхав, такий і здибав.');
+    expect(await correct('Який їхав, таку з дибав', { language: 'uk', workspaceId: 'workspace' })).toBe('Який їхав, такий і здибав.');
+    expect(calls[0].workspaceId).toBe('workspace');
     expect(calls[0].prompt).toContain('"uk"');
     expect(calls[0].prompt).toContain('таку з дибав');
     expect(calls[0].onOverflow).toBe('error');
@@ -19,12 +29,12 @@ describe('createTranscriptCorrector', () => {
 
   it('keeps the original when the model fails or answers instead of fixing', async () => {
     const failing = createTranscriptCorrector({ generate: async () => { throw new Error('no small model'); } });
-    expect(await failing('hello there')).toBe('hello there');
+    expect(await failing('hello there', { workspaceId: 'workspace' })).toBe('hello there');
 
     const chatty = createTranscriptCorrector({
       generate: async () => ({ text: 'Sure! Here is the corrected version of your dictated text: hello there' }),
     });
-    expect(await chatty('hello there')).toBe('hello there');
+    expect(await chatty('hello there', { workspaceId: 'workspace' })).toBe('hello there');
   });
 
   it('returns the original when the whole pass outlives its deadline', async () => {
@@ -36,15 +46,24 @@ describe('createTranscriptCorrector', () => {
         return new Promise(() => {});
       },
     });
-    expect(await correct('hello there')).toBe('hello there');
+    expect(await correct('hello there', { workspaceId: 'workspace' })).toBe('hello there');
     expect(signal.aborted).toBe(true);
   });
 
   it('skips the model for empty text', async () => {
     let called = false;
     const correct = createTranscriptCorrector({ generate: async () => { called = true; return { text: 'x' }; } });
-    expect(await correct('  ')).toBe('  ');
+    expect(await correct('  ', { workspaceId: 'workspace' })).toBe('  ');
     expect(called).toBe(false);
+  });
+
+  it('keeps speech and never calls the model without an authorized workspace identity', async () => {
+    const calls = [];
+    const correct = createTranscriptCorrector({ generate: async (args) => { calls.push(args); return { text: 'Hello there.' }; } });
+    for (const workspaceId of [undefined, null, '', '  ', 42]) {
+      expect(await correct('hello there', { workspaceId })).toBe('hello there');
+    }
+    expect(calls).toHaveLength(0);
   });
 });
 

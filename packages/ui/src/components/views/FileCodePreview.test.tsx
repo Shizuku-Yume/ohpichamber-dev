@@ -1,9 +1,9 @@
 import { afterAll, afterEach, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { Window } from 'happy-dom';
 import { preloadHighlighter, type FileContents } from '@pierre/diffs';
 import { getDefaultTheme } from '@/lib/theme/themes';
-import { getThemeRenderName } from '@/lib/shiki/appThemeRegistry';
+import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getFilePreviewTheme, useFilePreviewDescriptor } from './filePreview';
 
 const browser = new Window();
@@ -118,10 +118,10 @@ test('preview requests the registered theme names, including edits under the sam
   const light = getDefaultTheme(false);
   const dark = getDefaultTheme(true);
   const theme = getFilePreviewTheme(light, dark);
-  expect(theme).toEqual({ light: getThemeRenderName(light), dark: getThemeRenderName(dark) });
+  expect(theme).toEqual({ light: ensurePierreThemeRegistered(light), dark: ensurePierreThemeRegistered(dark) });
   expect(theme.light).not.toBe(light.metadata.id);
   expect(theme.dark).not.toBe(dark.metadata.id);
   const edited = { ...light, colors: { ...light.colors, syntax: { ...light.colors.syntax, base: { ...light.colors.syntax.base, background: '#123456' } } } };
-  expect(getFilePreviewTheme(edited, dark)).toEqual({ light: getThemeRenderName(edited), dark: theme.dark });
+  expect(getFilePreviewTheme(edited, dark)).toEqual({ light: ensurePierreThemeRegistered(edited), dark: theme.dark });
   expect(getFilePreviewTheme(edited, dark).light).not.toBe(theme.light);
 });

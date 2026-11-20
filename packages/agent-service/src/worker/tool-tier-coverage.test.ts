@@ -12,7 +12,7 @@ import {
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { __resetDirsFromEnvForTests } from '@oh-my-pi/pi-utils';
 import { NativeOperationDescriptorSchema, type NativeOperationDescriptor, type NativeToolTier } from '../native-policy-protocol.ts';
-import { createProjectDirectoryRuntime } from '../../../web/server/lib/host/project-directory-runtime.js';
+import { createProjectDirectoryRuntime } from '../../../web/server/lib/projects/project-directory-runtime.ts';
 import { createWorkerOperationAuthorizer } from '../../../web/server/lib/host/worker-operation-authorizer.js';
 import { describeNativeOperation } from './native-policy-descriptor.ts';
 import { WorkerSession } from './session.ts';

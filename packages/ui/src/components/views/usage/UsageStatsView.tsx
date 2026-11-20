@@ -37,10 +37,8 @@ import {
 } from './usageStatsModel';
 import { selectUsageStatsEntry, selectUsageToolsEntry, useTodayRollover, useUsageStatsStore, type UsageToolsEntry } from './usageStatsStore';
 
-/** Select value for the unfiltered report; project values are OpenChamber project ids. */
 const ALL_PROJECTS = '__all__';
 
-/** One bar color per token segment; the order matches `tokenSegments`. */
 const TOKEN_SEGMENT_CLASSES = {
   input: 'bg-chart-1',
   output: 'bg-chart-2',
@@ -63,19 +61,12 @@ const RANGE_LABEL_KEYS = {
   all: 'usageStats.range.all',
 } as const satisfies Record<UsageRange, I18nKey>;
 
-/**
- * The cached report for the chosen range and project (by directory). A key
- * with nothing cached loads on first view; a cached key never refetches on
- * its own, except Today once the local day changes. See `usageStatsStore.ts`.
- */
 function useUsageStats(range: UsageRange, projectDirectory: string | null) {
   const selectedProvider = useUsageStatsStore((store) => store.selectedProvider);
   const request = React.useMemo(() => ({ range, projectDirectory, providerId: selectedProvider ?? undefined }), [range, projectDirectory, selectedProvider]);
   const entry = useUsageStatsStore((store) => selectUsageStatsEntry(store, request));
   const load = useUsageStatsStore((store) => store.load);
 
-  // `entry` in the deps re-runs this after a runtime reset empties the cache.
-  // A layout effect, so an expired Today report is gone before the first paint.
   React.useLayoutEffect(() => {
     void load(request);
   }, [load, request, entry]);
@@ -85,8 +76,6 @@ function useUsageStats(range: UsageRange, projectDirectory: string | null) {
 
   const refresh = React.useCallback(() => void load(request, { force: true }), [load, request]);
 
-  // Tool calls load on request; once asked for, every report shown in this
-  // app session fetches its own, including a cached one switched back to.
   const toolsEntry = useUsageStatsStore((store) => selectUsageToolsEntry(store, request));
   const toolsRequested = useUsageStatsStore((store) => store.toolsRequested);
   const loadTools = useUsageStatsStore((store) => store.loadTools);
@@ -113,12 +102,10 @@ export function UsageStatsView({ className }: { className?: string }): React.Rea
  */
 export function UsageStatsReport(): React.ReactNode {
   const { t } = useI18n();
-  // Read during render: a locale change re-renders through useI18n.
   const intlLocale = getCurrentIntlLocale();
   const projects = useProjectsInSidebarOrder(useProjectsStore((store) => store.projects));
   const [range, setRange] = React.useState<UsageRange>('30d');
   const [projectChoice, setProjectChoice] = React.useState<string>(ALL_PROJECTS);
-  // A project removed from the list while chosen falls back to all projects.
   const selectedProject = projects.find((project) => project.id === projectChoice) ?? null;
   const { entry, refresh, tools } = useUsageStats(range, selectedProject?.path ?? null);
   const timeFormatPreference = useUIStore((store) => store.timeFormatPreference);
@@ -226,7 +213,6 @@ export function UsageStatsReport(): React.ReactNode {
   );
 }
 
-/** Time alone for a read made today, date and time otherwise. */
 function formatUpdatedAt(timestamp: number, preference: TimeFormatPreference): string {
   if (isSameLocalDay(timestamp, Date.now())) return formatTimeForPreference(timestamp, preference);
   return formatDateTimeForPreference(timestamp, preference, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -261,8 +247,6 @@ function PartialUsageNotice({ errors }: { errors?: Record<string, string> }): Re
 function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; range: UsageRange; formats: Formats; tools: ToolsState }): React.ReactNode {
   const { t } = useI18n();
   const cache = stats.tokens.cacheRead + stats.tokens.cacheWrite;
-  // A one-day report makes the daily chart a single bar and leaves active days
-  // and the streak at 0 or 1, so today shows the totals without them.
   const today = range === '1d';
 
   const isScopeFullyUnpriced = React.useMemo(() => {
@@ -348,7 +332,6 @@ function Section({
 }: {
   title: string;
   caption?: string;
-  /** Controls rendered on the title row, such as the model comparison toggle. */
   actions?: React.ReactNode;
   children: React.ReactNode;
 }): React.ReactNode {
@@ -371,7 +354,6 @@ const parseDay = (key: string): Date => {
 function ActivityChart({ stats, formats }: { stats: UsageStats; formats: Formats }): React.ReactNode {
   const { t } = useI18n();
   const series = React.useMemo(() => buildActivitySeries(stats), [stats]);
-  // Bar under the pointer or the keyboard cursor; null shows no tooltip.
   const [active, setActive] = React.useState<number | null>(null);
   const weekly = series.unit === 'week';
   const title = t(weekly ? 'usageStats.activity.titleWeekly' : 'usageStats.activity.titleDaily');
@@ -400,8 +382,6 @@ function ActivityChart({ stats, formats }: { stats: UsageStats; formats: Formats
 
   return (
     <Section title={title} caption={t(weekly ? 'usageStats.activity.captionWeekly' : 'usageStats.activity.captionDaily')}>
-      {/* Time runs left to right in the chart in every language; its tooltip
-          and arrow keys measure from the left. */}
       <div dir="ltr" className="rounded-lg border border-edge bg-[var(--surface-elevated)] px-3 pb-2 pt-3">
         <div
           className="relative flex h-32 items-end gap-px rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
@@ -453,7 +433,6 @@ function ActivityChart({ stats, formats }: { stats: UsageStats; formats: Formats
   );
 }
 
-/** Whole-range token split as one stacked bar with a per-segment legend. */
 function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Formats }): React.ReactNode {
   const { t } = useI18n();
   const segments = tokenSegments(stats.tokens);
@@ -491,9 +470,6 @@ function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Form
   );
 }
 
-/** Averages that need the whole report: cache reuse, cost of a session, how
- * much of the output the model spent reasoning, and the report's latency,
- * speed and error rate. Rendered for every report, not only comparisons. */
 function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStats; formats: Formats; isFullyUnpriced?: boolean }): React.ReactNode {
   const { t } = useI18n();
   const hitRate = cacheHitRate(stats.tokens);
@@ -537,7 +513,6 @@ function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStat
   );
 }
 
-/** Median tool-call duration in the locale's short units: 340 ms, 2.4 s, 1 min 5 s. */
 function formatDuration(ms: number, formats: Formats): string {
   if (ms < 1000) return formats.milliseconds.format(Math.round(ms));
   const seconds = ms / 1000;
@@ -545,11 +520,6 @@ function formatDuration(ms: number, formats: Formats): string {
   return `${formats.minutes.format(Math.floor(seconds / 60))} ${formats.wholeSeconds.format(Math.round(seconds % 60))}`;
 }
 
-/**
- * Tool-call totals and per-tool rows, loaded on request (see
- * `usageStatsStore.ts`). A failed read shows the error with a retry and never
- * reads as zero calls.
- */
 function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats }): React.ReactNode {
   const { t } = useI18n();
   const tools = state.entry?.tools ?? null;
@@ -577,7 +547,6 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
       </Section>
     );
   }
-  // Asked for and answered: zero calls is a real result, shown as such.
   const successRate = toolSuccessRate(tools.totals);
   // Canonical detail rows are sorted by calls; keep the page light past a toolbox.
   const rows = tools.usage.filter((tool) => tool.calls > 0).slice(0, 8);
@@ -614,7 +583,6 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
                     : t('usageStats.tools.rowStatsNoDuration', { count: formats.integer.format(tool.calls) })}
                 </span>
               </div>
-              {/* Succeeded and failed sit on the grey track; the gap is unfinished work. */}
               <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-edge" aria-hidden="true">
                 {tool.succeeded > 0 ? (
                   <div className="h-full bg-status-success" style={{ width: `${(tool.succeeded / tool.calls) * 100}%` }} />
@@ -631,7 +599,6 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
   );
 }
 
-/** Bar length basis for the model comparison: token volume, spend, or work done. */
 type ModelDimension = 'tokens' | 'cost' | 'steps';
 
 const MODEL_DIMENSIONS: readonly ModelDimension[] = ['tokens', 'cost', 'steps'];
@@ -651,7 +618,6 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
     (dimension === 'tokens' ? model.tokens.total : dimension === 'cost' ? model.cost : model.steps),
     [dimension],
   );
-  // Ranked by the compared value, so the chart reads top (busiest) to bottom.
   const ranked = React.useMemo(() => [...models].sort((a, b) => valueOf(b) - valueOf(a)), [models, valueOf]);
   const max = ranked.reduce((peak, model) => Math.max(peak, valueOf(model)), 0);
 
@@ -686,7 +652,6 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
                   <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate" title={`${providerName} · ${formatModelRef(model)}`}>
                     <span className="truncate typography-ui-label text-foreground">{name}</span>
                     {model.variant ? <span className="shrink-0 typography-micro text-muted-foreground">{model.variant}</span> : null}
-                    {/* Phones keep the row for the model name; the logo names the provider there. */}
                     <span className="hidden shrink-0 typography-micro text-muted-foreground @xl:inline">{providerName}</span>
                   </span>
                   <span className="shrink-0 typography-micro tabular-nums text-muted-foreground">
@@ -695,8 +660,6 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
                       : `${formats.compact.format(model.tokens.total)} · ${costLabel}`}
                   </span>
                 </div>
-                {/* Track width is the leader's value in the compared dimension. Tokens
-                 * split that further by token kind; cost and steps stay one color. */}
                 <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-edge" aria-hidden="true">
                   {dimension === 'tokens' ? (
                     <div className="flex h-full" style={{ width: `${share}%` }}>

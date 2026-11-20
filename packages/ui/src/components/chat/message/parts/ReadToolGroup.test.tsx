@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { I18nProvider } from '@/lib/i18n';
 import { ReadToolGroup, type ReadToolGroupItem } from './ReadToolGroup';

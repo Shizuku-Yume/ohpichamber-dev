@@ -1,3 +1,6 @@
+import { normalizeProjectPath } from '@/lib/projectResolution';
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
+
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { CanonicalEvent, RuntimeSession, Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import {
@@ -71,11 +74,6 @@ export const replaceGlobalSessionStatusById = (statusById: Map<string, GlobalSes
 type SessionStatusTransitionListener = (sessionId: string, activeSessionIds: ReadonlySet<string>) => void;
 const transitionListeners = new Set<SessionStatusTransitionListener>();
 
-/**
- * Runs synchronously for each status event, before the batch is published, so a
- * listener can react to a busy-and-idle pair that lands in the same payload.
- * The active-ID set is a draft valid only during the callback.
- */
 export const subscribeSessionStatusTransitions = (listener: SessionStatusTransitionListener): (() => void) => {
   transitionListeners.add(listener);
   return () => { transitionListeners.delete(listener); };
@@ -83,7 +81,11 @@ export const subscribeSessionStatusTransitions = (listener: SessionStatusTransit
 
 type SessionParentResolver = (sessionId: string) => string | undefined;
 let resolveSessionParentId: SessionParentResolver = () => undefined;
-export const setSessionParentResolver = (resolver: SessionParentResolver): void => { resolveSessionParentId = resolver; };
+
+export const setSessionParentResolver = (resolver: SessionParentResolver): void => {
+  resolveSessionParentId = resolver;
+};
+
 const MAX_SUBAGENT_DEPTH = 8;
 const forEachAncestorId = (sessionId: string, visit: (ancestorId: string) => void): void => {
   let current = resolveSessionParentId(sessionId);
@@ -302,3 +304,20 @@ export const useFirstSessionWithOpenTurn = (sessionIds: readonly string[]): stri
   return inTurn ?? inWorkflow ?? onShell ?? onPullRequest;
 };
 
+const statusWriteWatchers = new Set<Set<string>>();
+
+export const watchGlobalSessionStatusWrites = () => {
+  const touched = new Set<string>();
+  statusWriteWatchers.add(touched);
+  return { touched, stop: () => { statusWriteWatchers.delete(touched); } };
+};
+
+export const getDirectoryOwnedSessionIds = (directory: string, sessions: readonly Session[]): string[] => {
+  const scope = normalizeProjectPath(directory);
+  if (!scope) return [];
+  const ids: string[] = [];
+  for (const session of sessions) {
+    if (normalizeProjectPath(resolveGlobalSessionDirectory(session)) === scope) ids.push(session.sessionId);
+  }
+  return ids;
+};

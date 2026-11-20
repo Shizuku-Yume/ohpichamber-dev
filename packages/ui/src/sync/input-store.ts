@@ -1,17 +1,13 @@
-/**
- * Input Store — pending input text, synthetic parts, and attached files.
- * Extracted from session-ui-store for subscription isolation.
- */
 
 import { create } from "zustand"
 import type { AttachIssueRequest } from 'ohpichamber-sdk'
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import type { InlineCommentDraftTarget } from "@/stores/useInlineCommentDraftStore"
-import { prepareAttachmentFiles } from "./attachment-files"
+import { HeicConversionError, prepareAttachmentFiles } from "./attachment-files";
 import { getChatDraftIdentityKey, subscribeChatDraftDeletion, type ChatDraftIdentity } from "@/lib/chatDraftPersistence"
 import { pathForDroppedFile } from "@/lib/desktop"
-import { attachmentBasename } from "@/lib/attachmentIdentity"
+import { attachmentBasename } from "@/lib/attachmentIdentity";
 import { formatFileSize } from "@/lib/fileSize"
 import { formatMessage, useI18nStore } from "@/lib/i18n/store"
 
@@ -129,10 +125,8 @@ type PendingBtwComposerRequest = {
 }
 
 export type ComposerAddress = {
- /** Inline-comment draft slot the composer reads and writes. */
- inline: InlineCommentDraftTarget | null
- /** Attachment slot: the composer's own draft identity. */
- attachments: ChatDraftIdentity | null
+  inline: InlineCommentDraftTarget | null
+  attachments: ChatDraftIdentity | null
 }
 
 type InputState = {
@@ -187,7 +181,7 @@ type InputState = {
  setPendingSyntheticParts: (parts: SyntheticContextPart[] | null, target?: string | null) => void
  consumePendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
  getPendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
- addAttachedFile: (file: File, target?: ChatDraftIdentity | null) => Promise<boolean>
+ addAttachedFile: (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void) => Promise<boolean>
  removeAttachedFile: (id: string) => void
  setAttachedFiles: (files: AttachedFile[], target?: ChatDraftIdentity | null) => void
  clearAttachedFiles: (target?: ChatDraftIdentity | null) => void
@@ -334,13 +328,14 @@ export const useInputStore = create<InputState>()((set, get) => ({
   target === null ? get().pendingSyntheticParts : get().pinnedSyntheticParts.get(target) ?? null
  ),
 
- addAttachedFile: async (file: File, target?: ChatDraftIdentity | null) => {
+ addAttachedFile: async (file: File, target?: ChatDraftIdentity | null, onPrepared?: (files: readonly AttachedFile[]) => void) => {
   const generation = attachmentReadGeneration
   const referencePath = INTAKE_REDACTED_FILENAME.test(file.name) ? null : pathForDroppedFile(file)
   const attachReference = async (path: string): Promise<boolean> => {
    const reference = await prepareFileReference(file, path)
    if (generation !== attachmentReadGeneration) return false
    set((state) => appendAttachedFiles(state, [reference], target))
+   onPrepared?.([reference])
    return true
   }
 
@@ -360,8 +355,8 @@ export const useInputStore = create<InputState>()((set, get) => ({
    let attachedFiles: AttachedFile[] | undefined
    try {
     attachedFiles = await prepareLocalAttachments(file, reservedFilenames)
-   } catch {
-    return false
+   } catch (error) {
+    return error instanceof HeicConversionError && referencePath ? attachReference(referencePath) : false
    }
    if (generation !== attachmentReadGeneration) return false
    if (!attachedFiles) return referencePath ? attachReference(referencePath) : false
@@ -370,6 +365,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
    if (hasGeneratedFilenameCollision(generatedFilenames, attachedFilesFor(get(), target))) continue
 
    set((state) => appendAttachedFiles(state, attachedFiles, target))
+   onPrepared?.(attachedFiles)
    return true
   }
   return false
@@ -424,20 +420,12 @@ export const useInputStore = create<InputState>()((set, get) => ({
 
 const NO_ATTACHMENTS: AttachedFile[] = []
 
-/**
- * The attachments of one composer draft, whether or not it holds the selected
- * slot. Two composers can be on screen at once (a chat pinned in the side
- * panel); each shows its own files while only the one the user last worked
- * in holds `attachedFiles`. With a single composer the draft is always the
- * selected one, so this reads `attachedFiles`.
- */
 export const useDraftAttachedFiles = (target: ChatDraftIdentity | null | undefined): AttachedFile[] => {
- // Undefined: no composer named, the selected slot.
- const key = target === undefined ? undefined : target ? getChatDraftIdentityKey(target) : null
- return useInputStore((state) => {
-  if (key === undefined || key === state.attachmentDraftKey) return state.attachedFiles
-  return key ? state.attachmentDrafts.get(key) ?? NO_ATTACHMENTS : NO_ATTACHMENTS
- })
+  const key = target === undefined ? undefined : target ? getChatDraftIdentityKey(target) : null
+  return useInputStore((state) => {
+    if (key === undefined || key === state.attachmentDraftKey) return state.attachedFiles
+    return key ? state.attachmentDrafts.get(key) ?? NO_ATTACHMENTS : NO_ATTACHMENTS
+  })
 }
 
 subscribeChatDraftDeletion((identity) => {

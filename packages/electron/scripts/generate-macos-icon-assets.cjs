@@ -44,7 +44,6 @@ try {
   fs.copyFileSync(generatedAssetsPath, outputAssetsPath);
   console.log(`Generated ${outputAssetsPath}`);
 
-  // macOS before 26 reads icon.icns; actool renders it from the same document.
   const generatedIcnsPath = path.join(tmpDir, `${iconName}.icns`);
   if (!fs.existsSync(generatedIcnsPath)) {
     throw new Error(`actool did not generate ${iconName}.icns at ${generatedIcnsPath}`);

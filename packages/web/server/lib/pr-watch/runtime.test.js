@@ -399,7 +399,7 @@ describe('createPrWatchRuntime', () => {
     expect(() => runtime.stop()).not.toThrow();
   });
 
-  it('composes the real createOpenChamberSessionService and proves the wake payload passes canonical admission', async () => {
+  it('composes the real createOhPiChamberSessionService and proves the wake payload passes canonical admission', async () => {
     const dataDir = await makeDataDir();
     const stateDataDir = path.join(dataDir, 'state');
     await fs.mkdir(stateDataDir, { recursive: true });

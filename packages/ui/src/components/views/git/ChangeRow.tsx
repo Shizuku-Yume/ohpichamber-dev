@@ -31,9 +31,7 @@ interface ChangeRowProps {
   stats?: { insertions: number; deletions: number };
   rowPaddingClassName?: string;
   indentPx?: number;
-  /** Place the stage/unstage action at the row start (flat view) instead of the end (tree view). */
   actionAtStart?: boolean;
-  /** Tree view: the directory rows above already say where the file lives. */
   nameOnly?: boolean;
   showRevert?: boolean;
 }
@@ -113,7 +111,6 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
           onClick={handleRevertClick}
           disabled={isReverting}
           className={cn(
-            // On a phone a long press on the row reverts; the button stays for screen readers.
             isMobile ? 'sr-only' : 'flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
           )}
           aria-label={t('gitView.changes.revertFileAria', { path: file.path })}

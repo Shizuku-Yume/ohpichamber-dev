@@ -6,6 +6,7 @@ import { WorkStatusUsageSection } from './WorkStatusUsageSection';
 import { WorkStatusTelemetrySection } from './WorkStatusTelemetrySection';
 import { WorkStatusSubagentsSection } from './WorkStatusSubagentsSection';
 import { WorkStatusWorkflowsSection } from './WorkStatusWorkflowsSection';
+import { WorkStatusTasksSection } from './WorkStatusTasksSection';
 import { WorkStatusMcpSection } from './WorkStatusMcpSection';
 import { WorkStatusPinnedSection } from './WorkStatusPinnedSection';
 import { WorkStatusContextSection } from './WorkStatusContextSection';
@@ -13,10 +14,6 @@ import { WorkStatusExtensionSection } from './WorkStatusExtensionSection';
 import { isExtensionSectionId, isWorkStatusSectionVisible, type WorkStatusSectionId } from './sections';
 import type { WorkStatusSectionLayout } from './useWorkStatusSectionLayout';
 
-/**
- * The sections in the user's order, without the surface around them: the
- * desktop card and the phone's Status tab both render this.
- */
 export const WorkStatusSectionList: React.FC<{
   sessionId: string | null;
   directory: string | null;
@@ -27,12 +24,11 @@ export const WorkStatusSectionList: React.FC<{
   const { extensionSections, sectionOrder, hiddenSections } = layout;
   const sectionVisible = (id: Parameters<typeof isWorkStatusSectionVisible>[1]) => isWorkStatusSectionVisible(hiddenSections, id);
 
-  // Keep these elements owned here so primary readout updates do not rerender
-  // unrelated sections through the composition callback.
   const secondarySections = {
     usage: <WorkStatusUsageSection visible={visible} />,
     telemetry: <WorkStatusTelemetrySection sessionId={sessionId} directory={directory} />,
     subagents: <WorkStatusSubagentsSection sessionId={sessionId} directory={directory} />,
+    tasks: <WorkStatusTasksSection sessionId={sessionId} directory={directory} />,
     workflows: <WorkStatusWorkflowsSection sessionId={sessionId} directory={directory} />,
     mcp: <WorkStatusMcpSection directory={directory} />,
     pinned: <WorkStatusPinnedSection sessionId={sessionId} directory={directory} />,

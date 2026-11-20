@@ -1,16 +1,9 @@
+
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { focusChatInput } from './composer/editor/dom';
 
-/**
- * The session the chat column is showing — the deferred selection the
- * timeline renders, not the live store value. The composer and everything
- * stacked with the timeline read it so the column changes as one: a session
- * click publishes the live selection first, and a composer that followed it
- * would change height (changed-files row, todos, queued chips) while the
- * outgoing timeline is still on screen, shoving that timeline before the swap.
- */
 export type ChatColumnSession = {
   sessionId: string | null;
   directory: string | null;
@@ -20,12 +13,6 @@ export const ChatColumnSessionContext = React.createContext<ChatColumnSession | 
 
 export const useChatColumnSession = (): ChatColumnSession | null => React.useContext(ChatColumnSessionContext);
 
-/**
- * The session a chat component acts on: its column's when it renders inside
- * one, the app's selection elsewhere. Outside a column it reads the live
- * selection; inside one it never subscribes to it, so a pinned column (the
- * side panel) does not re-render when the main chat switches sessions.
- */
 export const useChatSessionSelection = (): ChatColumnSession => {
   const column = useChatColumnSession();
   const liveSessionId = useSessionUIStore((state) => (column ? null : state.currentSessionId));
@@ -46,7 +33,6 @@ export type ChatColumnActions = {
   pinned: boolean;
   openSession: (sessionId: string, directory: string | null) => void;
   openTimelineDialog: () => void;
-  /** Focuses this column's composer, never another chat's. */
   focusInput: () => void;
 };
 
@@ -81,4 +67,12 @@ export const useChatColumnExpandedInput = (): ChatColumnExpandedInput => {
     () => column ?? { expanded: globalExpanded, setExpanded: setGlobalExpanded },
     [column, globalExpanded, setGlobalExpanded],
   );
+};
+
+export const ChatTranscriptDirectoryContext = React.createContext<string | null>(null);
+
+export const useChatTranscriptDirectory = (): string | null => {
+  const nested = React.useContext(ChatTranscriptDirectoryContext);
+  const { directory } = useChatSessionSelection();
+  return nested ?? directory;
 };

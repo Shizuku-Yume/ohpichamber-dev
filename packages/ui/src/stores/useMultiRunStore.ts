@@ -82,10 +82,6 @@ export const registerMultiRunSession = (session: Session, directory: string, met
   return published;
 };
 
-/**
- * Sends a lane its prompt. Each lane is a fresh session, so it is owed the
- * project's standing context exactly as a composer send would be.
- */
 export async function dispatchRunPrompt(input: {
   runtimeKey: string;
   assertCurrent: () => void;
@@ -333,7 +329,6 @@ export const useMultiRunStore = create<MultiRunStore>()(
                   assertCurrent();
                 }
 
-                // A checkout that never populated is removed with its branch; the lane counts as failed.
                 const startDirectory = await resolveCreatedWorktreeStartDirectory(project, worktreeMetadata);
                 assertCurrent();
                 const session = await createRun(startDirectory);

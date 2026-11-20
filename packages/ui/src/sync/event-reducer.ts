@@ -1,3 +1,4 @@
+
 import type { AdvisorNote, CanonicalEvent, Message, Part, QueueState, Run, Session, SessionMetadataState, SessionSnapshot } from "@openchamber/agent-contract"
 import type { AdvisorState, CleanseProgressState, State } from "./types"
 import { omitKeys } from "@/lib/omitKeys"
@@ -664,3 +665,17 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
  }
  return { kind: "applied", state: committed }
 }
+
+export type SessionMaterializationReason =
+  | "missing-owning-message"
+  | "orphan-delta"
+  | "missing-delta-part"
+  | "empty-assistant-message"
+  | "child-session-idle"
+  | "child-session-discovered"
+  | "ensure-session-messages"
+  | "stream-reconnect"
+  | "stream-replayed"
+  | "transport-switch"
+  | "stale-status-resync"
+  | "settled-running-tool"

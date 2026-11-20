@@ -73,6 +73,22 @@ test('shares one absolute deadline across version and session requests', async (
   assert.deepEqual(result, { status: 'unreachable', latencyMs: 2_000 });
 });
 
+test('reports one round trip, the last request, as the latency', async () => {
+  let clock = 0;
+  const result = await baseProbe({
+    expectedServerId: 'server-a',
+    now: () => clock,
+    chromiumFetch: async (url) => {
+      // Health and version take 300ms between them; the session request 40ms.
+      if (url.endsWith('/health')) { clock += 200; return response(200, { serverId: 'server-a' }); }
+      if (url.endsWith('/api/version')) { clock += 100; return response(200, compatibleVersion); }
+      clock += 40;
+      return response(200, {});
+    },
+  });
+  assert.deepEqual(result, { status: 'ok', latencyMs: 40 });
+});
+
 test('checks unauthenticated identity before sending sanitized bearer headers', async () => {
   const calls = [];
   const result = await baseProbe({
@@ -104,7 +120,7 @@ for (const [name, versionResponse, expected] of [
   ['numeric compatibility', response(200, { status: 'ok', compatibility: 1 }), 'wrong-service'],
   ['array compatibility', response(200, { status: 'ok', compatibility: [] }), 'incompatible'],
   ['missing capability', response(200, { ...compatibleVersion, compatibility: { ...compatibleVersion.compatibility, capabilities: [] } }), 'incompatible'],
-  ['server before OpenCode 2', response(200, { ...compatibleVersion, openchamberVersion: '1.24.2' }), 'incompatible'],
+  ['fork version independent of Host protocol', response(200, { ...compatibleVersion, openchamberVersion: '1.0.0' }), 'ok'],
   ['server without a readable version', response(200, { ...compatibleVersion, openchamberVersion: 'unknown' }), 'ok'],
   ['server without a version field', response(200, { status: 'ok', compatibility: compatibleVersion.compatibility }), 'ok'],
   ['newer API', response(200, { ...compatibleVersion, compatibility: { ...compatibleVersion.compatibility, apiVersion: 2 } }), 'update-recommended'],
@@ -115,6 +131,24 @@ for (const [name, versionResponse, expected] of [
     assert.equal(result.status, expected);
   });
 }
+
+test('checks authenticated session status even for a protocol-compatible fork version', async () => {
+  const calls = [];
+  const result = await baseProbe({
+    clientToken: 'fixture-client',
+    chromiumFetch: async (url, options) => {
+      calls.push({ path: new URL(url).pathname, authorization: options.headers.Authorization });
+      return url.endsWith('/api/version')
+        ? response(200, { ...compatibleVersion, openchamberVersion: '1.0.0' })
+        : response(401);
+    },
+  });
+  assert.equal(result.status, 'auth');
+  assert.deepEqual(calls, [
+    { path: '/api/version', authorization: 'Bearer fixture-client' },
+    { path: '/auth/session', authorization: 'Bearer fixture-client' },
+  ]);
+});
 
 test('rejects an explicit identity mismatch before bearer-bearing requests', async () => {
   let calls = 0;

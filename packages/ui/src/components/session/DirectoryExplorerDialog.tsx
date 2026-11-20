@@ -1,3 +1,5 @@
+import { trimTrailingSeparators } from './directoryExplorerStart';
+import { isFilesystemRoot } from '@/lib/pathNormalization';
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
@@ -70,18 +72,7 @@ type BrowseRow =
   // An added folder can still be browsed for its subfolders; only adding it again is blocked.
   | { type: 'directory'; value: string; name: string; path: string; added: boolean };
 
-const isRootPath = (value: string): boolean => value === '/';
-
 const normalizeSeparators = (value: string): string => value.replace(/\\/g, '/');
-
-const trimTrailingSeparators = (value: string): string => {
-  if (!value || isRootPath(value)) return value;
-  let result = value;
-  while (result.length > 1 && result.endsWith('/')) {
-    result = result.slice(0, -1);
-  }
-  return result;
-};
 
 const hasTrailingPathSeparator = (value: string): boolean => value.endsWith('/');
 
@@ -133,14 +124,11 @@ const displayPathToAbsolutePath = (value: string, homeDirectory: string): string
   if (trimmed === '~') return homeDirectory;
   if (trimmed.startsWith('~/')) {
     const rest = trimmed.slice(1);
-    // Typing or pasting an absolute path while the field still holds its "~/"
-    // prefix means that absolute path, not one nested under home.
     return rest.startsWith('//') ? rest.slice(1) : `${homeDirectory}${rest}`;
   }
   return trimmed;
 };
 
-// The folder name `git clone` gives a checkout: the URL's last segment without `.git`.
 const cloneDirectoryName = (remoteUrl: string): string => {
   const withoutQuery = remoteUrl.trim().split(/[?#]/, 1)[0] ?? '';
   const name = withoutQuery.match(/([^/:]+?)(?:\.git)?\/?$/)?.[1]?.trim() ?? '';
@@ -218,8 +206,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [addButtonWidth, setAddButtonWidth] = React.useState(0);
   const [isCloneMode, setIsCloneMode] = React.useState(false);
   const [cloneRemoteUrl, setCloneRemoteUrl] = React.useState('');
-  // One identity carries the account, the transport and the signature, so the
-  // add and clone screens ask once instead of assembling three answers.
   const [identityChoice, setIdentityChoice] = React.useState<{ key: string; id: string } | null>(null);
   const cloneController = React.useRef<AbortController | null>(null);
   const cloneRecovery = useGitOperationRecovery(open && isCloneMode ? 'clone' : null, git, sourceControl, { kind: 'clone' });
@@ -253,7 +239,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       if (cancelled) return;
       const home = resolved || homeDirectory || '';
       setDialogHomeDirectory(home);
-      // Only while the field still holds the untouched default.
       const start = initialBrowseQuery(useProjectsStore.getState().projects, home);
       setQuery((current) => (current === '~/' ? start : current));
       requestAnimationFrame(() => focusPathInput(inputRef.current));
@@ -389,9 +374,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (!browseFilterQuery) return null;
     return filteredEntries.find((entry) => entry.name === browseFilterQuery) ?? null;
   }, [browseFilterQuery, filteredEntries]);
-  // A clone never lands in a folder that exists: one the path field points at
-  // is where the checkout goes, under the repository's own name, as with
-  // `git clone`. A path that does not exist yet is the checkout itself.
   const cloneDestination = React.useMemo(() => {
     if (!isCloneMode || !targetPath || isLoading) return '';
     const pointsAtExistingFolder = hasTrailingPathSeparator(query)
@@ -400,7 +382,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (!pointsAtExistingFolder) return targetPath;
     const name = cloneDirectoryName(cloneRemoteUrl);
     if (!name) return '';
-    return isRootPath(targetPath) ? `/${name}` : `${targetPath}/${name}`;
+    return isFilesystemRoot(targetPath) ? `${targetPath.replace(/\/$/, '')}/${name}` : `${targetPath}/${name}`;
   }, [browseErrorReason, cloneRemoteUrl, exactEntry, isBrowseDirectoryMissing, isCloneMode, isLoading, query, targetPath]);
   const submitTarget = isCloneMode ? cloneDestination : targetPath;
   const normalizedTargetPath = normalizeDirectoryPath(submitTarget);
@@ -431,14 +413,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (existingRepository) void refreshAccounts(sourceControl);
   }, [existingRepository, refreshAccounts, runtimeKey, sourceControl]);
 
-  /**
-   * The identity this screen is about to apply.
-   *
-   * It is proposed from the host the repository points at, so a repository on a
-   * host one identity already answers for needs no choice at all, and stays
-   * whatever the person picks instead. The key carries the host so a new host
-   * proposes again rather than keeping an answer given for another one.
-   */
   const existingPrimaryRemote = existingRepository?.primaryRemote ?? null;
   const identityRemote = React.useMemo((): RemoteTraits | null => {
     if (isCloneMode) return cloneRemoteUrl.trim() ? remoteTraits(cloneRemoteUrl) : null;
@@ -447,16 +421,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, [isCloneMode, cloneRemoteUrl, existingPrimaryRemote]);
   const identityHost = identityRemote?.host ?? null;
   const identityChoiceKey = `${isCloneMode ? 'clone' : 'add'}:${identityHost ?? ''}`;
-  // An identity is specific to an instance and to a way of reaching it; one
-  // that cannot serve this remote is shown with the reason, never proposed.
   const identityApplicabilityOf = React.useCallback((identity: GitIdentityProfile): IdentityApplicability =>
     identityRemote ? identityApplicability(identity, identityRemote) : { applicable: true },
   [identityRemote]);
   const existingAuthor = existingRepository?.author ?? null;
-  // What the repository is signed as today, shown as it is: one of the stored
-  // identities when the author matches one, the machine's own author, or the
-  // repository's own author when it matches neither. A clone has no author
-  // yet, so it is proposed an identity that can reach the address.
   const proposedIdentity = React.useMemo(() => {
     const applicable = availableGitIdentities.filter((identity) => identityApplicabilityOf(identity).applicable);
     if (!isCloneMode) {
@@ -473,13 +441,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       : null;
     return chosen ?? proposedIdentity;
   }, [availableGitIdentities, identityChoice, identityChosen, proposedIdentity]);
-  /**
-   * How the clone authenticates, read off the identity.
-   *
-   * Null means the identity cannot serve this URL — an account or anonymous
-   * identity for an SSH address, a key for an HTTPS one — which is a mismatch
-   * to show rather than a transfer to attempt.
-   */
   const cloneSelection: Parameters<typeof runGitClone>[0]['selection'] | null = React.useMemo(() => {
     if (!selectedGitIdentity) return null;
     const https = cloneRemoteUrl.trim().startsWith('https://');
@@ -491,8 +452,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       return { transportMode: 'managed', sshCredentialId: selectedGitIdentity.sshCredentialId };
     }
     if (transport === 'anonymous' && https) return { transportMode: 'anonymous' };
-    // System Git, and an identity from an earlier release that names no
-    // credentials of its own, clone with whatever the machine holds.
     if (transport === 'system') return { transportMode: 'system', unverifiedConfirmed: true };
     return null;
   }, [cloneRemoteUrl, selectedGitIdentity]);
@@ -609,8 +568,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         const result = await runGitClone({
           remoteUrl,
           destinationPath: target,
-          // The System identity writes no author: it is the absence of an
-          // override, and the machine may not even have one to copy.
           gitIdentityId: selectedGitIdentity && selectedGitIdentity.id !== GLOBAL_IDENTITY_ID
             ? selectedGitIdentity.id : undefined,
           providerAccount: selectedGitIdentity?.account ?? undefined,
@@ -623,9 +580,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         setupRequired = result.status === 'setup-required';
         selectedTarget = target;
       } else if (selectionToAdd.length > 0) {
-        // Batch path wins over single-target create: with checkboxes ticked,
-        // the user wants the selections added, not a fresh directory created
-        // for whatever happens to be typed in the filter.
         const added = await addProjects(selectionToAdd);
         if (added.length === 0) {
           toast.error(t('directoryExplorerDialog.toast.failedToAddProject'), {
@@ -648,20 +602,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         });
         return;
       }
-      // The proposal describes the repository as it is. Nothing is written
-      // unless the person picked an identity themselves: adding a directory
-      // never rewrites its author or binds an account on its own.
       if (!isCloneMode && identityChosen && selectedGitIdentity && existingRepository
         && existingRepository.directory === selectedTarget) {
         const outcome = await applyIdentityToRepository({
           directory: project.path,
-          // A repository with no remote binds nothing; the identity is still
-          // written, because it also says who commits there.
           remoteName: existingRepository.primaryRemote?.name ?? null,
           identity: selectedGitIdentity,
         }, { git, sourceControl });
-        // The project is added either way; what could not be written is said
-        // here rather than swallowed, and the Git panel can finish it.
         if (outcome.status === 'failed' && outcome.reason !== 'runtime') toast.warning(t('directoryExplorerDialog.existing.bindFailed'));
       }
       openProjectDraft(project.id, project.path);

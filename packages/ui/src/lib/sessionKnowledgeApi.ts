@@ -1,8 +1,3 @@
-/**
- * Project knowledge for the UI: what the session carries for display, and the
- * pin switches. Prompt delivery belongs to the Host, which attaches the user's
- * pins itself, so the client never assembles or reports prompt text.
- */
 
 import { runtimeFetch } from './runtime-fetch';
 import { z } from 'zod';
@@ -15,9 +10,6 @@ export interface SessionKnowledgeSummary {
 
 const EMPTY_SUMMARY: SessionKnowledgeSummary = { notes: [], plans: [] };
 
-// Several panels ask for the same session's summary at the same moment when a
-// session opens. One request serves all of them, and its answer stays good for
-// a few seconds; local pin changes drop it immediately.
 const SUMMARY_FRESH_MS = 5_000;
 const summaryCache = new Map<string, { at: number; request: Promise<SessionKnowledgeSummary> }>();
 const summaryCacheKey = (directory: string, sessionId: string | null | undefined): string => (
@@ -28,7 +20,6 @@ const invalidateSummary = (directory: string, sessionId: string | null | undefin
   summaryCache.delete(summaryCacheKey(directory, sessionId));
 };
 
-/** What the session is carrying, for display. Never throws; shows nothing instead. */
 export const fetchSessionKnowledgeSummary = (
   directory: string | null,
   sessionId?: string | null,
@@ -96,5 +87,7 @@ export const setSessionProjectContextPin = async (
     return sessionProjectContextPinsResponseSchema.parse(await response.json()).pins;
   } catch {
     return null;
+  } finally {
+    invalidateSummary(directory, sessionId);
   }
 };

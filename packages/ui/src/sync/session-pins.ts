@@ -1,3 +1,4 @@
+
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey, isSessionPinnedInMetadata } from '@/lib/sessionPins';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -6,14 +7,8 @@ import { setSessionPinned } from './session-actions';
 
 export type PinTarget = { directory: string; sessionId: string };
 
-// Clicks on one session run in order, so the last one wins on the server too.
 const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
 
-/**
- * Pin or unpin a session. The row flips at once; the pin is stored in the
- * session's metadata on the server, which tells every other client. Rejects
- * when the server could not store it, and the row flips back.
- */
 export function toggleSessionPin(target: PinTarget): Promise<void> {
  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
  if (!key) return Promise.resolve();
@@ -87,3 +82,9 @@ useGlobalSessionsStore.subscribe((state, previous) => {
  }
 });
 void migrateLegacyPins();
+
+export function setSessionPinList(target: PinTarget, pinned: boolean, _list: string | null): Promise<void> {
+  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
+  if (!key) return Promise.resolve();
+  return writeSessionPin(key, target, pinned);
+}

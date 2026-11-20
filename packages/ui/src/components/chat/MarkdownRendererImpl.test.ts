@@ -8,8 +8,7 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import * as actualEffectiveDirectory from '@/hooks/useEffectiveDirectory';
 
 const browser = new Window({ url: 'http://localhost/' });
-Object.assign(globalThis, {
-  window: browser, document: browser.document, navigator: browser.navigator,
+Object.assign(globalThis, { window: browser, document: browser.document, CustomEvent: browser.CustomEvent, navigator: browser.navigator,
   localStorage: browser.localStorage, sessionStorage: browser.sessionStorage, HTMLElement: browser.HTMLElement,
   HTMLAnchorElement: browser.HTMLAnchorElement, Element: browser.Element, Node: browser.Node, Text: browser.Text,
   SVGElement: browser.SVGElement, MutationObserver: browser.MutationObserver, DOMParser: browser.DOMParser,
@@ -55,6 +54,14 @@ const render = async (content: string, isStreaming = false, allowRawHtml = false
   });
   void isStreaming;
 };
+
+test('chat prose resolves each paragraph, list item and quote by most of its words', async () => {
+  await render('- **nao** — رخصة Apache 2.0 مفتوحة المصدر\n- Run the tests first\n- 42\n\n> Lightdash بيان مفتوح المصدر مبني على dbt\n\nThe Arabic label is مرحبا, and this paragraph is English.');
+  expect(Array.from(host.querySelectorAll('li'), (item) => item.getAttribute('dir'))).toEqual(['rtl', 'ltr', 'auto']);
+  expect(host.querySelector('ul')?.getAttribute('dir')).toBeNull();
+  expect(host.querySelector('blockquote')?.getAttribute('dir')).toBe('rtl');
+  expect(Array.from(host.querySelectorAll('p'), (paragraph) => paragraph.getAttribute('dir'))).toContain('ltr');
+});
 
 test('historical secret placeholders of either format render literally without secret resolution', async () => {
   const placeholders = ['$$0123456789ab$$', '$$0123456789ab:U$$', '$$OLDNAME_0123456789ab:L$$', '$$RENAMED_abcdefgh1234:M$$'];
@@ -173,9 +180,6 @@ test('file navigation respects disabling, stream settlement and selection-ending
       expect(open.mock.calls).toHaveLength(0);
     }
     await draw(true, true);
-    for (let i = 0; i < 50 && !host.querySelector('pre [data-openchamber-file-ref]'); i++) {
-      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
-    }
     const targets = host.querySelectorAll<HTMLElement>('a, code[data-openchamber-file-ref], pre [data-openchamber-file-ref]');
     expect(targets.length).toBe(3);
     for (const target of targets) {
@@ -199,12 +203,11 @@ test('on the phone a file link also opens the files drawer (#5486)', async () =>
   const open = spyOn(state, 'openContextFile');
   const { DedicatedMobileAppProvider } = await import('@/apps/mobileAppContext');
   let filesOpened = 0;
-  const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openPlan: () => undefined, openSourceBoard: () => undefined };
+  const actions: MobileAppActions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openPlan: () => undefined, openSourceBoard: () => undefined, openReceivedPage: () => undefined };
   try {
     const content = React.createElement(Renderer.MarkdownContent, { content: '[View README.md](README.md)', directory: '/project', enableFileReferences: true, settled: true });
     await act(() => root.render(React.createElement(I18nProvider, null, React.createElement(DedicatedMobileAppProvider, { actions, children: content }))));
-    host.querySelector<HTMLElement>('a')?.click();
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(() => { host.querySelector<HTMLElement>('a')?.click(); });
     expect(open.mock.calls).toEqual([['/project', '/project/README.md']]);
     expect(filesOpened).toBe(1);
   } finally {

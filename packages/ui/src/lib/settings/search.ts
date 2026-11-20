@@ -1,3 +1,5 @@
+
+import { canKeepScreenAwake } from '@/lib/platform';
 import type { I18nKey } from '@/lib/i18n/store';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
@@ -7,7 +9,7 @@ import { ompLayoutSettingIds } from '@/components/sections/openchamber/ompSettin
 /** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
 export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
 
-interface SettingsSearchItem {
+export interface SettingsSearchItem {
   id: string;
   page: SettingsPageSlug;
   titleKey: I18nKey;
@@ -25,11 +27,8 @@ export interface SettingsSearchResult extends SettingsSearchItem {
 export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
   isMobile: boolean;
   isDesktopLocalOrigin: boolean;
-  // macOS desktop shell — for controls that only render on darwin (e.g. dock badge).
   isMac: boolean;
-  // Windows desktop shell — for controls that only render on win32.
   isWindows: boolean;
-  // Linux desktop shell — for controls that only render on linux.
   isLinux: boolean;
 }
 
@@ -367,9 +366,15 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.dockBadge',
     descriptionKey: 'settings.openchamber.visual.field.dockBadgeHint',
     keywords: ['dock', 'badge', 'unread', 'unseen', 'counter', 'count', 'notification', 'macos'],
-    // Exactly matches the render guard in OpenChamberVisualSettings: any darwin
-    // Electron shell (isMac already implies isDesktopShell), local or remote host.
     isAvailable: (ctx) => ctx.isMac,
+  },
+  {
+    id: 'general.keep-screen-awake',
+    page: 'general',
+    titleKey: 'settings.mobileApp.keepScreenAwake.label',
+    descriptionKey: 'settings.mobileApp.keepScreenAwake.info',
+    keywords: ['screen', 'display', 'sleep', 'lock', 'awake', 'wake lock', 'timeout', 'battery', 'phone'],
+    isAvailable: () => canKeepScreenAwake(),
   },
   {
     id: 'appearance.scrollbars',
@@ -452,6 +457,14 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['terminal', 'exit', 'close', 'tab', 'shell'],
   },
   {
+    id: 'appearance.terminal-open-on-project-action',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.terminalOpenOnProjectAction',
+    descriptionKey: 'settings.openchamber.visual.field.terminalOpenOnProjectActionInfo',
+    keywords: ['terminal', 'project action', 'run', 'open', 'panel', 'dev server'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
     id: 'appearance.editor-font-size',
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.editorFontSize',
@@ -469,7 +482,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.inputBarOffset',
     descriptionKey: 'settings.openchamber.visual.field.inputBarOffsetTooltip',
     keywords: ['input', 'home bar', 'offset'],
-    // Only the mobile composer applies this offset (ChatInput gates on isMobile).
     isAvailable: (ctx) => ctx.isMobile,
   },
   {
@@ -600,10 +612,11 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['collapse', 'expand', 'clamp', 'long messages', 'user messages'],
   },
   {
-    id: 'chat.wide-layout',
+    id: 'chat.width',
     page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.wideChatLayout',
-    keywords: ['layout', 'wide', 'messages'],
+    titleKey: 'settings.openchamber.visual.field.chatWidth',
+    descriptionKey: 'settings.openchamber.visual.field.chatWidthInfo',
+    keywords: ['layout', 'wide', 'wider', 'full', 'width', 'column', 'messages'],
   },
   {
     id: 'chat.message-appearance',
@@ -674,6 +687,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.section.followUpBehavior',
     descriptionKey: 'settings.openchamber.visual.field.followUpBehaviorDescription',
     keywords: ['follow up', 'queue', 'steer', 'send immediately'],
+  },
+  {
+    id: 'chat.questions-placement',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.questionsPlacement',
+    descriptionKey: 'settings.openchamber.visual.field.questionsPlacementInfo',
+    keywords: ['question', 'form', 'ask', 'pop-up', 'popup', 'dock', 'inline', 'in the chat'],
   },
   {
     id: 'chat.input-history-scope',
@@ -1031,6 +1051,21 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['agent', 'tool', 'orchestration', 'openchamber', 'sessions', 'schedule', 'control'],
   },
   {
+    id: 'sessions.agent-terminal-tool',
+    page: 'tools',
+    titleKey: 'settings.openchamber.tools.field.agentTerminalTool',
+    descriptionKey: 'settings.openchamber.tools.field.agentTerminalToolSummary',
+    keywords: ['agent', 'terminal', 'panel', 'read', 'output'],
+  },
+  {
+    id: 'sessions.agent-browser-logins',
+    page: 'tools',
+    titleKey: 'settings.openchamber.tools.agentBrowserLogins.label',
+    descriptionKey: 'settings.openchamber.tools.agentBrowserLogins.info',
+    keywords: ['agent', 'browser', 'logins', 'cookies', 'profile'],
+    isAvailable: (ctx) => ctx.isDesktop,
+  },
+  {
     id: 'sessions.agent-web-tool',
     page: 'tools',
     titleKey: 'settings.openchamber.tools.field.agentWebTool',
@@ -1214,6 +1249,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['worktree', 'branch', 'repository'],
   },
   {
+    id: 'projects.worktree.create',
+    page: 'projects',
+    titleKey: 'settings.openchamber.worktrees.create.title',
+    descriptionKey: 'settings.openchamber.worktrees.create.info',
+    keywords: ['worktree', 'create', 'commands', 'bootstrap'],
+  },
+  {
     id: 'projects.worktree.directory',
     page: 'projects',
     titleKey: 'settings.openchamber.worktrees.directory.label',
@@ -1238,6 +1280,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.projects.environment.title',
     descriptionKey: 'settings.projects.environment.info',
     keywords: ['environment', 'env', 'variables', 'direnv', 'devenv', 'nix', 'envrc', 'path', 'terminal', 'git hooks'],
+  },
+  {
+    id: 'projects.notes-todos.repository',
+    page: 'projects',
+    titleKey: 'settings.projects.notesTodos.inRepository',
+    descriptionKey: 'settings.projects.notesTodos.inRepositoryDescription',
+    keywords: ['notes', 'todos', 'repository', 'git', 'sync', '.openchamber', 'notes-todos.json'],
   },
   {
     id: 'projects.shared',
@@ -1449,7 +1498,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['add provider', 'connect provider', 'credentials'],
   },
   {
-    // Opens the Classification providers sub-page (SettingsView sets the request).
     id: 'providers.classification',
     page: 'providers',
     titleKey: 'settings.classification.page.title',
@@ -1462,7 +1510,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'providers',
     titleKey: 'settings.providers.page.custom.title',
     descriptionKey: 'settings.providers.page.custom.description',
-    keywords: ['other', 'custom', 'openai-compatible', 'base url', 'api key'],
+    keywords: ['other', 'custom', 'openai-compatible', 'base url', 'api key', 'client certificate', 'mtls', 'mutual tls', 'gateway'],
   },
   {
     id: 'providers.auth',
@@ -1575,8 +1623,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.openchamber.keyboardShortcuts.tooltip',
     keywords: ['keyboard', 'hotkeys', 'bindings'],
   },
-  // Every in-app shortcut the page lists, by its own name. The system-wide
-  // ones (category `desktop`) live on General.
   ...getCustomizableShortcutActions()
     .filter((action) => action.category !== 'desktop')
     .map((action): SettingsSearchItem => ({
@@ -1764,6 +1810,15 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isMobile,
   },
 ];
+
+const SETTINGS_SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
+
+export const isSettingsAnchorAvailable = (anchorId: string, ctx: SettingsSearchAvailabilityContext): boolean => {
+  const item = SETTINGS_SEARCH_ITEMS_BY_ID.get(anchorId);
+  if (!item) return false;
+  const page = getSettingsPageMeta(item.page);
+  return Boolean(page) && (!page?.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
+};
 
 interface BuildSettingsSearchResultsOptions {
   query: string;

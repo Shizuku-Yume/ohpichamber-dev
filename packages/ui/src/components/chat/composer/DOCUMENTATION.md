@@ -3,9 +3,24 @@
 The chat composer: the prompt language, the editor that renders it, and
 everything between typing and sending.
 
-`ChatInput.tsx` (one directory up) is the orchestrator. It holds the composer's
-own state and wires these modules together; it should not grow logic that
-belongs to one of them.
+`ChatInput.tsx` composes the `input/` hooks and render functions. Selection,
+draft lifetime, reference preparation, queue capture and submission each have
+one state owner there. Agent commands, skill/resource expansion and sends use
+the Canonical Client; file access and tracker notifications use Host services.
+Queued configuration is captured before delivery, and submission retains its
+runtime-switch revision across asynchronous preparation. Document mentions are
+prepared before consuming a draft, so a failed read leaves the draft intact.
+Pasted-image path citations persist through the workspace Host upload service,
+not through an agent SDK temporary-file endpoint.
+
+Native `/btw` questions use the parent's selection and return ephemeral records,
+not independent sessions. Their pending composer key is UI draft identity only;
+record IDs never drive canonical session model lookups. Per-BTW SDK-session
+model, agent and permission overrides are not supported by the native contract.
+
+`ChatInput.tsx` (one directory up) composes the hooks and render helpers in
+`input/`. Those modules hold the composer's state and event handlers and wire
+the language, editor, attachment and submission modules together.
 
 `ChatContainer.tsx` keeps one `ChatInput` mounted while a new-session draft
 becomes its first session. Draft-only UI first fades for 120ms while the editor
@@ -300,9 +315,15 @@ and the send path reading the same grammar.
   draft. Two orderings are load-bearing: the debounced write is skipped once
   while a draft is being restored, and a deleted draft's empty signature is
   recorded before a queued write could resurrect it.
+  Retargeting the same new-session draft, or moving the same session to another
+  directory, carries text, attachments and linked references to that identity.
+  A different draft id, session or runtime keeps its own content. Confirmed
+  file mentions do not carry across directories. Disabling draft persistence
+  keeps these transitions in memory without durable writes.
   Fork replay text and files arrive in `input-store.pendingComposerRestore`,
   addressed to the fork's runtime, directory, and session. The hook consumes
-  them after loading that identity's draft. Selection alone is not enough:
+  them after loading that identity's draft and adds missing attachment citations
+  so restored files participate in sending. Selection alone is not enough:
   the deferred chat column can still show the source composer. Ordinary
   pending text insertions keep their existing path in `ChatInput`.
   The hook also selects the attachment draft before paint. `input-store.ts`
@@ -341,7 +362,7 @@ and the send path reading the same grammar.
   draft target UI is mounted.
   Keyboard selection returns focus to the current form's composer, including
   when the selected value is unchanged.
-- `ChatInput.tsx` maps Ctrl+N/P to the active command, skill, snippet, or
+- `input/createComposerKeyHandler.ts` maps Ctrl+N/P to the active command, skill, snippet, or
   mention picker after its IME guard.
 
 ## Input recall ownership
@@ -358,7 +379,7 @@ Prompt recall has two owners on purpose.
   composer's current text and attachments as an overlay for that position, so
   the live draft and any edit made to a recalled prompt survive a round trip
   through history. Overlays never rewrite stored history; sending resets them.
-- `ChatInput.tsx` applies the recalled text and attachments to the composer and
+- `input/useComposerDraftHistory.ts` applies the recalled text and attachments to the composer and
   places the caret.
 
 In session scope the composer merges two sources, oldest first: the visible
@@ -401,9 +422,8 @@ The salvage reader follows the end only while already there; rewrapping text
 keeps a reader who scrolled up in place. Expanding the composer releases this
 height floor and uses the existing fullscreen layout.
 
-**Every timeout and `flushSync` in them has a reason recorded next to it, and
-none of them is verifiable outside a real device.** Change them only against
-hardware.
+Their timing and focus invariants live in this document. Platform behavior needs
+verification on real hardware.
 
 `state/mobileComposerMorph.ts` plays the pill ↔ composer swap as a FLIP morph
 in the native iOS shell only. The swap commits synchronously (`flushSync`); the glass box

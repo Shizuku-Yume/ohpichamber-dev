@@ -2,7 +2,7 @@
 /**
  * scripts/upstream-gaps.mjs
  *
- * Guardrail comparing upstream bc50ba56a with the working tree on:
+ * Guardrail comparing the pinned upstream baseline with the working tree on:
  * - route registrations and runtime deps
  * - runtime constructors (create*) that exist only upstream
  * - uncalled route functions (an import is not a call)
@@ -32,7 +32,8 @@ function getFlag(name, fallback) {
   return fallback;
 }
 
-const UPSTREAM_REF = getFlag('--upstream-ref', 'bc50ba56a');
+const UPSTREAM_REF = getFlag('--upstream-ref', null)
+  ?? JSON.parse(fs.readFileSync(path.join(REPO_ROOT, '.workflow/upstream-baseline.json'), 'utf8')).upstream.revision;
 const ALLOWLIST_PATH = path.resolve(getFlag('--allowlist', path.join(REPO_ROOT, 'scripts/upstream-gaps.allowlist.tsv')));
 const DECISIONS_PATH = path.join(REPO_ROOT, '.workflow/decisions.md');
 
@@ -122,6 +123,13 @@ for (const item of serverOut.registerCalls.depDiffs) {
 for (const item of serverOut.createCalls.depDiffs) {
   for (const dep of item.missingInFork) {
     detectedGaps.push({ class: 'route-deps', item: `${item.name}.${dep}`, detail: `missing from ${item.fork.join(', ')}` });
+  }
+}
+
+// Runtime constructors called upstream and by no fork production file (a deleted create*Runtime call)
+for (const item of [...serverOut.registerCalls.depDiffs, ...serverOut.createCalls.depDiffs]) {
+  if (item.unresolvedKeys.length > 0) {
+    detectedGaps.push({ class: 'route-deps-indirect', item: item.name, detail: `indirect dependency bag at ${item.fork.join(', ')}; review ${item.unresolvedKeys.join(', ')}` });
   }
 }
 

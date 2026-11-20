@@ -52,8 +52,8 @@
     "dev:web:server": "bun run --cwd packages/web dev:server:watch",
     "start:web": "bun run --cwd packages/web start",
     "pack:web": "bun pm pack --cwd packages/web",
-    "electron:dev": "bun run extensions:build && node ./packages/electron/scripts/electron-dev.mjs",
-    "electron:dev:bundled": "bun run extensions:build && OPENCHAMBER_ELECTRON_USE_BUNDLED_UI=1 node ./packages/electron/scripts/electron-dev.mjs",
+    "electron:dev": "bun run extensions:build && node --import ./packages/web/scripts/register-server-sources.mjs --conditions=openchamber-source ./packages/electron/scripts/electron-dev.mjs",
+    "electron:dev:bundled": "bun run extensions:build && OPENCHAMBER_ELECTRON_USE_BUNDLED_UI=1 node --import ./packages/web/scripts/register-server-sources.mjs --conditions=openchamber-source ./packages/electron/scripts/electron-dev.mjs",
     "electron:build": "bun run --cwd packages/electron package",
     "mobile:build": "bun run --cwd packages/mobile build",
     "mobile:sync": "bun run --cwd packages/mobile sync",
@@ -102,7 +102,8 @@
     "profile:analyze": "node scripts/perf/analyze-run.mjs",
     "type-check:mobile": "bun run --cwd packages/mobile type-check",
     "dev:web": "bun run --cwd packages/web build:watch",
-    "dev:web:hmr": "node ./scripts/dev-web-hmr.mjs"
+    "dev:web:hmr": "node ./scripts/dev-web-hmr.mjs",
+    "build:server": "bun run --cwd packages/web build:server"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -157,7 +158,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "yaml": "^2.8.1",
-    "zod": "^4.3.6",
+    "zod": "^4.6.7",
     "zustand": "^5.0.8"
   },
   "overrides": {
@@ -420,11 +421,11 @@
     "@types/supertest": "7.2.0",
     "superagent": "10.3.0",
     "supertest": "7.2.2",
-    "zod": "4.3.6"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@clack/prompts": "^1.1.0",
-    "@oxlint/plugins": "1.90.0",
+    "@oxlint/plugins": "1.93.0",
     "@remixicon/react": "^4.7.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/dom-speech-recognition": "^0.0.12",
@@ -437,9 +438,9 @@
     "concurrently": "^10.0.0",
     "cors": "^2.8.5",
     "cross-env": "^10.0.0",
-    "node-addon-api": "7.1.1",
+    "node-addon-api": "8.9.2",
     "nodemon": "^3.1.7",
-    "oxlint": "1.90.0",
+    "oxlint": "1.93.0",
     "sharp": "^0.35.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.20.6",
@@ -448,12 +449,13 @@
     "vite": "^7.3.2"
   },
   "patchedDependencies": {
-    "happy-dom@18.0.1": "bun-patches/happy-dom@18.0.1.patch",
-    "@legendapp/list@3.7.1": "bun-patches/@legendapp%2Flist@3.7.1.patch",
-    "@tanstack/virtual-core@3.19.10": "bun-patches/@tanstack+virtual-core+3.19.10.patch",
+    "puppeteer-core@25.3.0": "vendor/omp/57771ae5/patches/puppeteer-core@25.3.0.patch",
+    "@oh-my-pi/pi-coding-agent@vendor/omp/57771ae5/tarballs/oh-my-pi-pi-coding-agent-19.0.0.tgz": "vendor/omp/57771ae5/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2F57771ae5%2Ftarballs%2Foh-my-pi-pi-coding-agent-19.0.0.tgz.patch",
+    "@tanstack/virtual-core@3.19.11": "bun-patches/@tanstack+virtual-core+3.19.11.patch",
     "@codemirror/view@6.43.15": "bun-patches/@codemirror%2Fview@6.43.15.patch",
     "bun-pty@0.6.0": "bun-patches/bun-pty@0.6.0.patch",
-    "puppeteer-core@25.3.0": "vendor/omp/57771ae5/patches/puppeteer-core@25.3.0.patch",
-    "@oh-my-pi/pi-coding-agent@vendor/omp/57771ae5/tarballs/oh-my-pi-pi-coding-agent-19.0.0.tgz": "vendor/omp/57771ae5/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2F57771ae5%2Ftarballs%2Foh-my-pi-pi-coding-agent-19.0.0.tgz.patch"
+    "happy-dom@21.0.4": "bun-patches/happy-dom@21.0.4.patch",
+    "@legendapp/list@3.7.2": "bun-patches/@legendapp%2Flist@3.7.2.patch",
+    "zod@4.6.7": "bun-patches/zod@4.6.7.patch"
   }
 }

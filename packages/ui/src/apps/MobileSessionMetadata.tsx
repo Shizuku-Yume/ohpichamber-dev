@@ -28,12 +28,11 @@ const formatTokens = (value: number): string => {
 
 type ContextDisplay =
   | { state: 'measured'; percentage: number; tokens: string; colorClass: string }
-  /** Nothing to measure yet: a draft, or a session without a response. */
+  | { state: 'compacted'; tokens: string }
   | { state: 'pending' }
   | null;
 
 
-/** `percentage: null` draws the empty track for a pending draft or session without usage. */
 const ContextProgressIcon: React.FC<{ percentage: number | null }> = ({ percentage }) => {
   const progressPct = clampPercent(percentage ?? 0) ?? 0;
   const tone = resolveUsageTone(percentage ?? 0);
@@ -113,16 +112,10 @@ const SessionMetadataOverlay: React.FC<{
   const panelRef = React.useRef<HTMLDivElement>(null);
   const [shouldRender, setShouldRender] = React.useState(open);
   const [isExiting, setIsExiting] = React.useState(false);
-  // Tablet: a phone-width sheet stretched across the whole chat column looks
-  // broken — render a popover anchored to the metadata button instead.
   const { enabled: isTabletLayout } = useTabletLayout();
   const wrapperRef = React.useRef<HTMLDivElement>(null);
   const [anchorLeft, setIpadAnchorLeft] = React.useState<number | null>(null);
 
-  // The shell has transformed ancestors, so the fixed wrapper's containing
-  // block is the chat column, NOT the viewport. Anchor the popover in the
-  // wrapper's own coordinate space — viewport-based lefts would double-count
-  // the sidebar offset.
   React.useLayoutEffect(() => {
     if (!open || !isTabletLayout || !shouldRender) return;
     const compute = () => {
@@ -140,8 +133,6 @@ const SessionMetadataOverlay: React.FC<{
       setIpadAnchorLeft(left);
     };
     compute();
-    // Re-anchor if the chat column shifts while the popover is open (sidebar
-    // toggle/resize, orientation change) — the header buttons move with it.
     const wrapper = wrapperRef.current;
     const ResizeObserverConstructor = globalThis.ResizeObserver;
     if (!ResizeObserverConstructor || !wrapper) return;
@@ -231,14 +222,17 @@ const SessionMetadataOverlay: React.FC<{
             >
               {contextDisplay.state === 'pending' ? null : (
                 <span className="inline-flex items-baseline gap-1.5 tabular-nums">
-                  <span className={cn('font-semibold', contextDisplay.colorClass)}>{contextDisplay.percentage.toFixed(1)}%</span>
+                  {contextDisplay.state === 'measured' ? (
+                    <span className={cn('font-semibold', contextDisplay.colorClass)}>{contextDisplay.percentage.toFixed(1)}%</span>
+                  ) : null}
                   <span className="text-muted-foreground">{contextDisplay.tokens}</span>
                 </span>
               )}
             </MetadataRow>
           ) : null}
-          {/* The header ring is empty on a draft; this row says why, so the
-              empty ring reads as "nothing yet" rather than "still loading". */}
+          {contextDisplay?.state === 'compacted' ? (
+            <p className="px-2.5 pb-1 typography-meta text-muted-foreground">{t('contextUsage.compacted.description')}</p>
+          ) : null}
           {contextDisplay?.state === 'pending' ? (
             <p className="px-2.5 pb-1 typography-meta text-muted-foreground">{t('mobile.header.metadata.contextPending')}</p>
           ) : null}
@@ -273,8 +267,6 @@ const MobileUsageLimits: React.FC<{
   const { t } = useI18n();
   const modeLabel = displayMode === 'remaining' ? t('header.services.remaining') : t('header.services.used');
 
-  // First open often races the quota fetch (~2s) — show an explicit loading
-  // row instead of collapsing to an empty overlay.
   if (groups.length === 0) {
     if (!isLoading) return null;
     return (
@@ -345,12 +337,10 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
 
 
   React.useEffect(() => {
-    // An extension's icon comes from its package, not the logo set.
     preloadProviderLogos(dropdownProviderIds.filter((id) => !isExtensionQuotaProviderId(id)));
   }, [dropdownProviderIds]);
 
 
-  // v2 records the model on the assistant reply (a user message carries none).
   const latestMessageModel = React.useMemo(() => {
     for (let i = activeSessionMessages.length - 1; i >= 0; i -= 1) {
       const message = activeSessionMessages[i];
@@ -409,8 +399,6 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
         onClick={() => onOpenChange((currentOpen) => !currentOpen)}
         style={{ touchAction: 'manipulation' }}
       >
-        {/* Live context gauge doubles as the metadata trigger: filled by the
-            session's context usage, an empty ring on a fresh draft. */}
         <ContextProgressIcon
           percentage={contextDisplay?.state === 'measured'
             ? contextDisplay.percentage

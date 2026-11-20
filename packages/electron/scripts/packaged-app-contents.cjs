@@ -33,7 +33,11 @@ const REQUIRED_FILES = [
   ...APP_FILES,
   // server/index.js reads the version from the package manifest.
   `${WEB_PACKAGE}/package.json`,
-  `${WEB_PACKAGE}/server/index.js`,
+  `${WEB_PACKAGE}/build/server/index.js`,
+  `${WEB_PACKAGE}/build/server/lib/host/login-shell-env.js`,
+  `${WEB_PACKAGE}/build/server/lib/host/agent-service-supervisor.js`,
+  `${WEB_PACKAGE}/build/server/lib/host/agent-runtime.js`,
+  `${WEB_PACKAGE}/build/scripts/standalone-loader.mjs`,
   // Loaded by server/lib/host/agent-runtime.js when the Host starts the Agent
   // Service; a packaged app without it fails every launch.
   `${WEB_PACKAGE}/scripts/standalone-loader.mjs`,
@@ -43,9 +47,10 @@ const REQUIRED_FILES = [
 
 // Run by git and ssh as separate processes, so they must exist on disk.
 const REQUIRED_UNPACKED_FILES = [
-  `${WEB_PACKAGE}/server/lib/git/credential-helper.js`,
-  `${WEB_PACKAGE}/server/lib/git/ssh-wrapper.js`,
-  `${WEB_PACKAGE}/server/lib/git/repository-credential-helper.js`,
+  `${WEB_PACKAGE}/build/server/built-in-extensions/registry.json`,
+  `${WEB_PACKAGE}/build/server/lib/git/credential-helper.js`,
+  `${WEB_PACKAGE}/build/server/lib/git/ssh-wrapper.js`,
+  `${WEB_PACKAGE}/build/server/lib/git/repository-credential-helper.js`,
 ];
 
 const requiredUnpackedFiles = ({ platform = process.platform, arch = process.arch } = {}) => (

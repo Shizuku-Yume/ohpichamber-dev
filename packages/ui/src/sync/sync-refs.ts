@@ -1,9 +1,3 @@
-/**
- * Sync refs — imperative access to sync state from non-React code.
- *
- * SyncProvider sets these refs on mount. Store actions (session-ui-store,
- * session-actions) use them to read child-store domain data without hooks.
- */
 
 import type { Part } from "@openchamber/agent-contract"
 import { getRuntimeKey } from "@/lib/runtime-switch"
@@ -46,7 +40,6 @@ export function getSyncChildStores(): ChildStoreManager {
   return _childStores
 }
 
-/** Read current directory's child store state. Returns undefined if not bootstrapped. */
 export function getDirectoryState(directory?: string): State | undefined {
   const stores = _childStores
   if (!stores || boundRuntimeKey !== getRuntimeKey()) return undefined
@@ -89,7 +82,6 @@ export function getAllSyncSessions(): State["session"] {
   return Array.from(getAllSyncSessionMap().values())
 }
 
-/** Read the cached cross-directory session index, rebuilding only when a session slice changes. */
 export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][number]> {
   const stores = _childStores
   if (!stores || boundRuntimeKey !== getRuntimeKey()) return new Map()
@@ -122,8 +114,6 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
   return cachedSessionsById
 }
 
-/** Native workspace ownership is registered by the directory loader and actions.
- * A child store is a directory-scoped owner; public records contain no Host path. */
 export function getSyncSessionDirectory(sessionId: string): string | null {
   if (!sessionId || boundRuntimeKey !== getRuntimeKey()) return null
   getAllSyncSessionMap()

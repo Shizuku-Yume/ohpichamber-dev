@@ -73,39 +73,31 @@ test('names a failed check by its status or network code, without the response d
   assert.equal(describeCheckFailure(new Error('Cannot parse feed\nmore details')), 'Cannot parse feed');
 });
 
-test('treats missing update feed (404) as no update available', async () => {
-  const result = await checkForDesktopUpdate({
-    autoUpdater: {
-      checkForUpdates: async () => {
-        throw new Error('HttpError: 404 Not Found "https://github.com/.../latest-linux.yml"');
-      },
-    },
-    currentVersion: '1.15.0',
-    pendingUpdate: null,
-  });
-  assert.equal(result.available, false);
-  assert.equal(result.pendingUpdate, null);
-  assert.equal(result.nextVersion, '1.15.0');
-});
-
-test('treats No published versions on GitHub as no update available', async () => {
-  const result = await checkForDesktopUpdate({
-    autoUpdater: { checkForUpdates: async () => { throw new Error('No published versions on GitHub'); } },
-    currentVersion: '1.0.0',
-    pendingUpdate: null,
-  });
-  assert.equal(result.available, false);
-  assert.equal(result.pendingUpdate, null);
-  assert.equal(result.nextVersion, '1.0.0');
-});
-
 for (const message of ['ENOTFOUND', 'HttpError: 404 Not Found', 'No published versions on GitHub']) {
+  test(`reports a failed check without a pending update: ${message}`, async () => {
+    const cause = new Error(message);
+    const state = { pendingUpdate: null };
+    await assert.rejects(refreshPendingDesktopUpdate({
+      autoUpdater: { checkForUpdates: async () => { throw cause; } },
+      currentVersion: '1.0.0', state,
+    }), (error) => {
+      assert.match(error.message, /Unable to check for updates/);
+      assert.equal(error.cause, cause);
+      return true;
+    });
+    assert.equal(state.pendingUpdate, null);
+    assert.equal(state.updateCheckPromise, null);
+  });
+
   test(`preserves a downloaded update on feed failure: ${message}`, async () => {
     const pendingUpdate = { version: '2.0.0', downloaded: true, downloadedFile: '/cache/A' };
-    await assert.rejects(checkForDesktopUpdate({
+    const state = { pendingUpdate };
+    await assert.rejects(refreshPendingDesktopUpdate({
       autoUpdater: { checkForUpdates: async () => { throw new Error(message); } },
-      currentVersion: '1.0.0', pendingUpdate,
+      currentVersion: '1.0.0', state,
     }), /Unable to check for updates/);
+    assert.equal(state.pendingUpdate, pendingUpdate);
+    assert.equal(state.updateCheckPromise, null);
     assert.equal(pendingUpdate.downloaded, true);
     assert.equal(pendingUpdate.downloadedFile, '/cache/A');
   });

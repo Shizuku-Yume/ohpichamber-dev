@@ -2,7 +2,6 @@ import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { chromaticDistance, contrastRatio } from './theme/color';
 
-/** `color` is a semantic theme CSS variable. */
 export type AgentColor = { color: string };
 
 const BUILD_COLOR: AgentColor = { color: 'var(--status-success)' };
@@ -49,8 +48,6 @@ export function createAgentColorResolver(theme: Theme, agents: readonly Pick<Age
     palette.push(color);
     chosen.push(color.value);
   }
-  // Monochrome or very sparse themes may have no alternative to success.
-  // Reuse a syntax role rather than inventing an unrelated decorative color.
   if (!palette.length) palette.push(visible[0] ?? candidates[0]);
 
   const ordered = [...agents].sort((a, b) => a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0);
@@ -60,7 +57,6 @@ export function createAgentColorResolver(theme: Theme, agents: readonly Pick<Age
     if (agent.agentId === 'build' || assigned.has(agent.agentId)) continue;
     if (used.size === palette.length) used.clear();
     const available = palette.map((_, index) => index).filter((index) => !used.has(index));
-    // Prefer colored syntax accents to the neutral code foreground while possible.
     const colorful = available.filter((index) => distance(palette[index].value, '#808080') >= 0.035);
     const choices = colorful.length ? colorful : available;
     const index = choices[hashName(agent.agentId) % choices.length];
@@ -72,3 +68,7 @@ export function createAgentColorResolver(theme: Theme, agents: readonly Pick<Age
     return assigned.get(agentId) ?? { color: palette[hashName(agentId) % palette.length].color };
   };
 }
+
+export const restingAgentColor = (color: string): string => (
+  `color-mix(in oklab, ${color} 55%, var(--muted-foreground))`
+);

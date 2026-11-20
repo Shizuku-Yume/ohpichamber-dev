@@ -1,15 +1,3 @@
-/**
- * The composer's autocomplete popups.
- *
- * Five pickers, one at a time: the command palette, the inline skill picker,
- * the snippet picker, the file/agent mention picker and the emoji picker. Which one is open is
- * decided by the prompt language, not here.
- *
- * A picker sits at the caret, right above the line being typed
- * (`useAutocompletePosition`, which `overlayPosition` carries), as every text
- * field's suggestions do; until the first measurement it anchors itself to
- * the composer's edge, which its own styles handle.
- */
 
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
@@ -21,7 +9,6 @@ import { SkillAutocomplete, type SkillAutocompleteHandle } from '../../SkillAuto
 import type { AutocompleteKind } from '../language/triggers';
 import { GlassPopupMotion } from './GlassPopupMotion';
 
-/** A caret placement relative to the composer box; with `place: 'above'`, `top` is the popup's bottom edge. */
 export interface AutocompleteOverlayPosition {
  top: number;
  left: number;
@@ -69,19 +56,16 @@ interface ComposerAutocompletePopupsProps {
  onClose: () => void;
 }
 function ComposerAutocompletePopupsView(props: ComposerAutocompletePopupsProps) {
- const { open } = props;
- // The wrapper is a zero-height box over the anchor's top edge, so the
- // picker's `bottom-full` and caret offsets resolve exactly as they would
- // against the anchor itself.
- return (
-  <AnimatePresence>
-   {open ? (
-    <GlassPopupMotion key={open} pace="brief" className="absolute inset-x-0 top-0 z-[100] h-0 origin-top-left rtl:origin-top-right">
-     <AutocompletePopup {...props} open={open} />
-    </GlassPopupMotion>
-   ) : null}
-  </AnimatePresence>
- );
+    const { open } = props;
+    return (
+        <AnimatePresence>
+            {open ? (
+                <GlassPopupMotion key={open} pace="brief" className="absolute inset-x-0 top-0 z-[100] h-0 origin-top-left rtl:origin-top-right">
+                    <AutocompletePopup {...props} open={open} />
+                </GlassPopupMotion>
+            ) : null}
+        </AnimatePresence>
+    );
 }
 
 function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: AutocompleteKind }) {
@@ -133,5 +117,4 @@ function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: Auto
  }
 }
 
-/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
 export const ComposerAutocompletePopups = React.memo(ComposerAutocompletePopupsView);

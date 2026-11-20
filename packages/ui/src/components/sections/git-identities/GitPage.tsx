@@ -71,8 +71,6 @@ export const GitPage: React.FC = () => {
     deleteProfile: s.deleteProfile,
     setDefaultGitIdentityId: s.setDefaultGitIdentityId,
   })));
-  // An identity whose account was disconnected has to say so, so the accounts
-  // of the instances these identities name are read when the page opens.
   React.useEffect(() => {
     void refreshIdentityAccounts(sourceControl, profiles.map((profile) => profile.account));
   }, [refreshIdentityAccounts, sourceControl, profiles]);
@@ -126,7 +124,6 @@ export const GitPage: React.FC = () => {
           settingsItem="git.identities"
         >
           <div className={cn('flex flex-col', !isMobile && 'overflow-hidden rounded-lg bg-[var(--surface-elevated)]/70')}>
-            {/* Global identity */}
             {globalIdentity && (
               <IdentityRow
                 profile={globalIdentity}
@@ -138,7 +135,6 @@ export const GitPage: React.FC = () => {
               />
             )}
 
-            {/* Custom profiles */}
             {profiles.map((profile, i) => (
               <IdentityRow
                 key={profile.id}
@@ -151,8 +147,6 @@ export const GitPage: React.FC = () => {
               />
             ))}
 
-            {/* Empty state, only once the instance answered: an unread list is
-                not "this instance has no identities". */}
             {phase === 'unknown' && (
               <p className="px-4 py-8 text-center typography-meta text-muted-foreground">
                 {t('gitIdentities.state.unknown')}
@@ -171,14 +165,12 @@ export const GitPage: React.FC = () => {
         <GitSettings />
       </SettingsPageLayout>
 
-      {/* Editor dialog */}
       <GitIdentityEditorDialog
         open={editorOpen}
         onOpenChange={setEditorOpen}
         profileId={editorProfileId}
       />
 
-      {/* Delete confirmation */}
       <Dialog
         open={deleteDialogProfile !== null}
         onOpenChange={(open) => {
@@ -206,7 +198,6 @@ export const GitPage: React.FC = () => {
   );
 };
 
-// --- Identity row ---
 
 interface IdentityRowProps {
   profile: GitIdentityProfile;
@@ -235,10 +226,7 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
   const descriptorOf = useSourceControlDescriptorOf();
   const providers = useSourceControlProviderRegistry((state) => state.byId);
   const iconName = ICON_MAP[profile.icon || 'branch'];
-  // An identity made from a connected account carries its provider's mark: the icon key is the provider id.
   const iconProvider = !iconName && profile.icon ? providers.get(profile.icon) : undefined;
-  // What keeps this identity from being chosen: a missing key, an account
-  // that was disconnected, or the gh CLI login while it is not in use.
   const accountNoteKey = (account: NonNullable<GitIdentityProfile['account']>) => (
     unavailableAccountReason(
       account,
@@ -288,7 +276,6 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
           <div
             className={cn(
               'group flex cursor-pointer items-center justify-between gap-3',
-              // Flat on a phone, like the other lists there.
               isMobile
                 ? 'min-h-11 rounded-md px-0 py-1.5 active:bg-interactive-hover'
                 : 'px-4 py-2.5 transition-colors hover:bg-[var(--interactive-hover)]/30',

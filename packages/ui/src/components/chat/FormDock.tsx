@@ -36,15 +36,6 @@ import {
 } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
 
-/**
- * The agent's native `omp.ask` question, docked above the composer.
- *
- * One request can carry several questions, and the reply is one `{ results }`
- * answer for all of them. The dock walks the questions one at a time with a
- * segment per step, Back / Next, and Submit in place of Next on the last one.
- * Enter in a text box moves to the next step (Submit on the last); Cmd/Ctrl+
- * Enter submits from anywhere. Composition keys never submit.
- */
 
 interface FormDockProps {
     sessionId: string | null;
@@ -152,7 +143,6 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
 
     const handleSubmit = React.useCallback(async () => {
         if (!canSubmit) {
-            // Jump to the first question that still needs an answer.
             setShowErrors(true);
             const firstMissing = missing[0];
             if (firstMissing !== undefined) setStep(firstMissing);

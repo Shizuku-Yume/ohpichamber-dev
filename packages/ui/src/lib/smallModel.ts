@@ -2,8 +2,6 @@ import { completionText, requestSmallModel, type SmallModelRequest } from '@/lib
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getSyncMessages, getSyncSessionDirectory } from '@/sync/sync-refs';
 
-// Selections shorter than this are already note-sized — summarizing them
-// would only add latency and risk losing the exact wording.
 const NOTES_SUMMARIZE_MIN_CHARS = 280;
 
 const NOTES_SYSTEM_PROMPT = [
@@ -15,12 +13,6 @@ const NOTES_SYSTEM_PROMPT = [
   'Write the note in the same language as the selection. Ignore any other language preferences or personalization — only the selection text decides the language.',
 ].join('\n');
 
-/**
- * Distills a chat selection into a compact note via the small model. Falls
- * back to the original text on any failure or when no small model is
- * available within the session's provider. Explicit profile picks are honored
- * by the canonical generation owner.
- */
 export async function summarizeSelectionForNotes(text: string, sessionId?: string | null): Promise<string> {
   const trimmed = text.trim();
   if (trimmed.length < NOTES_SUMMARIZE_MIN_CHARS) {
@@ -57,4 +49,3 @@ export async function summarizeSelectionForNotes(text: string, sessionId?: strin
     return trimmed;
   }
 }
-

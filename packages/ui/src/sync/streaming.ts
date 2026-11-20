@@ -1,3 +1,4 @@
+
 /** Native canonical streaming lifecycle tracking. */
 import { create } from 'zustand';
 import type { Message, SessionRuntimeStatus } from '@openchamber/agent-contract';
@@ -74,4 +75,18 @@ export function updateChangedStreamingSessions(state: State, previous: State, no
   const current = useStreamingStore.getState(); const ids = new Map(current.streamingMessageIds); const states = new Map(current.messageStreamStates); let didChange = false;
   for (const sessionId of changed) { countSyncPerformance('streamingSessionCandidatesVisited'); didChange = updateOne(state, sessionId, now, ids, states) || didChange; }
   if (didChange) useStreamingStore.setState({ streamingMessageIds: ids, messageStreamStates: states });
+}
+
+export function touchStreamingSession(sessionID: string, now = Date.now()): void {
+  countSyncPerformance("streamingHeartbeatAttempts")
+  const current = useStreamingStore.getState()
+  const messageID = current.streamingMessageIds.get(sessionID)
+  if (!messageID) return
+  const existing = current.messageStreamStates.get(messageID)
+  if (!existing || existing.phase !== "streaming" || now - existing.lastUpdateAt < STREAMING_HEARTBEAT_MS) return
+
+  const messageStreamStates = new Map(current.messageStreamStates)
+  messageStreamStates.set(messageID, { ...existing, lastUpdateAt: now })
+  countSyncPerformance("streamingHeartbeatCommits")
+  useStreamingStore.setState({ messageStreamStates })
 }

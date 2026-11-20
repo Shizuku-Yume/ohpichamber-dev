@@ -1,39 +1,3 @@
-/**
- * The pill ↔ full-composer morph (Capacitor iOS).
- *
- * The swap between the collapsed pill and the full composer is a React
- * conditional: one tree unmounts, the other mounts, and the glass box changes
- * height in a single frame. Left alone that is a visible jump — the box, and
- * the pinned transcript above it, snap by the height difference before the
- * keyboard has even started moving.
- *
- * The morph is a FLIP over that swap: the swap commits at once, then the box is frozen at its old
- * height and animated to the new one with its contents anchored to the
- * bottom edge (the footer icon row and the model/agent row stay where the
- * pill's rows were), the prompt travels from where it was to where it is
- * (the pill's text line rises into the editor, or the editor's first line
- * drops into the pill), gained editor lines unfurl beneath it, and the
- * footer controls that only exist expanded fade in once the box has mostly
- * grown. Everything is measured after the swap, so old and new geometry are
- * both real.
- *
- * The transcript never chases the box: the composer slot is pinned for the
- * tween at the height the transcript should see (the new one on expand, the
- * old one on collapse, since the transcript's end may only shrink once the
- * keyboard has landed), so the slot's ResizeObserver publishes one final
- * inset and keyboardFollowGlide moves scrollTop on the keyboard's curve.
- *
- * The motion is timed to the keyboard: it starts on the `oc:keyboard-anim`
- * event for its direction and runs on the keyboard's shared duration and
- * curve (mobileKeyboardTiming.ts); it ends on the keyboard's settled event.
- * A fallback timer runs it alone when no keyboard event comes in time (often
- * on an expand: the keyboard's event crosses the bridge late), and the
- * keyboard then takes the transcript over (keyboardFollowGlide).
- *
- * Only the native iOS shell morphs. Mobile browsers rely on Safari's own
- * reveal scroll; Android resizes the window natively and is not verified
- * against this; reduced motion keeps the instant swap.
- */
 
 import { KEYBOARD_EASING_CSS, KEYBOARD_HIDE_MS, KEYBOARD_SHOW_MS, keyboardKeyframes } from '@/lib/mobileKeyboardTiming';
 import { isCapacitorApp } from '@/lib/platform';
@@ -42,40 +6,16 @@ import type { ComposerMorphEventDetail } from '../../lib/scroll/keyboardFollowGl
 
 export type ComposerMorphDirection = 'expand' | 'collapse';
 
-/** The glass box (pill or full) the morph measures and animates. */
 const BOX_SELECTOR = '[data-composer-box]';
-/** The prompt surface in either state: the pill's text line or the editor block. */
 const PROMPT_SELECTOR = '[data-composer-morph-prompt]';
-/** The floating composer slot (ChatContainer); pinned for the tween. */
 const FLOATING_SLOT_SELECTOR = '[data-composer-slot="floating"]';
-/**
- * The anchor on the slot's top edge that carries the status row, recap hint
- * and scroll-to-end button. It follows the box's top edge through the tween
- * via the individual `translate` property, which composes with the keyboard
- * slide's `transform` instead of replacing it.
- */
 const RIDERS_SELECTOR = '[data-composer-riders]';
-/**
- * Footer controls that exist only in the full composer and land in the row
- * the rising prompt still occupies while the box is short; the attach
- * control (first child) sits where the pill's attach control was and stays.
- */
 const ARRIVING_CONTROLS_SELECTOR = '[data-chat-input-footer] .composer-mobile-actions > :not(:first-child)';
 
-/** Morph state on the box while it animates; mobile.css keys on it. */
 const MORPH_STATE_ATTR = 'data-composer-morph';
 
-/**
- * Longest wait for the keyboard's own timing before the morph runs alone.
- * Short on purpose: the expand answers the tap at once, and waiting for the
- * keyboard (whose event can take half a second in the simulator) put the box
- * growth on the frames WKWebView drops as the keyboard starts, which left the
- * composer under the keyboard. A keyboard that arrives after the morph takes
- * the transcript over (keyboardFollowGlide).
- */
 const KEYBOARD_EVENT_FALLBACK_MS = 120;
 
-/** Slack after the tween's nominal end before styles are cleared. */
 const FINISH_SLACK_MS = 40;
 
 const ARRIVAL_DRIFT_PX = 4;
@@ -86,11 +26,10 @@ const morphTiming = (direction: ComposerMorphDirection) => ({
 });
 
 const composerMorphSupported = (): boolean => {
- // isCapacitorApp() is false outside a window, so the DOM is present past it.
- if (!isCapacitorApp()) return false;
- if (document.documentElement.classList.contains('oc-platform-android')) return false;
- if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false;
- return true;
+    if (!isCapacitorApp()) return false;
+    if (document.documentElement.classList.contains('oc-platform-android')) return false;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false;
+    return true;
 };
 
 const dispatchMorph = (detail: ComposerMorphEventDetail) => {
@@ -98,15 +37,8 @@ const dispatchMorph = (detail: ComposerMorphEventDetail) => {
 };
 
 export interface ComposerMorphController {
- /**
-  * Run `swap` (which must commit the pill ↔ composer change synchronously,
-  * i.e. via flushSync) as a morph of the box found under `host`. Falls
-  * back to a plain swap when the morph is unsupported or there is nothing
-  * to measure.
-  */
- run: (direction: ComposerMorphDirection, host: HTMLElement | null, swap: () => void) => void;
- /** Abort an in-flight morph and restore the natural layout. */
- cancel: () => void;
+    run: (direction: ComposerMorphDirection, host: HTMLElement | null, swap: () => void) => void;
+    cancel: () => void;
 }
 
 export function createComposerMorphController(): ComposerMorphController {
@@ -119,23 +51,20 @@ export function createComposerMorphController(): ComposerMorphController {
   cleanup();
  };
 
- const run: ComposerMorphController['run'] = (direction, host, swap) => {
-  if (!host || !composerMorphSupported()) {
-   cancel();
-   swap();
-   return;
-  }
-  // Measured before cancelling: a swap that interrupts the opposite
-  // morph continues from the box's mid-tween geometry rather than
-  // snapping to its resting size first.
-  const outgoingBox = host.querySelector<HTMLElement>(BOX_SELECTOR);
-  const outgoingPrompt = outgoingBox?.querySelector<HTMLElement>(PROMPT_SELECTOR) ?? null;
-  const fromRect = outgoingBox?.getBoundingClientRect() ?? null;
-  const fromPromptRect = outgoingPrompt?.getBoundingClientRect() ?? null;
-  const slot = outgoingBox?.closest<HTMLElement>(FLOATING_SLOT_SELECTOR) ?? null;
-  const fromSlotHeight = slot?.getBoundingClientRect().height ?? null;
-  cancel();
-  swap();
+    const run: ComposerMorphController['run'] = (direction, host, swap) => {
+        if (!host || !composerMorphSupported()) {
+            cancel();
+            swap();
+            return;
+        }
+        const outgoingBox = host.querySelector<HTMLElement>(BOX_SELECTOR);
+        const outgoingPrompt = outgoingBox?.querySelector<HTMLElement>(PROMPT_SELECTOR) ?? null;
+        const fromRect = outgoingBox?.getBoundingClientRect() ?? null;
+        const fromPromptRect = outgoingPrompt?.getBoundingClientRect() ?? null;
+        const slot = outgoingBox?.closest<HTMLElement>(FLOATING_SLOT_SELECTOR) ?? null;
+        const fromSlotHeight = slot?.getBoundingClientRect().height ?? null;
+        cancel();
+        swap();
 
   const box = host.querySelector<HTMLElement>(BOX_SELECTOR);
   if (!box || !fromRect) return;
@@ -155,84 +84,61 @@ export function createComposerMorphController(): ComposerMorphController {
   let started = false;
   let startedByKeyboard = false;
 
-  // The transcript's inset comes from the slot: on expand it takes the
-  // new height at once (the glide carries the viewport there); on
-  // collapse it keeps the old height until the keyboard has landed.
-  const pinSlot = (height: number) => {
-   if (!slot) return;
-   slot.style.height = `${height}px`;
-   slot.style.alignItems = 'flex-end';
-  };
-  // The slot's natural height with the box at rest. The form's bottom
-  // padding follows the keyboard's root class, which flips only when
-  // the keyboard leg starts, so the natural height is re-read then.
-  // Measured without the morph state too: its clip and non-shrinking
-  // rows can size the box differently from rest, and any difference
-  // shows up as a riders jump when the slot is unpinned at the end.
-  const measureSlotNatural = (): number | null => {
-   if (!slot) return null;
-   const pinned = slot.style.height;
-   const boxHeight = box.style.height;
-   const morphState = box.getAttribute(MORPH_STATE_ATTR);
-   slot.style.height = '';
-   box.style.height = '';
-   box.removeAttribute(MORPH_STATE_ATTR);
-   const natural = slot.getBoundingClientRect().height;
-   slot.style.height = pinned;
-   box.style.height = boxHeight;
-   if (morphState !== null) box.setAttribute(MORPH_STATE_ATTR, morphState);
-   return natural;
-  };
-  if (slot && fromSlotHeight !== null) {
-   pinSlot(direction === 'expand' ? slot.getBoundingClientRect().height : fromSlotHeight);
-  }
-  // The riders travel by the slot's delta, not the box's alone (the
-  // form's own padding changes with the keyboard too). The transcript's
-  // end moves by the change of the column's tail inset, which takes the
-  // gap above the composer first (composerTailInset), so the glide is
-  // told that amount.
-  const column = slot?.parentElement ?? null;
-  const transcriptDeltaFor = (toSlotHeight: number): number => (
-   column && fromSlotHeight !== null
-    ? Math.abs(composerTailInsetFor(column, toSlotHeight) - composerTailInsetFor(column, fromSlotHeight))
-    : delta
-  );
-  const initialSlotHeight = slot?.getBoundingClientRect().height ?? null;
-  let slotDelta = fromSlotHeight !== null && initialSlotHeight !== null
-   ? Math.abs(initialSlotHeight - fromSlotHeight)
-   : delta;
-  let transcriptDelta = initialSlotHeight !== null ? transcriptDeltaFor(initialSlotHeight) : delta;
-  // Freeze the box at the outgoing height with its rows on the bottom
-  // edge; mobile.css supplies the clip and bottom anchoring.
-  box.setAttribute(MORPH_STATE_ATTR, direction);
-  box.style.height = `${fromRect.height}px`;
-  void box.offsetHeight;
+        const pinSlot = (height: number) => {
+            if (!slot) return;
+            slot.style.height = `${height}px`;
+            slot.style.alignItems = 'flex-end';
+        };
+        const measureSlotNatural = (): number | null => {
+            if (!slot) return null;
+            const pinned = slot.style.height;
+            const boxHeight = box.style.height;
+            const morphState = box.getAttribute(MORPH_STATE_ATTR);
+            slot.style.height = '';
+            box.style.height = '';
+            box.removeAttribute(MORPH_STATE_ATTR);
+            const natural = slot.getBoundingClientRect().height;
+            slot.style.height = pinned;
+            box.style.height = boxHeight;
+            if (morphState !== null) box.setAttribute(MORPH_STATE_ATTR, morphState);
+            return natural;
+        };
+        if (slot && fromSlotHeight !== null) {
+            pinSlot(direction === 'expand' ? slot.getBoundingClientRect().height : fromSlotHeight);
+        }
+        const column = slot?.parentElement ?? null;
+        const transcriptDeltaFor = (toSlotHeight: number): number => (
+            column && fromSlotHeight !== null
+                ? Math.abs(composerTailInsetFor(column, toSlotHeight) - composerTailInsetFor(column, fromSlotHeight))
+                : delta
+        );
+        const initialSlotHeight = slot?.getBoundingClientRect().height ?? null;
+        let slotDelta = fromSlotHeight !== null && initialSlotHeight !== null
+            ? Math.abs(initialSlotHeight - fromSlotHeight)
+            : delta;
+        let transcriptDelta = initialSlotHeight !== null ? transcriptDeltaFor(initialSlotHeight) : delta;
+        box.setAttribute(MORPH_STATE_ATTR, direction);
+        box.style.height = `${fromRect.height}px`;
+        void box.offsetHeight;
 
-  // The prompt starts where the outgoing prompt was.
-  let promptOffset = 0;
-  let promptGainedHeight = 0;
-  if (prompt && fromPromptRect) {
-   const promptRect = prompt.getBoundingClientRect();
-   promptOffset = fromPromptRect.top - promptRect.top;
-   promptGainedHeight = promptRect.height - fromPromptRect.height;
-   if (Math.abs(promptOffset) >= 0.5) prompt.style.transform = `translateY(${promptOffset}px)`;
-   if (direction === 'expand' && promptGainedHeight >= 0.5) {
-    prompt.style.clipPath = `inset(0 0 ${promptGainedHeight}px 0)`;
-   }
-  }
-  for (const control of arriving) control.style.opacity = '0';
-  // The riders' natural anchor is the pinned slot's top: the new box top
-  // on expand (so they start displaced down to the old one), the old
-  // box top on collapse (so they end displaced down to the new one,
-  // where the unpin then puts them for real).
-  // Their travel is the SLOT's delta (box plus the form's own padding
-  // change), the same amount the unpin moves their anchor by.
-  const riders = slot?.querySelector<HTMLElement>(RIDERS_SELECTOR) ?? null;
-  const ridersTravel = () => ({
-   from: direction === 'expand' ? slotDelta : 0,
-   to: direction === 'expand' ? 0 : slotDelta,
-  });
-  if (riders) riders.style.translate = `0 ${ridersTravel().from}px`;
+        let promptOffset = 0;
+        let promptGainedHeight = 0;
+        if (prompt && fromPromptRect) {
+            const promptRect = prompt.getBoundingClientRect();
+            promptOffset = fromPromptRect.top - promptRect.top;
+            promptGainedHeight = promptRect.height - fromPromptRect.height;
+            if (Math.abs(promptOffset) >= 0.5) prompt.style.transform = `translateY(${promptOffset}px)`;
+            if (direction === 'expand' && promptGainedHeight >= 0.5) {
+                prompt.style.clipPath = `inset(0 0 ${promptGainedHeight}px 0)`;
+            }
+        }
+        for (const control of arriving) control.style.opacity = '0';
+        const riders = slot?.querySelector<HTMLElement>(RIDERS_SELECTOR) ?? null;
+        const ridersTravel = () => ({
+            from: direction === 'expand' ? slotDelta : 0,
+            to: direction === 'expand' ? 0 : slotDelta,
+        });
+        if (riders) riders.style.translate = `0 ${ridersTravel().from}px`;
 
   const restore = () => {
    for (const animation of animations) animation.cancel();

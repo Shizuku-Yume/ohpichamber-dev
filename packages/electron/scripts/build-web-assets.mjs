@@ -101,7 +101,6 @@ try {
   await removeDir(resourcesWebDistDir);
   await fs.rename(stagedWebDistDir, resourcesWebDistDir);
 } catch (error) {
-  // A failed copy (a full disk, say) must not leave a half-staged dir behind.
   await removeDir(stagedWebDistDir);
   throw error;
 }

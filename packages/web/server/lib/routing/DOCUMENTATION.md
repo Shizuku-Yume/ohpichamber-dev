@@ -35,7 +35,8 @@ There is no env gate — the feature shipped dark behind
   one throws.
 - `jev.js` — request builders, answer parsing, and the HTTP call with a
   timeout to the endpoint `classifierEndpoint` chose.
-- `history.js` — bounded text excerpts from settled turns. `runtime.js` reads
+- `history.js` — bounded text excerpts from settled turns, with Host-owned
+  `HistoryEntry`/`RoutingHistory` types (role and text only). `runtime.js` reads
   chronological canonical session history through session assist's
   `loadSettledTurns`. Only `Turn.status === 'completed'` settles an answer;
   the matching Turn's `finishedAt` establishes the prompt-cache age. It keeps
@@ -60,6 +61,12 @@ There is no env gate — the feature shipped dark behind
   accept `workspaceId` in the query for workspace-scoped provider availability.
 
 ## Invariants
+
+- Gemini classification retains its Host-owned key store and authenticated
+  `PUT`/`DELETE /api/routing/classifier/gemini` routes. Saving selects Gemini;
+  deleting removes only its key. State exposes presence, never the key. Enterprise
+  mode refuses new keys and cannot select Gemini for execution. All four retained
+  clients use the same Host policy and transport.
 
 - The Auto sentinel is a Host choice, never an OMP model. A native send passes
   `{ providerId: 'openchamber', modelId: 'auto' }` to `resolveAutoSelection`.

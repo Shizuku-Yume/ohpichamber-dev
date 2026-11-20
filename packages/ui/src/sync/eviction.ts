@@ -1,6 +1,5 @@
 import type { DisposeCheck, EvictPlan, State } from "./types"
 
-/** A directory with a pending approval or question must remain available. */
 export function hasPendingBlockingRequests(state: State | undefined): boolean {
   if (!state) return false
   for (const requests of Object.values(state.form ?? {})) {

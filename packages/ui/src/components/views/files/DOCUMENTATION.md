@@ -1,5 +1,32 @@
 # File tree loading and visibility
 
+## Ownership
+
+This module owns shared file-tree behavior, file-editor handoffs and artifact
+previews. `FilesView` and the sidebar and mobile containers own their layout;
+runtime APIs own filesystem access, and `lib/codemirror` owns text-editor aids.
+
+`view/useFileClosing` registers the context panel's close and selection guards
+from `view/fileViewTypes`. A dirty selected file blocks a matching close or
+selection until the draft is saved or discarded; failed saves keep the action
+pending. The hook releases both guard refs when the view unmounts.
+
+## Invariants
+
+- Folder disclosure releases pinned rows even when loading fails or no rows
+  appear. Closing ghosts retain their final clipped state until removal, so
+  they cannot flash back after the animation ends.
+- Content-search callers debounce the query before passing it to the hook.
+  Search-result paths retain left-to-right marks inside the RTL folder label,
+  so a leading dot stays beside its name.
+- File paths retain trailing whitespace when resolving Git baselines because
+  that whitespace can belong to the filename. Change batches preserve the
+  caller's root spelling, including Windows drive-letter case.
+- Folder badges count files by Git status letter. Diff-style `+` and `-`
+  labels would imply counts of changed lines.
+
+## Directory snapshots
+
 `FilesView` and `SidebarFilesTree` keep directory snapshots in component state.
 `DirectoryRequests` owns shared in-flight reads and supersession. Repeated
 same-path callers await the same request; an explicit mutation refresh can
@@ -237,7 +264,7 @@ throwaway `FontFace` family removed when the tab closes), `TableArtifact`
 (CSV/TSV through `delimitedText.ts`, capped rows stated in the meta line),
 `OfficeArtifact` (docx, xlsx, pptx, odt, ods, odp, read-only, see below),
 and `BinaryArtifact` (name, type, size, download, and the desktop's open in
-the default app; never a decode attempt). `FilesView.renderArtifactPreview`
+the default app; never a decode attempt). `view/useArtifactPreview`
 is the single switch both the docked and the fullscreen viewer use.
 
 A file that cannot be shown fills the pane with `ContentState`
@@ -273,6 +300,24 @@ with `preview`): on desktop one preview tab follows the steps while the tab
 the user started from stays; on the phone the Files surface shows the
 neighbour in place and Back still leads to the folder being browsed. A folder
 that cannot be read shows no arrows.
+
+### Why images remount by source and not reset in an effect
+
+A data-URL SVG can report its dimensions before React flushes a reset effect;
+the effect would then erase the dimensions just loaded. A source-keyed viewer
+keeps measurements and zoom with their image, and retrying the same URL remounts
+the image element so the browser requests it again.
+
+### Image gesture invariants
+
+- Zoom flushes its render before another wheel or pinch event measures the
+  image, so the next anchor uses current geometry. Wheel deltas are capped
+  because one mouse-wheel notch is much larger than a trackpad pinch delta.
+- Touch pinches suppress simultaneous iOS gesture events. Safari trackpad
+  gestures still work when no finger touches the screen, so a pinch zooms once.
+- The decoding image stays mounted but invisible so it can load and report its
+  dimensions. The outer viewer stays measurable after failure so keyboard
+  visibility checks continue to work.
 
 The arrow keys are heard on the document: while the focus is in the panel
 that holds the viewer, and not in a text field or a control that moves with
@@ -316,7 +361,7 @@ preview a new URL and loads the new bytes.
 ### Why proxy-protected mobile previews buffer the file
 
 Browser media elements cannot attach proxy headers, and a scoped URL token
-only authenticates to OpenChamber. Reading through the shared HTTP transport
+only authenticates to OhPiChamber. Reading through the shared HTTP transport
 keeps proxy credentials out of URLs and preserves redirect refusal. The
 existing file-open limit bounds retained bytes, at the cost of waiting for
 the file to finish downloading before playback starts.
@@ -473,12 +518,34 @@ and small notes about its cells. These must stay true:
 - The grid draws only the columns near the view from `COLUMN_WINDOW_MIN` columns
   up. All `<col>`s stay and a spanning cell stands for what is not drawn, so widths
   stay exact. A frozen column and the one being edited are always drawn.
+- Each spanning gap is split into cells of at most 1,000 columns. Browsers clamp larger `colspan` values, which would place the drawn cells in the wrong columns and make the far end unreachable.
 - Reading a column's values for the filter menu takes every row, so it happens
   when the submenu mounts and never in render.
 
 A text table past `MAX_OPEN_FILE_BYTES` opens read-only from its bytes, because
 the editor could not hold it. Past `DEFAULT_TABLE_ROW_CAP` rows the grid holds
 the first ones; filters and search see only the rows the grid holds.
+
+### Data and preview invariants
+
+- SQLite reads retain big integers because converting an identifier past
+  `2^53` to a JavaScript number would round it.
+- PDF parsing and password errors identify an unreadable document. Transport
+  and token failures remain read failures, so a valid file still offers Retry.
+- A preview font uses a throwaway family scoped to its lifetime, so unrelated
+  UI text cannot accidentally select the document's font.
+
+### Why Bun archive operations use synchronous compression
+
+Bun's browser-style Blob workers do not reliably run fflate's asynchronous
+path. Archive reads and workbook packing use synchronous operations there;
+other runtimes retain the asynchronous path.
+
+### Why document parsing has a local transport fallback
+
+Bun's test runtime has no worker bundler, and the VS Code webview cannot load
+the document worker from its origin. Both use the same document host locally,
+while browser runtimes keep parsing off the app's thread.
 
 ### Export
 
@@ -533,6 +600,16 @@ asks for its grant with `allowOutsideWorkspace`, and the server scopes it to
 the page's folder. VS Code renders `srcDoc` in the same sandbox. The server
 side (read root, CORS, CSP) is described in
 `packages/web/server/lib/fs/DOCUMENTATION.md`.
+
+### Frame invariants
+
+- The host opens only allowed document links after checking the message's
+  source frame. The opaque-origin frame receives its parent's origin from the
+  host because it cannot read it; originless hosts require the wildcard target
+  while retaining the receiver's sender check.
+- Embedded document styles escape closing style tags because those rules are
+  untrusted text. The office iframe retains `color-scheme: normal` so its
+  transparent background stays transparent under a dark app theme.
 
 Adopting new content through `applyLoadedTextContent` bumps the file revision,
 which asks for a new grant and reloads the frame, so a page changed on disk
@@ -647,6 +724,29 @@ the changelog opens without a task over 10 ms, and a resize costs what it
 costs with a short file. The blocks render as they do in a streamed reply,
 pixel for pixel the same as the whole document.
 
+The preview's Outline button (`MarkdownPreviewOutline`) lists the headings the
+preview rendered (`readPreviewHeadings`: `h1` to `h6` inside
+`[data-markdown-content]`) and scrolls to the heading element the reader
+picked. Like the find bar, it holds every block mounted while it is open and
+lets go when it closes, and it rescans when the rendered document changes. The
+button exists for every Markdown file in every mode, so the row never changes
+with the mode, and pressing it never changes the mode: in the source it opens
+the editor's Symbols list, which lists a Markdown file's headings. The panel is
+closed by default, closes when the preview goes away or another file opens,
+and stores nothing.
+
+### Why the outline reads the rendered headings
+
+The outline could have parsed the file text and matched each entry to a heading
+by position or title. A raw HTML `<h2>` renders as a heading that a text parser
+does not list, inline formatting and image alt text read differently in the
+text and in the DOM, and duplicate titles need counting, so a match could land
+on the wrong heading or on none. Reading the rendered headings makes the list
+the document as shown, and a pick scrolls the element itself. The price is that
+a long document is mounted whole while the panel is open, which the find bar
+already costs. Parsing the text and mounting blocks only on a pick is the
+fallback if that mount time proves too slow on a very long file.
+
 ### Why document assets resolve before node updates
 
 Media and link components own their resources and cleanup. Rewriting the
@@ -729,7 +829,10 @@ built-in preview: a text editor only text files, a binary editor
 surface="file"` with a per-mount channel (`lib/guests/file-editor-channel.ts`)
 holding the draft at mount; the frame gets the file on `hello` / load, answers
 snapshot requests within `GUEST_REQUEST_TIMEOUT_MS`, and reports changes. VS
-Code and mobile keep the extension catalog empty, so there nothing matches.
+Code keeps the extension catalog empty, so nothing matches there. The phone's
+Files tab (`MobileFilesSurface` → `FilesView`) matches editors like the
+desktop, with no manifest opt-in: a file editor owns the whole view, so it
+needs none of the room a panel would.
 
 The contract is one-directional content. The frame reads the file it was
 handed at mount, so `FilesView` remounts it with a `key` of path plus

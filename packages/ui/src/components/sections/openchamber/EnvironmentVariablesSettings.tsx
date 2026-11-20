@@ -13,7 +13,6 @@ type LoadState =
   | { state: 'ready'; names: string[] }
   | { state: 'failed' };
 
-/** Host-owned environment variables for commands started by OpenChamber. */
 export const EnvironmentVariablesSettings: React.FC = () => {
   const { t } = useI18n();
   const enterpriseMode = useEnterpriseMode();

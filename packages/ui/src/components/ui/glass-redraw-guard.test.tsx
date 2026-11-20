@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 

@@ -1,5 +1,22 @@
 # MCP backend integration
 
+## Native Host usage tool
+
+`openchamber_usage` exposes only `usage.read`. It is disabled by default, follows
+`agentUsageToolEnabled` on initial worker setup and settings updates, and is
+checked again at the Host dispatch boundary. Results use the existing versioned
+usage card envelope, without account labels or credentials. `openchamber` also
+admits `session.track` and `session.markDone`; Canonical session eligibility,
+Host metadata and archive/worktree pin owners enforce their work-state policy.
+
+## Projection validation
+
+Unstamped session update/status projections reuse Canonical payload schemas,
+including revision and live-run refinements. Journal stamping adds the actual
+envelope and validates the complete event. Projection seeds reuse snapshot state
+fields, not snapshot-only cursor/window checks. Refined schemas are never merged
+then omitted/picked, which Zod 4.6.7 rejects.
+
 The Agent Service owns workspace MCP configuration and routes sessionless workspace MCP operations through stateless workers. Workspace configuration is persisted by the catalog coordinator; worker operations remain authorized against the workspace root session.
 
 A session worker applies its initial external MCP configuration off the admission path: `WorkerSession.open` starts the application in the background instead of waiting for the handshake, so a slow or unreachable external server cannot delay the first prompt. Connection failures are reported as `mcp.runtime.failure` diagnostics and never fail the worker; a successful application publishes the ready catalog and its tools through `catalog.updated`. `close()` disconnects the MCP owner before awaiting that background application, so a stalled handshake settles rather than holding the worker's shutdown window.
@@ -47,6 +64,19 @@ A tool result belongs to the message that authored its `tool_call`: the projecti
 `metadata()` also derives each assistant step's `timing` from the native `AssistantMessage` alone (`timestamp`, `ttft`, `duration`/`completedAt`), so a restored step and the live stream publish the same absolute epochs. A run OMP prompts itself (plan/goal continuation) opens a turn with no authored user message; the Host prompt path authors the user message it was given.
 
 Host tools (`openchamber`, `openchamber_knowledge`, `web`, `memory`, `notify`, `openchamber_image`, `openchamber_render`) are registered by `worker/host-tool.ts`; `openchamber_render` sends the tool call id so a waiting page can be answered, and returns its answer under `details.openchamber`, which the projection also hoists to the result's top level for the render card.
+
+`openchamber_secret` is a Host-owned tool with call identity. `secret.run`
+requests Canonical Bash approval for its executable and arguments, then
+consumes the one-shot receipt through the existing Host Bash authorizer before
+calling the private Host action channel. The Host alone collects values; no
+submitted secret enters the worker, SDK transcript or canonical tool result.
+`secret.request` refuses file mode and `secret.forget` clears Host memory leases.
+The shared private-protocol `hostActionTimeoutMs` policy exempts only `secret.run`
+from the generic two-minute IPC deadline in both supervisor and Node Host.
+Secret entry waits for the user or cancellation; the Host command runner owns
+the requested execution timeout (at most five minutes). Abort, worker/service
+disconnect and shutdown still cancel the pending action. Other actions retain
+their two-minute deadline; authorization requests retain five seconds.
 
 ## OMP TUI timeline notices and compaction projection
 
@@ -251,6 +281,11 @@ The Host captures both preferences into the worker bootstrap environment (`OPENC
 Plan mode keeps its own tool set. When `OPENCHAMBER_PLAN_ALLOW_AGENTS` is set in the worker bootstrap environment (Settings → Sessions → "Allow subagents in Plan mode"), `enterPlan` and the plan restore keep the native `task` tool active alongside the plan tool set. Leaving Plan mode restores the previous tools, so the permission never outlives the mode. It grants no capability of its own: every child tool call still passes its own authorization.
 
 ## Native goal mode
+
+The three-run native goal fixture disables `suggestion.generator`: background
+composer predictions reuse the provider and its tool catalog but are not goal
+runs. Its scripted response counter must count only foreground goal requests;
+suggestion generation has its own driver tests.
 
 Session control accepts `goal` operations `create`, `pause`, `resume`, and `drop`. Creation requires a nonempty objective and accepts a positive integer token budget (or `null` for no budget). The Host authorizes the session scope and forwards the operation; it stores no native goal state. Create and resume refuse an active run; pause and drop remain available during execution.
 

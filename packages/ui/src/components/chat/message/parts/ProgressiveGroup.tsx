@@ -28,7 +28,7 @@ import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { getDirectoryForFilePath, getRelativeFilePath, isFilePathWithinDirectory, toAbsoluteFilePath } from '@/lib/path-utils';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
-const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
+const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-normal', TOOL_ROW_TEXT_CLASS);
 const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 
 interface ProgressiveGroupProps {
@@ -119,11 +119,6 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
 };
 
 
-/**
- * Short description for a static tool row (aggregation display). Tool naming
- * and per-tool input fields live in `@/lib/toolHelpers`; this only trims
- * the result to the row's width and falls back to a bare file name.
- */
 const SHORT_DESCRIPTION_MAX = 50;
 
 const getToolShortDescription = (activity: TurnActivityPart): string | null => {
@@ -326,10 +321,6 @@ const aggregateRows = (parts: TurnActivityPart[], pairedResultKeys: ReadonlySet<
     return rows;
 };
 
-/**
- * Render a static aggregated tool row.
- * Shows: [icon] DisplayName file1.tsx file2.tsx ...
- */
 const areActivityListsEqual = (left: TurnActivityPart[], right: TurnActivityPart[]): boolean => {
     if (left === right) {
         return true;
@@ -419,9 +410,6 @@ const StaticToolRowInner: React.FC<{
             return;
         }
 
-        // Dedicated mobile app: stage the same pending file focus/navigation
-        // desktop uses, then surface the Files pane (workspace drawer tab),
-        // which consumes it.
         if (mobileActions) {
             const uiStore = useUIStore.getState();
             const contextDirectory = currentDirectory || getDirectoryForFilePath(currentDirectory, absolutePath);
@@ -458,9 +446,6 @@ const StaticToolRowInner: React.FC<{
 
     return (
         <div
-            // oc-static-tool-row: on touch devices mobile.css raises this to the
-            // same 36px floor the [role="button"] expandable/reasoning rows get,
-            // so static and expandable rows have identical rhythm.
             className={cn(
                 'oc-static-tool-row flex w-full items-center gap-x-1.5 pr-2 pl-px py-1.5 rounded-xl min-w-0'
             )}
@@ -471,8 +456,8 @@ const StaticToolRowInner: React.FC<{
             <MinDurationShineText
                 active={hasRunningActivity}
                 minDurationMs={1000}
-                className={cn(TOOL_ROW_TITLE_CLASS, 'inline-flex items-center flex-shrink-0 opacity-85')}
-                style={{ color: 'var(--tools-title)' }}
+                className={cn(TOOL_ROW_TITLE_CLASS, 'inline-flex items-center flex-shrink-0')}
+                style={{ color: 'var(--tools-description)' }}
                 title={displayName}
             >
                 {displayName}
@@ -502,7 +487,7 @@ const StaticToolRowInner: React.FC<{
                         <Text
                             variant={animateTailText ? 'generate-effect' : 'static'}
                             className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
-                            style={{ color: 'var(--tools-description)' }}
+                            style={{ color: 'var(--tools-title)' }}
                             title={desc}
                         >
                             "{desc}"
@@ -514,7 +499,7 @@ const StaticToolRowInner: React.FC<{
                 <Text
                     variant={animateTailText ? 'generate-effect' : 'static'}
                     className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
-                    style={{ color: 'var(--tools-description)' }}
+                    style={{ color: 'var(--tools-title)' }}
                 >
                     {descriptions.join(' ')}
                 </Text>

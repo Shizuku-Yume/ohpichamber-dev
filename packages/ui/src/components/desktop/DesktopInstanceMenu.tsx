@@ -25,10 +25,6 @@ type Props = {
   className?: string;
 };
 
-/**
- * The instance switcher. Instances only exist in the desktop app; everywhere
- * else there is nothing to switch, so nothing renders.
- */
 export function DesktopInstanceMenu({ className }: Props): React.ReactNode {
   const [isDesktopApp] = React.useState(() => isDesktopShell());
   if (!isDesktopApp) {
@@ -51,9 +47,6 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
       return;
     }
 
-    // Same resolution the host switcher's own header uses, so the button and
-    // the panel it opens can never disagree about which instance this is.
-    // Without the saved instances the window's own runtime still names it.
     const hosts = await desktopHostsGet()
       .then((cfg) => withLocalDesktopHost(cfg.hosts, cfg.localOrigin))
       .catch(() => withLocalDesktopHost([], getLocalDesktopOrigin()));
@@ -71,8 +64,6 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
 
   React.useEffect(() => {
     void refreshCurrentInstanceLabel();
-    // Switching instances does not remount the sidebar, so without this the
-    // button would keep naming the instance the window left behind.
     return subscribeRuntimeEndpointChanged(() => {
       void refreshCurrentInstanceLabel();
     });
@@ -91,8 +82,6 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
         setOpen(false);
         return;
       }
-      // The trigger lives in the sidebar footer; a collapsed sidebar has to
-      // come back first, or the menu would anchor to a zero-width column.
       const ui = useUIStore.getState();
       if (!ui.isSidebarOpen) {
         ui.setSidebarOpen(true);

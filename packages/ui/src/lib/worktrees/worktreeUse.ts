@@ -1,3 +1,6 @@
+
+import type { ChildStoreManager } from '@/sync/child-store';
+import { aggregateLiveSessions } from '@/sync/live-aggregate';
 import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -13,11 +16,34 @@ const sessionsInWorktree = (sessions: readonly Session[], path: string): Session
   return root ? sessions.filter((session) => isInside(resolveGlobalSessionDirectory(session), root)) : [];
 };
 
-/**
- * `sessionIds` and the sessions working in the worktree now. A retried delete
- * can come long after the first attempt, so it takes the sessions started
- * there since then as well.
- */
 export const withSessionsNowInWorktree = (sessionIds: readonly string[], path: string): string[] => [
   ...new Set([...sessionIds, ...sessionsInWorktree(useGlobalSessionsStore.getState().activeSessions, path).map((session) => session.sessionId)]),
 ];
+
+export const activeSessionsInWorktreeNow = (path: string, liveSessions: readonly Session[]): Session[] => {
+  const root = normalizePath(path);
+  if (!root) return [];
+  const listed = useGlobalSessionsStore.getState().activeSessions;
+  const listedIds = new Set(listed.map((session) => session.sessionId));
+  const merged = new Map(sessionsInWorktree(listed, root).map((session) => [session.sessionId, session]));
+  for (const session of liveSessions) {
+    if (!listedIds.has(session.sessionId) && !session.archivedAt && isInside(resolveGlobalSessionDirectory(session), root)) merged.set(session.sessionId, session);
+  }
+  return [...merged.values()];
+};
+
+export const readSessionsInWorktree = (childStores: ChildStoreManager, path: string): Session[] => activeSessionsInWorktreeNow(
+  path,
+  aggregateLiveSessions(Array.from(childStores.children.values(), (store) => store.getState())),
+);
+
+export const subscribeSessionsInWorktree = (childStores: ChildStoreManager, notify: () => void): (() => void) => {
+  const stopLive = childStores.subscribeAllSelected((state) => state.session, notify);
+  const stopGlobal = useGlobalSessionsStore.subscribe((state, previous) => {
+    if (state.activeSessions !== previous.activeSessions) notify();
+  });
+  return () => {
+    stopLive();
+    stopGlobal();
+  };
+};

@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
@@ -93,6 +93,12 @@ test('shares one control stream, deduplicates main-stream delivery, and retires 
     await act(async () => source.emit({ ...payload, title: 'Disabled' }));
     expect(delivered).toEqual(['Done']);
     useUIStore.setState({ nativeNotificationsEnabled: true });
+
+    // toastOnly on an answer to a shared page keeps the system notification
+    // away; its toast comes from the control stream sync (control-stream-sync.ts).
+    const answer = { title: 'Toast only', body: 'Picked B', kind: 'share-answer', tag: 'share-ses_1', sessionId: 'ses_1', directory: '/repo', requireHidden: true, toastOnly: true };
+    await act(async () => source.emit(answer));
+    expect(delivered).toEqual(['Done']);
 
     const apiBaseUrl = 'http://other-runtime.test';
     const previousApiBaseUrl = window.location.origin;

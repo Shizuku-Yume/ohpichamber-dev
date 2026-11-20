@@ -7,11 +7,6 @@ import { git } from '@/lib/gitApi';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { archivedWorktreeLabel, deleteArchivedWorktree, loadWorktreeArchives, restoreArchivedWorktree } from '@/lib/worktrees/worktreeArchive';
 
-/**
- * Restore and delete for archived worktrees, with their toasts and the
- * confirmation deleting asks for. `busyIds` are the archives being worked on,
- * so their buttons wait.
- */
 export function useWorktreeArchiveActions() {
   const { t } = useI18n();
   const { confirm, confirmWithCheckbox, dialog } = useConfirmDialog();

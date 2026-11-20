@@ -1,3 +1,4 @@
+import { commitRequestRepository, commitRequestShown, type MobileChangesCommitRequest } from './mobileChangesCommitRequest';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
@@ -87,6 +88,7 @@ import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { PendingGitOperationError } from '@/lib/source-control/git-operation-recovery';
 import { useGitPublishChooser } from '@/components/views/git/useGitPublishChooser';
 import { PublishDialog } from '@/components/views/git/PublishDialog';
+import { ChangedPathLabel } from '@/components/views/git/ChangedPathLabel';
 import { settleGitFileReverts } from './mobileChangesOperations';
 import { normalizePath } from '@/lib/pathNormalization';
 
@@ -120,8 +122,6 @@ const LOADING_COMPARISON_DIFF: ComparisonDiff = { status: 'loading' };
 const FULL_CONTEXT_DIFF_LINES = 1_000_000;
 const LIST_ROUTE: ChangesRoute = { type: 'list' };
 
-// The server already serializes reverts per repository, so anything beyond a
-// couple of in-flight POSTs only holds browser connections away from reads.
 const REVERT_PATHS_CONCURRENCY = 2;
 
 const isStagedStatusFile = (file: GitStatus['files'][number]): boolean => {
@@ -137,6 +137,8 @@ const isUnstagedStatusFile = (file: GitStatus['files'][number]): boolean => {
 
 const diffCacheKey = (path: string, staged: boolean): string => staged ? `${path}\u0000staged` : path;
 
+const handledCommitRequests = new WeakSet<MobileChangesCommitRequest>();
+
 type MobileChangesSurfaceProps = {
  /** When provided, the list header gets a close X that calls this. */
  onClose?: () => void;
@@ -144,7 +146,8 @@ type MobileChangesSurfaceProps = {
   * A new request object opens its working-tree diff, including repeated requests
   * for the same path. Reopening the drawer keeps the same object and navigation.
   */
- initialDiff?: { path: string; staged: boolean } | null;
+ initialDiff?: { path: string; staged: boolean; scope?: 'turn' } | null;
+ initialCommit?: MobileChangesCommitRequest | null;
  /** The workspace drawer keeps visited panes mounted while hidden. */
  visible?: boolean;
  registerBackHandler?: (handler: (() => boolean) | null) => void;
@@ -155,6 +158,13 @@ type MobileChangesSurfaceProps = {
 export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = (props) => {
  const rootDirectory = normalizePath(useEffectiveDirectory() ?? null) ?? '';
  const repository = useNestedGitDirectory(rootDirectory || null, { enabled: props.visible ?? true, recheckOnOpen: true });
+ React.useEffect(() => {
+  if (!props.initialCommit || handledCommitRequests.has(props.initialCommit)) return;
+  const target = commitRequestRepository(rootDirectory, props.initialCommit);
+  if (!target) return;
+  usePullRequestSelectionStore.getState().clearChangesRepository(rootDirectory);
+  useGitStore.getState().selectNestedRepo(rootDirectory, target);
+ }, [props.initialCommit, rootDirectory]);
  return <MobileChangesPane {...props} rootDirectory={rootDirectory} repository={repository} />;
 };
 
@@ -164,7 +174,7 @@ interface MobileChangesPaneProps extends MobileChangesSurfaceProps {
 }
 
 /** Repository-scoped navigation and actions, separate from session directory resolution. */
-export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, visible = true, onNavigatedToChat, registerBackHandler }) => {
+export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, initialCommit, visible = true, onNavigatedToChat, registerBackHandler }) => {
  const { t } = useI18n();
  const { git, sourceControl } = useRuntimeAPIs();
  // When the root is not itself a repository, changes come from the resolved
@@ -297,6 +307,12 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   changeMode('pr');
  }, [changeMode, requestedPr, visible]);
 
+ React.useEffect(() => {
+  if (!initialCommit || handledCommitRequests.has(initialCommit) || !commitRequestShown(currentDirectory, initialCommit)) return;
+  handledCommitRequests.add(initialCommit);
+  changeMode('commit');
+ }, [changeMode, currentDirectory, initialCommit]);
+
  // Allow the host (MobileApp) to push us into a specific diff when the surface
  // is reopened or when an external trigger (e.g. a changed-file tap in chat) requests
  // a different file mid-session.
@@ -304,7 +320,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   if (!initialDiff?.path) return;
   // A new external target is a working-tree diff, regardless of the last
   // comparison mode. Changing directories alone must not replay this target.
-  setNavigation({ ownerKey: ownerKeyRef.current, mode: 'working', route: { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } });
+  setNavigation({ ownerKey: ownerKeyRef.current, mode: initialDiff.scope === 'turn' ? 'turn' : 'working', route: { type: 'diff', path: initialDiff.path, staged: initialDiff.staged } });
  }, [initialDiff]);
  const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
  const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
@@ -653,7 +669,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   let cancelled = false;
   const runtimeKey = getRuntimeKey();
   setDiffLoadError(null);
-  void git.getGitFileDiff(currentDirectory, { path: route.path, staged: route.staged || undefined })
+  void git.getGitFileDiff(currentDirectory, { path: route.path, staged: route.staged || undefined, previousPath: selectedFileEntry?.previousPath })
    .then((response) => {
     if (cancelled) return;
     setDiff(currentDirectory, cacheKey, {
@@ -680,7 +696,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   return () => {
    cancelled = true;
   };
- }, [currentDirectory, diffRetryNonce, fetchStatus, getDiff, git, route, setDiff, visible]);
+ }, [currentDirectory, diffRetryNonce, fetchStatus, getDiff, git, route, selectedFileEntry?.previousPath, setDiff, visible]);
 
  const handleSyncAction = async (action: Exclude<SyncAction, null>, remote?: GitRemote, forceChoose = false) => {
   if (!currentDirectory) return;
@@ -1095,6 +1111,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
    <MobileDiffDetail
     path={route.path}
     diff={selectedDiff}
+    previousPath={selectedFileEntry?.previousPath}
     staged={route.staged}
     fileExists={Boolean(selectedFileEntry)}
     unavailableReason={unavailablePath?.key === `${currentDirectory}\u0000${route.path}` ? unavailablePath.reason : null}
@@ -1127,6 +1144,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   return (
    <MobileDiffDetail
     path={activeComparisonPath}
+    previousPath={comparisonFiles?.find((file) => file.path === activeComparisonPath)?.previousPath}
     subtitle={[modeLabel, sourceLabel].filter(Boolean).join(' · ')}
     diff={activeFullComparisonDiff ?? (activeComparisonDiff.status === 'ready' ? activeComparisonDiff.diff : null)}
     fileExists={!comparison.files || comparison.files.some((file) => file.path === activeComparisonPath)}
@@ -1437,6 +1455,7 @@ const MobileChangesState: React.FC<{
 
 const MobileDiffDetail: React.FC<{
  path: string;
+ previousPath?: string;
  subtitle?: string;
  diff: MobileDiffData | null;
  staged?: boolean;
@@ -1448,8 +1467,14 @@ const MobileDiffDetail: React.FC<{
  onExpandContextRequest?: (request: ContextExpansionRequest) => void;
  pendingContextExpansion?: ContextExpansionRequest | null;
  contextLoading?: boolean;
-}> = ({ path, subtitle, diff, staged = false, fileExists, unavailableReason = null, error, onBack, onRetry, onExpandContextRequest, pendingContextExpansion, contextLoading }) => {
+}> = ({ path, previousPath, subtitle, diff, staged = false, fileExists, unavailableReason = null, error, onBack, onRetry, onExpandContextRequest, pendingContextExpansion, contextLoading }) => {
  const { t } = useI18n();
+ const separator = path.lastIndexOf('/');
+ const filename = path.slice(separator + 1) || path;
+ const directory = separator < 0 ? '' : path.slice(0, separator);
+ const location = previousPath ? `${previousPath} → ${directory || '.'}` : directory;
+ const renameOnly = diff && previousPath && !diff.isBinary && !diff.submodule
+  && (diff.fileDiff ? diff.fileDiff.hunks.length === 0 : diff.original === diff.modified);
  const language = React.useMemo(() => getLanguageFromExtension(path) || 'text', [path]);
  const hideWhitespace = useUIStore((state) => state.diffHideWhitespace);
  const setHideWhitespace = useUIStore((state) => state.setDiffHideWhitespace);
@@ -1467,7 +1492,8 @@ const MobileDiffDetail: React.FC<{
      <Icon name="arrow-left" className="size-5" />
     </button>
     <div className="min-w-0 flex-1 px-2">
-     <h2 className="truncate typography-ui-header text-foreground">{path}</h2>
+     <h2 className="truncate typography-ui-header text-foreground" title={path}>{filename}</h2>
+     {location && <p className="truncate typography-meta text-muted-foreground">{location}</p>}
      {subtitle && <p className="truncate typography-meta text-muted-foreground">{subtitle}</p>}
     </div>
     <button
@@ -1505,6 +1531,10 @@ const MobileDiffDetail: React.FC<{
      <div className="p-3"><SubmoduleDiffSummary state={diff.submodule} staged={staged} /></div>
     ) : diff.isBinary ? (
      <MobileChangesState icon message={t('diffView.binary.unavailable')} />
+    ) : renameOnly ? (
+     <div className="px-4 py-3 typography-meta text-muted-foreground">
+      {t('diffView.change.renamedFrom', { from: previousPath ?? '' })}
+     </div>
     ) : isImageFile(path) && !diff.fileDiff ? (
      <MobileChangesState icon message={t('mobile.changes.diffDetail.imageUnavailable')} />
     ) : (
@@ -1550,7 +1580,7 @@ const MobileComparisonFileList: React.FC<{ files: GitComparisonFile[]; onSelect:
       <Button variant="ghost" size="lg" className="w-full justify-start gap-2.5 text-left normal-case" onClick={() => onSelect(file.path)}>
        <span className="w-4 shrink-0 text-center typography-meta font-semibold uppercase" style={{ color: statusColor }} aria-label={statusLabel}>{file.status}</span>
        <FileTypeIcon filePath={file.path} className="size-4 shrink-0" />
-       <span className="min-w-0 flex-1 truncate typography-ui-label" title={file.path}>{file.path}</span>
+       <ChangedPathLabel path={file.path} from={file.previousPath} className="flex-1 typography-ui-label" />
        {(file.insertions > 0 || file.deletions > 0) && <span className="shrink-0 typography-meta text-muted-foreground">+{file.insertions} -{file.deletions}</span>}
        <Icon name="arrow-right-s" className="size-4 shrink-0 text-muted-foreground" />
       </Button>

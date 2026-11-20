@@ -82,7 +82,6 @@ export const fetchConfiguredQuotaProviders = async (
   }
 };
 
-/** The deadline covers response bodies too, including transports that ignore abort. */
 export const fetchQuota = async (
   providerId: QuotaProviderId,
   { signal, timeoutMs = 30_000, workspaceId }: { signal?: AbortSignal; timeoutMs?: number; workspaceId?: string } = {},
@@ -133,7 +132,6 @@ export const fetchQuota = async (
   }
 };
 
-/** The deadline covers response bodies too, including transports that ignore abort. */
 export const activateGiftReset = async (
   providerId: QuotaProviderId,
   recordId: number,

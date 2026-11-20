@@ -1,4 +1,7 @@
+
+
 import { normalizePath } from '@/lib/pathNormalization';
+import { withoutShareLinkKeys } from '@/lib/received-pages/link';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { countSyncPersistenceSerialization } from '@/sync/performance-diagnostics';
 
@@ -43,12 +46,6 @@ export const createChatDraftIdentity = (
 
 const WORK_DRAFT_KEY_PREFIX = 'draft:';
 
-/**
- * The composer key of a new session's draft. Each draft opened in a project
- * has its own, so two drafts in one folder never share their text; the draft
- * becomes a session under its own id when sent. A new Chat, and every draft in
- * VS Code, keep the per-folder key `null`.
- */
 export const workDraftComposerKey = (workDraftId: string): string => `${WORK_DRAFT_KEY_PREFIX}${workDraftId}`;
 
 export const getChatDraftIdentityKey = (identity: ChatDraftIdentity): string =>
@@ -109,6 +106,7 @@ export const writeChatDraft = (
   confirmedMentions: Iterable<string>,
 ): void => {
   if (!identity) return;
+  text = withoutShareLinkKeys(text);
   const envelope = readEnvelope();
   const key = getChatDraftIdentityKey(identity);
   const mentions = Array.from(new Set(confirmedMentions));
@@ -134,3 +132,22 @@ export const subscribeChatDraftDeletion = (listener: (identity: ChatDraftIdentit
   deletionListeners.add(listener);
   return () => deletionListeners.delete(listener);
 };
+
+export const workDraftIdOfComposerKey = (sessionId: string | null | undefined): string | null => (
+  sessionId?.startsWith(WORK_DRAFT_KEY_PREFIX) ? sessionId.slice(WORK_DRAFT_KEY_PREFIX.length) : null
+);
+
+export const readChatDraftClaimingFolderDraft = (identity: ChatDraftIdentity | null): ChatDraftSnapshot => {
+  const saved = readChatDraft(identity);
+  if (!identity || workDraftIdOfComposerKey(identity.sessionId) === null || saved.text) return saved;
+  const folderIdentity = { ...identity, sessionId: null };
+  const folderDraft = readChatDraft(folderIdentity);
+  if (!folderDraft.text) return saved;
+  writeChatDraft(identity, folderDraft.text, folderDraft.confirmedMentions);
+  clearChatDraft(folderIdentity);
+  return folderDraft;
+};
+
+export const isNewSessionDraftIdentity = (identity: ChatDraftIdentity): boolean => (
+  identity.sessionId === null || workDraftIdOfComposerKey(identity.sessionId) !== null
+);

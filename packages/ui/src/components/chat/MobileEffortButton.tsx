@@ -15,13 +15,6 @@ interface MobileEffortButtonProps {
 
 const LONG_PRESS_MS = 500;
 
-/**
- * The phone composer's effort, after the model as on the desktop: a quiet
- * "/ medium". Like the agent button beside it, a tap moves to the next level
- * and a long press opens the effort sheet. Absent for Auto and for models
- * without effort levels — real `reasoningOptions` first, as the desktop panel
- * reads them, with legacy route variants as the fallback.
- */
 export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleThinking, onOpenThinking, className }) => {
     const { t } = useI18n();
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
@@ -59,15 +52,12 @@ export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleT
     return (
         <button
             type="button"
-            // The agent button's pattern: pointer events instead of a click, and
-            // the touch's default blocked, so a tap keeps the keyboard open.
             onPointerDown={(event) => {
                 if (event.pointerType === 'touch') event.preventDefault();
                 longPressedRef.current = false;
                 clearLongPress();
                 longPressTimerRef.current = window.setTimeout(() => {
                     longPressedRef.current = true;
-                    // The sheet slides up under the finger; its lift must not pick a level.
                     swallowGestureClick();
                     onOpenThinking();
                 }, LONG_PRESS_MS);
@@ -83,7 +73,6 @@ export const MobileEffortButton: React.FC<MobileEffortButtonProps> = ({ onCycleT
             onMouseDown={(event) => event.preventDefault()}
             aria-label={`${t('chat.modelControls.thinking')}: ${label}`}
             className={cn(
-                // Taller and wider than its text for a finger, without making the row taller.
                 '-my-[5px] inline-flex h-9 min-w-0 flex-shrink-0 items-center gap-1 rounded-lg px-1.5',
                 'typography-micro font-medium lowercase text-muted-foreground',
                 'select-none touch-none focus:outline-none hover:bg-[var(--interactive-hover)]',

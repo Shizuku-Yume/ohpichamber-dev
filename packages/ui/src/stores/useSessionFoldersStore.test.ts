@@ -1,6 +1,8 @@
+import { directoryEnvironment } from './test-support/directoryEnvironment';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createSessionFoldersStore, type SessionFoldersRuntime } from './useSessionFoldersStore';
 
+directoryEnvironment({ fakeTimers: false });
 const storage = new Map<string, string>();
 let storageSetCount = 0;
 let runtimeKey = 'runtime-a';
@@ -61,6 +63,11 @@ const runtime: SessionFoldersRuntime = {
 
 const { store: useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = createSessionFoldersStore(runtime);
 
+const activateRuntime = (key: string) => {
+  runtimeKey = key;
+  useSessionFoldersStore.getState().resetForRuntimeSwitch(key);
+};
+
 const waitForPersist = () => new Promise((resolve) => setTimeout(resolve, 350));
 
 describe('useSessionFoldersStore folder assignments', () => {
@@ -68,7 +75,7 @@ describe('useSessionFoldersStore folder assignments', () => {
     connected = false;
     storage.clear();
     storageSetCount = 0;
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     diskResponseBody = { version: 1, exists: false };
     requests.length = 0;
     respond = () => json(diskResponseBody);
@@ -124,17 +131,30 @@ describe('useSessionFoldersStore folder assignments', () => {
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project-worktree')[0]?.sessionIds).toEqual(['ses_1', 'ses_2']);
   });
 
+  test('a session moved into a worktree leaves the folder of the project it left', () => {
+    const store = useSessionFoldersStore.getState();
+    const tasks = store.createFolder('/workspace/project', 'Tasks');
+    store.addSessionsToFolder('/workspace/project', tasks.id, ['ses_moved', 'ses_stays']);
+    const before = useSessionFoldersStore.getState().foldersMap;
+
+    store.followSessionMove('ses_moved', '/workspace/project/docs', null);
+    expect(useSessionFoldersStore.getState().foldersMap).toBe(before);
+
+    store.followSessionMove('ses_moved', '/workspace/project-worktree', '/workspace/project-worktree');
+    expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project')[0]?.sessionIds).toEqual(['ses_stays']);
+  });
+
   test('restores independent folder snapshots across runtime switches', async () => {
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Runtime A');
     await waitForPersist();
 
-    runtimeKey = 'runtime-b';
+    activateRuntime('runtime-b');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project')).toEqual([]);
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Runtime B');
     await waitForPersist();
 
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Runtime A']);
   });
@@ -142,9 +162,9 @@ describe('useSessionFoldersStore folder assignments', () => {
   test('flushes the outgoing runtime before a debounced browser write can be lost', () => {
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Runtime A pending');
 
-    runtimeKey = 'runtime-b';
+    activateRuntime('runtime-b');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
 
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Runtime A pending']);
@@ -152,9 +172,9 @@ describe('useSessionFoldersStore folder assignments', () => {
 
   test('does not replace browser folders when the server has no disk snapshot', async () => {
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Browser folder');
-    runtimeKey = 'runtime-b';
+    activateRuntime('runtime-b');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
-    runtimeKey = 'runtime-a';
+    activateRuntime('runtime-a');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -354,12 +374,12 @@ describe('useSessionFoldersStore folder assignments', () => {
 
   test('does not silently evict folder state from older runtimes', () => {
     for (let index = 0; index < 10; index += 1) {
-      runtimeKey = `runtime-${index}`;
+      activateRuntime(`runtime-${index}`);
       useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
       useSessionFoldersStore.getState().createFolder('/workspace/project', `Folder ${index}`);
     }
 
-    runtimeKey = 'runtime-0';
+    activateRuntime('runtime-0');
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Folder 0']);
   });

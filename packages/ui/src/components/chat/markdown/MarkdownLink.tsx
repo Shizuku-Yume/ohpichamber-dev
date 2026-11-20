@@ -3,7 +3,7 @@ import React from 'react';
 import type { ExtraProps } from 'streamdown';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
-import { getExternalFaviconUrl, isAppLinkUrl, isExternalHttpUrl, isLoopbackHttpUrl, openExternalUrl } from '@/lib/url';
+import { getExternalFaviconUrl, isAppLinkUrl, isExternalHttpUrl, isLoopbackHttpUrl } from '@/lib/url';
 import { parseSessionLink } from '@/lib/sessionLinks';
 import { sessionLinkKey } from '@/lib/sessionLinks';
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
@@ -19,6 +19,11 @@ import { useMarkdownPresentation, type FileReferenceSource } from './MarkdownPre
 import { activateMarkdownFile, resolveMarkdownFile, useOpenMarkdownFile, useOpenTappedMarkdownFile } from './markdownFileReferences';
 import { MarkdownMediaLinkContext, useMarkdownMedia } from './markdown-media-context';
 import { openMarkdownDocumentLink } from '@/components/views/files/previews/useMarkdownLocalAssets';
+import { claimGuestIdentifier, claimGuestUrl } from '@/lib/guests/links';
+import { guestPanelOpensHere } from '@/lib/guests/phone';
+import { useGuestsStore } from '@/lib/guests/store';
+import { useOpenChatLink } from '../useOpenChatLink';
+import { isBuiltInLink, runGuestLink } from './guestLinkClick';
 
 // A path in code text and a path in a link's href parse differently: an href
 // may percent-encode spaces and non-ASCII names, which are decoded first.
@@ -111,7 +116,34 @@ const textOf = (node: ExtraProps['node']): string => {
   return text.trim();
 };
 
+function GuestIdentifierLink({ identifier, className, children }: { identifier: string; className?: string; children: React.ReactNode }) {
+  const { guestLinks, directory } = useMarkdownPresentation();
+  const { t } = useI18n();
+  const claim = guestLinks ? claimGuestIdentifier(guestLinks, identifier) : null;
+  const guest = useGuestsStore((state) => (claim ? state.guests.find((entry) => entry.id === claim.guestId) : undefined));
+  const openChatLink = useOpenChatLink(directory);
+  if (!claim || !guest) return <>{children}</>;
+  const pageUrl = claim.action === 'open' && !guestPanelOpensHere(guest) ? claim.url : undefined;
+  const activate = (event: React.MouseEvent | React.KeyboardEvent) => {
+    if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (pageUrl) openChatLink(pageUrl);
+    else runGuestLink(claim, 'identifier', directory, t);
+  };
+  const label = pageUrl ?? t(claim.action === 'open' ? 'chat.guestLink.open' : 'chat.guestLink.attach', { identifier, name: guest.name });
+  return (
+    <a role="button" tabIndex={0} className={className ? `${className} cursor-pointer` : 'cursor-pointer'}
+      data-oc-guest-link={claim.guestId} title={label} aria-label={label} onClick={activate} onKeyDown={activate}>
+      {children}
+    </a>
+  );
+}
+
 function ScreenMarkdownLink({ href, children: originalChildren, node, ...props }: React.ComponentProps<'a'> & ExtraProps) {
+  if (node?.properties.dataOcGuestLink !== undefined) {
+    return <GuestIdentifierLink identifier={textOf(node)} className={props.className}>{originalChildren}</GuestIdentifierLink>;
+  }
   // The policy dropped an unsafe or unsupported URL: the anchor stays inert,
   // as the old sanitizer left it, instead of opening the app in a new window.
   if (!href) {
@@ -128,12 +160,11 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
   const { t } = useI18n();
   const openFile = useOpenMarkdownFile();
   const media = useMarkdownMedia();
+  const openChatLink = useOpenChatLink(directory);
   const text = textOf(node);
   const skill = parseSkillHref(href);
   const agent = parseAgentHref(href);
   const attachment = parseAttachmentHref(href);
-  // VS Code keeps session links inert: its sessions live on its own OpenCode,
-  // so a link to a web session opens in the browser like any other.
   const session = parseSessionLink(href, appOwnOrigins());
   // A session or message the user's message mentioned draws as its chip.
   const mentionChips = React.useContext(SessionMentionChipsContext);
@@ -186,10 +217,18 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
       target?.scrollIntoView({ block: 'nearest' });
       return;
     }
+    if (external && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) && !isBuiltInLink(href)) {
+      const claim = presentation.guestLinks ? claimGuestUrl(presentation.guestLinks, href) : null;
+      if (claim && runGuestLink(claim, 'link', directory, t)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
     if (external && !presentation.disableLinkSafety && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) {
       event.preventDefault();
       event.stopPropagation();
-      void openExternalUrl(href);
+      openChatLink(href);
     }
   };
   if (attachment) {

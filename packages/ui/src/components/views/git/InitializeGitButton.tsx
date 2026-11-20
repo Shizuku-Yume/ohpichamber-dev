@@ -32,7 +32,6 @@ export const InitializeGitButton: React.FC<InitializeGitButtonProps> = ({ direct
       toast.error(t('gitView.toast.initializeGitFailed'), { description: error instanceof Error ? error.message : undefined });
       return;
     }
-    // On success this empty state unmounts as the Git surface takes over.
     const isRepository = await recheckRepository(directory, git);
     if (!isRepository) {
       setBusy(false);

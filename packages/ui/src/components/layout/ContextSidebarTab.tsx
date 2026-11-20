@@ -1,6 +1,6 @@
 import React from 'react';
 import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 
 import { Icon } from "@/components/icon/Icon";
 import { selectConfiguredModelPair, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
@@ -209,9 +209,6 @@ export const ContextPanelContent: React.FC = () => {
 
     const tokenBreakdown = contextMessage ? extractTokenBreakdown(contextMessage) : EMPTY_BREAKDOWN;
 
-    // Cache hit rate for the last assistant message. `input` is the non-cached portion
-    // (total input - cache.read - cache.write per SDK's session.ts:getUsage),
-    // so hit rate = cache.read / (input + cache.read + cache.write).
     const cacheHitRate = computeCacheHitRate({
       input: tokenBreakdown.input,
       cache: { read: tokenBreakdown.cacheRead, write: tokenBreakdown.cacheWrite },
@@ -243,8 +240,6 @@ export const ContextPanelContent: React.FC = () => {
       ? Math.min(999, (tokenBreakdown.total / contextLimit) * 100)
       : 0;
 
-    // OpenCode v2 delivers instruction text as its own `system` message
-    // instead of hanging a `system` string off the first user message.
     const systemMessage = [...sessionMessages].reverse().find((entry) => entry.info.role === 'system');
     const systemPrompt = systemMessage?.info.role === 'system' ? systemMessage.info.parts.filter((part) => part.type === 'text').map((part) => part.content).join('') : '';
 
@@ -303,7 +298,6 @@ export const ContextPanelContent: React.FC = () => {
     <ScrollableOverlay outerClassName="h-full" className="bg-background">
       <div className="mx-auto w-full max-w-[52rem] px-5 py-6">
 
-        {/* ── Session header ── */}
         <div className="mb-6">
           <h2 dir="auto" className="typography-ui-header font-semibold text-foreground truncate text-left">{viewModel.sessionTitle}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 typography-micro text-muted-foreground/70">
@@ -317,7 +311,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Context usage ── */}
         <div className="mb-5 rounded-lg bg-[var(--surface-elevated)]/70 px-4 py-3.5">
           <div className="flex items-baseline justify-between">
             <span className="typography-micro text-muted-foreground">{t('contextSidebar.section.context')}</span>
@@ -342,7 +335,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Stat grid ── */}
         <div className="mb-5 grid grid-cols-2 gap-2">
           {([
             { label: t('contextSidebar.stats.messages'), value: formatNumber(viewModel.messagesCount) },
@@ -387,7 +379,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Context breakdown ── */}
         <div className="mb-6">
           <div className="flex h-1 w-full overflow-hidden rounded-full bg-[var(--surface-subtle)]">
             {segments.map((segment) => {
@@ -418,7 +409,6 @@ export const ContextPanelContent: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Raw messages ── */}
         <div>
           <div className="typography-micro text-muted-foreground">{t('contextSidebar.section.rawMessages')}</div>
           <div className="mt-2.5 space-y-1">
@@ -516,7 +506,7 @@ export const ContextPanelContent: React.FC = () => {
                             <TooltipContent sideOffset={6}>{isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}</TooltipContent>
                           </Tooltip>
                         </div>
-                        <WorkerHighlightedCode
+                        <HighlightedCode
                           language="json"
                           code={jsonValue}
                           style={{

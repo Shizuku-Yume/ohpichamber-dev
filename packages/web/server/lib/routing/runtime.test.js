@@ -7,6 +7,9 @@ import { createRoutingStore, resolveEffectiveConfig } from './store.js';
 import { excerptHead, excerptHeadTail, turnsToHistory } from './history.js';
 import { createJevClient, decidePermission, decideRouting } from './jev.js';
 import { classifierEndpoint, parseCustomEndpointUrl, resolveClassifier } from './classifier.js';
+import express from 'express';
+import request from 'supertest';
+import { registerRoutingRoutes } from './routes.js';
 
 const AUTO = { providerId: 'openchamber', modelId: 'auto' };
 const FALLBACK = { model: { providerID: 'anthropic', modelID: 'claude-sonnet-5' }, variant: 'medium' };
@@ -123,6 +126,45 @@ const makeRuntime = async ({
   return { runtime, store, service, jev, events, state, resolveCredential };
 };
 const send = (extra = {}) => ({ sessionId: 's1', workspaceId: SCOPE.workspaceId, model: AUTO, requestText: 'find the root cause', ...extra });
+
+describe('Gemini classifier HTTP composition', () => {
+  it('saves, uses and removes a key without returning it to the client', async () => {
+    const { runtime } = await makeRuntime({ token: null, classifierSource: 'off', zenPromotionActive: false });
+    const app = express();
+    registerRoutingRoutes(app, runtime);
+    const saved = await request(app).put('/api/routing/classifier/gemini').send({ key: 'test-classifier-key' }).expect(200);
+    expect(saved.body.geminiKeyPresent).toBe(true);
+    expect(saved.body.classification.effective).toBe('gemini');
+    expect(JSON.stringify(saved.body)).not.toContain('test-classifier-key');
+    expect(await runtime.classifierEndpoint(SCOPE.workspaceId)).toMatchObject({ format: 'gemini', headers: { 'x-goog-api-key': 'test-classifier-key' } });
+    const cleared = await request(app).delete('/api/routing/classifier/gemini').expect(200);
+    expect(cleared.body.geminiKeyPresent).toBe(false);
+    expect(cleared.body.classification.effective).toBe(null);
+  });
+
+  it('rejects empty and malformed keys without changing storage', async () => {
+    const { runtime, store } = await makeRuntime();
+    const app = express();
+    registerRoutingRoutes(app, runtime);
+    for (const key of ['', '   ', null, 1, 'x'.repeat(4001)]) {
+      await request(app).put('/api/routing/classifier/gemini').send({ key }).expect(400);
+    }
+    expect(await store.readGeminiKey()).toBe(null);
+  });
+
+  it('refuses saves in enterprise mode and preserves a saved key when its write fails', async () => {
+    const { runtime, store, state } = await makeRuntime({ enterprise: true });
+    const app = express();
+    registerRoutingRoutes(app, runtime);
+    await request(app).put('/api/routing/classifier/gemini').send({ key: 'test-classifier-key' }).expect(403);
+    expect(await store.readGeminiKey()).toBe(null);
+    state.enterprise = false;
+    const write = vi.spyOn(store, 'writeGeminiKey').mockRejectedValueOnce(new Error('unavailable'));
+    await request(app).put('/api/routing/classifier/gemini').send({ key: 'test-classifier-key' }).expect(500);
+    expect(await store.readClassifierSource()).toBe('typesafe');
+    write.mockRestore();
+  });
+});
 
 const image = (name, mediaType = 'image/png') => ({ attachmentId: 'attachment_1', name, mediaType, size: 12, uri: 'attachment://attachment_1' });
 

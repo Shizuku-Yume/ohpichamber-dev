@@ -50,7 +50,6 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const detailsOwner = React.useRef<{ runtimeKey: string; revision: number } | null>(null);
 
-  // Fetch conflict details when dialog opens
   React.useEffect(() => {
     if (!open || !directory) return;
     const runtimeKey = getRuntimeKey();
@@ -160,7 +159,6 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
       return;
     }
 
-    // Set the visible text in the input and the synthetic parts for when user sends
     setPendingInputText(context.visibleText, 'replace');
     setPendingSyntheticParts([
       { text: context.instructionsText, synthetic: true },
@@ -184,7 +182,6 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
       return;
     }
 
-    // Open new session with the conflict context as initial prompt + synthetic parts
     openNewSessionDraft({
       directoryOverride: directory,
       initialPrompt: context.visibleText,

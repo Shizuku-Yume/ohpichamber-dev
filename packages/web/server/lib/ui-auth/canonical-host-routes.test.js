@@ -8,10 +8,10 @@ import request from 'supertest';
 import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
 import { createAgentServiceSupervisor } from '../host/agent-service-supervisor.js';
 import { createSelectedCredentialHandoff } from '../host/private-credential.js';
-import { createTunnelAuth } from '../host/tunnel-auth.js';
+import { createTunnelAuth } from '../tunnels/tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 import { createRequestSecurityRuntime } from '../security/request-security.js';
-import { registerCommonRequestMiddleware } from '../host/core-routes.js';
+import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-canonical-host-'));
 const originalDataDir = process.env.OPENCHAMBER_DATA_DIR;

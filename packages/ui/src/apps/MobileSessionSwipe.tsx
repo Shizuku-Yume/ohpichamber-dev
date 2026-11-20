@@ -7,13 +7,14 @@ import { cn } from '@/lib/utils';
 
 export const ROW_ACTION_SLOT_WIDTH = 48;
 
-// Four slots every session row has: archive, delete, rename and Copy ID.
-// Top-level rows add one slot each for Pin and Track / Done when enabled.
 export const ROW_ACTIONS_WIDTH = 4 * ROW_ACTION_SLOT_WIDTH;
 
 type MobileSessionWorkAction = { inWork: boolean; onToggle: () => void };
 type MobileSessionPinAction = { pinned: boolean; onToggle: () => void };
 const ROW_SWIPE_SNAP_MS = 180;
+const setActionsShown = (actions: HTMLElement | null, shown: boolean) => {
+  if (actions) actions.style.visibility = shown ? 'visible' : 'hidden';
+};
 
 /** Generic swipe-right-to-reveal wrapper for drawer rows (sessions, projects,
     worktrees): horizontal intent detection, imperative transform during the
@@ -24,11 +25,8 @@ export const MobileSwipeActionsRow: React.FC<{
   actions: React.ReactNode;
   revealed: boolean;
   onRevealedChange: (revealed: boolean) => void;
-  /** Marks the row as the current session so the sheet's open-time
-      auto-scroll can find it. */
   dataActiveSession?: boolean;
-  /** Classes for the transformed content element. The default suits a plain
-      header row; session rows pass their own layout and active background. */
+  sessionId?: string;
   contentClassName?: string;
   children: React.ReactNode;
 }> = ({
@@ -37,82 +35,87 @@ export const MobileSwipeActionsRow: React.FC<{
   revealed,
   onRevealedChange,
   dataActiveSession,
+  sessionId,
   contentClassName = 'relative flex w-full items-center bg-background',
   children,
 }) => {
-    const contentRef = React.useRef<HTMLDivElement>(null);
-    const startRef = React.useRef<{ x: number; y: number } | null>(null);
-    const draggingRef = React.useRef(false);
-    const offsetRef = React.useRef(0);
-    const revealedRef = React.useRef(revealed);
+  const { direction } = useI18n();
+  const sign = direction === 'rtl' ? -1 : 1;
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const actionsRef = React.useRef<HTMLDivElement>(null);
+  const startRef = React.useRef<{ x: number; y: number } | null>(null);
+  const draggingRef = React.useRef(false);
+  const offsetRef = React.useRef(0);
+  const revealedRef = React.useRef(revealed);
 
-    const applyOffset = React.useCallback((px: number, animate: boolean) => {
-      const el = contentRef.current;
-      if (!el) return;
-      el.style.transition = animate ? `transform ${ROW_SWIPE_SNAP_MS}ms ease-out` : 'none';
-      el.style.transform = px === 0 ? 'none' : `translateX(${px}px)`;
-      offsetRef.current = px;
-    }, []);
+  const applyOffset = React.useCallback((px: number, animate: boolean) => {
+    const el = contentRef.current;
+    if (!el) return;
+    setActionsShown(actionsRef.current, px !== 0 || (animate && px !== offsetRef.current));
+    el.style.transition = animate ? `transform ${ROW_SWIPE_SNAP_MS}ms ease-out` : 'none';
+    el.style.transform = px === 0 ? 'none' : `translateX(${px * sign}px)`;
+    offsetRef.current = px;
+  }, [sign]);
 
-    React.useEffect(() => {
-      revealedRef.current = revealed;
-      applyOffset(revealed ? actionsWidth : 0, true);
-    }, [actionsWidth, applyOffset, revealed]);
-
-    const handleTouchStart = (event: React.TouchEvent) => {
-      if (event.touches.length !== 1) return;
-      const touch = event.touches[0];
-      startRef.current = { x: touch.clientX, y: touch.clientY };
-      draggingRef.current = false;
-    };
-
-    const handleTouchMove = (event: React.TouchEvent) => {
-      if (!startRef.current) return;
-      const touch = event.touches[0];
-      const dx = touch.clientX - startRef.current.x;
-      const dy = touch.clientY - startRef.current.y;
-      if (!draggingRef.current) {
-        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
-        draggingRef.current = true;
-      }
-      const base = revealedRef.current ? actionsWidth : 0;
-      applyOffset(Math.max(0, Math.min(actionsWidth, base + dx)), false);
-    };
-
-    const handleTouchEnd = () => {
-      startRef.current = null;
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      const shouldReveal = offsetRef.current > actionsWidth / 2;
-      applyOffset(shouldReveal ? actionsWidth : 0, true);
-      if (shouldReveal !== revealedRef.current) onRevealedChange(shouldReveal);
-    };
-
-    return (
-      <div
-        data-active-session={dataActiveSession || undefined}
-        className="relative overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        // Vertical panning stays native; horizontal moves reach the swipe handler.
-        style={{ touchAction: 'pan-y' }}
-      >
-        <div className="absolute inset-y-0 left-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
-          {actions}
-        </div>
-        <div ref={contentRef} className={contentClassName}>
-          {children}
-        </div>
-      </div>
-    );
+  const handleTransitionEnd = (event: React.TransitionEvent) => {
+    if (event.target === contentRef.current && event.propertyName === 'transform' && offsetRef.current === 0) setActionsShown(actionsRef.current, false);
   };
 
-/** The session swipe actions, shared by every mobile session row. Ordered
-    left to right by how often they are used on a phone: the leftmost slot is
-    the one a short drag exposes first, so archive leads and the destructive
-    delete never sits under a partial swipe. Copy ID stays in the final slot. */
+  React.useLayoutEffect(() => {
+    revealedRef.current = revealed;
+    applyOffset(revealed ? actionsWidth : 0, true);
+  }, [actionsWidth, applyOffset, revealed]);
+
+  const handleTouchStart = (event: React.TouchEvent) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    startRef.current = { x: touch.clientX, y: touch.clientY };
+    draggingRef.current = false;
+  };
+
+  const handleTouchMove = (event: React.TouchEvent) => {
+    if (!startRef.current) return;
+    const touch = event.touches[0];
+    const dx = (touch.clientX - startRef.current.x) * sign;
+    const dy = touch.clientY - startRef.current.y;
+    if (!draggingRef.current) {
+      if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+      draggingRef.current = true;
+    }
+    const base = revealedRef.current ? actionsWidth : 0;
+    applyOffset(Math.max(0, Math.min(actionsWidth, base + dx)), false);
+  };
+
+  const handleTouchEnd = () => {
+    startRef.current = null;
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    const shouldReveal = offsetRef.current > actionsWidth / 2;
+    applyOffset(shouldReveal ? actionsWidth : 0, true);
+    if (shouldReveal !== revealedRef.current) onRevealedChange(shouldReveal);
+  };
+
+  return (
+    <div
+      data-active-session={dataActiveSession || undefined}
+      data-mobile-session-row={sessionId}
+      className="relative oc-row-clip rounded-lg"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      style={{ touchAction: 'pan-y' }}
+    >
+      <div ref={actionsRef} className="absolute inset-y-0 inset-s-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
+        {actions}
+      </div>
+      <div ref={contentRef} className={`${contentClassName} rounded-[inherit]`} onTransitionEnd={handleTransitionEnd} onTransitionCancel={handleTransitionEnd}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
 export const MobileSessionRowActions: React.FC<{
   sessionId: string;
   title: string;
@@ -123,9 +126,7 @@ export const MobileSessionRowActions: React.FC<{
   onConfirmDelete?: () => void;
   onRequestRename?: () => void;
   onRevealedChange?: (revealed: boolean) => void;
-  /** Track / Done, when the feature is on and the row is a top-level session. */
   work?: MobileSessionWorkAction;
-  /** Pin / Unpin, on top-level rows. */
   pin?: MobileSessionPinAction;
 }> = ({
   sessionId,

@@ -129,7 +129,7 @@ describe('streaming output transitions', () => {
 });
 
 
-describe('OpenChamber tool output', () => {
+describe('OhPiChamber tool output', () => {
     test('keeps the result envelope in the generic JSON rendering pipeline', () => {
         const result = {
             schemaVersion: 1,

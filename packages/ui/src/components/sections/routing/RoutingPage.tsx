@@ -44,11 +44,6 @@ import {
 
 const SAVE_DEBOUNCE_MS = 500;
 
-/**
- * Whether the server's copy is the draft as the server stores it. The server
- * trims names and descriptions, so a mid-typing "- " or trailing newline comes
- * back without it; adopting that copy would eat what the user just typed.
- */
 const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean => {
   const trimmed = (config: RoutingConfig) => JSON.stringify({
     ...config,
@@ -67,7 +62,6 @@ const invalidCategoryIds = (config: RoutingConfig): string[] => config.categorie
   .map((category) => category.id);
 
 
-/** One category: a flat disclosure row that expands into its editor. */
 const CategoryRow: React.FC<{
   category: RoutingCategory;
   expanded: boolean;
@@ -190,13 +184,8 @@ export const RoutingPage: React.FC = () => {
   const [draft, setDraft] = React.useState<RoutingConfig | null>(serverConfig);
   const [expandedIds, setExpandedIds] = React.useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
-  // A pending edit remembers the server it was made against; a save that would
-  // run after a runtime switch is dropped rather than sent to the new server.
   const pendingRef = React.useRef<{ config: RoutingConfig; runtimeKey: string } | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Saves run one after another, and the server's copy is adopted only while
-  // nothing is pending or in flight, so an older response cannot replace a
-  // newer draft.
   const saveChainRef = React.useRef<Promise<void>>(Promise.resolve());
   const savesInFlightRef = React.useRef(0);
 
@@ -204,8 +193,6 @@ export const RoutingPage: React.FC = () => {
     void load();
   }, [load]);
 
-  // The server is authoritative; adopt its config whenever nothing is mid-edit,
-  // unless it is only the trimmed form of what is already on screen.
   React.useEffect(() => {
     if (pendingRef.current || savesInFlightRef.current > 0) return;
     setDraft((current) => (current && serverConfig && isStoredFormOf(serverConfig, current) ? current : serverConfig));
@@ -247,21 +234,17 @@ export const RoutingPage: React.FC = () => {
     void flush();
   }, [flush]);
 
-  // A first visit starts from the session defaults: the model the user already
-  // chose for new sessions is the natural fallback, and it saves a required step.
   const settingsDefaultModel = useConfigStore((state) => state.settingsDefaultModel);
   const prefilledRef = React.useRef(false);
   React.useEffect(() => {
     if (prefilledRef.current || !loaded || !serverConfig || serverConfig.fallback) return;
     const parsed = parseModelSelector(settingsDefaultModel);
-    // A default of Auto is what this fallback exists to resolve; nothing to prefill from it.
     if (!parsed || isAutoModel(parsed.providerId, parsed.modelId)) return;
     prefilledRef.current = true;
     update((config) => (config.fallback ? config : {
       ...config,
       fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
     }));
-    // `update` is stable; the effect keys on what decides whether to prefill.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, serverConfig, settingsDefaultModel]);
 
@@ -367,7 +350,7 @@ export const RoutingPage: React.FC = () => {
         <p className={SETTINGS_DESCRIPTION_CLASS}>{t('settings.routing.unavailable')}</p>
       ) : (
         <>
-          <SettingsSection title={t('settings.routing.auto.title')} divider={false}>
+          <SettingsSection title={t('settings.routing.auto.title')}>
             <div className={SETTINGS_SPACE_ROW_CLASS}>
               <JevAccessNote />
               <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>

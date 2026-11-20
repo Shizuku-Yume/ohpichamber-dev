@@ -113,8 +113,6 @@ const ShellRow: React.FC<{
             )}
           </span>
         </TooltipTrigger>
-        {/* The row shows one truncated line; the tooltip keeps the command's
-            own line breaks and indentation and wraps only overlong lines. */}
         <TooltipContent side="top" sideOffset={6} className="max-w-[min(36rem,90vw)] [text-wrap:wrap]">
           <ScrollableOverlay as="pre" outerClassName="max-h-[50vh]" className="whitespace-pre-wrap break-words font-mono typography-meta" disableHorizontal>
             {shell.command}
@@ -188,7 +186,6 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
     );
   }
 
-  // The whole header toggles the list, as the queue header does.
   return (
     <div role="group" className="border-b border-edge" aria-label={t('chat.backgroundShells.aria')}>
       <div className="flex h-10 items-center ps-3 pe-3">

@@ -18,7 +18,6 @@ import type {
  SessionMetadataState,
 } from "@openchamber/agent-contract"
 
-/** Resolved filesystem context retained for UI routing and directory selection. */
 export type Path = {
  directory: string
  worktree: string
@@ -33,7 +32,6 @@ export type ProjectMeta = {
  commands?: { start?: string }
 }
 
-/** Per-directory canonical runtime state. Host metadata is revisioned on Session. */
 export type State = {
  status: "loading" | "partial" | "complete"
  project: string
@@ -102,7 +100,6 @@ export type CleanseProgressState = {
  summary?: string
  updatedAt: number
 }
-
 
 export type GlobalState = {
  ready: boolean

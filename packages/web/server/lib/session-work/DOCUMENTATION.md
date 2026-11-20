@@ -2,6 +2,9 @@
 
 ## Purpose
 
+Eligibility reads current Git worktree pins through `isWorktreeDirectoryPinned`;
+pinned worktrees, managed chats and child sessions never trigger classification.
+
 Keeps the sessions the user is working in in one block at the top of the
 sidebar until they mark them done. Sending a message puts a session in work;
 the user alone closes it. While a session is in work, Jev says after a turn
@@ -39,6 +42,24 @@ Track / Done go through the Host metadata route
 is the metadata authority; execution session metadata is never a fallback.
 
 ## Invariants
+
+The Host injects `activity-probe.ts` into turn-end evaluation. It reads the
+Canonical session shell snapshot (`/api/agent/v1/sessions/:id/shell/jobs`) and
+live subagent roster (`/api/agent/v1/sessions/:id/subagents`, backed by native
+`subagents.list`). Only running background shell jobs and non-persisted running
+children/descendants count. Foreground shells, ended jobs, unrelated sessions
+and persisted roster rows do not establish live activity.
+
+Background evaluation remains tri-state: true when either source proves work is
+running, false only when both reads succeed and neither shows work, and null
+when activity is unavailable. As upstream, shell jobs count only when started
+in this turn and younger than thirty minutes; other asynchronous job kinds and
+working children have no such shell window. Proven background work suppresses
+Done and next-step suggestions, including when classification fails. Unknown
+activity keeps the existing classifier behavior, not a claim that work stopped.
+The Canonical shell surface is available; no OpenCode read or synthetic empty
+job fallback is used. Other native async work not represented as a Canonical
+shell job or live subagent is not currently observable by this probe.
 
 - Jev only opens. Nothing here ever writes `done`.
 - Jev reopens a closed session only for a request sent after the user closed

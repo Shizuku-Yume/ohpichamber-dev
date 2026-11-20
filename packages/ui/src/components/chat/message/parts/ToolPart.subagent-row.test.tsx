@@ -1,7 +1,5 @@
 import { act } from 'react';
 import { expect, spyOn, test } from 'bun:test';
-import { plugin } from 'bun';
-import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { Session, Subagent, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
@@ -16,14 +14,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 
-plugin({
-  name: 'task-child-worker-url',
-  setup(build) {
-    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-      contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
-    }));
-  },
-});
 const { default: ToolPart } = await import('./ToolPart');
 const { default: TurnActivity } = await import('../../components/TurnActivity');
 const noAction = () => {};
@@ -63,6 +53,7 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
     window: happyWindow, document: happyWindow.document, navigator: happyWindow.navigator,
     localStorage: happyWindow.localStorage, customElements: happyWindow.customElements,
     Node: happyWindow.Node, Text: happyWindow.Text, NodeList: happyWindow.NodeList,
+    Window: happyWindow.Window, Event: happyWindow.Event, CustomEvent: happyWindow.CustomEvent,
     Element: happyWindow.Element, HTMLElement: happyWindow.HTMLElement, HTMLAnchorElement: happyWindow.HTMLAnchorElement, SVGElement: happyWindow.SVGElement,
     requestAnimationFrame: happyWindow.requestAnimationFrame.bind(happyWindow),
     cancelAnimationFrame: happyWindow.cancelAnimationFrame.bind(happyWindow),

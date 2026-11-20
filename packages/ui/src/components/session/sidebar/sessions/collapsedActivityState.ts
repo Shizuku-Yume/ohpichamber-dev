@@ -8,8 +8,6 @@ import { usePrWatchStore } from '@/sync/pr-watch';
 
 import { isSessionUnread } from '@/sync/session-unread';
 
-// Ordered by how much the user is needed: a blocked turn outranks a running
-// one, which outranks something merely unread.
 export type CollapsedActivityState = 'permission' | 'form' | 'active' | 'unread' | null;
 
 const mergeCollapsedActivityStates = (
@@ -60,17 +58,9 @@ export const getSessionNodesActivityState = (
 
 type SessionActivityProps = {
   nodes: readonly SessionNode[];
-  // Sessions not present as nodes whose pending requests still count, such as
-  // the hidden subagents of timeline rows.
   blockingSessionIds?: readonly string[];
 };
 
-/**
- * Every session in the hidden subtrees, and the top-level ones among them:
- * only those can be unread. The Host ends a turn on the root session, and the
- * fork's unread watermark reads the session record alone, so a subtask carries
- * no unread state of its own.
- */
 const collectActivityIds = (nodes: readonly SessionNode[]) => {
   const active = new Set<string>();
   const unread = new Set<string>();
@@ -101,7 +91,6 @@ export const useCollapsedSessionActivityState = ({
     }
     return null;
   }, [enabled, ids.active]));
-  // A session idling while its background command runs is still at work.
   const waitingOnShell = useBackgroundShellsStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.active) {
@@ -127,11 +116,6 @@ export const useCollapsedSessionActivityState = ({
     }
     return null;
   }, [enabled, ids.unread]));
-  const unread = unreadFromMetadata;
-  // Pending requests come from the cross-directory index, which every
-  // directory feeds live and the host seeds, so a collapsed group in a project
-  // that was never opened still shows the request. Subtasks count too: a
-  // permission asked by a subagent blocks the whole family.
   const blocked = useGlobalBlockingRequestsStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     let result: CollapsedActivityState = null;
@@ -143,5 +127,5 @@ export const useCollapsedSessionActivityState = ({
     }
     return result;
   }, [enabled, blockingIds]));
-  return blocked ?? active ?? waitingOnShell ?? waitingOnPullRequest ?? unread;
+  return blocked ?? active ?? waitingOnShell ?? waitingOnPullRequest ?? unreadFromMetadata;
 };

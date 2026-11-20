@@ -1,11 +1,10 @@
-/**
- * Session actions — Canonical Client operations and their UI reconciliation.
- * Host-owned archive and filesystem helpers keep their independent boundary.
- */
+import { ConnectionLostError } from './connection-lost-error';
+import type { SentMessage } from '@/sync/send-message-options';
 
 // The review-flow callback signature is retained for its Task 16 cutover;
 // session records and action responses use the Canonical contract directly.
 import { useSessionUIStore } from "./session-ui-store"
+import { beginAgentStartupWait } from './agent-startup-wait'
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
@@ -160,7 +159,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
  const request = PromptRequestSchema.parse(input.request)
- await waitForConnectionOrThrow()
+ await waitForConnectionOrThrow({ intent: 'prompt' })
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
  if (input.mode === "steer") {
   const result = await canonicalClient.steer(input.sessionId, request, input.commandId)
@@ -285,9 +284,6 @@ function publishRuntimeRun(run: Run, baselines?: RunControlBaselines): void {
 // Reference set by SyncProvider — allows actions to access the stores
 let _childStores: ChildStoreManager | null = null
 let _getDirectory: () => string = () => ""
-// Optional ref into the sync layer's session-tail materialization queue. Used
-// to reconcile a trailing running tool part after a blocking request is
-// confirmed stale server-side (see recoverStaleBlockingRequest).
 let _enqueueSessionMaterialization: ((directory: string, sessionID: string, messageID: string) => void) | null = null
 let _ensureSessionStream: ((sessionId: string, directory?: string | null, options?: { refreshSnapshot: boolean }) => void) | null = null
 let _detachSessionStream: ((sessionId: string, directory: string) => void) | null = null
@@ -430,11 +426,6 @@ function dirStoreForSession(sessionId: string): { store: DirectoryStoreApi; dire
  return { store: dirStore(), directory: dir() }
 }
 
-/**
- * Provider/model of the session's last assistant message — the authoritative
- * "session provider" for utility calls (notes distillation etc.), independent
- * of what the composer picker currently points at.
- */
 export function getSessionLastAssistantModel(sessionId: string): { providerID: string; modelID: string } | null {
  try {
   const { store } = dirStoreForSession(sessionId)
@@ -528,28 +519,18 @@ function dir() {
  return _getDirectory() || undefined
 }
 
-function connectionLostError(): Error {
- const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
- const suffix = lastDisconnectReason
-  ? ` (${lastDisconnectReason})`
-  : hasEverConnected
-   ? ""
-   : " (never connected)"
- return new Error(`Connection lost${suffix}. Please wait for reconnection.`)
+function connectionLostError(): ConnectionLostError {
+  const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
+  return new ConnectionLostError({ reason: lastDisconnectReason || null, everConnected: hasEverConnected })
 }
 
-// Wait briefly for the pipeline to re-establish connection before failing a
-// send. Transient reconnects (heartbeat race, WS→SSE fallback, brief network
-// blip) otherwise surface as a hard "Connection lost" toast even though the
-// pipeline recovers within a second. While waiting, run bounded health probes
-// inside the same grace window so stale disconnected state can recover quickly.
-// A relayed round trip crosses the relay twice (client -> relay -> host and
-// back), so a healthy but distant host can easily need more than 500 ms.
 const CONNECTION_GRACE_MS = 2000
 const CONNECTION_PROBE_MS = 500
 const RELAY_CONNECTION_GRACE_MS = 3000
 const RELAY_CONNECTION_PROBE_MS = 3000
-export async function waitForConnectionOrThrow(): Promise<void> {
+export async function waitForConnectionOrThrow(options: { intent?: 'prompt' } = {}): Promise<void> {
+ const finishWait = options.intent === 'prompt' ? beginAgentStartupWait(getRuntimeSwitchRevision()) : undefined
+ try {
  const relayed = isRelayModeActive()
  const deadline = Date.now() + (relayed ? RELAY_CONNECTION_GRACE_MS : CONNECTION_GRACE_MS)
  const probeMs = relayed ? RELAY_CONNECTION_PROBE_MS : CONNECTION_PROBE_MS
@@ -564,6 +545,9 @@ export async function waitForConnectionOrThrow(): Promise<void> {
   }
  }
  throw connectionLostError()
+ } finally {
+  finishWait?.()
+ }
 }
 
 type SessionListSnapshot = {
@@ -573,22 +557,8 @@ type SessionListSnapshot = {
 type DirectoryStoreApi = ReturnType<ChildStoreManager["ensureChild"]>
 
 
-/** "unknown" means no live source covers this session right now, so no caller
- *  may treat it as idle on this answer. "idle" requires positive coverage. */
 export type SessionLiveActivity = "unknown" | "idle" | "active"
 
-/**
- * A session's live status can live in a different child store than the one that
- * wins the directory dedup, so any store reporting a non-idle status counts.
- * Read at the moment of use: a descendant can start working after the subtree
- * snapshot was taken.
- *
- * Absence of a non-idle status is not proof of idleness. Child stores are
- * evicted for background directories, and the global status index keeps only
- * non-idle entries, so "no report" and "idle" are different answers: report
- * "idle" only after a live idle event or successful status snapshot covers
- * the session's own directory. A loaded session list is not status authority.
- */
 export function getSessionLiveActivity(sessionId: string): SessionLiveActivity {
  const stores = _childStores
 
@@ -669,17 +639,12 @@ function withArchivedAt(sessionId: string, archivedAt: number | null): Canonical
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)))
 
 function getSessionDirectory(sessionId: string): string | undefined {
- // The global record carries the directory the server filed the session
- // under, so it wins. Directory stores come second: a project root's store
- // also indexes status, permissions and questions for sessions that live in
- // that project's worktrees, so a lookup there can name the root for a
- // worktree session and the server then answers 404/500 for the mutation.
- const globalSession = getGlobalSessionSnapshot(sessionId)
- const globalDirectory = globalSession ? resolveGlobalSessionDirectory(globalSession) ?? undefined : undefined
- return globalDirectory
-  || findSessionDirectoryInChildStores(sessionId)
-  || useSessionUIStore.getState().getDirectoryForSession(sessionId)
-  || dir()
+  const globalSession = getGlobalSessionSnapshot(sessionId)
+  const globalDirectory = globalSession ? resolveGlobalSessionDirectory(globalSession) ?? undefined : undefined
+  return globalDirectory
+    || findSessionDirectoryInChildStores(sessionId)
+    || useSessionUIStore.getState().getDirectoryForSession(sessionId)
+    || dir()
 }
 
 function findSessionDirectoryInChildStores(sessionId: string): string | null {
@@ -843,10 +808,6 @@ async function submitQuestion(request: FormRequest, action: { action: "answer" |
  }
 }
 
-// ---------------------------------------------------------------------------
-// Session CRUD
-// ---------------------------------------------------------------------------
-
 /** Capture the existing composer selection in native session admission options. */
 export type SessionCreateSelection = {
  model?: { providerId: string; modelId: string }
@@ -906,34 +867,14 @@ export async function createSession(
  }
 }
 
-/**
- * True when a caller captured a runtime key before an asynchronous mutation and
- * that runtime is no longer the active one. Callers pass `undefined` when they
- * do not participate in runtime-scoped guarding, which keeps the previous
- * unguarded behavior.
- */
 function isStaleRuntime(expectedRuntimeKey: string | undefined): boolean {
  return expectedRuntimeKey !== undefined && getRuntimeKey() !== expectedRuntimeKey
 }
 
-/**
- * Read a session, apply `updater` to its metadata, and persist the result.
- *
- * `expectedRuntimeKey` is optional here and unguarded when omitted, unlike the
- * archive and delete actions. When supplied, the runtime is rechecked before
- * the read, before the write, and before the global store is updated; a change
- * at any of those points **throws** `"runtime changed"` rather than returning a
- * value, because this function must resolve to a `Session`. Callers that pass a
- * key must therefore be prepared to catch that rejection.
- */
 const isMetadataRecord = (value: JsonValue | undefined): value is Metadata =>
  value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value)
 
-/**
- * The JSON Merge Patch (RFC 7386) that turns `current` into `next`: changed
- * keys carry their new value, removed keys carry `null`, and nested records
- * recurse so a sibling key another feature owns is left untouched.
- */
+// external: https://www.rfc-editor.org/rfc/rfc7386 Metadata merge patches delete keys with null and preserve untouched nested siblings.
 function buildMetadataMergePatch(current: Metadata, next: Metadata): Metadata {
  const patch: Metadata = {}
  for (const key of Object.keys(current)) {
@@ -975,12 +916,6 @@ export async function patchSessionMetadata(
  return publishCanonicalMetadata(current, result)
 }
 
-/**
- * Link or unlink one item on a session. The list transform lives on the
- * OpenChamber server now, decided there from a fresh read inside the
- * session's write queue: a UI request and an agent's `session.link` can no
- * longer wipe each other, whichever write lands first.
- */
 export async function setLinkedIssue(
  sessionId: string,
  directory: string | null | undefined,
@@ -990,10 +925,6 @@ export async function setLinkedIssue(
  return updateLinkedIssues(sessionId, directory, [issue], linked)
 }
 
-/**
- * Link several items in one server operation: one write-queue turn applies
- * all of them, reading and writing the record once.
- */
 export async function addLinkedIssues(
  sessionId: string,
  directory: string | null | undefined,
@@ -1043,12 +974,6 @@ async function updateLinkedIssues(
  return updated
 }
 
-/**
- * The user tracks a session as in work (`open`) or marks its work done.
- * Bound to the server it was clicked on: when the runtime switches while the
- * change is in flight, nothing reaches the new server or its cache, and the
- * result is null rather than an error to show.
- */
 export async function setSessionWorkState(
  sessionId: string,
  directory: string | null | undefined,
@@ -1158,14 +1083,6 @@ function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: str
  return snapshots
 }
 
-/**
- * Remove a batch of server-confirmed sessions from every live child store.
- *
- * Each affected store is written once for the whole batch. Removing the
- * sessions one at a time notified every subscriber — and therefore re-rendered
- * the sidebar — once per session, which is what made archiving a worktree's
- * sessions block the main thread for seconds.
- */
 function removeSessionsFromLiveStores(sessionIds: Iterable<string>, preferredDirectory?: string, archive = false): SessionListSnapshot[] {
  const ids = new Set(sessionIds)
  if (!_childStores || ids.size === 0) return []
@@ -1215,16 +1132,6 @@ function cleanupSessionWorktreeMetadata(sessionId: string): void {
  useSessionUIStore.getState().setWorktreeMetadata(sessionId, null)
 }
 
-/**
- * Commit a server-confirmed deletion.
- *
- * `expectedRuntimeKey` is the runtime the deletion was confirmed on. It is
- * forwarded to `cleanupPersistedSessionState`, which rejects an identity whose
- * runtime is no longer active. Passing the live `getRuntimeKey()` here would
- * make that existing check a tautology, so the captured key is required to keep
- * it meaningful. Callers must still reject a stale runtime themselves, because
- * the in-memory live/global/UI stores mutated below are not runtime-scoped.
- */
 function finalizeConfirmedSessionDeletion(
  sessionId: string,
  sessionDirectory?: string,
@@ -1253,21 +1160,6 @@ function finalizeConfirmedSessionDeletion(
  }
 }
 
-/**
- * Reconcile a session the authoritative global snapshot proved gone.
- *
- * `session.deleted` is the primary signal, but the server can publish it while
- * this client's stream is being rebuilt, and then nothing removes the session
- * anywhere else: the live store keeps listing it, the sidebar keeps rendering
- * it, and the open chat keeps prompting an id the server no longer has. A
- * later complete snapshot that omits a session from the established baseline
- * reports the same deletion over the other channel, so it commits the same
- * reconciliation as a confirmed deletion instead of only clearing persisted
- * state.
- *
- * The captured runtime is rechecked here because the live, global, and UI
- * stores mutated below are not runtime-scoped.
- */
 export function reconcileExternallyDeletedSession(identity: {
  runtimeKey: string
  directory: string
@@ -1278,11 +1170,9 @@ export function reconcileExternallyDeletedSession(identity: {
 }
 
 type ChatDirectoryCleanupPlan = {
- directory: string | undefined
- /** Only a root session owns its managed chat directory. */
- rootDeleted: boolean
- /** The deleted session and the descendants the server cascade-deletes with it. */
- cascadeIds: ReadonlySet<string>
+  directory: string | undefined
+  rootDeleted: boolean
+  cascadeIds: ReadonlySet<string>
 }
 
 function planChatDirectoryCleanup(sessionId: string, snapshot: CanonicalSession | null, directory: string | undefined): ChatDirectoryCleanupPlan {
@@ -1322,29 +1212,9 @@ async function cleanupDeletedChatDirectory(plan: ChatDirectoryCleanupPlan, expec
 }
 
 export type DeleteSessionOptions = {
- /**
-  * Runtime key the deletion is scoped to. Defaults to the active runtime when
-  * the action starts; callers may supply a key captured earlier when
-  * confirmation spans a runtime switch.
-  */
- expectedRuntimeKey?: string
+  expectedRuntimeKey?: string
 }
 
-/**
- * Delete one session.
- *
- * The runtime is rechecked before the request and again before any store is
- * reconciled, so a response produced by the previous runtime cannot mutate the
- * current runtime's state. Session IDs are not unique across runtimes, so
- * committing a stale deletion could otherwise evict an unrelated session and
- * erase its persisted queue, todos, drafts, folders, and pins.
- *
- * A `404` is treated as an already-completed deletion, but only when it is
- * still authoritative for the captured runtime. After a runtime change the
- * `404` describes either the previous runtime or a runtime this session never
- * belonged to; neither justifies committing cleanup here, so the action reports
- * failure and leaves reconciliation to the next authoritative load.
- */
 export async function deleteSession(sessionId: string, options?: DeleteSessionOptions): Promise<boolean> {
  const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
  if (isStaleRuntime(expectedRuntimeKey)) return false
@@ -1379,22 +1249,9 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
 }
 
 export type DeleteSessionsOptions = {
- /**
-  * Runtime key captured when the batch was confirmed. When supplied, the batch
-  * stops as soon as the active runtime differs.
-  */
- expectedRuntimeKey?: string
+  expectedRuntimeKey?: string
 }
 
-/**
- * Delete several sessions sequentially, preserving partial results.
- *
- * One failed session never blocks or erases the others: it is reported in
- * `failedIds` while the remaining IDs are still attempted. When the runtime
- * changes mid-batch, the sessions already committed on the captured runtime
- * stay in `deletedIds` and every ID that was not committed there is reported in
- * `failedIds`, so existing partial-failure feedback stays truthful.
- */
 export async function deleteSessions(
  ids: string[],
  options?: DeleteSessionsOptions,
@@ -1415,18 +1272,6 @@ export async function deleteSessions(
  return { deletedIds, failedIds }
 }
 
-/**
- * Archive one session.
- *
- * `expectedRuntimeKey` defaults to the active runtime when the action starts.
- * Callers may supply a key captured earlier when confirmation spans a runtime
- * switch. When the runtime changes, the action stops and returns `false`
- * without reconciling any store, so a response
- * produced by the previous runtime cannot mutate the current runtime's live or
- * global session state. A session the server already archived before the switch
- * stays archived on that runtime and is re-read from the server the next time
- * the runtime is loaded.
- */
 export async function archiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
  if (isStaleRuntime(expectedRuntimeKey)) return false
  const sessionDirectory = getSessionDirectory(sessionId)
@@ -1461,31 +1306,9 @@ export async function archiveSession(sessionId: string, expectedRuntimeKey = get
 }
 
 export type ArchiveSessionsOptions = {
- /**
-  * Runtime key captured when the batch was confirmed. When supplied, the batch
-  * stops as soon as the active runtime differs.
-  */
- expectedRuntimeKey?: string
+  expectedRuntimeKey?: string
 }
 
-/**
- * Archive several sessions, preserving partial results.
- *
- * Sessions that carry no review or btw link are archived by their directory's
- * server in one request, and the whole answer is reconciled with a single store
- * write. The remainder — review sessions, btw forks, sessions with an active
- * btw fork, and any session this client does not hold — keep the per-session
- * path, because unlinking a partner is UI-owned work that reads and rewrites
- * another session's metadata.
- *
- * One failed session never blocks or erases the others: it is reported in
- * `failedIds` while the remaining IDs are still attempted. When
- * `expectedRuntimeKey` is supplied and the runtime changes mid-batch, the
- * already-confirmed sessions stay in `archivedIds` and every ID that was not
- * confirmed on the captured runtime is reported in `failedIds`, so callers keep
- * showing the existing partial-failure feedback instead of silently dropping
- * work.
- */
 export async function archiveSessions(
  ids: string[],
  options?: ArchiveSessionsOptions,
@@ -1550,18 +1373,6 @@ function hasLinkedSessionCleanup(session: CanonicalSession): boolean {
  return links?.kind === "review"
 }
 
-/**
- * Split the requested IDs into per-directory server batches and the sessions
- * that must be archived individually.
- *
- * Link classification reads this client's session records rather than
- * refetching each session: those records are kept current by the same
- * `session.updated` events that publish a link created anywhere else, so a
- * fetch per session would buy no authority the store does not already have.
- * A session this client does not hold is classified as individual, which
- * restores the per-session fetch for exactly the cases where the store has
- * nothing to say.
- */
 function planArchiveBatches(ids: string[]) {
  const global = useGlobalSessionsStore.getState()
  const knownSessions = new Map<string, CanonicalSession>()
@@ -1592,14 +1403,6 @@ function planArchiveBatches(ids: string[]) {
  return { batchesByDirectory, individualIds }
 }
 
-/**
- * Reconcile a server-confirmed archive batch with one write per store.
- *
- * This mirrors what `archiveSession` does for a single session — drop it from
- * the live directory stores, invalidate its cached messages, move it to the
- * archived bucket, and clear it if it was open — with the per-session store
- * notifications collapsed into one.
- */
 function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string): void {
  if (stamps.length === 0) return
 
@@ -1616,21 +1419,6 @@ function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string
  if (ui.currentSessionId && ids.includes(ui.currentSessionId)) ui.setCurrentSession(null)
 }
 
-/**
- * Restore one archived session back to the active list.
- *
- * Same contract as `archiveSession`: waits for server confirmation before
- * reconciling stores, and rejects stale runtimes so a response produced by a
- * previous runtime cannot mutate the current runtime's state. Archive state is
- * OpenChamber's own (OpenCode has no route for it), so this goes to the
- * OpenChamber unarchive route rather than the OpenCode client.
- *
- * A subsession is the agent's: under an archived parent it is never restored
- * on its own. Restoring a top-level session brings its archived subsessions
- * back with it, so the agent runs it holds are whole again. A subsession
- * archived alone while its parent stayed active is restored on its own, back
- * under that parent.
- */
 export async function unarchiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
  const { restoredIds } = await restoreSessionTree(sessionId, expectedRuntimeKey)
  return restoredIds.includes(sessionId)
@@ -1736,29 +1524,10 @@ async function restoreArchivedSession(sessionId: string, expectedRuntimeKey: str
 }
 
 export type UnarchiveSessionsOptions = {
- /**
-  * Runtime key captured when the batch was confirmed. When supplied, the batch
-  * stops as soon as the active runtime differs.
-  */
- expectedRuntimeKey?: string
- /**
-  * Undo of an archive that just happened: put back exactly the sessions it
-  * moved, subsessions included. Without it a subsession is restored on its
-  * own only while its parent is active (`isRestorableOnItsOwn`).
-  */
- undo?: boolean
+  expectedRuntimeKey?: string
+  undo?: boolean
 }
 
-/**
- * Restore several archived sessions sequentially, preserving partial results.
- *
- * One failed session never blocks or erases the others: it is reported in
- * `failedIds` while the remaining IDs are still attempted. When
- * `expectedRuntimeKey` is supplied and the runtime changes mid-batch, the
- * already-confirmed sessions stay in `restoredIds` and every ID that was not
- * confirmed on the captured runtime is reported in `failedIds`, so callers keep
- * showing truthful partial-failure feedback.
- */
 export async function unarchiveSessions(
  ids: string[],
  options?: UnarchiveSessionsOptions,
@@ -1816,9 +1585,6 @@ export async function updateSessionTitle(
  publishCanonicalSession(result, options?.directory ?? undefined)
 }
 
-// ---------------------------------------------------------------------------
-// Retained review-flow send boundary — Task 16 owns its transport cutover.
-// ---------------------------------------------------------------------------
 
 const isUserMessageWithText = (message: CanonicalMessage, content: string): boolean => (
  message.role === "user" && message.parts.some((part) => part.type === "text" && part.content === content)
@@ -1901,20 +1667,6 @@ function reconcileAcceptedSend(input: {
  })
 }
 
-/**
- * Send a review-flow prompt with optimistic continuity.
- *
- * A client-generated pending user message is inserted into the visible store
- * and the loader's optimistic shadow before transport, so the review send is
- * visible while the Host accepts it. The callback's correlation ID is not a
- * native message identity: the Agent Service allocates message, turn, and part
- * IDs. A definite failure removes only that unconfirmed record and records the
- * failure for diagnostics. An accepted send reconciles the pending record with
- * the server-authored user message named by the accepted run's canonical turn
- * (falling back to a new matching user message for callers that return no run),
- * from an authoritative snapshot/history read or the live transcript, without
- * duplicating it. A rejected read cannot turn an accepted send into a failure.
- */
 export async function optimisticSend(input: {
  runtimeKey?: string
  runtimeRevision?: number
@@ -1939,7 +1691,7 @@ export async function optimisticSend(input: {
   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("Message was not sent because the runtime changed.")
  }
  assertRuntimeUnchanged()
- await waitForConnectionOrThrow()
+ await waitForConnectionOrThrow({ intent: 'prompt' })
  assertRuntimeUnchanged()
  const directory = input.directory ?? getSessionDirectory(input.sessionId)
  const context = (input.context ?? []).filter((item) => item.text.trim())
@@ -1999,9 +1751,6 @@ export async function optimisticSend(input: {
  })
 }
 
-// ---------------------------------------------------------------------------
-// Abort
-// ---------------------------------------------------------------------------
 
 export async function abortCurrentOperation(sessionId: string): Promise<void> {
  const runtimeKey = getRuntimeKey()
@@ -2035,9 +1784,6 @@ export async function runBuiltinCommand(sessionId: string, text: string): Promis
  return result.output
 }
 
-// ---------------------------------------------------------------------------
-// Permissions
-// ---------------------------------------------------------------------------
 
 export async function respondToPermission(
  sessionId: string,
@@ -2056,7 +1802,6 @@ export async function dismissPermission(sessionId: string, requestId: string): P
  await respondToPermission(sessionId, requestId, "reject")
 }
 
-/** Reject pending subtree approvals once, restoring unresolved cards on failure. */
 export async function dismissOpenPermissionsForSession(sessionId: string): Promise<boolean> {
  if (!sessionId || !_childStores) return false
  const runtimeKey = getRuntimeKey()
@@ -2096,9 +1841,6 @@ export async function dismissOpenPermissionsForSession(sessionId: string): Promi
  return true
 }
 
-// ---------------------------------------------------------------------------
-// Forms (the agent asking the user for input)
-// ---------------------------------------------------------------------------
 
 export async function replyToForm(sessionId: string, formId: string, answer: JsonValue): Promise<void> {
  const runtimeKey = getRuntimeKey()
@@ -2159,9 +1901,20 @@ export async function dismissOpenFormsForSession(sessionId: string): Promise<boo
  return true
 }
 
-// ---------------------------------------------------------------------------
-// Message history
-// ---------------------------------------------------------------------------
+export async function deferQuestionsAfterSend(forms: readonly FormRequest[], sent: SentMessage | undefined): Promise<void> {
+  if (sent?.route !== "prompt") return
+  await Promise.all(forms.filter((form) => form.sessionId === sent.sessionId).map(async (form) => {
+    try {
+      await cancelForm(form.sessionId, form.questionId)
+    } catch (error) {
+      if (isFormRequestNotFoundError(error)) {
+        recoverStaleBlockingRequest(form.sessionId)
+      } else if (!isFormRequestNotFoundError(error)) {
+        console.error("[session-actions] Could not defer an open question after a send:", error)
+      }
+    }
+  }))
+}
 
 export async function revertToMessage(sessionId: string, messageId: string): Promise<void> {
  const runtimeKey = getRuntimeKey()
@@ -2239,7 +1992,6 @@ export async function forkAfterMessage(sessionId: string, messageId: string): Pr
 }
 
 
-/** The session has no finished turn yet, so a fork would copy nothing stable. */
 export class NothingToForkError extends Error {
  constructor() {
   super("No completed turn to fork from")
@@ -2291,7 +2043,6 @@ export async function forkFromLastCompletedTurn(sessionId: string): Promise<Cano
  }
 }
 
-/** Fork the native selected branch including the user message; leave both composers unchanged. */
 export async function forkFromMessage(sessionId: string, messageId: string): Promise<void> {
  await forkAfterMessage(sessionId, messageId)
 }

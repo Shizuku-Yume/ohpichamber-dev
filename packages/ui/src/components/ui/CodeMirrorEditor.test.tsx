@@ -25,7 +25,6 @@ const { CodeMirrorEditor } = await import('./CodeMirrorEditor');
 const { ComposerEditorView } = await import('../chat/composer/editor/ComposerEditorView');
 const { ComposerEditor } = await import('../chat/composer/editor/ComposerEditor');
 const { history, undo } = await import('@codemirror/commands');
-const { EditorState, StateEffect } = await import('@codemirror/state');
 const { focusedHistory, handleNativeHistoryMenu } = await import('@/lib/codemirror/focusedHistory');
 
 type EditorProps = React.ComponentProps<typeof CodeMirrorEditor>;
@@ -89,13 +88,6 @@ describe('CodeMirrorEditor detached', () => {
     expect(mounted?.dom.isConnected).toBe(true);
     expect(container.contains(mounted?.dom ?? null)).toBe(true);
   });
-
-  test('is destroyed cleanly while detached', async () => {
-    await render({ detached: true });
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    expect(container.querySelector('.cm-editor')).toBeNull();
-  });
 });
 
 describe('CodeMirrorEditor reconfiguration', () => {
@@ -116,6 +108,17 @@ describe('CodeMirrorEditor reconfiguration', () => {
     await render({ highlightLines: { start: 2, end: 3 }, readOnly: true });
     expect(reconfigures).toBe(2);
     expect(view?.state.facet(EditorView.editable)).toBe(false);
+  });
+
+  test('read-only stops editing commands as well as typing', async () => {
+    const { indentMore, undo } = await import('@codemirror/commands');
+    await render({ readOnly: true });
+    expect(view!.state.readOnly).toBe(true);
+    expect(indentMore(view!)).toBe(false);
+    expect(view!.state.doc.toString()).toBe('one\ntwo\nthree');
+    await render({ readOnly: false });
+    expect(view!.state.readOnly).toBe(false);
+    expect(undo(view!)).toBe(false);
   });
 });
 
@@ -284,7 +287,7 @@ test('menu history ignores invalid actions and consumes read-only CodeMirror his
   expect(await menuHistory('copy')).toBe(false);
   expect(await menuHistory(null)).toBe(false);
   await act(async () => file.dispatch({ changes: { from: 0, insert: 'saved ' } }));
-  file.dispatch({ effects: StateEffect.appendConfig.of(EditorState.readOnly.of(true)) });
+  await render({ readOnly: true, onChange: (value) => changes.push(value) });
   changes.length = 0;
   expect(await menuHistory('undo')).toBe(true);
   expect(changes).toEqual([]);

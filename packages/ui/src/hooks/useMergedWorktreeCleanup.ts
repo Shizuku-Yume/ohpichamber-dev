@@ -137,12 +137,6 @@ const createDeps = (): MergedWorktreeCleanupDeps => {
   };
 };
 
-/**
- * Archives a worktree's sessions once its PR is merged, and removes the
- * worktree with its local branch when nothing there can be lost. Opt-in
- * (`mergedWorktreeCleanupEnabled`). Runs on desktop and web only: a phone
- * would race the desktop it drives for the same worktree.
- */
 export const useMergedWorktreeCleanup = ({ enabled }: { enabled: boolean }): void => {
   const settingEnabled = useUIStore((state) => state.mergedWorktreeCleanupEnabled);
   const active = enabled && settingEnabled && !isCapacitorApp() && !isMobileSurfaceRuntime();
@@ -179,8 +173,6 @@ export const useMergedWorktreeCleanup = ({ enabled }: { enabled: boolean }): voi
       }, PASS_DEBOUNCE_MS);
     };
 
-    // A PR turning merged, an agent going idle or a session closing can each
-    // make a waiting worktree ready, so any of them asks for a pass.
     const unsubscribePr = useGitHubPrStatusStore.subscribe((state, previous) => {
       if (state.entries !== previous.entries) schedule();
     });

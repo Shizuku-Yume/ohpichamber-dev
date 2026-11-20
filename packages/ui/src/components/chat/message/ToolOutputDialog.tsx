@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PatchDiff } from '@pierre/diffs/react';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -988,7 +988,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     {t('chat.toolOutputDialog.arguments')}
                                 </div>
                                 <div className="tool-input-surface bg-transparent rounded-xl border border-border/20">
-                                    <WorkerHighlightedCode
+                                    <HighlightedCode
                                         language="json"
                                         code={argumentsText}
                                         style={toolDisplayStyles.getPopupStyles()}
@@ -1029,7 +1029,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             {(() => {
                                 if (popupToolName && isGrepTool(popupToolName)) {
                                     return renderGrepOutput(popup.content, isMobile, t) ?? (
-                                        <WorkerHighlightedCode
+                                        <HighlightedCode
                                             language={popup.language || 'text'}
                                             code={popup.content}
                                             style={toolDisplayStyles.getPopupContainerStyles()}
@@ -1041,7 +1041,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
 
                                 if (popupToolName && isGlobTool(popupToolName)) {
                                     return renderGlobOutput(popup.content, isMobile, t) ?? (
-                                        <WorkerHighlightedCode
+                                        <HighlightedCode
                                             language={popup.language || 'text'}
                                             code={popup.content}
                                             style={toolDisplayStyles.getPopupContainerStyles()}
@@ -1072,7 +1072,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 }
 
                                 return (
-                                    <WorkerHighlightedCode
+                                    <HighlightedCode
                                         language={popup.language || 'text'}
                                         code={popup.content}
                                         style={toolDisplayStyles.getPopupContainerStyles()}

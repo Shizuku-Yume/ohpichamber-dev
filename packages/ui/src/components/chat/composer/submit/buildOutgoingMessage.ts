@@ -1,31 +1,16 @@
-/**
- * Assembling what the composer actually sends.
- *
- * A single send can carry more than what the user just typed: messages queued
- * while the previous turn ran, inline review comments, `@file` references
- * resolved to attachments, linked issues and PRs, synthetic parts from
- * conflict resolution, and the skills mentioned inline.
- *
- * OpenCode takes one primary message plus additional parts, so all of that has
- * to be flattened into that shape — and the flattening has rules that are easy
- * to get wrong and impossible to see when they are spread through a 400-line
- * handler. They are stated here, as a pure function over injected resolvers,
- * so the ordering can be tested rather than trusted.
- */
 
 import type { JsonValue } from 'ohpichamber-sdk';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import type { SourceControlProvider } from '@/lib/api/types';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { QueuedContextPart, QueuedMessage } from '@/stores/messageQueueStore';
+import { withoutShareLinkKeys } from '@/lib/received-pages/link';
 import { contextPayloadFromDraft, createContextPart, type ContextPartMetadata, type ContextPartPayload } from '@/lib/messages/contextParts';
 
 export interface OutgoingPart {
     text: string;
     attachments?: AttachedFile[];
-    /** Synthetic parts are context for the model, not shown as user content. */
     synthetic?: boolean;
-    /** Structured context (see contextParts.ts), persisted with the part. */
     metadata?: ContextPartMetadata;
     /** This queued text already passed through native expansion at capture time. */
     fileResourcesExpanded?: boolean;
@@ -42,15 +27,9 @@ export interface OutgoingMessage {
      * messages already carry the instruction they were queued with.
      */
     skillNames: string[];
-    /** True when there is nothing worth sending. */
     isEmpty: boolean;
 }
 
-/**
- * A queued message is already resolved: its file mentions became attachments,
- * and the context the composer had attached travels with it.
- * Assembly only places it.
- */
 export interface QueuedInput {
     text: string;
     attachments?: AttachedFile[];
@@ -62,11 +41,10 @@ export const selectComposerQueue = (messages: readonly QueuedMessage[]): readonl
         ? messages.filter((message) => !message.scheduledTask)
         : messages;
 
-/** An issue, PR or tracker item attached to the composer, as it is sent. */
 export type ComposerContextReference =
     | { kind: 'repository-issue'; provider?: SourceControlProvider; number: number; title: string; url: string; contextText: string }
     | { kind: 'change-request'; provider: SourceControlProvider; number: number; title: string; url: string; context: string }
-    | { kind: 'linear-issue'; identifier: string; title: string; url: string; contextText: string }
+    | { kind: 'shared-page'; receivedId: string | null; host: string; title: string; opened: boolean; contextText: string }
     | { kind: 'repository-discussion'; provider: SourceControlProvider; number: number; title: string; url: string; contextText: string }
     | { kind: 'tracker-item'; provider: string; identifier: string; title: string; url: string; contextText: string }
     | { kind: 'session'; sessionId: string; title: string; contextText: string; messageId?: string }
@@ -79,38 +57,25 @@ export type ComposerContextReference =
         url: string;
         contextText: string;
         thread?: 'issue' | 'pull';
-        /** Opaque guest payload; rides the context part metadata, not its text. */
         data?: JsonValue;
     };
 
-/** What the composer has attached besides text and files. */
 export interface ComposerContextInput {
-    /** Context drafts (code comments, terminal selections, annotations, PR context). */
     inlineComments: readonly InlineCommentDraft[];
-    /** Synthetic context produced elsewhere (conflict resolution, and such). */
     syntheticTexts: readonly string[];
-    /** Attached issues, PRs and tracker items, in the order they were attached. */
     references: readonly ComposerContextReference[];
 }
 
 export interface OutgoingMessageInput extends ComposerContextInput {
-    /** Messages queued while a turn was running, oldest first. */
     queued: readonly QueuedInput[];
-    /** The composer's own text, or null when this send skips it. */
     composerText: string | null;
     composerAttachments: readonly AttachedFile[];
 }
 
-/**
- * The parts of assembly that depend on stores or async config, injected so the
- * assembly itself stays pure.
- */
 export interface OutgoingMessageDeps {
     /** Resolve `@path` references into server-side attachments. */
     extractFileMentions: (text: string) => { text: string; attachments: AttachedFile[] };
-    /** Normalize attachments for transport (server paths become file URLs). */
     sanitizeAttachments: (files: readonly AttachedFile[] | undefined) => AttachedFile[];
-    /** Skills named with `$name`. */
     collectSkillNames: (text: string) => string[];
 }
 
@@ -168,36 +133,25 @@ export function buildOutgoingMessage(
         }
     }
 
-    // Everything the composer had attached follows its text.
     additionalParts.push(...queuedContextToParts(
         buildComposerContext(input, null),
     ));
 
     return {
-        primaryText,
+        primaryText: withoutShareLinkKeys(primaryText),
         primaryFileResourcesExpanded: input.queued.length > 0,
         primaryAttachments,
-        additionalParts,
+        additionalParts: additionalParts.map((part) => ({ ...part, text: withoutShareLinkKeys(part.text) })),
         skillNames,
         isEmpty: !primaryText && primaryAttachments.length === 0 && additionalParts.length === 0,
     };
 }
 
-/**
- * Everything the composer has attached besides text and files, in send
- * order. Each attached context item becomes its own synthetic part carrying
- * structured metadata, so the timeline can render it as a context block after
- * the server echoes the message back. Used both when sending and when queueing:
- * a queued message takes this context with it, so whoever delivers it later
- * sends exactly what the composer would have.
- */
 export function buildComposerContext(
     input: ComposerContextInput,
     skillInstruction: string | null,
 ): QueuedContextPart[] {
     const context: QueuedContextPart[] = [];
-    // An attached item is context only: no instructions guess what the user
-    // wants from it; their message says that.
     const attach = (part: { text: string; metadata: ContextPartMetadata }) => {
         context.push({ kind: 'context', text: part.text, metadata: part.metadata });
     };
@@ -222,9 +176,9 @@ export function buildComposerContext(
                 attach(createContextPart({ kind: 'change-request', provider, number, title, url }, prContext));
                 break;
             }
-            case 'linear-issue': {
-                const { identifier, title, url, contextText } = reference;
-                attach(createContextPart({ kind: 'tracker-item', provider: 'linear', identifier, title, url }, contextText));
+            case 'shared-page': {
+                const { receivedId, host, title, opened, contextText } = reference;
+                attach(createContextPart({ kind: 'shared-page', receivedId, host, title, opened }, contextText));
                 break;
             }
             case 'tracker-item': {
@@ -274,7 +228,6 @@ export function buildComposerContext(
     return context;
 }
 
-/** The synthetic parts a captured context is delivered as, in order. */
 export function queuedContextToParts(context: readonly QueuedContextPart[]): OutgoingPart[] {
     const parts: OutgoingPart[] = [];
     for (const part of context) {
@@ -288,11 +241,6 @@ export function queuedContextToParts(context: readonly QueuedContextPart[]): Out
     return parts;
 }
 
-/**
- * Expand native `/template` invocations in the words of each attached comment,
- * before comments become synthetic context. Quoted code stays verbatim.
- * Worker failures reject the submission so the composer can restore its input.
- */
 export async function expandCommentSnippets(
     drafts: readonly InlineCommentDraft[],
     expandText: (text: string) => Promise<string>,

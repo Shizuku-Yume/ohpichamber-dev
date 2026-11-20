@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
@@ -54,6 +54,8 @@ describe('Dock badge with the macOS menu bar disabled', () => {
       __OPENCHAMBER_ELECTRON__: { runtime: 'electron', trayEnabled: false },
       __OPENCHAMBER_DESKTOP__: { invoke, listen },
       setInterval: intervals,
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
     });
     Object.assign(globalThis, {
       window: dom, document: dom.document, navigator: dom.navigator,

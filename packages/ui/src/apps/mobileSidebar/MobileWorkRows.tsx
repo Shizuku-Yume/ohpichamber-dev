@@ -1,38 +1,42 @@
+import { isSpaceDirectory } from '@/lib/spaces/space-route';
 import React from 'react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { Icon } from '@/components/icon/Icon';
 import { Spinner } from '@/components/ui/spinner';
+import { ContextMenuItem } from '@/components/ui/context-menu';
 import { CollapsedActivityIndicator } from '@/components/session/sidebar/sessions/collapsedActivityIndicator';
 import { useCollapsedSessionActivityState } from '@/components/session/sidebar/sessions/collapsedActivityState';
 import { DirectoryActionIndicator } from '@/components/session/sidebar/sessions/DirectoryActionIndicator';
+import { TimelineProjectName } from '@/components/session/sidebar/sessions/SessionTimelineRowBody';
+import { useZoneProjectNames } from '@/components/session/sidebar/sessions/useZoneProjectNames';
 import { useRunWork } from '@/components/session/sidebar/sessions/useRunWork';
-import type { SessionSidebarRow } from '@/components/session/sidebar/sessionSidebarRowModel';
+import { isPinnedZoneRowKey, type SessionSidebarRow } from '@/components/session/sidebar/sessionSidebarRowModel';
 import { useSessionDraftRow } from '@/components/session/sidebar/works/useSessionDraftRow';
 import { useWorktreeWork } from '@/components/session/sidebar/works/useWorktreeWork';
+import { useWorkRowGuestMarks } from '@/components/session/sidebar/sessions/useRowGuestMarks';
+import { MobileGuestMarks } from './MobileGuestMarks';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { useI18n } from '@/lib/i18n';
 import { refTintStyle } from '@/lib/source-control/prVisualState';
 import { cn } from '@/lib/utils';
 import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { MobileProjectIcon } from '../MobileProjectIcon';
 import { MobileRunProviderLogos } from '../MobileRunProviderLogos';
 import { MobileSessionRenameForm } from '../MobileSessionRenameForm';
 import { MobileSwipeActionsRow, ROW_ACTION_SLOT_WIDTH } from '../MobileSessionSwipe';
 import type { MobileTreeGeometry } from './mobileSidebarGeometry';
+import { MobileRowMenu } from './MobileRowMenu';
 import { useMobileRowSwipe, useMobileSidebarActions, useMobileSidebarRowsStore } from './mobileSidebarState';
 import { MOBILE_ACTIVE_ROW_CLASS, MOBILE_ACTIVE_TITLE_CLASS, MobileRowChevron, MobileSlotChevron, MobileSwipeAction, MobileTwoLineLayout } from './mobileRowParts';
 
 const ONE_LINE_ROW_CLASS = 'flex h-9 min-w-0 flex-1 items-center gap-2.5 pe-3.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
-/** The project of a row listed among other projects' works, for the icon that names it. */
 const useMixedRowProject = (projectId: string | null, shown: boolean) => useProjectsStore(React.useCallback(
   (state) => (shown && projectId ? state.projects.find((entry) => entry.id === projectId) ?? null : null),
   [projectId, shown],
 ));
 
-/** A row's state or mark in the slot left of its title, where the chevron is not. */
 const MobileSlotMark: React.FC<{ slotLeft: number; children: React.ReactNode }> = ({ slotLeft, children }) => (
   <span className="pointer-events-none absolute inset-y-0 z-10 flex w-3.5 items-center justify-center" style={{ insetInlineStart: slotLeft }}>
     {children}
@@ -55,10 +59,13 @@ export const MobileWorktreeRow: React.FC<{
   const { revealed, renaming } = useMobileRowSwipe(row.key);
   const work = useWorktreeWork({ group: row.group, projectId: row.projectId, collapsed: row.collapsed, onNavigate: actions.close });
   const { worktree, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
+  const guestMarks = useWorkRowGuestMarks({ space: isSpaceDirectory(work.directory), projectId: project?.id ?? row.projectId ?? null, directory: work.directory, branch });
+  const marks = <MobileGuestMarks marks={guestMarks} onOpenRow={() => work.open()} />;
+  const projectNamed = useZoneProjectNames();
   const mixedProject = useMixedRowProject(row.projectId, row.mixed && row.detailed);
   const expandable = !row.empty;
-  const expanded = row.forceExpanded || !row.collapsed;
-  const toggle = expandable && !row.forceExpanded ? () => onToggle(row.groupKey) : undefined;
+  const expanded = !row.collapsed;
+  const toggle = expandable ? () => onToggle(row.groupKey) : undefined;
   const setRevealed = (next: boolean) => useMobileSidebarRowsStore.getState().setRevealed(row.key, next);
   const after = (action: () => void) => () => {
     setRevealed(false);
@@ -72,7 +79,6 @@ export const MobileWorktreeRow: React.FC<{
     work.open();
   };
   const stopRename = () => useMobileSidebarRowsStore.getState().stopRename();
-  // The live state sits on the right before the time; the slot says what the row is.
   const stateMark = worktreeRemoving || finishing
     ? <Spinner className="size-3" />
     : activityState ? <CollapsedActivityIndicator state={activityState} /> : null;
@@ -105,7 +111,6 @@ export const MobileWorktreeRow: React.FC<{
       dir="auto"
       className={cn(
         'block min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label',
-        // The title carries the state as a session's does.
         selected
           ? MOBILE_ACTIVE_TITLE_CLASS
           : activityState === 'unread' || activityState === 'permission' || activityState === 'form'
@@ -135,10 +140,7 @@ export const MobileWorktreeRow: React.FC<{
     </span>
   ) : null;
   const directoryIndicator = row.group.directory ? <DirectoryActionIndicator directory={row.group.directory} /> : null;
-  // With the Pinned section shown a pinned work is listed there, whose header
-  // already says so; otherwise the row carries the mark, as a session's does.
-  const pinnedSectionShown = useSessionDisplayStore((state) => state.showPinnedSection);
-  const pinMark = work.pinned && !pinnedSectionShown
+  const pinMark = work.pinned && !isPinnedZoneRowKey(row.key)
     ? <Icon name="pushpin" className="size-3 shrink-0 text-muted-foreground" aria-label={t('sessions.sidebar.session.status.pinned')} />
     : null;
 
@@ -155,9 +157,10 @@ export const MobileWorktreeRow: React.FC<{
           : <>{titleText}{missing}{pinMark}{directoryIndicator}{stateMark}{duration}</>}
         secondLine={<>
           {mixedProject ? <MobileProjectIcon project={mixedProject} size="xs" /> : null}
+          {mixedProject && projectNamed ? <TimelineProjectName project={mixedProject} separated={false} /> : null}
           {branchMark}
-          {secondName ? <span dir="auto" className="block min-w-0 truncate typography-micro">{secondName}</span> : null}
-          <span className="ms-auto flex shrink-0 items-center">{ref}</span>
+          {secondName && !(mixedProject && projectNamed && secondName === title) ? <span dir="auto" className="block min-w-0 truncate typography-micro">{secondName}</span> : null}
+          <span className="ms-auto flex shrink-0 items-center gap-1.5">{ref}{marks}</span>
         </>}
       />
     );
@@ -174,11 +177,11 @@ export const MobileWorktreeRow: React.FC<{
           aria-label={t('sessions.sidebar.work.openAria', { label })}
           onClick={select}
         >
-          {/* The desktop work row's order. */}
           {titleText}
           {missing}
           {pinMark}
           {ref}
+          {marks}
           {directoryIndicator}
           {stateMark}
           {duration}
@@ -190,7 +193,31 @@ export const MobileWorktreeRow: React.FC<{
   // The fork's worktree model offers no pin write (`useWorktreeWork` reports
   // `canPin` false), so the row has no pin action to swipe.
   const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
+  const menu = (
+    <>
+      {work.workAction ? (
+        <ContextMenuItem disabled={finishing || worktreeRemoving} onClick={work.toggleWork}>
+          <Icon name={inWork ? 'check' : 'eye'} className="me-1 size-4" />
+          {inWork ? t('sessions.sidebar.session.work.markDone') : t('sessions.sidebar.session.work.track')}
+        </ContextMenuItem>
+      ) : null}
+      {work.canRename ? (
+        <ContextMenuItem onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}>
+          <Icon name="edit" className="me-1 size-4" />
+          {t('sessions.sidebar.work.menu.rename')}
+        </ContextMenuItem>
+      ) : null}
+      {work.canArchive ? (
+        <ContextMenuItem disabled={finishing} onClick={() => { void work.finish(true); }}>
+          <Icon name="archive" className="me-1 size-4" />
+          {t('sessions.sidebar.work.menu.archive')}
+        </ContextMenuItem>
+      ) : null}
+    </>
+  );
+
   return (
+    <MobileRowMenu disabled={revealed || renaming || worktreeRemoving} menu={menu}>
     <MobileSwipeActionsRow
       actionsWidth={slots * ROW_ACTION_SLOT_WIDTH}
       revealed={revealed}
@@ -240,14 +267,10 @@ export const MobileWorktreeRow: React.FC<{
     >
       {content}
     </MobileSwipeActionsRow>
+    </MobileRowMenu>
   );
 };
 
-/**
- * A multi-run in the phone's list, a work like a worktree: a tap opens its
- * newest fusion, else its overview; the chevron opens its lanes. Swiping
- * reveals Done or Track, Open overview, Rename and Archive run.
- */
 export const MobileRunRow: React.FC<{
   row: Extract<SessionSidebarRow, { kind: 'run' }>;
   geometry: MobileTreeGeometry;
@@ -261,9 +284,10 @@ export const MobileRunRow: React.FC<{
   const activityNodes = React.useMemo(() => [...row.laneNodes], [row.laneNodes]);
   const activityState = useCollapsedSessionActivityState({ nodes: activityNodes, blockingSessionIds: row.blockingSessionIds });
   const activity = activityState ? <CollapsedActivityIndicator state={activityState} /> : null;
+  const projectNamed = useZoneProjectNames();
   const mixedProject = useMixedRowProject(row.projectId, row.detailed && row.renderContext === 'timeline-mixed');
-  const expanded = row.forceExpanded || row.expanded;
-  const toggle = row.laneNodes.length > 0 && !row.forceExpanded ? () => toggleParent(row.expansionKey) : undefined;
+  const expanded = row.expanded;
+  const toggle = row.laneNodes.length > 0 ? () => toggleParent(row.expansionKey) : undefined;
   const laneCount = run.lanes.length;
   const setRevealed = (next: boolean) => useMobileSidebarRowsStore.getState().setRevealed(row.key, next);
   const after = (action: () => void) => () => {
@@ -280,7 +304,6 @@ export const MobileRunRow: React.FC<{
   const stopRename = () => useMobileSidebarRowsStore.getState().stopRename();
   const runMark = <ArrowsMerge className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />;
   const titleText = (
-    // Muted like an idle session title; the run's state shows in its mark.
     <span dir="auto" className={cn('block min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label', work.isActive ? MOBILE_ACTIVE_TITLE_CLASS : 'oc-title-rest')}>
       {run.title}
     </span>
@@ -312,8 +335,9 @@ export const MobileRunRow: React.FC<{
           : <>{titleText}{activity}</>}
         secondLine={<>
           {mixedProject ? <MobileProjectIcon project={mixedProject} size="xs" /> : null}
+          {mixedProject && projectNamed ? <TimelineProjectName project={mixedProject} separated={false} /> : null}
           {runMark}
-          <span className="block min-w-0 flex-1 truncate typography-micro">
+          <span className="block min-w-0 flex-auto truncate typography-micro">
             {laneCount === 1
               ? t('sessions.sidebar.run.laneCountSingle', { count: laneCount })
               : t('sessions.sidebar.run.laneCountPlural', { count: laneCount })}
@@ -371,11 +395,6 @@ export const MobileRunRow: React.FC<{
   );
 };
 
-/**
- * A new session's draft not sent yet, where its session would go: a pen in
- * the slot and the start of what was typed. A tap opens it in the composer;
- * swiping reveals Discard, which throws it away without asking.
- */
 export const MobileDraftRow: React.FC<{
   row: Extract<SessionSidebarRow, { kind: 'draft' }>;
   geometry: MobileTreeGeometry;
@@ -385,6 +404,7 @@ export const MobileDraftRow: React.FC<{
   const { draft } = row;
   const { revealed } = useMobileRowSwipe(row.key);
   const { isOpen, firstLine, attachmentCount, label, open, discard } = useSessionDraftRow(draft, actions.close);
+  const projectNamed = useZoneProjectNames();
   const mixedProject = useMixedRowProject(draft.projectId ?? null, row.detailed && row.mixed);
   const branch = useGitBranchLabel(row.detailed ? draft.directory : null);
   const setRevealed = (next: boolean) => useMobileSidebarRowsStore.getState().setRevealed(row.key, next);
@@ -434,6 +454,7 @@ export const MobileDraftRow: React.FC<{
           firstLine={titleText}
           secondLine={<>
             {mixedProject ? <MobileProjectIcon project={mixedProject} size="xs" /> : null}
+          {mixedProject && projectNamed ? <TimelineProjectName project={mixedProject} separated={false} /> : null}
             {pen}
             {branch ? <span className="block min-w-0 truncate typography-micro">{branch}</span> : null}
             {attachment ? <span className="ms-auto flex shrink-0 items-center">{attachment}</span> : null}

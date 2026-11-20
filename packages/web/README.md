@@ -27,6 +27,13 @@ Or install manually: `bun add -g ohpichamber` (or npm, pnpm, yarn).
 
 ### Monorepo development scripts
 
+Source server commands rebuild the Canonical contract and Agent Service before
+starting. Their public package exports deliberately resolve compiled `dist`
+files even when the Host entrypoint is source. After a merge that adds schema
+exports, an old `dist` can reject an otherwise correct source import. Direct
+embedders of `server/index.js` run `bun run --cwd packages/web dev:server:prepare`
+from the repository root before booting; reinstalling dependencies is not needed.
+
 ```bash
 # From repository root
 bun run build:web       # Build web assets and server dependencies
@@ -41,6 +48,16 @@ bun run start           # Start via bin/cli.js serve
 ```
 
 
+
+Published packages run emitted JavaScript from `build/server` and `build/bin`.
+To build from a checkout, run `bun install` and `bun run build:web` at the repo
+root. `bun run start:web` runs the source CLI with Bun; `bun run dev`,
+`dev:server`, `dev:server:watch` and tests use sources without a server build.
+`bun run build:server` builds only the backend and its runtime assets.
+The build includes retained JavaScript/MJS runtime modules even when a typed
+declaration keeps them out of TypeScript's emit graph. After building, run
+`node scripts/smoke-server-build.mjs --built-cli` from this package to exercise
+the production CLI, HTTP listener and native Agent Service with isolated data.
 
 ## Usage
 

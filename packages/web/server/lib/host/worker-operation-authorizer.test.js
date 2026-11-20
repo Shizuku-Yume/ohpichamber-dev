@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
+import { createProjectDirectoryRuntime } from '../projects/project-directory-runtime.js';
 import { createWorkerOperationAuthorizer } from './worker-operation-authorizer.js';
 
 const server = { serverId: 'oauth-server', label: 'OAuth server', enabled: true, transport: { type: 'http', url: 'https://mcp.example/tools' } };

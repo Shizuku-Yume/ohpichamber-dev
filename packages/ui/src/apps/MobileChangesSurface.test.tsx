@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitLogEntry, GitStatus } from '@/lib/api/types';
@@ -9,7 +9,11 @@ import { closeTopmostBackLayer, registerBackLayer } from '@/lib/mobileBackLayers
 // These cases cover the repository panes, not the transcript: the turn scope's
 // sync read is answered empty rather than standing up a provider for it.
 const actualSyncContext = await import('@/sync/sync-context');
-mock.module('@/sync/sync-context', () => ({ ...actualSyncContext, useSessionMessages: () => [] }));
+mock.module('@/sync/sync-context', () => ({
+  ...actualSyncContext,
+  useSessionMessages: () => [],
+  useSessionDirectory: () => undefined,
+}));
 
 // Pull requests are read through the checkout's bound GitHub context, so the
 // repository here is bound to an account the auth store knows as valid.
@@ -53,6 +57,10 @@ test('dirty branch switching publishes through the managed chooser and keeps the
   }
 });
 
+// Git's patch for a rename with unchanged content: headers, no hunks.
+const pureRenamePatch = (from: string, to: string) =>
+  `diff --git a/${from} b/${to}\nsimilarity index 100%\nrename from ${from}\nrename to ${to}\n`;
+
 test('mobile comparisons drill into files, retry, resume, change source, and yield to external working diffs', async () => {
   const dom = new Window({ url: 'http://localhost' });
   dom.happyDOM.setWindowSize({ width: 390, height: 844 });
@@ -78,8 +86,8 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const requests: URL[] = [];
   const originalFetch = globalThis.fetch;
   let failBranchDiff = true;
-  let statusFailure: 'host' | 'timeout' | null = null;
-  let refreshedStatus: GitStatus | null = null;
+  const statusFailure: 'host' | 'timeout' | null = null;
+  const refreshedStatus: GitStatus | null = null;
   let nestedIsRepository = true;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
@@ -122,18 +130,27 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
         });
       }
       case '/api/git/branch-base': return Response.json({ base: null });
-      case '/api/git/range-files': return Response.json({ files: [{ path: url.searchParams.get('base') === 'refs/heads/parent' ? 'parent.png' : 'branch.png', status: 'M' }] });
+      case '/api/git/range-files': return Response.json({ files: url.searchParams.get('base') === 'refs/heads/parent'
+        ? [{ path: 'parent.png', status: 'M' }, { path: 'docs/moved.md', previousPath: 'docs/orig.md', status: 'R' }]
+        : [{ path: 'branch.png', status: 'M' }] });
       case '/api/git/range-diff':
+        if (url.searchParams.get('path') === 'docs/moved.md') return Response.json({ diff: pureRenamePatch('docs/orig.md', 'docs/moved.md') });
         return failBranchDiff
           ? Response.json({ error: 'Branch diff failed' }, { status: 500 })
           : Response.json({ diff: 'Binary files a/branch.png and b/branch.png differ' });
       case '/api/git/log': return Response.json({ all: commits, latest: commits[0], total: commits.length });
-      case '/api/git/commit-files': return Response.json({ files: [{ path: `commit-${url.searchParams.get('hash')?.[0]}.png`, previousPath: 'old.png', changeType: 'R', insertions: 0, deletions: 0, isBinary: true }] });
-      case '/api/git/commit-diff': return Response.json({ diff: 'Binary files a/old.png and b/commit.png differ' });
+      case '/api/git/commit-files': return Response.json({ files: url.searchParams.get('hash')?.[0] === 'a'
+        ? [{ path: 'commit-a.png', previousPath: 'old.png', changeType: 'R', insertions: 0, deletions: 0, isBinary: true }]
+        : [{ path: 'commit-b.md', previousPath: 'old.md', changeType: 'R', insertions: 0, deletions: 0, isBinary: false }] });
+      case '/api/git/commit-diff': return Response.json({ diff: url.searchParams.get('path') === 'commit-b.md'
+        ? pureRenamePatch('old.md', 'commit-b.md')
+        : 'Binary files a/old.png and b/commit.png differ' });
       case '/api/git/file-diff':
         if (url.searchParams.get('path') === 'nested/' && nestedIsRepository) {
           return Response.json({ error: 'Path is a separate Git repository: nested/', code: 'nested_repository' }, { status: 422 });
         }
+        // A staged pure rename: the file-version read answers equal versions and no patch.
+        if (url.searchParams.get('path') === 'docs/moved.md') return Response.json({ path: 'docs/moved.md', original: 'same\n', modified: 'same\n', isBinary: false });
         return Response.json({ path: url.searchParams.get('path'), original: '', modified: '', isBinary: true });
       // The bound status contract echoes the branch it answered for.
       case '/api/source-control/github/pr/status': return Response.json({
@@ -213,7 +230,13 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     await act(async () => { option.click(); });
   };
   const openFile = async (path: string) => {
-    const button = container.querySelector(`[title="${path}"]`)?.closest('button');
+    // A renamed row names both sides (`old → new`), so match on the destination.
+    const button = [...container.querySelectorAll('[title]')]
+      .find((node) => {
+        const title = node.getAttribute('title') ?? '';
+        return title === path || title.endsWith(` \u2192 ${path}`);
+      })
+      ?.closest('button');
     if (!button) throw new Error(`Missing file ${path}`);
     await act(async () => { button.click(); });
   };
@@ -270,19 +293,29 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     await click('[data-value="refs/heads/parent"]');
     expect(container.querySelector('[title="branch.png"]')).toBeNull();
     expect(container.querySelector('[title="parent.png"]')).not.toBeNull();
+    // A pure rename names its source and says the content is unchanged, instead of an empty body.
+    await openFile('docs/moved.md');
+    expect(container.querySelector('h2')?.textContent).toBe('moved.md');
+    expect(container.textContent).toContain('docs/orig.md → docs');
+    expect(container.textContent).toContain('Renamed from docs/orig.md — content unchanged');
+    const renameRequest = [...requests].reverse().find((url) => url.pathname === '/api/git/range-diff');
+    expect(renameRequest?.searchParams.get('previousPath')).toBe('docs/orig.md');
+    await click('[aria-label="Back"]');
 
     await chooseMode('Commit');
     expect(container.querySelector('[aria-label="Sync Changes"]')).toBeNull();
     expect(checkoutControl()).toBeUndefined();
-    expect(container.querySelector('[title="commit-a.png"]')).not.toBeNull();
+    // A renamed entry names both sides: the row reads `old → new`.
+    expect(container.querySelector('[title="old.png \u2192 commit-a.png"]')).not.toBeNull();
     await click('[aria-label="Select commit"]');
     await click(`[data-value="${'b'.repeat(40)}"]`);
     expect(container.querySelector('[title="commit-a.png"]')).toBeNull();
-    await openFile('commit-b.png');
+    await openFile('commit-b.md');
     expect(container.textContent).toContain('Commit · bbbbbbbb');
+    expect(container.textContent).toContain('Renamed from old.md — content unchanged');
     const commitRequest = [...requests].reverse().find((url) => url.pathname === '/api/git/commit-diff');
     expect(commitRequest?.searchParams.get('hash')).toBe('b'.repeat(40));
-    expect(commitRequest?.searchParams.get('previousPath')).toBe('old.png');
+    expect(commitRequest?.searchParams.get('previousPath')).toBe('old.md');
     expect(requests.filter((url) => url.pathname === '/api/git/range-diff').every((url) => url.searchParams.get('includeWorkingTree') === 'true')).toBe(true);
 
     await click('[aria-label="Back"]');
@@ -381,86 +414,15 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(container.querySelector('[aria-label="Publish"]')).not.toBeNull();
     expect(checkoutControl()).toBeDefined();
 
-    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
-    const openWalkthrough = [...container.querySelectorAll('button')].find((button) => button.getAttribute('aria-label')?.toLowerCase().includes('walkthrough'));
-    if (!openWalkthrough) throw new Error('Missing walkthrough action');
-    await act(async () => { openWalkthrough.click(); });
-    const step = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Inspect the change'));
-    if (!step) throw new Error('Missing walkthrough step');
-    await act(async () => { step.click(); });
-    expect(container.textContent).toContain('Step explanation');
-    await act(async () => { expect(backHandler?.()).toBe(true); });
-    expect(container.textContent).toContain('Review this change');
-    expect(container.textContent).not.toContain('Step explanation');
-    expect(backHandler).not.toBeNull();
-    await act(async () => { expect(backHandler?.()).toBe(true); });
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(backHandler).toBeNull();
-
-    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
-    expect(container.textContent).toContain('Review this change');
-    await act(async () => { seed('/repo'); });
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(backHandler).toBeNull();
-    workspaceOpen = true;
-    back();
-    expect(workspaceOpen).toBe(false);
-
-    visible = false;
+    // A working-tree pure rename reads as one too, from its equal file versions.
+    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'docs/moved.md', previousPath: 'docs/orig.md', index: 'R', working_dir: ' ' }] }); });
+    initialDiff = { path: 'docs/moved.md', staged: true };
     await render();
-    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
-    visible = true;
-    await render();
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(container.textContent).not.toContain('Review this change');
-    expect(backHandler).toBeNull();
-
-    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
-    expect(container.textContent).toContain('Review this change');
-    visible = false;
-    await render();
-    await act(async () => { seed('/repo'); });
-    await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
-    visible = true;
-    await render();
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(backHandler).toBeNull();
-
-    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
-    const knownStatus = useGitStore.getState().getDirectoryState('/repo')?.status;
-    if (!knownStatus) throw new Error('Missing working-tree status');
-    const refreshStatus = () => act(async () => {
-      await useGitStore.getState().fetchStatus('/repo', apis.git, { force: true, silent: true });
-    });
-    statusFailure = 'host';
-    await refreshStatus();
-    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(knownStatus);
-    expect(container.textContent).toContain('Review this change');
-    expect(backHandler).not.toBeNull();
-    statusFailure = 'timeout';
-    await refreshStatus();
-    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(knownStatus);
-    expect(container.textContent).toContain('Review this change');
-    await refreshStatus();
-    expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBeNull();
-    expect(backHandler).toBeNull();
-    statusFailure = null;
-    refreshedStatus = knownStatus;
-    await refreshStatus();
-    expect(container.textContent).toContain('Review this change');
-    await act(async () => { expect(backHandler?.()).toBe(true); });
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(backHandler).toBeNull();
-
-    await click(`[aria-label="${openWalkthrough.getAttribute('aria-label')}"]`);
-    refreshedStatus = status;
-    await refreshStatus();
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(backHandler).toBeNull();
-    refreshedStatus = knownStatus;
-    await refreshStatus();
-    expect(container.querySelector('[aria-label="Select change mode"]')).not.toBeNull();
-    expect(backHandler).toBeNull();
+    expect(container.querySelector('h2')?.textContent).toBe('moved.md');
+    expect(container.textContent).toContain('Renamed from docs/orig.md — content unchanged');
+    const workingRenameRequest = [...requests].reverse().find((url) => url.pathname === '/api/git/file-diff');
+    expect(workingRenameRequest?.searchParams.get('previousPath')).toBe('docs/orig.md');
+    await click('[aria-label="Back"]');
 
     // A nested-repository answer must not outlive the read that produced it.
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'nested/', index: '?', working_dir: '?' }] }); });
@@ -587,11 +549,6 @@ test('bounds Revert All fan-out to two in-flight revert requests', async () => {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  const settle = async (done: () => boolean) => {
-    for (let tick = 0; tick < 20 && !done(); tick += 1) {
-      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-    }
-  };
   try {
     await act(async () => {
       root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
@@ -607,15 +564,12 @@ test('bounds Revert All fan-out to two in-flight revert requests', async () => {
     if (!confirm) throw new Error('Missing Revert all confirmation');
     await act(async () => { confirm.click(); });
     // Two paths hold the only in-flight slots; the other six wait for one.
-    await settle(() => revertCalls >= 2);
     expect(revertCalls).toBe(2);
     expect(peakReverts).toBeLessThanOrEqual(2);
-    releaseReverts();
-    await settle(() => revertCalls >= files.length);
+    await act(async () => { releaseReverts(); });
     expect(revertCalls).toBe(files.length);
     expect(peakReverts).toBeLessThanOrEqual(2);
-    // Let the post-revert refresh finish so the surface does not update after unmount.
-    await settle(() => !container.textContent?.includes('Revert all'));
+    expect(container.textContent).not.toContain('Revert all');
   } finally {
     await act(async () => root.unmount());
     globalThis.fetch = originalFetch;

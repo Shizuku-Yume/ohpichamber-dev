@@ -3,10 +3,6 @@ import type { Part } from '@openchamber/agent-contract';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
 import { isExplorationTool, isWebTool, isWriteTool } from '@/lib/toolHelpers';
 
-/**
- * `paths` are absolute, normalized files whose parent listings changed.
- * Without `paths` anything under `directory` may have changed.
- */
 export type FileTreeChange = { directory: string; paths?: string[] };
 
 type FileTreeChangeListener = (change: FileTreeChange) => void;
@@ -104,11 +100,6 @@ export const fileTreeChanges = {
 const isWithin = (path: string, root: string): boolean =>
   path === root || path.startsWith(root === '/' ? '/' : `${root}/`);
 
-/**
- * The directories of `root`'s tree a change can affect: each named file's
- * parent, or `null` when the whole tree is in question. An empty list means
- * the change is elsewhere.
- */
 export const affectedDirectories = (change: FileTreeChange, root: string): string[] | null => {
   if (!change.paths) {
     return isWithin(change.directory, root) || isWithin(root, change.directory) ? null : [];

@@ -1,7 +1,17 @@
-import { beforeEach, describe, expect, test } from "bun:test"
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { strToU8, zipSync } from "fflate"
 import { useInputStore } from "./input-store"
 import { getChatDraftIdentityKey } from "@/lib/chatDraftPersistence"
+
+// A HEIC conversion that fails the way the vendored decoder does for Apple's
+// HDR gain-map photos.
+const decodeHeic = async (): Promise<Blob> => {
+  throw new Error("ERR_LIBHEIF format not supported")
+}
+
+mock.module("heic2any", () => ({
+  default: async () => decodeHeic(),
+}))
 
 class MockFileReader {
   result: string | ArrayBuffer | null = null

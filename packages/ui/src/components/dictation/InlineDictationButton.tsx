@@ -1,14 +1,3 @@
-/**
- * Dictation for a plain text field outside the composer (project notes and
- * todos): a mic button that turns into discard/insert while recording and a
- * spinner while the server transcribes. The transcript goes to `onTranscript`;
- * the host decides where it lands in its field.
- *
- * Unlike ComposerDictation there is no overlay and no global shortcut: the
- * toggle_dictation shortcut belongs to the chat composer, and a second listener
- * would start two recordings from one key press.
- */
-
 import React from 'react';
 
 import { toast } from '@/components/ui';
@@ -23,14 +12,15 @@ import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 
 interface InlineDictationButtonProps {
+  directory?: string;
   onTranscript: (text: string) => void;
   disabled?: boolean;
-  /** Classes for each icon button, so the controls match the host's own. */
   buttonClassName: string;
   iconClassName?: string;
 }
 
 export const InlineDictationButton: React.FC<InlineDictationButtonProps> = ({
+  directory,
   onTranscript,
   disabled,
   buttonClassName,
@@ -57,13 +47,12 @@ export const InlineDictationButton: React.FC<InlineDictationButtonProps> = ({
     cancelDictation,
     discardFailedDictation,
   } = useDictation({
+    directory,
     onTranscript: (text) => {
       if (text.trim()) onTranscriptRef.current(text.trim());
     },
   });
 
-  // No room here for the composer's salvage view: keep whatever was
-  // transcribed before the failure, say it failed, and go back to idle.
   React.useEffect(() => {
     if (status !== 'failed') return;
     const salvage = partialTranscript.trim();
@@ -91,8 +80,6 @@ export const InlineDictationButton: React.FC<InlineDictationButtonProps> = ({
     const downloadingModel = errorReason === 'model_download_in_progress';
     return (
       <>
-        {/* The composer's recording signs: a live dot, the mic level and the
-            elapsed time, so it is plain that speech is being heard. */}
         <span role="status" aria-label={t('chat.dictation.listening')} className="inline-flex min-w-0 items-center gap-1.5">
           <span className="relative flex size-1.5 shrink-0" aria-hidden="true">
             <span className={cn('relative inline-flex size-1.5 rounded-full bg-[var(--status-error)]', recordingBlink)} />

@@ -56,9 +56,9 @@ describe('injectedEnvKeys', () => {
 });
 
 describe('withoutInjectedEnv', () => {
-  it('drops what OpenChamber put into the shell and keeps the user\'s own', () => {
+  it('drops what OhPiChamber put into the shell and keeps the user\'s own', () => {
     const env = assignInjectedEnv({ PATH: '/usr/bin', OPENCODE_PASSWORD: 'theirs' }, {
-      OPENCHAMBER_DIST_DIR: '/Applications/OpenChamber.app/web-dist',
+      OPENCHAMBER_DIST_DIR: '/Applications/OhPiChamber.app/web-dist',
       OPENCHAMBER_UI_PASSWORD: 'desktop',
       OPENCODE_PASSWORD: 'theirs',
     });

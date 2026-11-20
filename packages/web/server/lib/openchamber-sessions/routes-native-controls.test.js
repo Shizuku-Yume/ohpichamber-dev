@@ -30,7 +30,7 @@ const fixture = async () => {
   const source = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: cwd, agentDirectory, name: 'Project' });
   const destination = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: destinationCwd, agentDirectory, name: 'Project' });
   for (const sessionId of ['public-root', 'public-child']) await store.bindSession({ sessionId, rootSessionId: 'public-root', workspaceId: source.workspaceId });
-  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [], compactResult: { type: 'compact', compactionId: 'compact-id', tokensBefore: 9000, completedAt: 1700000000002 } };
+  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [], readSignals: [], compactResult: { type: 'compact', compactionId: 'compact-id', tokensBefore: 9000, completedAt: 1700000000002 } };
   const runtime = (sessionId = 'public-root') => {
     const session = { sessionId, rootSessionId: 'public-root',
       projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
@@ -40,6 +40,10 @@ const fixture = async () => {
     return session;
   };
   const request = async (pathname, init = {}) => {
+    if (init.signal) {
+      native.readSignals.push({ pathname, signal: init.signal });
+      init.signal.throwIfAborted();
+    }
     const body = init.body ? JSON.parse(init.body) : null;
     native.calls.push({ pathname, body });
     if (native.pause?.pathname === pathname) { native.pause.entered(); await native.pause.wait; }
@@ -96,6 +100,7 @@ const fixture = async () => {
     service: { request }, agentScopeStore: state.agentScopeStore, resolveHostRelocationScope: (id) => state.agentScopeStore.getSession(id),
     resolveSessionScope: (id) => state.agentScopeStore.getSession(id), resolveHostSessionScope: (id) => state.agentScopeStore.getSession(id),
     resolveWorkspaceScope: async (id) => { const scope = await state.agentScopeStore.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
+    listWorkspaceScopes: async () => ({ items: [{ workspaceId: source.workspaceId }], errors: {} }),
     resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
     directCommandAdmissionStore: state.directCommandAdmissionStore,
     archiveStore: state.archiveStore, sessionMetadataStore: state.sessionMetadataStore,
@@ -104,6 +109,20 @@ const fixture = async () => {
 };
 
 describe('Host native session control saga', () => {
+  it('forwards read cancellation and keeps aborted global inventory non-authoritative', async () => {
+    const { native, makeService, source } = await fixture();
+    const service = makeService();
+    const controller = new AbortController();
+    await service.open('public-root', { signal: controller.signal });
+    expect(await service.list(undefined, { signal: controller.signal })).toEqual({ items: [], errors: {} });
+    expect(native.readSignals).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/snapshot', signal: controller.signal });
+    expect(native.readSignals).toContainEqual({ pathname: `/api/agent/v1/sessions?workspaceId=${encodeURIComponent(source.workspaceId)}`, signal: controller.signal });
+    controller.abort();
+    await expect(service.open('public-root', { signal: controller.signal })).rejects.toThrow();
+    const inventory = await service.list(undefined, { signal: controller.signal });
+    expect(inventory.errors[source.workspaceId]).toBe('SERVICE_UNAVAILABLE');
+  });
+
   it('forwards authorized mode transitions without storing mode in the Host', async () => {
     const { native, makeService } = await fixture();
     const service = makeService();

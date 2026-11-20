@@ -8,14 +8,6 @@ import {
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useDirectorySync } from '@/sync/sync-context';
 
-/**
- * Which model's window the context readouts measure against.
- *
- * Canonical sessions do not carry a model selection. Measure the newest
- * assistant answer first, then the composer's model before an answer exists.
- * Under Auto the composer names no real model (the server picks one per
- * turn), so without an answer the readouts use their default window.
- */
 export const useContextWindowLimits = (sessionId: string | null, directory?: string): ContextWindowLimits => {
   const currentProviderId = useConfigStore((state) => state.currentProviderId);
   const currentModelId = useConfigStore((state) => state.currentModelId);

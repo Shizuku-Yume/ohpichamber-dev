@@ -28,16 +28,9 @@ const getRuntimeGit = () => {
   return getRegisteredRuntimeAPIs()?.git ?? null;
 };
 
-// A registered runtime that omits an operation does not have it. Falling back
-// to the HTTP adapter would call a server that runtime does not run.
 const unsupportedByRuntime = (operation: string): Promise<never> =>
   Promise.reject(new GitNetworkOperationRequestError('RUNTIME_UNSUPPORTED', `${operation} is not supported in this runtime`, 501));
 
-// Runtime git adapters do not necessarily go through the HTTP
-// adapter's cache, so the invalidation signal `useGitStore` relies on has to be
-// emitted here, at the dispatch layer, once a runtime mutation succeeds. The
-// HTTP adapter keeps emitting it itself when it clears its own cache, so a
-// mutation is announced exactly once on either path.
 const runtimeStatusMutation = async <T>(directory: string, mutation: Promise<T>): Promise<T> => {
   const result = await mutation;
   notifyGitStatusInvalidated(directory);
@@ -79,7 +72,6 @@ export async function resolveGitPrimaryRoot(directory: string): Promise<string> 
   return result.root;
 }
 
-/** Where `directory` sits inside its repository's checkout; `''` at the root. Rejects when unknown. */
 export async function resolveGitRepositoryPrefix(directory: string): Promise<string> {
   const runtime = getRuntimeGit();
   if (runtime?.resolveRepositoryPrefix) return runtime.resolveRepositoryPrefix(directory);
@@ -169,9 +161,6 @@ export async function getGitUnpushedBranchCounts(directory: string, branches: st
 
 const COMMIT_DIFF_FILE_LIMIT = 30;
 const COMMIT_DIFF_TOTAL_CHAR_LIMIT = 120_000;
-// Each in-flight file issues a staged + unstaged pair, so the peak request
-// count here is twice this value. Two matches the store's diff-prefetch
-// concurrency and keeps the browser connection pool able to serve the UI.
 const COMMIT_DIFF_CONCURRENCY = 2;
 
 const collectSelectedFileDiffs = async (directory: string, files: string[], assertCurrent: () => void): Promise<string> => {
@@ -212,9 +201,6 @@ const collectSelectedFileDiffs = async (directory: string, files: string[], asse
 const COMMIT_STYLE_SAMPLE_COUNT = 10;
 const COMMIT_STYLE_SUBJECT_CHAR_LIMIT = 200;
 
-// Recent commit subjects give the model the repository's own commit style —
-// language, prefixes, capitalization — instead of a hardcoded English default.
-// A repository with no history yet is normal, so an empty sample is not an error.
 const collectRecentCommitSubjects = async (directory: string): Promise<string> => {
   try {
     const log = await getGitLog(directory, { maxCount: COMMIT_STYLE_SAMPLE_COUNT });
@@ -299,11 +285,6 @@ export async function generateCommitMessage(
   }
 }
 
-// Conventional pull request template locations. GitHub resolves `.github/`
-// first, then the repository root, then `docs/`; both casings are probed
-// because case-sensitive filesystems treat them as different files. GitLab
-// keeps its merge request templates in `.gitlab/merge_request_templates/`,
-// where `Default.md` is the one applied without an explicit choice.
 const PULL_REQUEST_TEMPLATE_PATHS = [
   '.github/pull_request_template.md',
   '.github/PULL_REQUEST_TEMPLATE.md',
@@ -357,7 +338,6 @@ const collectPullRequestTemplate = async (directory: string, provider: ChangeReq
       length: trimmed.length,
     });
     const body = trimmed.slice(0, PULL_REQUEST_TEMPLATE_CHAR_LIMIT);
-    // Leading blank line keeps the block visually separate from the file list.
     return [
       '',
       '',
@@ -567,7 +547,6 @@ async function teardownGitWorktree(
   return gitHttp.teardownGitWorktree(directory, payload);
 }
 
-/** Renames the task of the worktree at `directory`; the user's name stays over the agent's. */
 export async function setGitWorktreeTitle(
   directory: string,
   title: string,
@@ -591,10 +570,6 @@ export async function snapshotGitWorktree(
   return gitHttp.snapshotGitWorktree(directory, payload);
 }
 
-/**
- * Worktree archives exist where the runtime's git offers them: web and the
- * desktop app, through the server. VS Code keeps its own list without them.
- */
 export const canArchiveWorktrees = (): boolean => {
   const runtime = getRuntimeGit();
   return runtime ? Boolean(runtime.worktree?.archive && runtime.worktree.listArchives && runtime.worktree.restoreArchive && runtime.worktree.deleteArchive) : true;

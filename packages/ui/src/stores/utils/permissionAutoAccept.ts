@@ -1,28 +1,15 @@
 import { z } from "zod";
 import type { Session } from '@openchamber/agent-contract';
 
-/**
- * How a session answers tool permissions. The server owns the policy
- * (`packages/web/server/lib/permission-auto-accept`):
- *
- * - `ask`: every request waits for the user.
- * - `safety`: accepted unless the safety net (Jev) says the user should decide.
- * - `auto`: every request is accepted.
- */
 const permissionModeSchema = z.enum(["ask", "safety", "auto"]);
 
 export type PermissionMode = z.infer<typeof permissionModeSchema>;
 
 export type PermissionModeMap = Record<string, PermissionMode>;
 
-/**
- * The mode the user sees. Without a classification provider there is no safety
- * net, and a `safety` session waits for the user exactly as an `ask` one does.
- */
 export const displayedPermissionMode = (mode: PermissionMode, safetyAvailable: boolean): PermissionMode =>
   mode === "safety" && !safetyAvailable ? "ask" : mode;
 
-/** The composer button's cycle: ask → safety → auto → ask, skipping safety while it is unavailable. */
 export const nextPermissionMode = (mode: PermissionMode, safetyAvailable: boolean): PermissionMode => {
   const shown = displayedPermissionMode(mode, safetyAvailable);
   if (shown === "ask") return safetyAvailable ? "safety" : "auto";
@@ -36,10 +23,6 @@ export type PermissionPolicySnapshot = {
   revision?: number;
 };
 
-/**
- * A server policy received over HTTP or as a broadcast. `modes` is the policy;
- * servers from before the modes send only `sessions` as on/off, where on means `auto`.
- */
 export const permissionPolicyWireSchema = z.object({
   sessions: z.record(z.string().min(1), z.boolean()),
   modes: z.record(z.string().min(1), permissionModeSchema).optional(),
@@ -82,12 +65,6 @@ const resolveLineage = (
   return result;
 };
 
-/**
- * The nearest explicit mode up the session's lineage, or `null` when the
- * policy has not been read. `null` is not `ask`: a policy read that has not
- * answered must not be rendered as the user having chosen Ask, and callers
- * that need a concrete mode pass the configured default themselves.
- */
 export const resolvePermissionMode = (input: {
   modes: PermissionModeMap;
   sessions: readonly Session[];

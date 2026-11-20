@@ -1,3 +1,4 @@
+
 import { cjk } from '@streamdown/cjk';
 import { createMathPlugin } from '@streamdown/math';
 import { defaultRehypePlugins, defaultRemarkPlugins, type CjkPlugin, type MathPlugin, type StreamdownProps } from 'streamdown';
@@ -9,9 +10,10 @@ import { remarkDisclosures } from './remarkDisclosures';
 import { remarkLineBreaks } from './remarkLineBreaks';
 import { remarkMathCompatibility } from './remarkMathCompatibility';
 import { rehypeMarkdownPolicy, rehypeRestoreMarkdownLinks } from './rehypeMarkdownPolicy';
+import { rehypeTextDirection } from './rehypeTextDirection';
 import { isInvisibleText } from '@/lib/invisibleText';
 
-// Micromark merges GFM and CJK registrations, so both must disable single tildes.
+// external: https://github.com/micromark/micromark#syntax-extensions GFM and CJK registrations merge, so both must disable single tildes.
 const strictTildes = { singleTilde: false } as const;
 const gfmEntry = defaultRemarkPlugins.gfm as [Plugin, Record<string, unknown>];
 const defaultRemarkPluginList: Pluggable[] = [
@@ -19,7 +21,7 @@ const defaultRemarkPluginList: Pluggable[] = [
   ...Object.values(defaultRemarkPlugins).filter((plugin) => plugin !== defaultRemarkPlugins.gfm),
 ];
 
-// `@streamdown/cjk` is pinned to 1.0.4, which appends its strikethrough last.
+// external: https://www.npmjs.com/package/@streamdown/cjk/v/1.0.4 The pinned CJK plugin appends strikethrough last.
 const cjkStrikethrough = cjk.remarkPluginsAfter.at(-1) as Plugin;
 const markdownCjk: CjkPlugin = {
   ...cjk,
@@ -31,8 +33,7 @@ export function getMarkdownCjk(singleTilde = false): CjkPlugin {
 }
 
 const officialMath = createMathPlugin({ singleDollarTextMath: false });
-// Streamdown appends math's remark plugin after the configured remark plugins.
-// Keeping the compatibility transformer here makes it run after remark-math.
+// external: https://github.com/vercel/streamdown Streamdown appends the math remark plugin after configured remark plugins; compatibility runs inside it after remark-math.
 export const markdownMath: MathPlugin = {
   ...officialMath,
   remarkPlugin: function markdownMathSyntax(this: Processor) {
@@ -46,7 +47,7 @@ const schema: NonNullable<Parameters<typeof rehypeSanitize>[0]> = {
   strip: ['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'form'],
   attributes: {
     '*': ['align', 'alt', 'checked', 'colSpan', 'height', 'media', 'open', 'rowSpan', 'start', 'title', 'width'],
-    a: ['href', 'id', 'ariaDescribedBy', 'ariaLabel', 'dataFootnoteRef', 'dataFootnoteBackref', 'dataOcLinkSource', 'dataOcReference'],
+    a: ['href', 'id', 'ariaDescribedBy', 'ariaLabel', 'dataFootnoteRef', 'dataFootnoteBackref', 'dataOcLinkSource', 'dataOcReference', 'dataOcGuestLink'],
     // `:` for GitLab's suggestion fences (`suggestion:-0+2`).
     code: [['className', /^language-[\w#+.:-]+$/, 'math-inline', 'math-display'], 'metastring'],
     img: ['src', 'srcSet', 'alt', 'dataOcMediaSource'],
@@ -60,8 +61,6 @@ const schema: NonNullable<Parameters<typeof rehypeSanitize>[0]> = {
     h2: ['id', ['className', 'sr-only']],
     blockquote: [['dataOcAlert', ...MARKDOWN_ALERT_KINDS]],
   },
-  // href has already passed the application URL classifier. Media still only
-  // uses HTTP(S)/relative src; local files travel as validated source metadata.
   protocols: { src: ['http', 'https'] },
   clobberPrefix: '',
   required: { input: { type: 'checkbox', disabled: true } },
@@ -97,7 +96,7 @@ function remarkSessionLinks() {
 // Match the original top-level source policy without stripping inline joiners.
 function remarkVisibleBlocks() {
   return (tree: Root, file: { value: string | Uint8Array }) => {
-    // Micromark omits a leading BOM before assigning source offsets.
+    // external: https://github.com/micromark/micromark/blob/main/packages/micromark/dev/lib/preprocess.js Micromark omits the initial BOM from source offsets.
     const source = String(file.value).replace(/^\uFEFF/, '');
     tree.children = tree.children.filter((node) => {
       const start = node.position?.start.offset;
@@ -127,6 +126,7 @@ function createOptions(
       [rehypeSanitize, schema],
       defaultRehypePlugins.harden,
       rehypeRestoreMarkdownLinks,
+      rehypeTextDirection,
     ],
   };
 }
@@ -148,4 +148,9 @@ export function getMarkdownProcessingOptions(
   lineBreaks = false,
 ): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
   return policies[singleTildeStrikethrough ? 'gfm' : 'strict'][allowRawHtml ? 'raw' : 'text'][lineBreaks ? 'breaks' : 'plain'];
+}
+
+export function remarkLiteralText(this: Processor) {
+  const data = this.data();
+  (data.micromarkExtensions ??= []).push({ disable: { null: ['htmlFlow', 'htmlText', 'characterReference'] } });
 }

@@ -101,6 +101,7 @@ describe('permission store server policy', () => {
     const oldResponse = new Promise<Response>((resolve) => { resolveOld = resolve; });
     fetchImpl = async () => oldResponse;
     const oldHydration = usePermissionStore.getState().hydrate();
+    await Promise.resolve();
 
     usePermissionStore.getState().reset();
     fetchImpl = async () => json({ sessions: { current: true }, revision: 2 });
@@ -115,6 +116,7 @@ describe('permission store server policy', () => {
     let resolveOld!: (response: Response) => void;
     fetchImpl = async () => new Promise<Response>((resolve) => { resolveOld = resolve; });
     const mutation = usePermissionStore.getState().setSessionMode('stale', 'auto');
+    await Promise.resolve();
 
     usePermissionStore.getState().reset();
     resolveOld(json({ sessions: { stale: true }, revision: 1 }));
@@ -129,6 +131,7 @@ describe('permission store server policy', () => {
     fetchImpl = async () => new Promise<Response>((resolve) => { resolvers.push(resolve); });
     const first = usePermissionStore.getState().setSessionMode('first', 'auto');
     const second = usePermissionStore.getState().setSessionMode('second', 'auto');
+    await Promise.resolve();
 
     resolvers[1](json({ sessions: { first: true, second: true }, revision: 2 }));
     await second;

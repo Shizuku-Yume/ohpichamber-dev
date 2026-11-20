@@ -36,6 +36,7 @@ import { resetStreamingState } from '@/sync/streaming';
 import { replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
 import { resetBackgroundShells } from '@/sync/background-shells';
+import { resetSessionLiveWork } from '@/sync/session-live-work';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { resetSessionOrdering } from '@/sync/session-ordering';
 import { resetSessionActivityTiming } from '@/sync/session-activity-timing';
@@ -43,7 +44,14 @@ import { syncDesktopSettings } from '@/lib/persistence';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 import { useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 
-// Transport-only switches preserve session state; SyncProvider reconnects canonical streams on the endpoint event.
+// Same-device transport switch (LAN⇄relay for one paired canonical rebind the SDK
+// to the new transport WITHOUT tearing down connection/session state or remounting
+// the sync layer. `reconnectToRuntimeBaseUrl` swaps in a fresh SDK client; the
+// caller then forces a re-render so SyncProvider receives it as a new `sdk` prop,
+// which re-runs its event-pipeline + bootstrap effects (keyed on `sdk`) to
+// reconnect over the new transport IN PLACE. Message-pagination refs, the open
+// session, and the whole view are preserved — no reconnecting screen, no flash,
+// no bounce back to the draft.
 export const reconnectAppForTransportSwitch = (): void => {
   disposeTerminalInputTransport();
   hostFilesystem.resetRequests();
@@ -64,11 +72,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
     lastDisconnectReason: null,
   });
   useProjectsStore.getState().resetForRuntimeSwitch();
-  // Notes, todos, plans and the pinned-context bookkeeping are keyed by a
-  // path-derived project id, which two runtimes can collide on.
   useProjectContextStore.getState().reset();
-  // Cross-project session list (mobile sessions sheet & co) belongs to the
-  // previous instance — drop it so stale sessions can't linger after a switch.
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   useSpacesStore.getState().resetForRuntimeSwitch();
   useSpaceArchivesStore.getState().resetForRuntimeSwitch();
@@ -82,9 +86,8 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   replaceGlobalSessionStatusById(new Map());
   resetGlobalBlockingRequests();
   resetBackgroundShells();
+  resetSessionLiveWork();
   resetSessionOrdering();
-  // Turn timings belong to the previous instance's sessions, and the reset also
-  // restarts the resume window so the switch is treated as a fresh load.
   resetSessionActivityTiming();
   useMessageQueueStore.getState().resetForRuntimeSwitch(detail.previousRuntimeKey);
   useFileSearchStore.getState().resetForRuntimeSwitch();
@@ -98,17 +101,8 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useWalkthroughStore.getState().reset();
   usePullRequestSelectionStore.setState({ selections: new Map(), diffRequests: new Map(), diffContexts: new Map(), changesRepositories: new Map() });
   useFilesViewTabsStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
-  // Guest rail icons are instance-owned. Keep the previous catalog and the
-  // new instance mints icon URLs that 404: an invisible, still-clickable slot.
   useGuestsStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
-  // Guest OAuth status is answered by the instance too; a stale "connected"
-  // would otherwise be pushed to a guest frame on the new instance.
   useGuestOauthStore.getState().resetForRuntimeSwitch();
-  // Trackers and source control are authenticated on the instance, not in the
-  // browser. Left in place, the previous instance's login stayed visible and
-  // usable — its rail tab, its issue pickers, its work-status rows — against a
-  // runtime that has no such integration. `App` re-asks once the new instance
-  // answers.
   useTrackerAuthStore.getState().resetForRuntimeSwitch();
   useSourceControlAuthStore.getState().resetForRuntimeSwitch();
   useSourceControlProviderRegistry.getState().resetForRuntimeSwitch(detail.runtimeKey);
@@ -121,26 +115,15 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useSessionUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey, detail.previousRuntimeKey);
   useSessionUIStore.setState({ worktreeDiscoveryByProject: new Map() });
   useUIStore.getState().setOpenGuestPage(null);
+  useUIStore.setState({ customProviderLogos: {} });
   resetStreamingState();
   queueMicrotask(() => void syncDesktopSettings());
 };
 
-/**
- * True when the endpoint event only replaced credentials for the runtime that
- * was already active, as the login gate does after a successful sign-in.
- */
 export const isSameRuntimeEndpoint = (detail: RuntimeEndpointChangedDetail): boolean => (
   detail.runtimeKey === detail.previousRuntimeKey && detail.apiBaseUrl === detail.previousApiBaseUrl
 );
 
-// Web and desktop reset endpoint changes from the entrypoint because
-// SessionAuthGate can unmount App while showing login or error states. A host
-// switch from that gate must still clear runtime-scoped state before App mounts
-// against the new host.
-// A same-runtime credential change stays with App, which resets only while
-// mounted: a sign-in on the login screen must keep the terminal tabs and
-// auto-review runs of the host being unlocked. Mobile keeps its own subscriber
-// because it tells transport switches apart from runtime switches.
 export const installRuntimeEndpointReset = (): (() => void) => (
   subscribeRuntimeEndpointChanged((detail) => {
     if (isSameRuntimeEndpoint(detail)) return;

@@ -5,9 +5,6 @@ import { excerptMarkdown } from './messages/messageMarkdown';
 import { completionText, requestSmallModel } from './smallModelRequest';
 
 
-// Titles use only the recent completed conversation, never tool execution.
-// A session usually ends on a housekeeping request ("commit and push"), so the
-// prompt names the work itself and treats such requests as pointers back to it.
 const TITLE_SYSTEM_PROMPT = [
   'You are a title generator. Output ONLY a thread title. Nothing else.',
   'Generate a brief title that helps the user find this coding session later in a list of sessions.',
@@ -36,7 +33,6 @@ export function formatSessionTitleContext(turns: readonly NativeTitleTurn[]): st
 }
 
 export const generatedSessionTitleSchema = z.object({ text: z.string().trim().min(1) }).transform(({ text }, context) => {
-  // Keep the established first-line cleanup and length limit.
   const title = text
     .replace(/<think>[\s\S]*?<\/think>\s*/g, '')
     .split('\n')

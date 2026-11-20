@@ -28,11 +28,8 @@ export type { SkillCatalogConfig } from '@/lib/settings/parsers';
 export type DesktopWindowControlsPosition = 'left' | 'right';
 export type DesktopWindowControlsSide = 'left' | 'right';
 export type DesktopWindowControlAction = 'close' | 'minimize' | 'maximize';
-// No fixed-width constant: control width depends on the style (classic vs traffic-lights).
 export type DesktopWindowControlsStyle = 'classic' | 'traffic-lights';
 
-// The settings document is defined once, in the registry, and re-exported here
-// so the many existing importers keep their path.
 export type { DesktopSettings } from '@/lib/settings/registry';
 
 type DesktopClipboardBridge = {
@@ -55,11 +52,10 @@ type DesktopBridgeGlobal = {
 };
 
 type ElectronRuntimeGlobal = {
- runtime?: string;
- arch?: string;
- trayEnabled?: boolean;
- /** Linux window with the desktop environment's own title bar (opt-in). */
- nativeFrame?: boolean;
+  runtime?: string;
+  arch?: string;
+  trayEnabled?: boolean;
+  nativeFrame?: boolean;
 };
 
 const getElectronRuntime = (): ElectronRuntimeGlobal | null => {
@@ -80,10 +76,8 @@ const getElectronPlatform = (): string | null => {
  return typeof platform === 'string' ? platform : null;
 };
 
-/** Default side for in-app window controls (Windows-style, right). */
 export const DEFAULT_DESKTOP_WINDOW_CONTROLS_POSITION: DesktopWindowControlsPosition = 'right';
 
-/** Windows and Linux use frameless windows with in-app minimize/maximize/close controls. */
 export const usesFramelessElectronChrome = (): boolean => {
  if (!isElectronShell()) return false;
  const platform = getElectronPlatform();
@@ -91,18 +85,16 @@ export const usesFramelessElectronChrome = (): boolean => {
  return platform === 'win32';
 };
 
-/** Normalize a stored preference; legacy `auto` maps to the right-side default. */
 export const normalizeDesktopWindowControlsPosition = (
  value: unknown,
 ): DesktopWindowControlsPosition | undefined => {
- if (value === 'left' || value === 'right') {
-  return value;
- }
- // Legacy "auto" never read OS chrome config; treat it as the right default.
- if (value === 'auto') {
-  return DEFAULT_DESKTOP_WINDOW_CONTROLS_POSITION;
- }
- return undefined;
+  if (value === 'left' || value === 'right') {
+    return value;
+  }
+  if (value === 'auto') {
+    return DEFAULT_DESKTOP_WINDOW_CONTROLS_POSITION;
+  }
+  return undefined;
 };
 
 export const resolveDesktopWindowControlsSide = (
@@ -111,10 +103,6 @@ export const resolveDesktopWindowControlsSide = (
  return preference === 'left' ? 'left' : DEFAULT_DESKTOP_WINDOW_CONTROLS_POSITION;
 };
 
-/**
- * Left matches macOS traffic-light order (close, minimize, maximize).
- * Right keeps Windows order (minimize, maximize, close).
- */
 export const getDesktopWindowControlsOrder = (
  side: DesktopWindowControlsSide,
 ): DesktopWindowControlAction[] => {
@@ -129,7 +117,6 @@ export const hasDesktopInvoke = (): boolean => {
 
 export const canUseElectronDesktopIPC = (): boolean => isElectronShell() && hasDesktopInvoke();
 
-/** Linux's PRIMARY buffer is reachable only through the local Electron bridge. */
 export const createDesktopClipboardAPI = (): RuntimeAPIs['clipboard'] => {
  const bridge = getDesktopBridge()?.clipboard;
  if (!bridge?.readSelection || !bridge.writeSelection) return undefined;
@@ -145,17 +132,15 @@ export const createDesktopClipboardAPI = (): RuntimeAPIs['clipboard'] => {
 };
 
 export const createDesktopThemeFileAPI = (): RuntimeAPIs['themeFiles'] => {
- // Preload exposes this capability only to trusted local UI pages. Unlike the
- // active API endpoint, that page identity stays local during remote connections.
- if (!getDesktopBridge()?.pickThemeFile) return undefined;
- return {
-  async pick() {
-   const pick = getDesktopBridge()?.pickThemeFile;
-   if (!pick) return { status: 'unsupported' };
-   const file = z.object({ name: z.string(), size: z.number().nonnegative(), text: z.string() }).nullable().parse(await pick());
-   return { status: 'picked', file };
-  },
- };
+  if (!getDesktopBridge()?.pickThemeFile) return undefined;
+  return {
+    async pick() {
+      const pick = getDesktopBridge()?.pickThemeFile;
+      if (!pick) return { status: 'unsupported' };
+      const file = z.object({ name: z.string(), size: z.number().nonnegative(), text: z.string() }).nullable().parse(await pick());
+      return { status: 'picked', file };
+    },
+  };
 };
 
 export const invokeDesktop = async <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T | null> => {
@@ -164,18 +149,11 @@ export const invokeDesktop = async <T = unknown>(command: string, args?: Record<
  return bridge.invoke(command, args ?? {}) as Promise<T>;
 };
 
-/** Removes the session's delivered native notifications from Notification Center (macOS only). */
 export const clearDesktopSessionNotifications = (sessionId: string): void => {
  if (getElectronPlatform() !== 'darwin' || !canUseElectronDesktopIPC()) return;
  void invokeDesktop('desktop_clear_session_notifications', { sessionId }).catch(() => { });
 };
 
-/**
- * The runtime a Mini Chat window must continue on: the instance its parent
- * window is showing, not the default host. `runtimeKey` names the parent's
- * instance (`local` or `host:<id>`); main turns a relay-capable host into the
- * relay transport, since such a host has no HTTP base to inject.
- */
 export const getMiniChatRuntimeArgs = (): { apiBaseUrl: string; clientToken: string | null; runtimeKey: string } => ({
  apiBaseUrl: getRuntimeApiBaseUrl(),
  clientToken: getRuntimeBearerTokenSync(),
@@ -267,11 +245,10 @@ export const setDesktopMinimizeToTray = async (enabled: boolean): Promise<Minimi
 };
 
 type MiniChatGlobalShortcutStatus = {
- supported: boolean;
- combo: string | null;
- active: boolean;
- // Set when a save was refused; the stored combo is unchanged.
- error?: 'unsupported-combo';
+  supported: boolean;
+  combo: string | null;
+  active: boolean;
+  error?: 'unsupported-combo';
 };
 
 export const getDesktopMiniChatGlobalShortcut = async (): Promise<MiniChatGlobalShortcutStatus | null> => {
@@ -312,16 +289,13 @@ export const setDesktopMiniChatGlobalShortcut = async (combo: string | null): Pr
 };
 
 const quakeModeStatusSchema = z.object({
- supported: z.boolean(),
- enabled: z.boolean(),
- /** Effective combo: the stored one, or the default while Quake is enabled. */
- combo: z.string().nullable(),
- /** The stored value before the enabled-default applies: a combo, the unassigned sentinel, or null when nothing is stored. */
- storedCombo: z.string().nullable(),
- active: z.boolean(),
- heightFraction: z.number(),
- // Set when a shortcut save was refused; the stored combo is unchanged.
- error: z.literal('unsupported-combo').optional(),
+  supported: z.boolean(),
+  enabled: z.boolean(),
+  combo: z.string().nullable(),
+  storedCombo: z.string().nullable(),
+  active: z.boolean(),
+  heightFraction: z.number(),
+  error: z.literal('unsupported-combo').optional(),
 });
 
 export type QuakeModeStatus = z.infer<typeof quakeModeStatusSchema>;
@@ -489,21 +463,12 @@ export const isDesktopShell = (): boolean => {
  return isElectronShell();
 };
 
-/** Native visibility includes minimized and tray-hidden windows, independently of focus. */
 export const getDesktopWindowVisibility = async (): Promise<boolean | null> => {
  if (!isDesktopShell()) return null;
  const parsed = z.object({ visible: z.boolean() }).safeParse(await invokeDesktop('desktop_get_current_window_state'));
  return parsed.success ? parsed.data.visible : null;
 };
 
-/**
- * Raises the desktop window.
- *
- * Used when work finishes somewhere the app cannot be reached from — an MCP
- * authorization completing in the system browser, for instance. Browsers will
- * not follow a custom-protocol link back without a user gesture, so the app
- * brings itself forward instead of asking the page to do it.
- */
 export const focusDesktopWindow = async (): Promise<boolean> => {
  if (!isDesktopShell()) return false;
  try {
@@ -513,15 +478,6 @@ export const focusDesktopWindow = async (): Promise<boolean> => {
  }
 };
 
-/**
- * A notification click or a session link can name the instance that owns the
- * session ('local' or 'host:<id>'). When this window shows another instance,
- * opens the session, and the message when one is named, in a window for the
- * owning one. Valid from any app window, including one that currently shows
- * a remote instance; the main process gates the command by sender. Returns
- * false when the session belongs here or the desktop bridge is not available,
- * so the caller opens it in this window.
- */
 export const openSessionInOwningHostWindow = (
  sessionId: string,
  runtimeKey: string | null,
@@ -556,12 +512,6 @@ const pendingSessionLinksSchema = z.array(z.object({
 
 type PendingDesktopSessionLink = { sessionId: string; messageId: string | null; runtimeKey: string | null; requireKnownSession: boolean };
 
-/**
- * Extension install links (`ohpichamber://extensions/install?url=…`) that
- * reached the desktop app before this window could listen for them. Taking
- * them removes them; outside the desktop local page there are none. The shell
- * only lets an https repository through.
- */
 export const takePendingDesktopExtensionInstalls = async (): Promise<string[]> => {
  if (!isDesktopShell() || !isDesktopLocalOriginActive()) return [];
  try {
@@ -606,28 +556,17 @@ const pendingHostActionsSchema = z.array(z.discriminatedUnion('type', [
 
 type PendingDesktopHostAction = z.infer<typeof pendingHostActionsSchema>[number];
 
-/**
- * Host work the desktop shell hands to the main window: a pairing link the user
- * confirmed (`ohpichamber://connect`), or a relay-capable host to activate
- * (`ohpichamber://host/<id>`). Taking them removes them.
- */
 export const takePendingDesktopHostActions = async (): Promise<PendingDesktopHostAction[]> => {
- // The shell answers only the main window's local page, whichever instance
- // that page is connected to; no runtime check here.
- if (!isDesktopShell()) return [];
- try {
-  const parsed = pendingHostActionsSchema.safeParse(await invokeDesktop('desktop_take_pending_host_actions'));
-  return parsed.success ? parsed.data : [];
- } catch (error) {
-  console.warn('Failed to read pending host actions', error);
-  return [];
- }
+  if (!isDesktopShell()) return [];
+  try {
+    const parsed = pendingHostActionsSchema.safeParse(await invokeDesktop('desktop_take_pending_host_actions'));
+    return parsed.success ? parsed.data : [];
+  } catch (error) {
+    console.warn('Failed to read pending host actions', error);
+    return [];
+  }
 };
 
-/**
- * On-disk path of a File dropped from the OS onto the desktop app.
- * Null outside the desktop local origin (browser drops carry no usable path).
- */
 const droppedFilePathSchema = z.string().min(1);
 
 export const pathForDroppedFile = (file: File): string | null => {
@@ -667,10 +606,6 @@ export const isWebRuntime = (): boolean => {
  return true;
 };
 
-/**
- * Electron reuses the web RuntimeAPIs implementation, so distinguish a browser
- * client from an Electron renderer with both the runtime descriptor and shell.
- */
 export const isBrowserClientRuntime = (
  platform: RuntimeAPIs['runtime']['platform'],
  desktopShell = isDesktopShell(),
@@ -777,11 +712,8 @@ export const checkForDesktopUpdates = async (): Promise<UpdateInfo | null> => {
   return null;
  }
 
- // Propagate updater capability / feed errors so the UI can show actionable
- // messages (missing AppImage, read-only path, network failure). Missing
- // latest-linux*.yml is already normalized to available:false in main.
- const info = await invokeDesktop<UpdateInfo>('desktop_check_for_updates');
- return info as UpdateInfo;
+  const info = await invokeDesktop<UpdateInfo>('desktop_check_for_updates');
+  return info as UpdateInfo;
 };
 
 export const downloadDesktopUpdate = async (
@@ -851,11 +783,8 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
   return false;
  }
 
- // Unlike a plain restart, an install failure (rejected signature, disabled
- // updater session) must reach the update dialog instead of being reduced to
- // a boolean the caller cannot explain.
- await invokeDesktop('desktop_restart');
- return true;
+  await invokeDesktop('desktop_restart');
+  return true;
 };
 
 export const restartDesktopApp = async (): Promise<boolean> => {

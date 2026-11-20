@@ -12,7 +12,6 @@ export function isSessionInWork(session: Session | null | undefined): boolean {
   return getSessionWork(session)?.state === 'open';
 }
 
-/** Whether the Host's done hint was written after the last turn ended. */
 export function isDoneSuggested(session: Session | null | undefined): boolean {
   const work = getSessionWork(session);
   return work?.state === 'open' && isHintCurrent(session, work.suggestDoneAt);

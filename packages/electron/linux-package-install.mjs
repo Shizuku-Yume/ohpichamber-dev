@@ -12,9 +12,7 @@ const isOnPath = (name, pathEnv = process.env.PATH) => (pathEnv || '').split(':'
   }
 });
 
-// The same commands electron-updater 6.8 runs for .deb and .rpm, as one call
-// each: its dpkg path retries a failed install with `apt-get install -f`,
-// which asks for the password a second time after a cancel.
+// external: https://github.com/electron-userland/electron-builder/tree/v26.0.12/packages/electron-updater Use one package-manager invocation; cancellation must not trigger a second password prompt, and downgrades need explicit flags.
 const RPM_INSTALLERS = [
   ['zypper', (file) => ['zypper', '--non-interactive', '--no-refresh', 'install', '--allow-unsigned-rpm', '-f', file]],
   ['dnf', (file) => ['dnf', 'install', '--nogpgcheck', '-y', file]],
@@ -46,13 +44,7 @@ const execFileAsync = (file, args) => new Promise((resolve, reject) => {
   });
 });
 
-/**
- * Installs a downloaded .deb or .rpm without blocking the main process.
- * electron-updater runs the installer with spawnSync, which freezes every
- * window, the update dialog's spinner included, for the whole password prompt
- * and install. Rejects when the user cancels the prompt (pkexec exits 126).
- */
-export const installLinuxPackage = async ({ packageType, file, run = execFileAsync }) => {
+export const installLinuxPackage = async ({ packageType, file, downgrade = false, run = execFileAsync }) => {
   if (!file) throw new Error('The downloaded update file is missing.');
   const [command, ...args] = buildPackageInstallCommand({ packageType, file });
   await run(command, args);

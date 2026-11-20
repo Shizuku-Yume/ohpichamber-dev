@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { I18nProvider } from '@/lib/i18n';
@@ -34,11 +34,13 @@ const setup: ProjectSetup = {
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
     teardownWorktree: [],
+    createWorktreeCommand: '',
     projectActions: [],
     projectActionsPrimaryId: null,
     draftStarters: [],
     hiddenSharedActionIds: [],
     sharedTrust: null,
+    notesTodosInRepository: false,
   },
 };
 

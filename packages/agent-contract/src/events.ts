@@ -17,7 +17,7 @@ export const DataEventEnvelopeSchema = z.strictObject({
 });
 export type DataEventEnvelope = z.infer<typeof DataEventEnvelopeSchema>;
 
-const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
+export const SessionUpdatedPayloadSchema = z.strictObject({
   type: z.literal('session.updated'),
   session: RuntimeSessionSchema.optional(),
   mode: SessionModeSchema.optional(),
@@ -42,13 +42,16 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));
 }, { message: 'Host projections require their exact independent revisions' });
 
-const sessionStatusSchema = DataEventEnvelopeSchema.extend({
+const sessionUpdatedSchema = SessionUpdatedPayloadSchema.safeExtend(DataEventEnvelopeSchema.shape);
+
+export const SessionStatusPayloadSchema = z.strictObject({
   type: z.literal('session.status'),
   runtimeStatus: SessionRuntimeStatusSchema,
   activeRunId: EntityIdSchema.nullable(),
 }).refine((event) => (event.runtimeStatus === 'idle' || event.runtimeStatus === 'unavailable') === (event.activeRunId === null), {
   message: 'Runtime status must identify its live outer run',
 });
+const sessionStatusSchema = SessionStatusPayloadSchema.safeExtend(DataEventEnvelopeSchema.shape);
 
 export const SubagentUpdatedEventSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('subagent.updated'),

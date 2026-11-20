@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { expect, mock, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
@@ -13,10 +13,6 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
-// Bun cannot load Vite's `?worker&url` import that markdown-worker makes.
-mock.module('../../markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
-
-// Loaded after the shim so the worker URL never reaches Bun's loader.
 const { default: ToolPart } = await import('./ToolPart');
 const { default: ProgressiveGroup } = await import('./ProgressiveGroup');
 

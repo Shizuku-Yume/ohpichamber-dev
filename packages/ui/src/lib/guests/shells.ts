@@ -49,10 +49,6 @@ const guestEndedShell = (shell: EndedShell): GuestEndedShell => {
   return ended;
 };
 
-/**
- * The running shells a scope covers, oldest first, and the ones that ended,
- * oldest end first with the newest kept. Local store only; never a network read.
- */
 export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnapshot => {
   const store = useBackgroundShellsStore.getState();
   const filter = scopeShells(scope);
@@ -98,7 +94,6 @@ const scopeKey = (scope: GuestShellsScope): string => {
 type Observer = { listeners: Set<(snapshot: GuestRunningShellsSnapshot) => void>; snapshot: GuestRunningShellsSnapshot; dispose: () => void };
 const observers = new Map<string, Observer>();
 
-/** One shared observer per runtime and scope, mirroring the workspace observer lifecycle. */
 export const observeGuestShells = (scope: GuestShellsScope, listener: (snapshot: GuestRunningShellsSnapshot) => void): (() => void) => {
   if (scope.kind === 'project') guestProject(scope.projectId);
   const key = `${getRuntimeKey()}|${scopeKey(scope)}`;

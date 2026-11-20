@@ -8,7 +8,7 @@ interface RegisteredToolStub {
   name: string;
   label: string;
   description: string;
-  approval: string;
+  approval: unknown;
   loadMode: string;
   execute: (callId: string, params: Record<string, unknown>, signal?: AbortSignal) => Promise<{ content: Array<{ type: string; text: string }>; details: unknown }>;
 }
@@ -72,6 +72,68 @@ describe('HostActionRequestSchema', () => {
 });
 
 describe('createHostToolExtension & controller', () => {
+  test('secret commands require call identity and approval before the captured Host invocation', async () => {
+    const tools = new Map<string, RegisteredToolStub>();
+    const order: string[] = [];
+    let rejectApproval = false;
+    let cancelApproval = false;
+    const cancellation = new AbortController();
+    const controller = createHostToolController({
+      scope: { sessionId: 'session-123', rootSessionId: 'session-123', workspaceId: 'ws-123' },
+      approveSecretRun: async (id, command, signal) => {
+        expect(id).toBe('secret-call');
+        expect(command).toEqual({ command: "'example' 'a'\\''b' '$(not-a-shell)'" });
+        expect(signal).toBe(cancellation.signal);
+        order.push('approve');
+        if (rejectApproval) throw new Error('Approval rejected');
+        if (cancelApproval) cancellation.abort();
+      },
+      invoke: async ({ request }) => {
+        order.push('invoke');
+        expect(request).toMatchObject({ sessionId: 'session-123', toolCallId: 'secret-call', toolName: 'openchamber_secret' });
+        return { answer: { status: 'ran' }, stdout: '[secret:TOKEN]' };
+      },
+    });
+    controller.extension({
+      typebox: { Type: { Object: () => ({}), String: () => ({}), Record: () => ({}), Unknown: () => ({}) } },
+      registerTool: (tool: RegisteredToolStub) => tools.set(tool.name, tool),
+    } as never);
+    const tool = tools.get('openchamber_secret')!;
+    const params = { action: 'secret.run', input: { program: 'example', args: ["a'b", '$(not-a-shell)'], sessionId: 'forged', authorized: true } };
+    await expect(tool.execute('', params, cancellation.signal)).rejects.toThrow();
+    expect(order).toEqual([]);
+    const result = await tool.execute('secret-call', params, cancellation.signal);
+    expect(order).toEqual(['approve', 'invoke']);
+    expect(result.details).toMatchObject({ openchamber: { action: 'secret.run', answer: { status: 'ran' } } });
+    order.length = 0;
+    rejectApproval = true;
+    await expect(tool.execute('secret-call', params, cancellation.signal)).rejects.toThrow('Approval rejected');
+    expect(order).toEqual(['approve']);
+    order.length = 0;
+    rejectApproval = false;
+    cancelApproval = true;
+    await expect(tool.execute('secret-call', params, cancellation.signal)).rejects.toThrow();
+    expect(order).toEqual(['approve']);
+  });
+
+  test('secret.run fails closed without an approval owner even with a supplied authorized flag', async () => {
+    const tools = new Map<string, RegisteredToolStub>();
+    let invoked = false;
+    const controller = createHostToolController({
+      scope: { sessionId: 'session-123', rootSessionId: 'session-123', workspaceId: 'ws-123' },
+      invoke: async () => { invoked = true; return {}; },
+    });
+    controller.extension({
+      typebox: { Type: { Object: () => ({}), String: () => ({}), Record: () => ({}), Unknown: () => ({}) } },
+      registerTool: (tool: RegisteredToolStub) => tools.set(tool.name, tool),
+    } as never);
+    await expect(tools.get('openchamber_secret')!.execute('secret-call', {
+      action: 'secret.run', input: { program: 'example', authorized: true },
+    })).rejects.toThrow('Secret command approval is unavailable');
+    expect(invoked).toBe(false);
+    expect(HostActionRequestSchema.safeParse({ sessionId: 'session-123', toolName: 'openchamber_secret', action: 'secret.run', input: {} }).success).toBe(false);
+  });
+
   test('disabled host tool is absent and workflow.run dispatches to host', async () => {
     const registeredTools = new Map<string, RegisteredToolStub>();
     const mockApi = {
@@ -252,6 +314,9 @@ test('openchamber_render is registered and carries its call id and answer envelo
   });
   extension(mockApi as never);
   expect(registeredTools.has('openchamber_render')).toBe(true);
+  expect(registeredTools.get('openchamber_render')!.description).toContain('root = Stack(');
+  expect(registeredTools.get('openchamber_render')!.description).toContain('```openui-lang');
+  expect(registeredTools.get('web')!.description).not.toContain('UI blocks:');
   const result = await registeredTools.get('openchamber_render')!.execute('call-render', {
     action: 'render.page',
     input: { html: '<h1>Fixture</h1>', title: 'Fixture page', awaitAnswer: true },
@@ -274,7 +339,30 @@ test('normalizeHostToolEnablement preserves valid flags when an entry has a non-
     web: true,
     openchamber_knowledge: true,
     notify: false,
+    openchamber_usage: false,
     openchamber_render: true,
+    openchamber_secret: true,
     openchamber_workflow: true,
   });
+});
+
+test('usage is opt-in, schema-restricted and publishes the native usage card envelope', async () => {
+  expect(normalizeHostToolEnablement({}).openchamber_usage).toBe(false);
+  expect(normalizeHostToolEnablement({ agentUsageToolEnabled: true }).openchamber_usage).toBe(true);
+  expect(normalizeHostToolEnablement({ agentUsageToolEnabled: false }).openchamber_usage).toBe(false);
+  for (const action of ['usage.read', 'session.track', 'session.markDone']) {
+    expect(HostActionRequestSchema.safeParse({ toolName: action === 'usage.read' ? 'openchamber_usage' : 'openchamber', action, sessionId: 'session-123', input: {} }).success).toBe(true);
+  }
+  expect(HostActionRequestSchema.safeParse({ toolName: 'openchamber_usage', action: 'session.send', sessionId: 'session-123', input: {} }).success).toBe(false);
+  const registered = new Map<string, RegisteredToolStub>();
+  const invoked: HostToolInvocation[] = [];
+  createHostToolExtension({
+    scope: { sessionId: 'session-123', rootSessionId: 'session-123', workspaceId: 'ws-123' },
+    initialEnablement: { openchamber_usage: true },
+    invoke: async (invocation) => { invoked.push(invocation); return { providers: [] }; },
+  })({ typebox: { Type: { Object: (props: unknown) => ({ properties: props }), String: () => ({}), Record: () => ({}), Unknown: () => ({}) } }, registerTool: (tool: RegisteredToolStub) => { registered.set(tool.name, tool); } } as never);
+  expect(registered.get('openchamber_usage')?.description).toContain('usage.read');
+  const result = await registered.get('openchamber_usage')!.execute('call-usage', { action: 'usage.read', input: {} });
+  expect(invoked[0]?.request).toEqual({ sessionId: 'session-123', toolName: 'openchamber_usage', action: 'usage.read', input: {} });
+  expect(result.details).toMatchObject({ ok: true, action: 'usage.read', openchamber: { schemaVersion: 1, ok: true, action: 'usage.read', data: { providers: [] } } });
 });

@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { HunkBusyState } from './HunkActions';
@@ -22,7 +22,7 @@ test('each compact capsule acts on its own hunk and shares the mutation lock', a
   const root = createRoot(container);
   const actions: string[] = [];
   const render = (staged = false, busyHunk: HunkBusyState = null) => act(async () => root.render(
-    <I18nProvider>{[0, 1, 2].map((index) => <HunkActions key={index} index={index} staged={staged}
+    <I18nProvider>{[0, 1, 2].map((index) => <HunkActions key={index} index={index} revealed={false} staged={staged}
       busyHunk={busyHunk} disabled={false} onAction={(hunk, action) => actions.push(`${action}:${hunk}`)} />)}</I18nProvider>
   ));
   const button = (label: string) => {

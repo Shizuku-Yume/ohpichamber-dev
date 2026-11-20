@@ -2,11 +2,6 @@ import { useEffect, useMemo } from 'react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
-/**
- * Provider ids the Small Model and Changes Walkthrough pickers may offer,
- * resolved through OMP `modelRoles` and the model catalog (decision 2026-11-05).
- * `undefined` until providers are loaded.
- */
 export function useCallableModelProviders(enabled = true): string[] | undefined {
   const providers = useConfigStore((state) => state.providers);
   const providersLoaded = useConfigStore((state) => state.providersLoaded);

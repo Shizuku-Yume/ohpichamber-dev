@@ -2,8 +2,6 @@ import React from 'react';
 import { getShownPages } from '../lib/turns/liveActivity';
 import type { TurnRecord } from '../lib/turns/types';
 
-// The fold and the final answer are separate list rows; aria-controls names
-// their content across rows.
 export const foldContentId = (turnId: string) => `turn-activity-${turnId}`;
 export const finalActivityContentId = (turnId: string) => `turn-final-activity-${turnId}`;
 
@@ -31,7 +29,6 @@ const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boo
  return { finalMessage, activityMessages, settled, isExpanded: !settled || expanded, pages };
 };
 
-/** What the rows of a turn under a fold read: the pages it hoists, and the final answer's fold state. */
 export const useTurnFoldContexts = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
  const { finalMessage, isExpanded, pages } = useTurnFold(turn, hasLaterAssistant, expanded, finalMessageId);
  const hoistedPages = React.useMemo(() => new Set(pages.map((part) => part.partId)), [pages]);

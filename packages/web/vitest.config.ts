@@ -20,18 +20,11 @@ export default defineConfig({
       { find: 'ohpichamber-sdk', replacement: path.resolve(here, '../sdk/src/index.ts') },
       { find: '@openchamber/ui', replacement: path.resolve(here, '../ui/src') },
       { find: '@web', replacement: path.resolve(here, './src') },
-      // Anchored to `@/` on purpose: a bare `@` prefix would also swallow
-      // scoped dependencies the server tests rely on, such as `@octokit/rest`.
       { find: /^@\//, replacement: `${path.resolve(here, '../ui/src')}/` },
     ],
   },
   test: {
-    // Loopback integration tests and real Git subprocesses need event-loop and
-    // CPU capacity outside Vitest's workers. Saturating every logical CPU made
-    // short deadline tests and socket handshakes fail at random.
     maxWorkers,
-    // UI integration fixtures with Vite asset imports cannot execute in Bun's
-    // raw TS loader. Keep them beside their UI owner and run them here.
     include: [...configDefaults.include, '../ui/src/**/*.vitest.tsx'],
     // These suites use Node's test context and are run with `node --test`; Vitest loads their
     // modules but cannot register the Node-owned tests.
@@ -45,17 +38,12 @@ export default defineConfig({
     // Tests never touch the developer's real ~/.config/ohpichamber, and
     // supertest servers listen on the loopback address it sends to.
     setupFiles: ['./test/isolated-data-dir.ts', './test/loopback-supertest.js'],
-    // A developer who turned on enterprise mode or pinned endpoints for their
-    // own app (often in ~/.zshrc) must not flip what the suites assert; tests
-    // that need them set them themselves.
     env: {
       OPENCHAMBER_ENTERPRISE_MODE: '',
       OPENCHAMBER_RELAY_URL: '',
       OPENCHAMBER_JEV_URL: '',
       OPENCHAMBER_JEV_MODEL: '',
       OPENCHAMBER_JEV_API_KEY: '',
-      // OpenCode's own switches for external skills, often set by people who
-      // run OpenCode beside Claude Code.
       OPENCODE_DISABLE_CLAUDE_CODE: '',
       OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: '',
       OPENCODE_DISABLE_EXTERNAL_SKILLS: '',

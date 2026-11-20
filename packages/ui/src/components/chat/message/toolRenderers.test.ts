@@ -1,7 +1,17 @@
 import { describe, test, expect } from 'bun:test';
 import type { JsonValue } from '@openchamber/agent-contract';
 
-import { capToolOutputText, TOOL_OUTPUT_MAX_CHARS, unwrapTextBlocks } from './toolRenderers';
+import { capToolOutputText, formatInputForDisplay, TOOL_OUTPUT_MAX_CHARS, unwrapTextBlocks } from './toolRenderers';
+
+describe('formatInputForDisplay', () => {
+    test('exposes native input formatting to expanded tool cards', () => {
+        expect(formatInputForDisplay({ command: 'ls -la' }, 'bash')).toBe('ls -la');
+        expect(formatInputForDisplay({ path: 'file', content: '' }, 'write')).toBe('');
+        expect(formatInputForDisplay({ code: '1 + 1' }, 'eval')).toBe('1 + 1');
+        expect(formatInputForDisplay({ nested: { id: 'opaque' } }, 'custom')).toBe(JSON.stringify({ nested: { id: 'opaque' } }, null, 2));
+        expect(formatInputForDisplay({})).toBe('{}');
+    });
+});
 
 // Regression coverage for issue #2265: the desktop renderer hard-crashes with a
 // V8 "Zone Allocation failed" OOM when a tool returns oversized external content

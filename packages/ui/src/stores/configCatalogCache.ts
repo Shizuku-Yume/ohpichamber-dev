@@ -41,8 +41,6 @@ const openDatabase = (): Promise<IDBDatabase | null> => {
       request.result.createObjectStore(STORE, { keyPath: 'key' }).createIndex(SAVED_AT_INDEX, 'savedAt');
     };
     request.onsuccess = () => resolve(request.result);
-    // Private modes and restricted browser storage can refuse IndexedDB; the cache is
-    // then simply absent and the pickers wait for the live load as before.
     request.onerror = () => resolve(null);
     request.onblocked = () => resolve(null);
   });
@@ -95,11 +93,6 @@ const toStoredCatalog = (catalog: CachedCatalog): StoredCatalog => {
   return stored;
 };
 
-/**
- * A record is trusted only when it carries the current schema and the identity
- * it was asked for. Anything else is from another build or another place and
- * is dropped, never shown.
- */
 const isRecordFor = (record: StoredRecord, runtimeKey: string, directoryKey: string): boolean =>
   record.schema === CATALOG_CACHE_SCHEMA && record.runtimeKey === runtimeKey && record.directoryKey === directoryKey;
 
@@ -115,7 +108,6 @@ const requestResult = <T>(request: IDBRequest<T>): Promise<T> => new Promise((re
   request.onerror = () => reject(request.error ?? new Error('Catalog cache request failed.'));
 });
 
-/** Reads one record, parsed at the IndexedDB boundary. */
 const readStoredRecord = async (database: IDBDatabase, key: string): Promise<StoredRecord | 'missing' | 'corrupt'> => {
   const stored = await requestResult(database.transaction(STORE, 'readonly').objectStore(STORE).get(key));
   if (stored === undefined) return 'missing';
@@ -123,11 +115,6 @@ const readStoredRecord = async (database: IDBDatabase, key: string): Promise<Sto
   return parsed.success ? parsed.data : 'corrupt';
 };
 
-/**
- * The cached catalog for a runtime and directory; null when there is none,
- * IndexedDB is unavailable, or the record is corrupt (corrupt records are
- * deleted).
- */
 export const readCachedCatalog = async (runtimeKey: string, directoryKey: string): Promise<CachedCatalog | null> => {
   const database = await openDatabase();
   if (!database) return null;
@@ -145,13 +132,8 @@ export const readCachedCatalog = async (runtimeKey: string, directoryKey: string
   }
 };
 
-// Serialize writes so newer provider/model snapshots cannot be overtaken.
 let writeChain: Promise<void> = Promise.resolve();
 
-/**
- * Stores the part of a catalog a live load just produced, keeping the other
- * part of the record. Callers write only authoritative, non-empty catalogs.
- */
 export const writeCachedCatalog = (runtimeKey: string, directoryKey: string, update: CachedCatalog): Promise<void> => {
   writeChain = writeChain.then(async () => {
     const database = await openDatabase();
@@ -176,17 +158,8 @@ export const writeCachedCatalog = (runtimeKey: string, directoryKey: string, upd
   return writeChain;
 };
 
-/**
- * How long a loaded catalog must go without a newer catalog event before it is
- * stored. OpenCode announces a starting location's full catalog about two
- * seconds after its first, partial answer.
- */
 export const CATALOG_PERSIST_SETTLE_MS = 3_000;
 
-/**
- * Stores a loaded catalog after the settle delay, unless `isSuperseded` says a
- * newer load replaces it by then (a catalog event, a runtime switch).
- */
 export const writeCachedCatalogWhenSettled = (
   runtimeKey: string,
   directoryKey: string,

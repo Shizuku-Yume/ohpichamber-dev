@@ -4,9 +4,7 @@ import { z } from 'zod';
 const optionalIdentity = z.string().catch('').transform((value) => value.trim());
 const versionEnvelope = z.object({
   status: z.literal('ok'),
-  // Arrays historically classify as incompatible rather than wrong-service.
   compatibility: z.union([z.looseObject({}), z.array(z.unknown())]),
-  openchamberVersion: optionalIdentity,
 });
 
 const buildProbeUrl = (url, pathname) => {
@@ -19,24 +17,13 @@ const buildProbeUrl = (url, pathname) => {
   }
 };
 
-// A server before 2.0 runs OpenCode 1.x and reports the same API version and
-// capabilities as a current one; only its own version tells it apart. A
-// version that does not parse says nothing either way.
-const isServerBeforeOpenCode2 = (version) => {
-  const major = /^(\d+)\./.exec(version)?.[1];
-  return major !== undefined && Number(major) < 2;
-};
-
 const classifyVersionPayload = (payload) => {
   const parsed = versionEnvelope.safeParse(payload);
   if (!parsed.success) {
     return 'wrong-service';
   }
-  const { compatibility, openchamberVersion } = parsed.data;
+  const { compatibility } = parsed.data;
   if (!Array.isArray(compatibility.capabilities) || !compatibility.capabilities.includes('api.runtime-url.v1')) {
-    return 'incompatible';
-  }
-  if (isServerBeforeOpenCode2(openchamberVersion)) {
     return 'incompatible';
   }
   if (compatibility.apiVersion !== 1 || compatibility.minClientApiVersion > 1) {
@@ -57,8 +44,8 @@ export const probeElectronHostWithDeadline = async ({
   scheduleTimeout = setTimeout,
   cancelTimeout = clearTimeout,
 }) => {
-  const started = now();
-  const result = (status) => ({ status, latencyMs: now() - started });
+  let requestStarted = now();
+  const result = (status) => ({ status, latencyMs: now() - requestStarted });
   if (!isReady()) return result('unreachable');
 
   const versionUrl = buildProbeUrl(url, '/api/version');
@@ -81,12 +68,11 @@ export const probeElectronHostWithDeadline = async ({
   };
   const fetchProbe = async (requestUrl, headers) => {
     controller.signal.throwIfAborted();
+    requestStarted = now();
     const response = await chromiumFetch(requestUrl, {
       headers,
       signal: controller.signal,
       redirect: 'manual',
-      // Reachability is a question for the server: a cached answer could
-      // report a host that is down as up.
       cache: 'no-store',
     });
     if (controller.signal.aborted) {

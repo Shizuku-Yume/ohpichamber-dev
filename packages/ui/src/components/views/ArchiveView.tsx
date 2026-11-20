@@ -1,4 +1,20 @@
+import { createSessionOwnershipIndex } from '@/components/session/sidebar/sessions/sessionOwnership';
+import { resolveSidebarSessionLocations } from '@/components/session/sidebar/recent/sessionLocation';
+import type { ConversationResult } from '@/hooks/useConversationSearch';
+import type { ConversationResultContext } from '@/components/search/conversationResultContext';
+import type { OmniAuthor } from '@/lib/search/omniQuery';
+import { useMessageSearch } from '@/hooks/useMessageSearch';
+import { useConversationSearch } from '@/hooks/useConversationSearch';
+import { searchScopeQuery, type SearchScope } from '@/lib/search/omniQuery';
+import { conversationContextFromLocation } from '@/components/search/conversationResultContext';
+import { ConversationResultRow } from '@/components/search/ConversationResultRow';
+import { MatchHighlight } from '@/components/ui/MatchHighlight';
+import { leadWithMatch } from '@/lib/messageSearch';
+import { splitSnippet } from '@/lib/messageSearch';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
+import { SearchStatusMark } from '@/components/search/SearchStatusMark';
+import { SearchInMenu } from '@/components/search/SearchInMenu';
+import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
@@ -15,6 +31,7 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { formatSessionDateLabel, normalizePath } from '@/components/session/sidebar/utils';
 import { useShallow } from 'zustand/react/shallow';
 import { SessionSearchInput } from '@/components/session/SessionSearchInput';
+import { requestReasoningReveal } from '@/components/chat/search/reasoningReveal';
 import { refreshSpaceArchives, useSpaceArchivesStore } from '@/lib/spaces/space-archives';
 import { isRestorableOnItsOwn } from '@/sync/session-restore-rule';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -35,11 +52,56 @@ type WorkspaceBucket = {
 };
 
 
-// Bound the mounted DOM: archives grow into the hundreds; batch rendering
-// keeps the list responsive without a virtualizer.
 const PAGE_SIZE = 100;
 
-// Subsessions of one parent sit together, at the place of the first of them.
+type SearchResultRowsProps = {
+  result: ConversationResult;
+  query: string;
+  context: ConversationResultContext;
+  mobile: boolean;
+  onOpen: () => void;
+  onOpenExcerpt: (messageId: string) => void;
+  onRestore: () => void;
+  restoreLabel: string;
+  restorable: boolean;
+  author: OmniAuthor;
+  includeReasoning: boolean;
+  contentAvailable: boolean;
+};
+
+function ArchiveSearchResultRow({ result, query, context, mobile, onOpen, onOpenExcerpt, onRestore, restoreLabel, restorable, author, includeReasoning, contentAvailable }: SearchResultRowsProps): React.ReactNode {
+  const { t } = useI18n();
+  const [expandedKey, setExpandedKey] = React.useState<string | null>(null);
+  const expansionKey = `${query}\0${author}\0${includeReasoning}\0${contentAvailable}`;
+  const showMatches = expandedKey === expansionKey;
+  const matches = useMessageSearch({ query, enabled: showMatches && contentAvailable, limit: PAGE_SIZE, sessionId: result.sessionId, lifecycle: 'archived', role: author === 'any' ? null : author, includeReasoning });
+  const openHit = (messageId: string, hitRole: string): void => {
+    requestReasoningReveal(hitRole === 'reasoning' ? messageId : null);
+    onOpenExcerpt(messageId);
+  };
+  return <div data-archive-search-result={result.sessionId}>
+    <ConversationResultRow
+      result={result}
+      context={context}
+      mobile={mobile}
+      onOpen={onOpen}
+      onOpenExcerpt={() => {
+        if (result.excerpt) openHit(result.excerpt.messageId, result.excerpt.role);
+      }}
+      onShowMoreMatches={result.moreMatches > 0 && contentAvailable ? () => setExpandedKey(expansionKey) : undefined}
+      trailing={restorable ? <Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size={mobile ? 'lg' : 'xs'} className={mobile ? 'min-h-11 min-w-11' : undefined} onClick={onRestore} aria-label={restoreLabel}><Icon name="inbox-unarchive" className="size-3.5" /></Button></TooltipTrigger><TooltipContent>{restoreLabel}</TooltipContent></Tooltip> : null}
+    />
+    {showMatches ? <div className="ms-3 space-y-0.5" data-archive-other-matches={result.sessionId} aria-live="polite">
+      {'hits' in matches.state ? matches.state.hits.filter((hit) => hit.id !== result.excerpt?.messageId).map((hit) => <button key={hit.id} type="button" className="block w-full truncate text-start typography-micro text-muted-foreground hover:text-foreground" onClick={() => openHit(hit.id, hit.role)}><MatchHighlight segments={leadWithMatch(splitSnippet(hit.snippet))} /></button>) : null}
+      {matches.state.status === 'loading' ? <span className="typography-micro text-muted-foreground">{t('search.omni.status.searching')}</span> : null}
+      {matches.state.status === 'error' || (matches.state.status === 'ready' && matches.state.pageError) ? <span className="typography-micro text-muted-foreground">{t('search.omni.status.error')}</span> : null}
+      {matches.state.status === 'unavailable' ? <span className="typography-micro text-muted-foreground">{t('search.omni.status.unsupported')}</span> : null}
+      {matches.state.status === 'too-short' ? <span className="typography-micro text-muted-foreground">{t('search.omni.status.tooShort')}</span> : null}
+      {matches.state.status === 'ready' && matches.state.next ? <button type="button" className="typography-micro text-muted-foreground hover:text-foreground hover:underline" onClick={matches.loadMore} disabled={matches.state.loadingMore}>{t('search.omni.result.loadMore')}</button> : null}
+    </div> : null}
+  </div>;
+}
+
 const groupByParent = (sessions: Session[]): Session[] => {
   const byParent = new Map<string, Session[]>();
   for (const session of sessions) {
@@ -62,19 +124,14 @@ const groupByParent = (sessions: Session[]): Session[] => {
   return grouped;
 };
 
-/**
- * The archive itself, mounted only while it is on screen, so every open starts
- * fresh. `page` is the desktop surface that replaces the chat area; `mobile`
- * is the single-column list inside the phone's fullscreen surface. `onLeave`
- * runs once an archived session has been opened. `initialQuery` fills the
- * search field, for a sidebar search that found nothing.
- */
-export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
+export function ArchiveSessionsView({ layout, onLeave }: {
   layout: 'page' | 'mobile';
   onLeave: () => void;
-  initialQuery?: string;
 }): React.ReactNode {
   const { t } = useI18n();
+  const messageSearchEnabled = useUIStore((state) => state.messageSearchEnabled);
+  const messageSearchReasoningEnabled = useUIStore((state) => state.messageSearchReasoningEnabled);
+  const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const unarchiveSession = useSessionUIStore((state) => state.unarchiveSession);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
@@ -100,15 +157,18 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     }
   }, [loadSessions]);
   const hasDiscoveryErrors = Boolean(discoveryErrors && discoveryErrors.size > 0);
-  const [query, setQuery] = React.useState(initialQuery);
+  const [text, setText] = React.useState('');
+  const [searchScope, setSearchScope] = React.useState<SearchScope>('everything');
+  const { searchIn, author } = searchScopeQuery(searchScope);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null);
   const spaceArchives = useSpaceArchivesStore((state) => state.byWorkspaceId);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   const projects = useProjectsStore((state) => state.projects);
+  const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const normalizedProjects = React.useMemo(() => projects.map((project) => ({ ...project, normalizedPath: normalizePath(project.path) ?? project.path })), [projects]);
   const archivesByProject = useWorktreeArchivesByProject();
   const archiveActions = useWorktreeArchiveActions();
 
-  // The chats of deleted spaces are read-only and named after their space; refresh when the page opens.
   React.useEffect(() => {
     void refreshSpaceArchives().catch(() => {});
   }, []);
@@ -125,7 +185,8 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     return directory ? (formatDirectoryName(directory, homeDirectory) || directory) : t('sessions.archivePage.otherProjects');
   }, [homeDirectory, spaceArchives, t]);
 
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = text.trim().toLowerCase();
+  const hasSearchQuery = normalizedQuery !== '';
   // A subsession under an archived parent comes back with that parent and is
   // not listed. One archived while its parent stays active would otherwise
   // show nowhere, so it is listed under its parent's title and restored alone.
@@ -134,13 +195,15 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     [listedSessions],
   );
 
+  const ownership = React.useMemo(() => createSessionOwnershipIndex([], normalizedProjects, availableWorktreesByProject, sortedSessions), [normalizedProjects, availableWorktreesByProject, sortedSessions]);
+  const locations = React.useMemo(() => resolveSidebarSessionLocations({ sessions: sortedSessions, projects: normalizedProjects, ownerBySessionId: ownership.bySessionId, availableWorktreesByProject, gitBranches: new Map(), homeDirectory, hideBranchMatchingProjectLabel: false }), [sortedSessions, normalizedProjects, ownership.bySessionId, availableWorktreesByProject, homeDirectory]);
+
   const parentTitles = React.useMemo(() => {
     const titles = new Map<string, string>();
     for (let index = 0; index < parentTitlePairs.length; index += 2) titles.set(parentTitlePairs[index], parentTitlePairs[index + 1]);
     return titles;
   }, [parentTitlePairs]);
 
-  // The parent's title, shown once above the first of its subsessions' rows.
   const parentTitleAbove = (rows: Session[], index: number): string | null => {
     const parentSessionId = rows[index]?.parentSessionId;
     if (!parentSessionId || rows[index - 1]?.parentSessionId === parentSessionId) return null;
@@ -228,12 +291,44 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const visibleSessions = filteredSessions.slice(0, visibleCount);
   const remainingCount = filteredSessions.length - visibleSessions.length;
   const totalCount = sortedSessions.length;
+  const searchedSessionById = React.useMemo(() => new Map(sortedSessions.map((session) => [session.sessionId, session])), [sortedSessions]);
+  const metadataItems = React.useMemo(() => sortedSessions.map((session) => ({
+    sessionId: session.sessionId,
+    title: session.title ?? '',
+    directory: resolveGlobalSessionDirectory(session),
+    archived: true,
+    updatedAt: session.updatedAt,
+    projectLabel: locations.get(session.sessionId)?.projectLabel ?? null,
+    worktreeLabel: locations.get(session.sessionId)?.branchLabel ?? null,
+  })), [locations, sortedSessions]);
+  const isAdmitted = React.useCallback((directory: string | null) => Boolean(directory && sortedSessions.some((session) => resolveGlobalSessionDirectory(session) === directory)), [sortedSessions]);
+  const conversationSearch = useConversationSearch({ enabled: hasSearchQuery, text, lifecycle: 'archived', searchIn, author, metadataItems, isAdmitted });
+  const { results: searchResults, contentStatus } = conversationSearch;
+  const shownCount = hasSearchQuery ? conversationSearch.totalCount : filteredSessions.length;
+  const countLabel = shownCount === null ? null : t(shownCount === 1 ? 'sessions.archivePage.countSingle' : 'sessions.archivePage.countPlural', { count: shownCount });
+  const archiveSearchResultContext = ({ result }: { result: ConversationResult; mobile: boolean }): ConversationResultContext => {
+    const session = searchedSessionById.get(result.sessionId);
+    const project = projects.find((entry) => entry.id === session?.projectId);
+    const extras = [];
+    const parentTitle = session?.parentSessionId ? parentTitles.get(session.parentSessionId) : null;
+    if (parentTitle) extras.push({ key: 'parent', text: parentTitle, dir: 'auto' as const });
+    if (session || result.updatedAt !== null) extras.push({ key: 'date', text: formatSessionDateLabel(session?.archivedAt ?? result.updatedAt ?? session?.updatedAt ?? 0), dir: 'auto' as const });
+    const deletedSpace = session ? spaceArchives?.get(session.workspaceId) : null;
+    return conversationContextFromLocation({ location: locations.get(result.sessionId), directory: result.directory, project: project ? { ...project, label: project.label ?? formatDirectoryName(project.path, homeDirectory) } : null, projectRoot: project?.path ?? null, homeDirectory, folderOverride: deletedSpace?.name, extras });
+  };
   const isFailed = sessionsStatus === 'error' || (totalCount === 0 && hasDiscoveryErrors);
 
   const selectWorkspace = React.useCallback((workspaceId: string | null) => {
     setSelectedWorkspaceId(workspaceId);
     setVisibleCount(PAGE_SIZE);
   }, []);
+
+  const search = (next: string) => {
+    setText(next);
+    if (next === '') setSearchScope('everything');
+    else if (!hasSearchQuery) setSelectedWorkspaceId(null);
+    setVisibleCount(PAGE_SIZE);
+  };
 
   const openSession = React.useCallback((session: Session) => {
     const directory = normalizePath(resolveGlobalSessionDirectory(session));
@@ -250,20 +345,18 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
 
   const searchInput = (
     <SessionSearchInput
-      value={query}
-      onSearch={(next) => {
-        setQuery(next);
-        setVisibleCount(PAGE_SIZE);
-      }}
+      value={text}
+      onSearch={search}
       mobile={layout === 'mobile'}
       placeholder={t('sessions.archivePage.searchPlaceholder')}
       clearLabel={t('sessions.sidebar.header.search.clear')}
+      trailing={hasSearchQuery ? <>
+        <SearchStatusMark status={contentStatus} scope={searchScope} />
+        <SearchInMenu mobile={layout === 'mobile'} scope={searchScope} onChange={(next) => { setSearchScope(next); setVisibleCount(PAGE_SIZE); }} />
+      </> : undefined}
     />
   );
 
-  const countLabel = filteredSessions.length === 1
-    ? t('sessions.archivePage.countSingle', { count: filteredSessions.length })
-    : t('sessions.archivePage.countPlural', { count: filteredSessions.length });
   const emptyLabel = () => {
     if (totalCount === 0 && (sessionsStatus === 'error' || hasDiscoveryErrors)) return t('sessions.sidebar.group.empty.loadFailed');
     if (totalCount === 0 && sessionsStatus !== 'ready') return t('sessions.sidebar.group.empty.loadingSessions');
@@ -289,13 +382,44 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
       ) : null}
     </div>
   );
-  const showMoreButton = remainingCount > 0 ? (
-    <button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+
+  const searchResultRows = (mobile: boolean) => <div data-archive-search-results>
+    {contentStatus.kind === 'error' || contentStatus.kind === 'failed' || (contentStatus.kind === 'ready' && contentStatus.pageError) ? <p data-archive-search-failure className="typography-micro text-muted-foreground">{t(contentStatus.kind === 'failed' ? 'search.omni.status.failed' : 'search.omni.status.error')}</p> : null}
+    {searchResults.length === 0 ? emptyState : searchResults.slice(0, visibleCount).map((result) => {
+    const session = searchedSessionById.get(result.sessionId);
+    return <ArchiveSearchResultRow
+      key={result.sessionId}
+      result={result}
+      query={normalizedQuery}
+      context={archiveSearchResultContext({ result, mobile })}
+      mobile={mobile}
+      restorable={Boolean(session) && !(spaceArchives?.has(session?.workspaceId ?? '') ?? false)}
+      onOpen={() => { void openSessionLink(result.sessionId, null); onLeave(); }}
+      onOpenExcerpt={(messageId) => { void openSessionLink(result.sessionId, messageId); onLeave(); }}
+      onRestore={() => { if (session) restoreSession(session); }}
+      restoreLabel={t('sessions.archivePage.restoreSessionAria', { title: result.title })}
+      author={author}
+      includeReasoning={messageSearchReasoningEnabled && showReasoningTraces}
+      contentAvailable={messageSearchEnabled}
+    />;
+  })}
+    {showMoreButton}
+  </div>;
+
+  const hasMoreContent = contentStatus.kind === 'ready' && contentStatus.hasMore;
+  const showMoreButton = remainingCount > 0 || (hasSearchQuery && hasMoreContent) ? (
+    <button
+      type="button"
+      disabled={hasSearchQuery && conversationSearch.loadingMore}
+      onClick={() => {
+        setVisibleCount((count) => count + PAGE_SIZE);
+        if (hasMoreContent) conversationSearch.loadMore();
+      }}
       className={cn(
         'flex items-center justify-start rounded-md text-left text-muted-foreground/70 leading-tight hover:text-foreground hover:underline',
         layout === 'mobile' ? 'min-h-10 px-3 typography-micro' : 'mt-1 px-2 py-1 text-xs',
       )}>
-      {t('sessions.sidebar.group.showMore')}
+      {t(hasSearchQuery ? 'search.omni.result.loadMore' : 'sessions.sidebar.group.showMore')}
     </button>
   ) : null;
   if (layout === 'mobile') {
@@ -307,7 +431,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
         <div className="shrink-0 space-y-1.5 px-3 pt-3">
           {searchInput}
           {totalCount > 0 || sessionsStatus === 'ready' ? (
-            <p className="px-1 typography-micro text-muted-foreground">{countLabel}</p>
+            <p data-archive-count className="px-1 typography-micro text-muted-foreground">{countLabel}</p>
           ) : null}
         </div>
         <div
@@ -329,7 +453,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
             </div>
           ) : null}
           {discoveryErrorBanner}
-          {visibleSessions.length === 0 && allWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
+          {hasSearchQuery ? searchResultRows(true) : visibleSessions.length === 0 && allWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
             const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
             const title = session.title || t('sessions.sidebar.session.untitled');
@@ -371,7 +495,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               </React.Fragment>
             );
           })}
-          {showMoreButton}
+          {!hasSearchQuery && showMoreButton}
         </div>
         {archiveActions.dialog}
       </div>
@@ -381,7 +505,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const renderDirectoryItem = (
     key: string,
     label: string,
-    count: number,
+    count: number | null,
     isSelected: boolean,
     onSelect: () => void,
     fullPath?: string,
@@ -456,7 +580,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               {searchInput}
             </div>
             {/* Pages have no close button: you leave via the sidebar. */}
-            <span className="flex h-8 flex-shrink-0 items-center self-start typography-micro text-muted-foreground">
+            <span data-archive-count className="flex h-8 flex-shrink-0 items-center self-start typography-micro text-muted-foreground">
               {countLabel}
             </span>
           </div>
@@ -477,7 +601,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                 </div>
               ) : null}
               {discoveryErrorBanner}
-              {visibleSessions.length === 0 && selectedWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
+              {hasSearchQuery ? searchResultRows(false) : visibleSessions.length === 0 && selectedWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
                 const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
                 const directoryLabel = labelOf(workspaceId, sessionDirectory);
@@ -542,7 +666,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                   </React.Fragment>
                 );
               })}
-              {showMoreButton}
+              {!hasSearchQuery && showMoreButton}
             </div>
           </div>
         </div>
@@ -554,11 +678,9 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
 
 export function ArchiveView(): React.ReactNode {
   const open = useUIStore((state) => state.isArchivePageOpen);
-  const initialQuery = useUIStore((state) => state.archivePageSearch);
   const openCount = useUIStore((state) => state.archivePageOpenCount);
   const setOpen = useUIStore((state) => state.setArchivePageOpen);
   const leave = React.useCallback(() => setOpen(false), [setOpen]);
   if (!open) return null;
-  // Keyed by open, so a handed-over query lands even while the page is already on screen.
-  return <ArchiveSessionsView key={openCount} layout="page" onLeave={leave} initialQuery={initialQuery} />;
+  return <ArchiveSessionsView key={openCount} layout="page" onLeave={leave} />;
 }

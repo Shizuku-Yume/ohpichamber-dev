@@ -1,7 +1,9 @@
 import { afterAll, describe, expect, it } from 'bun:test';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-ui-auth-test-'));
 process.env.OPENCHAMBER_DATA_DIR = dataDir;
@@ -45,6 +47,30 @@ const createResponse = () => {
 };
 
 describe('ui auth client credential seam', () => {
+  it('validates registered desktop credentials on a passwordless Host without trusting a cookie after revocation', async () => {
+    const createUiAuth = await loadCreateUiAuth();
+    const clients = createRemoteClientAuthRuntime({ fsPromises: fs.promises, path, crypto, storePath: path.join(dataDir, 'desktop-clients.json') });
+    const auth = createUiAuth({ clientAuthController: clients });
+    try {
+      const anonymous = createResponse();
+      await auth.handleSessionStatus({ headers: {} }, anonymous);
+      expect(anonymous.body).toEqual({ authenticated: true, disabled: true });
+      const { token, client } = await clients.createClient({ label: 'Desktop', clientKind: 'desktop-local', dedupeKey: 'desktop-local' });
+      const req = { headers: { authorization: `Bearer ${token}`, cookie: String(anonymous.getHeader('Set-Cookie')).split(';', 1)[0] } };
+      const accepted = createResponse();
+      await auth.handleSessionStatus(req, accepted);
+      expect(accepted.statusCode).toBe(200);
+      expect(accepted.body).toEqual({ authenticated: true, disabled: true, scope: 'client' });
+      await clients.revokeClient(client.id);
+      const revoked = createResponse();
+      await auth.handleSessionStatus(req, revoked);
+      expect(revoked.statusCode).toBe(401);
+      expect(revoked.body).toEqual({ authenticated: false, locked: true, disabled: true });
+    } finally {
+      auth.dispose();
+    }
+  });
+
   it('bootstraps signed passwordless bearer sessions with the same policy and lifetime as cookies', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth({ sessionTtlMs: 60_000, trustedSessionTtlMs: 3_600_000 });
@@ -87,6 +113,35 @@ describe('ui auth client credential seam', () => {
     await expiredAuth.handleSessionCreate({ ...req, body: { issueSessionToken: true } }, expired);
     expect(await expiredAuth.resolveAuthContext({ headers: { authorization: `Bearer ${expired.body.sessionToken}` } }, createResponse(), strict)).toBeNull();
     expiredAuth.dispose();
+  });
+
+  it('preserves upgrade cookie handling with a null response', async () => {
+    const createUiAuth = await loadCreateUiAuth();
+    const auth = createUiAuth();
+    try {
+      const req = { headers: { host: 'localhost:3000', upgrade: 'websocket' } };
+      await expect(auth.ensureSessionToken(req, null)).rejects.toBeInstanceOf(TypeError);
+      const response = createResponse();
+      const token = await auth.ensureSessionToken(req, response);
+      req.headers.cookie = String(response.getHeader('Set-Cookie')).split(';', 1)[0];
+      expect(await auth.ensureSessionToken(req, null)).toBe(token);
+    } finally {
+      auth.dispose();
+    }
+  });
+
+  it('accepts upgrade bearer credentials without a response', async () => {
+    const createUiAuth = await loadCreateUiAuth();
+    const auth = createUiAuth({
+      clientAuthController: {
+        authenticateBearerToken: async () => ({ ok: true, clientId: 'device-1' }),
+      },
+    });
+    try {
+      expect(await auth.ensureSessionToken({ headers: { authorization: 'Bearer client-token', upgrade: 'websocket' } }, null)).toBe('client:device-1');
+    } finally {
+      auth.dispose();
+    }
   });
 
   it('accepts bearer client credentials when UI password auth is enabled', async () => {
@@ -327,6 +382,8 @@ describe('ui auth client credential seam', () => {
       { method: 'GET', path: '/api/guests/hello/oauth/status', url: `/api/guests/hello/oauth/status?oc_url_token=${encodeURIComponent(guestToken)}` },
       { method: 'GET', path: '/api/guests/hello/oauth/callback', url: `/api/guests/hello/oauth/callback?oc_url_token=${encodeURIComponent(guestToken)}` },
       { method: 'GET', path: '/api/guests/hello/service/status', url: `/api/guests/hello/service/status?oc_url_token=${encodeURIComponent(guestToken)}` },
+      // A route named like the guest (`/api/guests/marks` for a guest `marks`) is not one of its files.
+      { method: 'GET', path: '/api/guests/hello', url: `/api/guests/hello?oc_url_token=${encodeURIComponent(guestToken)}` },
     ]) {
       const forbiddenRes = createResponse();
       let forbiddenCalled = false;
@@ -475,7 +532,7 @@ describe('ui auth client credential seam', () => {
       body: {
         password: 'secret',
         issueClientToken: true,
-        clientLabel: 'OpenChamber Desktop',
+        clientLabel: 'OhPiChamber Desktop',
       },
     };
     const res = createResponse();
@@ -483,7 +540,7 @@ describe('ui auth client credential seam', () => {
     await auth.handleSessionCreate(req, res);
 
     expect(res.body.clientToken).toBe('client-token');
-    expect(createClientInput.fallbackLabel).toBe('OpenChamber Desktop');
+    expect(createClientInput.fallbackLabel).toBe('OhPiChamber Desktop');
     const expiresAt = Date.parse(createClientInput.expiresAt);
     expect(expiresAt).toBeGreaterThanOrEqual(before + 122_000);
     expect(expiresAt).toBeLessThanOrEqual(Date.now() + 124_000);

@@ -28,7 +28,6 @@ type PullRequestList =
     page: number;
     hasMore: boolean;
     error: string | null;
-    /** Projects (an upstream beside a fork) whose pull requests could not be read this time. */
     incompleteProjectIds: string[];
   }
   | { key: string; status: 'error'; message: string };
@@ -37,13 +36,9 @@ const NO_PROJECT_IDS: string[] = [];
 
 type ReadyList = Extract<PullRequestList, { status: 'ready' }>;
 
-// Lists already read, shared by every comparison surface (Changes, Walkthrough,
-// mobile Changes): reopening one shows the last list at once, and one older
-// than this is read again in the background, replaced when the answer lands.
 const LIST_FRESH_MS = 60_000;
 const MAX_SHARED_LISTS = 30;
 const sharedLists = new Map<string, { list: ReadyList; readAt: number }>();
-/** Forgets every shared list; for scenarios that must start from nothing. */
 export const forgetSharedPullRequestLists = () => sharedLists.clear();
 const rememberList = (list: ReadyList) => {
   sharedLists.delete(list.key);
@@ -57,11 +52,6 @@ const sourceOf = (pr: ChangeRequest): PullRequestSource => ({
 
 const pullRequestKey = (pr: ChangeRequest) => `${pr.project.owner}/${pr.project.name}#${pr.number}`;
 
-/**
- * Folds one page of pull requests into what the picker already shows. A
- * project the server could not read keeps the records it showed before rather
- * than reading as having none; the page still says which ones failed.
- */
 export const mergePullRequestPage = (
   shown: ChangeRequest[],
   result: PageResult<ChangeRequest>,
@@ -72,12 +62,6 @@ export const mergePullRequestPage = (
   return { prs: [...merged.values()], incompleteProjectIds: result.incompleteProjectIds ?? [] };
 };
 
-/**
- * Lists and remembers the pull request a comparison reviews. Every read goes
- * through the checkout's bound provider context, so the list and the branch's
- * own pull request come from the account and repository the binding grants,
- * never from whichever account happens to be active.
- */
 export function usePullRequestComparison(
   directory: string | null,
   branch: string | null,
@@ -90,12 +74,9 @@ export function usePullRequestComparison(
   const runtimeKey = useGitStore((state) => state.runtimeKey);
   const latestContext = readContext;
   const contextKey = latestContext ? JSON.stringify(sourceControlReadContextParts(latestContext)) : '';
-  // Callers may hand over a fresh object each render; effects and callbacks key
-  // on `contextKey` and read the object through this ref.
   const contextRef = useRef(latestContext);
   contextRef.current = latestContext;
   const context = latestContext;
-  // Known even with no working account, so the messages name the right host.
   const hostProvider = useRepositoryHost(directory)?.provider;
   const provider = context?.provider ?? hostProvider ?? null;
   const changeRequestTerm = useChangeRequestTerm(provider);
@@ -128,8 +109,6 @@ export function usePullRequestComparison(
   const branchStatus = useGitHubPrStatusStore((state) => context && branch
     ? getFreshestSourceControlStatusForBranch(state.entries, context, branch) : null);
 
-  // Ask for this branch's own pull request through the same bound context.
-  // The status store dedupes by signature and throttles by TTL.
   useEffect(() => {
     const context = contextRef.current;
     if (!enabled || !context || !branch || selectedSource || !auth.authChecked || !auth.connected) return;
@@ -171,7 +150,6 @@ export function usePullRequestComparison(
     if (previous) setLoadingMore(true);
     else {
       setLoadingMore(false);
-      // A list already on screen stays while it is read again.
       if (!shownReady) setList({ key, status: 'loading' });
     }
     try {
@@ -195,7 +173,6 @@ export function usePullRequestComparison(
     }
   }, [auth.connected, changeRequestTerm, directory, enabled, key, search, sourceControl, t]);
 
-  // Shows a list another surface read, and reads again only what is stale.
   const revalidate = useCallback(() => {
     const shared = sharedLists.get(key);
     if (shared && listRef.current !== shared.list) setList(shared.list);
@@ -211,9 +188,7 @@ export function usePullRequestComparison(
   return {
     enabled,
     readContext: context,
-    /** The host the change requests come from, for wording and numbering. */
     provider,
-    /** The host lists its change requests but does not serve their diff: nothing to compare or walk through. */
     diffUnavailable,
     selectedSource: pendingPreference ?? selectedSource,
     prs: current?.status === 'ready' ? current.prs : NO_PULL_REQUESTS,
@@ -221,12 +196,9 @@ export function usePullRequestComparison(
     loading: enabled && (!current || current.status === 'loading' || search !== query.trim()),
     loadingMore,
     hasMore: current?.status === 'ready' && current.hasMore,
-    /** Projects whose pull requests failed to load; non-empty means the list is partial. */
     incompleteProjectIds: current?.status === 'ready' ? current.incompleteProjectIds : NO_PROJECT_IDS,
     error: current?.status === 'error' ? current.message : current?.status === 'ready' ? current.error : null,
-    /** Reads the list again now: retry and refresh buttons. */
     refresh: () => refresh(),
-    /** Opening the picker: shows what is known and reads again only when stale. */
     revalidate,
     loadMore: () => current?.status === 'ready' && current.hasMore && !loadingMore ? refresh(current) : Promise.resolve(),
     select: (pr: ChangeRequest) => saveSelection(selectionKey, sourceOf(pr)),

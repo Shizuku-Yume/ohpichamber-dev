@@ -22,6 +22,7 @@ import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import type { JsonValue } from '@openchamber/agent-contract';
+import { isElectronShell } from '@/lib/desktop';
 
 export const ToolsPage: React.FC = () => {
   const { t } = useI18n();
@@ -36,6 +37,10 @@ export const ToolsPage: React.FC = () => {
   const setAgentWebToolEnabled = useUIStore((state) => state.setAgentWebToolEnabled);
   const browserProvider = useUIStore((state) => state.browserProvider);
   const setBrowserProvider = useUIStore((state) => state.setBrowserProvider);
+  const agentBrowserSharesLogins = useUIStore((state) => state.agentBrowserSharesLogins);
+  const setAgentBrowserSharesLogins = useUIStore((state) => state.setAgentBrowserSharesLogins);
+  const agentTerminalToolEnabled = useUIStore((state) => state.agentTerminalToolEnabled);
+  const setAgentTerminalToolEnabled = useUIStore((state) => state.setAgentTerminalToolEnabled);
   const agentKnowledgeToolEnabled = useUIStore((state) => state.agentKnowledgeToolEnabled);
   const setAgentKnowledgeToolEnabled = useUIStore((state) => state.setAgentKnowledgeToolEnabled);
   const agentNotifyToolEnabled = useUIStore((state) => state.agentNotifyToolEnabled);
@@ -157,6 +162,28 @@ export const ToolsPage: React.FC = () => {
         settingsItem="tools.section.host"
       >
         <div className={SETTINGS_SPACE_ROW_CLASS}>
+          <SettingsCheckboxRow
+            settingsItem="sessions.agent-terminal-tool"
+            checked={agentTerminalToolEnabled}
+            onChange={(enabled) => {
+              setAgentTerminalToolEnabled(enabled);
+              void updateDesktopSettings({ agentTerminalToolEnabled: enabled });
+            }}
+            label={t('settings.openchamber.tools.field.agentTerminalTool')}
+            info={t('settings.openchamber.tools.field.agentTerminalToolSummary')}
+          />
+          {isElectronShell() ? (
+            <SettingsCheckboxRow
+              settingsItem="sessions.agent-browser-logins"
+              checked={agentBrowserSharesLogins}
+              onChange={(enabled) => {
+                setAgentBrowserSharesLogins(enabled);
+                void updateDesktopSettings({ agentBrowserSharesLogins: enabled });
+              }}
+              label={t('settings.openchamber.tools.agentBrowserLogins.label')}
+              info={t('settings.openchamber.tools.agentBrowserLogins.info')}
+            />
+          ) : null}
           <SettingsCheckboxRow
             settingsItem="sessions.agent-control-tool"
             checked={agentControlToolEnabled}

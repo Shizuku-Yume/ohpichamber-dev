@@ -4,7 +4,6 @@ import { CONTEXT_ZONES } from '@/lib/workspace/zones';
 
 declare global {
   interface Window {
-    /** Set by the desktop preload on the load after the window crashed several times in a row. */
     __OPENCHAMBER_SAFE_START__?: boolean;
   }
 }

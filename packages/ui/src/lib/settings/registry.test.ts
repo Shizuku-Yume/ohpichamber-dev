@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import {
   resolveWorkStatusSectionOrder,
@@ -20,11 +21,61 @@ import {
   SETTINGS_KEYS,
   SETTINGS_REGISTRY,
   applySettingsToStores,
+  isWritableSettingsKey,
   parseSettingsDocument,
   readAutoSaveSnapshot,
 } from './registry';
 
 describe('settings registry', () => {
+  test('terminal reading is a parsed Host-writable preference, not a local-only flag', () => {
+    const previous = useUIStore.getState().agentTerminalToolEnabled;
+    try {
+      expect(LOCAL_DEVICE_KEYS).not.toContain('agentTerminalToolEnabled');
+      expect(isWritableSettingsKey('agentTerminalToolEnabled')).toBe(true);
+      expect(parseSettingsDocument({ agentTerminalToolEnabled: 'yes' })).toEqual({});
+      for (const enabled of [true, false]) {
+        const parsed = parseSettingsDocument({ agentTerminalToolEnabled: enabled });
+        expect(parsed).toEqual({ agentTerminalToolEnabled: enabled });
+        applySettingsToStores({ agentTerminalToolEnabled: enabled });
+        expect(readAutoSaveSnapshot().agentTerminalToolEnabled).toBe(enabled);
+      }
+    } finally {
+      useUIStore.getState().setAgentTerminalToolEnabled(previous);
+    }
+  });
+  test('reserved preferences retain valid and empty values and reject invalid data', () => {
+    expect(parseSettingsDocument({ cornerRadius: 12, pinnedDirectories: ['/work'] }))
+      .toEqual({ cornerRadius: 12, pinnedDirectories: ['/work'] });
+    expect(parseSettingsDocument({ cornerRadius: 0, pinnedDirectories: [] }))
+      .toEqual({ cornerRadius: 0, pinnedDirectories: [] });
+    expect(parseSettingsDocument({ cornerRadius: 'wide', pinnedDirectories: 42 })).toEqual({});
+    expect(parseSettingsDocument({})).toEqual({});
+    expect(SETTINGS_REGISTRY.cornerRadius.scope).toBe('profile');
+    expect(SETTINGS_REGISTRY.pinnedDirectories.scope).toBe('instance');
+    expect(MIRRORED_KEYS).toContain('cornerRadius');
+    expect(MIRRORED_KEYS).toContain('pinnedDirectories');
+  });
+  test('round-trips sidebar batching and pin placement through the profile owner', () => {
+    const previous = useSessionDisplayStore.getState();
+    try {
+      for (const size of [null, 3, 12, 50]) {
+        const parsed = parseSettingsDocument({ sidebarSessionBatchSize: size, sidebarKeepPinnedInPlace: false });
+        expect(parsed).toEqual({ sidebarSessionBatchSize: size, sidebarKeepPinnedInPlace: false });
+        if (!parsed) throw new Error('Expected valid settings');
+        applySettingsToStores(parsed);
+        expect(useSessionDisplayStore.getState().sessionBatchSize).toBe(size);
+        expect(useSessionDisplayStore.getState().keepPinnedInPlace).toBe(false);
+      }
+      for (const [size, bounded] of [[2, 3], [51, 50], [3.5, 4]]) {
+        expect(parseSettingsDocument({ sidebarSessionBatchSize: size })).toEqual({ sidebarSessionBatchSize: bounded });
+      }
+      expect(parseSettingsDocument({ sidebarSessionBatchSize: '12' })).toEqual({});
+      expect(parseSettingsDocument({ sidebarKeepPinnedInPlace: 'false' })).toEqual({});
+    } finally {
+      useSessionDisplayStore.setState(previous, true);
+    }
+  });
+
   test('round-trips custom selection approval text and clearing it without resetting omitted preferences', async () => {
     const options = useUIStore.persist.getOptions();
     const original = useUIStore.getState();
@@ -228,13 +279,13 @@ describe('settings registry', () => {
 
   test('section order: a saved order applies as stored and a dragged order stays', () => {
     const original = useUIStore.getState();
-    const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
+    const saved = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources', 'tasks'];
     try {
       applySettingsToStores(parseSettingsDocument({ workStatusSectionOrder: saved }) ?? {});
       // The fork's store has one sanitized order and no explicit marker.
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(saved);
 
-      const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'];
+      const dragged = ['repository', 'session', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'tasks'];
       useUIStore.getState().setWorkStatusSectionOrder(dragged);
       expect(useUIStore.getState().workStatusSectionOrder).toEqual(dragged);
 
@@ -243,7 +294,7 @@ describe('settings registry', () => {
         .toEqual(resolveWorkStatusSectionOrder(['session', 'repository'], []));
       // An order the user never arranged follows the default's Context sources move.
       expect(sanitizeWorkStatusSectionOrder(['session', 'repository', 'usage', 'subagents', 'mcp', 'pinned', 'contextSources'], false))
-        .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'mcp', 'pinned', 'telemetry', 'workflows']);
+        .toEqual(['session', 'repository', 'usage', 'contextSources', 'subagents', 'tasks', 'mcp', 'pinned', 'telemetry', 'workflows']);
     } finally {
       useUIStore.setState(original, true);
     }
@@ -254,7 +305,7 @@ describe('settings registry', () => {
     if (!migrate) throw new Error('Expected a migration');
     const savedDefault = ['session', 'repository', 'usage', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned', 'contextSources'];
     expect(await migrate({ workStatusSectionOrder: savedDefault }, 26)).toMatchObject({
-      workStatusSectionOrder: ['session', 'repository', 'usage', 'contextSources', 'telemetry', 'subagents', 'workflows', 'mcp', 'pinned'],
+      workStatusSectionOrder: ['session', 'repository', 'usage', 'contextSources', 'telemetry', 'subagents', 'tasks', 'workflows', 'mcp', 'pinned'],
     });
   });
 
@@ -348,6 +399,16 @@ describe('settings registry', () => {
     expect(parseSettingsDocument({ chatRenderMode: 'live', activityRenderMode: 'summary' }))
       .toEqual({ chatRenderMode: 'live', activityRenderMode: 'summary' });
     expect(parseSettingsDocument({ activityRenderMode: 'summary' })).toEqual({ activityRenderMode: 'summary' });
+  });
+
+  test('reads the old Wide chat layout switch as the Full chat width until a width is picked', () => {
+    expect(parseSettingsDocument({ wideChatLayoutEnabled: true }))
+      .toEqual({ wideChatLayoutEnabled: true, chatWidth: 'full' });
+    expect(parseSettingsDocument({ wideChatLayoutEnabled: false }))
+      .toEqual({ wideChatLayoutEnabled: false, chatWidth: 'default' });
+    expect(parseSettingsDocument({ wideChatLayoutEnabled: true, chatWidth: 'wider' }))
+      .toEqual({ wideChatLayoutEnabled: true, chatWidth: 'wider' });
+    expect(parseSettingsDocument({ chatWidth: 'wide' })).toEqual({});
   });
 
   test('applies only the fields a snapshot carries and leaves the rest alone', () => {
@@ -460,10 +521,11 @@ describe('settings registry effects', () => {
     'packages/ui/src/lib/persistence.test.ts',
     'packages/ui/src/lib/appearanceAutoSave.ts',
     'packages/ui/src/lib/modelPrefsAutoSave.ts',
-    'packages/web/server/lib/host/settings-helpers.js',
-    'packages/web/server/lib/host/settings-helpers.test.js',
-    'packages/web/server/lib/host/settings-runtime.js',
-    'packages/web/server/lib/host/settings-files.js',
+    'packages/ui/src/stores/ui/initialState.ts',
+    'packages/web/server/lib/settings/settings-helpers.ts',
+    'packages/web/server/lib/settings/settings-runtime.ts',
+    'packages/web/server/lib/settings/settings-files.ts',
+    'packages/web/server/lib/settings/settings-normalization-runtime.ts',
   ]);
 
   const SOURCE_ROOTS = [
@@ -591,6 +653,7 @@ describe('settings registry effects', () => {
   test('every key has a consumer outside the settings plumbing', () => {
     const withoutConsumer = [...SETTINGS_KEYS, ...LOCAL_DEVICE_KEYS].filter((key) => {
       const consumers = runtimeConsumersOf(key);
+      if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.reserved) return false;
       // Secret or computed instance keys are consumed in settings dialogs or server runtime
       if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.computed) return false;
       if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.secret) return false;
@@ -605,6 +668,12 @@ describe('settings registry effects', () => {
     const mismatches: string[] = [];
     for (const key of SETTINGS_KEYS) {
       const declared = SETTINGS_REGISTRY[key].effect;
+      if (SETTINGS_REGISTRY[key].reserved) {
+        expect(SETTINGS_REGISTRY[key].reserved?.trim()).toBeTruthy();
+        expect(declared).toEqual([]);
+        expect([...effectClassesOf(key)]).toEqual([]);
+        continue;
+      }
       if (!Array.isArray(declared) || declared.length === 0) {
         mismatches.push(`${key}: no effect declared`);
         continue;

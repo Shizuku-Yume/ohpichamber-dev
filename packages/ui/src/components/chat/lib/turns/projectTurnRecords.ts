@@ -48,11 +48,6 @@ interface ProjectTurnRecordsOptions {
     previousProjection?: TurnProjectionResult | null;
     showTextJustificationActivity: boolean;
     showTurnChangedFiles: boolean;
-    /**
-     * When true, a turn whose user message is hidden (no visible display parts,
-     * e.g. a prompt OpenChamber sent on the user's behalf) is merged into the
-     * previous turn instead of starting a new one.
-     */
     mergeHiddenUserTurns?: boolean;
 }
 
@@ -89,12 +84,6 @@ const canReusePreviousTurn = (previous: TurnRecord, next: TurnRecord): boolean =
 type TurnChanges = Pick<TurnRecord, 'diffStats' | 'changedFiles'>;
 type TurnActivity = ReturnType<typeof projectTurnActivity>;
 
-// Summary, activity and changed files are read only by rendered turn rows,
-// and the transcript list mounts a handful of rows out of a long history. So
-// each is derived on first read and kept: opening a session pays for the rows
-// on screen, not for every turn it holds. The inputs are fixed here, since a
-// turn record never changes after hydration; changed messages produce a new
-// record instead.
 const hydrateTurnRecord = (
     turn: TurnRecord,
     effectiveOptions: ProjectTurnRecordsOptions,

@@ -18,10 +18,6 @@ import { getMultiRunMembership, multiRunMembershipPatch, type MultiRunMembership
 import { multiRunVariantLabel, readMultiRunIdentity, type MultiRunSummary } from './runs';
 import { generateUuid } from '@/lib/uuid';
 
-/**
- * Renames the run on every member. Each write is a merge patch of the title
- * alone; members whose write failed keep the old title and are returned.
- */
 export async function renameRun(run: MultiRunSummary, title: string, sessionById: ReadonlyMap<string, Session>): Promise<string[]> {
   const nextTitle = title.trim().slice(0, 200);
   if (!nextTitle) return [];
@@ -51,12 +47,6 @@ export async function renameRun(run: MultiRunSummary, title: string, sessionById
   return failed;
 }
 
-/**
- * Turns a member into an ordinary session, as if it never took part in the
- * run: its membership marker is deleted (a merge patch with `null`) and its
- * lane title ("Model · Run") becomes the run's title. It keeps its directory
- * or worktree. A run left with one member stops being a run by itself.
- */
 export async function detachFromRun(session: Session, runTitle: string): Promise<void> {
   const runtimeKey = getRuntimeKey();
   const nextTitle = runTitle.trim() || session.title;
@@ -71,7 +61,6 @@ export async function detachFromRun(session: Session, runTitle: string): Promise
   registerMultiRunSession({ ...renamed, metadata: metadata.metadata, metadataRevision: metadata.revision }, directory, metadata);
 }
 
-/** Archives every member of the run. Worktrees stay; the chats move to the archive. */
 export async function archiveRun(run: MultiRunSummary): Promise<{ archivedIds: string[]; failedIds: string[] }> {
   return useSessionUIStore.getState().archiveSessions([...run.memberIds]);
 }
@@ -83,12 +72,6 @@ export class NotFirstTurnError extends Error {
   }
 }
 
-/**
- * Turns a chat into a run: the chat becomes the first lane, and each chosen
- * model gets its own lane with the same first prompt and files, in its own
- * worktree when the project is a git repository. Only the chat's first turn
- * qualifies, because new lanes start without the conversation that followed.
- */
 export async function askOtherModels(input: {
   session: Session;
   turnUserMessageId: string;
@@ -155,11 +138,6 @@ export async function askOtherModels(input: {
   return { runKey: identity.key, failedCount };
 }
 
-/**
- * Adds a lane for another model to an existing variant: same prompt and
- * files as that variant's first lane, same starting commit, its own worktree
- * when the run is isolated. Returns the new session id.
- */
 export async function addLaneToRun(input: {
   run: MultiRunSummary;
   runGroup: string | undefined;

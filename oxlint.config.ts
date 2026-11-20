@@ -1,4 +1,5 @@
 import { defineConfig } from "oxlint";
+import legacyServerSources from "./packages/web/scripts/fork-owned-server-untyped.json" with { type: "json" };
 
 // The repository's general-purpose lint, run by `bun run lint` and failing on
 // any finding, and the config editors pick up by default.
@@ -108,6 +109,23 @@ export default defineConfig({
         "react-hooks/exhaustive-deps": "warn",
         "react/only-export-components": ["error", { allowConstantExport: true }],
       },
+    },
+    {
+      files: ["packages/web/server/**/*.ts", "packages/web/bin/**/*.ts"],
+      rules: {
+        "openchamber/server-js-specifiers": "error",
+        "typescript/no-non-null-assertion": "error",
+        "typescript/ban-ts-comment": ["error", {
+          "ts-ignore": "allow-with-description",
+          "ts-expect-error": "allow-with-description",
+          "ts-nocheck": true,
+          "minimumDescriptionLength": 10,
+        }],
+      },
+    },
+    {
+      files: legacyServerSources.files.map(({ path }) => `packages/web/${path}`),
+      rules: { "typescript/no-non-null-assertion": "off" },
     },
     {
       files: ["packages/ui/src/**/*.ts", "packages/ui/src/**/*.tsx"],

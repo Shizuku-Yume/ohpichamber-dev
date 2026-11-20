@@ -17,6 +17,13 @@ Node server entrypoints apply `../network-defaults.js` before serving requests, 
 
 ## Credential architecture and resolution flow
 
+`selected-usage.ts` supplies the control service's `usage.read` loader using the
+same catalog selectors and private resolver as the HTTP quota routes. Its scope
+is the Host-resolved calling workspace and agent directory. A missing selected
+record is unconfigured; catalog, scope and resolution failures stay failures.
+`listUsagePageProviders` exposes the built-in Usage page cards, excluding the
+Copilot add-on card. Extension usage reads remain on their separate quota routes.
+
 Live quota fetches resolve provider credentials dynamically from the selected workspace context. The web server never reads legacy OpenCode `auth.json` or `opencode.json` files, and the obsolete `../opencode/auth.js` and `resolveConfigApiKey` utilities are removed.
 
 1. **Request context:**
@@ -172,6 +179,28 @@ Report coding plan limits from monitor APIs:
 
 ### Ollama Cloud and exe.dev
 Both provider modules export `isConfigured: () => false` and return explicit errors indicating that selected credential quota is unsupported.
+
+#### Cursor individual dollar allowance fallback
+
+When the legacy Enterprise readers produce no billing-cycle meter, the server
+and VS Code both call `providers/cursor-summary.js`. It reads the fixed
+`https://cursor.com/api/usage-summary` endpoint using the existing access token
+in the dashboard's `WorkosCursorSessionToken` cookie. Redirects are refused and
+the request has a 15-second deadline. There is at most one additional request
+per refresh; Pro and usable request-based Enterprise meters do not call it.
+
+`individualUsage.overall` supplies the individual's used and limit amounts in
+cents. Only an explicitly enabled bucket with nonnegative usage and a positive
+limit becomes a billing-cycle window, with the summary's billing-cycle end. A
+blank or whitespace-only `used` or `limit` is missing data, never zero.
+Team pools and team on-demand spending are never substituted for this personal
+allowance. An absent bucket or a failed request leaves the legacy result intact.
+
+#### Why the dashboard fallback is shared
+
+Both runtimes need the same cookie construction, cents conversion and personal
+scope. Sharing this reader keeps those rules equal without changing the older
+provider-specific request and on-demand meters.
 
 ## Notes for contributors
 - Provider modules must export `providerId`, `providerName`, `isConfigured(credential)`, and `fetchQuota(options)`.

@@ -106,8 +106,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
           ? {
             ...state.info,
             ...desktopInfo,
-            // Keep the richer changelog; desktopInfo.body is often the bare
-            // "See release notes at..." fallback from the updater.
             body: state.info.body || desktopInfo.body,
             available: state.info.available,
           }
@@ -133,9 +131,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
   restartToUpdate: async () => {
     const { downloaded, installing, runtimeType } = get();
 
-    // A restart is already in flight: the app is shutting down, so a second
-    // click must not invoke the updater again. The main process guards the
-    // same race; this keeps the dialog in its restarting state.
     if (runtimeType !== 'desktop' || !downloaded || installing) {
       return;
     }
@@ -145,12 +140,9 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     try {
       const ok = await restartToApplyUpdate();
       if (!ok) {
-        // No desktop bridge at all — the update was never installable here.
         throw new Error(formatMessage(useI18nStore.getState().dictionary, 'updateDialog.error.restartUnavailable'));
       }
     } catch (error) {
-      // Keep the real installer failure; the dialog shows it and the button
-      // stays clickable for another attempt.
       set({ installing: false, error: getUpdateInstallErrorMessage(error instanceof Error ? error : new Error(String(error))) });
     }
   },

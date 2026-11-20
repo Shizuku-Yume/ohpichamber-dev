@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { clearSuggestionPatch, openByJevPatch, readWork, offerReviewPatch, suggestDonePatch } from './state.js';
+import { clearSuggestionPatch, openByJevPatch, readWork, offerReviewPatch, suggestDonePatch, userStatePatch } from './state.js';
 
 const withWork = (work) => ({ openchamber: { goal: { id: 'g' }, work } });
 
 describe('session work state', () => {
+  it('tracks and closes with user stamps, keeps repeated requests idempotent and never tracks a pin', () => {
+    expect(userStatePatch({}, { state: 'open', now: 5 })).toMatchObject({ openchamber: { work: { state: 'open', openedBy: 'user', openedAt: 5 } } });
+    expect(userStatePatch({}, { state: 'done', now: 6 })).toMatchObject({ openchamber: { work: { state: 'done', doneAt: 6 } } });
+    expect(userStatePatch(withWork({ state: 'open' }), { state: 'open', now: 5 })).toBeNull();
+    expect(userStatePatch(withWork({ state: 'done' }), { state: 'done', now: 5 })).toBeNull();
+    for (const metadata of [{ isPinned: true }, { openchamber: { pinned: { at: 1 } } }]) {
+      expect(userStatePatch(metadata, { state: 'open', now: 5 })).toBeNull();
+      expect(userStatePatch(metadata, { state: 'done', now: 5 })).not.toBeNull();
+    }
+  });
   it('reads a work record, and a missing or malformed one as none', () => {
     expect(readWork(withWork({ state: 'open', openedAt: 1 }))).toMatchObject({ state: 'open' });
     expect(readWork({})).toBeNull();

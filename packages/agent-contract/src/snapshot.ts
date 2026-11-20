@@ -16,13 +16,15 @@ export const SessionCompactingSchema = z.strictObject({
   startedAt: TimestampSchema,
 });
 export type SessionCompacting = z.infer<typeof SessionCompactingSchema>;
-export const SessionSnapshotSchema = z.strictObject({
-  session: RuntimeSessionSchema, cursor: CursorSchema, activeRun: RunSchema.nullable(),
+export const SessionSnapshotStateSchema = z.strictObject({
   /** The persisted native selection; absent readers keep the existing selection state. */
   selection: SessionSelectionSchema.optional(),
   branch: SessionBranchStateSchema,
   compacting: SessionCompactingSchema.nullable().optional(),
   todos: z.array(TodoPhaseSchema).optional(),
+});
+export const SessionSnapshotSchema = SessionSnapshotStateSchema.extend({
+  session: RuntimeSessionSchema, cursor: CursorSchema, activeRun: RunSchema.nullable(),
   window: z.strictObject({
     firstTurnId: EntityIdSchema.nullable(), lastTurnId: EntityIdSchema.nullable(),
     firstMessageId: EntityIdSchema.nullable(), lastMessageId: EntityIdSchema.nullable(), hasEarlier: z.boolean(),

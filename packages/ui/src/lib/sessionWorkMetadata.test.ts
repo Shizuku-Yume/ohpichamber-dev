@@ -54,4 +54,6 @@ describe('session work metadata', () => {
     // Asking for the state it already has changes nothing.
     expect(withSessionWorkState(closed, 'done', 30)).toBe(closed);
   });
+
+
 });

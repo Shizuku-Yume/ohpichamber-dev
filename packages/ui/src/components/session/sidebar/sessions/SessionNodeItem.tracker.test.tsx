@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { I18nProvider } from '@/lib/i18n';
@@ -87,11 +87,10 @@ test(`a child displayed in A opens ${kind} with owner ${ownerProjectId} through 
     ownsWork: false, projectId: 'project-a', ownerProjectId, renderContext: 'mixed-compact',
     folderOwnerKey: 'project-b', groupDirectory: '/project-a',
     pinnedSessionIds: new Set(), expandedParents: new Set(),
-    hasSessionSearchQuery: false, normalizedSessionSearchQuery: '',
     editingId: null, editingRowKey: null, editTitle: '', openSidebarMenuKey: null,
     setEditingId: noop, setEditingRowKey: noop, setEditTitle: noop,
     handleSaveEdit: noop, handleCancelEdit: noop, toggleParent: noop,
-    handleSessionSelect: noop, handleSessionDoubleClick: noop, handleCopySessionId: noop,
+    handleSessionSelect: noop, handleSessionDoubleClick: noop,
     setOpenSidebarMenuKey: noop, createFolderAndStartRename: () => null,
     handleDeleteSession: noop, handleRestoreSession: noop,
     startSessionWorktreeMenuLoad: () => ({ cachedTargets: [], refreshTargets: Promise.resolve([]) }),

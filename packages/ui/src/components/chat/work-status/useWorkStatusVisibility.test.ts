@@ -57,6 +57,7 @@ const installMinimalDom = () => {
     activeElement: null,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
+    querySelector: () => null,
   };
   const container = {
     nodeType: 1,

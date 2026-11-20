@@ -2,8 +2,6 @@ import { expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { plugin } from 'bun';
-import { pathToFileURL } from 'node:url';
 import { SyncProvider } from '@/sync/sync-context';
 import type { MessageListHandle } from './MessageList';
 import { KeepAlive } from '@/components/ui/KeepAlive';
@@ -18,16 +16,6 @@ import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 
-// Bun does not implement Vite's worker URL imports.
-plugin({
-    name: 'navigation-worker-url',
-    setup(build) {
-        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`,
-            loader: 'js',
-        }));
-    },
-});
 const { default: MessageList } = await import('./MessageList');
 const { MarkdownContent } = await import('./MarkdownRendererImpl');
 
@@ -169,6 +157,9 @@ test('quote reveal opens real folded Activity, including a source prepended from
     };
     try {
         await render();
+        expect(ref.current?.hasMessageRow('recent-source')).toBe(true);
+        expect(ref.current?.hasMessageRow('older-source')).toBe(false);
+        expect(ref.current?.hasMessageRow('unknown')).toBe(false);
         for (let index = 0; index < 5; index += 1) await flush();
         expect(host.querySelector('[data-message-id="recent-source"]')).toBeNull();
         await reveal('recent');
@@ -178,6 +169,7 @@ test('quote reveal opens real folded Activity, including a source prepended from
         expect(finishLoad).toBeDefined();
         messages = [...older, ...recent];
         await render();
+        expect(ref.current?.hasMessageRow('older-source')).toBe(true);
         for (let index = 0; index < 5; index += 1) await flush();
         expect(host.querySelector('[data-message-id="older-source"]')).toBeNull();
         await act(async () => finishLoad?.(true));

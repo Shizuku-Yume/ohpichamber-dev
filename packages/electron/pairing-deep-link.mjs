@@ -25,8 +25,6 @@ const directCandidateUrl = (candidate) => {
   }
 };
 
-// Same shape the host's buildRelayPairingCandidate emits and the renderer's
-// connectionPayload accepts: a ws(s) relay URL, a server id, an EC public key.
 const relayCandidateServerId = (candidate) => {
   const serverId = readText(candidate.serverId);
   const jwk = candidate.hostEncPubJwk;

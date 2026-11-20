@@ -9,13 +9,9 @@ import { useSessionRecapStore } from '@/stores/useSessionRecapStore';
 import { useSessionSuggestionStore } from '@/stores/useSessionSuggestionStore';
 
 export interface SessionAssistState {
-  /** Valid (fresh) assist payload, or null. */
   assist: SessionAssistPayload | null;
-  /** Recap text, shown as soon as OMP publishes one for an idle session. */
   visibleRecap: string | null;
-  /** Suggestion text — fresh payload, session idle; caller still gates on input emptiness. */
   suggestion: string | null;
-  /** False until the session record is in memory; the recap cannot be decided before that. */
   sessionKnown: boolean;
 }
 

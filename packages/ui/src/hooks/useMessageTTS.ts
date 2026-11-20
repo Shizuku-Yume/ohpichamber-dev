@@ -1,9 +1,3 @@
-/**
- * useMessageTTS Hook
- * 
- * Hook for playing TTS on individual messages.
- * Uses the configured voice provider (browser, OpenAI, or macOS Say).
- */
 
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -23,8 +17,6 @@ import {
  useIsReading,
 } from '@/lib/voice/activeReading';
 
-// Below this length the reply is comfortable to listen to as-is; summarizing
-// would only add latency.
 const TTS_SUMMARIZE_MIN_CHARS = 600;
 
 const SUMMARIZE_SYSTEM_PROMPT = 'Summarize the assistant reply for text-to-speech listening. Reply with 2-4 sentences of plain spoken prose in the same language as the reply. No markdown, no lists, no code — mention code changes briefly in words instead.';
@@ -49,25 +41,16 @@ async function summarizeForSpeech(
 }
 
 export interface PlayMessageTTSOptions {
- /** Rechecked immediately before the first audio starts, after preparation. */
- canStart?: () => boolean;
- /** False reads the text as-is even when the voice settings ask for a summary. */
- summarize?: boolean;
+    canStart?: () => boolean;
+    summarize?: boolean;
 }
 
 export interface UseMessageTTSReturn {
- /** Whether a reading under this hook's key is playing */
- isPlaying: boolean;
- /** Play the text, replacing any reading in progress */
- play: (text: string, options?: PlayMessageTTSOptions) => Promise<void>;
- /** Stop the reading under this hook's key */
- stop: () => void;
+    isPlaying: boolean;
+    play: (text: string, options?: PlayMessageTTSOptions) => Promise<void>;
+    stop: () => void;
 }
 
-/**
- * @param readingKey Hooks passing the same key share one reading; without a
- * key the reading is private to this hook.
- */
 export function useMessageTTS(readingKey?: string): UseMessageTTSReturn {
  const instanceKey = useId();
  const key = readingKey ?? instanceKey;

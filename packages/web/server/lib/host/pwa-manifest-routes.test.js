@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { registerPwaManifestRoute } from './pwa-manifest-routes.js';
+import { registerPwaManifestRoute } from '../appearance/pwa-manifest-routes.js';
 
 const canonicalSession = (sessionId, title, updatedAt, extra = {}) => ({
   sessionId,

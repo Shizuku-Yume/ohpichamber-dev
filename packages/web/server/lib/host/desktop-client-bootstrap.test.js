@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
-import { registerAuthAndAccessRoutes } from './core-routes.js';
+import { registerAuthAndAccessRoutes } from '../server-frame/core-routes.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 
 // The packaged desktop shell bootstraps its local credential with a

@@ -1,0 +1,35 @@
+import { describe, expect, test } from 'bun:test';
+import type { Session } from '@openchamber/agent-contract';
+import { nativeSnapshot } from './session-message-loader-test-fixtures';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { resolveAdmittedLineageDirectory } from './session-admission-rule';
+
+const session = (id: string, directory: string, parentID?: string): Session => {
+  const record = { ...nativeSnapshot(id, []).session, workspaceId: `workspace-${directory}`, parentSessionId: parentID, metadata: {}, metadataRevision: '0', archiveRevision: '0' };
+  registerWorkspaceDirectory(record.workspaceId, directory);
+  return record;
+};
+
+describe('resolveAdmittedLineageDirectory', () => {
+  const records = new Map([
+    ['root', session('root', '/repo')],
+    ['worker', session('worker', '/removed/worktree', 'root')],
+    ['nested', session('nested', '/elsewhere', 'worker')],
+    ['outside', session('outside', '/elsewhere')],
+  ]);
+  const isAdmitted = (directory: string | null) => directory === '/repo';
+
+  test("reads a session in an admitted folder through its own", () => {
+    expect(resolveAdmittedLineageDirectory('root', records, isAdmitted)).toBe('/repo');
+  });
+
+  test("reads a subsession in an unknown folder through its nearest admitted ancestor's", () => {
+    expect(resolveAdmittedLineageDirectory('worker', records, isAdmitted)).toBe('/repo');
+    expect(resolveAdmittedLineageDirectory('nested', records, isAdmitted)).toBe('/repo');
+  });
+
+  test('admits nothing for a root session or an unknown one', () => {
+    expect(resolveAdmittedLineageDirectory('outside', records, isAdmitted)).toBeNull();
+    expect(resolveAdmittedLineageDirectory('missing', records, isAdmitted)).toBeNull();
+  });
+});

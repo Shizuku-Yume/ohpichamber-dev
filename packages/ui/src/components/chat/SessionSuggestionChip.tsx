@@ -9,7 +9,6 @@ import { useI18n } from '@/lib/i18n';
 interface SessionSuggestionChipProps {
   sessionId: string | null;
   directory?: string;
-  /** The composer already has content — the suggestion must stay out of the way. */
   hidden: boolean;
   onApply: (text: string) => void;
 }

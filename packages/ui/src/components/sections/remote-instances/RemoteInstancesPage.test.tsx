@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { DesktopHost, HostProbeResult } from '@/lib/desktopHosts';
@@ -8,7 +8,7 @@ const dom = (globalThis.window as unknown as Window | undefined) ?? new Window({
 (dom as unknown as { __OPENCHAMBER_ELECTRON__: unknown }).__OPENCHAMBER_ELECTRON__ = { runtime: 'electron' };
 Object.assign(globalThis, {
   __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
-  window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
+  window: dom, document: dom.document, CustomEvent: dom.CustomEvent, navigator: dom.navigator, localStorage: dom.localStorage,
   Node: dom.Node, Element: dom.Element, HTMLElement: dom.HTMLElement,
   Event: dom.Event, MouseEvent: dom.MouseEvent, MutationObserver: dom.MutationObserver,
   requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
@@ -21,7 +21,11 @@ const sshState = {
   load: async () => { }, loadImports: async () => { }, refreshStatuses: async () => { },
 };
 mock.module('@/stores/useDesktopSshStore', () => ({ useDesktopSshStore: (select: (state: unknown) => unknown) => select(sshState) }));
-mock.module('@/stores/useUIStore', () => ({ useUIStore: (select: (state: unknown) => unknown) => select({ settingsRemoteInstancesSelectedId: null }) }));
+const uiState = { settingsRemoteInstancesSelectedId: null };
+// useConfigStore subscribes to the UI store when it loads, through the Settings search index.
+mock.module('@/stores/useUIStore', () => ({
+  useUIStore: Object.assign((select: (state: unknown) => unknown) => select(uiState), { getState: () => uiState, subscribe: () => () => {} }),
+}));
 let mockClientAuth: {
   listClients: () => Promise<Array<{ id: string; label: string; clientKind: string; lastUsedAt?: string; revokedAt?: string | null }>>;
   listPendingPairings: () => Promise<never[]>;

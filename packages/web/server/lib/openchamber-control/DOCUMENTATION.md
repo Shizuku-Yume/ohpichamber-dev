@@ -3,11 +3,15 @@
 ## Purpose
 
 This module owns the typed control contract shared by the OpenChamber CLI and
-the managed OpenCode `openchamber` tool. Both adapters delegate to
+the native Agent Service's Host tool boundary. Both adapters delegate to
 `createOpenChamberControlService()`; neither adapter may call or spawn the
 other.
 
 ## Boundaries
+
+Waiting render pages and secret requests share the Host's scoped queued-message
+check. An earlier user message prevents starting either human-input wait; a failed
+queue read does not admit a wait as if the queue were empty.
 
 - `service.js` validates and executes the fixed project, model, session, and
   scheduled-task action allowlist. `actions.js` marks CLI-only actions with
@@ -25,6 +29,23 @@ other.
   answer keyed by session and tool call id (`pageAnswers`). Every inner host
   action request for `openchamber_render` carries that `toolCallId`, so an
   answer reaches the call that showed the page.
+  Operator-child eligibility reads the Host metadata through the Canonical
+  session metadata service, not the SDK transcript or a second session store.
+  An unavailable metadata read fails the waiting action rather than treating
+  the child as a human-facing session.
+  With `answerLater` the call returns at once and `later-pages.js` keeps the
+  page, across restarts, in `render-later-pages.json`; `GET
+  /api/openchamber/render/later` serves its snapshot and the answer route
+  falls back to it when no call waits. With `share` the page goes to
+  `../share-pages/runtime.js` (see its DOCUMENTATION.md).
+- `synthetic-delivery.js` posts a later or shared page's answer into the
+  author's session as synthetic context through the canonical session
+  service: a send keyed by the answer's message id when the session is idle, a
+  steer into its active run on `RUN_ACTIVE`. The steer has its own stable
+  command ID so it cannot reuse the send admission with a different action.
+  A message with `resume: false`
+  (an archived session) is not posted, since a canonical send always starts a
+  run; the answer still shows under the page.
 - `../agent-tool/runtime.js` is the managed-tool adapter. It wraps service
   results in the versioned native-tool envelope and uses a separate ephemeral
   loopback credential.
@@ -33,26 +54,65 @@ other.
 
 ## Invariants
 
-- Session status and messages come from official directory-scoped OpenCode
-  APIs. Message output includes only ordered `text` parts.
+`usage.read` is carried by the native `openchamber_usage` tool and is off unless
+`agentUsageToolEnabled` is true, checked again by the service at dispatch. The
+calling session supplies the workspace and agent directory; an explicit CLI
+workspace selector uses the same Host scope resolver. `usage-read.ts` reads
+configured providers or one `providerId`, strips account labels and preserves
+individual errors and timeouts. A failed provider list is reported as `listError`
+while each supported provider is tried, never as an authoritative empty list.
+`quota/selected-usage.ts` reuses the quota routes' catalog selection and private
+credential resolver. No credentials are included in the result. Worker tool
+results carry the existing `usage.read` card envelope.
+
+`session.track` and `session.markDone` default to the calling session and require
+In work to be enabled. Canonical session open and Host scope resolution establish
+identity and root eligibility; Host metadata, archive state, chat roots and Git
+worktree pins govern tracking. Children, managed Chats, reviews, `/btw` questions,
+scheduled runs, archived sessions and pinned sessions/worktrees cannot be tracked.
+Done remains available for those sessions to clear old membership. Both actions
+write `userStatePatch` through the queued Host metadata update/broadcast owner;
+the patch rechecks session pins against metadata at write time.
+
+- `openchamber_secret` carries the calling session and tool call id over the
+  authenticated worker channel. Before `secret.run`, the worker asks the
+  Canonical Bash approval owner for the exact command and reauthorizes its
+  one-shot receipt against Host policy. Public control calls cannot authorize
+  secret execution. The Host runs directly in the captured workspace, kills
+  the process tree on cancellation or timeout, and redacts secret values from
+  stdout, stderr and execution errors before returning them.
+- Secret card values travel only through `POST /api/openchamber/secret/answer`
+  into Host memory and the approved child's environment. The fields endpoint
+  returns only environment names for the exact waiting session/call. Optional
+  ten-minute leases are session-scoped and memory-only; `secret.forget` clears
+  them. `secret.request` file mode always refuses: no secret files are written.
+  Tool arguments, results, wait events and application persistence contain no
+  submitted values. An explicitly approved command itself is not a sandbox.
+
+- `terminal.list` and `terminal.read` use the Host terminal owner on all four
+  retained client surfaces. They require the explicit, default-off terminal
+  reading preference. Agent calls cannot select another workspace, and a read
+  checks membership in that folder before accessing output. Results omit Host
+  cwd fields and redact captured Host paths. Missing panels fail with 503.
+
+- Session status and messages come from the Canonical session service. The
+  Host control read views expose status or text-only history, not SDK records.
+  `contracts.ts` owns these CLI and Guest read shapes, cancellation options and
+  dispatch results. A status/message result does not promise a directory.
 - Wait never treats an initial idle response as completion after dispatch. It
   requires observed activity or a newly completed assistant message.
 - Timeout and cancellation are failures, never authoritative idle results.
 - Validation that protects side effects runs before session creation or
-  dispatch. An explicitly requested model, agent, or variant is checked against
-  the directory's own OpenCode agent and provider lists before any session,
-  worktree, or goal is created, because `prompt_async` accepts an unusable
-  selection and then fails only on the event stream. A failed or empty lookup
-  never turns a valid selection into a rejection.
-- `promptDispatched` reports an observed dispatch, never an accepted request.
-  After `prompt_async` the service confirms a new user message reached the
-  session; when it does not, the result reports `promptDispatched: false` with
-  `promptError` instead of claiming success.
+  dispatch. Model, agent and variant selection uses the native catalogs and
+  session options; no OpenCode configuration or provider client is consulted.
+- `promptDispatched` becomes true after a Canonical send acknowledgement or
+  goal start. It does not promise completion. With no prompt or goal, creation
+  alone leaves it false.
 - Send and fork dispatches without an explicit model/agent/variant reuse the
   target session's last user-message selection before falling back to the
   configured defaults; only session creation resolves defaults directly.
 - Default agents resolve from the owning project before global settings and
-  OpenCode defaults. Directory-based requests identify the project before
+  native defaults. Directory-based requests identify the project before
   creating a worktree; existing linked worktrees resolve through Git's primary
   worktree root. Send/fork fallback uses that same owner. Configured model IDs
   and effort preferences survive missing catalog entries rather than silently

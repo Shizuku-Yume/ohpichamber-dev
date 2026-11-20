@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -9,10 +9,6 @@ import { useChatSessionSelection } from './chatColumnSession';
 import { useSessionDirectory } from '@/sync/sync-context';
 import { selectAutoReviewRun } from '@/stores/useAutoReviewStore';
 
-/**
- * A running review loop, as a top row of the composer next to the background
- * commands: what it waits for, Open for the read-only review session, Stop.
- */
 export const AutoReviewStrip = memo(() => {
   const { t } = useI18n();
   const currentSessionId = useChatSessionSelection().sessionId;

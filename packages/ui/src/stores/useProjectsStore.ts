@@ -16,7 +16,6 @@ import { useSessionFoldersStore } from './useSessionFoldersStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 
-/** Pick a color key that's least used among existing projects */
 const pickAutoColor = (projects: ProjectEntry[]): string => {
   const colorKeys = PROJECT_COLORS.map((c) => c.key);
   const usageCounts = new Map<string, number>();
@@ -28,7 +27,6 @@ const pickAutoColor = (projects: ProjectEntry[]): string => {
       usageCounts.set(p.color, (usageCounts.get(p.color) ?? 0) + 1);
     }
   }
-  // Find minimum usage, then pick randomly among those with min usage
   const minUsage = Math.min(...usageCounts.values());
   const candidates = colorKeys.filter((k) => usageCounts.get(k) === minUsage);
   return candidates[Math.floor(Math.random() * candidates.length)];
@@ -178,8 +176,6 @@ const normalizeProjectPath = (value: string): string => {
   return normalizePath(expanded) ?? '';
 };
 
-// Folder names are shown verbatim: title-casing them turned `.ssh` into `.Ssh`
-// and made every project look like a name the user never chose.
 const deriveProjectLabel = (path: string): string => {
   const normalized = normalizeProjectPath(path);
   if (!normalized || normalized === '/') {
@@ -189,8 +185,6 @@ const deriveProjectLabel = (path: string): string => {
   return segments[segments.length - 1] || normalized;
 };
 
-// Labels auto-derived by older versions were title-cased and persisted. Drop
-// them back to the folder name; labels the user typed themselves are kept.
 const legacyAutoProjectLabel = (path: string): string => {
   const derived = deriveProjectLabel(path);
   return derived.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -303,7 +297,6 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     const defaultModel = normalizeDefaultModel(candidate.defaultModel);
     if (defaultModel) {
       project.defaultModel = defaultModel;
-      // A variant only means something next to the model it belongs to.
       if (typeof candidate.defaultVariant === 'string' && candidate.defaultVariant.trim().length > 0) {
         project.defaultVariant = candidate.defaultVariant.trim();
       }
@@ -493,18 +486,22 @@ export const useProjectsStore = create<ProjectsStore>()(
       // project that has not landed in the settings document yet.
       const persisted = await persistProjects(nextProjects, entry.id);
       if (!persisted.ok) return null;
-      set({ projects: nextProjects });
+      const savedProjects = persisted.settings ? sanitizeProjects(persisted.settings.projects) : nextProjects;
+      const savedProjectId = persisted.settings?.activeProjectId ?? entry.id;
+      const savedProject = savedProjects.find((project) => project.id === savedProjectId);
+      if (!savedProject) return null;
+      set({ projects: savedProjects });
 
       if (streamDebugEnabled()) {
-        console.info('[ProjectsStore] Added project', entry);
+        console.info('[ProjectsStore] Added project', savedProject);
       }
 
-      get().setActiveProject(entry.id);
-      await get().discoverProjectIcon(entry.id);
+      get().setActiveProject(savedProject.id);
+      await get().discoverProjectIcon(savedProject.id);
       // Dynamic import to avoid circular dependency between ProjectsStore and GlobalSessionsStore.
       const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
-      await useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]);
-      return entry;
+      await useGlobalSessionsStore.getState().refreshSessionsForDirectories([savedProject.path]);
+      return savedProject;
     },
 
     addProjects: async (paths: string[]) => {
@@ -543,19 +540,22 @@ export const useProjectsStore = create<ProjectsStore>()(
       // only for projects already in the settings document.
       const persisted = await persistProjects(nextProjects, entries[0].id);
       if (!persisted.ok) return [];
-      set({ projects: nextProjects });
+      const savedProjects = persisted.settings ? sanitizeProjects(persisted.settings.projects) : nextProjects;
+      const existingIds = new Set(current.projects.map((project) => project.id));
+      const savedAdded = savedProjects.filter((project) => !existingIds.has(project.id));
+      if (savedAdded.length === 0) return [];
+      set({ projects: savedProjects });
 
       if (streamDebugEnabled()) {
-        console.info('[ProjectsStore] Added projects', entries);
+        console.info('[ProjectsStore] Added projects', savedAdded);
       }
 
-      // Mirror addProject: the first newly added project becomes active.
-      get().setActiveProject(entries[0].id);
-      for (const entry of entries) {
+      get().setActiveProject(savedAdded[0].id);
+      for (const entry of savedAdded) {
         void get().discoverProjectIcon(entry.id);
       }
-      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories(entries.map((entry) => entry.path)));
-      return entries;
+      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories(savedAdded.map((entry) => entry.path)));
+      return savedAdded;
     },
 
     removeProject: (id: string) => {
@@ -572,11 +572,8 @@ export const useProjectsStore = create<ProjectsStore>()(
       set({ projects: nextProjects, activeProjectId: nextActiveId, manualProjectOrder: nextManualOrder });
       void persistProjects(nextProjects, nextActiveId, nextManualOrder);
 
-      // Clean up worktree entries for the removed project
       if (project) {
         const normalizedPath = project.path.replace(/\\/g, '/').replace(/\/+$/, '') || '/';
-        // Its chat folders go for every client of the server: those of the
-        // project root, its archive and each of its worktrees.
         const folderRoot = normalizePath(project.path);
         if (folderRoot) {
           const worktreeScopes = (useSessionUIStore.getState().availableWorktreesByProject.get(normalizedPath) ?? [])
@@ -588,8 +585,6 @@ export const useProjectsStore = create<ProjectsStore>()(
           next.delete(normalizedPath);
           return { availableWorktreesByProject: next };
         });
-        // Its running isolated spaces stop, but not one whose agent is working. Loaded on demand,
-        // so the feature stays out of this store's module graph.
         const label = project.label?.trim() || project.path.split('/').pop() || project.path;
         void import('@/lib/spaces/space-close').then(({ stopSpacesOfClosedProject }) => stopSpacesOfClosedProject(project.path, label));
       }
@@ -692,8 +687,6 @@ export const useProjectsStore = create<ProjectsStore>()(
             delete updated.defaultVariant;
           }
         }
-        // A variant without its model is meaningless, and the model may have
-        // just been cleared in this same update.
         if (!updated.defaultModel) {
           delete updated.defaultVariant;
         }
@@ -853,10 +846,6 @@ export const useProjectsStore = create<ProjectsStore>()(
       const incomingIds = new Set(incomingProjects.map((p) => p.id));
       if (!current.hasServerSnapshot || current.serverSnapshotFailed) set({ hasServerSnapshot: true, serverSnapshotFailed: false });
 
-      // The settings document is shared by every window on this server, so
-      // outside a bootstrap sync the incoming active pointer is just another
-      // window's choice — the project LIST still reconciles, but this
-      // window's active project stays its own while it remains valid.
       const nextActive = adoptActiveProject
         ? incomingActive
         : (current.activeProjectId && incomingIds.has(current.activeProjectId)

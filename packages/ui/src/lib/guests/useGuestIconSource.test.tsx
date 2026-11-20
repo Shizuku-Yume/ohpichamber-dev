@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
@@ -40,7 +40,7 @@ describe('guest icon loading', () => {
     revoked = [];
     reply = async () => svg();
     window = new Window({ url: 'http://localhost/' });
-    for (const [key, value] of Object.entries({ window, document: window.document, navigator: window.navigator, IS_REACT_ACT_ENVIRONMENT: true })) {
+    for (const [key, value] of Object.entries({ window, document: window.document, Event: window.Event, CustomEvent: window.CustomEvent, navigator: window.navigator, IS_REACT_ACT_ENVIRONMENT: true })) {
       globals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
       Object.defineProperty(globalThis, key, { configurable: true, value });
     }

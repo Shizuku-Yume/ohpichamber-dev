@@ -22,7 +22,6 @@ const resolveDefaultModelSelection = (): { providerID: string; modelID: string }
 
 const resolveDefaultVariant = (providerID: string, modelID: string): string | undefined => {
   const configState = useConfigStore.getState();
-  // The configured effort belongs to its default model; on the fallback model it does not apply.
   const configuredVariant = configState.getDefaultVariantForModel(providerID, modelID);
   const currentVariant = configState.currentProviderId === providerID && configState.currentModelId === modelID
     ? configState.currentVariant

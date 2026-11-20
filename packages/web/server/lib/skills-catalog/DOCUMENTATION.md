@@ -131,10 +131,14 @@ The following functions are internal helpers used by exported functions:
 - Per-skill decision entries override the global policy. Conflicts use native `workspace` / `agent` scope.
 - The source owner repeats CAS and overwrite checks inside its serialized transaction, so an install cannot overwrite a newer edit discovered after the catalog check.
 
+### Why an SSH source takes its subpath only from options
+An SSH URL is `git@host:owner/repo.git`, so the part after the colon is the repository itself and nothing in the URL can name a skill subpath. `options.subpath` is the only source of a subpath for an SSH source. A shorthand source reads the subpath from the URL tail, as in `owner/repo/sub/path`.
+
 ### Cache Management
 - Cache keys include Git host, normalized repository, ref, subpath, and selected identity for isolation.
 - Default TTL is 3 hours for both scan results and GitHub repository metadata.
 - Scan and GitHub metadata caches persist to JSON files in the OpenChamber data dir, so app restarts and page refreshes reuse previous results instead of re-hitting GitHub.
+- GitHub metadata lookups time out after 1.5 seconds, well under the catalog route's client request deadline, so optional enrichment never aborts catalog loading. A failed lookup is cached for five minutes, which keeps a rate-limited or failing API from being hit on every catalog load.
 - Scans run through a global concurrency limiter (2 at a time) with per-key in-flight deduplication.
 - The refresh button passes `refresh: true` and bypasses the cache.
 

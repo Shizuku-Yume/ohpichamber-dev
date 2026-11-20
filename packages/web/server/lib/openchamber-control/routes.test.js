@@ -12,7 +12,7 @@ const createApp = (execute, answerPage = vi.fn()) => {
   return app;
 };
 
-describe('OpenChamber control route', () => {
+describe('OhPiChamber control route', () => {
   it('is a thin adapter over the control service', async () => {
     const execute = vi.fn(async () => ({ projects: [] }));
     const response = await request(createApp(execute))
@@ -78,5 +78,22 @@ describe('page answer route', () => {
       .send({ sessionId: 'ses_1', callId: 'call_1', summary: 'B' })
       .expect(404);
     expect(response.body).toEqual({ error: 'This page is no longer waiting for an answer' });
+  });
+});
+
+describe('later pages route', () => {
+  it('serves the later pages snapshot once loaded', async () => {
+    const app = express();
+    const laterPages = { load: vi.fn(async () => undefined), snapshot: vi.fn(() => ({ revision: 2, pages: [{ sessionID: 'ses_1', callID: 'call_1', status: 'open' }] })) };
+    registerOpenChamberControlRoutes(app, { controlService: { execute: vi.fn(), answerPage: vi.fn() }, laterPages });
+    const response = await request(app).get('/api/openchamber/render/later').expect(200);
+    expect(response.body).toEqual({ revision: 2, pages: [{ sessionID: 'ses_1', callID: 'call_1', status: 'open' }] });
+    expect(laterPages.load).toHaveBeenCalledBefore(laterPages.snapshot);
+  });
+
+  it('answers 503 where the server keeps no later pages', async () => {
+    const app = express();
+    registerOpenChamberControlRoutes(app, { controlService: { execute: vi.fn(), answerPage: vi.fn() } });
+    await request(app).get('/api/openchamber/render/later').expect(503);
   });
 });

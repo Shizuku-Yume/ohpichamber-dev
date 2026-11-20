@@ -30,9 +30,7 @@ const MAX_PARENT_SESSIONS = 7;
 type SwitcherItemsOptions = {
   scopeProjectId?: string | null;
   currentSessionId?: string | null;
-  /** How many parent sessions to return (default 7 — the desktop dropdown). */
   maxParents?: number;
-  /** Plain recency: a pinned session gets no head start. */
   ignorePins?: boolean;
 };
 
@@ -115,11 +113,6 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
-  // Worktree sessions live OUTSIDE their project's path, so prefix matching
-  // can't resolve their project — and their branch is known from worktree
-  // discovery long before any git status is fetched for that directory.
-  // Shared exact index: normalized keys, project-root exclusion, first-wins
-  // dedupe. Branch display below is already live-first, so no branch change.
   const normalizedProjects = React.useMemo(
     () => projects
       .map((project) => ({ ...project, normalizedPath: normalizePath(project.path) }))
@@ -136,10 +129,8 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
   const spacesJourney = useSpacesStore((state) => state.journey);
   const findProjectForDirectory = React.useCallback(
     (sessionDirectory: string | null) => {
-      // A space's session belongs to the project the space was made from.
       const directory = spaceProjectDirectoryIn({ spaces: spaceMarks, journey: spacesJourney }, sessionDirectory) ?? sessionDirectory;
       if (!directory) return null;
-      // Known worktree → its project, regardless of where the worktree lives.
       const worktreeHit = findPrefixWorktreeEntry(normalizePath(directory) ?? directory, worktreeByPath);
       if (worktreeHit) return worktreeHit.project;
       const matches = normalizedProjects
@@ -196,8 +187,6 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
       const directory = resolveGlobalSessionDirectory(session);
       const matchedProject = findProjectForDirectory(directory);
       const projectLabel = formatProjectLabel(matchedProject);
-      // Live git branch when available; the discovered worktree branch fills
-      // in for directories whose git status hasn't been fetched yet.
       const worktreeHit = directory ? findPrefixWorktreeEntry(normalizePath(directory) ?? directory, worktreeByPath) : null;
       const liveBranch = directory ? branchesByDirectory.get(directory) : undefined;
       const branchLabel = liveBranch ?? worktreeHit?.meta.branch?.trim() ?? null;

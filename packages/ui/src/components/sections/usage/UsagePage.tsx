@@ -52,7 +52,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const setProviderInDropdown = useQuotaStore((state) => state.setProviderInDropdown);
   const selectedModels = useQuotaStore((state) => state.selectedModels);
-  const toggleModelSelected = useQuotaStore((state) => state.toggleModelSelected);
+  const setSelectedModels = useQuotaStore((state) => state.setSelectedModels);
   const applyDefaultSelections = useQuotaStore((state) => state.applyDefaultSelections);
   const providers = useQuotaProviders();
 
@@ -102,13 +102,13 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
     [selectedModels, providerId],
   );
   const handleModelToggle = React.useCallback((modelName: string) => {
-    toggleModelSelected(providerId, modelName);
     const isSelected = providerSelectedModels.includes(modelName);
     const nextSelected = isSelected
       ? providerSelectedModels.filter((model) => model !== modelName)
       : [...providerSelectedModels, modelName];
+    setSelectedModels(providerId, nextSelected);
     void updateDesktopSettings({ usageSelectedModels: { ...selectedModels, [providerId]: nextSelected } });
-  }, [providerId, providerSelectedModels, selectedModels, toggleModelSelected]);
+  }, [providerId, providerSelectedModels, selectedModels, setSelectedModels]);
 
   const familyRows = (models: ModelInfo[]) => models.map((model) => {
     const entries = Object.entries(model.windows.windows);

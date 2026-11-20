@@ -1,3 +1,4 @@
+import type { PinnedSelection } from '@/components/chat/column/useChatColumnSelection';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageTTS } from "@/hooks/useMessageTTS";
 import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";
@@ -712,19 +713,11 @@ const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false }) => {
 };
 
 type ChatContainerProps = {
- active?: boolean;
- autoOpenDraft?: boolean;
- readOnly?: boolean;
- /**
-  * Shows this session instead of the app's selection: a chat opened in the
-  * side panel. The column navigates inside itself (open a subtask, return
-  * to the parent) and never changes the main chat's selection, draft, or
-  * panels.
-  */
- pinnedSession?: { sessionId: string; directory: string | null };
+    active?: boolean;
+    autoOpenDraft?: boolean;
+    readOnly?: boolean;
+    pinnedSession?: { sessionId: string; directory: string | null };
 };
-
-type PinnedSelection = { sessionId: string; directory: string | null };
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({
  active = true,

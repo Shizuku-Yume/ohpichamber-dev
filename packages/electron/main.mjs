@@ -1623,7 +1623,7 @@ const spawnLocalServer = async () => {
     exitOnShutdown: false,
     apiOnly: false,
     builtInExtensionsDir: app.isPackaged
-      ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/ohpichamber/server/built-in-extensions')
+      ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/ohpichamber/build/server/built-in-extensions')
       : undefined,
     // The in-process server's notifications belong to the local instance.
     onDesktopNotification: (payload) => maybeShowNativeNotification({ ...payload, runtimeKey: 'local' }),
@@ -2978,7 +2978,7 @@ const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig =
   return state.mainWindow;
 };
 
-const openMainWindow = async () => {
+const openMainWindowOnce = async () => {
   if (!state.startupResolved) {
     // The tray, a second launch, a deep link or a shortcut can ask for a window
     // while startup still runs. Resolving next to it would start the in-process
@@ -3026,6 +3026,14 @@ const openMainWindow = async () => {
     ? (shouldUsePackagedUi() ? buildPackagedUiUrl('/index.html') : host.url)
     : localUiUrl;
   return activateMainWindow(targetUrl, state.localOrigin, state.bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
+};
+
+let mainWindowOpening = null;
+const openMainWindow = () => {
+  if (!mainWindowOpening) {
+    mainWindowOpening = openMainWindowOnce().finally(() => { mainWindowOpening = null; });
+  }
+  return mainWindowOpening;
 };
 
 // A session (and message) to open in a new window, from a link. IDs end up in

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { registerOpenRouterModelInfoRoute } from './openrouter-model-info.js';
-import { registerCommonRequestMiddleware } from './core-routes.js';
+import { registerCommonRequestMiddleware } from '../server-frame/core-routes.js';
 
 const ENDPOINT = '/api/openchamber/openrouter/model-info';
 

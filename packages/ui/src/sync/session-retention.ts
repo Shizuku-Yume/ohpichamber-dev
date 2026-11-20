@@ -22,8 +22,6 @@ const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boole
   return Number.isFinite(timestamp) && timestamp > 0 && timestamp < cutoff;
 };
 
-/** Sessions the user asked to keep: pinned on this client, or in the In work block. */
-/** In work keeps a session unless retention was told to take those too. */
 export const inWorkKeepsSessions = (settings: { sessionWorkEnabled: boolean; sessionRetentionIncludeInWork: boolean }): boolean => (
   settings.sessionWorkEnabled && !settings.sessionRetentionIncludeInWork
 );
@@ -50,7 +48,6 @@ type CandidateOptions = {
   now?: number;
 };
 
-/** The unselected scope stays protected, including from cascading parent deletion. */
 export function buildSessionRetentionCandidates({
   sessions, currentSessionId, cutoffDays, action, onlyArchived = false, activeSessionIds, isKept, now = Date.now(),
 }: CandidateOptions): string[] {

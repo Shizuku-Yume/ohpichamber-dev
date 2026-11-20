@@ -1,12 +1,11 @@
+import type { GuestStatusActionEvent } from 'ohpichamber-sdk';
+import { z } from 'zod';
 import type { GuestRequest, GuestStatusView } from 'ohpichamber-sdk';
 import { guestStatusViewSchema } from 'ohpichamber-sdk/schemas';
 import { proxyGuestServiceRequest } from './service';
 
-/**
- * Why a source section shows no fresh view: the service did not answer with a
- * success (`unreachable`), or answered with something that is not a view the
- * host can draw (`invalid`).
- */
+type GuestStatusActionResult = { ok: true } | { ok: false; message: string | null };
+
 export type GuestStatusViewFailure = 'unreachable' | 'invalid';
 
 export type GuestStatusViewRead =
@@ -15,9 +14,7 @@ export type GuestStatusViewRead =
 
 /** What the service is told about where the section shows. */
 type GuestStatusContext = {
-  /** The project the Work Status panel shows; absent without one. */
   directory: string | null;
-  /** The app's language, so the service can format numbers and words for it. */
   locale: string;
 };
 
@@ -82,7 +79,6 @@ export const createGuestStatusViewReader = (
   };
 };
 
-/** Whether anyone can see the app, and a way to hear when they can again. */
 export type StatusViewVisibility = {
   isHidden: () => boolean;
   onVisible: (listener: () => void) => () => void;
@@ -118,12 +114,6 @@ type StatusViewPolling = {
   cancel?: (id: number) => void;
 };
 
-/**
- * Reads a source section now and then every `interval` after the previous
- * read finished, so a slow service is never asked twice at once. Nothing is
- * read while the document is hidden; the next read happens when it shows.
- * Results that arrive after `stop` are dropped.
- */
 export const startStatusViewPolling = ({
   read,
   interval,
@@ -136,7 +126,6 @@ export const startStatusViewPolling = ({
   let running = false;
   let again = false;
   let timer: number | null = null;
-  // Reads are numbered as they start; a waiter wants one numbered at least `from`.
   let started = 0;
   let waiters: Array<{ from: number; resolve: () => void }> = [];
 
@@ -192,4 +181,26 @@ export const startStatusViewPolling = ({
       release(Number.POSITIVE_INFINITY);
     },
   };
+};
+
+const actionFailureSchema = z.object({ message: z.string().trim().min(1).max(300) });
+
+export const postGuestStatusAction = async (
+  guestId: string,
+  path: string,
+  context: GuestStatusContext,
+  event: GuestStatusActionEvent,
+): Promise<GuestStatusActionResult> => {
+  const answer = await proxyGuestServiceRequest(guestId, sourceRequest(path, context, {
+    method: 'POST',
+    body: JSON.stringify(event),
+  }));
+  if (!answer.ok) return { ok: false, message: null };
+  if (isSuccess(answer.result.status)) return { ok: true };
+  try {
+    const parsed = actionFailureSchema.safeParse(JSON.parse(answer.result.body));
+    return { ok: false, message: parsed.success ? parsed.data.message : null };
+  } catch {
+    return { ok: false, message: null };
+  }
 };

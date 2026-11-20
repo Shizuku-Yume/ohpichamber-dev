@@ -1,3 +1,5 @@
+
+
 import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
@@ -15,11 +17,6 @@ import { isRetryableBootstrapError } from "@/sync/retry";
 import { readAgentSelection, registerAgentReadinessListener, type AgentReadinessState } from "./agentConfigBridge";
 import { problemMessage } from '@/lib/problemMessage';
 
-/**
- * Directory a call operates on. Settings can browse another project without
- * moving the app, so every entry point takes one; omitting it means the project
- * the app is currently on.
- */
 const resolveDirectory = (directory?: string | null): string | null => {
   if (directory !== undefined) {
     const trimmed = directory?.trim();
@@ -33,7 +30,6 @@ const getConfigDirectory = (): string | null => {
     const projectsStore = useProjectsStore.getState();
     const activeProject = projectsStore.getActiveProject?.();
     
-    // 1. Primary: Active project path from store
     if (activeProject?.path?.trim()) {
       return activeProject.path.trim();
     }
@@ -60,13 +56,10 @@ const getAgentRecoveryKey = (directory: string): string => `${getRuntimeKey()}\0
 const agentRecoveryInFlight = new Map<string, Promise<void>>();
 const agentRecoverySettled = new Set<string>();
 const agentsLastLoadedAt = new Map<string, number>();
-// Each invalidation starts a new load generation. A read that began before the
-// latest invalidation (a delete, a catalog event) may carry the list from
-// before that change, so later callers never join it: they wait for it to
-// settle and read again, and the newest generation's result is the one kept.
 const agentsLoadGeneration = new Map<string, number>();
 const agentsLoadInFlight = new Map<string, { generation: number; request: Promise<boolean> }>();
 let agentsGeneration = 0;
+let agentsReloadEpoch = 0;
 
 const getAgentsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_AGENTS_CACHE_KEY;
@@ -77,6 +70,17 @@ export const invalidateAgentsLoadCache = (directory: string | null = getConfigDi
   agentsLastLoadedAt.delete(cacheKey);
   agentsLoadGeneration.set(cacheKey, (agentsLoadGeneration.get(cacheKey) ?? 0) + 1);
   // Retire reads started before a catalog mutation or notification.
+};
+
+export const invalidateAgentCatalogsForReload = (): void => {
+  agentsReloadEpoch += 1;
+  const keys = new Set([
+    ...Object.keys(useAgentsStore.getState().agentsByDirectory),
+    ...agentsLastLoadedAt.keys(),
+    ...agentsLoadInFlight.keys(),
+  ]);
+  agentsLastLoadedAt.clear();
+  for (const key of keys) agentsLoadGeneration.set(key, (agentsLoadGeneration.get(key) ?? 0) + 1);
 };
 
 interface AgentMutationResult { ok: boolean; error?: string; revision?: string }
@@ -199,6 +203,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       set({ agents: [], agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: {}, agentDraft: null, isLoading: false });
     },
     loadAgents: async (requestedDirectory) => {
+      const reloadEpoch = agentsReloadEpoch;
       const directory = resolveDirectory(requestedDirectory);
       const key = getAgentsCacheKey(directory);
       const runtimeGeneration = agentsGeneration;
@@ -206,7 +211,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       const currentRuntime = () => runtimeGeneration === agentsGeneration && runtimeKey === getRuntimeKey();
       if (!get().errorsByDirectory[key] && get().revisionsByDirectory[key] !== undefined && Date.now() - (agentsLastLoadedAt.get(key) ?? 0) < AGENTS_LOAD_CACHE_TTL_MS) return true;
       const inFlight = agentsLoadInFlight.get(key);
-      if (inFlight) {
+      if (inFlight && inFlight.generation === (agentsLoadGeneration.get(key) ?? 0)) {
         const loaded = await inFlight.request;
         if (!currentRuntime()) return false;
         return inFlight.generation === (agentsLoadGeneration.get(key) ?? 0) ? loaded : get().loadAgents(directory);
@@ -243,7 +248,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       let loaded: boolean;
       try { loaded = await request; }
       finally { if (agentsLoadInFlight.get(key) === entry) agentsLoadInFlight.delete(key); }
-      if (!currentRuntime()) return false;
+      if (!currentRuntime() || reloadEpoch !== agentsReloadEpoch) return false;
       return current() ? loaded : get().loadAgents(directory);
     },
     retryAgentsWhenReady: async (requestedDirectory) => {

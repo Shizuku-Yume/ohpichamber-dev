@@ -17,9 +17,9 @@ Object.assign(globalThis, {
 });
 
 // Import-time system-info probes are unrelated to the canonical agent contract.
-const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ data: [] }));
+const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ data: [], home: '/workspace', chatsRoot: '/workspace/chats' }));
 // Store imports read browser storage during module initialization; install happy-dom first.
-const { useAgentsStore, invalidateAgentsLoadCache, selectAgentsForDirectory, selectAgentCatalogStatus } = await import('@/stores/useAgentsStore');
+const { useAgentsStore, invalidateAgentsLoadCache, invalidateAgentCatalogsForReload, selectAgentsForDirectory, selectAgentCatalogStatus } = await import('@/stores/useAgentsStore');
 const { useProjectsStore } = await import('./useProjectsStore');
 const { useConfigStore } = await import('./useConfigStore');
 const DIRECTORY = '/workspace/project';
@@ -44,7 +44,7 @@ let deleteAgent: Mock<CanonicalClient['deleteAgent']>;
 let checkReady: Mock<CanonicalClient['checkReady']>;
 
 beforeEach(() => {
-  fetchSpy.mockReset().mockResolvedValue(Response.json({ data: [] }));
+  fetchSpy.mockReset().mockImplementation(async () => Response.json({ data: [], home: '/workspace', chatsRoot: '/workspace/chats' }));
   checkReady = spyOn(canonicalClient, 'checkReady').mockResolvedValue(true);
   useProjectsStore.setState({ projects: [{ id: 'project', path: DIRECTORY }], activeProjectId: 'project' });
   useAgentsStore.getState().resetForRuntimeSwitch();
@@ -391,4 +391,22 @@ describe('agent catalog startup recovery', () => {
     expect(getAgents).toHaveBeenCalledTimes(1);
     expect(agents()).toEqual([]);
   });
+
+  for (const joined of [false, true]) {
+    test(`configuration reload discards the retired response and lets a joined caller use the replacement (joined=${joined})`, async () => {
+      await settleProjectDirectory();
+      const held = deferred<AgentCatalog>();
+      getAgents.mockImplementationOnce(() => held.promise).mockResolvedValue(catalog([agent('replacement')], '2'));
+      const old = useAgentsStore.getState().loadAgents(DIRECTORY);
+      const waiter = joined ? useAgentsStore.getState().loadAgents(DIRECTORY) : null;
+      await waitFor(() => getAgents.mock.calls.length === 1);
+      invalidateAgentCatalogsForReload();
+      expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(true);
+      held.resolve(catalog([agent('retired')], '1'));
+      expect(await old).toBe(false);
+      if (waiter) expect(await waiter).toBe(true);
+      expect(agents()).toEqual([agent('replacement')]);
+      expect(getAgents).toHaveBeenCalledTimes(2);
+    });
+  }
 });

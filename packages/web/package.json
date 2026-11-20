@@ -3,16 +3,23 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
-  "main": "./server/index.js",
-  "types": "./server/index.d.ts",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Shizuku-Yume/ohpichamber.git",
-    "directory": "packages/web"
-  },
-  "homepage": "https://github.com/Shizuku-Yume/ohpichamber",
+  "main": "./build/server/index.js",
+  "types": "./build/server/index.d.ts",
   "bin": {
-    "ohpichamber": "./bin/cli.js"
+    "ohpichamber": "./build/bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./build/server/index.d.ts",
+      "openchamber-source": "./server/index.js",
+      "default": "./build/server/index.js"
+    },
+    "./server/*": {
+      "openchamber-source": "./server/*",
+      "default": "./build/server/*"
+    },
+    "./package.json": "./package.json",
+    "./scripts/standalone-loader.mjs": "./scripts/standalone-loader.mjs"
   },
   "publishConfig": {
     "access": "public"
@@ -22,20 +29,25 @@
   },
   "scripts": {
     "dev": "bun run build:watch",
-    "dev:server": "bun ../../scripts/build-builtin-extensions.mjs && OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
-    "dev:server:watch": "bun ../../scripts/build-builtin-extensions.mjs && node ./scripts/dev-server-watch.mjs",
-    "build": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build && node ./scripts/stage-changelog.mjs",
+    "dev:server:prepare": "bun run --cwd ../agent-contract build && bun run --cwd ../agent-service build",
+    "dev:server": "bun run dev:server:prepare && bun ../../scripts/build-builtin-extensions.mjs && OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
+    "dev:server:watch": "bun run dev:server:prepare && bun ../../scripts/build-builtin-extensions.mjs && node ./scripts/dev-server-watch.mjs",
+    "build": "bun run build:server && NODE_OPTIONS=--max-old-space-size=6144 vite build && node ./scripts/stage-changelog.mjs",
     "stage:changelog": "node ./scripts/stage-changelog.mjs",
     "build:diag": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build --config vite.diag.config.ts",
     "build:watch": "bun ../../scripts/build-builtin-extensions.mjs && vite build --watch",
-    "prepack": "node ./scripts/prepack.mjs",
-    "type-check": "bun check -b",
-    "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src",
+    "prepack": "bun run build:server && node ./scripts/prepack.mjs",
+    "type-check": "bun check -b && bun run type-check:server",
+    "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src && bun run lint:server",
     "test": "vitest run",
     "start": "node bin/cli.js serve",
     "postpack": "node ./scripts/postpack.mjs",
     "pack:standalone": "node ./scripts/pack-standalone.mjs",
-    "stage:runtime": "node ./scripts/prepare-agent-runtime.mjs"
+    "stage:runtime": "node ./scripts/prepare-agent-runtime.mjs",
+    "build:server": "bun ../../scripts/build-builtin-extensions.mjs && node scripts/build-server.mjs",
+    "type-check:server": "bun run --cwd ../agent-service build && node scripts/check-server-types.mjs",
+    "lint:server": "node scripts/check-server-types.mjs --lint",
+    "smoke:server-build": "node scripts/smoke-server-build.mjs"
   },
   "dependencies": {
     "7zip-bin": "5.2.0",
@@ -43,6 +55,7 @@
     "@gitbeaker/rest": "43.8.0",
     "@octokit/rest": "^22.0.1",
     "@simplewebauthn/server": "13.3.3",
+    "@vscode/ripgrep": "^1.18.0",
     "bun-pty": "0.6.0",
     "compression": "^1.8.1",
     "cron-parser": "^5.10.1",
@@ -108,21 +121,26 @@
     "tw-animate-css": "^1.3.8",
     "typescript": "~7.0.2",
     "vite": "^7.3.2",
-    "vite-plugin-pwa": "^1.0.3",
+    "vite-plugin-pwa": "^2.0.0",
     "vitest": "^4.1.4",
     "workbox-window": "^7.4.0",
     "zustand": "^5.0.8"
   },
   "files": [
     "dist",
-    "server",
-    "bin",
+    "build",
     "public",
+    "package.json",
+    "README.md",
     "resources/agent-runtime",
     "resources/changelog",
     "scripts/standalone-loader.mjs",
-    "package.json",
-    "README.md",
     "resources/standalone-sdk"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shizuku-Yume/ohpichamber.git",
+    "directory": "packages/web"
+  },
+  "homepage": "https://github.com/Shizuku-Yume/ohpichamber"
 }

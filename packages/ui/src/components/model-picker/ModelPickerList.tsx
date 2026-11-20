@@ -90,15 +90,10 @@ const hasTooltipMetadata = (metadata?: ModelMetadata) => {
  );
 };
 
-// The row sits inside the list's padding, so the card's offset from the row
-// has to clear that padding too, or the card covers the picker's edge.
-const ROW_TOOLTIP_OFFSET = 16;
+const ROW_TOOLTIP_OFFSET = 20;
 
-// Card width (max-w-xs) plus its offset from the row. Narrower room on both
-// sides means the card would land on top of the list it describes.
 const ROW_TOOLTIP_ROOM = 320 + ROW_TOOLTIP_OFFSET;
 
-/** The side with room for the details card, or null when neither side has it. */
 const pickRowTooltipSide = (row: Element | null): 'right' | 'left' | null => {
  if (!row) return null;
  const rect = row.getBoundingClientRect();
@@ -249,8 +244,6 @@ const ModelPickerRowHighlight: React.FC<{
  return <>{children(isHighlighted)}</>;
 });
 
-// The leading action's place in the keyboard list: it is highlighted and
-// chosen like a row, but it is not a model entry.
 const LEADING_ACTION_SLOT = 'leading-action';
 type NavigationItem = ModelPickerEntry | typeof LEADING_ACTION_SLOT;
 
@@ -618,13 +611,10 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
   useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
  );
 
- const allowedProviderSet = React.useMemo(() => {
-  // undefined = no restriction; [] = allow none. Treating empty like
-  // "unrestricted" would resurface providers without a login in pickers that
-  // intentionally pass the authenticated-only list.
-  if (!allowedProviderIds) return null;
-  return new Set(allowedProviderIds);
- }, [allowedProviderIds]);
+  const allowedProviderSet = React.useMemo(() => {
+    if (!allowedProviderIds) return null;
+    return new Set(allowedProviderIds);
+  }, [allowedProviderIds]);
 
  const providerById = React.useMemo(() => new Map(providers.map((provider) => [provider.providerId, provider])), [providers]);
 

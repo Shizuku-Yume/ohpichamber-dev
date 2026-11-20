@@ -15,22 +15,12 @@ export type StreamingTailEntry =
     | { kind: 'turn'; key: string; turn: TurnRecord; isLastTurn: boolean };
 
 type BuildLiveStreamingEntryOptions = {
-    // Live parts for EVERY message of the streaming tail, not only the one
-    // currently streaming: when the stream moves to the next step message, the
-    // previous message's base record can still lag behind the part store, and
-    // rendering it from that stale snapshot briefly drops its completed tool
-    // parts — remounting them (and replaying their reveal animation) once the
-    // record catches up.
     livePartsByMessageId: Readonly<Record<string, Part[]>>;
     showTextJustificationActivity: boolean;
     showTurnChangedFiles: boolean;
     mergeHiddenUserTurns?: boolean;
 };
 
-// The record with its live parts, kept per record so an unchanged pair is the
-// same object on the next publish. The display normalizer memoizes by object
-// identity; a fresh spread every 100 ms publish normalized every assistant
-// message of the turn again, not only the one that streamed.
 const liveMessageByRecord = new WeakMap<ChatMessageEntry, { parts: Part[]; message: ChatMessageEntry }>();
 
 /**

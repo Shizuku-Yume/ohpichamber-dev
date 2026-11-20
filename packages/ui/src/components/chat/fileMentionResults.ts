@@ -12,10 +12,6 @@ export const tokenizeMentionQuery = (query: string): string[] =>
     .split(/\s+/)
     .filter(Boolean);
 
-/**
- * The opencode file search takes a single term, so multi-word queries send the
- * most selective (longest) token and the remaining tokens filter client-side.
- */
 export const mentionServerQuery = (query: string): string => {
   const tokens = tokenizeMentionQuery(query);
   if (tokens.length === 0) {
@@ -24,11 +20,6 @@ export const mentionServerQuery = (query: string): string => {
   return tokens.reduce((longest, token) => (token.length > longest.length ? token : longest));
 };
 
-/**
- * Names the server search a mention query needs: the same key means the same
- * results. Null when the query needs none (no directory, nothing typed, or a
- * space, which only a session title holds).
- */
 export const mentionSearchKey = (
   directory: string,
   query: string,
@@ -43,21 +34,11 @@ export const mentionSearchKey = (
 
 type MentionListState = 'rows' | 'loading' | 'empty';
 
-/**
- * Rows while there are any to show, even the last query's while the next one
- * searches; the one-line loading row only with nothing to show yet; "no
- * matches" only once the current query's search has settled.
- */
 export const mentionListState = (rowCount: number, pending: boolean): MentionListState => {
   if (rowCount > 0) return 'rows';
   return pending ? 'loading' : 'empty';
 };
 
-/**
- * Merge directory and file hits into one list ranked by match quality against
- * the full relative path. Multi-token queries require every token to appear
- * somewhere in the path, in any order.
- */
 export function rankFileMentionResults(
   files: ProjectFileSearchHit[],
   directories: ProjectFileSearchHit[],
@@ -95,4 +76,3 @@ export function filterStaleRecentFiles<T extends { path: string }>(
   }
   return files.filter((file) => !stalePaths.has(file.path));
 }
-

@@ -1,9 +1,5 @@
 import type { Session } from '@openchamber/agent-contract';
 
-/**
- * Select newly discovered native child sessions. A listing can race an archive
- * mutation; a globally known archived child must not be reintroduced as active.
- */
 export const selectNewChildSessions = (
   listed: readonly Session[],
   existingIds: ReadonlySet<string>,

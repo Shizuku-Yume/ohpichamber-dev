@@ -45,18 +45,9 @@ interface RevertedMessagesStripProps {
     directory?: string;
 }
 
-/**
- * A staged revert, as a top row of the composer. OpenCode v2 stages a revert:
- * the messages after the revert point are hidden and the agent's file changes
- * from those turns are rolled back. The next message drops them for good
- * (OpenCode commits the revert before admitting it), so the only decision left
- * here is Restore, which puts the messages and the files back. One reverted
- * message is its own row; several collapse into a count that expands in place.
- */
 export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React.memo(({ sessionId, directory }) => {
     const { t } = useI18n();
     const [restoring, setRestoring] = React.useState(false);
-    // The list opens for one revert point; a new revert starts collapsed.
     const [expandedFor, setExpandedFor] = React.useState<string | null>(null);
     const listId = React.useId();
     const revertedStateRef = React.useRef<RevertedMessageDockState>(EMPTY_REVERTED_MESSAGE_DOCK_STATE);
@@ -123,8 +114,6 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
     const expansionKey = `${revertedState.revertMessageID}:${items[0].id}`;
     const expanded = expandedFor === expansionKey;
 
-    // The header toggles the list, as the background commands header does;
-    // Restore stays on it, so the decision never hides behind the toggle.
     return (
         <div role="group" className="border-b border-edge" aria-label={t('chat.revertPopover.title')}>
             <div className="flex h-10 items-center gap-2 pl-3 pr-1.5">

@@ -80,6 +80,7 @@ function selectRecentSessions<T extends RecencyRecord>(sessions: T[], limit: num
   const ids = recentSessionIds(sessions, limit)
   return sessions.filter((session) => ids.has(session.sessionId))
 }
+
 function selectRecentSessionsWithAncestors<T extends RecencyRecord>(sessions: T[], limit: number): T[] {
   if (sessions.length <= limit) return sessions
   const keptIds = recentSessionIds(sessions, limit)

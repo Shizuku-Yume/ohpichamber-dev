@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 import { parseCssTimeMs } from './springs';
@@ -12,13 +13,10 @@ const prefersReducedMotion = (): boolean => (
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 );
 
-// Height reads the layout box: a popup opens with a scale transform, and its
-// scaled bounding box would make the first change start from the wrong size.
 const measure = (element: HTMLElement, axis: MorphAxis): number => (
   axis === 'width' ? element.getBoundingClientRect().width : element.offsetHeight
 );
 
-/** Starts easing `element` into its new size on every change of its content; returns the cleanup. */
 const watchSize = (element: HTMLElement, axis: MorphAxis): (() => void) => {
   if (typeof MutationObserver === 'undefined' || !('animate' in element)) return () => undefined;
   const morphingAttribute = `data-${axis}-morphing`;
@@ -33,9 +31,6 @@ const watchSize = (element: HTMLElement, axis: MorphAxis): (() => void) => {
     );
     animation.currentTime = currentTime;
     running = { animation, from, to };
-    // While it moves, the content does not fit the box: a truncating label
-    // would flash its ellipsis, a list would overflow it. The move clips
-    // instead (design-system.css), until it settles.
     element.setAttribute(morphingAttribute, '');
     const settle = () => {
       if (running === null || running.animation === animation) element.removeAttribute(morphingAttribute);
@@ -45,10 +40,6 @@ const watchSize = (element: HTMLElement, axis: MorphAxis): (() => void) => {
   };
 
   const onContentChange = () => {
-    // Until the first layout is reported, the size measured at mount is not
-    // one the user saw: a popup is the full height of its list until its
-    // positioner caps it, and a list that re-measured its rows in that window
-    // (the model picker's first open) eased the menu down from that height.
     if (!laidOut) {
       settledSize = measure(element, axis);
       return;
@@ -61,31 +52,21 @@ const watchSize = (element: HTMLElement, axis: MorphAxis): (() => void) => {
     const to = measure(element, axis);
     settledSize = to;
     const duration = parseCssTimeMs(readMotionVariable('--oc-motion-layout-duration'));
-    // A change that leaves the target where it was (a virtualized list
-    // mounting rows into the box as it grows) carries on with the same move
-    // instead of starting it over, which stalled the growth on every row.
     if (moving && Math.abs(moving.to - to) < 1 && elapsed < duration) {
       start(moving.from, to, duration, elapsed);
       return;
     }
-    // Nothing to show while hidden (zero size), when nothing moved, or for
-    // readers who asked for less motion.
     if (from <= 0 || Math.abs(from - to) < 1 || prefersReducedMotion() || duration <= 0) return;
     start(from, to, duration, 0);
   };
 
   const observer = new MutationObserver(onContentChange);
   observer.observe(element, { childList: true, subtree: true, characterData: true });
-  // The size a move starts from is the last one laid out, not the last one a
-  // content change left: a popup measured as it mounts is the full height of
-  // its list until its positioner caps it, and the first change after that
-  // (a hovered row) eased it from that stale height down to the real one.
   const sizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
     laidOut = true;
     if (running?.animation.playState !== 'running') settledSize = measure(element, axis);
   });
   sizes?.observe(element);
-  // Without a ResizeObserver there is no first layout to wait for.
   if (!sizes) laidOut = true;
   return () => {
     observer.disconnect();
@@ -95,7 +76,6 @@ const watchSize = (element: HTMLElement, axis: MorphAxis): (() => void) => {
   };
 };
 
-/** A stable callback that watches whichever element it was last given (null detaches); detaches on unmount. */
 const useSizeMorphAttach = (axis: MorphAxis): ((element: HTMLElement | null) => void) => {
   const attachedRef = React.useRef<{ element: HTMLElement; detach: () => void } | null>(null);
   const attach = React.useCallback((element: HTMLElement | null) => {
@@ -109,8 +89,6 @@ const useSizeMorphAttach = (axis: MorphAxis): ((element: HTMLElement | null) => 
 
 const useSizeMorph = (ref: React.RefObject<HTMLElement | null>, axis: MorphAxis): void => {
   const attach = useSizeMorphAttach(axis);
-  // The element can mount after the hook's owner (a picker shown only for
-  // some models), so each commit checks which element the ref holds now.
   React.useLayoutEffect(() => {
     attach(ref.current);
   });
@@ -126,9 +104,6 @@ const useSizeMorph = (ref: React.RefObject<HTMLElement | null>, axis: MorphAxis)
  */
 export const useHeightMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'height');
 
-/**
- * `useHeightMorph` as a callback ref, for a box that can mount without its
- * owner rendering (a menu popup that a portal mounts on open): the watch
- * starts when the node arrives, not at the owner's next commit.
- */
 export const useHeightMorphRef = (): ((element: HTMLElement | null) => void) => useSizeMorphAttach('height');
+
+export const useWidthMorph = (ref: React.RefObject<HTMLElement | null>): void => useSizeMorph(ref, 'width');

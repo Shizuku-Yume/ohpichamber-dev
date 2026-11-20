@@ -47,8 +47,6 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   const selectedIndexRef = React.useRef(0);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const { listRef, onKeyboardNavigate } = useAutocompleteSelectionScroll(selectedIndex, itemRefs);
-  // Skills of the directory the composer sends to (session directory, or the
-  // Chats root for a chat draft), not of the project the app was on last.
   const effectiveDirectory = useEffectiveDirectory();
   const skills = useSkillsStore((s) => selectAvailableSkillsForDirectory(s, effectiveDirectory));
   const skillsLoading = useSkillsStore((s) => s.isLoading);

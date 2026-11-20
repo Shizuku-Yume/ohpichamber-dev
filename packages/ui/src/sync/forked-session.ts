@@ -1,10 +1,5 @@
 import type { Session } from '@openchamber/agent-contract';
 
-/**
- * Hydrate an identity discovered after a fork command through the authoritative
- * Session insertion path. Forking has no synthetic canonical event variant;
- * callers supply identity and a native Host-projected Session read.
- */
 export type ForkedSessionDeps = {
   isKnown: (sessionId: string) => boolean;
   isCreatingLocally: (parentSessionId: string) => boolean;

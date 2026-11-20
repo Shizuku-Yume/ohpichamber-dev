@@ -18,53 +18,17 @@ import { WorkStatusPresenceProvider } from './presence';
 import { Icon } from '@/components/icon/Icon';
 
 type Props = {
- /** Null on a new-session draft: repository readouts still apply. */
- sessionId: string | null;
- directory: string | null;
- /** Managed Chats have no project repository, even if another project remains active. */
- repositoryEnabled?: boolean;
- /** Whether the panel should currently be shown. */
- visible: boolean;
- /**
-  * Inline only: the right slot keeps the card's column (see
-  * `components/layout/rightSlot.ts`). True while the context panel covers
-  * the card too, so closing the panel goes straight back to the card.
-  */
- reserved?: boolean;
- /**
-  * Inline only: with `reserved`, the card keeps its column beside the open
-  * context panel instead of the panel replacing it.
-  */
- besidePanel?: boolean;
- /**
-  * Floats over the transcript instead of sitting beside it, for when the chat
-  * is too narrow to give it a column of its own.
-  */
- overlay?: boolean;
+  sessionId: string | null;
+  directory: string | null;
+  repositoryEnabled?: boolean;
+  visible: boolean;
+  reserved?: boolean;
+  besidePanel?: boolean;
+  overlay?: boolean;
 };
 
-/**
- * The inline card lives in the right slot with the context panel, and the
- * slot animates the width (`components/layout/rightSlot.ts`): the card itself
- * keeps its width and only fades, on the slot's duration and curve, while the
- * context panel fades in over it. The overlay fades and lifts.
- */
 const PANEL_TRANSITION_EASING = LAYOUT_ANIMATION_EASING;
 
-/**
- * Work-status panel: a card inside the chat column reporting the state of the
- * session, its branch and its subagents.
- *
- * Sections follow the user's saved order. Each section renders
- * nothing when it has nothing, so the panel collapses toward the top instead of
- * reserving empty space.
- *
- * The card clips; the scroller lives inside it, so the same top/bottom scroll
- * shadows the transcript uses stay within the rounded border instead of
- * bleeding past it. The scrollbar itself is hidden — at this width it would
- * eat a visible slice of every row's trailing value, and the shadows already
- * say there is more to see.
- */
 export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible, reserved = false, besidePanel = false, repositoryEnabled = true, overlay = false }) => {
  const { t } = useI18n();
  // The card's fade and lift follow the side columns' animation setting.

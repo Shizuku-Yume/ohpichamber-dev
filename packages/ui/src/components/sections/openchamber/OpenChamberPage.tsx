@@ -34,7 +34,6 @@ const useRuntimeEndpointEpoch = (): number => {
 };
 
 interface OpenChamberPageProps {
-    /** Which section to display. */
     section: OpenChamberSection;
 }
 
@@ -42,7 +41,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     const { t } = useI18n();
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
 
-    // Show specific section content
     const renderSectionContent = () => {
         switch (section) {
             case 'general':
@@ -116,12 +114,9 @@ const ShortcutsSectionContent: React.FC = () => {
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
     const isLocalDesktop = isDesktopShell() && isDesktopLocalOriginActive();
-    // Passkeys only work against the browser's WebAuthn UI on the web surface —
-    // desktop shell and the Capacitor app never show the login screen.
     const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isCapacitorApp();
     return (
         <>
-            {/* Remote hosts too: the Dock badge works there. */}
             {isDesktopShell() && <DesktopAppSettings />}
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
@@ -135,7 +130,6 @@ const GeneralSectionContent: React.FC = () => {
     );
 };
 
-// Visual section: Theme Mode, Font Size, Spacing, Input Bar Offset (mobile), Nav Rail
 const VisualSectionContent: React.FC = () => {
     return <OpenChamberVisualSettings visibleSettings={[
         'theme',
@@ -161,11 +155,10 @@ const ChatSectionContent: React.FC = () => {
     return <ChatSettings />;
 };
 
-// Sessions section: Default model & agent, Session retention
 const SessionsSectionContent: React.FC<{ runtimeEndpointEpoch: number }> = ({ runtimeEndpointEpoch }) => {
     return (
         <>
-            <DefaultsSettings key={runtimeEndpointEpoch} />
+            <DefaultsSettings key={`defaults-${runtimeEndpointEpoch}`} />
             <SessionWorkSettings />
             <SessionRetentionSettings />
             <MergedWorktreeCleanupSettings />
@@ -173,17 +166,14 @@ const SessionsSectionContent: React.FC<{ runtimeEndpointEpoch: number }> = ({ ru
     );
 };
 
-// Git section: Commit message model, Worktree settings
 const GitSectionContent: React.FC = () => {
     return <GitSettings />;
 };
 
-// Notifications section: Native browser notifications
 const NotificationSectionContent: React.FC = () => {
     return <NotificationSettings />;
 };
 
-// Voice section: Language selection and continuous mode
 const VoiceSectionContent: React.FC = () => {
     return <VoiceSettings />;
 };

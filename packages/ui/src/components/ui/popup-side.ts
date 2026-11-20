@@ -10,14 +10,8 @@
 
 type PopupSide = 'top' | 'bottom';
 
-/** Room on the preferred side, in px, below which the popup opens on the other side. */
 const MIN_ROOM = 240;
 
-/**
- * The preferred side, unless it has less than `MIN_ROOM` and the other side
- * has more. `bounds` is the area the popup is kept inside, already clipped to
- * the window.
- */
 export const choosePopupSide = (
     preferred: PopupSide,
     trigger: { top: number; bottom: number },

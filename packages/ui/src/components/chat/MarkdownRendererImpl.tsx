@@ -1,3 +1,4 @@
+import type { Theme } from '@/types/theme';
 import React from 'react';
 import { isInvisibleText } from '@/lib/invisibleText';
 import { useEmojiShortcodes } from '@/lib/emoji/shortcodes';
@@ -60,6 +61,8 @@ import { splitFrontmatter } from './markdown/frontmatter';
 import { FrontmatterProperties } from './markdown/FrontmatterProperties';
 import { isBareVideoUrl, markdownMediaCopySource, markdownMediaFilename } from './markdown/markdownVideo';
 import type { RepositoryLinkContext } from '@/lib/source-control/repositoryLinks';
+import { guestLinksVersion, useGuestLinkRules, type GuestLinkRule } from '@/lib/guests/links';
+import { remarkGuestLinks } from './markdown/remarkGuestLinks';
 
 export type MarkdownVariant = 'assistant' | 'tool' | 'reasoning';
 
@@ -151,7 +154,7 @@ const components: Components = {
   video: ExportSafeVideo,
   p: MarkdownBodyParagraph,
   strong: ({ node: _node, ...props }) => <strong {...props} />,
-  li: ({ node: _node, ...props }) => <li {...props} dir="auto" />,
+  li: ({ node: _node, ...props }) => <li dir="auto" {...props} />,
   blockquote: MarkdownBlockquote,
   summary: ({ node: _node, children, ...props }) => (
     <summary {...props}>
@@ -167,12 +170,7 @@ const renderers = [
 ];
 const linkSafety = { enabled: false };
 const remend: StreamdownProps['remend'] = { linkMode: 'text-only', singleTilde: false };
-// Static mode renders the document whole and never reads the block split, but
-// Streamdown still computes it, running the marked lexer over the full text.
 const wholeDocument = (markdown: string) => [markdown];
-// Read once, when a block mounts. The value lives in a ref the provider keeps
-// for its lifetime: a context value that changed with every streamed update
-// re-rendered every block of the reply on each update.
 type BlockArrival = { active: boolean; firstNewIndex: number };
 const BlockArrivalContext = React.createContext<React.RefObject<BlockArrival>>({ current: { active: false, firstNewIndex: 0 } });
 type ArrivalStyle = React.CSSProperties & { '--oc-md-enter-delay': string };
@@ -180,11 +178,6 @@ const arrivalDelayStyle = (delay: number): ArrivalStyle => ({ '--oc-md-enter-del
 
 const MarkdownArrivalBlock = React.memo(function MarkdownArrivalBlock(props: BlockProps) {
   const arrivalRef = React.useContext(BlockArrivalContext);
-  // Only a block committed while the reply streams enters with the reveal; the
-  // first block and blocks present when the message mounted do not, so a full
-  // initial render does not shimmer. Several blocks committed in one update
-  // cascade by 55 ms each, at most four steps. The mount decision is kept
-  // across stream settlement and parent updates.
   const [delay] = React.useState(() => {
     const arrival = arrivalRef.current;
     return arrival.active && props.index > 0 && props.index >= arrival.firstNewIndex
@@ -280,6 +273,7 @@ export interface MarkdownContentProps {
   mermaidControls?: MermaidControls;
   allowMermaidWheelEvents?: boolean;
   purpose?: 'copy' | 'image';
+  theme?: Theme;
   preparedHighlights?: ReadonlyMap<string, ReadonlyMap<string, HighlightResult>>;
   onExportCode?: (source: string, language: string) => void;
   /** `:tada:` reads as 🎉 with these names (`useEmojiShortcodes`); text keeps its shortcodes without them. */
@@ -287,9 +281,10 @@ export interface MarkdownContentProps {
   tableWidthScope?: string;
   windowed?: boolean;
   uiBlocks?: boolean;
+  svgFences?: boolean;
+  guestLinks?: readonly GuestLinkRule[] | null;
 }
 
-/** Shared screen/copy/image renderer. Streamdown owns the Markdown subtree. */
 export function MarkdownContent({
   content,
   variant = 'assistant',
@@ -311,23 +306,24 @@ export function MarkdownContent({
   mermaidControls = defaultMermaidControls,
   allowMermaidWheelEvents,
   purpose,
+  theme: exportTheme,
   preparedHighlights,
   onExportCode,
   emojiShortcodes,
   tableWidthScope,
   windowed = false,
   uiBlocks = true,
+  svgFences = false,
+  guestLinks = null,
 }: MarkdownContentProps) {
   const themeSystem = useOptionalThemeSystem();
-  const theme = themeSystem?.currentTheme ?? getDefaultTheme(
+  const theme = exportTheme ?? themeSystem?.currentTheme ?? getDefaultTheme(
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
   );
   const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
   const codeWrap = useUIStore((state) => state.codeBlockLineWrap);
   const tableWrap = useUIStore((state) => state.tableCellWrap);
   const container = React.useRef<HTMLDivElement>(null);
-  // Null until the first commit: blocks in the first render were not committed
-  // by the stream, they were already there when the message mounted.
   const committedBlockCount = React.useRef<number | null>(null);
   const blockWindow = React.useMemo(() => (windowed ? new MarkdownWindow() : null), [windowed]);
   React.useLayoutEffect(() => {
@@ -419,13 +415,15 @@ export function MarkdownContent({
     return createMarkdownCodePlugin({ purpose, prepared: preparedHighlights, resolvePaths });
   }, [purpose, preparedHighlights, fileReferences, directory, confirmFile]);
   const plugins = React.useMemo(() => ({ code, math: markdownMath, cjk: getMarkdownCjk(singleTilde), renderers }), [code, singleTilde]);
+  const activeGuestLinks = guestLinks && guestLinks.length > 0 && !purpose ? guestLinks : null;
   const processing = React.useMemo(() => {
     const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde, variant === 'reasoning');
     const extra: Pluggable[] = [];
     if (activeEmojiShortcodes) extra.push([remarkEmojiShortcodes, activeEmojiShortcodes]);
+    if (activeGuestLinks) extra.push([remarkGuestLinks, activeGuestLinks]);
     if (extra.length === 0) return base;
     return { ...base, remarkPlugins: [...(base.remarkPlugins ?? []), ...extra] };
-  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes]);
+  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes, activeGuestLinks]);
   const presentation = React.useMemo(() => ({
     directory,
     fileReferences,
@@ -433,9 +431,9 @@ export function MarkdownContent({
     loopbackPreview,
     settled,
     purpose,
-    // Only an assistant reply on screen draws UI blocks; copies and image
-    // exports keep the block's source.
-    uiBlocks: uiBlocks && !purpose,
+    uiBlocks: uiBlocks && purpose !== 'copy',
+    svgFences: svgFences && !purpose,
+    guestLinks: activeGuestLinks,
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
     tableWidthScope,
@@ -444,11 +442,12 @@ export function MarkdownContent({
     allowMermaidWheelEvents,
     onShowPopup,
     onExportCode,
+    preparedHighlights,
     confirmFile,
     code,
   }), [
-    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, sessionId, messageId, disableLinkSafety, tableWidthScope, theme,
-    mermaidControls, allowMermaidWheelEvents, onShowPopup, onExportCode, confirmFile, code,
+    directory, fileReferences, fileNavigation, loopbackPreview, settled, purpose, uiBlocks, svgFences, activeGuestLinks, sessionId, messageId, disableLinkSafety, tableWidthScope, theme,
+    mermaidControls, allowMermaidWheelEvents, onShowPopup, onExportCode, preparedHighlights, confirmFile, code,
   ]);
 
   let body = (
@@ -475,6 +474,7 @@ export function MarkdownContent({
       data-oc-directory={directory}
       data-oc-runtime={runtimeKey}
       data-oc-file-references={fileReferences ? 'enabled' : 'disabled'}
+      data-oc-guest-links={activeGuestLinks ? guestLinksVersion(activeGuestLinks) : undefined}
       data-code-wrap={codeWrap ? 'true' : 'false'}
       data-table-wrap={tableWrap ? 'true' : 'false'}
       className="min-w-0 space-y-0"
@@ -543,6 +543,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   enableFileReferences = true,
 }: MarkdownRendererProps) {
   const directory = useEffectiveDirectory() ?? '';
+  const guestLinks = useGuestLinkRules();
   // Canonical parts carry no per-part completion time: the message's streaming
   // flag is the settled signal, and a part whose text already equals `content`
   // is the one this render settled for.
@@ -576,6 +577,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       enableFileReferences={enableFileReferences}
       loopbackPreview
       uiBlocks={variant === 'assistant'}
+      guestLinks={guestLinks}
     />
   );
 
@@ -592,7 +594,6 @@ export interface SimpleMarkdownRendererProps extends Omit<
   'directory' | 'mode' | 'mediaMode' | 'isStreaming' | 'settled' | 'purpose' | 'preparedHighlights' | 'onExportCode'
 > {
   frontmatter?: 'hide' | 'properties';
-  /** The folder links and media resolve against; the effective directory when absent. */
   directory?: string | null;
 }
 

@@ -17,14 +17,6 @@ import {
 import { getApprovalPresentation } from './permissionPresentation';
 import { usePermissionFromSubagent, usePermissionResponse } from './usePermissionResponse';
 
-/**
- * The agent's native approval requests, docked above the composer in the same
- * frame as the form dock. Every pending request for the composer's session
- * (including its subagents') is a step in the header, one dot per request with
- * the current one solid, so a batch raised together reads as one panel to walk
- * through rather than a stack of cards. The dock answers one request at a time;
- * once it is answered the next one takes its place.
- */
 
 interface PermissionDockProps {
     sessionId: string | null;
@@ -127,7 +119,6 @@ const PermissionDockRequest: React.FC<{
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={6}>{collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}</TooltipContent>
                 </Tooltip>
-                {/* One dot per pending request, the current one solid. */}
                 {!collapsed && permissions.length > 1 ? (
                     <div className="flex shrink-0 items-center gap-1" role="tablist">
                         {permissions.map((entry, index) => {
@@ -181,5 +172,4 @@ const PermissionDockRequest: React.FC<{
     );
 };
 
-/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
 export const PermissionDock = React.memo(PermissionDockView);

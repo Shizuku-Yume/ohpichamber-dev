@@ -52,6 +52,17 @@ describe('completed-turn changed files', () => {
 });
 
 describe('message render comparison', () => {
+  test('re-renders when compaction model attribution arrives or changes', () => {
+    const before = { ...running };
+    const after = { ...before, providerId: 'p', modelId: 'm' };
+    const changed = { ...after, providerId: 'other', modelId: 'm' };
+    const changedID = { ...after, providerId: 'p', modelId: 'other' };
+    expect(areRenderRelevantMessagesEqual({ info: before, parts: [] }, { info: after, parts: [] })).toBe(false);
+    expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: changed, parts: [] })).toBe(false);
+    expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: changedID, parts: [] })).toBe(false);
+    expect(areRenderRelevantMessagesEqual({ info: after, parts: [] }, { info: { ...after }, parts: [] })).toBe(true);
+  });
+
   const running: Message = {
     messageId: 'msg_1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 1,
     parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far' }],

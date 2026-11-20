@@ -93,7 +93,7 @@ describe('macOS startup service', () => {
     }
   });
 
-  it('leaves what OpenChamber put into the enabling shell out of the service environment', () => {
+  it('leaves what OhPiChamber put into the enabling shell out of the service environment', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-startup-'));
     const platform = Object.getOwnPropertyDescriptor(process, 'platform');
     const plistPath = path.join(home, 'Library', 'LaunchAgents', 'dev.ohpichamber.web.plist');

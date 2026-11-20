@@ -4,6 +4,642 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+The v2.7.3 web/Electron drift follow-up restores the shared UI's successful
+`no-favicon-found` discovery response: non-OK responses otherwise become an error
+toast. The three remaining runtime gaps now use Host/OMP owners: opt-in
+`openchamber_usage` reads selected native quota credentials; track/done use
+Canonical root eligibility, Host metadata/archive state and worktree pins; the
+turn-end activity probe reads Canonical shell snapshots and live subagents.
+Focused Web coverage passes 588 tests in 51 files, Agent Service Host tool/policy
+coverage passes 38 tests in 5 files, Agent Service build and server lint pass,
+and the gap audit reports zero unallowlisted gaps after removing three obsolete
+allowlist rows for the restored dependencies. Activity read failures
+remain unknown; non-shell native async work without a Canonical job/subagent
+surface is not observed. No visual or live-provider verification is claimed.
+Accepted unrelated UI type/declaration failures remain untouched.
+
+PR #68 integration merges `origin/devin/upstream-sync-1795118808` at `a7aee9947`
+without replacing either feature set. The only conflict was this progress
+record; both the secret/Guest evidence and upstream test-repair entry remain.
+Contract/service/SDK builds pass on the combined tree. Nine focused web suites
+pass 169 tests; supervisor/tool/interaction suites pass 36 and both actual SDK
+secret approval cases pass. Nine isolated UI suites pass 100 tests, including
+the incoming mobile rename, PR target and attachment repairs. Server lint and
+server/service/UI type checks pass. Evidence: `/home/ubuntu/secret-merge-checks/`.
+These are focused tests, not a full-suite or visual verification claim.
+
+PR #68 review: secret-run card parsing now accepts the native `{ action, input }`
+envelope preserved by worker projection and the canonical tool join, alongside
+upstream forms. Canonical-join regressions include malformed native arguments.
+Parser and card suites pass 15 tests; full UI lint exits 0 (unchanged-file hook
+warnings), and UI type-check passes 4,234 files across two projects. Evidence:
+`/home/ubuntu/secret-review-checks/`. Visual verification remains unclaimed.
+
+The same review exposed a two-minute IPC deadline covering both secret entry
+and command execution despite the Host's five-minute command budget. Both IPC
+ends now share a private-protocol deadline policy: only `secret.run` waits for
+completion or cancellation without a transport timer. Host execution retains
+its bounded command timeout; abort, disconnect and shutdown still cancel the
+action. Other actions retain two minutes and authorization retains five
+seconds. Supervisor/tool suites pass 16 tests; four focused Host/control suites
+pass 57 tests, including three minutes of real secret collection followed by
+five minutes of simulated execution, cancellation and unchanged ordinary-action
+deadlines. Contract/service/SDK builds, server/service lint and both type checks
+pass. Evidence: `/home/ubuntu/secret-review-checks/`. The long-duration tests use
+fake clocks and the Host integration injects the command runner; this is not a
+real-provider or elapsed-eight-minute runtime claim.
+
+Secret-tool Step A restores v2.7.3 memory-only command execution behind the
+authenticated worker Host action and exact-command Canonical Bash receipt.
+Public control cannot authorize it; file-mode requests refuse. Secret answers
+stay in Host memory and child environments, with ten-minute session leases and
+redacted results. Focused Host/Guest tests (91), worker tool/interaction tests
+(30), and native SDK approval/persistence tests pass, including cancellation of
+a child process tree and absence of submitted values in SDK session files,
+Canonical projections, provider requests and wait events. Contract/service/SDK
+builds, server/service lint and both server/service type checks pass. The
+environment required a frozen-lockfile dependency repair before these checks.
+Guest Step B now mounts the private service Host callback route from runtime
+composition and unregisters it after Guest shutdown. The Guest owner translates
+abort and approval/question replies through Canonical operations using current
+snapshot identities and CAS, without restoring OpenCode runtime methods. Private
+settings use auth-store, instructions retain their file owner, marks reuse the
+singleton, and configuration notes invalidate the catalog. Service events now
+reach the existing Guest frame subscriber through the validated UI broadcast
+parser. Real callback-listener HTTP tests use a Host-spawned service's bearer
+and exercise every callback, empty/stale/error cases, revocation, disposal and
+private-value log exclusion. Seven focused web suites pass 93 tests; the UI event
+suite passes 29 tests. Contract/service/SDK builds, server lint and server type
+check pass. The UI event suite emits filesystem/identity request warnings from
+its existing boot-side-effect tests and partial HTTP fixtures; it has no failed
+tests. Evidence: `/home/ubuntu/secret-step-b-checks/`.
+
+Secret-tool Step C restores the upstream multi-field command card on canonical
+tool views. Authenticated, uncached Host field lookup selects requested inputs
+and remembered-field labels; failures are visible and retry. Answers carry only
+session/call identity, requested values and remembered field names, or decline.
+Inputs stay in component memory and disappear after answer, expiry, unmount or
+runtime switching. Errors never display response bodies; file-mode requests
+show only a localized refusal. All 15 locales include refusal and recovery copy.
+Shared web/PWA, Electron, hosted mobile and Capacitor use their connected Host;
+mobile does not execute commands locally. Five focused UI suites pass 48 tests
+(card interactions, canonical parsing, Host transport, locale completeness and
+existing runtime-fetch coverage). Contract/service/SDK builds pass. Full UI
+lint exits 0 with 97 hook-dependency warnings in unchanged files; no changed-file
+diagnostics. Full UI type-check passes 4,234 files across two projects. Evidence:
+`/home/ubuntu/secret-step-c-checks/`. No visual verification or real-provider run
+is claimed.
+
+2026-11-21 upstream-sync test repair: mobile Changes now keeps rename paths in
+comparison rows, shows the destination basename in detail, forwards the previous
+path for working-tree reads and renders unchanged-rename summaries. Retired
+VS Code PR-opening and PDF-webview assertions were removed or replaced with
+retained behavior; the settings registry fixture now includes the supported
+terminal-tool toggle. The isolated CI tests job passes SDK (36 files), UI (1,407
+files), agent-contract (274 tests), Electron (80 files) and Web (615 files,
+9 skipped; 9,768 tests, 127 skipped). Scripts remain 35/38 because of the known
+PIDFD environment limitation. The native RPC three-turn goal test also fails on
+`origin/main` (`8de18dc0b`): after the first native `agent_end`, the Host suggestion
+driver sends an ephemeral composer-prediction request with the same tool catalog.
+That request advances the fixture's foreground counter, causing completion in the
+second goal run. The fixture now disables its session-local `suggestion.generator`
+without changing the three-run assertion or production behavior. Five isolated
+runs pass; the full Agent Service suite passes 683 tests with 12 skipped and zero
+failures. Trace evidence is in `/home/ubuntu/ci-logs/final-goal-trace.log`; suite
+evidence is in `final-agent-suite.log` in the same directory. No message-queue UI
+failure reproduced.
+The Git smudge-filter boundary test failed intermittently on an execution marker,
+then passed alone, with all 205 network-operation tests and in the full Web run;
+no Git security assertion or implementation was changed. `bun run build` exits 0.
+Runs use fresh isolated HOME, data, desktop-data and TMPDIR directories. UI is
+DOM-tested but visually unverified. Secret tooling and Guest service wiring are
+outside this test-repair branch.
+
+2026-11-21 upstream-sync audit reconciliation remains partial after merging PR
+branch `67aedc75e` (including UI state/infra, extension waits and shared/later pages). Earlier stages
+removed 113 stale gap exceptions and reconciled all 260 contradicted ledger
+rows. The continuation restores authenticated browser uploads from the captured
+session directory, the mobile Return-key control and worktree-create search/tab
+mapping, forwarded-client tunnel scoping, and managed chat cleanup subscriptions
+with shutdown detachment. It removes the unused workflow auto-approval field and
+sanitizer. A further composition pass restores repository notes/todos switching
+and exports its file resolver; paired-client bearer authentication, session
+context snapshots, push clearing and visibility now reach their retained owners.
+Scanner regressions cover typed calls, spread properties, same-file
+callers and dependency comparisons scoped to matching source owners. Sixteen
+more stale exceptions were removed, and reviewed Host/native differences retain
+specific reasons rather than waiving missing features.
+
+Further batches restore Gemini classifier credential routes, opted-in terminal
+actions, browser-login sharing controls, profile-scoped terminal reading, durable
+bounded notification tags and session clearing, and Canonical tracker status
+fan-out. Worktree-move dependencies are captured after Git bridge registration;
+queue movement retains Canonical identity and directory-adoption ownership.
+Pinned worktrees no longer trigger automatic work classification. Render-page
+eligibility reads Host metadata and fails closed if that read fails; busy-session
+delivery uses a stable native steer admission. Quota cards now reload on the
+Host's actual extension-catalog invalidation, with a mounted-hook test covering
+normal, failed and empty reads, reconnect, unrelated events and unmount.
+
+The final root `bun run type-check` passes TypeScript (4,542 files / five
+projects), error-cause and CSS checks, but remains 3/5: drift reports 169
+unexplained paths and gaps report 669 detected / 661 allowlisted / 8
+unallowlisted. Scanner/drift tests pass 43/43; the quota hook test passes 1/1.
+Actual CI `bun run lint` exits 0, with warnings; the earlier six scoped-lint
+errors do not fail this gate. Extension waits and shared/received/later pages
+are present after the merges, not accepted omissions.
+
+Remaining gap reports cover pending chat input before a page wait, background
+activity probing, pinned-worktree eligibility for explicit work-state control,
+secret request/run construction, usage-read construction and the unmounted
+Guest service Host API (constructor and unused-function findings). The inherited
+claim that the Guest subsystem delegates to `createServiceHostApi` was false:
+the only production reference is its declaration, so both waivers were removed.
+The upstream secret-run module is 392 lines; Native secret tooling and Guest
+service callbacks need separately scoped implementation rather than a waiver.
+The remaining drift and dependency-parity reviews are not complete.
+
+`SessionSnapshotStateSchema` exists in source and is exported on main and the
+sync branch. Source development now builds agent-contract before agent-service
+to avoid stale package exports. The real Node Host with a separate Bun Agent
+Service reached `ready`, listened on loopback and returned health 200. Shutdown
+logged a worker warmup failure; a separate real native archive Git test passed
+1/1 with isolated HOME/data/userData/TMPDIR. This is source-boot evidence, not
+proof of the original live process's artifact state or platform acceptance.
+Evidence is under `/home/ubuntu/ci-logs/audit-*`. UI changes are visually
+unverified; full retained-platform acceptance is not claimed.
+
+2026-11-20 upstream-sync tooling: excluded the inherited OpenCode-only
+`scripts/verify` stand (absent on main) and the orphan `.github` policy test;
+no OpenCode runtime was restored. Kept the fixture-request regression under
+`scripts/perf` and forwarded its opt-in observation flag to the child process,
+fixing the missing `no-store` response. Regenerated SDK examples with the
+existing Bun bundler; six bundles changed, including embedded Zod 4.3.6 code
+rebuilt against the frozen lockfile's 4.6.7. Electron tests now select source
+exports for Node and Bun, with an absolute Node source-registration preload;
+packaged exports are unchanged. On Bun 1.4.4 / Node 24.22.2, the exact CI suite
+commands reported scripts 35/38 files (only the same three PIDFD suites failing
+on main), SDK 36/36 and Electron 80/80. No `packages/web/build` artifacts existed.
+Changed-tooling oxlint exited 0 without diagnostics. Logs:
+`/home/ubuntu/ci-logs/tooling-{scripts,sdk,electron}.log`. This is tooling
+verification only, not canonical behavior-harness or retained-platform
+acceptance; UI, Git managed-sync and audit reconciliation remain separate work.
+
+The macOS tester confirmed first-send for `/tmp` aliases, `/private/tmp`, Gemini
+and devin-swe-2; the reported blocking Web/macOS smoke bugs are closed. A known
+display-only composer model-label issue remains recorded in technical debt.
+Merge now requires full acceptance on Web/PWA, Android, iOS, Windows and macOS;
+local checks and the earlier smoke results do not establish that acceptance.
+The owner transferred testing and requested all test/build runs stop on
+2026-11-20. No further testing is owned by this implementation handoff.
+The comparison found remaining integration regressions outside the smoke paths.
+Main's 1,274 UI files pass; the latest branch run passes 1,363/1,405 UI files,
+with 42 failing files. That run was stopped during Agent Service testing.
+One verified cause is mixed URI branding: builders emit `ohpichamber://` but
+adopted parsers still recognize `openchamber://`. Session/pairing readers now
+use the fork scheme, and generic external-link handling blocks self links so
+Markdown cannot bypass the explicit session/extension-install allowlist.
+
+Focused link and branding checks pass: session links (10), pairing payloads (9),
+Usage deep links (4), external URL policy (13), app-link interactions (6),
+composer citation language (26), pasted session IDs (9), session references (10),
+session mention rendering (3), logo generation (5), Android QR scan (9) and
+mobile reconnect/password/pairing (3). The Markdown suite now passes its
+self-link cases but retains three literal Windows-path/math failures also
+present in the pre-fix aggregate. UI type-check passes (4,229 files); focused
+lint passes. Native rendering was not visually checked for this batch.
+
+The scoped UI feature regression repair restores composer retargeting and fork
+attachment citations, literal Markdown Windows paths, shared diff counts, settings
+layout primitives and missing project search targets. ReferenceBrowser and
+Walkthrough fixtures now answer Git discovery/status reads; BehaviorPage and
+CodeMirror tests follow their current public contracts. The initial UI run passed
+1,371/1,405 files. Subsequent focused runs cover all repaired files; the final
+16-file batch and three files rechecked after final edits pass. Touched-file lint
+passes. UI type-check is blocked by `MarkdownDiffPreview.tsx:9` passing an object
+to a string argument; broad dead-code findings remain unresolved. No full-suite
+rerun or visual/platform acceptance is claimed.
+
+The gap audit now compares the pinned v2.7.3 revision rather than its historical
+v2.7.0 literal, follows TypeScript source behind JavaScript import specifiers,
+checks relocated settings sanitizers and composed store owners, and recognizes
+Electron consumers of public Host factories. Twenty Git-fixture regressions
+pass, including missing setters and imported-but-unmounted routes. Sanitizer
+ownership now excludes unrelated helpers and recognizes typed key arrays only
+when the sanitizer iterates them. The guard still fails honestly: 214
+unallowlisted findings, 113 stale rows and 12 stale owner citations need
+reconciliation; they are not runtime acceptance evidence.
+
+The completed origin/main comparison passes all 8,575 Web tests and all UI,
+SDK, Electron and Agent Service suites. Only three scripts tests fail on
+unavailable kernel PIDFD isolation. Integration-only Web/UI failures remain.
+Host settings now preserve question placement, packed-package tests use emitted
+settings modules, retry commands name the fork binary, and Node fixtures track
+current modules and retained scripts. The built-in extension builder initializes
+the Node source resolver before loading converted Host modules; its five build
+tests and real Bun entry pass. Strict server lint applies to new/upstream
+TypeScript, with only the committed typing-port list exempting non-null assertions.
+Six focused Host verification files pass 88 tests; the Node-entry file passes
+21 tests after removing two tests for retired scripts.
+
+Browser fixtures now install matching DOM constructors: 23 focused tests pass.
+Empty and heading-only plans open for editing. The combined plan/router/Node-entry
+run passes its 27 tests but fails overall on home initialization calling
+an unavailable persistence export. A speculative deferred import did not resolve
+that failure and was removed; home initialization behavior is unchanged.
+This failure is not dismissed as pre-existing. The UI changes are visually
+unverified. PR #60 also has all four actual CI jobs pending, while its Devin
+Review passed. PR #61's failed Review exposes no job ID, reviews or review
+comments through the PR API, so no actionable review text is available there.
+
+### Gate evidence at testing handoff (2026-11-20)
+
+The following results were captured for code head
+`b5afbb93df5cc78ec25510b8555cc380c76144b3` before the owner stopped testing.
+They are source/gate evidence, not platform acceptance. The `type-check` script
+is an alias for the complete root check; its nonzero exit includes drift/gaps.
+
+```text
+✓ No type errors in 4,539 files across 5 projects [3.18s]
+[error-cause] 0 baseline site(s) unchanged, every denial names its reason
+[css-classes] 2296 class tokens resolve to a rule, a utility or a marker
+[check] 3/5 steps passed
+[check] failed: upstream-drift (exit 1), upstream-gaps (exit 1)
+NATIVE_BROWSER_LINT_EXIT=0
+```
+
+Drift reports 260 ledger contradictions. Upstream-gaps reports 776 findings:
+562 allowlisted, 214 unallowlisted, 113 stale rows and 12 invalid owner citations.
+These failures are not waived. The completed main baseline passes six of seven
+suites; its three failing scripts files report `PIDFD_UNAVAILABLE`. The latest
+branch full run completed these sections before being stopped:
+
+| Suite | Recorded result |
+| --- | --- |
+| Scripts | 38/48 files pass; 10 fail, including retired verify-runner imports |
+| SDK | 35/36 files pass; shipped example bundles do not match current source |
+| UI | 1,363/1,405 files pass; 42 fail |
+| Agent Contract | 274 tests pass, zero fail |
+| Agent Service | Interrupted by owner instruction; no final verdict |
+| Electron / Web | Not reached in this run |
+
+The final focused plan/router run records six passing tests but exits 1 with
+two unhandled `updateDesktopSettings is not a function` errors at
+`useDirectoryStore.ts:161`. The initialization dependency is not resolved;
+no production-home workaround was retained. The earlier Node-entry file passes
+21 tests and the five browser-fixture files pass 23 tests.
+
+The last PR #61 snapshot has failed Devin Review with no job ID and four pending
+actual jobs. All three commit pages, reviews and review-comment streams were
+read; both review streams contain zero events. The one issue comment is a
+monitoring-bot control, not a review request. PR #60 has the same four actual
+jobs pending but its Review passes; the Review failure is not established as
+pre-existing. No runner policy was changed.
+
+Capacitor build/type-check and additional Windows checks were requested just
+before testing ownership transferred. No new such runs were started. Full
+Android/iOS/Windows/macOS acceptance remains with the owner and testers.
+Check waived for this documentation-only handoff: owner instruction to stop
+all test/gate runs, 2026-11-20. Existing logs are summarized here rather than
+committing machine-local scratch files or treating interrupted runs as passes.
+
+The error-cause and CSS guards pass after five retained UI error paths preserve
+their caught cause with `problemMessage`, file-artifact notices use the existing
+`typography-ui-label` token, and an unconsumed diff-toolbar class is removed.
+The header's archive action also treats timestamp zero as archived, as the
+Canonical contract and its existing regression require. Focused owner/helper
+tests pass 23 Bun and four Node tests; UI type-check passes 4,229 files. Full
+root lint exits 0 (existing hook-dependency warnings remain). These error and
+artifact typography changes have not been visually rechecked.
+
+DiffView's extracted comparison hooks now retain the fork parent's repository
+and binding authority checks: non-repositories make no binding request, and a
+board handoff cannot replay an obsolete account/revision after a rebind. The
+three failing PR-diff cases pass without changing their tests. DiffView and
+binding suites pass 26 tests; UI type-check and focused lint pass. Full root
+lint also exits 0. The root check's type step passes (4,539 files, five projects),
+but drift and upstream-gaps remain failing; full suite/baseline
+acceptance is not complete. DiffView rendering was not visually rechecked.
+
+The initial-draft selection failure is reproduced on Linux with a scratch Git
+project reached through a symlink. Host settings canonicalize its path, but Add
+project returned the original entry to the dialog, which opened a draft against
+the alias. The first create/run succeeds and the transcript persists; session
+admission then clears the unrecognized alias selection and the composer returns
+to Choose project. The non-alias control keeps its selection, so startup 503s
+and a delayed prepare alone do not explain the failure. The supplied macOS
+capture does not include the settings/path normalization response, so that
+platform's alias or casing difference remains to be verified. Project additions
+now consume the existing settings acknowledgement, including its canonical active
+project ID, before publishing the returned draft target. This is shared by Web/PWA,
+Electron, hosted mobile and Capacitor through their existing Host settings
+transport; Guest MessagePort and Canonical delivery contracts are unchanged.
+The focused persistence, project, draft-promotion, creation and sidebar-selection
+suites pass 119 tests; UI type-check and focused lint pass. A fresh native OMP
+run through the alias, with startup readiness 503 and 20 seconds between Add
+project and Send, keeps session `7197f88d-19d9-4605-8343-d56a1e376c57` selected
+through the completed fixture response. History returns the exact prompt and
+5,742 assistant characters. Before/after evidence lives in
+`/home/ubuntu/sync-notes/initial-send-native-8oaZJC/{add,send}.png` and
+`/home/ubuntu/sync-notes/initial-send-native-2Gy1OQ/{add,send,completed}.png`;
+the latter directory also contains `post-send-evidence.json`. This is Linux
+Web/Host/OMP verification, not macOS packaged-app or real-provider certification.
+
+Desktop update checks now reject missing GitHub releases, missing manifests and
+network failures instead of reporting that the installed version is current.
+The existing error formatter exposes the failed check; downloaded pending
+updates survive failures and authoritative no-update responses still clear them.
+This intentionally changes the first-release behavior recorded on 2026-11-19.
+Updater tests pass 16/16 and renderer error tests pass 4/4 (7 assertions).
+A rebuilt Linux x64 AppImage exercised the real bundled UI's Check for Updates
+action against the production feed and visibly rendered "Failed to check for
+updates / Couldn't check for updates: No published versions on GitHub", without
+the latest-version message. Evidence:
+`/home/ubuntu/sync-notes/bundled-auth-check-Cw2Wmt/bundled-ui.png` and
+`/home/ubuntu/sync-notes/updater-honest-appimage-smoke.log`.
+No installer/restart behavior changed or was certified by this check. The native
+Automatic Updates checkbox is present in both platform menus, as on main #59;
+it is intentionally hidden outside Applications on macOS and on unsupported
+Linux installations. Main #59 did not add a shared Settings/registry/search
+entry; the maintainer confirmed menu-only parity is sufficient.
+
+PR #61 CI remains non-authoritative pending fork runner availability: its four
+Blacksmith jobs are pending, as are all four jobs on already-merged PR #60
+(lint 135977137432, type-check 135977137371, build 135977137299,
+tests 135977136995). Main head reports zero checks. The workflow is identical
+to main; runner policy stays unchanged. The maintainer accepted this as a
+pre-existing fork CI condition and directed local gates to be authoritative.
+Fresh full lint passes in all workspaces with existing React-hook warnings.
+Remaining local guard findings are stale drift/gap ledgers. The macOS first-send report is no longer
+parked; its Host-normalization fix has Linux real-path evidence above and still
+needs the tester's packaged-app confirmation.
+
+The desktop authentication smoke investigation reproduced two separate bundled
+UI failures in the unchanged AppImage: the renderer sees `/auth/session` 401
+with its issued desktop credential, and Local probe returns incompatible for
+Host version 1.0.0 despite compatible API version 1 and runtime-url capability.
+The passwordless status handler lost the fork parent's registered-client check
+when ported to TypeScript and tested the opaque client token as a JWT instead.
+The desktop probe independently retained an obsolete OpenCode-era app-major
+gate. The fixes validate opaque credentials with the existing client owner and
+judge Host compatibility by the existing explicit protocol/capability handshake;
+they do not weaken revoked-token rejection or add an API or agent fallback.
+Surface policy: Web/PWA, Electron, hosted mobile and Capacitor all share the
+corrected Host credential check; Electron alone uses the repaired native probe.
+Guest MessagePort auth is unchanged. Desktop bootstrap/probe regression tests
+pass 40/40; Host authentication tests pass 17/17 and the authenticated real
+Canonical boundary passes 25/25. The null-response assertion now checks the
+TypeError contract, not Node-specific wording that differs under Bun/JSC.
+The full Linux AppImage build passes, including the 712-module Host closure
+and the verified 123-package OMP 19 payload. A new isolated headless run renders
+the bundled UI, gets HTTP 200 for both the real no-bearer control and the
+desktop bearer (`scope: client`), reports Local probe `ok`, observes native
+readiness and confirms the Unlock surface is absent. Screenshot:
+`/home/ubuntu/sync-notes/bundled-auth-check-lJIwtB/bundled-ui.png`.
+The no-header request inside Chromium is not an anonymous control: Electron
+injects its credential there too, so the helper uses independent Node fetch
+for that control. macOS itself remains unverified.
+Compilation passes for 4,538 files across five projects, but the root command
+still fails drift, error-cause, CSS and upstream-gaps (1/5 steps pass). Focused
+lint still flags the pre-existing unused `handlePasskeyRename` in the touched
+Auth owner; its declaration is unchanged from the merge parent and belongs
+with the outstanding Host lint/route repairs. Initial-draft first send and
+the updater controls/error-state reports remain the next priority.
+
+The sync branch now real-merges fork main `8de18dc0bc`, including the OMP 19
+integration and desktop runtime/update fixes from PRs 56–60. The entire vendor
+tree matches that main commit. All 75 native manifest pins and 35 native lock
+entries match main: the six registry native leaves are exactly 19.0.0;
+fastembed retains ONNX 1.21.0 beside the service's 1.26.0, and Chromium retains
+Zod 3.25.76 beside the app/Canonical service's adopted Zod 4.6.7. The package
+audit scans all 24 manifests; its detailed receipt is
+`/home/ubuntu/sync-notes/main19-pin-audit.tsv`. Native patches match main;
+app-only patches retain the adopted upstream versions.
+
+The rebuilt Linux payload contains OMP 19.0.0 and native leaf 19.0.0, passes
+checksum/import verification and reaches native readiness (123 packages).
+Forty-nine desktop runtime/update tests pass, including a new regression for
+duplicate package names at different manifest paths and a genuine version
+mismatch. All five-project compiler checks, Agent Service types, Electron and
+mobile checking pass. The server build still verifies all 712 runtime outputs.
+Merge repairs remove obsolete blocked-todo UI fields, migrate two newly merged
+policy tests to the extracted project-directory owner and derive the profile
+fixture directory through the SDK instead of assuming an ambient config root.
+The broad contract/service run passed 943 tests and skipped 12 but exposed those
+three fixture/collection failures; their affected owners pass focused checks.
+Mixed UI tests also require the existing isolated-process runner because the
+Markdown fixture replaces the UI store; the Tasks suite passes alone (3 tests).
+Changed-source lint passes. Full root guards remain red and are not certified
+by these checks; native readiness alone does not certify bundled-UI access or
+macOS launch (the separate Linux authentication smoke above does cover access).
+
+The production Host build now includes every retained server/bin JavaScript and
+MJS module, not just files reached by TypeScript's emit graph. Hand-written
+declaration siblings had hidden their JavaScript implementations from emit;
+the resulting CLI and desktop imports failed before startup. Runtime copies
+never overwrite compiler output or its maps. The post-build inventory validates
+all 712 production module outputs, including Host externals used by Electron.
+Six build/closure tests pass. The built Node CLI reaches `/health`, serves the
+UI and reaches native `/api/agent/v1/ready` (all HTTP 200) with isolated data;
+the native probe waits for service startup rather than treating an initial 503
+as a settled failure. The full Web build passes. Electron explicitly includes
+the renamed package's `build` tree and unpacks the compiled Git helper paths;
+its archive content guard now requires compiled login-shell, supervisor,
+runtime and unpacked built-in registry modules. The standalone loader keeps
+its public export and resolves the owning manifest from either emitted or
+source layout, so bundled Agent resources remain package-relative. Electron's
+packaged built-in override uses that same compiled layout. Build/loader tests
+pass (7), Host runtime resolution tests pass (8), and packaging/content tests
+pass (28). The Linux AppImage builds; its extracted archive contains both
+reported missing Host modules. An isolated Xvfb launch with the bundled runtime
+reaches the mounted application document and native readiness (HTTP 200,
+`ready: true`, `engine: omp`). Headless runtime checks do not certify appearance
+or macOS launch. Evidence: `/home/ubuntu/sync-notes/appimage-headless-ready-result.log`
+and `/home/ubuntu/sync-notes/production-host-main-appimage-final.log`.
+
+First-prompt Host capture now extracts the Git result's `root` before computing
+the project-context id. The fork caller had passed the whole `{ root }` record;
+the upstream TypeScript encoder no longer silently returns an empty id for that
+wrong input, so capture failed after session creation and before prompt dispatch.
+A live Git probe reproduces the exact `value.replace` error at the old call and
+resolves a valid id at the fixed call. Seven real-Git/resolver tests pass,
+including fresh-session prompt capture with no pins through Session Knowledge.
+The project mapping lives in the focused projects owner, not bootstrap.
+
+Work-status Tasks now reads the same scoped Canonical todo phases as the
+composer tray. The retired OpenCode-backed Host todo loader, cache and unused
+event subscriber are removed; no `/api/session-todos` request or replacement
+Host route remains. Blocked and abandoned tasks keep their Canonical meanings.
+Twelve todo/tray tests pass, covering all statuses, scoped selection and ordered
+empty updates without Host polling. UI type-check and changed-source lint pass;
+server type-check and lint pass. These are source/integration checks, not a
+browser smoke certification.
+
+The remaining Host lint errors are repaired without broadening server-check
+coverage: credentials and routing use their existing domain value types, SSH
+key and dictation scope boundaries use Zod parsing, and the storage fixture
+preserves its typed file-read call. Dictation keeps opaque workspace ids
+unchanged. The unbound OpenCode Zen catalog route is retired; Canonical model
+catalogs remain authoritative, while Host metadata and autofill remain intact.
+Eight focused Host suites pass (75 tests); the server type-check and lint pass.
+
+The Web server declaration build now passes with an explicit public route-rule
+type for file-resource schemas and a named exported command-stream class.
+Schema instances and subprocess behavior are unchanged; 193 Docker-place and
+command-stream unit tests pass. Desktop entry now imports the retained
+`ohpichamber` Host package name rather than upstream's workspace alias. The
+Linux x64 AppImage packages successfully after Web assets, Agent runtime
+verification, main bundling and native rebuild. macOS packaging and runtime
+smoke verification remain unverified here.
+
+UI checking now passes with zero diagnostics (4,227 files); Agent Service
+checking also passes. UI-block guidance is generated from the UI catalog into
+the native render-tool description, without importing the renderer into the
+worker or restoring session-prompt injection. Five guidance tests and eight
+native Host-tool tests pass. Canonical session, message, tool-call/result and private Guest-port
+fixtures have replaced retired SDK shapes. Timeline/history navigation now checks
+the actual renderable message-row index; the timeline, navigation, quote,
+pinned-selection and render-comparison focused suites pass. Guest-link actions
+recheck the installed guest and granted capability, and generated identifier
+markers cannot be supplied by authored HTML. The four action-helper tests pass.
+SVG fences again use the guarded preview/failure path. Image exports receive the
+captured theme and render nested Markdown without an ambient session provider;
+extension frames are not executed during capture and their source stays visible.
+All fourteen image-export tests now pass: source-reveal controls are excluded,
+while unavailable-extension source and built-in content remain visible. Native
+guest-card rendering is restored (four tests), and static Steps retain upstream
+contrast rather than being treated as pending. Standalone block tests pass
+(22), as do extension-answer tests (13) with the real Native sync provider in
+their harness. Changed-source lint passes. Composer draft/keystroke assertions
+pass (five tests); reserved registry preferences are documented and the registry
+suite passes (30 tests). DiffView acceptance, full gates and fork-parent
+comparison remain outstanding. Visual verification has not been performed.
+
+Native chat-directory cleanup now consumes complete Canonical inventories,
+scoped snapshots/updates and cascading deletion events instead of SDK records.
+Its 40 filesystem/lifecycle tests pass and changed-source lint passes. The
+controller is not yet wired into the Native bootstrap; automatic cleanup is not
+runtime-certified. Native session snapshot/inventory readers now forward optional
+cancellation signals; all three cleanup/native session-route suites pass (112
+tests), including signal forwarding and failed-inventory handling.
+
+The scoped server check now passes with zero diagnostics. Dictation captures
+the recording origin's authorized workspace before microphone permission,
+retains it for replay, and carries it to native small-model correction. Session
+scope resolves by opaque session identity, not reverse directory lookup; draft
+and project inputs use the Canonical workspace resolver. Missing scope preserves
+recognition without correction. Four UI suites pass (24 tests), three Host suites
+pass (32 tests), and changed-source lint passes. No visual check was performed.
+The Agent Service projection import failure under Zod 4.6.7 is repaired by
+sharing refined unstamped Canonical payload schemas and snapshot-state fields.
+No wire DTO or cross-field validation was removed. Five focused contract/journal/
+worker suites pass (65 tests), changed-source lint passes, and the rebuilt private
+protocol imports successfully in Node from the Web package. Dead-code checking
+still reports 105 unused UI files and the duplicate config directory export;
+full gates remain outstanding. Fork parent `881705d19b` has no chat-directory
+cleanup composition, so the incoming standalone controller stays unmounted per
+the maintainer's conditional wiring instruction.
+
+The real upstream merge now includes `v2.7.3` (`cf18602cc7`), after `1928155551`.
+Its four verification-runner slot changes are adopted; fork guidance, release
+notes, retired VS Code paths, 1.0.0 manifests and lockfile are retained by the
+standing exclusions. No resolved manifest changed, so no lockfile regeneration
+was needed for this increment. Baseline metadata and the drift pin now agree.
+Slot and drift unit tests pass (19); the verify-runner suite cannot collect
+because its stand still imports the retired `bundled-opencode-server.mjs`.
+That stand needs native adaptation, not restoration of an OpenCode launcher.
+Overall integration acceptance remains pending. The maintainer
+selected Host-only queue delivery: edit/send-now are disabled for every entry,
+store take/restore calls reject without mutation, and ordinary sends never drain
+the queue or inherit queued model choices. Queue tests pass 39/39 and disabled
+controls 3/3. A preserved-original-draft plus atomic Host CAS take design remains
+technical debt; no API was added. The server TS-only guard now exempts exactly
+95 retained fork JavaScript paths, with 6/6 guard tests; no new neighboring JS
+module is exempt. Zod's stale override and lock are aligned to the adopted
+4.6.7 manifest/patch version; install exits 0 without a patch warning. Root
+checks and complete suites are still pending;
+these focused results do not advance rebaseline or runtime acceptance.
+
+The Agent Service build emits declarations for the private Host authorization
+protocol; the web server checker consumes the built package rather than Bun
+implementation sources outside its boundary (7 boundary tests pass). Canonical
+work-status telemetry retains the upstream folded summary without SDK part
+timestamps (15 tests pass). Subagent rows use canonical role/token data and the
+extracted activity owner; 9 tests cover inactive-run rejection and the native
+Agent Hub. These projections apply equally to Web/PWA, Electron, hosted mobile
+and Capacitor. No new capability or Agent Contract was added. These surfaces
+remain visually unverified, and full merge acceptance is still pending.
+
+All 14 non-English dictionaries now translate the five attachment action/error
+keys; no English dictionary spread is used as a substitute for translation.
+The i18n suite passes 124 tests with 76,999 assertions, including corrected
+French MCP guidance, Chinese Token spelling and the unchanged Google Gemini
+brand name. The native catalog restoration fixture passes 1 test with 6
+assertions. Current full checks still fail: integrated
+UI fixture diagnostics, three DiffView
+binding cases, lint and all five root guard steps remain unresolved. These are
+not classified as pre-existing. Full suites and fork-parent comparisons remain
+pending.
+
+Reserved settings now keep `cornerRadius` and `pinnedDirectories` without
+claiming runtime consumers. Registry parsing/mirroring and consumer/effect
+coverage pass 30 tests (920 assertions); its focused lint passes. Server
+comparison worktrees show the fork's original frontend-only web check passes
+(2,299 files, two projects), with zero implementation TypeScript in server/bin;
+upstream's original strict server check passes. Applying upstream's guard to
+the old fork rejects 605 JavaScript paths, so that guard was not prior fork
+coverage. The carried-body declaration boundary records 212 explicit paths
+and their original JavaScript owners. New/upstream roots remain strict and
+retain ambient declarations. Regression tests prove a new neighbor and a new
+root imported by a legacy module are checked, not hidden by the project
+reference. Remaining server diagnostics are 3, down from 4,597; they include
+stale OpenCode imports, missing owner types and actual contract mismatches and
+are not waived. No server or full-merge acceptance is claimed.
+
+The CLI now uses upstream's thin bootstrap and extracted TypeScript controller,
+with the fork's bundled Bun Agent Service setup and Canonical commands ported
+into that controller. The duplicate JavaScript command table and dangling
+OpenCode lookup/update imports are removed. Node subprocess CLI coverage passes
+155 tests; Host executable lookup covers successful, empty and invalid PATH
+entries in three tests. CLI strict diagnostics and changed strict-source lint
+are zero. The static server/CLI graph contains 615 modules with zero missing
+literal relative imports or named exports; this is not dynamic-loader or
+packaged-runtime certification. Dead-code checking still exits 1 with 105 unused
+files and further export/type findings; these are not classified as pre-existing.
+
+Host owner contracts now preserve the checkout action discriminants and Node's
+complete synchronous-read overloads in the cross-process storage fixture.
+Guest installation consumes its catalog owner's public result type; Mistral
+accepts unknown credentials only through the existing private credential
+validator. Assist context exposes its checked final answer as `last`, while
+turn-array lookups remain optional and no SDK snapshot/diff fields are claimed.
+Eleven affected Host files pass 326 tests, including managed Git network,
+cross-process persistence, catalog/install, quota, shared-page and assist
+coverage. Changed strict-source lint passes. The remaining server diagnostics
+and broader UI/root gates are still unresolved.
+
+The strict Web frontier now uses native Host control read views and policy
+callbacks, the storage owner's inferred metadata type, canonical text history
+and checked scheduler composition dependencies. Removed the unreferenced
+OpenCode listed-session, wait-projection and archive-projection helpers rather
+than restoring their deleted SDK dependencies; the Native entry graph remains
+615 modules with zero missing relative imports/named value exports. The existing
+Canonical control service and Host SQLite archive authority remain in place.
+The generic upstream npm registry/config helper is retained as Host package
+metadata functionality, with scoped-header and invalid-config coverage.
+
+Seventeen focused files pass 266 tests for these boundaries. Follow-up npm and
+scheduler checks pass 28 tests; changed strict-source lint passes. The scoped
+server check still fails on two chat-cleanup SDK declarations and dictation's
+missing Canonical workspace scope. The dead-code report remains non-green:
+105 unused UI files plus export/type findings, not classified as pre-existing.
+
+**2026-11-20 Upstream main merge in progress:** The real merge of upstream `1928155551` is still under repair on `devin/upstream-sync-1795118808`; historical green results below are not acceptance of this merge. Both `useUIStore` and `useConfigStore` now compose extracted owners. Config owners use canonical provider/model catalogs, native agent-catalog ownership and existing Host settings/voice services. Explicit reloads retire obsolete catalog reads without clearing published snapshots; joined agent reads can refresh only in the current runtime. Host permission-policy events are validated as Host envelopes, not routed through a retired SDK classifier. Focused config coverage passed 109 tests with 423 assertions; Host-event coverage passed 26 tests with 76 assertions, including empty/malformed policy events. The broader UI type-check remains red, retired imports remain, and root guards, full UI/web suites and fork-parent comparisons are unfinished. No runtime or visual certification is claimed.
+
+The owner port is shared by Web/PWA, Electron, hosted mobile and Capacitor mobile: each uses the Canonical Client for agent catalogs and the current Host's event/preferences services. No surface starts a runtime or discovers OpenCode configuration through these owners; mobile continues to use its remote Host.
+
+The unreachable SDK dispatcher and its SDK status/permission/materialization recovery graph have been retired. Canonical cursor recovery, monotonic Host metadata and canonical cross-directory status seeding remain the active owners. Useful notification presentation was ported into `surface-notifications`, not dropped with the dispatcher: shared-page answers, focused plugin toasts and runtime notification delivery now use the Host control stream, including duplicate-desktop-delivery flags. Nine focused sync/Host test files passed 91 tests, including wire validation of those flags; changed-source lint passed. A second canonical DTO field batch migrated 223 accesses across 49 files. New-worktree reference selection again uses the extracted Host repository and tracker owners, including discussion references and provider-aware source branches; its behavior suite passed 11 tests, the branch characterization passed one, and focused lint passed. Broader affected tests remain red (7 files passed, 16 failed), including retired imports, incomplete fixtures and unresolved extracted-owner symbols; they are not classified as pre-existing. Stable desktop updates now retain the upstream release-note presentation without dead canary, CLI/mirror or OpenCode compatibility fragments. Guest tool presentation again reads its schemas and template constants from the Guest SDK and accepts decoded JSON results. Five focused updater/release-note/Guest files passed 47 tests with 3,607 assertions; changed-owner lint passed. A third DTO batch migrated 79 field accesses across 11 files, resolving canonical tool aliases before editing. Extracted subagent activity now consumes inline canonical parts and active-run turn membership, pairs call/result identities and presents native retry notices without invented tool timestamps. Its native section controller cutover remains unfinished. Tool-result decoding moved into a pure shared owner, breaking the registry/eval/renderer import cycle; native input formatting is exported to expanded cards. Six focused tool/activity files passed 54 tests; the final renderer check passed 19 tests and page-ask coverage passed 8. Changed-source lint passed. These user-facing surfaces are visually unverified. The latest UI compile reports 1,955 diagnostics in 460 files; the retired-import audit has 132 matches in 65 files. Neither marker removal nor these focused checks constitutes merge acceptance.
+
 **2026-11-19 Windows local OMP cold imports:** The desktop's local SDK import budget is now 30 seconds on Windows (2.5 seconds elsewhere); selection still validates every launch and falls back to the offline bundle. SDK version, layout, patch, import-failure and timeout reasons survive the later interpreter-only fallback probe. No positive verdict cache or bypass of patch/native import checks was added. On Windows Server 2022 / Bun 1.4.4, three warm isolated imports took 1.283/1.293/1.220 seconds; real-HOME imports took 1.395/1.371/1.540 seconds. A fresh HOME took 6.677 seconds, then 1.397/1.893 seconds. First native dlopen was 2.949 seconds versus 7–10 ms warm, and the cold worker import was 1.922 seconds versus about 0.1 seconds warm. Disabling Bun's transpiler cache left warm imports at 1.232–1.306 seconds. Defender antivirus and realtime protection were disabled. The earlier isolated probe took 21.618 seconds, but no phase trace exists for that exact run; not all of that delay is attributed. PR #57 records Linux readiness, not a numeric import timing or rationale for 2.5 seconds. Evidence scripts/logs are under `C:\Users\Administrator\ohpi-builds\`; no GUI was installed, launched or rebuilt, and the loopback feed was left running. Focused test and final resolution results are recorded in the handoff.
 
 Headless selection using baseline packaged resources and the modified selector chose the compatible SDK under a new HOME in 8.077 seconds; stock OMP returned `LOCAL_SDK_PATCH_MISMATCH`. The imported service/worker closure exposed 2,522 cached modules, including 1,957 TypeScript paths. `node --test agent-runtime.test.mjs windows-agent-links.test.mjs`: 13 pass, 2 skip, 2 fail; the new regression passed. Both failures are the previously observed POSIX script fixtures on Windows (`BUN_PROBE_FAILED` instead of `BUN_VERSION_BELOW_MINIMUM`; `PROBE_FAILED` instead of `IDENTITY_MISMATCH`), not EBUSY/EPERM cleanup errors. Electron package type-check and lint exited 0 (lint is a no-op). HMR/packaged GUI behavior and Linux timing remain unverified; the existing installers were not rebuilt with this fix. A stalled local SDK import can now block Windows startup for up to the 30-second import budget before fallback, plus staging/interpreter-probe overhead.

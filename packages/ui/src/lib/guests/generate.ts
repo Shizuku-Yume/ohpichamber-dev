@@ -46,11 +46,6 @@ const parseGuestGenerateResponse = async (response: Response): Promise<GuestGene
   return { ok: true, result: parsed.data.result };
 };
 
-/**
- * One-off generation through the Guest grant owner. The Host authorizes the
- * canonical workspace and calls its canonical completion domain service.
- * Provider preferences come from the Host UI, never from guest content.
- */
 export const guestGenerate = async (
   guestId: string,
   request: GenerateRequest,

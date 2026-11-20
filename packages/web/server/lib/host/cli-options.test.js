@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseServeCliOptions } from './cli-options.js';
+import { parseServeCliOptions } from '../server-frame/cli-options.js';
 
 describe('parseServeCliOptions UI password environment', () => {
   it('uses the OpenChamber environment variable', () => {

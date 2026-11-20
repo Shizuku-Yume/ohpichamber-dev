@@ -1,17 +1,9 @@
-// ---------------------------------------------------------------------------
-// Unread sessions: a turn that finished and nobody has looked at yet.
-//
-// The Host owns the state. Its session record carries `workbench.lastIdleAt`,
-// when the last turn ended, and `workbench.viewedAt`, a monotone watermark of
-// the last idle transition a viewer saw. A session is unread while the turn that
-// ended last is newer than the watermark. Because the record lives in Host
-// metadata the mark survives restarts, and every client of the server sees the
-// same one.
-// ---------------------------------------------------------------------------
+
+
 
 import { useCallback } from 'react';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
-import { getRuntimeKey } from '@/lib/runtime-switch';
+import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { patchSessionMetadata } from './session-actions';
 
@@ -26,7 +18,7 @@ function withWorkbenchViewedAt(
 
  const nextWorkbench = {
   ...currentWb,
-  lastIdleAt,
+  lastIdleAt: Math.max(currentWb.lastIdleAt ?? 0, lastIdleAt),
   ...(viewedAt !== undefined ? { viewedAt } : {}),
  };
  if (viewedAt === undefined) {
@@ -59,11 +51,8 @@ export const isSessionUnread = (session: Session | undefined): boolean => (
 export const isUnreadTurn = (session: Session | null | undefined): boolean => {
  if (!session) return false;
  const workbench = session.metadata?.openchamber?.workbench;
- const legacyTime = 'time' in session && session.time && typeof session.time === 'object'
-  ? (session.time as { idle?: number; viewed?: number })
-  : undefined;
- const lastIdleAt = workbench?.lastIdleAt ?? legacyTime?.idle;
- const viewedAt = workbench?.viewedAt ?? legacyTime?.viewed;
+ const lastIdleAt = workbench?.lastIdleAt;
+ const viewedAt = workbench?.viewedAt;
  return lastIdleAt !== undefined && (viewedAt === undefined || viewedAt < lastIdleAt);
 };
 
@@ -71,10 +60,7 @@ export const isUnreadTurn = (session: Session | null | undefined): boolean => {
 export const isSessionUnreadWithError = (session: Session | undefined): boolean => {
  if (!isSessionUnread(session)) return false;
  const workbench = session?.metadata?.openchamber?.workbench;
- const outcome = session && 'outcome' in session && typeof session.outcome === 'string'
-  ? session.outcome
-  : undefined;
- return workbench?.lastTurnOutcome === 'failed' || outcome === 'failed';
+ return workbench?.lastTurnOutcome === 'failed';
 };
 
 export const useSessionUnread = (sessionId: string): boolean => (
@@ -89,20 +75,20 @@ const pendingViews = new Map<string, number>();
  * the watermark at once, so the mark clears without waiting for the round
  * trip; a failed write restores it, unless something newer replaced it.
  */
-export const markSessionUnreadSeen = (sessionId: string): void => {
+export const markSessionUnreadSeen = (sessionId: string, options?: { explicit?: boolean }): void => {
  const store = useGlobalSessionsStore.getState();
  const session = store.entityById.get(sessionId);
  if (!session || !isSessionUnread(session)) return;
- const workbench = session.metadata?.openchamber?.workbench;
- const legacyTime = 'time' in session && session.time && typeof session.time === 'object'
-  ? (session.time as { idle?: number; viewed?: number })
-  : undefined;
- const lastIdleAt = workbench?.lastIdleAt ?? legacyTime?.idle;
- if (lastIdleAt === undefined || pendingViews.get(sessionId) === lastIdleAt) return;
-
- const previousViewed = workbench?.viewedAt ?? legacyTime?.viewed;
  const runtimeKey = getRuntimeKey();
- pendingViews.set(sessionId, lastIdleAt);
+ const key = `${runtimeKey}\n${sessionId}`;
+ if (options?.explicit) keptMarks.delete(key);
+ if (keptMarks.has(key)) return;
+ const workbench = session.metadata?.openchamber?.workbench;
+ const lastIdleAt = workbench?.lastIdleAt;
+ if (lastIdleAt === undefined || pendingViews.get(key) === lastIdleAt) return;
+
+ const previousViewed = workbench?.viewedAt;
+ pendingViews.set(key, lastIdleAt);
 
  const updatedSession: Session = {
   ...session,
@@ -110,7 +96,7 @@ export const markSessionUnreadSeen = (sessionId: string): void => {
  };
  store.upsertSession(updatedSession);
 
- const directory = resolveGlobalSessionDirectory(session) ?? (session as { directory?: string }).directory;
+ const directory = resolveGlobalSessionDirectory(session);
  void patchSessionMetadata(
   sessionId,
   directory,
@@ -123,10 +109,7 @@ export const markSessionUnreadSeen = (sessionId: string): void => {
    const current = useGlobalSessionsStore.getState().entityById.get(sessionId);
    if (!current) return;
    const currentWb = current.metadata?.openchamber?.workbench;
-   const currentLegacyTime = 'time' in current && current.time && typeof current.time === 'object'
-    ? (current.time as { viewed?: number })
-    : undefined;
-   const currentViewed = currentWb?.viewedAt ?? currentLegacyTime?.viewed;
+   const currentViewed = currentWb?.viewedAt;
    if (currentViewed !== lastIdleAt) return;
 
    const rollbackSession: Session = {
@@ -136,6 +119,59 @@ export const markSessionUnreadSeen = (sessionId: string): void => {
    useGlobalSessionsStore.getState().upsertSession(rollbackSession);
   })
   .finally(() => {
-   if (pendingViews.get(sessionId) === lastIdleAt) pendingViews.delete(sessionId);
+   if (pendingViews.get(key) === lastIdleAt) pendingViews.delete(key);
   });
 };
+
+export const canSessionBeUnread = (session: Session | undefined): session is Session => (
+  Boolean(session) && !session?.parentSessionId && session?.archivedAt === undefined
+)
+
+const keptMarks = new Set<string>()
+
+const pendingMarks = new Map<string, Promise<boolean>>()
+
+subscribeRuntimeEndpointWillChange(() => {
+  keptMarks.clear()
+  pendingViews.clear()
+  pendingMarks.clear()
+})
+
+export const markSessionUnread = (sessionId: string): Promise<boolean> => {
+  const runtimeKey = getRuntimeKey()
+  const key = `${runtimeKey}\n${sessionId}`
+  const pending = pendingMarks.get(key)
+  if (pending) return pending
+  const store = useGlobalSessionsStore.getState()
+  const session = store.entityById.get(sessionId)
+  if (!canSessionBeUnread(session)) return Promise.resolve(false)
+  const previousViewed = session.metadata?.openchamber?.workbench?.viewedAt
+  const lastIdleAt = session.metadata?.openchamber?.workbench?.lastIdleAt ?? session.updatedAt
+  keptMarks.add(key)
+  store.upsertSession({ ...session, metadata: withWorkbenchViewedAt(session.metadata, lastIdleAt, undefined) })
+  const request = patchSessionMetadata(
+    sessionId,
+    resolveGlobalSessionDirectory(session),
+    (metadata) => withWorkbenchViewedAt(metadata, lastIdleAt, undefined),
+    runtimeKey,
+  ).then((result) => result !== null && runtimeKey === getRuntimeKey()).catch((error) => {
+    console.warn('[session-unread] failed to mark unread', error)
+    if (runtimeKey !== getRuntimeKey()) return false
+    keptMarks.delete(key)
+    const current = useGlobalSessionsStore.getState().entityById.get(sessionId)
+    const workbench = current?.metadata?.openchamber?.workbench
+    if (current && workbench?.lastIdleAt === lastIdleAt && workbench.viewedAt === undefined) {
+      useGlobalSessionsStore.getState().upsertSession({
+        ...current,
+        metadata: withWorkbenchViewedAt(current.metadata, lastIdleAt, previousViewed),
+      })
+    }
+    return false
+  }).finally(() => { if (pendingMarks.get(key) === request) pendingMarks.delete(key) })
+  pendingMarks.set(key, request)
+  return request
+}
+
+export const releaseKeptUnreadMarks = (): void => {
+  keptMarks.clear()
+}

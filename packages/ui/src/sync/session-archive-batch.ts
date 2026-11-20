@@ -1,10 +1,3 @@
-/**
- * OpenChamber-owned session routes: archive, unarchive, metadata, links.
- *
- * Archiving a batch is a Host capability, not a canonical runtime mutation.
- * The route returns only stamps; callers reconcile those against native Session
- * records already in their stores.
- */
 
 import { SessionMetadataSchema, type SessionMetadata, type SessionMetadataPatch } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -97,7 +90,7 @@ export type SessionMetadataUpdateResult =
   | { outcome: 'updated'; metadata: SessionMetadata | null; revision: string }
   | { outcome: 'unavailable'; reason: string };
 
-/** Applies a native SessionMetadataPatch through the OpenChamber Host route. */
+// external: https://www.rfc-editor.org/rfc/rfc7386 The host merges metadata objects recursively and deletes keys assigned null.
 export async function requestSessionMetadataUpdate(
   sessionId: string,
   patch: SessionMetadataPatch,

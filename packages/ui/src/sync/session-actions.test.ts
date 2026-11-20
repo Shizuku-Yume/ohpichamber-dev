@@ -192,7 +192,22 @@ describe("native branch consumer lifecycle", () => {
     expect(history).toHaveBeenCalledTimes(2)
     expect(loader.getSnapshot({ directory: destination, sessionId: "session-a" })).toMatchObject({ status: "ready", resolved: true, cursor: undefined, complete: true })
   })
-})
+
+  test("a retired runtime cannot publish a completed native move", async () => {
+    const source = seed();
+    const relocation = deferred<{ sessions: Session[] }>();
+    const started = deferred<void>();
+    spyOn(canonicalClient, "resolveWorkspace").mockResolvedValue({ workspaceId: "workspace-destination", projectId: "project-a", name: "Destination" });
+    spyOn(canonicalClient, "relocateSession").mockImplementation(() => { started.resolve(); return relocation.promise });
+    const pending = moveSessionToDirectory(session(), directory, "/destination");
+    await started.promise;
+    changeRuntime();
+    relocation.resolve({ sessions: [session("session-a", { workspaceId: "workspace-destination" })] });
+    await expect(pending).rejects.toThrow('runtime changed');
+    expect(source.getState().session).toEqual([session()]);
+    expect(manager.getChild("/destination")?.getState().session ?? []).toEqual([]);
+  });
+});
 
 describe("native session deletion", () => {
   test("retains live and persisted state on failure and reports the failure", async () => {

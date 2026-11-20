@@ -2,15 +2,28 @@
 
 ## Scope
 
+Canonical sessions do not carry the inherited operator-child or workflow-agent
+tags. The operator-only Take Over and mark-done interception are not supported:
+ordinary child-session lineage does not imply either role. Pending tool
+approvals keep their existing CAS-scoped canonical response flow; taking over a
+legacy permission ruleset must never become blanket approval.
+
 This document covers the client-side session and data synchronization architecture in `packages/ui/src/sync` under the Task 13 native canonical contract, and the rules for updating stores safely.
 
 There are two distinct session data scopes in the UI:
 
 1. **Directory-scoped sync stores**
-   - Owned by the sync layer child stores created in `sync-context.tsx` and managed by `ChildStoreManager`
+   - Owned by the sync layer child stores created in `sync-stores.ts` and managed by `ChildStoreManager`
    - Source for per-directory live session state, messages with inline parts, approval requests, question requests, snapshots, queue state, catalog state, shell jobs, and runtime statuses
    - Backed by single-flight SSE event streaming per session (`subscribeSessionEvents`) and directory-scoped workspace discovery (`client.listSessions(workspaceId)`)
    - Read via narrow hooks including `useSessions()`, `useSessionMessages()`, `useSessionStatus()`, `useSessionPermissions()`, `useSessionForms()`, `useSessionPartsForMessages()`, `useDirectoryStore()`, and `useDirectorySync()`
+
+`sync-runtime-context.ts` owns the shared canonical contexts used by the provider
+and extracted hooks. Canonical message selectors and record snapshots live in
+`session-message-hooks.ts` and `session-message-records.ts`; `sync-context.tsx`
+re-exports their public API. Pre-mount reads use the same store and loader the
+provider adopts, with a 30-second expiry if no provider mounts. They do not
+create an additional transcript authority.
 
 2. **Global sessions cache**
    - Owned by `packages/ui/src/stores/useGlobalSessionsStore.ts` (Slice C)
@@ -32,6 +45,8 @@ The directory-scoped sync stores do not provide a complete global view:
 
 Use the directory sync stores for live session, message, approval, and question state. Use the global sessions store for cold or global session coverage (archived pages and unopened directories). Use aggregated child-store sessions (`useAllLiveSessions()`) and the global session status index (`useGlobalSessionStatus()`) for live truth across initialized directories.
 
+`session-live-work.ts` derives Guest tool intent and context fill only from reducer-admitted canonical events and adopted snapshots. Snapshot tools must belong to the current active run, never historical running parts. Terminal events clear live tools; compaction invalidates an old context reading. The bounded cache resets with the runtime, and a Host read started before that reset cannot repopulate it.
+
 ## Snapshot startup and cold-send recovery
 
 Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryable failures stop immediately, exhausted failures preserve prior state and report a loader error, and retired loads stop before another request. Every adopted snapshot reaches the existing event pipeline through `onSnapshot`.
@@ -39,6 +54,18 @@ Snapshot and workspace reads use the bounded `STARTUP_RETRY` policy; non-retryab
 Cold snapshots remain worker-free and do not subscribe to worker-owned events. A normal send whose starting snapshot was cold or absent requests a recovery snapshot only after native acceptance. SyncProvider queues this recovery behind any in-flight load and requires an available worker snapshot within the same startup budget before attachment. Snapshot errors never replay or reject an accepted send. The pipeline attaches from the returned cursor so already-completed replies come from the snapshot and later deltas come from the stream. Manual history retry followed by send takes the same path.
 
 Web/PWA, Electron, hosted mobile and Capacitor share this behavior through the Canonical Client; Guest SDK and transport/auth contracts are unchanged.
+
+The canonical pipeline owns gap recovery and pending-request snapshots. There
+is no parallel SDK event dispatcher, SDK active-status poller or interrupted-tool
+repair layer. Session updates preserve unrelated message/request references;
+Host metadata uses its own monotonic revisions. Cross-directory status seeding
+reads canonical sessions and never overwrites observed live status.
+
+Host notifications arrive on the separate control stream. The Host envelope is
+validated before presentation, including desktop-delivery flags. Shared-answer
+and focused plugin toasts retain their existing UI components; device delivery
+uses `RuntimeAPIs.notifications`. Local desktop delivery is not duplicated, and
+a remote Host's desktop delivery does not suppress notifications on this client.
 
 ## Host operational metadata authority
 
@@ -624,3 +651,5 @@ First-connect subscribers now observe the first successful, current canonical di
 `seedGlobalSessionStatusFromHost()` retains its no-argument asynchronous entry point. It uses canonical `listSessions()` projections, admitted workspace-to-directory bindings, numeric `updatedAt` freshness, per-session/workspace discovery failures, and runtime generation guards (including A→B→A switches). Seeding is additive and cannot overwrite live observations. Only `awaiting_approval`/`awaiting_input` sessions fetch canonical snapshots to discover pending request DTOs; idle/unavailable discovery does not invent request payloads or native events. `buildHostStatusSeedSnapshots` replaces the old wire-event builder.
 
 `directory-recovery-snapshots.ts` was an unreferenced OpenCode event-observer mechanism and is retired. Its retained regression suite now exercises native `installSessionSnapshot`/`applyDirectoryEvent` recovery, including stale snapshot and request revision races, rather than introducing disconnected observers into the canonical pipeline.
+
+`agent-startup-wait.ts` tracks outstanding prompt connection waits by runtime-switch revision. Each wait owns its completion token; completing an older wait cannot clear another prompt's feedback. This is presentation state, not a source of session activity or runtime readiness.

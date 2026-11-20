@@ -21,15 +21,14 @@ import { LIVE_BROWSER_TABS_MAX, LIVE_BROWSER_TABS_MIN } from '@/lib/browser/live
 import type { ProjectEntry, TerminalShell } from '@/lib/api/types';
 import type { DesktopWindowControlsPosition, DesktopWindowControlsStyle } from '@/lib/desktop';
 import { getDirectoryShowHidden, setDirectoryShowHidden } from '@/lib/directoryShowHidden';
-import type { DraftStarterRef } from '@/lib/draftStarters';
-import { sanitizeStarterRefs } from '@/lib/draftStarters';
+import { sanitizeStarterRefs, type DraftStarterRef } from '@/lib/draftStarters';
 import { getFilesViewShowGitignored, setFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { isMonoFontOption, isUiFontOption, UI_FONT_WEIGHT_OPTIONS, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
 import { LOCALES } from '@/lib/i18n/runtime';
 import { useI18nStore } from '@/lib/i18n/store';
 import { isInputHistoryLimit, isInputHistoryScope, type InputHistoryScope } from '@/lib/inputHistoryScope';
 import { normalizeMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
-import { hiddenSidebarSectionsSchema, sidebarPinListsSchema, sidebarSectionsSchema } from '@/lib/sidebarSections';
+import { hiddenSidebarSectionsSchema, sidebarPinListsSchema, sidebarSectionsSchema, SIDEBAR_SESSION_BATCH_MIN, SIDEBAR_SESSION_BATCH_MAX } from '@/lib/sidebarSections';
 import { isResponseStylePreset, type ResponseStylePreset } from '@/lib/responseStyle';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { sanitizeWorkStatusHiddenSections, sanitizeWorkStatusSectionOrder } from '@/components/chat/work-status/sections';
@@ -43,6 +42,7 @@ import {
  fromSchema,
  mapParser,
  parseBoolean,
+ parseChatWidth,
  parseCustomProviderIcons,
  parseCustomProviderLogos,
  parseDesktopWindowControlsPosition,
@@ -86,22 +86,12 @@ import {
 type SettingsScope = 'instance' | 'profile' | 'device';
 export type SettingsSurface = 'web' | 'desktop' | 'mobile';
 
-/**
- * The siblings a field's `write` may consult in the same parsed snapshot. Named
- * explicitly (not `DesktopSettings`) so the registry's type does not refer to
- * itself through the bindings; extend it when another field needs a sibling.
- */
 type SettingsSiblingView = {
  readonly draftStartersCraftGoalAdded?: boolean;
  readonly draftStartersScheduleTaskAdded?: boolean;
  readonly workStatusHiddenSectionsExplicit?: boolean;
 };
 
-/**
- * How the UI keeps a live copy of a field, when it keeps one at all. Method
- * syntax on purpose: it keeps `SettingsFieldSpec<T>` assignable to
- * `SettingsFieldSpec<unknown>`, which is what the generic loops below iterate.
- */
 type SettingsUiBinding<T> = {
  read(): T | undefined;
  write(value: T, snapshot: SettingsSiblingView): void;
@@ -132,6 +122,8 @@ type SettingsFieldSpec<T> = {
  scope: SettingsScope;
  /** Who consumes the stored value; see `SettingsEffect`. */
  effect: readonly SettingsEffect[];
+ /** Persisted for compatibility, without a current runtime consumer. */
+ reserved?: string;
  parse(value: unknown, raw: SettingsRawDocument): T | undefined;
  ui?: SettingsUiBinding<T>;
  /** Profile fields the owner chose to store per surface kind (change on a phone stays on phones). */
@@ -152,7 +144,6 @@ const field = <T>(spec: SettingsFieldSpec<T>): SettingsFieldSpec<T> => spec;
 
 type UIStoreState = ReturnType<typeof useUIStore.getState>;
 
-/** A field whose live copy is one `useUIStore` key, written through its setter. */
 const uiStore = <K extends keyof UIStoreState>(
  key: K,
  write: (value: UIStoreState[K], snapshot: SettingsSiblingView) => void,
@@ -169,9 +160,6 @@ const setUi = <K extends keyof UIStoreState>(key: K) => (value: UIStoreState[K])
  useUIStore.setState({ [key]: value } as Pick<UIStoreState, K>);
 };
 
-// The config store is reached through the global it registers on `window`
-// (`useConfigStore` imports the shared write path, so a direct import here
-// would be a load-order cycle). Absent outside the browser.
 const configStore = () => globalThis.window?.__zustand_config_store__ ?? null;
 
 type ConfigStoreState = NonNullable<ReturnType<NonNullable<ReturnType<typeof configStore>>['getState']>>;
@@ -211,8 +199,6 @@ const parseInputHistoryScope: SettingsParser<InputHistoryScope> = fromSchema(z.s
 const parseInputHistoryLimit: SettingsParser<number> = fromSchema(z.number().refine(isInputHistoryLimit));
 const parseMobileKeyboardModeValue = mapParser(parseTrimmedString, (value) => normalizeMobileKeyboardMode(value, undefined));
 const parseDraftStarters: SettingsParser<DraftStarterRef[]> = mapParser(fromSchema(z.array(z.unknown())), sanitizeStarterRefs);
-// Unknown ids are dropped rather than kept: they would hide nothing and
-// accumulate forever as sections get renamed.
 const parseWorkStatusHiddenSections: SettingsParser<string[]> = mapParser(fromSchema(z.array(z.unknown())), (value) => sanitizeWorkStatusHiddenSections(value));
 const parseLargeTextPasteBehavior: SettingsParser<LargeTextPasteBehavior> = parseOneOf(['ask', 'attach', 'inline', 'inline-double-paste']);
 const parseFileEditorKeymap: SettingsParser<FileEditorKeymap> = parseOneOf(['default', 'vim']);
@@ -243,11 +229,6 @@ const permissionAutoAcceptSchema = z.object({
 type PermissionAutoAcceptPolicy = z.infer<typeof permissionAutoAcceptSchema>;
 const parsePermissionAutoAccept: SettingsParser<PermissionAutoAcceptPolicy> = fromSchema(permissionAutoAcceptSchema);
 
-/**
- * Removing a built-in starter must stay a durable choice, so the list is only
- * patched with the built-ins when the corresponding marker says they were
- * never offered. The markers travel with the user's edit (useDraftStarters).
- */
 const withOfferedBuiltInStarters = (starters: DraftStarterRef[], snapshot: SettingsSiblingView): DraftStarterRef[] => {
  let next = starters;
  const insertAfter = (name: string, after: string) => {
@@ -262,6 +243,18 @@ const withOfferedBuiltInStarters = (starters: DraftStarterRef[], snapshot: Setti
 };
 
 export const SETTINGS_REGISTRY = {
+ chatWidth: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseChatWidth, ui: uiStore('chatWidth', (v) => useUIStore.getState().setChatWidth(v)) }),
+ wideChatLayoutEnabled: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseBoolean }),
+ cornerRadius: field({ scope: 'profile', effect: [], reserved: 'Legacy appearance preference retained for rollback; no current renderer reads it.', perSurface: true, parse: parseFiniteNumber, ui: uiStore('cornerRadius', (v) => useUIStore.getState().setCornerRadius(v)) }),
+ fileEditorWrapLines: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('fileEditorWrapLines', (v) => useUIStore.getState().setFileEditorWrapLines(v)) }),
+ terminalOpenOnProjectAction: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('terminalOpenOnProjectAction', (v) => useUIStore.getState().setTerminalOpenOnProjectAction(v)) }),
+ agentBrowserSharesLogins: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('agentBrowserSharesLogins', (v) => useUIStore.getState().setAgentBrowserSharesLogins(v)) }),
+ agentTerminalToolEnabled: field({ scope: 'profile', effect: ['ui', 'server'], parse: parseBoolean, ui: uiStore('agentTerminalToolEnabled', (v) => useUIStore.getState().setAgentTerminalToolEnabled(v)) }),
+ questionsInChat: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('questionsInChat', (v) => useUIStore.getState().setQuestionsInChat(v)) }),
+ savePastedImagesAsFiles: field({ scope: 'profile', effect: ['ui', 'server'], parse: parseBoolean, ui: uiStore('savePastedImagesAsFiles', (v) => useUIStore.getState().setSavePastedImagesAsFiles(v)) }),
+ collapsedModelProviders: field({ scope: 'profile', effect: ['store'], parse: parseStringSet, ui: uiStore('collapsedModelProviders', setUi('collapsedModelProviders'), { autoSave: false }) }),
+ recentAgents: field({ scope: 'profile', effect: ['store'], parse: parseStringSet, ui: uiStore('recentAgents', setUi('recentAgents'), { autoSave: false }) }),
+ recentEfforts: field({ scope: 'profile', effect: ['store'], parse: parseStringRecordOfStringLists, ui: uiStore('recentEfforts', setUi('recentEfforts'), { autoSave: false }) }),
  layoutAnimations: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('layoutAnimations', (v) => useUIStore.getState().setLayoutAnimations(v)) }),
  openLinksInBrowserPanel: field({ scope: 'profile', effect: ['ui'], surfaces: ['desktop'], parse: parseBoolean, ui: uiStore('openLinksInBrowserPanel', (v) => useUIStore.getState().setOpenLinksInBrowserPanel(v)) }),
  liveBrowserTabLimit: field({ scope: 'profile', effect: ['ui'], surfaces: ['desktop'], parse: parseIntegerInRange(LIVE_BROWSER_TABS_MIN, LIVE_BROWSER_TABS_MAX), ui: uiStore('liveBrowserTabLimit', (v) => useUIStore.getState().setLiveBrowserTabLimit(v)) }),
@@ -306,7 +299,7 @@ export const SETTINGS_REGISTRY = {
  homeDirectory: field({ scope: 'instance', effect: ['server', 'shell', 'store', 'ui'], parse: parseNonEmptyString }),
  projects: field<ProjectEntry[]>({ scope: 'instance', effect: ['server', 'shell', 'store', 'ui'], parse: parseProjects }),
  activeProjectId: field({ scope: 'instance', effect: ['server', 'store', 'ui'], adopt: 'bootstrap-only', parse: parseNonEmptyString }),
- pinnedDirectories: field({ scope: 'instance', effect: ['server'], parse: parseStringSet }),
+ pinnedDirectories: field({ scope: 'instance', effect: [], reserved: 'Legacy directory pins retained on the instance; current sidebar pins have a separate owner.', parse: parseStringSet }),
  desktopLanAccessEnabled: field({ scope: 'instance', effect: ['shell', 'ui'], surfaces: ['desktop'], parse: parseBoolean }),
  desktopKeepAwakeEnabled: field({ scope: 'instance', effect: ['shell'], surfaces: ['desktop'], parse: parseBoolean }),
  desktopMinimizeToTrayEnabled: field({ scope: 'instance', effect: ['shell'], surfaces: ['desktop'], parse: parseBoolean }),
@@ -377,7 +370,7 @@ export const SETTINGS_REGISTRY = {
  // reaches the store, so the page and its command stay unreachable.
  overviewFeatureAvailable: field({
   scope: 'instance',
-  effect: ['server', 'store', 'ui'],
+  effect: ['store', 'ui'],
   computed: true,
   parse: parseBoolean,
   ui: uiStore('overviewFeatureAvailable', (v) => useUIStore.getState().setOverviewFeatureAvailable(v), { autoSave: false }),
@@ -422,6 +415,8 @@ export const SETTINGS_REGISTRY = {
  sidebarListSessionGrouping: field({ scope: 'profile', effect: ['store'], perSurface: true, parse: parseOneOf(['project', 'time']), ui: sessionDisplayField('listSessionGrouping') }),
  sidebarGrouping: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseOneOf(['project', 'time']), ui: sessionDisplayField('sidebarGrouping') }),
  sidebarKeepWorkInPlace: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('keepWorkInPlace') }),
+ sidebarKeepPinnedInPlace: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('keepPinnedInPlace') }),
+ sidebarSessionBatchSize: field<number | null>({ scope: 'profile', effect: ['ui'], perSurface: true, parse: (value, raw) => value === null ? null : parseIntegerInRange(SIDEBAR_SESSION_BATCH_MIN, SIDEBAR_SESSION_BATCH_MAX)(value, raw), ui: sessionDisplayField('sessionBatchSize') }),
  sidebarProjectSortOrder: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['manual', 'a-z', 'z-a', 'date-added', 'recent']), ui: sessionDisplayField('projectSortOrder') }),
  sidebarShowChatsSection: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('showChatsSection') }),
  sidebarShowWorkSection: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: sessionDisplayField('showWorkSection') }),
@@ -482,7 +477,6 @@ export const SETTINGS_REGISTRY = {
  collapsibleUserMessages: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('collapsibleUserMessages', (v) => useUIStore.getState().setCollapsibleUserMessages(v)) }),
  stickyUserHeader: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: uiStore('stickyUserHeader', (v) => useUIStore.getState().setStickyUserHeader(v)) }),
  promptNavigatorEnabled: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: uiStore('promptNavigatorEnabled', (v) => useUIStore.getState().setPromptNavigatorEnabled(v)) }),
- wideChatLayoutEnabled: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseBoolean, ui: uiStore('wideChatLayoutEnabled', (v) => useUIStore.getState().setWideChatLayoutEnabled(v)) }),
  showSplitAssistantMessageActions: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showSplitAssistantMessageActions', (v) => useUIStore.getState().setShowSplitAssistantMessageActions(v)) }),
  showToolFileIcons: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showToolFileIcons', (v) => useUIStore.getState().setShowToolFileIcons(v)) }),
  codeBlockLineWrap: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('codeBlockLineWrap', (v) => useUIStore.getState().setCodeBlockLineWrap(v)) }),
@@ -577,9 +571,9 @@ export const SETTINGS_REGISTRY = {
  fontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('fontSize', (v) => useUIStore.getState().setFontSize(v)) }),
  chatFontSize: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('chatFontSize', (v) => useUIStore.getState().setChatFontSize(v)) }),
  terminalFontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('terminalFontSize', (v) => useUIStore.getState().setTerminalFontSize(v)) }),
- editorFontSize: field({ scope: 'profile', effect: ['ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('editorFontSize', (v) => useUIStore.getState().setEditorFontSize(v)) }),
- uiFont: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseUiFont, ui: uiStore('uiFont', (v) => useUIStore.getState().setUiFont(v)) }),
- monoFont: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseMonoFont, ui: uiStore('monoFont', (v) => useUIStore.getState().setMonoFont(v)) }),
+ editorFontSize: field({ scope: 'profile', effect: ['store', 'ui'], perSurface: true, parse: parseFiniteNumber, ui: uiStore('editorFontSize', (v) => useUIStore.getState().setEditorFontSize(v)) }),
+ uiFont: field({ scope: 'profile', effect: ['ui'], parse: parseUiFont, ui: uiStore('uiFont', (v) => useUIStore.getState().setUiFont(v)) }),
+ monoFont: field({ scope: 'profile', effect: ['ui'], parse: parseMonoFont, ui: uiStore('monoFont', (v) => useUIStore.getState().setMonoFont(v)) }),
  customUiFont: field({ scope: 'profile', effect: ['ui'], parse: parseTextUpTo(100), ui: uiStore('customUiFont', (v) => useUIStore.getState().setCustomUiFont(v)) }),
  customMonoFont: field({ scope: 'profile', effect: ['ui'], parse: parseTextUpTo(100), ui: uiStore('customMonoFont', (v) => useUIStore.getState().setCustomMonoFont(v)) }),
  uiFontWeight: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(UI_FONT_WEIGHT_OPTIONS), ui: uiStore('uiFontWeight', (v) => useUIStore.getState().setUiFontWeight(v)) }),
@@ -685,16 +679,29 @@ type SettingsKey = keyof typeof SETTINGS_REGISTRY;
 
 type FieldValue<S> = S extends SettingsFieldSpec<infer T> ? T : never;
 
-/** The shared settings document as every client sees it: every registry key, optional. */
 export type DesktopSettings = { -readonly [K in SettingsKey]?: FieldValue<(typeof SETTINGS_REGISTRY)[K]> };
 
-/**
- * Device state that only ever lived in `useUIStore`'s persisted slice. Listed
- * so the registry accounts for every persisted key; none of these crosses the
- * wire, so they carry no parser. `globalDraftStarters` is the store's name for
- * the `draftStarters` field and is therefore not here.
- */
 export const LOCAL_DEVICE_KEYS = [
+ 'workStatusSectionOrderExplicit',
+ 'sidebarSection',
+ 'isSessionCreateDialogOpen',
+ 'messageLimit',
+ 'mobileKeepScreenAwake',
+ 'sessionSuggestionEnabled',
+ 'sessionGoalEnabled',
+ 'summaryLength',
+ 'summarizeLastMessage',
+ 'summaryThreshold',
+ 'agentScheduleToolEnabled',
+ 'agentMemoryToolEnabled',
+ 'agentUsageToolEnabled',
+ 'agentImageToolEnabled',
+ 'agentImageModel',
+ 'agentMemoryDreamingEnabled',
+ 'agentMemoryDreamingModel',
+ 'agentMemoryDreamingVariant',
+ 'agentSecretToolEnabled',
+ 'agentMemoryViewedAt',
  'theme',
  'isSidebarOpen',
  'sidebarWidth',
@@ -730,13 +737,6 @@ export const LOCAL_DEVICE_KEYS = [
  'contextZoneExpandedChatSizes',
 ] as const;
 
-/**
- * Instance facts the Electron main process writes straight into
- * `settings.json` (`mutateSettingsRoot`). The server keeps them when merging
- * and never accepts them from a client; no client reads them.
- * `desktopSplashColors` arrives over the window-theme IPC and replaces the
- * flat `splash*` keys older builds wrote through the settings document.
- */
 export const DESKTOP_SHELL_KEYS = [
  'desktopSplashColors',
  'desktopHosts',
@@ -751,22 +751,14 @@ const isSettingsKey = (key: string): key is SettingsKey => Object.prototype.hasO
 
 export const SETTINGS_KEYS: SettingsKey[] = Object.keys(SETTINGS_REGISTRY).filter(isSettingsKey);
 
-/** Keys whose value belongs to this install and therefore never goes to the server. */
 export const isDeviceSettingsKey = (key: SettingsKey): boolean => SETTINGS_REGISTRY[key].scope === 'device';
 
 type SettingsValue = DesktopSettings[SettingsKey];
 
-/** The erased view the generic loops iterate; assignable because the bindings use method syntax. */
 const specOf = (key: SettingsKey): SettingsFieldSpec<SettingsValue> => SETTINGS_REGISTRY[key];
 
-/** Keys the client may send to the server: not computed, not this install's device state. */
 export const isWritableSettingsKey = (key: SettingsKey): boolean => !SETTINGS_REGISTRY[key].computed && !isDeviceSettingsKey(key);
 
-/**
- * Parse an untrusted document (server response, bridge payload) into the
- * trusted shape. Keys not in the registry are dropped; a value a parser rejects
- * is dropped as if absent — never replaced by a default.
- */
 const rawDocumentSchema = z.record(z.string(), z.unknown());
 
 export const parseSettingsDocument = (payload: unknown): DesktopSettings | null => {
@@ -795,11 +787,6 @@ const isSameValue = (left: SettingsValue, right: SettingsValue): boolean => {
  return JSON.stringify(left) === JSON.stringify(right);
 };
 
-/**
- * Copy the fields a snapshot carries into their live stores. A field the
- * snapshot omits is left alone ("missing is not default"); a field whose
- * store already holds the value is not written again.
- */
 export const applySettingsToStores = (snapshot: DesktopSettings): void => {
  for (const key of SETTINGS_KEYS) {
   const spec = specOf(key);
@@ -811,13 +798,11 @@ export const applySettingsToStores = (snapshot: DesktopSettings): void => {
  }
 };
 
-/** Keys whose backing store the auto-save watches. */
 export const AUTO_SAVE_KEYS = SETTINGS_KEYS.filter((key) => {
  const spec = specOf(key);
  return spec.ui?.autoSave === true;
 });
 
-/** Current store values for the auto-saved keys (undefined for unset). */
 export const readAutoSaveSnapshot = (): DesktopSettings => {
  const snapshot: DesktopSettings = {};
  for (const key of AUTO_SAVE_KEYS) {
@@ -828,25 +813,21 @@ export const readAutoSaveSnapshot = (): DesktopSettings => {
  return snapshot;
 };
 
-/** Keys the per-runtime browser mirror carries: everything the server owns for the user, minus secrets and computed flags. */
 export const MIRRORED_KEYS = SETTINGS_KEYS.filter((key) => {
  const spec = specOf(key);
  return spec.scope !== 'device' && !spec.secret && !spec.computed;
 });
 
-/** Shape of one field in the generated JSON snapshot the server consumes. */
 type SettingsRegistrySnapshotField = {
- scope: SettingsScope;
- perSurface?: true;
- surfaces?: readonly SettingsSurface[];
- adopt?: 'bootstrap-only';
- derived?: true;
- secret?: true;
- computed?: true;
- /** Lives only in the local store; never crosses the wire. */
- local?: true;
- /** Written by the desktop shell straight into the file; never by a client. */
- owner?: 'desktop-shell';
+  scope: SettingsScope;
+  perSurface?: true;
+  surfaces?: readonly SettingsSurface[];
+  adopt?: 'bootstrap-only';
+  derived?: true;
+  secret?: true;
+  computed?: true;
+  local?: true;
+  owner?: 'desktop-shell';
 };
 
 type SettingsRegistrySnapshot = {

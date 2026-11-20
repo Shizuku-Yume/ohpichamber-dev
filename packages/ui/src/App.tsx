@@ -3,7 +3,7 @@ import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
 import { LegacyDataNotice } from '@/components/onboarding/LegacyDataNotice';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
-import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
+import { GlobalQuestionDialogs } from '@/components/layout/GlobalQuestionDialogs';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from '@/components/ui';
@@ -23,6 +23,7 @@ import { bootServerStateStores, installServerStateBootEvents } from '@/stores/se
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
+import { useGuestMarksSync } from '@/hooks/useGuestMarksSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
@@ -54,6 +55,7 @@ import { SyncProvider } from '@/sync/sync-context';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useUIStore } from '@/stores/useUIStore';
+import { useChatWidthAttribute } from '@/hooks/useChatWidthAttribute';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { useSourceControlProviderRegistry } from '@/lib/source-control/providers/registry';
 import { refreshTrackers } from '@/stores/useTrackerAuthStore';
@@ -190,7 +192,6 @@ function App({ apis }: AppProps) {
   const [initRetryEpoch, setInitRetryEpoch] = React.useState(0);
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
   const [manualInitRetrying, setManualInitRetrying] = React.useState(false);
-  const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled);
   const mobileKeyboardMode = useUIStore((state) => state.mobileKeyboardMode);
   const isDesktopRuntime = React.useMemo(() => isDesktopShell(), []);
   const [bootInjectionStatus, setBootInjectionStatus] = React.useState<BootInjectionStatus>(() => {
@@ -246,12 +247,7 @@ function App({ apis }: AppProps) {
     });
   }, []);
 
-  React.useEffect(() => {
-    document.documentElement.classList.toggle('wide-chat-layout', wideChatLayoutEnabled);
-    return () => {
-      document.documentElement.classList.remove('wide-chat-layout');
-    };
-  }, [wideChatLayoutEnabled]);
+  useChatWidthAttribute();
 
   React.useEffect(() => {
     registerRuntimeAPIs(apis);
@@ -492,7 +488,7 @@ function App({ apis }: AppProps) {
   React.useLayoutEffect(() => {
     const restore = lastSessionRestoreRef.current;
     if (restore.attempt) return;
-    restore.attempt = beginLastSessionRestore({ selectNow: !parseRoute().sessionId });
+    restore.attempt = beginLastSessionRestore({ selectNow: !parseRoute().sessionId, refresh: false });
   }, []);
   React.useEffect(() => {
     const restore = lastSessionRestoreRef.current;
@@ -598,6 +594,7 @@ function App({ apis }: AppProps) {
   useGuestCatalogSync();
   useGuestInstallLinks();
   useBrowserProviderSync();
+  useGuestMarksSync();
   useRoutingSync();
   useEnterprisePolicySync();
   // Desktop windows on a relay host; the phone has its own handling in MobileApp.
@@ -793,21 +790,23 @@ function App({ apis }: AppProps) {
       <SyncProvider key={runtimeEndpointEpoch} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
-            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-              <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                <SyncAppEffects backgroundWorkEnabled />
-                <MainLayout />
-                <LegacyDataNotice />
-                {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
-                <Toaster />
-                <AppLinkConfirmDialog />
-                <SharedTrustConfirmDialog />
-                <AboutDialogWrapper />
-                {showMemoryDebug && (
-                  <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
-                )}
-              </div>
-            </TooltipProvider>
+              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
+                <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
+                  <SyncAppEffects backgroundWorkEnabled />
+                  <MainLayout />
+                  <LegacyDataNotice />
+                  {/* Unmounted, not faded: the shell under it is ready, and a
+                      fade only delays the moment it is seen. */}
+                  {isDesktopRuntime && !(bootOutcomeKnown && bootViewIsMain) ? <AppStartupOverlay ready={false} /> : null}
+                  <Toaster />
+                  <AppLinkConfirmDialog />
+                  <GlobalQuestionDialogs />
+                  <AboutDialogWrapper />
+                  {showMemoryDebug && (
+                    <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
+                  )}
+                </div>
+              </TooltipProvider>
           </FireworksProvider>
         </RuntimeAPIProvider>
       </SyncProvider>

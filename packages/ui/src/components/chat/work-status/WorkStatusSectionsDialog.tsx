@@ -25,7 +25,6 @@ import {
 } from './sections';
 import { useWorkStatusExtensionSections, type WorkStatusExtensionSections } from './useWorkStatusExtensionSections';
 
-/** Built-in sections are named by the host; an extension's by its own title. */
 const useSectionLabel = (extensions: WorkStatusExtensionSections) => {
   const { t } = useI18n();
   return React.useCallback((sectionId: WorkStatusPanelSectionId): string => {
@@ -62,7 +61,6 @@ const SortableSectionRow: React.FC<{
         <Icon name="draggable" className="size-4" />
       </Button>
       <SettingsCheckboxRow
-        // Extension rows are dynamic entities, so they carry no search anchor.
         settingsItem={extension ? undefined : `chat.work-status.section.${sectionId}`}
         checked={checked}
         onChange={onChange}
@@ -77,7 +75,6 @@ const SortableSectionRow: React.FC<{
   );
 };
 
-/** Visibility and display order share stable section ids. */
 export const WorkStatusSectionsDialog: React.FC<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -106,8 +103,6 @@ export const WorkStatusSectionsDialog: React.FC<{
     const from = sectionOrder.findIndex((id) => id === active.id);
     const to = sectionOrder.findIndex((id) => id === over.id);
     if (from < 0 || to < 0) return;
-    // Sections of extensions that are paused or not loaded right now keep
-    // their saved slot at the end instead of being forgotten.
     const next = arrayMove(sectionOrder, from, to);
     const shown = new Set<string>(next);
     setSectionOrder([...next, ...storedOrder.filter((id) => !shown.has(id))]);
@@ -134,8 +129,6 @@ export const WorkStatusSectionsDialog: React.FC<{
     };
   }, [sectionLabel, sectionOrder, t]);
 
-  // Measured against what the dialog lists: a hidden id of an extension that
-  // is not available here must not offer a "Show all" with nothing to show.
   const allVisible = sectionOrder.every((id) => isWorkStatusSectionVisible(hidden, id));
   const noneVisible = areAllWorkStatusSectionsHidden(hidden, extensionSections.ids);
 

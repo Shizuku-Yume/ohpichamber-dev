@@ -149,8 +149,6 @@ const TaskTargetLine: React.FC<{ sessionId: string }> = ({ sessionId }) => {
  return <p className="truncate typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.targetSession')}: {session?.title || sessionId}</p>
 };
 
-// Next to "Paused" on a repository loop that waits for the user: the icon
-// says why, the sentence is its title. A loop the user paused has none.
 const LoopApprovalMark: React.FC<{ reason: NonNullable<ScheduledTask['loopApproval']> }> = ({ reason }) => {
  const { t } = useI18n();
  const label = reason === 'outdated'
@@ -174,15 +172,8 @@ const toneStyle = (tone: StatusTone): React.CSSProperties => {
  };
 };
 
-/** Why the page is being left: a started session or a loop file to edit
- *  takes over the screen, and each shell decides how to get there. */
 export type ScheduledTasksLeaveReason = 'session' | 'file';
 
-/**
- * The scheduled tasks page. `page` is the desktop surface that replaces the
- * chat area (scope list at the left, tasks at the right); `mobile` is the
- * single-column body of the mobile shell's fullscreen surface.
- */
 export function ScheduledTasksView({ layout, onLeave }: {
  layout: 'page' | 'mobile';
  onLeave: (reason: ScheduledTasksLeaveReason) => void;
@@ -749,8 +740,6 @@ export function ScheduledTasksView({ layout, onLeave }: {
  );
 }
 
-/** The desktop page, open while the UI store says so. The mobile shell mounts
- *  ScheduledTasksView in its own fullscreen surface instead. */
 export function ScheduledTasksDialog() {
  const open = useUIStore((state) => state.isScheduledTasksDialogOpen);
  const setOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);

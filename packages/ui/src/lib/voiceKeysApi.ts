@@ -1,11 +1,6 @@
 import { z } from 'zod';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-/**
- * Custom transcription keys live on the server (`/api/voice/keys`, mode 0600
- * there); the UI only learns whether one is set. Speech credentials remain
- * SDK-owned and are not part of this store.
- */
 const voiceApiKeyStateSchema = z.object({
   stt: z.boolean(),
 });
@@ -15,7 +10,6 @@ export type VoiceApiKeyKind = keyof VoiceApiKeyState;
 
 export const EMPTY_VOICE_API_KEYS = { stt: false } satisfies VoiceApiKeyState;
 
-/** Where builds before the server-side store kept each key in the browser. */
 const LEGACY_STORAGE_KEYS = {
   stt: 'sttApiKey',
 } as const satisfies Record<VoiceApiKeyKind, string>;
@@ -28,7 +22,6 @@ export const fetchVoiceApiKeys = async (): Promise<VoiceApiKeyState> => {
   return voiceApiKeyStateSchema.parse(await response.json());
 };
 
-/** A string stores the key, null removes it. Answers the new state. */
 export const updateVoiceApiKeys = async (
   patch: Partial<Record<VoiceApiKeyKind, string | null>>,
 ): Promise<VoiceApiKeyState> => {
@@ -41,12 +34,6 @@ export const updateVoiceApiKeys = async (
   return voiceApiKeyStateSchema.parse(await response.json());
 };
 
-/**
- * Moves keys a previous build left in localStorage to the server, then
- * deletes them from the browser. Only after the server confirmed the write:
- * a failed move keeps them for the next attempt rather than losing them.
- * Answers the new state, or null when there was nothing to move.
- */
 export const migrateLegacyVoiceApiKeys = async (): Promise<VoiceApiKeyState | null> => {
   const patch: Partial<Record<VoiceApiKeyKind, string>> = {};
   let legacyPresent = false;

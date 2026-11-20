@@ -1,5 +1,5 @@
-import { describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -9,7 +9,8 @@ import { hostFilesystem } from '@/lib/host-filesystem';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import {
-  GLOBAL_SESSIONS_REFRESH_INTERVAL_MS,
+  GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS,
+  GLOBAL_SESSIONS_RETRY_INTERVAL_MS,
   startGlobalSessionsPolling,
   useGlobalSessionsPolling,
 } from './useGlobalSessionsPolling';
@@ -42,6 +43,10 @@ const timers = () => {
 };
 
 describe('global sessions polling lifecycle', () => {
+  const realNow = Date.now;
+  beforeEach(() => { Date.now = () => 1_800_000_000_000; });
+  afterEach(() => { Date.now = realNow; });
+
   test('loads immediately, schedules only after completion, and clears its timer on disposal', async () => {
     const clock = timers();
     let initialLoads = 0;
@@ -57,15 +62,16 @@ describe('global sessions polling lifecycle', () => {
     expect(clock.pending.size).toBe(0);
     complete(true);
     await flush();
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    // Before: a 45 s timer, though the event stream already names every new session.
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     await clock.fire();
     expect(refreshes).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     dispose();
     expect(clock.pending.size).toBe(0);
   });
 
-  test('recovers a startup failure without waiting 45 seconds or user interaction', async () => {
+  test('recovers a startup failure without waiting for the full interval or user interaction', async () => {
     const clock = timers();
     let calls = 0;
     const dispose = startGlobalSessionsPolling(
@@ -77,33 +83,33 @@ describe('global sessions polling lifecycle', () => {
     expect(clock.delay()).toBe(1_000);
     await clock.fire();
     expect(calls).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     dispose();
   });
 
-  test('bounds startup retries and resumes ordinary polling after exhaustion', async () => {
+  test('bounds startup retries and keeps retrying at the retry interval after exhaustion', async () => {
     const clock = timers();
     const fail = async () => false;
     const dispose = startGlobalSessionsPolling(fail, fail, clock.schedule, clock.clear);
     await flush();
-    for (const delay of [1_000, 2_000, 4_000, GLOBAL_SESSIONS_REFRESH_INTERVAL_MS]) {
+    for (const delay of [1_000, 2_000, 4_000, GLOBAL_SESSIONS_RETRY_INTERVAL_MS]) {
       expect(clock.delay()).toBe(delay);
       await clock.fire();
     }
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_RETRY_INTERVAL_MS);
     dispose();
   });
 
-  test('a background failure after success does not restart the startup retry burst', async () => {
+  test('a background failure after success retries without restarting the startup burst', async () => {
     const clock = timers();
     const dispose = startGlobalSessionsPolling(async () => true, async () => false, clock.schedule, clock.clear);
     await flush();
     await clock.fire();
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_RETRY_INTERVAL_MS);
     dispose();
   });
 
-  test('OpenCode answering ends the wait after a failed startup load', async () => {
+  test('the Agent Service answering ends the wait after a failed startup load', async () => {
     const clock = timers();
     let ready: () => void = () => undefined;
     let refreshes = 0;
@@ -115,14 +121,13 @@ describe('global sessions polling lifecycle', () => {
       (listener) => { ready = listener; return () => { ready = () => undefined; }; },
     );
     await flush();
-    // Startup retries exhausted: before, the next try came 45 s later.
     for (let attempt = 0; attempt < 3; attempt += 1) await clock.fire();
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_RETRY_INTERVAL_MS);
     ready();
     await flush();
     expect(refreshes).toBe(4);
     expect(clock.pending.size).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     // After a success it changes nothing.
     ready();
     await flush();
@@ -130,7 +135,7 @@ describe('global sessions polling lifecycle', () => {
     dispose();
   });
 
-  test('OpenCode answering during a failing load runs one more load right after it', async () => {
+  test('the Agent Service answering during a failing load runs one more load right after it', async () => {
     const clock = timers();
     let ready: () => void = () => undefined;
     let finishInitial: (success: boolean) => void = () => undefined;
@@ -146,7 +151,7 @@ describe('global sessions polling lifecycle', () => {
     await flush();
     await flush();
     expect(refreshes).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     dispose();
   });
 
@@ -158,7 +163,7 @@ describe('global sessions polling lifecycle', () => {
     await flush();
     expect(clock.delay()).toBe(1_000);
     await clock.fire();
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     dispose();
   });
 
@@ -183,7 +188,6 @@ describe('global sessions polling lifecycle', () => {
     );
     await flush();
 
-    // Before: the full global list every 45 s whether or not anyone looked.
     hidden = true;
     await clock.fire();
     expect(refreshes).toBe(0);
@@ -194,7 +198,7 @@ describe('global sessions polling lifecycle', () => {
     notifyVisible();
     await flush();
     expect(refreshes).toBe(1);
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     notifyVisible();
     await flush();
     expect(refreshes).toBe(1);
@@ -287,15 +291,13 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     await act(async () => { await clock.fire(); await recovered; });
     expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['restored']);
     expect(useGlobalSessionsStore.getState().status).toBe('ready');
-    expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
+    expect(clock.delay()).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
     expect(list.mock.calls.every(([workspaceId]) => workspaceId === undefined)).toBe(true);
 
     const oldPage = new Promise<SessionList>((resolve) => { resolveOldPage = resolve; });
     list.mockImplementation(() => getRuntimeKey() === 'startup-a' ? oldPage : Promise.resolve(session('new-runtime')));
     await act(async () => clock.fire());
-    // The pass between full loads is a head check: it applies what it reads as
-    // mutations and never flashes the list into a loading state.
-    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().status).toBe('loading');
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
     expect(clock.pending.size).toBe(0);
     const switched = subscribeToNextReady();
@@ -352,6 +354,6 @@ describe('global session polling root coverage', () => {
   // already waiting at startup never reaches the index its rows read (#5098).
   test('the mobile sessions sheet seeds the host index after its own load', () => {
     const source = readFileSync(new URL('../apps/MobileSessionsSheet.tsx', import.meta.url), 'utf8');
-    expect(/refreshGlobalSessions\(liveSessions\)\.then\(\(\) => seedGlobalSessionStatusFromHost\(\)\)/.test(source)).toBe(true);
+    expect(/refreshGlobalSessionsWhenShown\(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS, liveSessions\)\.then\(\(\) => seedGlobalSessionStatusFromHost\(\)\)/.test(source)).toBe(true);
   });
 });

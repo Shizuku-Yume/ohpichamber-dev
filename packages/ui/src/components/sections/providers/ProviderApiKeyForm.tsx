@@ -16,10 +16,6 @@ interface ProviderApiKeyFormProps {
   disabled?: boolean;
 }
 
-/**
- * The API key form for one provider. Mount with `key={providerId}` so a
- * different provider starts from an empty, write-only input.
- */
 export const ProviderApiKeyForm: React.FC<ProviderApiKeyFormProps> = ({
   writeCanonicalKey,
   onSaved,

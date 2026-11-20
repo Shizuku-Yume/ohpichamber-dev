@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { registerWorkspaceDirectory } from './globalSessions';
-import { isGlobalSessionRecencyOnlyUpdate, resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
 
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_project', workspaceId: 'wsp_repo', displayPath: 'repo',
@@ -136,12 +136,14 @@ describe('native global session mutations', () => {
   });
 });
 
-describe('native recency-only detection', () => {
-  test('accepts only an updated timestamp change', () => {
+describe('native recency updates', () => {
+  test('publishes a native timestamp change without replacing unrelated entities', () => {
     const record = session('ses_one');
-    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3 })).toBe(true);
-    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, title: 'New', metadata: {} })).toBe(false);
-    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, archivedAt: 4 })).toBe(false);
-    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, parentSessionId: 'ses_parent' })).toBe(false);
+    useGlobalSessionsStore.getState().upsertSession(record);
+    useGlobalSessionsStore.getState().upsertSession(session('ses_other'));
+    const other = useGlobalSessionsStore.getState().entityById.get('ses_other');
+    useGlobalSessionsStore.getState().upsertSession({ ...record, updatedAt: 3 });
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_one')?.updatedAt).toBe(3);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_other')).toBe(other);
   });
 });

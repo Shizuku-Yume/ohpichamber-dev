@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
@@ -136,7 +136,6 @@ describe('NewWorktreeBranchPicker desktop dropdown', () => {
       await act(async () => {
         search.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       });
-      await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 50)); });
       expect(document.querySelector('[data-slot="dropdown-menu-content"]') === null).toBe(true);
       expect(document.querySelector('input[data-slot="command-input"]') === null).toBe(true);
     });

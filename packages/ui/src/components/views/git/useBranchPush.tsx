@@ -1,4 +1,3 @@
-import React from 'react';
 
 import { toast } from '@/components/ui';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -14,13 +13,6 @@ import { PublishDialog } from './PublishDialog';
 import { useGitOperationRecovery } from './useGitOperationRecovery';
 import { useGitPublishChooser } from './useGitPublishChooser';
 
-/**
- * Pushes the current branch the way the Git view's Publish does: to its own
- * remote, or through the publish and contributor choosers when that is not
- * obvious, as a tracked network operation. `dialogs` renders those choosers.
- * `pushForReview` pushes it for review instead (hosts that create changes by
- * pushing), through the same tracked operation and the same failure reporting.
- */
 export function useBranchPush(directory: string | null, branch: string | undefined) {
     const { git, sourceControl } = useRuntimeAPIs();
     const { t } = useI18n();
@@ -29,7 +21,6 @@ export function useBranchPush(directory: string | null, branch: string | undefin
     const recovery = useGitOperationRecovery(directory, git, sourceControl);
 
     type Operation = NonNullable<ReturnType<typeof recovery.start>>;
-    /** Runs one tracked push; true once it went through, false after a failure the user was told about. */
     const run = async (failed: string, transfer: (operation: Operation) => Promise<void>): Promise<boolean> => {
         const operation = recovery.start();
         if (!operation) {
@@ -60,7 +51,6 @@ export function useBranchPush(directory: string | null, branch: string | undefin
         }
     };
 
-    /** True once the branch is on its remote; false after a failure the user was told about. */
     const push = (): Promise<boolean> => run(
         t('gitView.toast.syncActionFailed', { action: t('gitView.publish.title') }),
         async (operation) => {
@@ -69,7 +59,6 @@ export function useBranchPush(directory: string | null, branch: string | undefin
         },
     );
 
-    /** True once the commits are on the review host as a change or a new patchset of one. */
     const pushForReview = (review: GitPushReviewIntent): Promise<boolean> => {
         if (!directory) return Promise.resolve(false);
         return run(t('gitView.change.push.toast.failed'), async (operation) => {

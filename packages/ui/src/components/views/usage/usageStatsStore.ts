@@ -23,25 +23,17 @@ import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
 
 export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null; providerId?: string | null };
 export type UsageStatsEntry = {
-  /** Last successful report; kept on screen through refreshes and failed refreshes. */
   stats: UsageStats | null;
-  /** When the read of `stats` started, so a read that crosses midnight counts as the old day's. */
   fetchedAt: number | null;
   loading: boolean;
-  /** Message of the last failed read; cleared by the next success. */
   error: string | null;
 };
 
 export type UsageStatsFetcher = (request: UsageStatsRequest, signal: AbortSignal) => Promise<UsageStats>;
 
-/**
- * Native tool calls for a loaded report, fetched only on request.
- * `range` is the loaded report's window, so the numbers match the page.
- */
 export type UsageToolsEntry = {
   tools: UsageToolsResponse | null;
   loading: boolean;
-  /** Message of the last failed read; never shown as zero calls. */
   error: string | null;
 };
 
@@ -64,18 +56,8 @@ type UsageStatsStore = {
    */
   load: (request: UsageStatsRequest, options?: { force?: boolean }) => Promise<void>;
   toolEntries: Record<string, UsageToolsEntry>;
-  /**
-   * Set once the user asks for tool calls; from then on every loaded report
-   * fetches its tools after it lands, for the rest of the app session.
-   */
   toolsRequested: boolean;
-  /**
-   * Loads tool calls for the request's loaded report. Without `force` this
-   * only reads a key that has no tools, no error and no read running; with no
-   * loaded report there is no window to count, so it does nothing.
-   */
   loadTools: (request: UsageStatsRequest, options?: { force?: boolean }) => Promise<void>;
-  /** Forgets every entry and ignores reads still in flight. */
   reset: () => void;
 };
 
@@ -109,11 +91,7 @@ export function createUsageStatsStore(
   now: () => number = Date.now,
   toolsFetcher: UsageToolsFetcher = fetchToolsFromCanonical,
 ) {
-  // Aborted and replaced on reset, so reads from a previous runtime can
-  // neither commit nor keep a key marked as loading.
   let controller = new AbortController();
-  // The tool read each key still wants: a read left over from an expired
-  // Today report must not land on the new day's tools, whichever finishes last.
   const currentToolReads = new Map<string, symbol>();
 
   return create<UsageStatsStore>()((set, get) => {
@@ -146,8 +124,6 @@ export function createUsageStatsStore(
 
         const { signal } = controller;
         if (expired) {
-          // Dropped before the read, so a failed read shows as an error and
-          // never as yesterday's totals under Today.
           patch(key, { stats: null, fetchedAt: null, loading: true, error: null });
           currentToolReads.delete(key);
           set((state) => {
@@ -227,15 +203,8 @@ export function createUsageStatsStore(
 
 export const useUsageStatsStore = createUsageStatsStore(fetchFromCanonical, getRuntimeKey);
 
-/** How often an open Today report checks whether the local day has changed. */
 const TODAY_CHECK_INTERVAL_MS = 60_000;
 
-/**
- * Keeps Today current while the page stays open. `load` reads only once the
- * day has changed, so the checks cost nothing the rest of the time. A clock
- * check survives sleep and daylight saving, where a timer aimed at midnight
- * would not.
- */
 export function useTodayRollover(enabled: boolean, load: () => void): void {
   React.useEffect(() => {
     if (!enabled) return undefined;

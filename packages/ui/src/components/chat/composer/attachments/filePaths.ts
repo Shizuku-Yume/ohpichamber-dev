@@ -1,10 +1,3 @@
-/**
- * Path handling for composer attachments.
- *
- * Two representations meet here: what the user sees in the prompt (a
- * project-relative mention) and what the OpenCode server is given (a
- * `file://` URL).
- */
 
 const FILE_URI_PREFIX = 'file://';
 
@@ -68,10 +61,6 @@ export function toServerFileUrl(filepath: string): string {
 
 export { normalizePath } from '@/lib/pathNormalization';
 
-/**
- * Express an absolute path relative to the project root, so the prompt carries
- * the path the user recognizes. Paths outside the root are left absolute.
- */
 export function toProjectRelativeMentionPath(absolutePath: string, root: string): string {
  const normalizedAbsolutePath = absolutePath.replace(/\\/g, '/').trim();
  const normalizedRoot = (root || '').replace(/\\/g, '/').replace(/\/+$/, '');
@@ -83,4 +72,3 @@ export function toProjectRelativeMentionPath(absolutePath: string, root: string)
   ? normalizedAbsolutePath.slice(rootWithSlash.length)
   : normalizedAbsolutePath;
 }
-

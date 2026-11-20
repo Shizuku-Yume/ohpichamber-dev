@@ -1,8 +1,3 @@
-/**
- * Recent canonical session errors, kept in memory for diagnostics.
- * Canonical run failures carry a string. Transport diagnostics may additionally
- * supply structured detail; these are never treated as canonical event payloads.
- */
 
 type NativeErrorDetail = {
   type?: string;
@@ -61,7 +56,6 @@ export function recordSessionError(record: Omit<SessionErrorRecord, 'at'>): void
   }
 }
 
-/** Newest first. */
 export function getRecentSessionErrors(): SessionErrorRecord[] {
   return [...records].reverse()
 }

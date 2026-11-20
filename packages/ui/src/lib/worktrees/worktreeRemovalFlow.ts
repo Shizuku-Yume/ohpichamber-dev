@@ -1,18 +1,12 @@
-/**
- * A delete stopped by the project's teardown commands. The server, the
- * extension host and the bridge carry the code on the error they throw.
- */
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
+import type { Session } from '@openchamber/agent-contract';
+import { normalizePath } from '@/lib/pathNormalization';
+import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
+
 export const isWorktreeTeardownFailure = (error: Error): boolean => (
   'code' in error && error.code === 'WORKTREE_TEARDOWN_FAILED'
 );
 
-/**
- * The failure toast's options for a delete its teardown commands stopped: an
- * action that repeats the delete with every option the user picked and no
- * teardown. Only a click runs it; nothing skips a teardown on its own. The
- * toast stays until it is answered or closed, like the app's other toasts that
- * wait for a decision.
- */
 export const deleteWithoutTeardownToast = (
   error: Error,
   label: string,
@@ -26,17 +20,8 @@ export type SessionArchiveResult = {
   failedIds: string[];
 };
 
-/**
- * Archives a worktree's sessions, then removes (or archives) the worktree. The sessions go
- * first because OpenCode can change a session only while its directory exists:
- * archived after the removal, each one would have to move to the project's
- * main folder first and carry a "moved" note in its transcript. A removal that
- * fails or throws restores the sessions it archived, so no archived session
- * stays attached to a worktree still on disk; a throw is passed on after that.
- */
 export async function archiveSessionsThenRemoveWorktree(options: {
   sessionIds: string[];
-  /** Gets the sessions it archived: an archive of the worktree records them. */
   removeWorktree: (archivedIds: string[]) => Promise<boolean>;
   archiveSessions: (sessionIds: string[]) => Promise<SessionArchiveResult>;
   restoreSessions: (sessionIds: string[]) => Promise<{ failedIds: string[] }>;
@@ -63,4 +48,96 @@ export async function archiveSessionsThenRemoveWorktree(options: {
   if (removed) return { removed, archive };
   await restore();
   return { removed, archive: { archivedIds: [], failedIds: [] } };
+}
+
+export type WorktreeKeepStop = 'busy' | 'unknown' | 'added' | 'unconfirmed' | 'switched';
+
+const STOP_MESSAGES = {
+  busy: 'A session in the worktree is still running',
+  unknown: 'Could not read whether a session in the worktree is running',
+  added: 'A session started in the worktree while the others moved',
+  unconfirmed: 'The server had not applied a session move in time',
+  switched: 'The server changed before the worktree was removed',
+} satisfies Record<WorktreeKeepStop, string>;
+
+export class WorktreeKeepStoppedError extends Error {
+  readonly reason: WorktreeKeepStop;
+
+  constructor(reason: WorktreeKeepStop) {
+    super(STOP_MESSAGES[reason]);
+    this.name = 'WorktreeKeepStoppedError';
+    this.reason = reason;
+  }
+}
+
+export type SessionTreeInFolder = {
+  root: Session;
+  descendants: Session[];
+  sourceDirectory: string;
+};
+
+export const groupSessionTreesByFolder = (sessions: readonly Session[]): SessionTreeInFolder[] => {
+  const byFolder = new Map<string, Session[]>();
+  for (const session of sessions) {
+    const folder = resolveGlobalSessionDirectory(session);
+    if (!folder) continue;
+    const members = byFolder.get(folder);
+    if (members) members.push(session);
+    else byFolder.set(folder, [session]);
+  }
+  return [...byFolder.entries()].flatMap(([sourceDirectory, members]) => {
+    const ids = new Set(members.map((session) => session.sessionId));
+    const childrenById = new Map<string, Session[]>();
+    for (const session of members) {
+      if (!session.parentSessionId || !ids.has(session.parentSessionId)) continue;
+      const siblings = childrenById.get(session.parentSessionId);
+      if (siblings) siblings.push(session);
+      else childrenById.set(session.parentSessionId, [session]);
+    }
+    const descendantsOf = (id: string): Session[] => (childrenById.get(id) ?? [])
+      .flatMap((child) => [child, ...descendantsOf(child.sessionId)]);
+    return members
+      .filter((session) => !session.parentSessionId || !ids.has(session.parentSessionId))
+      .map((root) => ({ root, descendants: descendantsOf(root.sessionId).reverse(), sourceDirectory }));
+  });
+};
+
+export async function moveSessionsThenRemoveWorktree(options: {
+  worktreePath: string;
+  readSessions: () => readonly Session[];
+  readActivity: (sessions: readonly Session[]) => Promise<'active' | 'idle' | 'unknown'>;
+  resolveDestination: (directory: string) => Promise<string>;
+  moveTree: (tree: SessionTreeInFolder & { projectDirectory: string }) => Promise<void>;
+  confirmMoves: (moves: readonly (SessionTreeInFolder & { projectDirectory: string })[]) => Promise<boolean>;
+  removeWorktree: () => Promise<boolean>;
+  isCurrent: () => boolean;
+}): Promise<{ removed: boolean }> {
+  const assertCurrent = () => {
+    if (!options.isCurrent()) throw new WorktreeKeepStoppedError('switched');
+  };
+  const sessions = options.readSessions();
+  if (sessions.length > 0) {
+    const activity = await options.readActivity(sessions);
+    assertCurrent();
+    if (activity === 'unknown') throw new WorktreeKeepStoppedError('unknown');
+    if (activity === 'active') throw new WorktreeKeepStoppedError('busy');
+  }
+  if (sessions.some((session) => !resolveGlobalSessionDirectory(session))) throw new Error('A session in the worktree has no folder');
+  const worktreePath = normalizePath(options.worktreePath) ?? options.worktreePath;
+  const moves = await Promise.all(groupSessionTreesByFolder(sessions).map(async (tree) => ({
+    ...tree,
+    projectDirectory: await options.resolveDestination(tree.sourceDirectory),
+  })));
+  const doomed = moves.find((move) => checkoutHoldsDirectory(worktreePath, normalizePath(move.projectDirectory) ?? move.projectDirectory));
+  if (doomed) throw new Error(`The project folder ${doomed.projectDirectory} is inside the worktree`);
+  for (const move of moves) {
+    assertCurrent();
+    await options.moveTree(move);
+  }
+  const confirmed = moves.length === 0 || await options.confirmMoves(moves);
+  assertCurrent();
+  if (!confirmed) throw new WorktreeKeepStoppedError('unconfirmed');
+  const movedIds = new Set(sessions.map((session) => session.sessionId));
+  if (options.readSessions().some((session) => !movedIds.has(session.sessionId))) throw new WorktreeKeepStoppedError('added');
+  return { removed: await options.removeWorktree() };
 }

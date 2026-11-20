@@ -313,11 +313,6 @@ export const buildSessionWorktreeMenuTargets = (args: {
   return [...primaryTargets, ...linkedTargets];
 };
 
-// A restored session can keep a source directory whose worktree was deleted:
-// that path no longer matches any known worktree or configured project root,
-// so directory-based resolution fails. The session's worktree metadata still
-// records the owning project root in projectDirectory, so fall back to it
-// before giving up. Without an owner the menu cannot list sibling worktrees.
 export const resolveSessionWorktreeMenuProject = (
   args: StartSessionWorktreeMenuLoadArgs,
   deps: Pick<WorktreeTopologyRefreshDependencies, 'projects' | 'resolveProject'>,

@@ -129,7 +129,6 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
   const logoProviderId = form.providerId.trim() || 'custom';
   const { hasLogo: providerHasLogo } = useProviderLogo(logoProviderId);
-  // A logo stored under the typed ID: kept when the provider was removed and is added again.
   const storedLogo = useUIStore((state) => state.customProviderLogos[logoProviderId]);
   const pickedLogoFile = form.logo instanceof File ? form.logo : null;
   const [pickedLogoUrl, setPickedLogoUrl] = React.useState<string | null>(null);
@@ -383,7 +382,6 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     <form onSubmit={submit}>
       <SettingsSection
         title={isEdit ? t('settings.providers.page.custom.editTitle') : t('settings.providers.page.custom.title')}
-        divider={false}
         settingsItem="providers.custom"
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
@@ -465,7 +463,6 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           info={t('settings.providers.page.custom.field.icon.info')}
         >
           <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('settings.providers.page.custom.field.icon.label')}>
-            {/* Default keeps the provider's own logo when its id has one. */}
             <Button
               type="button"
               variant={form.icon === null ? 'chip' : 'ghost'}

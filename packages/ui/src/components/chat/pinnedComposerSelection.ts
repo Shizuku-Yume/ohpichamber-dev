@@ -30,12 +30,6 @@ export const resolvePinnedComposerSelection = ({ savedAgent, savedModel, savedVa
     reasoningEffort: savedReasoningEffort,
 });
 
-/**
- * The model, agent and effort a pinned column's composer (a chat open in the
- * side panel) sends with. The app-wide current model belongs to the main
- * chat, so a pinned composer keeps its own saved choices. Canonical session
- * records do not provide a fallback selection; null outside a pinned column.
- */
 export const usePinnedComposerSelection = ({ enabled, sessionId, directory }: {
     enabled: boolean;
     sessionId: string | null;

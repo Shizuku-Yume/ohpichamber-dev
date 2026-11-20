@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
@@ -13,7 +13,7 @@ describe('useDraftTarget while a new worktree attaches', () => {
     dom = new Window({ url: 'http://localhost/' });
     Object.assign(globalThis, {
       window: dom,
-      document: dom.document,
+      document: dom.document, Event: dom.Event, CustomEvent: dom.CustomEvent,
       navigator: dom.navigator,
       localStorage: dom.localStorage,
       IS_REACT_ACT_ENVIRONMENT: true,

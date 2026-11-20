@@ -4,4 +4,3 @@
 export function isSurfaceAttended(): boolean {
   return document.hasFocus?.() ?? false
 }
-

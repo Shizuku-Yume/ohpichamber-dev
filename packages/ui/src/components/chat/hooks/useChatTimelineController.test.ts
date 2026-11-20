@@ -1,6 +1,7 @@
+import type { Message } from '@openchamber/agent-contract';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 
 import {
     isOlderHistoryPrependCommit,
@@ -99,6 +100,7 @@ describe('loadHistoryUntilMessage', () => {
     const renderHarness = (options: {
         pages: ChatMessageEntry[][];
         complete?: boolean;
+        hasMessageRow?: (messageId: string, messages: ChatMessageEntry[]) => boolean;
     }) => {
         const dom = installMinimalDom();
         Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, writable: true, value: false });
@@ -106,11 +108,27 @@ describe('loadHistoryUntilMessage', () => {
         let messages: ChatMessageEntry[] = [userMessage('msg_9', 9)];
         let calls = 0;
         let controller!: UseChatTimelineControllerResult;
+        const { hasMessageRow } = options;
+        const messageListRef: React.RefObject<MessageListHandle | null> = {
+            current: hasMessageRow
+                ? {
+                    hasMessageRow: (messageId: string) => hasMessageRow(messageId, messages),
+                    scrollToTurnId: () => false,
+                    scrollToMessageId: () => false,
+                    captureViewportAnchor: () => null,
+                    restoreViewportAnchor: () => false,
+                    alignViewportAnchor: () => 'missing',
+                    holdViewportAnchor: () => {},
+                    isHistoryVirtualized: () => false,
+                    scrollToBottom: () => {},
+                }
+                : null,
+        };
         const Harness = () => {
             controller = useChatTimelineController({
                 sessionId: 'session', sessionKey: 'runtime\n/repo\nsession', messages,
                 historyMeta: { limit: messages.length, complete: options.complete === true, loading: false },
-                scrollRef: { current: null }, messageListRef: { current: null }, isPinned: true, showScrollButton: false,
+                scrollRef: { current: null }, messageListRef, isPinned: true, showScrollButton: false,
                 loadMoreMessages: async () => {
                     const page = options.pages[calls] ?? [];
                     calls += 1;
@@ -138,6 +156,26 @@ describe('loadHistoryUntilMessage', () => {
         try {
             await harness.ready();
             expect(await harness.controller.loadHistoryUntilMessage('msg_1', { maxBatches: 3 })).toBe(true);
+            expect(harness.calls).toBe(2);
+        } finally {
+            harness.dispose();
+        }
+    });
+
+    test('keeps loading while the message is in the store without a row', async () => {
+        // A batch can end inside a turn: the reply is loaded, but the list
+        // gives it a row only once the prompt that opens its turn is loaded.
+        const reply: Message = {
+            messageId: 'msg_4', sessionId: 'session', turnId: 'turn_msg_3', role: 'assistant',
+            createdAt: 4, parts: [], providerId: 'test', modelId: 'test',
+        };
+        const harness = renderHarness({
+            pages: [[reply], [userMessage('msg_3', 3)]],
+            hasMessageRow: (messageId, messages) => messageId === 'msg_4' && messages.some((message) => message.messageId === 'msg_3'),
+        });
+        try {
+            await harness.ready();
+            expect(await harness.controller.loadHistoryUntilMessage('msg_4', { maxBatches: 3 })).toBe(true);
             expect(harness.calls).toBe(2);
         } finally {
             harness.dispose();
@@ -212,6 +250,7 @@ describe('useChatTimelineController identity lifecycle', () => {
 
     test('preserves the new identity while an old load is waiting for its render', async () => {
         const dom = installMinimalDom();
+        jest.useFakeTimers();
         const root: Root = createRoot(dom.container);
         const pendingA = deferred();
         const pendingB = deferred();
@@ -244,7 +283,11 @@ describe('useChatTimelineController identity lifecycle', () => {
                 isHistoryVirtualized: () => false,
                 scrollToTurnId: () => false,
                 scrollToMessageId: () => false,
-            } as unknown as MessageListHandle,
+                hasMessageRow: () => false,
+                alignViewportAnchor: () => 'missing',
+                holdViewportAnchor: () => {},
+                scrollToBottom: () => {},
+            } satisfies MessageListHandle,
         };
         let controller!: UseChatTimelineControllerResult;
         let directory = 'A';
@@ -298,10 +341,10 @@ describe('useChatTimelineController identity lifecycle', () => {
             // another A page after its render wait without the second token gate.
             messages = [message, assistantMessage];
             startBOnLayout = true;
-            await act(async () => {
+            act(() => {
                 root.render(React.createElement(Harness));
-                await loadA;
             });
+            await act(async () => { await loadA; });
             expect(calls).toEqual(['A', 'B']);
             expect(controller.isLoadingOlder).toBe(true);
             expect(capturedAnchors).toContain('anchor-B');
@@ -309,7 +352,7 @@ describe('useChatTimelineController identity lifecycle', () => {
 
             await act(async () => {
                 pendingB.resolve();
-                await new Promise((resolve) => setTimeout(resolve, 0));
+                await Promise.resolve();
             });
             messages = [olderMessage, message, assistantMessage];
             scrollMetrics.scrollHeight = 1200;
@@ -324,6 +367,7 @@ describe('useChatTimelineController identity lifecycle', () => {
             expect(restoredAnchors).toEqual(['anchor-B']);
         } finally {
             await act(async () => root.unmount());
+            jest.useRealTimers();
             dom.restore();
         }
     });

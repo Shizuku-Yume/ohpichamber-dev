@@ -9,11 +9,8 @@ type OnboardingScreenProps = {
   onChooseLocal?: () => void;
   /** Screen mode to render */
   mode?: OnboardingScreenMode;
-  /** Recovery variant (only used when mode is 'recovery') */
   recoveryVariant?: RecoveryVariant;
-  /** Host URL for recovery context */
   recoveryHostUrl?: string;
-  /** Host label for recovery context */
   recoveryHostLabel?: string;
   /** Saved host the recovery is about */
   localAvailable?: boolean;
@@ -29,7 +26,6 @@ export function OnboardingScreen({
 }: OnboardingScreenProps) {
   const [showRecoveryRemoteForm, setShowRecoveryRemoteForm] = React.useState(false);
 
-  // A different recovery target must not inherit the previous remote form.
   React.useEffect(() => {
     setShowRecoveryRemoteForm(false);
   }, [mode, recoveryVariant, recoveryHostUrl, recoveryHostLabel]);
@@ -50,7 +46,6 @@ export function OnboardingScreen({
   }
 
 
-  // First-launch mode (default)
   return (
     <ChooserScreen
       onChooseLocal={onChooseLocal}

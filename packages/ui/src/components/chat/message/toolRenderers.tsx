@@ -1,5 +1,7 @@
-import type { JsonValue, ToolResultPart } from '@openchamber/agent-contract';
-import { z } from 'zod';
+import { detectToolOutputLanguage } from '@/lib/toolHelpers';
+import { formatToolInput } from '@/lib/toolHelpers';
+import type { JsonValue, ToolCallPart } from '@openchamber/agent-contract';
+import { coerceToText, nativeToolResultContent, unwrapTextBlocks } from '@/lib/toolResultContent';
 
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -9,51 +11,7 @@ import { parseNativeSearchOutput } from '@/lib/native-web-search';
 import { WebSearchResults } from './parts/WebSearchResults';
 
 
-export const coerceToText = (value: unknown, fallback = ''): string => {
-    if (typeof value === 'string') return value;
-    if (value === null || value === undefined) return fallback;
-    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
-    try {
-        return JSON.stringify(value);
-    } catch {
-        return fallback;
-    }
-};
-
-/** SDK result envelopes are retained verbatim by the canonical projection. */
-export const nativeToolResultContent = (result: ToolResultPart | undefined): {
-    text: string;
-    images: Array<{ mediaType: string; data: string }>;
-    details?: JsonValue;
-} => {
-    const output = result?.output;
-    if (output === null) return { text: 'null', images: [] };
-    if (!output || typeof output !== 'object' || Array.isArray(output) || !Array.isArray(output.content)) {
-        // A result made of text content blocks is one string to the reader, not
-        // JSON: joining the blocks keeps a tool card from showing raw envelopes.
-        const textBlocks = output === undefined ? null : unwrapTextBlocks(output);
-        return { text: textBlocks ?? coerceToText(output), images: [] };
-    }
-    const text: string[] = [];
-    const images: Array<{ mediaType: string; data: string }> = [];
-    for (const block of output.content) {
-        if (block && typeof block === 'object' && !Array.isArray(block)) {
-            if (block.type === 'text' && typeof block.text === 'string') {
-                text.push(block.text);
-                continue;
-            }
-            if (block.type === 'image' && typeof block.data === 'string' && typeof block.mimeType === 'string'
-                && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(block.mimeType)
-                && block.data.length <= 14 * 1024 * 1024) {
-                images.push({ mediaType: block.mimeType, data: block.data });
-                continue;
-            }
-        }
-        // Unrecognized content is still inspectable rather than silently discarded.
-        text.push(coerceToText(block));
-    }
-    return { text: text.join('\n'), images, details: output.details };
-};
+export { coerceToText, nativeToolResultContent, unwrapTextBlocks };
 
 // Guards the renderer process against V8 "Zone Allocation failed" OOM crashes
 // (issue #2265). When a tool returns oversized external content — e.g. a fetched
@@ -106,64 +64,6 @@ export const tryParseJsonOutput = (output: string): { data: JsonValue; isJson: b
     } catch {
         return { data: null, isJson: false };
     }
-};
-
-const TEXT_BLOCK_UNWRAP_PASSES = 4;
-const textBlockSchema = z.object({ type: z.literal('text'), text: z.string() });
-type TextBlock = z.infer<typeof textBlockSchema>;
-
-// The content-block envelope, a single block or a list of them, validated one
-// block at a time so the first non-text entry stops the parse (a whole-array
-// schema instead accumulates an error per entry, which stalls on large
-// structured results such as a serialized numeric array).
-const parseTextBlocks = (value: JsonValue): TextBlock[] | null => {
-    const blocks = Array.isArray(value) ? value : [value];
-    if (blocks.length === 0) return null;
-    const parsed: TextBlock[] = [];
-    for (const block of blocks) {
-        const result = textBlockSchema.safeParse(block);
-        if (!result.success) return null;
-        parsed.push(result.data);
-    }
-    return parsed;
-};
-
-const looksLikeJsonContainer = (text: string): boolean => {
-    const trimmed = text.trim();
-    return (trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'));
-};
-
-/**
- * The text of a tool result made of text content blocks, joined on newlines.
- * A finished tool call may carry its result as `[{type:"text",text}]`, and the
- * transport may serialize that list once more, so the joined text is unwrapped
- * again while it is itself such a list, four passes at most (upstream #5067).
- * Any other result returns null.
- */
-export const unwrapTextBlocks = (data: JsonValue): string | null => {
-    let blocks = parseTextBlocks(data);
-    if (!blocks) return null;
-
-    let text = '';
-    for (let pass = 0; pass < TEXT_BLOCK_UNWRAP_PASSES; pass += 1) {
-        let joined = '';
-        for (const block of blocks) {
-            joined += (joined ? '\n' : '') + block.text;
-        }
-        text = joined;
-
-        if (!looksLikeJsonContainer(joined)) break;
-        let parsed: JsonValue;
-        try {
-            parsed = JSON.parse(joined);
-        } catch {
-            break;
-        }
-        const inner = parseTextBlocks(parsed);
-        if (!inner) break;
-        blocks = inner;
-    }
-    return text;
 };
 
 const GREP_DOT_STYLE = { backgroundColor: 'var(--status-info)', opacity: 0.6 };
@@ -398,4 +298,15 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
     }
 
     return hunks;
+};
+
+export const formatInputForDisplay = (input: ToolCallPart['input'], toolName?: string) => {
+    if (!input || typeof input !== 'object') {
+        return String(input);
+    }
+    return formatToolInput(input, toolName || '');
+};
+
+export const detectLanguageFromOutput = (output: string, toolName: string, input?: ToolCallPart['input']) => {
+    return detectToolOutputLanguage(toolName, output, input);
 };

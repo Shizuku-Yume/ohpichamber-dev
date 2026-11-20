@@ -66,9 +66,6 @@ const REMOTE_TRANSPORT_LABELS = {
 const normalizeEnvKey = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
 const normalizeHeaderKey = (value: string): string => value.replace(/[^!#$%&'*+.^_`|~0-9A-Za-z-]/g, '');
 
-// ─────────────────────────────────────────────────────────────
-// CommandTextarea — one argument per line, paste-friendly
-// ─────────────────────────────────────────────────────────────
 interface CommandTextareaProps {
   value: string[];
   onChange: (value: string[]) => void;
@@ -78,7 +75,6 @@ interface CommandTextareaProps {
   readOnly?: boolean;
 }
 
-/** Splits a simple shell-like command into argv tokens, honouring quotes. */
 function parseShellCommand(raw: string): string[] {
   const args: string[] = [];
   let current = '';
@@ -124,7 +120,6 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange, prev
     if (disabled || readOnly) return;
     const raw = event.clipboardData.getData('text');
     const trimmed = raw.trim();
-    // Only take over a paste that replaces the whole field with one command line.
     if (!trimmed || trimmed.includes('\n') || !/\s/.test(trimmed)) return;
     const target = event.currentTarget;
     if (target.selectionStart !== 0 || target.selectionEnd !== target.value.length) return;
@@ -900,7 +895,6 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         ) : null}
         <SettingsSection
           title={t('settings.mcp.page.server.title')}
-          divider={false}
           settingsItem="mcp.server"
           titleAccessory={isNew ? (
             <Button

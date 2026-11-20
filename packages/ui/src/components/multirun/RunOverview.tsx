@@ -44,7 +44,6 @@ const modelLabelFor = (member: MultiRunMember, providers: readonly { providerId:
  return member.identity.index && member.identity.index > 1 ? `${name} #${member.identity.index}` : name;
 };
 
-/** The first prompt of each variant, read once, as the caption over its cards. */
 function useVariantPrompts(run: MultiRunSummary | null, sessionById: ReadonlyMap<string, Session>): ReadonlyMap<string, string> {
  const [prompts, setPrompts] = React.useState<ReadonlyMap<string, string>>(new Map());
  const firstLaneByVariant = React.useMemo(() => {
@@ -72,11 +71,6 @@ function useVariantPrompts(run: MultiRunSummary | null, sessionById: ReadonlyMap
  return prompts;
 }
 
-/**
- * The prompt a variant's lanes received: one line until expanded, then the
- * whole text in a bounded, scrollable block. The toggle shows only when the
- * line is actually cut or the prompt has several lines.
- */
 function PromptCaption({ prompt, expanded, onToggle }: { prompt: string; expanded: boolean; onToggle: () => void }): React.ReactNode {
  const { t } = useI18n();
  const lineRef = React.useRef<HTMLSpanElement>(null);
@@ -642,7 +636,6 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
  );
 }
 
-/** Replaces the chat area while a run overview is open. */
 export function RunOverview(): React.ReactNode {
  const runKey = useUIStore((state) => state.runOverviewKey);
  if (!runKey) return null;

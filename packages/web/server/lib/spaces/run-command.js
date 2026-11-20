@@ -376,7 +376,7 @@ const STREAM_STDERR_BYTES = 4 * 1024;
  * zero, or before it wrote anything, destroys the stream with `command_stream_failed` and the
  * tail of its stderr, so a bridge that could not reach the server inside says so.
  */
-class CommandStream extends Duplex {
+export class CommandStream extends Duplex {
   #child;
   #file;
   #args;

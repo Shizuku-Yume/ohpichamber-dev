@@ -7,17 +7,6 @@ import type { SmallModelRequest } from '@/lib/smallModelRequest';
 
 export type SmallModelAvailabilityScope = Pick<SmallModelRequest, 'workspaceId' | 'preferred'>;
 
-/**
- * Whether OpenChamber's background model ("small model") can run right now.
- *
- * Canonical workspace model catalogs and scoped profile settings determine
- * availability. Failed discovery keeps the previous answer; it is not proof
- * that a selected model disappeared.
- *
- * Cached per runtime + directory and refreshed at most once a minute unless
- * something that changes the answer happens: a provider login or a settings
- * save emits a config change, a runtime switch drops everything.
- */
 
 export type SmallModelAvailability = 'unknown' | 'available' | 'unavailable';
 
@@ -87,7 +76,5 @@ export const selectSmallModelAvailability = (
   scope?: SmallModelAvailabilityScope,
 ): SmallModelAvailability => state.byKey[toKey(directory, scope)]?.availability ?? 'unknown';
 
-// Profile settings or credentials invalidate discovery; runtime resets reject
-// all pending answers, including a switch away and back to the same endpoint.
 subscribeToConfigChanges(() => useSmallModelStore.getState().invalidate());
 subscribeRuntimeEndpointChanged(() => useSmallModelStore.getState().invalidate());

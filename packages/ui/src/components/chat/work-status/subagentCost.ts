@@ -1,9 +1,5 @@
 import type { Session } from '@openchamber/agent-contract';
 
-// Spend is read against a budget, so it keeps its real precision instead of
-// collapsing to two decimals. Trailing zeros are dropped so exact values stay
-// short. Relocated from WorkStatusPrimaryGroup.tsx so both that component and
-// WorkStatusSubagentsSection share one implementation.
 const trimZeros = (value: string): string =>
   (value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value);
 
@@ -39,4 +35,3 @@ export function computeSubtreeCost(
   void _visited;
   return null;
 }
-

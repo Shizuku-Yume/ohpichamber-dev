@@ -88,11 +88,24 @@ describe('what opening a sent attachment does', () => {
         expect(resolveAttachmentOpenTarget(item, [item])).toEqual({ kind: 'external', url: item.url });
     });
 
-    test('nothing opens for what the app cannot show', () => {
+    test('a pdf sent inline opens the document dialog', () => {
         const pdf = file({ mime: 'application/pdf', filename: 'spec.pdf', url: 'data:application/pdf;base64,JVBERg==' });
+        expect(resolveAttachmentOpenTarget(pdf, [pdf])).toEqual({
+            kind: 'popup',
+            popup: { open: true, title: 'spec.pdf', content: '', document: { url: pdf.url, filename: 'spec.pdf' } },
+        });
+    });
+
+    test('a remote pdf is not opened as an inline document', () => {
+        const pdf = file({ mime: 'application/pdf', filename: 'spec.pdf', url: 'https://example.com/spec.pdf' });
+        expect(resolveAttachmentOpenTarget(pdf, [pdf])).toBeNull();
+    });
+
+    test('nothing opens for what the app cannot show', () => {
+        const zip = file({ mime: 'application/zip', filename: 'build.zip', url: 'data:application/zip;base64,UEsDBA==' });
         const folder = file({ mime: 'application/x-directory', filename: 'src', url: 'file:///repo/src' });
         const remoteText = file({ url: 'https://example.com/notes.txt' });
-        expect(resolveAttachmentOpenTarget(pdf, [pdf])).toBeNull();
+        expect(resolveAttachmentOpenTarget(zip, [zip])).toBeNull();
         expect(resolveAttachmentOpenTarget(folder, [folder])).toBeNull();
         expect(resolveAttachmentOpenTarget(remoteText, [remoteText])).toBeNull();
         expect(resolveAttachmentOpenTarget(file({ url: '' }), [])).toBeNull();
@@ -123,10 +136,10 @@ describe('matching a citation to its attachment', () => {
 
     test('lists only the names whose chips open something', () => {
         const pasted = file();
-        const pdf = file({ mime: 'application/pdf', filename: 'spec.pdf', url: 'data:application/pdf;base64,JVBERg==' });
-        const openable = collectOpenableAttachmentNames([pasted, pdf]);
+        const zip = file({ mime: 'application/zip', filename: 'build.zip', url: 'data:application/zip;base64,UEsDBA==' });
+        const openable = collectOpenableAttachmentNames([pasted, zip]);
         expect(isOpenableAttachmentName(openable, 'PASTED-CONTEXT-1.txt')).toBe(true);
-        expect(isOpenableAttachmentName(openable, 'spec.pdf')).toBe(false);
+        expect(isOpenableAttachmentName(openable, 'build.zip')).toBe(false);
     });
 
     test('the text test and the data URL decoder keep their contracts', () => {

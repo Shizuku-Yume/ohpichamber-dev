@@ -1,10 +1,10 @@
-import { afterEach, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { DiscoveredSkill } from '@/stores/useSkillsStore';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
-  window: browser, document: browser.document, navigator: browser.navigator,
+  window: browser, document: browser.document, CustomEvent: browser.CustomEvent, navigator: browser.navigator,
   customElements: browser.customElements, localStorage: browser.localStorage, sessionStorage: browser.sessionStorage,
   HTMLTextAreaElement: browser.HTMLTextAreaElement, Text: browser.Text, NodeList: browser.NodeList,
   Event: browser.Event, FocusEvent: browser.FocusEvent,
@@ -31,10 +31,6 @@ const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { ThemeSystemContext } = await import('@/contexts/theme-system-context');
 const { getDefaultTheme } = await import('@/lib/theme/themes');
 const { EditorView } = await import('@codemirror/view');
-const { plugin } = await import('bun');
-plugin({ name: 'skill-editor-worker-url', setup(build) {
-  build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, () => ({ contents: 'export default "http://localhost/worker.js";', loader: 'js' }));
-} });
 const { SkillsPage } = await import('./SkillsPage');
 const theme = getDefaultTheme(false);
 const noThemeChange = (): never => { throw new Error('Unexpected theme change'); };
@@ -47,9 +43,12 @@ const themeContext = {
 } satisfies import('@/contexts/theme-system-context').ThemeContextValue;
 const container = document.createElement('div');
 document.body.appendChild(container);
-const root = createRoot(container);
+let root = createRoot(container);
 afterEach(async () => {
   await act(async () => root.unmount());
+  root = createRoot(container);
+});
+afterAll(() => {
   fetchSpy.mockRestore();
   browser.close();
 });
@@ -116,4 +115,55 @@ test('skill refresh preserves newer editor text while a save is pending and swit
   expect(currentView().state.doc.toString()).toContain('description: new draft');
   await act(async () => { finishPending(); });
   expect(currentView().state.doc.toString()).toContain('draft body');
+});
+
+test('a skill list refresh keeps the name typed into a new skill', async () => {
+  const builtIn = { skillId: 'built-in', name: 'Built-in', content: 'built-in body', description: '', scope: 'agent', source: 'built-in', readOnly: true } satisfies DiscoveredSkill;
+  useSkillsStore.setState({ selectedSkillName: 'new-skill', skills: [builtIn], skillsByDirectory: { __default__: [builtIn], '/test': [builtIn] },
+    skillDraft: { name: 'new-skill', scope: 'agent', content: '' },
+    getSkillByName: (name) => useSkillsStore.getState().skills.find((entry) => entry.name === name),
+  });
+  await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}><SkillsPage /></ThemeSystemContext.Provider></I18nProvider>));
+  const nameInput = () => {
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="skill-name"]');
+    if (!input) throw new Error('Skill name field missing');
+    return input;
+  };
+  expect(nameInput().value).toBe('new-skill');
+  await act(async () => {
+    const input = nameInput();
+    Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set?.call(input, 'net helper');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(nameInput().value).toBe('net-helper');
+  // A catalog event or a slow first read replaces the list while the user is still filling the form.
+  await act(async () => useSkillsStore.setState({ skills: [{ ...builtIn }], skillsByDirectory: { __default__: [{ ...builtIn }], '/test': [{ ...builtIn }] } }));
+  expect(nameInput().value).toBe('net-helper');
+
+  // Another skill takes the editor; coming back shows the draft again, not that skill's text.
+  await act(async () => useSkillsStore.setState({ selectedSkillName: 'built-in',
+    getSkillDetail: async () => ({ content: 'built-in body', supportingFiles: [] }),
+  }));
+  await act(async () => useSkillsStore.setState({ selectedSkillName: 'new-skill' }));
+  expect(nameInput().value).toBe('new-skill');
+  const editorNode = container.querySelector<HTMLElement>('.cm-editor');
+  if (!editorNode) throw new Error('Skill editor missing');
+  expect(EditorView.findFromDOM(editorNode)?.state.doc.toString()).not.toContain('built-in');
+});
+
+test('a skill selected before the list is read shows its editor only while it exists', async () => {
+  const builtIn = { skillId: 'built-in', name: 'Built-in', content: 'built-in body', description: '', scope: 'agent', source: 'built-in', readOnly: true } satisfies DiscoveredSkill;
+  // Settings in a VS Code tab receives the selection before it has read any skills.
+  useSkillsStore.setState({ selectedSkillName: 'built-in', skillDraft: null, skills: [], skillsByDirectory: {},
+    getSkillByName: (name) => useSkillsStore.getState().skills.find((entry) => entry.name === name),
+    getSkillDetail: async () => ({ content: 'text', supportingFiles: [] }),
+  });
+  await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}><SkillsPage /></ThemeSystemContext.Provider></I18nProvider>));
+  expect(useSkillsStore.getState().selectedSkillName).toBe('built-in');
+
+  await act(async () => useSkillsStore.setState({ skills: [builtIn], skillsByDirectory: { __default__: [builtIn], '/test': [builtIn] } }));
+  expect(useSkillsStore.getState().selectedSkillName).toBe('built-in');
+
+  await act(async () => useSkillsStore.setState({ skills: [], skillsByDirectory: { __default__: [], '/test': [] } }));
+  expect(container.querySelector('.cm-editor')).toBeNull();
 });

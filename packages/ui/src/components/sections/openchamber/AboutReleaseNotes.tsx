@@ -5,13 +5,27 @@ import { fetchReleaseNotes, formatReleaseDate, type ReleaseNotesRelease } from '
 import { ReleaseNotesBody } from '@/components/update/ReleaseNotesBody';
 import { useI18n } from '@/lib/i18n';
 
-const GITHUB_RELEASES_URL = 'https://github.com/Shizuku-Yume/ohpichamber/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
 
-/**
- * What the installed version brought, read from the changelog bundled with
- * the app. Nothing shows while the notes load, when the bundle cannot be
- * read, or when the changelog has none for this version.
- */
+type ReleaseCardProps = {
+  release: ReleaseNotesRelease;
+  label: { version: string; date: string | null } | null;
+};
+
+const ReleaseCard: React.FC<ReleaseCardProps> = ({ release, label }) => (
+  <div className="oc-tile rounded-lg p-4">
+    {label && (
+      <div className="mb-3 flex items-center gap-3">
+        <span className="typography-ui-label rounded bg-[var(--primary-base)]/10 px-1.5 py-0.5 font-mono text-[var(--primary-base)]">
+          {label.version}
+        </span>
+        {label.date && <span className="typography-meta text-muted-foreground">{label.date}</span>}
+      </div>
+    )}
+    <ReleaseNotesBody notes={release} folded={label !== null} />
+  </div>
+);
+
 export const AboutReleaseNotes: React.FC<{ version: string | null }> = ({ version }) => {
   const { t } = useI18n();
   const [releases, setReleases] = React.useState<ReleaseNotesRelease[] | null>(null);
@@ -49,9 +63,11 @@ export const AboutReleaseNotes: React.FC<{ version: string | null }> = ({ versio
       )}
     >
       {releases.map((release) => (
-        <div key={release.version} className="oc-tile rounded-lg p-4">
-          <ReleaseNotesBody notes={release} folded={false} />
-        </div>
+        <ReleaseCard
+          key={release.version}
+          release={release}
+          label={single ? null : { version: `v${release.version}`, date: formatReleaseDate(release.date) }}
+        />
       ))}
     </SettingsSection>
   );

@@ -11,10 +11,9 @@ interface ProviderLogoProps {
     alt?: string;
     className?: string;
     onError?: () => void;
-    /** Show the provider's own logo even when the user picked an icon for it. */
     ignoreCustomIcon?: boolean;
-    /** Shown when this provider has no chosen icon and no logo. `null` shows nothing. */
     fallback?: React.ReactNode;
+    tint?: boolean;
 }
 
 export const ProviderLogo: React.FC<ProviderLogoProps> = ({
@@ -24,6 +23,7 @@ export const ProviderLogo: React.FC<ProviderLogoProps> = ({
     onError: externalOnError,
     ignoreCustomIcon = false,
     fallback,
+    tint = false,
 }) => {
     const { src, onError: handleInternalError, hasLogo } = useProviderLogo(providerId);
     const customIcon = useUIStore((state) => state.customProviderIcons[providerId]);
@@ -41,6 +41,26 @@ export const ProviderLogo: React.FC<ProviderLogoProps> = ({
     if (!hasLogo || !src) {
         if (fallback !== undefined) return <>{fallback}</>;
         return fallbackIcon ? <Icon name={fallbackIcon} className={cn('text-muted-foreground', className)} /> : null;
+    }
+
+    if (tint) {
+        return (
+            <>
+            <img src={src} alt="" aria-hidden hidden crossOrigin="anonymous" onError={handleError} />
+            <span
+                role={alt === '' ? undefined : 'img'}
+                aria-label={alt === '' ? undefined : alt ?? `${providerId} logo`}
+                aria-hidden={alt === '' ? true : undefined}
+                className={cn('inline-block bg-current', className)}
+                style={{
+                    maskImage: `url("${src}")`, WebkitMaskImage: `url("${src}")`,
+                    maskSize: 'contain', WebkitMaskSize: 'contain',
+                    maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat',
+                    maskPosition: 'center', WebkitMaskPosition: 'center',
+                }}
+            />
+            </>
+        );
     }
 
     return (

@@ -51,7 +51,6 @@ const readSnapshot = async (response: Response): Promise<PermissionPolicySnapsho
 
 const requestSnapshot = async (path: string, init?: RuntimeFetchOptions) => readSnapshot(await runtimeFetch(path, init));
 
-// `enabled` rides along for servers from before the modes, which know only on/off.
 const putSessionMode = (sessionId: string, mode: PermissionMode, directory?: string) => requestSnapshot(
     `/api/permission-auto-accept/sessions/${encodeURIComponent(sessionId)}`,
     {
@@ -82,12 +81,10 @@ const isCurrentOperation = (operation: PermissionOperation) => (
 
 const legacySessionsSchema = z.record(z.string().min(1), z.boolean());
 
-/** Version 1 kept the policy itself in localStorage as an on/off map. */
 const persistedV1Schema = z.object({
     autoAccept: legacySessionsSchema.catch({}).default({}),
 }).catch({ autoAccept: {} });
 
-/** Version 2 keeps only a not-yet-migrated version 1 policy. */
 const persistedV2Schema = z.object({
     legacyCandidate: legacySessionsSchema.nullable().catch(null).default(null),
     legacyRuntimeKey: z.string().nullable().catch(null).default(null),

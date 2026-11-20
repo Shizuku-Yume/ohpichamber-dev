@@ -1,7 +1,5 @@
-// Host-side parsing. OpenChamber (browser host and server) imports this to
-// validate an untrusted guest's manifest and messages with zod. Guests import
-// `ohpichamber-sdk`, which carries no schema library.
 export {
+  guestToolCardSchema,
   openChamberManifestSchema,
   PACKAGE_VERSION_PATTERN,
   packageManifestSchema,
@@ -35,6 +33,7 @@ export {
   trackerProviderMethodSchema,
   trackerProviderSchemasV1,
 } from './service-provider-schemas.ts';
+export { waitArgsSchema, waitCheckOutcomeSchema, waitCheckResultSchema, waitStartResultSchema } from './waits-schemas.ts';
 export {
   surfaceClipboardAnswerSchema,
   surfaceControllerSchema,

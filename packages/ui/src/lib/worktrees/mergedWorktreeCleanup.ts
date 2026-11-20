@@ -5,14 +5,11 @@ import { normalizePath } from '@/lib/pathNormalization';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SourceControlProvider } from '@/lib/source-control/types';
 
-/** A linked worktree whose branch's PR (GitHub) or merge request (GitLab) is reported merged. */
 export type MergedWorktreeCandidate = {
   worktree: WorktreeMetadata;
   project: { id: string; path: string };
   prNumber: number;
-  /** Where the change request lives; GitLab's toasts say merge request. */
   provider?: SourceControlProvider | null;
-  /** Last commit of the merged PR; null when the status did not carry it. */
   mergedHeadSha: string | null;
 };
 
@@ -51,7 +48,6 @@ export const decideMergedWorktreeCleanup = (input: {
 export const hasUnmergedCommits = async (input: {
   mergedHeadSha: string | null;
   status: Pick<GitStatus, 'tracking' | 'ahead'>;
-  /** Rejects when `sha` is not in this clone. */
   hasCommitsAfter: (sha: string) => Promise<boolean>;
 }): Promise<boolean | null> => {
   if (input.mergedHeadSha) {
@@ -81,7 +77,6 @@ export type MergedWorktreeOutcome =
 
 export type MergedWorktreeCleanupDeps = {
   listCandidates: () => MergedWorktreeCandidate[];
-  /** Sessions are archived once per worktree and PR, so work continued in a kept worktree is never archived again. */
   isHandled: (candidate: MergedWorktreeCandidate) => boolean;
   markHandled: (candidate: MergedWorktreeCandidate) => void;
   getActiveSessions: () => readonly Session[];

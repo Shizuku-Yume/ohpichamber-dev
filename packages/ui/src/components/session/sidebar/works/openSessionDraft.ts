@@ -1,4 +1,5 @@
 import { toServerFileUrl } from '@/components/chat/composer/attachments/filePaths';
+import { attachmentBasename, withMissingCitations } from '@/lib/attachmentIdentity';
 import { createChatDraftIdentity, getChatDraftIdentityKey } from '@/lib/chatDraftPersistence';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -6,7 +7,6 @@ import { hasUnsyncedSessionDraft, readSessionDraftAttachment, type SessionDraft 
 import { useInputStore } from '@/sync/input-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
-/** Whether the composer still shows this draft's directory, after the user had time to move on. */
 const isDraftOpen = (directory: string): boolean => {
   const state = useSessionUIStore.getState();
   return !state.currentSessionId
@@ -14,13 +14,6 @@ const isDraftOpen = (directory: string): boolean => {
     && normalizePath(state.newSessionDraft.directoryOverride) === normalizePath(directory);
 };
 
-/**
- * Opens a Host-shared draft from the sidebar in the composer. The composer's
- * own per-device draft for that directory keeps the text; the server's copy
- * supplies the files it stored and their bytes follow when they have
- * downloaded, if the user is still on the draft. Resolves false when an
- * attachment could not be read; the draft still opens with the rest.
- */
 export async function openSessionDraft(draft: SessionDraft): Promise<boolean> {
   useSessionUIStore.getState().openNewSessionDraft({
     selectedProjectId: draft.projectId ?? undefined,
@@ -34,8 +27,8 @@ export async function openSessionDraft(draft: SessionDraft): Promise<boolean> {
       ? [{ url: toServerFileUrl(attachment.path), mimeType: attachment.mimeType, filename: attachment.filename }]
       : []
   ));
-  // The composer applies it once it shows this draft, over what it kept of it.
-  useInputStore.setState({ pendingComposerRestore: { target, text: draft.text, files: pathFiles } });
+  const text = withMissingCitations(draft.text, draft.attachments.map((attachment) => ({ filename: attachmentBasename(attachment.filename) })));
+  useInputStore.setState({ pendingComposerRestore: { target, text, files: pathFiles } });
 
   const stored = draft.attachments.filter((attachment) => attachment.kind === 'data');
   if (stored.length === 0) return true;

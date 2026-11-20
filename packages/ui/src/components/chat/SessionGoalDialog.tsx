@@ -26,18 +26,9 @@ interface SessionGoalDialogProps {
   directory?: string;
 }
 
-// Create or replace the objective and budget; OMP owns continuation and completion.
-//
-// The shell stays mounted with the composer and the work status panel, while
-// the session record it would read is replaced on every streamed step. Every
-// goal read lives in `SessionGoalDialogBody`, which mounts only while the
-// dialog is open (or animating closed), so a closed dialog does no work.
 export function SessionGoalDialog({ open, onOpenChange, sessionId, directory }: SessionGoalDialogProps) {
   const isMobile = useUIStore((state) => state.isMobile);
 
-  // Mobile renders the shared bottom-sheet overlay instead of a centered
-  // dialog — same pattern as model controls and the session status panel.
-  // The overlay renders nothing while closed, so the body mounts with it.
   if (isMobile) {
     return open ? <SessionGoalDialogBody mobile onOpenChange={onOpenChange} sessionId={sessionId} directory={directory} /> : null;
   }

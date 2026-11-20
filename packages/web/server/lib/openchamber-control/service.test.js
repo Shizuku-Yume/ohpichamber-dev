@@ -1,12 +1,16 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import express from 'express';
+import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SessionJournal } from '../../../../agent-service/src/projection/journal.ts';
 import { createOpenChamberControlService } from './service.js';
+import { registerOpenChamberControlRoutes } from './routes.js';
 import { createPrWatchRuntime, parsePullRequestUrl } from '../pr-watch/runtime.js';
 import { trackedItemKey } from '../tracked-items/items.js';
+import { createUploadStore } from '../browser-control/uploads.js';
 
 const scopeForWorkspace = {
   projectId: 'project-1',
@@ -50,6 +54,7 @@ const createHarness = (settings = {
       return { session: { sessionId: 'session-forked', projectId: 'project-1', workspaceId: 'workspace-1' } };
     },
     open: async (sessionId) => ({ session: { sessionId, runtimeStatus: 'idle' } }),
+    getMetadata: async (sessionId) => ({ sessionId, revision: '0', metadata: null }),
     history: async () => ({ turns: [], messages: [] }),
     list: async () => ({ items: [], errors: {} }),
   };
@@ -84,10 +89,145 @@ const createHarness = (settings = {
     },
     ...overrides,
   });
-  return { control, created, sent, forked, goalControls, callOrder, requests };
+  return { control, created, sent, forked, goalControls, callOrder, requests, sessionService };
 };
 
-describe('OpenChamber control service canonical consumers', () => {
+describe('OhPiChamber control service canonical consumers', () => {
+  it('dispatches scoped usage.read only through its own Host tool and current setting', async () => {
+    const scopes = [];
+    const quota = { listUsagePageProviders: () => [], listConfiguredQuotaProviders: async () => [], fetchQuotaForProvider: async () => ({}) };
+    const { control } = createHarness({ agentUsageToolEnabled: true }, { loadQuota: async (scope) => { scopes.push(scope); return quota; } });
+    const scope = { ...scopeForWorkspace, rootSessionId: 'session-1' };
+    const request = { toolName: 'openchamber_usage', sessionId: 'session-1', action: 'usage.read', input: {} };
+    expect(await control.invokeHostAction(scope, request)).toEqual({ ok: true, value: { providers: [], notConfigured: [] } });
+    expect(scopes).toEqual([{ rootSessionId: 'session-1', ...scopeForWorkspace }]);
+    expect(await control.invokeHostAction(scope, { ...request, toolName: 'notify' })).toMatchObject({ ok: false, status: 400 });
+    const disabled = createHarness({ agentUsageToolEnabled: false }, { loadQuota: async () => { throw new Error('Must not load quota'); } });
+    await expect(disabled.control.execute('usage.read', {}, undefined, { contextSessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(createHarness().control.execute('usage.read', {}, undefined, { contextSessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('tracks and marks done using Canonical eligibility and queued Host metadata patches', async () => {
+    const patches = [];
+    const { control, sessionService } = createHarness({}, { now: () => 100,
+      updateSessionMetadata: async (id, decide, options) => { patches.push({ id, patch: decide({}), options }); return { changed: true }; },
+    });
+    sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'session-1', title: 'Work' } });
+    expect(await control.execute('session.track', {}, undefined, { contextSessionId: 'session-1' })).toMatchObject({ sessionId: 'session-1', inWork: true, changed: true });
+    expect(await control.execute('session.markDone', { sessionId: 'session-1' })).toMatchObject({ sessionId: 'session-1', inWork: false });
+    expect(patches).toEqual([
+      { id: 'session-1', options: { directory: '/repo/app' }, patch: { openchamber: { work: { state: 'open', openedAt: 100, openedBy: 'user', doneAt: null, suggestDoneAt: null } } } },
+      { id: 'session-1', options: { directory: '/repo/app' }, patch: { openchamber: { work: { state: 'done', doneAt: 100, suggestDoneAt: null } } } },
+    ]);
+  });
+
+  it.each([
+    ['pinned worktree', {}, { isWorktreePinned: async () => true }, 409],
+    ['pinned session', { isPinned: true }, {}, 409],
+    ['Host pin stamp', { openchamber: { pinned: { at: 1 } } }, {}, 409],
+    ['review', { openchamber: { kind: 'review' } }, {}, 400],
+    ['btw', { openchamber: { kind: 'btw' } }, {}, 400],
+    ['scheduled', { openchamber: { kind: 'scheduled' } }, {}, 400],
+    ['archived', {}, { archiveStore: { archivedAt: async () => 5 } }, 409],
+    ['managed chat', {}, { chatRoots: ['/repo'] }, 400],
+  ])('refuses tracking a %s but allows marking it done', async (_label, metadata, overrides, statusCode) => {
+    let writes = 0;
+    const { control, sessionService } = createHarness({}, { ...overrides, updateSessionMetadata: async () => { writes += 1; return { changed: true }; } });
+    sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'session-1' } });
+    sessionService.getMetadata = async () => ({ metadata });
+    await expect(control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode });
+    expect(writes).toBe(0);
+    await expect(control.execute('session.markDone', { sessionId: 'session-1' })).resolves.toMatchObject({ inWork: false });
+    expect(writes).toBe(1);
+  });
+
+  it('refuses missing, child, out-of-scope and unreadable sessions before any work write', async () => {
+    const { control, sessionService } = createHarness({}, { updateSessionMetadata: async () => { throw new Error('Unexpected write'); } });
+    await expect(control.execute('session.track')).rejects.toMatchObject({ statusCode: 400 });
+    sessionService.open = async () => ({ session: { sessionId: 'session-1', rootSessionId: 'parent' } });
+    await expect(control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(control.execute('session.track', { sessionId: 'session-1', workspaceId: 'workspace-2' })).rejects.toMatchObject({ statusCode: 403 });
+    sessionService.getMetadata = async () => { throw new Error('Metadata unreadable'); };
+    await expect(control.execute('session.track', { sessionId: 'session-1' })).rejects.toThrow('Metadata unreadable');
+    const disabled = createHarness({ sessionWorkEnabled: false }, { updateSessionMetadata: async () => ({ changed: true }) });
+    await expect(disabled.control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 409 });
+    await expect(createHarness().control.execute('session.track', { sessionId: 'session-1' })).rejects.toMatchObject({ statusCode: 503 });
+  });
+  it('refuses public secret authority and runs only the scoped worker call with private card answers', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'secret-control-'));
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace, cwd: directory };
+    const waiting = Promise.withResolvers();
+    const changes = [];
+    const { control, requests } = createHarness(undefined, {
+      resolveSessionScope: async () => scope,
+      onPageWaitChange: change => { changes.push(change); if (change.type === 'waiting') waiting.resolve(); },
+    });
+    const app = express();
+    registerOpenChamberControlRoutes(app, { controlService: control });
+    const input = {
+      program: process.execPath, args: ['-e', 'console.log(process.env.TOKEN)'],
+      reason: 'Sign in', inputs: [{ env: 'TOKEN', label: 'Token' }],
+      authorized: true, sessionId: 'session-1', callId: 'call-secret',
+    };
+    try {
+      await request(app).post('/api/openchamber/control').send({
+        action: 'secret.run', input, authorized: true,
+        contextSessionId: 'session-1', contextCallId: 'call-secret',
+      }).expect(403);
+      await expect(control.execute('secret.run', input, directory, { authorized: true })).rejects.toMatchObject({ statusCode: 403 });
+      expect(changes).toEqual([]);
+      const invocation = { toolName: 'openchamber_secret', action: 'secret.run', input, sessionId: 'session-1', toolCallId: 'call-secret' };
+      await expect(control.invokeHostAction({ ...scope, workspaceId: 'other' }, invocation)).resolves.toMatchObject({ ok: false, status: 403 });
+      const pending = control.invokeHostAction(scope, invocation);
+      await waiting.promise;
+      const fields = await request(app).get('/api/openchamber/secret/fields').query({ sessionId: 'session-1', callId: 'call-secret' }).expect(200);
+      expect(fields.body).toEqual({ fields: ['TOKEN'], reused: [] });
+      expect(fields.headers['cache-control']).toBe('no-store');
+      const malformed = await request(app).post('/api/openchamber/secret/answer').set('Content-Type', 'application/json').send('{"values":"private-value"').expect(400);
+      expect(JSON.stringify(malformed.body)).not.toContain('private-value');
+      await request(app).post('/api/openchamber/secret/answer').send({ sessionId: 'other', callId: 'call-secret', values: { TOKEN: 'private-value' } }).expect(404);
+      const answer = await request(app).post('/api/openchamber/secret/answer').send({ sessionId: 'session-1', callId: 'call-secret', values: { TOKEN: 'private-value' }, remember: ['TOKEN'] }).expect(200);
+      const result = await pending;
+      expect(result).toMatchObject({ ok: true, value: { stdout: '[secret:TOKEN]\n', remembered: ['TOKEN'] } });
+      expect(JSON.stringify([result, answer.body, changes])).not.toContain('private-value');
+      expect(await fs.readdir(directory)).toEqual([]);
+      expect(requests).toEqual([]);
+      await request(app).get('/api/openchamber/secret/fields').query({ sessionId: 'session-1', callId: 'call-secret' }).expect(404);
+      await expect(control.invokeHostAction(scope, { ...invocation, action: 'secret.forget', input: {} })).resolves.toMatchObject({ ok: true, value: { forgotten: 1 } });
+      await request(app).post('/api/openchamber/control').send({ action: 'secret.request', input: { label: 'Token', reason: 'Sign in' } }).expect(403);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('reads opted-in terminal output only within the captured workspace and hides Host directory fields', async () => {
+    const runtime = {
+      listTerminals: vi.fn(() => [{ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, status: 'running' }]),
+      readTerminal: vi.fn(() => ({ sessionId: 'terminal-1', cwd: scopeForWorkspace.cwd, text: `output in ${scopeForWorkspace.cwd}`, status: 'running' })),
+    };
+    const { control } = createHarness({ agentTerminalToolEnabled: true }, { getTerminalRuntime: () => runtime });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const invoke = (action, input = {}) => control.invokeHostAction(scope, { sessionId: 'session-1', toolName: 'openchamber', action, input });
+    const listed = await invoke('terminal.list');
+    expect(listed).toMatchObject({ ok: true, value: { terminals: [{ sessionId: 'terminal-1', directory: '.' }] } });
+    const read = await invoke('terminal.read', { sessionId: 'terminal-1' });
+    expect(read.ok).toBe(true);
+    expect(JSON.stringify(read)).not.toContain(scopeForWorkspace.cwd);
+    expect(read.value.cwd).toBeUndefined();
+    await expect(invoke('terminal.list', { workspaceId: 'workspace-2' })).resolves.toMatchObject({ ok: false, status: 403 });
+    runtime.listTerminals.mockReturnValue([]);
+    runtime.readTerminal.mockClear();
+    await expect(invoke('terminal.read', { sessionId: 'foreign' })).resolves.toMatchObject({ ok: false, status: 404 });
+    expect(runtime.readTerminal).not.toHaveBeenCalled();
+    await expect(invoke('terminal.list')).resolves.toMatchObject({ ok: true, value: { terminals: [] } });
+  });
+
+  it('keeps terminal reads off by default and reports an unavailable panel explicitly', async () => {
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const call = { sessionId: 'session-1', toolName: 'openchamber', action: 'terminal.list' };
+    await expect(createHarness().control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 403 });
+    await expect(createHarness({ agentTerminalToolEnabled: true }).control.invokeHostAction(scope, call)).resolves.toMatchObject({ ok: false, status: 503 });
+  });
   it('reads complete and most-recent messages through the canonical paginated journal across workspaces', async () => {
     const sessionId = 'session-other';
     const turns = Array.from({ length: 205 }, (_, index) => ({
@@ -202,6 +342,53 @@ describe('OpenChamber control service canonical consumers', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('refuses to wait for human input in a Host-metadata operator child', async () => {
+    const { control, sessionService } = createHarness();
+    sessionService.getMetadata = async (sessionId) => ({ sessionId, revision: '1', metadata: { openchamber: { kind: 'operator-child', parentID: 'operator-root' } } });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true }, toolCallId: 'child-call',
+    });
+    expect(result).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it('does not treat failed Host metadata reads as permission to wait for a human', async () => {
+    const { control, sessionService } = createHarness();
+    sessionService.getMetadata = async () => { throw new Error('/host/private/metadata.db is unreadable'); };
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true }, toolCallId: 'unavailable-call',
+    });
+    expect(result).toMatchObject({ ok: false, status: 503 });
+    expect(JSON.stringify(result)).not.toContain('/host/private');
+  });
+
+  it('does not wait on a page when a user message is already queued', async () => {
+    const hasUnreadChat = vi.fn(async () => true);
+    const onPageWaitChange = vi.fn();
+    const { control } = createHarness(undefined, { hasUnreadChat, onPageWaitChange });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', toolCallId: 'queued-page',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true },
+    });
+    expect(result).toMatchObject({ ok: true, value: { answer: { answered: false, reason: 'chat-sent-earlier' } } });
+    expect(hasUnreadChat).toHaveBeenCalledWith('session-1');
+    expect(onPageWaitChange).not.toHaveBeenCalled();
+  });
+
+  it('does not wait on a page after an unavailable queued-message read', async () => {
+    const onPageWaitChange = vi.fn();
+    const { control } = createHarness(undefined, {
+      hasUnreadChat: async () => { throw new Error('queue unavailable'); }, onPageWaitChange,
+    });
+    const result = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', toolCallId: 'unavailable-queue-page',
+      input: { html: '<p>Choose</p>', title: 'Choose', awaitAnswer: true },
+    });
+    expect(result).toMatchObject({ ok: false });
+    expect(onPageWaitChange).not.toHaveBeenCalled();
+  });
+
   it('serves render.page through the render feature policy and carries the call id to a waiting page', async () => {
     const waits = [];
     const { control } = createHarness(undefined, {
@@ -228,13 +415,48 @@ describe('OpenChamber control service canonical consumers', () => {
     });
     const announced = await waiting;
     expect(announced).toMatchObject({ type: 'waiting', sessionId: 'session-1', callId: 'call-ask', title: 'Ask' });
-    expect(control.answerPage({ sessionId: 'session-1', callId: 'call-ask', summary: 'chose one', data: { n: 1 } }))
-      .toEqual({ answered: true });
+    await expect(control.answerPage({ sessionId: 'session-1', callId: 'call-ask', summary: 'chose one', data: { n: 1 } }))
+      .resolves.toEqual({ answered: true });
     await expect(pending).resolves.toMatchObject({
       ok: true,
       value: { title: 'Ask', answer: { answered: true, summary: 'chose one' } },
     });
   });
+  it('keeps an answerLater page with its owner and routes the later answer there', async () => {
+    const laterPages = { open: vi.fn(async () => undefined), answer: vi.fn(async () => ({ answered: true })) };
+    const { control } = createHarness(undefined, { laterPages });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const result = await control.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<p>Which layout?</p>', title: 'Later', answerLater: true }, toolCallId: 'call-later',
+    });
+    expect(result).toMatchObject({ ok: true, value: { shown: true, title: 'Later', answerLater: true } });
+    expect(laterPages.open).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session-1', callId: 'call-later', title: 'Later', question: 'Which layout?' }));
+    const answer = { sessionId: 'session-1', callId: 'call-later', summary: 'B' };
+    await expect(control.answerPage(answer)).resolves.toEqual({ answered: true });
+    expect(laterPages.answer).toHaveBeenCalledWith(answer);
+  });
+
+  it('creates a share group for a shared page without handing the agent its links', async () => {
+    const sharePages = {
+      isAvailable: () => true,
+      parseRequest: vi.fn((share) => share),
+      createGroup: vi.fn(async () => ({ recipients: [{ recipientId: 'r1', label: 'Ana', status: 'preparing' }], expiresAt: Date.UTC(2030, 0, 1) })),
+    };
+    const { control } = createHarness(undefined, { sharePages });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const call = (input) => control.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', input, toolCallId: 'call-share',
+    });
+    const result = await call({ html: '<p>Approve?</p>', title: 'Review', share: { recipients: ['Ana'] } });
+    expect(result).toMatchObject({ ok: true, value: { title: 'Review', shared: { recipients: [{ label: 'Ana' }], expiresAt: '2030-01-01T00:00:00.000Z' } } });
+    expect(result.value.shared.recipients[0]).not.toHaveProperty('url');
+    expect(result.value.shared.recipients[0]).not.toHaveProperty('pin');
+    expect(sharePages.createGroup).toHaveBeenCalledWith({ sessionId: 'session-1', callId: 'call-share', title: 'Review', share: { recipients: ['Ana'] } });
+    await expect(call({ html: '<p>Approve?</p>', share: { recipients: ['Ana'] }, awaitAnswer: true })).resolves.toMatchObject({ ok: false });
+    expect(sharePages.createGroup).toHaveBeenCalledTimes(1);
+  });
+
   it('returns canonical project and workspace-scoped model projections', async () => {
     const { control, requests } = createHarness();
 
@@ -345,6 +567,48 @@ describe('browser.close over the browser control bridge', () => {
     const { control } = createHarness(undefined, { browserControl: { request } });
     await expect(control.execute('browser.close', { tabId: 'tab-1' }, '/repo/app')).resolves.toEqual({ closed: true });
     expect(request).toHaveBeenCalledWith('browser.close', { tabId: 'tab-1' }, expect.objectContaining({ timeoutMs: 20_000 }));
+  });
+});
+
+describe('browser.upload over the browser control bridge', () => {
+  it('stages session files in the same store the download route reads', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-upload-'));
+    try {
+      await fs.writeFile(path.join(directory, 'a.txt'), 'hello');
+      const browserUploads = createUploadStore();
+      const request = vi.fn(async () => ({ uploaded: true }));
+      const { control } = createHarness(undefined, { browserControl: { request }, browserUploads });
+      await expect(control.execute('browser.upload', { selector: '#file', paths: ['a.txt'], directory: '/ignored' }, directory))
+        .resolves.toEqual({ uploaded: true });
+      const [action, parameters, options] = request.mock.calls[0];
+      expect(action).toBe('browser.upload');
+      expect(parameters.selector).toBe('#file');
+      expect(parameters.upload.files).toEqual([{ name: 'a.txt', size: 5 }]);
+      expect(browserUploads.get(parameters.upload.token, 0).bytes.toString()).toBe('hello');
+      expect(options).toMatchObject({ timeoutMs: 45_000, context: { directory } });
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses empty paths, missing context and escaping files before dispatch', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-upload-'));
+    try {
+      await fs.mkdir(path.join(directory, 'session'));
+      await fs.writeFile(path.join(directory, 'outside.txt'), 'private');
+      await fs.symlink(path.join(directory, 'outside.txt'), path.join(directory, 'session', 'link.txt'));
+      const request = vi.fn();
+      const { control } = createHarness(undefined, { browserControl: { request }, browserUploads: createUploadStore() });
+      for (const paths of [[], ['../outside.txt'], ['link.txt'], ['absent']]) {
+        await expect(control.execute('browser.upload', { selector: '#file', paths }, path.join(directory, 'session')))
+          .rejects.toMatchObject({ statusCode: 400 });
+      }
+      await expect(control.execute('browser.upload', { paths: ['outside.txt'] }, directory)).rejects.toMatchObject({ statusCode: 400 });
+      await expect(control.execute('browser.upload', { selector: '#file', paths: ['outside.txt'] })).rejects.toMatchObject({ statusCode: 400 });
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

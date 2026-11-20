@@ -1326,7 +1326,7 @@ describe('gh CLI account consent', () => {
       // through gh once the user switches that host on.
       expect(before.body).toMatchObject({
         connected: false,
-        accounts: [{ id: 'github.example.com#cli:0', current: false, status: 'valid', user: { id: '0', username: 'ghe-user' } }],
+        accounts: [{ id: 'github.example.com#cli:0', current: false, status: 'valid', usable: false, user: { id: '0', username: 'ghe-user' } }],
       });
       expect(before.body.cli).toMatchObject({ available: true, active: false, user: { id: '0', username: 'ghe-user' } });
       expect(await fs.access(ghInvokedFile).then(() => true, () => false)).toBe(false);
@@ -1339,7 +1339,7 @@ describe('gh CLI account consent', () => {
       expect(response.body).toMatchObject({
         connected: true,
         user: { id: '42', username: 'ghe-user' },
-        accounts: [{ id: 'github.example.com#cli:42', providerUserId: 'github.example.com#42', current: true, status: 'valid' }],
+        accounts: [{ id: 'github.example.com#cli:42', providerUserId: 'github.example.com#42', current: true, status: 'valid', usable: true }],
       });
       expect(response.body.cli).toMatchObject({ available: true, active: true });
       // The activation belongs to that instance: its own switch is on, and
@@ -1350,6 +1350,36 @@ describe('gh CLI account consent', () => {
     } finally {
       if (previousConfigDir === undefined) delete process.env.GH_CONFIG_DIR;
       else process.env.GH_CONFIG_DIR = previousConfigDir;
+    }
+  });
+
+  it('never runs gh for github.com while its switch is off and keeps the row that turns it back on', async () => {
+    const ghConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-gh-hosts-'));
+    const hostsFile = path.join(ghConfigDir, 'hosts.yml');
+    await fs.writeFile(hostsFile, 'github.com:\n  user: cli-user\n  oauth_token: gho_cli\n');
+    const previous = { GH_CONFIG_DIR: process.env.GH_CONFIG_DIR, GH_TOKEN: process.env.GH_TOKEN, GITHUB_TOKEN: process.env.GITHUB_TOKEN };
+    process.env.GH_CONFIG_DIR = ghConfigDir;
+    delete process.env.GH_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    const fetch = stubGitHubUsers();
+    auth.setGhCliDisabled(true);
+    const cliStatus = async () => (await request(makeApp()).get('/api/source-control/github/auth/status').expect(200)).body.cli;
+    try {
+      expect(await cliStatus()).toEqual({ available: true, disabled: true, active: false });
+
+      // A gh signed in only through GH_TOKEN has no hosts.yml entry.
+      await fs.rm(hostsFile);
+      expect(await cliStatus()).toEqual({ available: false, disabled: true, active: false });
+      process.env.GH_TOKEN = 'env-token';
+      expect(await cliStatus()).toEqual({ available: true, disabled: true, active: false });
+
+      expect(await fs.access(path.join(directory, 'invoked-hosts.txt')).then(() => true, () => false)).toBe(false);
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      for (const [name, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
   });
 
@@ -1402,7 +1432,7 @@ describe('gh CLI account consent', () => {
       expect(response.body).toMatchObject({
         connected: true,
         user: { id: '42', username: 'ghe-user' },
-        accounts: [{ id: 'github.example.com#cli:42', providerUserId: 'github.example.com#42', current: true, status: 'valid' }],
+        accounts: [{ id: 'github.example.com#cli:42', providerUserId: 'github.example.com#42', current: true, status: 'valid', usable: true }],
       });
       expect(response.body.cli).toMatchObject({ available: true, active: true });
     } finally {
@@ -1472,6 +1502,10 @@ describe('gh CLI account consent', () => {
 
     const before = await request(makeApp()).get('/api/source-control/github/auth/status').expect(200);
     expect(before.body).toMatchObject({ connected: false, cli: { available: true, active: false } });
+    // While the switch is off no gh row is usable: the server would refuse an
+    // exact lookup, so a binding offer must not be made from this listing.
+    const beforeCliRows = (before.body.accounts ?? []).filter((account) => account.source === 'cli');
+    expect(beforeCliRows.every((account) => account.usable === false)).toBe(true);
 
     const response = await request(makeApp()).post('/api/source-control/github/auth/activate')
       .send({ accountId: 'github.com#cli:9' }).expect(200);

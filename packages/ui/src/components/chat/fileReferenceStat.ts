@@ -12,8 +12,6 @@ let activeFileReferenceStatCount = 0;
 const pendingFileReferenceStats: Array<() => void> = [];
 
 
-// NUL cannot occur in a real path, so a directory-qualified key cannot collide
-// with a differently scoped entry.
 const statCacheKey = (directory: string, normalizedPath: string): string => `${directory}\u0000${normalizedPath}`;
 
 export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: string): Promise<boolean> => {
@@ -83,11 +81,6 @@ export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: st
 
 const fileStatSchema = z.object({ exists: z.boolean().optional() });
 
-/**
- * One answer for a person waiting on a tap. It stays out of the cache and the
- * queue above: the file may have appeared since the last tap, and a failed
- * request must not read as a missing file.
- */
 export const checkFileReference = async (resolvedPath: string, effectiveDirectory: string): Promise<'exists' | 'missing' | 'failed'> => {
   const normalizedPath = normalizeFilePath(resolvedPath, { preserveWhitespace: true });
   try {

@@ -1,3 +1,4 @@
+
 import { getRuntimeUrlResolver } from './runtime-url';
 import { runtimeFetch } from './runtime-fetch';
 import { getRuntimeExtraHeadersSync } from './runtime-auth';
@@ -8,13 +9,14 @@ import { isCapacitorApp } from './platform';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
+import { extensionWaitsUpdatedEventSchema, type ExtensionWaitsUpdatedEvent } from '@/sync/extension-waits';
 import { autoReviewUpdatedEventSchema, type AutoReviewUpdatedEvent } from '@/stores/useAutoReviewStore';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
-import type { SyncEvent } from './opencode/events';
 import { workflowRunSchema, type WorkflowRun } from './workflows/model';
-import { classifyStreamPayload } from '@/sync/event-pipeline';
 import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
+import { permissionPolicyWireSchema } from '@/stores/utils/permissionAutoAccept';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 type ScheduledTaskRanEvent = {
  type: 'scheduled-task-ran';
@@ -35,22 +37,12 @@ type SessionCreatedEvent = {
  dispatchedAsCommand: boolean;
 };
 
-/**
- * The set of linked worktrees of one repository changed: created or removed by
- * this server, by an agent, or from a terminal. `directories` are the
- * directories inside that repository the server has seen requests for, so a
- * listener can map them onto its registered projects and refresh only those.
- */
 type WorktreeChangedEvent = {
  type: 'worktree-changed';
  directories: string[];
  changedAt: number;
 };
 
-/**
- * One in-app browser action requested by the agent tool. Broadcast to every
- * connected client; only the one owning a browser view answers.
- */
 type BrowserControlRequestEvent = {
  type: 'browser-control-request';
  requestId: string;
@@ -59,10 +51,6 @@ type BrowserControlRequestEvent = {
  context: BrowserControlRequestContext;
 };
 
-/**
- * The session that called the browser tool and the project it works in, each
- * null when unknown (an older server, or a caller with no session).
- */
 const browserControlRequestContextSchema = z.object({
  directory: z.string().min(1).nullable().catch(null),
  sessionId: z.string().min(1).nullable().catch(null),
@@ -70,10 +58,6 @@ const browserControlRequestContextSchema = z.object({
 export type BrowserControlRequestContext = z.infer<typeof browserControlRequestContextSchema>;
 const UNKNOWN_BROWSER_CONTROL_CONTEXT: BrowserControlRequestContext = { directory: null, sessionId: null };
 
-/**
- * The agent asked for a file to be shown in the user's file panel. Every
- * client receives it; one showing that project opens the file.
- */
 const fileOpenRequestSchema = z.object({
  path: z.string().min(1),
  directory: z.string().min(1).nullable(),
@@ -81,11 +65,6 @@ const fileOpenRequestSchema = z.object({
 });
 type FileOpenRequestEvent = { type: 'file-open-request' } & z.infer<typeof fileOpenRequestSchema>;
 
-/**
- * The agent asked for a saved plan to be shown. `projectId` is the storage
- * owner; `directory` is where the asking session works, so the window that
- * shows that project opens the plan.
- */
 const planOpenRequestSchema = z.object({
  projectId: z.string().min(1),
  planId: z.string().min(1),
@@ -98,31 +77,18 @@ type PlanOpenRequestEvent = { type: 'plan-open-request' } & z.infer<typeof planO
 const projectContextChangedSchema = z.object({ projectId: z.string().min(1) });
 type ProjectContextChangedEvent = { type: 'project-context-changed' } & z.infer<typeof projectContextChangedSchema>;
 
-/** A client changed the chat folders; `updatedAt` is the stored revision, so a client already showing it skips the read. */
 const sessionFoldersChangedSchema = z.object({ updatedAt: z.number().finite() });
 type SessionFoldersChangedEvent = { type: 'session-folders-changed' } & z.infer<typeof sessionFoldersChangedSchema>;
 
-/** A client saved, sent or discarded a session draft; every client reads the drafts again. */
 const sessionDraftsChangedSchema = z.object({ updatedAt: z.number().finite() });
 type SessionDraftsChangedEvent = { type: 'session-drafts-changed' } & z.infer<typeof sessionDraftsChangedSchema>;
 
-/**
- * The extension chosen as browser provider can no longer serve (paused,
- * removed, or approval withdrawn), so the server put the in-app browser back.
- * The setting is already written; listeners update the store and tell the user.
- */
 const browserProviderResetSchema = z.object({
  guestId: z.string().min(1),
  guestName: z.string().min(1),
 });
 type BrowserProviderResetEvent = { type: 'browser-provider-reset' } & z.infer<typeof browserProviderResetSchema>;
 
-/**
- * The set of source-control providers the server serves changed: an extension
- * that acts as a Git host was approved, enabled, updated, paused or removed.
- * Carries nothing; listeners re-read the provider list from the server, so the
- * event cannot go stale between being sent and being handled.
- */
 type SourceControlProvidersChangedEvent = { type: 'source-control-providers-changed' };
 
 /**
@@ -148,14 +114,12 @@ const limitFailoverSchema = z.discriminatedUnion('kind', [
 ]);
 type LimitFailoverEvent = { type: 'limit-failover'; failover: z.infer<typeof limitFailoverSchema> };
 
-/** Jev routing events; each carries what the routing store needs and nothing the UI must re-derive. */
 const routingUpdatedSchema = z.object({
- available: z.boolean(),
- autoReady: z.boolean(),
- // Absent from servers before the classifier pick, where Jev always answered.
- jevAvailable: z.boolean().default(true),
- tokenPresent: z.boolean(),
- jevSource: z.enum(['typesafe', 'zen-free']),
+  available: z.boolean(),
+  autoReady: z.boolean(),
+  jevAvailable: z.boolean().default(true),
+  tokenPresent: z.boolean(),
+  jevSource: z.enum(['typesafe', 'zen-free']),
 });
 
 const routingDecisionSchema = z.object({
@@ -172,12 +136,11 @@ const routingDecisionSchema = z.object({
 });
 
 const routingPermissionHeldSchema = z.object({
- permissionId: z.string().min(1),
- sessionId: z.string().min(1),
- // Where the request lives, so the held request can be announced from its directory's store.
- directory: z.string().nullable().default(null),
- score: z.number(),
- kind: z.string().nullable(),
+  permissionId: z.string().min(1),
+  sessionId: z.string().min(1),
+  directory: z.string().nullable().default(null),
+  score: z.number(),
+  kind: z.string().nullable(),
 });
 
 const routingSafetySkippedSchema = z.object({
@@ -192,12 +155,21 @@ type RoutingDecisionEvent = { type: 'routing-decision'; decision: z.infer<typeof
 type RoutingPermissionHeldEvent = { type: 'routing-permission-held' } & z.infer<typeof routingPermissionHeldSchema>;
 type RoutingSafetySkippedEvent = { type: 'routing-safety-skipped' } & z.infer<typeof routingSafetySkippedSchema>;
 
-/**
- * A permission mode change, or a request the server's auto-answer left for the
- * user. The main event stream carries both as well; a window whose main stream
- * runs over SSE hears them only here.
- */
-export type PermissionPolicySyncEvent = Extract<SyncEvent, { type: 'openchamber.permission-auto-accept' | 'openchamber.permission-left-for-user' }>;
+const permissionPolicyEventSchema = z.discriminatedUnion('type', [
+ z.object({
+  type: z.literal('openchamber:permission-auto-accept.updated'),
+  properties: permissionPolicyWireSchema,
+ }),
+ z.object({
+  type: z.literal('openchamber:permission-auto-accept.left-for-user'),
+  properties: z.object({
+   permissionId: z.string().min(1),
+   sessionId: z.string().min(1),
+   directory: z.string().nullable(),
+  }),
+ }),
+]);
+export type PermissionPolicySyncEvent = z.infer<typeof permissionPolicyEventSchema>;
 type PermissionPolicyEvent = { type: 'permission-policy'; event: PermissionPolicySyncEvent };
 
 /** Followed pull requests, merge requests or issues whose state the server saw move. */
@@ -205,25 +177,30 @@ type TrackedItemsChangedEvent = { type: 'tracked-items-changed'; records: z.infe
 
 const eventStreamReadySchema = z.object({ connectionId: z.string().min(1).optional() });
 const sourceControlActivitySchema = z.object({ directory: z.string().min(1) });
-// The host follows one isolated space's queue or permission modes again.
 const spaceStreamConnectedSchema = z.object({ spaceId: z.string().regex(/^[0-9a-f]{12}$/), status: z.literal('connected') });
 
 const notificationPropertiesSchema = z.object({
- title: z.string().optional(),
- body: z.string().optional(),
- tag: z.string().optional(),
- kind: z.string().optional(),
- sessionId: z.string().optional(),
- directory: z.string().optional(),
- requireHidden: z.boolean().optional(),
- showWhenFocused: z.boolean().optional(),
+  title: z.string().optional(),
+  body: z.string().optional(),
+  tag: z.string().optional(),
+  kind: z.string().optional(),
+  sessionId: z.string().optional(),
+  directory: z.string().optional(),
+  requireHidden: z.boolean().optional(),
+  showWhenFocused: z.boolean().optional(),
+  toastOnly: z.boolean().optional(),
+  desktopNotificationDelivered: z.boolean().optional(),
+  desktopStdoutActive: z.boolean().optional(),
 });
+
+export type HostNotification = z.infer<typeof notificationPropertiesSchema>;
 
 type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
 type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
  /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
  | { type: 'guests-changed' }
+ | { type: 'guest-service-event'; guestId: string; topic: string; data: JsonValue }
  /** A terminal session was created, exited, restarted or removed. */
  | { type: 'terminal-sessions-changed' }
  /** A workflow run's state as the server last wrote it; the card and panel follow it. */
@@ -241,6 +218,7 @@ type OpenChamberEvent =
  | RoutingSafetySkippedEvent
  | MessageQueueUpdatedEvent
  | PrWatchUpdatedEvent
+ | ExtensionWaitsUpdatedEvent
  | AutoReviewUpdatedEvent
  | PermissionPolicyEvent
  /** The host follows this space's queue again; what changed in a gap is read from the space. */
@@ -507,6 +485,13 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   for (const listener of listeners) listener({ type: 'guests-changed' });
   return;
  }
+ if (envelope.type === 'openchamber:guest-service-event') {
+  const parsed = z.object({ guestId: z.string().min(1), topic: z.string().min(1), data: z.json().default(null) }).safeParse(envelope.properties);
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'guest-service-event', ...parsed.data });
+  }
+  return;
+ }
  if (envelope.type === 'openchamber:terminal-sessions-changed') {
   for (const listener of listeners) listener({ type: 'terminal-sessions-changed' });
   return;
@@ -559,6 +544,14 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   return;
  }
 
+ if (envelope.type === 'openchamber:extension-waits.updated') {
+  const parsed = extensionWaitsUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
+  }
+  return;
+ }
+
  if (envelope.type === 'openchamber:auto-review.updated') {
   const parsed = autoReviewUpdatedEventSchema.safeParse(envelope);
   if (parsed.success) {
@@ -568,11 +561,9 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  }
 
  if (envelope.type === 'openchamber:permission-auto-accept.updated' || envelope.type === 'openchamber:permission-auto-accept.left-for-user') {
-  const classified = classifyStreamPayload(envelope, undefined);
-  if (classified.kind !== 'events') return;
-  for (const { event } of classified.events) {
-   if (event.type !== 'openchamber.permission-auto-accept' && event.type !== 'openchamber.permission-left-for-user') continue;
-   for (const listener of listeners) listener({ type: 'permission-policy', event: event as PermissionPolicySyncEvent });
+  const parsed = permissionPolicyEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'permission-policy', event: parsed.data });
   }
   return;
  }

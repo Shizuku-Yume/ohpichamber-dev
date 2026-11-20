@@ -1,14 +1,12 @@
-import { AdvisorYieldedEventSchema, CanonicalEventSchema, CleanseProgressEventSchema, MessageSchema, SessionRecapEventSchema, SessionSuggestionEventSchema, SessionModeSchema, SessionSnapshotSchema, SubagentUpdatedEventSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
+import { AdvisorYieldedEventSchema, CanonicalEventSchema, CleanseProgressEventSchema, MessageSchema, SessionRecapEventSchema, SessionSuggestionEventSchema, SessionModeSchema, SessionSnapshotStateSchema, SessionUpdatedPayloadSchema, SessionStatusPayloadSchema, SubagentUpdatedEventSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 // Preserve each tuple member's payload type; Array.map widens away its fields.
 const envelope = { sessionId: true, epoch: true, sequence: true, timestamp: true } as const;
-// Envelope-dependent checks run after the journal stamps the canonical event.
-const payloadFields = z.strictObject({});
 const ProjectionEventSchema = z.union([
-  payloadFields.merge(CanonicalEventSchema.options[0]).omit(envelope),
+  SessionUpdatedPayloadSchema,
   CanonicalEventSchema.options[1].omit(envelope),
-  payloadFields.merge(CanonicalEventSchema.options[2]).omit(envelope),
+  SessionStatusPayloadSchema,
   CanonicalEventSchema.options[3].omit(envelope),
   CanonicalEventSchema.options[4].omit(envelope),
   CanonicalEventSchema.options[5].omit(envelope),
@@ -47,7 +45,7 @@ export const ProjectionInputSchema = z.strictObject({
 });
 export type ProjectionInput = z.infer<typeof ProjectionInputSchema>;
 
-export const ProjectionSeedSchema = payloadFields.merge(SessionSnapshotSchema).pick({ branch: true, selection: true, compacting: true, todos: true }).extend({
+export const ProjectionSeedSchema = SessionSnapshotStateSchema.extend({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
   turns: z.array(TurnSchema),

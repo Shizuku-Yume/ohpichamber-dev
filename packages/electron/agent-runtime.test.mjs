@@ -335,3 +335,41 @@ exit 0
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('probes each manifest package slot rather than its top-level namesake', { skip: process.platform === 'win32' }, () => {
+  const fixture = createMockRuntimeFixture();
+  const service = path.dirname(path.dirname(fixture.entrypoint));
+  const omp = path.join(fixture.root, 'omp');
+  fs.writeFileSync(omp, `#!/bin/sh
+case "$*" in
+  *-e*) echo "__COMPAT_OK__" ;;
+  *)
+    if [ "$BUN_BE_BUN" = "1" ]; then echo "1.4.4"; else echo "omp/19.0.0"; fi
+    ;;
+esac
+`, { mode: 0o755 });
+  const packages = [
+    { name: 'onnxruntime-node', version: '1.21.0', path: 'packages/onnx21' },
+    { name: 'onnxruntime-node', version: '1.26.0', path: 'packages/onnx26' },
+    { name: 'zod', version: '3.25.76', path: 'packages/zod3' },
+    { name: 'zod', version: '4.6.7', path: 'packages/zod4' },
+  ];
+  for (const item of packages) {
+    const directory = path.join(fixture.runtimeDir, item.path);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: item.name, version: item.version }));
+  }
+  for (const item of [packages[1], packages[3]]) {
+    const directory = path.join(service, 'node_modules', item.name);
+    fs.mkdirSync(path.dirname(directory), { recursive: true });
+    fs.symlinkSync(path.join(fixture.runtimeDir, item.path), directory, 'dir');
+  }
+  try {
+    const options = { bundledServiceDir: service, bundledManifest: { packages }, env: { PATH: '' } };
+    assert.equal(probeSystemOmp(omp, options).ok, true);
+    packages[2].version = '3.25.75';
+    assert.deepEqual(probeSystemOmp(omp, options), { ok: false, reason: 'PACKAGE_VERSION_MISMATCH' });
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});

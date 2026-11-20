@@ -18,7 +18,6 @@ export type DirectoryOwner = {
   projectRoot: string;
   scopeDirectory: string;
   kind: 'project' | 'worktree' | 'space';
-  /** The isolated space that owns the scope, for `kind: 'space'`. */
   spaceId?: string;
 };
 

@@ -30,7 +30,6 @@ type ComparisonFiles =
   | { key: string; status: 'ready'; files: GitComparisonFile[]; revision: number; refreshing: boolean }
   | { key: string; status: 'error'; message: string };
 
-/** File-list authority shared by the stacked desktop view and mobile drill-down. */
 export function useGitComparison(
   directory: string | null,
   source: GitComparisonSource | null,
@@ -43,8 +42,6 @@ export function useGitComparison(
   const { t } = useI18n();
   const runtimeKey = useGitStore((state) => state.runtimeKey);
   const changeRequestTerm = useChangeRequestTerm(readContext?.provider ?? changeRequestProvider);
-  // A pull request is read through the bound context, so that context is part
-  // of what is being compared: a rebind is a different comparison.
   const authority = source?.kind === 'pr' && readContext ? JSON.stringify(sourceControlReadContextParts(readContext)) : '';
   const key = directory && source ? JSON.stringify([runtimeKey, directory, source, authority]) : null;
   const pushScope = gitPushScopeKey(directory ?? '', runtimeKey);
@@ -107,11 +104,10 @@ export function useGitComparison(
       return { diff: file.patch };
     }
     return target.kind === 'branch'
-      ? getGitRangeDiff(directory, { base: target.baseRef, head: target.headRef, path: filePath, contextLines, includeWorkingTree: true })
+      ? getGitRangeDiff(directory, { base: target.baseRef, head: target.headRef, path: filePath, previousPath: file.previousPath, contextLines, includeWorkingTree: true })
       : getGitCommitDiff(directory, { hash: target.hash, path: filePath, previousPath: file.previousPath, contextLines });
   }, [directory, enabled, filesByPath, key, t]);
 
-  // Provider patches have fixed context; expansion reads both published sides.
   const fetchFullFile = useCallback(async (filePath: string): Promise<{ original: string; modified: string }> => {
     const { key: targetKey, source: target, enabled: active, readContext: context } = sourceRef.current;
     const file = filesByPath.get(filePath);
@@ -119,7 +115,6 @@ export function useGitComparison(
     return fetchPullRequestFile(context.directory, target, context, { path: file.path, previousPath: file.previousPath, status: file.status });
   }, [directory, enabled, filesByPath, key, t]);
 
-  // A document is compared in the viewer, so it needs both whole versions.
   const fetchVersions = useCallback(async (filePath: string): Promise<{ original: string; modified: string }> => {
     const { key: targetKey, source: target, enabled: active, readContext: context } = sourceRef.current;
     const file = filesByPath.get(filePath);

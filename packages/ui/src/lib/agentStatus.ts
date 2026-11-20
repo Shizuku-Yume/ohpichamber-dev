@@ -1,15 +1,8 @@
 import type { I18nKey, I18nParams, Locale } from '@/lib/i18n';
 
-/**
- * What the agent is doing, as a dictionary key and its values; the text is
- * made in the reader's language when it is shown (`formatAgentStatus`). The
- * phrases live in `lib/i18n/messages/agent-status.i18n.ts`.
- */
 export type AgentStatus = {
   key: I18nKey;
-  /** Parallel calls of one kind, for a counted phrase (`*.count`). */
   count?: number;
-  /** A tool or integration nobody described, read as words. */
   name?: string;
   /**
    * A phrase the harness or the tool wrote itself — a running call's `input.i`
@@ -24,11 +17,6 @@ type Translate = (key: I18nKey, params?: I18nParams) => string;
 const PLURAL = /\{count, plural,((?:[^{}]|\{[^{}]*\})*)\}/g;
 const PLURAL_CASE = /(=\d+|zero|one|two|few|many|other)\s*\{([^{}]*)\}/g;
 
-/**
- * Resolves ICU `{count, plural, ...}` blocks for `locale`: an exact `=n`
- * case first, then the locale's plural category, then `other`. `#` becomes
- * the number in the locale's digits.
- */
 export const applyPlural = (template: string, count: number, locale: Locale): string => {
   const category = new Intl.PluralRules(locale).select(count);
   const number = new Intl.NumberFormat(locale).format(count);
@@ -44,7 +32,6 @@ export const applyPlural = (template: string, count: number, locale: Locale): st
 const formatAgentStatusPhrase = (t: Translate, locale: Locale, status: AgentStatus): string => {
   const raw = status.text ?? t(status.key);
   const counted = status.count === undefined ? raw : applyPlural(raw, status.count, locale);
-  // A function, so `$&` or `$$` in a tool's name stay as written.
   return counted.replace(/\{name\}/g, () => status.name ?? '');
 };
 

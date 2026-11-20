@@ -44,8 +44,6 @@ const parsePinnedSessionKey = (key: string): LegacyPin | null => {
 
 const legacyStorageSchema = z.object({ version: z.literal(2), sessions: z.record(z.string(), z.number()) });
 
-// Device-local pins of every runtime this client has used, waiting to move
-// into session metadata. Malformed storage holds nothing to move.
 const readLegacyPins = (): Map<string, LegacyPin> => {
   storage.removeItem(LEGACY_STORAGE_KEY);
   const raw = storage.getItem(STORAGE_KEY);
@@ -154,19 +152,16 @@ useGlobalSessionsStore.subscribe((state, previous) => {
 });
 publishPinnedIds();
 
-/** Show a pin or unpin before the server confirms it; `null` drops the overlay. */
 export const setPendingPin = (key: string, pinned: boolean | null): void => {
   if (pinned === null) pendingPins.delete(key);
   else pendingPins.set(key, pinned);
   publishPinnedIds();
 };
 
-/** This device's old local pins on a runtime, still to be written to the server. */
 export const getLegacyPins = (runtimeKey: string): LegacyPin[] => (
   [...readLegacyPins().values()].filter((pin) => pin.runtimeKey === runtimeKey)
 );
 
-/** Drop local pins that reached the server, or whose session is gone. */
 export const forgetLegacyPins = (keys: readonly string[]): void => {
   const current = readLegacyPins();
   let changed = false;

@@ -32,15 +32,7 @@ import type { ProjectEntry } from '@/lib/api/types';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { toast } from '@/components/ui';
 
-// Native tray/menu bar bridge. The Electron main process owns the Tray UI; this hook
-// streams a compact snapshot of live session/approval state to it via the
-// `desktop_tray_update` IPC command, and routes tray clicks back into the app.
-//
-// Dock badges share the IPC command, but remain active when the menu bar is
-// disabled. That path observes unread state only, without tray polling or quotas.
-
 const TRAY_ACTION_EVENT = 'openchamber:tray-action';
-// Event-driven updates do the real work; this is just a slow safety net.
 const POLL_INTERVAL_MS = 5000;
 const FLUSH_DEBOUNCE_MS = 500;
 const MAX_SESSIONS = 20;
@@ -55,7 +47,6 @@ type TraySession = {
   unseen: number;
   hasError: boolean;
   directory: string;
-  // Secondary line for the menu row: "project · branch" (rendered as sublabel).
   subtitle: string;
 };
 
@@ -75,21 +66,11 @@ type TrayUsage = { mode: 'usage' | 'remaining'; groups: TrayUsageGroup[] };
 type TraySnapshot = {
   sessions: TraySession[];
   approvals: TrayApproval[];
-  // Active instance label (e.g. "Local OpenChamber" or a remote host name) so
-  // the tray header makes clear which instance/window it reflects.
   instanceName: string;
-  // Provider rate-limit usage, only for providers the user enabled for the
-  // dropdown (same "configured to show" rule as the header/mobile). Empty
-  // groups → the tray omits the Usage submenu entirely.
   usage: TrayUsage;
-  // Number of chats (root sessions) with unseen activity, for the macOS dock
-  // badge. 0 when the user disabled the badge — the main process clears it.
   dockBadgeCount: number;
 };
 
-// focus-session / new-session are routed natively by the main process through
-// the existing `openchamber:open-session` / `openchamber:open-draft-session`
-// events (handled in App.tsx). Only respond-permission needs handling here.
 type TrayAction =
   | { type: 'respond-permission'; sessionId: string; id: string; response: 'once' | 'always' | 'reject' };
 
@@ -132,7 +113,6 @@ const basenameOf = (p: string): string => {
   return idx >= 0 ? norm.slice(idx + 1) : norm;
 };
 
-// Resolve the project metadata line using Host directory and cached Git facts.
 const resolveSessionSubtitle = (
   directory: string,
   projects: ProjectEntry[],
@@ -195,9 +175,6 @@ const buildUsage = (): TrayUsage => {
   return { mode, groups };
 };
 
-// Mirrors the header's instance resolution (Header.refreshCurrentInstanceLabel):
-// the local origin shows as "Local OpenChamber"; a remote host shows its
-// configured name. Async because the host config is read over IPC.
 const resolveInstanceName = async (): Promise<string> => {
   try {
     if (isDesktopLocalOriginActive()) return 'Local OhPiChamber';
@@ -215,8 +192,6 @@ const resolveInstanceName = async (): Promise<string> => {
   }
 };
 
-// Live data lives in the directory-scoped sync child stores. Aggregate it once
-// into flat lookups so we can attach it to the global session list by id.
 type LiveData = {
   statusById: Map<string, TraySessionStatus>;
   approvals: TrayApproval[];
@@ -243,11 +218,6 @@ const collectLiveData = (): LiveData => {
       titleById.set(session.sessionId, session.title ?? '');
     }
 
-    // Status comes from the status map itself, NOT from the session list — a
-    // just-created session can have a live status entry before (or without)
-    // appearing in this store's list, and the same session can be listed by
-    // several stores. Never let one store's missing/idle entry clobber another
-    // store's busy/retry.
     for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
       const mapped = trayStatus(status);
       const existing = statusById.get(sessionId);
@@ -273,21 +243,7 @@ const collectLiveData = (): LiveData => {
   return { statusById, approvals, titleById };
 };
 
-// Status for sessions outside the synced child stores arrives two ways, both
-// landing in useGlobalSessionStatusStore (the fallback in the rollup below):
-//  - live: the global event stream carries status events for every directory;
-//    the sync dispatcher routes the ones without a child store into the store;
-//  - seeded: events only deliver changes, so the root global-sessions poll
-//    seeds the store from the host's cross-project map (`/api/sessions/status`,
-//    see `sync/host-session-status-seed.ts`). The tray no longer polls the
-//    upstream `/session/status?directory=` endpoint: that call creates an
-//    OpenCode instance per directory.
 const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot => {
-
-  // The list source is the GLOBAL store — every project/worktree the backend
-  // knows about, independent of which directories this client has opened. Live
-  // status/unread/branch are merged in by id where we have them (the session's
-  // directory is synced); otherwise the row is shown as idle.
   const allSessions = useGlobalSessionsStore.getState().activeSessions;
   const childrenByParent = new Map<string, string[]>();
   for (const session of allSessions) {
@@ -342,10 +298,6 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
     }
   }
 
-  // A session is active if EITHER source says so: the synced child stores
-  // (instant, but can miss sessions created outside this window) or the
-  // cross-project status map (event-driven for every directory + polled
-  // reconciliation). Requiring agreement would re-introduce the gaps.
   const globalStatusById = useGlobalSessionStatusStore.getState().statusById;
   const resolveStatus = (id: string): TraySessionStatus => {
     const fromStores = live.statusById.get(id);
@@ -384,8 +336,6 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       };
     });
 
-  // Directory stores list approvals for open directories; the cross-directory
-  // index adds the ones from directories this window never initialized.
   const approvals = live.approvals.map((a) => ({ ...a, sessionTitle: titleById.get(a.sessionId) || '' }));
   const seen = new Set(approvals.map((a) => a.id));
   for (const [sessionId, pending] of useGlobalBlockingRequestsStore.getState().bySession) {
@@ -415,8 +365,6 @@ export const useTraySync = (): void => {
     let disposed = false;
     let lastSerialized = '';
     let flushTimer: number | null = null;
-    // The active instance is fixed per window load (switching hosts re-navigates
-    // the window, remounting this hook). Resolve it once, then re-push.
     let instanceName = '';
     const flushNow = () => {
       if (disposed) return;
@@ -427,9 +375,6 @@ export const useTraySync = (): void => {
       void invokeDesktop('desktop_tray_update', snapshot);
     };
 
-    // Coalesce bursts (e.g. token-by-token streaming updates a store rapidly)
-    // into at most one push per FLUSH_DEBOUNCE_MS; discrete events surface within
-    // that window. The main app UI stays instant via SSE/stores.
     const scheduleFlush = () => {
       if (disposed || flushTimer !== null) return;
       flushTimer = window.setTimeout(() => {
@@ -464,9 +409,6 @@ export const useTraySync = (): void => {
       flushNow();
     });
 
-    // Event-driven: subscribe to each directory store so session create/update/
-    // status changes propagate immediately, and to the registry so stores for
-    // newly-opened directories get wired up as they appear.
     const storeUnsubs = new Map<string, () => void>();
 
     const rebindStores = () => {
@@ -518,15 +460,8 @@ export const useTraySync = (): void => {
     const unsubscribeSessionOrder = useSessionOrderingStore.subscribe(() => scheduleFlush());
     const unsubscribePinnedSessions = useSessionPinnedStore.subscribe(() => scheduleFlush());
 
-    // Usage: push to the tray whenever the quota store changes, and do one
-    // initial fetch for enabled providers so the submenu isn't empty on launch.
-    // Settings and quotas are read by the boot registry, not by a tray mount:
-    // a tray-only read was the second reader that kept the store's settings
-    // disagreement alive. Opening the tray asks for fresh numbers instead.
     const unsubscribeQuota = useQuotaStore.subscribe(() => scheduleFlush());
 
-    // Safety net: catches anything the event subscriptions miss (e.g. a store
-    // that existed before the registry subscription was attached).
     const interval = window.setInterval(() => { rebindStores(); flushNow(); }, POLL_INTERVAL_MS);
 
     flushNow();

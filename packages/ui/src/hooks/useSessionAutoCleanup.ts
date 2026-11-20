@@ -40,8 +40,10 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
   const pinnedIds = useSessionPinnedStore((state) => state.ids);
 
   React.useEffect(() => {
-    if (needsGlobalSessions) void ensureGlobalSessionsLoaded();
-  }, [needsGlobalSessions]);
+    if (!needsGlobalSessions) return;
+    if (autoRun && autoDeleteLastRunAt && Date.now() - autoDeleteLastRunAt < RETENTION_INTERVAL_MS) return;
+    void ensureGlobalSessionsLoaded();
+  }, [needsGlobalSessions, autoRun, autoDeleteLastRunAt]);
 
   const candidates = React.useMemo(() => buildSessionRetentionCandidates({
     sessions: [...activeSessions, ...archivedSessions],

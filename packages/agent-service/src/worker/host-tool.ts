@@ -3,13 +3,16 @@ import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-sessi
 import { z } from 'zod';
 import { JsonObjectSchema, type JsonObject, type JsonValue } from '@openchamber/agent-contract';
 import { HostActionRequestSchema, type HostActionRequest } from '../native-policy-protocol.ts';
+import { UI_BLOCKS_GUIDANCE } from './ui-blocks-guidance.ts';
 
 export type HostToolName =
   | 'openchamber'
   | 'web'
   | 'openchamber_knowledge'
   | 'notify'
+  | 'openchamber_usage'
   | 'openchamber_render'
+  | 'openchamber_secret'
   | 'openchamber_workflow';
 
 export const HOST_TOOL_NAMES: readonly HostToolName[] = [
@@ -17,7 +20,9 @@ export const HOST_TOOL_NAMES: readonly HostToolName[] = [
   'web',
   'openchamber_knowledge',
   'notify',
+  'openchamber_usage',
   'openchamber_render',
+  'openchamber_secret',
   'openchamber_workflow',
 ] as const;
 
@@ -26,7 +31,9 @@ const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Ob
   web: true,
   openchamber_knowledge: true,
   notify: false,
+  openchamber_usage: false,
   openchamber_render: true,
+  openchamber_secret: true,
   openchamber_workflow: true,
 });
 const HostToolEnablementInputSchema = z.record(z.string(), z.boolean().optional().catch(undefined)).optional();
@@ -46,7 +53,9 @@ export function normalizeHostToolEnablement(input?: HostToolEnablementInput) {
   if (record.agentWebToolEnabled !== undefined) result.web = record.agentWebToolEnabled;
   if (record.agentKnowledgeToolEnabled !== undefined) result.openchamber_knowledge = record.agentKnowledgeToolEnabled;
   if (record.agentNotifyToolEnabled !== undefined) result.notify = record.agentNotifyToolEnabled;
+  if (record.agentUsageToolEnabled !== undefined) result.openchamber_usage = record.agentUsageToolEnabled;
   if (record.agentRenderToolEnabled !== undefined) result.openchamber_render = record.agentRenderToolEnabled;
+  if (record.agentSecretToolEnabled !== undefined) result.openchamber_secret = record.agentSecretToolEnabled;
   if (record.agentWorkflowToolEnabled !== undefined) result.openchamber_workflow = record.agentWorkflowToolEnabled;
   return result;
 }
@@ -57,7 +66,9 @@ export const HOST_TOOL_DESCRIPTIONS = {
   openchamber: 'Invoke retained OhPiChamber project/model, session, pull request watch, schedule or file.open actions in the captured workspace. '
     + 'Pass action parameters inside input, for example {"action":"pr.watch","input":{"url":"https://github.com/owner/repo/pull/123"}} or {"action":"session.list","input":{}}. '
     + 'pr.watch watches a pull or merge request at url (GitHub/GitLab) for check status, reviews/comments, conflicts, or merge, waking the session with a message on change; requires url, optional sessionId (defaults to calling session) and directory. '
-    + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it.',
+    + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it. '
+    + 'session.track puts a root project session In work; session.markDone removes it. Both accept sessionId, defaulting to this session. Pinned sessions and worktrees cannot be tracked. '
+    + 'wait.list lists this session’s timer and extension waits and available sources. wait.start takes source and args from wait.list (e.g. "timer" and {"minutes":5}) and wakes this session when the wait fires. wait.stop takes optional waitId and stops that wait or all timer and extension waits without waking the session.',
   openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OhPiChamber's Project knowledge panel and shared by its sessions. One action per call. "
     + 'knowledge.list returns everything unless planId or ready narrows it; read it before answering a question the project notes may hold. '
     + 'knowledge.save requires kind and body; with id it replaces, and an update may send only completed, planId or dependsOn. '
@@ -66,9 +77,13 @@ export const HOST_TOOL_DESCRIPTIONS = {
     + 'knowledge.show opens a plan for the user. knowledge.delete requires kind and id.',
   web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
   notify: 'Invoke notify.send for an authorized OhPiChamber notification.',
+  openchamber_usage: 'Invoke usage.read to read provider usage limits in this workspace. Optional providerId selects one provider; otherwise returns every configured provider. Account details and credentials are never returned.',
+  openchamber_secret: 'Run one approved command with secrets supplied privately by the user. secret.run requires program, args (optional), reason, and inputs: [{env,label,placeholder?}]. Values enter only the child environment, never tool arguments; stdout and stderr are redacted. Remembered values last ten minutes in memory; secret.forget clears this session. secret.request file mode is disabled because secrets must not be saved to disk.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
-    + 'The chat draws the page inline, so do not restate what it already says.',
+    + 'With answerLater, for a decision the rest of the task does not wait on, the call returns at once and the page stays open, across restarts, until the user answers or declines; the answer arrives later as a message in this session. '
+    + 'With share ({"recipients":["Name"]}) the page is for people outside this chat: the user sends each link and PIN from the card, you never see them, and each answer arrives later as a message; it goes with neither awaitAnswer nor answerLater. '
+    + 'The chat draws the page inline, so do not restate what it already says.\n\n' + UI_BLOCKS_GUIDANCE,
   openchamber_workflow: 'Propose, check, run, inspect, stop or resume multi-agent workflows in the project. Actions: workflow.run, workflow.check, workflow.status, workflow.result, workflow.stop, workflow.resume, workflow.save, workflow.list.',
 } satisfies Record<HostActionRequest['toolName'], string>;
 
@@ -78,7 +93,7 @@ export const HOST_TOOL_DESCRIPTIONS = {
  * caller reads.
  */
 function envelopeFor(toolName: HostActionRequest['toolName'], action: string, value: JsonValue): JsonObject | null {
-  if (toolName === 'openchamber_render') {
+  if (toolName === 'openchamber_render' || toolName === 'openchamber_secret' || toolName === 'openchamber_usage') {
     const data = JsonObjectSchema.safeParse(value);
     if (!data.success) return null;
     const answer = JsonObjectSchema.safeParse(data.data.answer);
@@ -115,10 +130,12 @@ export function createHostToolController({
   scope,
   invoke,
   initialEnablement,
+  approveSecretRun,
 }: {
   scope: HostToolScope;
   invoke: (request: HostToolInvocation) => Promise<JsonValue>;
   initialEnablement?: Partial<Record<HostToolName, boolean>> | ((tool: HostToolName) => boolean);
+  approveSecretRun?: (toolCallId: string, command: JsonObject, signal: AbortSignal) => Promise<void>;
 }): HostToolController {
   const captured: HostToolScope = { ...scope };
   const enablement: Record<HostToolName, boolean> = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
@@ -144,7 +161,7 @@ export function createHostToolController({
       label: toolName,
       description: HOST_TOOL_DESCRIPTIONS[toolName],
       parameters,
-      approval: 'exec',
+      approval: toolName === 'openchamber_secret' ? { tier: 'exec', policy: 'allow', reason: 'Secret commands require a separate exact-command Bash receipt at execution' } : 'exec',
       loadMode: 'essential',
       async execute(toolCallId, params, signal) {
         const cancellation = signal ?? new AbortController().signal;
@@ -166,8 +183,18 @@ export function createHostToolController({
           toolName,
           action: action.data,
           input: toolInput.data,
-          ...(toolName === 'openchamber_render' && toolCallId ? { toolCallId } : {}),
+          ...((toolName === 'openchamber_render' || toolName === 'openchamber_secret') && toolCallId ? { toolCallId } : {}),
         });
+        if (parsed.toolName === 'openchamber_secret' && parsed.action === 'secret.run') {
+          const command = z.object({
+            program: z.string().trim().min(1).refine(value => !value.includes('\0')),
+            args: z.array(z.string().refine(value => !value.includes('\0'))).max(64).default([]),
+          }).parse(parsed.input);
+          if (!approveSecretRun) throw new Error('Secret command approval is unavailable');
+          const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+          await approveSecretRun(toolCallId, { command: [command.program, ...command.args].map(quote).join(' ') }, cancellation);
+          cancellation.throwIfAborted();
+        }
         const value = await invoke({ ...captured, request: parsed, signal: cancellation });
         cancellation.throwIfAborted();
         const envelope = envelopeFor(toolName, parsed.action, value);

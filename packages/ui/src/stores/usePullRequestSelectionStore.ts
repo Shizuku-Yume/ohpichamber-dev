@@ -45,14 +45,12 @@ const remember = (state: PullRequestSelectionState, key: string, selection: Pull
   return { selections };
 };
 
-// Keys are runtime/directory/branch tuples supplied by usePullRequestComparison.
 export const usePullRequestSelectionStore = create<PullRequestSelectionState>((set) => ({
   selections: new Map(),
   diffRequests: new Map(),
   diffContexts: new Map(),
   changesRepositories: new Map(),
   select: (key, source) => set((state) => remember(state, key, { source, handoff: state.selections.get(key)?.handoff ?? null })),
-  // A retained request is consumed once even if the walkthrough tab remounts.
   acceptHandoff: (key, source) => set((state) => state.selections.get(key)?.handoff === source
     ? state : remember(state, key, { source, handoff: source })),
   requestDiff: (directory, source, context, repository = null) => set((state) => {

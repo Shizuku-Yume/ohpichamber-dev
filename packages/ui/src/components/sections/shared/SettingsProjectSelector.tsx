@@ -50,8 +50,6 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
     if (project) setSettingsProjectPath(project.path);
   };
 
-  // Mobile reuses the composer's bottom-sheet project picker: a select popup
-  // over a phone viewport cannot scroll far enough for long project lists.
   if (isMobile) {
     return (
       <>

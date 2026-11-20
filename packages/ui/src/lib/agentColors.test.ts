@@ -1,5 +1,5 @@
-import { expect, test } from 'bun:test';
-import { createAgentColorResolver } from './agentColors';
+import { describe, expect, test } from 'bun:test';
+import { createAgentColorResolver, restingAgentColor } from './agentColors';
 import { getDefaultTheme, getThemeById } from './theme/themes';
 import { chromaticDistance } from './theme/color';
 import type { Theme } from '@/types/theme';
@@ -86,4 +86,10 @@ test('duplicate labels retain distinct colors by ID and build labels are not ali
   const resolve = createAgentColorResolver(getDefaultTheme(true), agents);
   expect(resolve('review-a')).not.toEqual(resolve('review-b'));
   expect(resolve('review-a').color.startsWith('var(--syntax-')).toBe(true);
+});
+
+describe('restingAgentColor', () => {
+  test('keeps the agent hue and mixes it toward the muted text colour', () => {
+    expect(restingAgentColor('#34983a')).toBe('color-mix(in oklab, #34983a 55%, var(--muted-foreground))');
+  });
 });

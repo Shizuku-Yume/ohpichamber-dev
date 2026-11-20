@@ -9,7 +9,6 @@ export interface ConnectableProvider {
 
 interface PopularProvider {
   id: string;
-  /** One line saying what the provider gives you. */
   noteKey: I18nKey;
   recommended: boolean;
 }
@@ -41,12 +40,6 @@ const toConnectable = (provider: Provider): ConnectableProvider => ({
 const byName = (a: ConnectableProvider, b: ConnectableProvider) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
-/**
- * What can still be connected: native providers the workspace reports without
- * a configured credential. Sorted by name so the compact rows stay scannable.
- * A provider working from an environment variable has a credential, so it
- * stays out of this list; `listProvidersAcceptingKey` covers it instead.
- */
 export const listConnectableProviders = (
   providers: readonly Provider[],
 ): ConnectableProvider[] => providers
@@ -70,7 +63,6 @@ export const listProvidersAcceptingKey = (
   .sort(byName);
 
 interface ConnectableProviderGroups {
-  /** Popular providers that can still be connected, in `POPULAR_PROVIDERS` order. */
   popular: Array<ConnectableProvider & PopularProvider>;
   others: ConnectableProvider[];
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Message, Part } from "@openchamber/agent-contract"
-import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry } from "./form-recovery"
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry, resolveRecoveryDirectory } from "./form-recovery"
 
 const message = (role: Message["role"], parts: Part[] = []): Message => ({
   messageId: `${role}-${parts.length}`, sessionId: "ses_1", turnId: "turn_1", role, createdAt: 1, parts,
@@ -52,5 +53,14 @@ describe("recoverPendingFormWithRetry", () => {
     )
     expect(recovered).toBe(false)
     expect(attempts).toBe(0)
+  })
+})
+
+describe("resolveRecoveryDirectory", () => {
+  test("prefers the session's own directory and keeps the fallback when the read fails", () => {
+    registerWorkspaceDirectory("recovery-workspace", "/real")
+    expect(resolveRecoveryDirectory({ workspaceId: "recovery-workspace" }, "/stale")).toBe("/real")
+    expect(resolveRecoveryDirectory(null, "/stale")).toBe("/stale")
+    expect(resolveRecoveryDirectory(null, null)).toBeNull()
   })
 })

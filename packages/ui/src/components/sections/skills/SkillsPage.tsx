@@ -181,8 +181,7 @@ const SkillsInstalledPage: React.FC = () => {
       ...(language ? [language] : []),
       ...(useShiki && shikiLanguage ? [codeHighlightExtension({
         language: shikiLanguage,
-        themeName: currentTheme.metadata.id,
-        theme: getCodeTokenTheme(currentTheme),
+        theme: getCodeTokenTheme(currentTheme).zed,
       })] : []),
       EditorView.lineWrapping,
     ];

@@ -1,6 +1,3 @@
-/**
- * Other sessions and their messages, mentioned in the composer's text.
- */
 
 import { canonicalClient } from '@/api/canonicalClient';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -53,13 +50,11 @@ export const sessionMessageReference = (
     };
 };
 
-/** The key of the link a reference was named by, matching `sessionLinkKey`. */
 export const sessionReferenceKey = (reference: { sessionId: string; messageId?: string }): string => sessionLinkKey({
     sessionId: reference.sessionId,
     messageId: reference.messageId ?? null,
 });
 
-/** The link the `@` picker writes for a session. */
 export const sessionLinkText = (sessionId: string): string => `ohpichamber://session/${sessionId}`;
 
 export const loadSessionLinkReference = async (target: SessionLinkTarget): Promise<SessionReference | null> => {

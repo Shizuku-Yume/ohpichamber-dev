@@ -251,7 +251,7 @@ describe('beginLastSessionRestore', () => {
         persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
         const list = holdSessionList();
         try {
-            const attempt = beginLastSessionRestore({ selectNow: true });
+            const attempt = beginLastSessionRestore({ selectNow: true, refresh: false });
             // Selected synchronously, before the list was even asked for.
             expect(selected).toEqual([{ id: 'ses_open', directory: '/repo' }]);
             expect(list.loads()).toBe(0);
@@ -271,7 +271,7 @@ describe('beginLastSessionRestore', () => {
         const original = useGlobalSessionsStore.getState().entityById;
         useGlobalSessionsStore.setState({ entityById: new Map([['ses_open', session('ses_open')]]) });
         try {
-            beginLastSessionRestore({ selectNow: true });
+            beginLastSessionRestore({ selectNow: true, refresh: false });
             expect(selected).toEqual([{ id: 'ses_open', directory: '/repo' }]);
         } finally {
             useGlobalSessionsStore.setState({ entityById: original });
@@ -284,7 +284,7 @@ describe('beginLastSessionRestore', () => {
         useGlobalSessionsStore.setState({ entityById: new Map() });
         const list = holdSessionList();
         try {
-            const attempt = beginLastSessionRestore({ selectNow: true });
+            const attempt = beginLastSessionRestore({ selectNow: true, refresh: false });
             expect(selected).toEqual([]);
             const result = attempt();
             list.answer([session('ses_open')]);
@@ -298,7 +298,7 @@ describe('beginLastSessionRestore', () => {
 
     test('leaves the launch to a route that names a session', () => {
         persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
-        beginLastSessionRestore({ selectNow: false });
+        beginLastSessionRestore({ selectNow: false, refresh: false });
         expect(selected).toEqual([]);
     });
 
@@ -306,7 +306,7 @@ describe('beginLastSessionRestore', () => {
         persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_deleted', directory: '/repo' });
         const list = holdSessionList();
         try {
-            const attempt = beginLastSessionRestore({ selectNow: true });
+            const attempt = beginLastSessionRestore({ selectNow: true, refresh: false });
             expect(useSessionUIStore.getState().currentSessionId).toBe('ses_deleted');
 
             // Failed discovery proves nothing and leaves the reopened session intact.
@@ -331,7 +331,7 @@ describe('beginLastSessionRestore', () => {
         registerWorkspaceDirectory('workspace-moved', '/repo/.worktrees/moved');
         const list = holdSessionList();
         try {
-            const attempt = beginLastSessionRestore({ selectNow: true });
+            const attempt = beginLastSessionRestore({ selectNow: true, refresh: true });
             const result = attempt();
             list.answer([session('ses_open', 'workspace-moved')]);
             expect(await result).toBe('restored');
@@ -348,7 +348,7 @@ describe('beginLastSessionRestore', () => {
         persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_deleted', directory: '/repo' });
         const list = holdSessionList();
         try {
-            const attempt = beginLastSessionRestore({ selectNow: true });
+            const attempt = beginLastSessionRestore({ selectNow: true, refresh: false });
             const result = attempt();
             // The user clicks another session while the list loads; selecting
             // it moves the pointer, as setCurrentSession does.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { NotificationChannel } from '@/lib/notifications/channels';
@@ -38,7 +38,7 @@ describe('NotificationChannelCard', () => {
   beforeEach(() => {
     dom = new Window({ url: 'http://localhost/' });
     const values = {
-      window: dom, document: dom.document, navigator: dom.navigator,
+      window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
       HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node,
       HTMLInputElement: dom.HTMLInputElement, DocumentFragment: dom.DocumentFragment,
       MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,

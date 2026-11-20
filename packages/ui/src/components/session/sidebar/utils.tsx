@@ -1,8 +1,7 @@
-import React from 'react';
+import { resolveGlobalSessionDirectory } from '@/stores/globalSessionStructure';
 import type { Session } from '@openchamber/agent-contract';
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 import { normalizePath } from '@/lib/pathNormalization';
 export { normalizePath };
@@ -130,12 +129,6 @@ export const isBranchDifferentFromLabel = (branch: string | null, label: string)
   return normalizeForBranchComparison(branch) !== normalizeForBranchComparison(label);
 };
 
-/**
- * A worktree group is named after its branch as it is now. A listing names a
- * worktree by the branch it had then, or by its folder when it had none (a
- * worktree created detached, given a branch later); either follows the live
- * branch. Only a label that names something else is kept.
- */
 export const resolveWorktreeGroupLabel = (
   meta: { label?: string | null; name?: string | null; branch?: string | null },
   currentBranch: string | null,
@@ -174,45 +167,4 @@ export const resolveArchivedFolderName = (session: Session, projectRoot: string 
   return segments[segments.length - 1] ?? 'unassigned';
 };
 
-// Folder names are shown exactly as they are on disk — no title-casing.
 export const formatProjectLabel = (label: string): string => label.trim();
-
-export const renderHighlightedText = (text: string, query: string): React.ReactNode => {
-  if (!query) {
-    return text;
-  }
-
-  const loweredText = text.toLowerCase();
-  const loweredQuery = query.toLowerCase();
-  const queryLength = loweredQuery.length;
-  if (queryLength === 0) {
-    return text;
-  }
-
-  const parts: React.ReactNode[] = [];
-  let cursor = 0;
-  let matchIndex = loweredText.indexOf(loweredQuery, cursor);
-
-  while (matchIndex !== -1) {
-    if (matchIndex > cursor) {
-      parts.push(text.slice(cursor, matchIndex));
-    }
-    const matchText = text.slice(matchIndex, matchIndex + queryLength);
-    parts.push(
-      <mark
-        key={`${matchIndex}-${matchText}`}
-        className="bg-primary text-primary-foreground ring-1 ring-primary/90"
-      >
-        {matchText}
-      </mark>,
-    );
-    cursor = matchIndex + queryLength;
-    matchIndex = loweredText.indexOf(loweredQuery, cursor);
-  }
-
-  if (cursor < text.length) {
-    parts.push(text.slice(cursor));
-  }
-
-  return parts.length > 0 ? parts : text;
-};

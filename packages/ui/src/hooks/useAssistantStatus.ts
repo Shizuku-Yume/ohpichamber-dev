@@ -3,7 +3,7 @@ import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionCompacting, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
+import { useDirectorySync, useSessionCompacting, useSessionForms, useSessionMessages, useSessionPermissions } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
 import type { AgentStatus } from '@/lib/agentStatus';
 import { normalizeIntent, toolPresentation } from '@/lib/toolPresentation';
@@ -158,7 +158,6 @@ export const retryInfoOf = (parts: readonly Part[]): { attempt?: number; maxAtte
     return null;
 };
 
-/** True when a user prompt follows `index`, i.e. a turn is queued or starting. */
 const hasNewerPrompt = (messages: Message[], index: number): boolean => {
     for (let cursor = messages.length - 1; cursor > index; cursor -= 1) {
         if (messages[cursor]?.role === 'user') return true;
@@ -193,9 +192,6 @@ export const getActiveAssistantContext = (messages: Message[], _sessionModel?: M
 };
 
 export function useAssistantStatus(): AssistantStatusSnapshot {
-    // Inside the chat column, follow the session the timeline shows rather
-    // than the live selection, so the status chip changes together with the
-    // conversation instead of a commit ahead of it.
     const { sessionId: currentSessionId, directory: currentSessionDirectory } = useChatSessionSelection();
 
     const rawSessionMessages = useSessionMessages(
@@ -222,7 +218,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     );
 
     const sessionPermissionRequests = useSessionPermissions(currentSessionId ?? '', currentSessionDirectory ?? undefined);
-    const sessionFormRequests = useSessionForms(currentSessionId ?? '', currentSessionDirectory ?? undefined);
+    const formHoldsTurn = useSessionForms(currentSessionId ?? '', currentSessionDirectory ?? undefined).length > 0;
 
     const sessionAbortRecord = useSessionUIStore(
         React.useCallback((state) => {
@@ -280,7 +276,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         if (baseWorking.abortActive) return baseWorking;
 
         const hasPendingPermission = sessionPermissionRequests.length > 0;
-        const hasPendingForm = sessionFormRequests.length > 0;
+        const hasPendingForm = formHoldsTurn;
 
         if (!hasPendingPermission && !hasPendingForm) {
             return baseWorking;
@@ -296,7 +292,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isWaitingForPermission: true,
             retryInfo: null,
         };
-    }, [baseWorking, sessionPermissionRequests, sessionFormRequests]);
+    }, [baseWorking, sessionPermissionRequests, formHoldsTurn]);
 
     return {
         activeModel: activeAssistant.model,

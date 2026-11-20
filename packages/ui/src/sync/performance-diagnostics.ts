@@ -30,6 +30,8 @@ export type SyncPerformanceCounters = {
   streamingStatusEntriesVisited: number
   streamingSessionCandidatesVisited: number
   streamingMessagesVisited: number
+  streamingHeartbeatAttempts: number
+  streamingHeartbeatCommits: number
   permissionChangeCallbacks: number
   formChangeCallbacks: number
   sessionMessageChangeCallbacks: number
@@ -71,6 +73,8 @@ const createCounters = (): SyncPerformanceCounters => ({
   streamingStatusEntriesVisited: 0,
   streamingSessionCandidatesVisited: 0,
   streamingMessagesVisited: 0,
+  streamingHeartbeatAttempts: 0,
+  streamingHeartbeatCommits: 0,
   permissionChangeCallbacks: 0,
   formChangeCallbacks: 0,
   sessionMessageChangeCallbacks: 0,

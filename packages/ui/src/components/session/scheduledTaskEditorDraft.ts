@@ -22,7 +22,6 @@ export type ScheduledTaskDraft = {
     modelID: string;
     variant: string;
     agent: string;
-    /** Model, thinking level and agent follow the session defaults at run time. */
     useDefaults: boolean;
     goalEnabled: boolean;
     goalTokenBudget: number | null;
@@ -30,7 +29,6 @@ export type ScheduledTaskDraft = {
   };
   runInWorktree: boolean;
   baseBranch: string;
-  /** Remove the run's worktree and branch when it ends; off keeps them. */
   cleanupWorktree: boolean;
   state?: ScheduledTask['state'];
 };
@@ -120,8 +118,6 @@ export const toDraft = (
     },
     execution: {
       prompt: task.execution.prompt,
-      // A task that followed the defaults may store no model; the picker then
-      // starts from the current defaults if it is pinned again.
       providerID: task.execution.providerID || defaults.providerID,
       modelID: task.execution.modelID || defaults.modelID,
       variant: task.execution.variant || '',
@@ -180,7 +176,6 @@ export const buildScheduledTaskPayload = (draft: ScheduledTaskDraft): Partial<Sc
         : {}),
     },
   };
-  // Send explicit choices so switching isolation off is persisted.
   if (draft.sessionMode === 'new') {
     payload.runInWorktree = draft.runInWorktree;
     payload.baseBranch = draft.baseBranch.trim();

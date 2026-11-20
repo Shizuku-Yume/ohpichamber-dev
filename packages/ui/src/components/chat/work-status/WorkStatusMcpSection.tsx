@@ -34,14 +34,6 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
   const isConnected = useConfigStore((state) => state.isConnected);
   const [busyServer, setBusyServer] = React.useState<string | null>(null);
 
-  // The panel must not depend on the header dropdown having been mounted or
-  // opened to know its MCP servers. Silent and background-gated, so it cannot
-  // compete with chat bootstrap traffic for sockets. The section remounts on
-  // every session switch, so it only asks for a status that is missing or
-  // older than a minute; connect/disconnect/auth refresh on their own.
-  // `isConnected` is a dependency, not a gate: MCP status is cached by
-  // directory alone and dropped on an instance switch, and two instances can
-  // hold the same project path — so the switch itself has to trigger the ask.
   React.useEffect(() => {
     void runBackgroundNetworkTask(() => ensureMcpFresh({ directory, silent: true, maxAgeMs: MCP_STATUS_MAX_AGE_MS }));
   }, [directory, ensureMcpFresh, isConnected]);

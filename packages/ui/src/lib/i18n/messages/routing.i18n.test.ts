@@ -15,6 +15,7 @@ const SHARED_WITH_ENGLISH: Record<string, true> = {
   'settings.classification.custom.model.label': true,
   'settings.classification.custom.key.placeholder': true,
   'settings.sessions.permissions.defaultMode': true,
+  'settings.classification.source.gemini.name': true,
 };
 describe('Routing and classification translations', () => {
   test('every locale has every key, translated', () => {

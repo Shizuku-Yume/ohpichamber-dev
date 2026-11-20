@@ -404,7 +404,7 @@ describe('createAutoReviewRuntime', () => {
     expect(() => runtime.stop()).not.toThrow();
   });
 
-  it('composes the real createOpenChamberSessionService and passes canonical admission and history parsing', async () => {
+  it('composes the real createOhPiChamberSessionService and passes canonical admission and history parsing', async () => {
     const dataDir = await makeDataDir();
     const stateDataDir = path.join(dataDir, 'state');
     await fs.mkdir(stateDataDir, { recursive: true });

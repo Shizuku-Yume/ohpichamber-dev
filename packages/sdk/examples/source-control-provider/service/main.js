@@ -203,7 +203,9 @@ var HOST_PUSH_TYPES = new Set([
   "file-open",
   "file-snapshot",
   "file-saved",
-  "generate-late"
+  "generate-late",
+  "microphone-audio",
+  "microphone-ended"
 ]);
 // packages/sdk/src/service-providers.ts
 var BROWSER_CONTROL_ACTIONS = [
@@ -539,6 +541,9 @@ var mapComment = (call, raw, fallbackUrl) => {
     body: raw.body,
     author: mapUser(call, raw.user)
   };
+  const mine = call.session.user !== null && raw.user !== undefined && call.session.user.login.toLowerCase() === raw.user.login.toLowerCase();
+  comment.canUpdate = mine;
+  comment.canDelete = mine;
   stamp(comment, raw);
   return comment;
 };
@@ -961,6 +966,17 @@ var readResolved = (input) => {
     target: objectOf(resolved, "target")
   };
 };
+var itemCommentPath = async (call, providerTarget, commentId) => {
+  const path = `${repoPath(providerTarget)}/issues/comments/${seg(commentId)}`;
+  const { data } = await api(call, "GET", path);
+  const href = (data.issue_url || data.pull_request_url || "").toLowerCase();
+  const item = `${call.identity.instance.replace(/\/+$/, "")}/${providerTarget.owner}/${providerTarget.name}`.toLowerCase();
+  const match = href.startsWith(`${item}/`) ? /^\/(?:issues|pulls)\/(\d+)\/?$/.exec(href.slice(item.length)) : null;
+  if (!match || Number(match[1]) !== providerTarget.number) {
+    throw new CallError("The comment is not on this item", 409, "SOURCE_CONTROL_MUTATION_TARGET_INVALID");
+  }
+  return path;
+};
 var perform = async (call, input) => {
   const kind = text(input, "kind");
   const normalized = objectOf(input, "input");
@@ -992,6 +1008,13 @@ var perform = async (call, input) => {
       await api(call, "PATCH", `${repo}/pulls/${providerTarget.number}`, { body: payload });
       return {};
     }
+    case "issue-update": {
+      const payload = { title: text(normalized, "title") };
+      if (Object.hasOwn(normalized, "body"))
+        payload.body = text(normalized, "body");
+      await api(call, "PATCH", `${repo}/issues/${providerTarget.number}`, { body: payload });
+      return {};
+    }
     case "change-request-merge": {
       const payload = { Do: text(normalized, "method") || "merge" };
       const headSha = text(target, "headSha");
@@ -1004,6 +1027,14 @@ var perform = async (call, input) => {
     case "change-request-comment":
     case "issue-comment":
       await api(call, "POST", `${repo}/issues/${providerTarget.number}/comments`, { body: { body: text(normalized, "body") } });
+      return {};
+    case "change-request-comment-update":
+    case "issue-comment-update":
+      await api(call, "PATCH", await itemCommentPath(call, providerTarget, text(normalized, "commentId")), { body: { body: text(normalized, "body") } });
+      return {};
+    case "change-request-comment-delete":
+    case "issue-comment-delete":
+      await api(call, "DELETE", await itemCommentPath(call, providerTarget, text(normalized, "commentId")));
       return {};
     case "change-request-state":
     case "issue-state": {
@@ -1033,6 +1064,11 @@ var reconcile = async (call, input) => {
     case "change-request-update": {
       const pull = await readPull(call, providerTarget, providerTarget.number ?? 0);
       const landed = pull.title === text(normalized, "title") && (!Object.hasOwn(normalized, "body") || (pull.body ?? "") === text(normalized, "body"));
+      return landed ? { state: "succeeded", result: {} } : { state: "outcome-unknown" };
+    }
+    case "issue-update": {
+      const { data } = await api(call, "GET", `${repo}/issues/${providerTarget.number}`);
+      const landed = data.title === text(normalized, "title") && (!Object.hasOwn(normalized, "body") || (data.body ?? "") === text(normalized, "body"));
       return landed ? { state: "succeeded", result: {} } : { state: "outcome-unknown" };
     }
     case "change-request-merge": {

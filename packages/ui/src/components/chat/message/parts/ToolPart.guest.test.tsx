@@ -1,7 +1,5 @@
 import { act } from 'react';
 import { expect, test } from 'bun:test';
-import { plugin } from 'bun';
-import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ToolCallPart as ToolPartData, ToolResultPart } from '@openchamber/agent-contract';
@@ -11,17 +9,6 @@ import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-sys
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { useGuestsStore } from '@/lib/guests/store';
 import type { InstalledGuest } from '@/lib/guests/types';
-
-// Bun does not implement Vite's worker asset-query imports.
-plugin({
-  name: 'tool-guest-worker-url',
-  setup(build) {
-    build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-      contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`,
-      loader: 'js',
-    }));
-  },
-});
 
 const { default: ToolPart } = await import('./ToolPart');
 
@@ -84,7 +71,8 @@ const result: ToolResultPart = {
   isError: false,
 };
 
-test('a declared tool rule sets the header, icon, and table body of a matching tool part', async () => {
+/** One mounted `ToolPart` in a fresh happy-dom window; `dispose` restores the globals. */
+const mountToolPart = () => {
   const happyWindow = new Window({ url: 'http://localhost' });
   const globals = {
     window: happyWindow,
@@ -114,23 +102,40 @@ test('a declared tool rule sets the header, icon, and table body of a matching t
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const render = async () => {
+  const render = async (shown: ToolPartData, outcome: ToolResultPart = result) => {
     await act(async () => {
       root.render(
         <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-              <ToolPart part={result} pairedCall={part} isExpanded isMobile={false} onToggle={() => {}} />
+              <ToolPart part={outcome} pairedCall={shown} isExpanded isMobile={false} onToggle={() => {}} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,
       );
     });
   };
+  const dispose = async () => {
+    await act(async () => { root.unmount(); });
+    await happyWindow.happyDOM.abort();
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  };
+  return { container, render, dispose };
+};
+
+const tableRows = (container: HTMLElement) => Array.from(container.querySelectorAll('tbody tr')).map((row) => (
+  Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent)
+));
+
+test('a declared tool rule sets the header, icon, and table body of a matching tool part', async () => {
+  const { container, render, dispose } = mountToolPart();
 
   try {
     useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
-    await render();
+    await render(part);
     // Without a rule the built-in path runs: generic wrench, formatted tool name, JSON views.
     expect(container.querySelector('table')).toBeNull();
     expect(container.querySelector('use[href="#oc-checkbox-circle"]')).toBeNull();
@@ -144,10 +149,7 @@ test('a declared tool rule sets the header, icon, and table body of a matching t
     expect(container.querySelector('use[href="#oc-checkbox-circle"]')).not.toBeNull();
     const headers = Array.from(container.querySelectorAll('th')).map((cell) => cell.textContent);
     expect(headers).toEqual(['id', 'title', 'assignee.name']);
-    const rows = Array.from(container.querySelectorAll('tbody tr')).map((row) => (
-      Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent)
-    ));
-    expect(rows).toEqual([
+    expect(tableRows(container)).toEqual([
       ['DEMO-1', 'Write docs', 'Ada'],
       ['DEMO-2', 'Ship it', ''],
     ]);
@@ -159,11 +161,140 @@ test('a declared tool rule sets the header, icon, and table body of a matching t
     expect(container.querySelector('table')).toBeNull();
     expect(container.textContent).not.toContain('Tasks for DEMO');
   } finally {
-    await act(async () => { root.unmount(); });
-    await happyWindow.happyDOM.abort();
-    for (const [name, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
+    await dispose();
+  }
+});
+
+test('a native tool is not relabelled from another tool\'s output shape', async () => {
+  const { container, render, dispose } = mountToolPart();
+  const call: ToolPartData = { ...part, partId: 'execute-call', toolCallId: 'execute', toolName: 'execute', input: { code: 'return await tools.tasks.list({ project: "DEMO" })' } };
+  try {
+    useGuestsStore.getState().replaceCatalog([tasksGuest], 'test');
+    await render(call, { ...result, toolCallId: call.toolCallId, toolName: call.toolName });
+    expect(container.textContent).not.toContain('Tasks for DEMO');
+    expect(container.querySelector('use[href="#oc-checkbox-circle"]')).toBeNull();
+  } finally {
+    await dispose();
+  }
+});
+
+test('failed native results retain their error instead of a success table', async () => {
+  const { container, render, dispose } = mountToolPart();
+  try {
+    useGuestsStore.getState().replaceCatalog([tasksGuest], 'test');
+    await render({ ...part, status: 'failed' }, { ...result, output: undefined, isError: true, error: 'Backend unavailable' });
+    expect(container.textContent).toContain('Backend unavailable');
+    expect(container.querySelector('table')).toBeNull();
+  } finally {
+    await dispose();
+  }
+});
+
+const issuesGuest = (toolLinkSettings?: Record<string, string>): InstalledGuest => ({
+  id: 'issues-demo',
+  name: 'Issues Demo',
+  icon: 'bug',
+  entry: 'panel/index.html',
+  capabilities: { requested: [], granted: [] },
+  tools: [{
+    match: 'issues_*',
+    name: 'Issue',
+    output: 'card',
+    card: {
+      label: '{output.key} · {output.type}',
+      title: '{output.summary}',
+      status: { value: '{output.status}', tones: { 'In Progress': 'info', Blocked: 'error' } },
+      fields: [{ label: 'Assignee', value: '{output.assignee.name}' }, { label: 'Priority', value: '{output.priority}' }],
+      link: { label: 'Open in tracker', url: 'https://{settings.site}/browse/{output.key}' },
+    },
+  }],
+  ...(toolLinkSettings ? { toolLinkSettings } : {}),
+});
+
+const issuePart = (tool: string, output: string): readonly [ToolPartData, ToolResultPart] => [
+  { type: 'tool_call', partId: 'prt_issue', toolCallId: 'call_issue', toolName: tool, status: 'completed', input: {} },
+  { type: 'tool_result', partId: 'result_issue', toolCallId: 'call_issue', toolName: tool, output, isError: false },
+];
+
+const issue = { key: 'DEMO-482', type: 'Bug', summary: 'Login fails after token refresh', status: 'In Progress', assignee: { name: 'Olena K.' }, priority: 'High' };
+
+test('a declared card draws the output as a card, an array as a list, and anything else as before', async () => {
+  const { container, render, dispose } = mountToolPart();
+  const link = () => container.querySelector('a[href^="https://"]');
+  const badge = (text: string) => Array.from(container.querySelectorAll('span')).find((node) => node.textContent === text);
+
+  try {
+    useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
+    await act(async () => {
+      useGuestsStore.getState().replaceCatalog([issuesGuest({ site: 'acme.example' })], 'test');
+    });
+
+    await render(...issuePart('issues_get', JSON.stringify(issue)));
+    expect(container.textContent).toContain('DEMO-482 · Bug');
+    expect(container.textContent).toContain('Login fails after token refresh');
+    expect(Array.from(container.querySelectorAll('dt')).map((node) => node.textContent)).toEqual(['Assignee', 'Priority']);
+    expect(Array.from(container.querySelectorAll('dd')).map((node) => node.textContent)).toEqual(['Olena K.', 'High']);
+    expect(badge('In Progress')?.className).toContain('--status-info-background');
+    expect(link()?.getAttribute('href')).toBe('https://acme.example/browse/DEMO-482');
+    expect(link()?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link()?.textContent).toBe('Open in tracker');
+    // The raw answer is not drawn beside the card.
+    expect(container.textContent).not.toContain('"summary"');
+    // Each text takes its own direction, so a value in another script reads in its own order.
+    const texts = ['DEMO-482 · Bug', 'In Progress', 'Login fails after token refresh', 'Assignee', 'Olena K.', 'Open in tracker'];
+    const shown = Array.from(container.querySelectorAll('span, div, dt, dd'));
+    expect(texts.map((text) => shown.find((node) => node.textContent === text && node.children.length === 0)?.getAttribute('dir'))).toEqual(texts.map(() => 'auto'));
+
+    // The saved setting changed: the catalog brings the new value and the link follows it.
+    await act(async () => {
+      useGuestsStore.getState().replaceCatalog([issuesGuest({ site: 'other.example' })], 'test');
+    });
+    expect(link()?.getAttribute('href')).toBe('https://other.example/browse/DEMO-482');
+    // No value saved: the card stays, the link goes.
+    await act(async () => {
+      useGuestsStore.getState().replaceCatalog([issuesGuest()], 'test');
+    });
+    expect(container.textContent).toContain('Login fails after token refresh');
+    expect(link()).toBeNull();
+
+    // A missing path hides its part; a status without a mapping is neutral.
+    await render(...issuePart('issues_get', JSON.stringify({ key: 'DEMO-470', summary: 'Billing export misses refunds', status: 'To Do' })));
+    expect(container.querySelectorAll('dt')).toHaveLength(0);
+    expect(badge('To Do')?.className).toContain('oc-tile-inset');
+
+    // An array, or an `items` array, is a list: one row per item, the first field beside the status, no link.
+    await act(async () => {
+      useGuestsStore.getState().replaceCatalog([issuesGuest({ site: 'acme.example' })], 'test');
+    });
+    const blocked = { key: 'DEMO-477', summary: 'Rate limiter drops webhook retries', status: 'Blocked', assignee: { name: 'Ada L.' }, priority: 'Low' };
+    for (const output of [[issue, blocked], { total: 2, items: [issue, blocked] }]) {
+      await render(...issuePart('issues_search', JSON.stringify(output)));
+      const rows = Array.from(container.querySelectorAll('li'));
+      expect(rows.map((row) => Array.from(row.children).map((cell) => cell.textContent))).toEqual([
+        ['DEMO-482 · Bug', 'Login fails after token refresh', 'Olena K.', 'In Progress'],
+        ['DEMO-477 ·', 'Rate limiter drops webhook retries', 'Ada L.', 'Blocked'],
+      ]);
+      expect(badge('Blocked')?.className).toContain('--status-error-background');
+      expect(rows.flatMap((row) => Array.from(row.children).map((cell) => cell.getAttribute('dir')))).toEqual(Array.from({ length: 8 }, () => 'auto'));
+      expect(link()).toBeNull();
+      expect(container.textContent).not.toContain('High');
     }
+
+    // An item without a title: its first field is the row's text, in the cell no width hides.
+    await render(...issuePart('issues_search', JSON.stringify([{ assignee: { name: 'Ada L.' }, priority: 'Low' }, blocked])));
+    const cells = Array.from(container.querySelectorAll('li')).map((row) => Array.from(row.children));
+    expect(cells.map((row) => row.map((cell) => cell.textContent))).toEqual([['Ada L.'], ['DEMO-477 ·', 'Rate limiter drops webhook retries', 'Ada L.', 'Blocked']]);
+    expect(cells[0]?.[0]?.getAttribute('title')).toBe('Assignee: Ada L.');
+    expect([cells[0]?.[0], cells[1]?.[2]].map((cell) => cell?.className.includes('hidden'))).toEqual([false, true]);
+
+    // Nothing the card names is in the answer, or the answer is not JSON: the output shows as it would without the rule.
+    await render(...issuePart('issues_get', JSON.stringify({ message: 'No such issue' })));
+    expect(container.querySelector('li, dl')).toBeNull();
+    expect(container.textContent).toContain('No such issue');
+    await render(...issuePart('issues_get', 'Issue DEMO-1 was not found.'));
+    expect(container.querySelector('li, dl')).toBeNull();
+    expect(container.textContent).toContain('Issue DEMO-1 was not found.');
+  } finally {
+    await dispose();
   }
 });

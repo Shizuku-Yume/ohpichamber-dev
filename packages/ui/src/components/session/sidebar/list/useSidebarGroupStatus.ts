@@ -53,7 +53,6 @@ export const useSidebarGroupStatus = ({
     React.useCallback(() => '', []),
   );
   const groupStatusByKey = React.useMemo(() => {
-    // The snapshot invalidates these reads; the directory stores own their state.
     void bootstrapSnapshot;
     const statuses = new Map<string, SessionSidebarGroupStatus>();
     for (const { key, archived, directories: groupDirectories, groupSessionWorkspaceIds } of groups) {

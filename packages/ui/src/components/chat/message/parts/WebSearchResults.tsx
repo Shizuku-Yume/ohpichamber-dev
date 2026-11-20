@@ -6,12 +6,6 @@ import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { openExternalUrl } from '@/lib/url';
 import { useWebSearchStore } from '@/stores/useWebSearchStore';
 
-/**
- * A finished `websearch` call as a list of result cards: site icon and
- * domain, the title linking out, the publish date, and a clamped snippet.
- * Native response details are projected by the canonical worker; malformed
- * responses retain the ordinary tool output renderer.
- */
 
 const formatPublished = (iso: string): string | null => {
     const date = new Date(iso);
@@ -27,8 +21,6 @@ const originOf = (url: string): string | null => {
     }
 };
 
-// The site's own icon, fetched from the site itself (no third-party icon
-// service sees the domain); the globe stands in when it has none.
 const SiteIcon: React.FC<{ url: string }> = ({ url }) => {
     const origin = originOf(url);
     const [failed, setFailed] = React.useState(false);

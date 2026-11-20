@@ -76,7 +76,6 @@ const RenameField: React.FC<{
   );
 };
 
-/** Stored native credentials for one provider, one row per account. */
 export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
   roster,
   busyId,

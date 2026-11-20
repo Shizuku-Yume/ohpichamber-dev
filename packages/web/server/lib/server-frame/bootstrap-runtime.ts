@@ -1,0 +1,174 @@
+import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
+import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
+
+export const createBootstrapRuntime = (dependencies) => {
+  const {
+    createUiAuth,
+    registerServerStatusRoutes,
+    registerCommonRequestMiddleware,
+    registerAuthAndAccessRoutes,
+    registerTtsRoutes,
+    registerNotificationRoutes,
+    registerOpenChamberRoutes,
+    express,
+  } = dependencies;
+
+  const setupBaseRoutes = (app, options) => {
+    const {
+      process,
+      openchamberVersion,
+      runtimeName,
+      serverStartedAt,
+      gracefulShutdown,
+      getHealthSnapshot,
+      getServerPort,
+      getTunnelUrl,
+      verboseRequestLogs,
+      uiPassword,
+      tunnelAuthController,
+      remoteClientAuthRuntime,
+      clientPairingRuntime,
+      getRelayPairingCandidate,
+      reconcileRelay,
+      removeClientPushDevices,
+      getPairingTransports,
+      getDirectCandidateUrls,
+      getServerId,
+      getServerLabel,
+      readSettingsFromDiskMigrated,
+      normalizeTunnelSessionTtlMs,
+      sayTTSCapability,
+      ttsService,
+      resolveTtsSelection,
+      canonicalAgentRoutes,
+      ensurePushInitialized,
+      ensureGlobalWatcherStarted,
+      getOrCreateVapidKeys,
+      getUiSessionTokenFromRequest,
+      writeSettingsToDisk,
+      addOrUpdatePushSubscription,
+      removePushSubscription,
+      addOrUpdateApnsToken,
+      removeApnsToken,
+      resolveApnsStatus,
+      isLocalOnlyPushRequest,
+      updateUiVisibility,
+      clearPendingPushBadge,
+      clearSessionPushNotifications,
+      isUiVisible,
+      getUiNotificationClients,
+      writeSseEvent,
+      sessionRuntime,
+      setPushInitialized,
+      modelsDevApiUrl,
+      modelsMetadataCacheTtl,
+      setAutoAcceptSession,
+      pluginNotificationEmitter,
+      skipBodyParsing,
+      isRequestOriginAllowed,
+    } = options;
+
+    const uiAuthController = createUiAuth({
+      password: uiPassword,
+      readSettingsFromDiskMigrated,
+      clientAuthController: remoteClientAuthRuntime,
+    });
+    if (uiAuthController.enabled) {
+      console.log('UI password protection enabled for browser sessions');
+    }
+
+    registerServerStatusRoutes(app, {
+      express,
+      process,
+      openchamberVersion,
+      runtimeName,
+      serverStartedAt,
+      gracefulShutdown,
+      getHealthSnapshot,
+      getServerId,
+      getServerPort,
+      getTunnelUrl,
+      tunnelAuthController,
+      uiAuthController,
+    });
+
+    registerCommonRequestMiddleware(app, { express, verboseRequestLogs, skipBodyParsing });
+
+    registerCanonicalHostRoutes(app, {
+      ...canonicalAgentRoutes,
+      express,
+      uiAuthController,
+      tunnelAuthController,
+      isRequestOriginAllowed,
+    });
+
+
+    const notificationEmitRoutes = registerNotificationEmitRoutes(app, {
+      express,
+      emitter: pluginNotificationEmitter,
+    });
+
+    registerAuthAndAccessRoutes(app, {
+      express,
+      tunnelAuthController,
+      uiAuthController,
+      remoteClientAuthRuntime,
+      clientPairingRuntime,
+      getRelayPairingCandidate,
+      reconcileRelay,
+      removeClientPushDevices,
+      getPairingTransports,
+      getDirectCandidateUrls,
+      getServerId,
+      getServerLabel,
+      readSettingsFromDiskMigrated,
+      normalizeTunnelSessionTtlMs,
+    });
+
+    notificationEmitRoutes.registerApiRoute();
+
+    registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection });
+
+    registerNotificationRoutes(app, {
+      uiAuthController,
+      ensurePushInitialized,
+      ensureGlobalWatcherStarted,
+      getOrCreateVapidKeys,
+      getUiSessionTokenFromRequest,
+      readSettingsFromDiskMigrated,
+      writeSettingsToDisk,
+      addOrUpdatePushSubscription,
+      removePushSubscription,
+      addOrUpdateApnsToken,
+      removeApnsToken,
+      resolveApnsStatus,
+      isLocalOnlyPushRequest,
+      updateUiVisibility,
+      clearPendingPushBadge,
+      clearSessionPushNotifications,
+      isUiVisible,
+      getUiNotificationClients,
+      writeSseEvent,
+      getSessionActivitySnapshot: sessionRuntime.getSessionActivitySnapshot,
+      getSessionStateSnapshot: sessionRuntime.getSessionStateSnapshot,
+      getPendingBlockingRequestsSnapshot: sessionRuntime.getPendingBlockingRequestsSnapshot,
+      getSessionContextSnapshot: sessionRuntime.getSessionContextSnapshot,
+      getSessionState: sessionRuntime.getSessionState,
+      setPushInitialized,
+      setAutoAcceptSession,
+    });
+
+    registerOpenChamberRoutes(app, {
+      modelsDevApiUrl,
+      modelsMetadataCacheTtl,
+    });
+
+    return {
+      uiAuthController,
+    };
+  };
+
+  return {
+    setupBaseRoutes,
+  };
+};

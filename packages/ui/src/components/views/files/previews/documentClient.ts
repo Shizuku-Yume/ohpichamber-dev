@@ -1,14 +1,10 @@
+
 import type {
   BookOpened, CellNote, CellPatch, DocumentCalls, DocumentChunk, DocumentRequest, DocumentResponse, DocumentResult, SheetLayout,
 } from './documentProtocol';
 import type { CellInput, CellRestore } from './workbook/workbookSession';
 import type { StructureChange } from './workbook/model';
 
-/**
- * The way to the code that parses documents. A big workbook takes seconds to
- * read, and every edit reads it again to prove the write, so that runs in a
- * worker and the app stays live. Where no worker starts it runs here instead.
- */
 type Transport = <Op extends keyof DocumentCalls>(
   op: Op,
   args: DocumentCalls[Op]['args'],
@@ -85,15 +81,13 @@ export const documentTransport = (): Promise<Transport> => {
 };
 
 let nextName = 1;
-const newDocumentId = (): string => {
+export const newDocumentId = (): string => {
   nextName += 1;
   return `document-${nextName}`;
 };
 
-/** A sheet as the grid draws it, with what is held about its cells. */
 export type SheetView = SheetLayout & { sheet: number; rows: string[][]; notes: Map<string, CellNote>; lockedCells: Set<string> };
 
-/** Applies changed cells; null when one falls outside the grid or on its spare edge, which then has to grow. */
 export const patchSheetView = (view: SheetView, patches: CellPatch[], allowEdge = false): SheetView | null => {
   const index = new Map(view.rowNumbers.map((row, rowIndex) => [row, rowIndex]));
   const rows = view.rows.slice();
@@ -115,7 +109,6 @@ export const patchSheetView = (view: SheetView, patches: CellPatch[], allowEdge 
   return { ...view, rows };
 };
 
-/** One open workbook behind the transport. */
 export class WorkbookBook {
   constructor(
     private readonly call: Transport,
@@ -163,4 +156,14 @@ export const openWorkbook = async (path: string, name: string, bytes: Uint8Array
   const id = newDocumentId();
   const opened = await call('workbook.open', { book: id, path, name, bytes });
   return opened ? new WorkbookBook(call, id, opened) : null;
+};
+
+export const collectRows = () => {
+  const rows: string[][] = [];
+  return {
+    rows,
+    add: (chunk: { rows: string[][] }) => {
+      for (const row of chunk.rows) rows.push(row);
+    },
+  };
 };

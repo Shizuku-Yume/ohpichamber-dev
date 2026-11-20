@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import type { Root } from 'react-dom/client';
 import { HTMLDivElement as HappyDivElement, Window } from 'happy-dom';

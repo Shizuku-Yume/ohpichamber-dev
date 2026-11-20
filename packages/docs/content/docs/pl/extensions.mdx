@@ -5,13 +5,13 @@ description: Zainstaluj rozszerzenia innych autorów w OhPiChamber, zdecyduj, co
 
 # Rozszerzenia
 
-Rozszerzenie może oferować stronę pełnoekranową, na przykład tablicę zadań. Otworzysz ją w menu Strony rozszerzeń nad listą sesji. Menu pojawia się tylko dla włączonych i zatwierdzonych stron. Wybór czatu, przeładowanie, wstrzymanie, usunięcie lub zmiana serwera zamyka stronę. Rozszerzenie nie może samo jej otworzyć.
+Rozszerzenie może oferować stronę pełnoekranową, na przykład tablicę zadań. Otworzysz ją z jej wiersza w sekcji **Strony** na pasku bocznym. Wiersz pojawia się tylko dla włączonych i zatwierdzonych stron. Wybór czatu, ponowne kliknięcie wiersza, przeładowanie, wstrzymanie, usunięcie lub zmiana serwera zamyka stronę. Rozszerzenie nie może samo jej otworzyć.
 
 Własne dane rozszerzenia są przechowywane na połączonym serwerze i usuwane wraz z rozszerzeniem. Tablica może śledzić sesje wielu projektów i worktree bez tworzenia plików w Twoim projekcie.
 
 W **Ustawienia → Rozszerzenia** dodasz do OhPiChamber panele zrobione przez inne osoby. Rozszerzenie to mała strona na prawym pasku, obok wbudowanych paneli. Może pokazywać dane z innej usługi, dołączać zadanie do czatu, a jeśli na to pozwolisz, uruchamiać sesje, wysyłać prompty lub czytać pliki.
 
-Rozszerzenia działają w OhPiChamber w wersji web i desktop. To nie to samo co wtyczki Host.
+Rozszerzenia działają w OhPiChamber w wersji web, desktop i w aplikacji mobilnej; telefon pokazuje część każdego z nich, zobacz [Na telefonie](#na-telefonie). VS Code ich nie ładuje. To nie to samo co wtyczki OMP.
 
 ## Zainstaluj rozszerzenie
 
@@ -54,7 +54,9 @@ Pokazywanie panelu i odczyt, który projekt i sesja są otwarte, nie wymaga upra
 - **Czytać, co agent mówi w tle**: końcowa odpowiedź każdej tury, pytania, które agent zadaje, i to, o jakie uprawnienia prosi, w każdym projekcie, wysyłane do lokalnej usługi rozszerzenia. Zezwalaj tylko, jeśli ufasz miejscu, do którego rozszerzenie to wysyła.
 - **Samodzielne uruchamianie sesji i wysyłanie wiadomości**: jego lokalna usługa robi to bez otwartego okna, co kosztuje tokeny i może uruchamiać narzędzia.
 - **Dodawanie do tego, co czytają agenci**: tekst w instrukcjach Twoich sesji i skille oferowane każdemu agentowi, gdy rozszerzenie jest włączone.
+- **Dodawanie pluginu do OMP**: plugin z pakietu jest ładowany do Twojego OMP, gdy rozszerzenie jest włączone. Kod pluginu działa wewnątrz OMP z Twoimi pełnymi uprawnieniami, jak lokalna usługa, więc zezwalaj tylko wtedy, gdy ufasz autorowi.
 - **Rozpoznawanie jego linków w czatach**: identyfikatory takie jak `DEMO-12` i linki do strony rozszerzenia stają się klikalne w Twoich wiadomościach na czacie. Okno wymienia, które to są, i mówi, czy kliknięcie otwiera je w rozszerzeniu, czy dołącza do Twojej wiadomości. Linki, które OhPiChamber już zna, na przykład pull requesty z GitHub i zadania z Linear, działają jak zwykle.
+- **Pokazywanie znaczników na pasku bocznym**: małe ikony z podpowiedzią przy sesjach i worktree, które wskaże rozszerzenie, na przykład nieudany test na gałęzi. Okno mówi, czy kliknięcie otwiera panel rozszerzenia, czy link podany przez rozszerzenie.
 
 Lokalna usługa może też działać przez cały czas pracy OhPiChamber albo budzić się według harmonogramu. Okno dialogowe mówi o tym pod **Uruchamianie lokalnej usługi** i informuje też, kiedy to, co wpisujesz po `@`, trafia do usługi. Rozszerzenie może dodać własne wiersze do menu `@` i własne bloki do odpowiedzi agenta. Wstrzymanie rozszerzenia to wszystko odbiera.
 
@@ -64,9 +66,44 @@ Gdy nowsza wersja prosi o więcej, niż pozwoliłeś, karta pokazuje **Wymaga zg
 
 ## Gdzie się pojawia
 
-Poza panelem na pasku bocznym rozszerzenie może dodawać pozycje do menu, z których już korzystasz: akcje na wiadomości w czacie, menu sesji, menu + obok pola czatu oraz polecenia z ukośnikiem, jak `/task ABC-12`, które dołączają coś bez otwierania czegokolwiek. Może też nadać własnym narzędziom porządną ikonę, tytuł i układ wyniku w czacie, tak jak mają wbudowane narzędzia OhPiChamber. Rozszerzenie samo decyduje, które z nich oferuje; wszystkie są wyłączone, dopóki nie zezwolisz na rozszerzenie.
+Strona OhPiChamber pokazuje na mapie [wszystkie miejsca, w których rozszerzenie może coś dodać](https://openchamber.dev/pl/extensions/build/).
 
-Niektóre rozszerzenia pokazują obraz na żywo zamiast własnego panelu: to, w czym agent pracuje na serwerze, na przykład przeglądarkę albo symulator. Kliknij w obraz lub wpisz coś, aby przejąć kontrolę; wiersz stanu pokaże **Masz kontrolę**, a działania agenta w przeglądarce będą odrzucane, dopóki nie naciśniesz **Oddaj agentowi**. Kopiowanie i wklejanie działają jak zwykle. Inne urządzenie połączone w tym samym czasie widzi, kto ma kontrolę, i nie może jej przejąć. Takie rozszerzenie może dodać własne kontrolki obok obrazu, na przykład pasek adresu nad nim albo kolumnę narzędzi z boku.
+Poza panelem na pasku bocznym rozszerzenie może dodawać elementy w miejscach, z których już korzystasz:
+
+- **Menu**: akcje na wiadomości w czacie, menu sesji, tekst zaznaczony w wiadomości, plik w Plikach i wiersze zaznaczone w diffie.
+- **Pole czatu**: menu **+**, polecenia z ukośnikiem, takie jak `/task ABC-12`, które coś dołączają, niczego nie otwierając, oraz własne wiersze w menu `@`.
+- **Czat**: bloki, które agent rysuje w odpowiedzi, na przykład wykres albo kartę zgłoszenia, oraz własną ikonę, tytuł i układ wyniku dla swoich narzędzi, tak jak mają je wbudowane narzędzia OhPiChamber.
+- **Stan pracy**: własną sekcję w panelu obok czatu.
+- **Pliki**: własny edytor dla typu pliku, na przykład rysunku albo arkusza kalkulacyjnego.
+- **Pasek boczny**: małe znaczniki na wierszach sesji i worktree.
+
+Rozszerzenie samo decyduje, co z tego oferuje; wszystko jest wyłączone, dopóki nie zezwolisz na rozszerzenie. Akcje sesji i polecenia z ukośnikiem pojawiają się też w palecie poleceń (⌘P lub Ctrl+P), gdy wyszukasz ich nazwę albo nazwę rozszerzenia.
+
+Niektóre rozszerzenia pokazują obraz na żywo zamiast własnego panelu: to, w czym agent pracuje na serwerze, na przykład przeglądarkę albo symulator. Kliknij w obraz lub wpisz coś, a na ekranie dotykowym dotknij obrazu, aby przejąć kontrolę; wiersz stanu pokaże **Masz kontrolę**, a działania agenta w przeglądarce będą odrzucane, dopóki nie naciśniesz **Oddaj agentowi**. Kopiowanie i wklejanie działają jak zwykle. Inne urządzenie połączone w tym samym czasie widzi, kto ma kontrolę, i nie może jej przejąć. Takie rozszerzenie może dodać własne kontrolki obok obrazu, na przykład pasek adresu nad nim albo kolumnę narzędzi z boku.
+
+## Na telefonie
+
+Aplikacja mobilna, a także OhPiChamber otwarty w przeglądarce telefonu, ładują rozszerzenia zainstalowane na serwerze, z którym się łączą. Jest tam też **Ustawienia → Rozszerzenia**, gdzie można je dodawać, zatwierdzać, wstrzymywać i usuwać.
+
+To, co OhPiChamber sam rysuje na podstawie rozszerzenia, pojawia się na każdym telefonie: linki w wiadomościach czatu, układ jego narzędzi w czacie, logo dostawców, jego wiersze w menu `@`, znaczniki na wierszach paska bocznego i jego karty kont w **Ustawienia → Integracje**. Dotknięcie znacznika otwiera ten wiersz i kartę rozszerzenia, gdy jego panel jest przygotowany na telefon (poniżej); w przeciwnym razie pokazuje tekst znacznika i otwiera jego link, jeśli go ma.
+
+Te części rozszerzenia też się pojawiają, bez żadnej dodatkowej pracy autora:
+
+- bloki w odpowiedziach agenta
+- jego sekcja w karcie **Stan pracy** obszaru roboczego
+- jego edytor plików, gdy otworzysz pasujący plik w karcie **Pliki**
+- polecenia z ukośnikiem w polu czatu
+- akcje menu, które działają w tle i niczego nie otwierają: w **Więcej akcji** wiadomości, w arkuszu zaznaczonego tekstu, w menu sesji otwieranym długim naciśnięciem na liście sesji, po długim naciśnięciu wiersza w **Pliki** i pod polem komentarza zaznaczonych wierszy diffa
+
+Panel potrzebuje więcej miejsca, niż ma telefon, więc pojawia się tylko wtedy, gdy autor rozszerzenia zaznaczy, że jest przygotowany na telefon. Takie rozszerzenie dostaje:
+
+- własną kartę w obszarze roboczym, po Stan pracy, Git, Pliki, Terminal i Wiedza o projekcie. **Ustawienia → Ogólne → Karty panelu roboczego** ustawia jej kolejność i ukrywa ją razem z innymi.
+- swoją pozycję w menu **+** pola czatu
+- swoje akcje menu, które otwierają panel albo okno dołączania
+
+Dla każdego innego rozszerzenia to wszystko nie trafia na telefon, a jego menu pokazują tylko akcje działające w tle. Dołączony przez nie chip informuje, że rozszerzenie nie otwiera się na telefonie, a jego linki działają jak zwykle.
+
+Strona pełnoekranowa ma własną regułę: pojawia się w **Więcej** na liście sesji, gdy autor oznaczy samą stronę jako przygotowaną na telefon albo gdy strona używa panelu, który jest na to przygotowany.
 
 ## Rozszerzenie jako host Git
 
@@ -94,9 +131,9 @@ SDK OhPiChamber ma działający przykład, `examples/tracker-provider`, z udawan
 
 ## Rozszerzenie jako dostawca zużycia
 
-Rozszerzenie może dodać dostawcę zużycia obok wbudowanych: dostawcę, którego OhPiChamber nie odczytuje samodzielnie, albo własnego. Jego okno uprawnień ma wtedy wiersz zaczynający się od **Raportuje zużycie jak wbudowany dostawca** i wymienia dostawców OpenCode, których dane logowania odczytuje, na przykład `openrouter`; rozszerzenie, które nie wymienia żadnego, mówi o tym.
+Rozszerzenie może dodać dostawcę zużycia obok wbudowanych: dostawcę, którego OhPiChamber nie odczytuje samodzielnie, albo własnego. Jego okno uprawnień ma wtedy wiersz zaczynający się od **Raportuje zużycie jak wbudowany dostawca** i wymienia dostawców OMP, których dane logowania odczytuje, na przykład `openrouter`; rozszerzenie, które nie wymienia żadnego, mówi o tym.
 
-Gdy na nie pozwolisz, jego karta stoi za wbudowanymi dostawcami w **Ustawienia → Zużycie**, z nazwą i ikoną rozszerzenia, i tak jak każdy wbudowany dostawca trafia do limitów w nagłówku, do stanu pracy, do okienka na telefonie i do zasobnika na pulpicie, gdy zaznaczysz **Pokaż w stanie pracy**. Przy każdym odświeżeniu OhPiChamber przekazuje rozszerzeniu dane logowania, które OpenCode przechowuje dla każdego wymienionego dostawcy, i nic więcej; wersja, która wymienia innego dostawcę, ponownie prosi o Twoją zgodę. Rozszerzenie samo odczytuje zużycie, a OhPiChamber rysuje je tak, jak zużycie wbudowanego dostawcy.
+Gdy na nie pozwolisz, jego karta stoi za wbudowanymi dostawcami w **Ustawienia → Zużycie**, z nazwą i ikoną rozszerzenia, i tak jak każdy wbudowany dostawca trafia do limitów w nagłówku, do stanu pracy, do okienka na telefonie i do zasobnika na pulpicie, gdy zaznaczysz **Pokaż w stanie pracy**. Przy każdym odświeżeniu OhPiChamber przekazuje rozszerzeniu dane logowania, które OMP przechowuje dla każdego wymienionego dostawcy, i nic więcej; wersja, która wymienia innego dostawcę, ponownie prosi o Twoją zgodę. Rozszerzenie samo odczytuje zużycie, a OhPiChamber rysuje je tak, jak zużycie wbudowanego dostawcy.
 
 Wstrzymanie rozszerzenia zabiera kartę, dopóki go z powrotem nie włączysz, a Twoje ustawienia zużycia dla niego zostają. Usunięcie rozszerzenia zabiera kartę na stałe.
 

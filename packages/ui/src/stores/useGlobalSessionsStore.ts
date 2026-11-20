@@ -16,7 +16,6 @@ import {
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { ensureChatsRootDirectory, getChatsRoot, isChatDirectoryPath } from '@/lib/chatDirectories';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
 import { retry, STARTUP_RETRY } from '@/sync/retry';
 import {
@@ -50,7 +49,6 @@ type GlobalSessionsState = {
   reviewTransferBySessionId: Map<string, 'review-to-original' | 'original-to-review'>;
   mutationRevision: number;
   mutationRevisionBySessionId: Map<string, number>;
-  /** A complete global snapshot has arrived for this runtime. */
   hasLoaded: boolean;
   managedChatsHydrated: boolean;
   status: GlobalSessionsStatus;
@@ -73,13 +71,12 @@ type GlobalSessionsState = {
   refreshSessionsForDirectories: (directories: Iterable<string>, fallbackActive?: Session[]) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   applySessionMutations: (mutations: readonly GlobalSessionMutation[]) => void;
+  noteDeferredSessionUpdate: (sessionId: string) => void;
   upsertSession: (session: Session) => void;
   upsertSessions: (sessions: Session[]) => void;
   upsertSubagents: (parent: Session, children: readonly Subagent[]) => void;
   removeSessions: (ids: Iterable<string>) => void;
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void;
-  /** Drop every session from the previous runtime instance and go back to the
-      unloaded state, so a fresh load runs against the new endpoint. */
   resetForRuntimeSwitch: () => void;
 };
 
@@ -107,6 +104,7 @@ let inflightHead: Promise<boolean> | null = null;
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
 let loadGeneration = 0;
+let completeLoadAt = 0;
 
 type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
 
@@ -165,8 +163,8 @@ const bindKnownWorkspaceDirectories = async (generation: number): Promise<{
   /** The store action itself, called once the discovery snapshot has committed. */
   adoptGuessedSession: () => void;
 }> => {
-  const [{ useProjectsStore }, { useSessionUIStore }] = await Promise.all([
-    import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'),
+  const [{ useProjectsStore }, { useSessionUIStore }, { useDirectoryStore }] = await Promise.all([
+    import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'), import('@/stores/useDirectoryStore'),
   ]);
   const projectRootsById = new Map<string, string>();
   const adoptGuessedSession = useSessionUIStore.getState().adoptAuthoritativeSessionDirectory;
@@ -292,18 +290,13 @@ const getSessionStructuralSignature = (session: Session): string => {
   return JSON.stringify(structural);
 };
 
-export const isGlobalSessionRecencyOnlyUpdate = (existing: Session, incoming: Session): boolean => {
+export const isGlobalSessionDeferrableUpdate = (existing: Session, incoming: Session): boolean => {
   const merged = mergeSessionDirectoryMetadata(incoming, existing);
   return existing.updatedAt !== merged.updatedAt
     && getSessionStructuralSignature(existing) === getSessionStructuralSignature(merged);
 };
 
 
-/**
- * The startup seed: managed chats and the global snapshot of every other
- * directory. Never authoritative; `hasLoaded` stays false until a complete
- * load replaces it.
- */
 const readPersistedSessionSeed = (): Session[] => {
   const chats = readManagedChatSessions();
   const chatIds = new Set(chats.map((session) => session.sessionId));
@@ -311,7 +304,6 @@ const readPersistedSessionSeed = (): Session[] => {
   return sortSessionsByUpdated([...chats, ...others]);
 };
 
-/** Whether `existing` can stay in place of `incoming`. */
 const isSameSessionRecord = (existing: Session, incoming: Session): boolean => (
   existing === incoming || getSessionSignature(existing) === getSessionSignature(incoming)
 );
@@ -391,6 +383,7 @@ const fetchDirectoryPages = async (
   directories: Set<string>,
 ): Promise<DirectoryPageResult> => {
   const generation = loadGeneration;
+  const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
   const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory);
   const orderedDirectories = [...directories].sort((left, right) => {
     if (left === currentDirectory) return -1;
@@ -452,14 +445,6 @@ const upsertSessionIntoList = (sessions: Session[], session: Session): Session[]
 };
 
 
-/**
- * Adds the live directory-store sessions this list does not hold yet.
- *
- * A record already held, active or archived, always stands: this list hears
- * every session event and action result itself, while a directory store can
- * keep an old copy of a session it does not own. Letting that copy win put
- * sessions the user had marked done back under "In work".
- */
 const addUnlistedLiveSessions = (active: Session[], archived: Session[], live?: Session[]): Session[] => {
   if (!live || live.length === 0) return active;
   const listed = new Set([...active, ...archived].map((session) => session.sessionId));
@@ -477,8 +462,6 @@ const applySnapshot = (
   activeSessions: Session[],
   archivedSessions: Session[],
   status: GlobalSessionsStatus,
-  /** False for a partial page merged mid-load: the lists are incomplete, so
-      they must not claim the authority `hasLoaded` grants. */
   markLoaded = status === 'ready',
   discoveryErrors = state.discoveryErrors,
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
@@ -764,9 +747,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   failedChildDiscoveryParents: new Set(),
 
   applySnapshot: (activeSessions, archivedSessions, status = 'ready') => {
-    // An authoritative snapshot may carry newer `updated` stamps for sessions
-    // whose active→settled cycle this client slept through — raise their
-    // ordering baselines so recent lists re-sort (see session-ordering).
     raiseSessionOrderingBaselines(activeSessions);
     set((state) => {
       const next = applySnapshot(state, activeSessions, archivedSessions, status);
@@ -779,9 +759,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     set((state) => applySessionMutations(state, mutations));
   },
 
-  // The module-init seed and runtime reset read the persisted snapshot before
-  // the server-resolved chats root is available, so relocated directories are
-  // filtered out of the stale sidebar paint until this runs after the warm-up.
+  noteDeferredSessionUpdate: (sessionId) => {
+    set((state) => mutationRevisionPatch(state, [sessionId]));
+  },
+
   rehydrateManagedChatSessions: () => {
     const state = get();
     if (state.managedChatsHydrated || state.hasLoaded) return;
@@ -795,6 +776,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
 
   resetForRuntimeSwitch: () => {
     loadGeneration += 1;
+    completeLoadAt = 0;
     inflightLoad = null;
     inflightHead = null;
     resetWorkspaceDirectories();
@@ -874,6 +856,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           const committed = get();
           raiseSessionOrderingBaselines(committed.activeSessions);
           if (retryPartial) throw Object.assign(new Error('Session discovery is temporarily unavailable'), { status: 503 });
+          completeLoadAt = committed.discoveryErrors.size === 0 ? Date.now() : 0;
           binding.adoptGuessedSession();
           return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
         }, STARTUP_RETRY);
@@ -1009,7 +992,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     if (fetched.errors.length > 0) {
       console.warn('[GlobalSessions] Failed to refresh sessions for some directories:', fetched.errors[0]);
     }
-    // A space that answered a directory read is reachable again, whatever the last global list said.
     for (const directory of fetched.directories) {
       const spaceId = spaceIdOfDirectory(directory);
       if (spaceId !== null) useSpacesStore.getState().noteReachable(spaceId);
@@ -1188,8 +1170,6 @@ useGlobalSessionsStore.subscribe((state, previous) => {
     || (!state.managedChatsHydrated && state.mutationRevision !== previous.mutationRevision)
     || (state.hasLoaded && !previous.hasLoaded)
   ) {
-    // A local mutation can precede the initial load. Preserve the saved seed
-    // and overlay its explicit mutations instead of persisting a partial list.
     const sessions = !state.hasLoaded && !state.managedChatsHydrated
       ? overlayMutationsSince(state, readManagedChatSessions(), [], 0).activeSessions
       : state.activeSessions;
@@ -1216,6 +1196,17 @@ export const ensureGlobalSessionsLoaded = async (fallbackActive?: Session[]): Pr
 export const refreshGlobalSessions = async (fallbackActive?: Session[]): Promise<LoadResult> => {
   return useGlobalSessionsStore.getState().loadSessions(fallbackActive);
 };
+
+export const refreshGlobalSessionsWhenShown = async (completeMaxAgeMs: number, fallbackActive?: Session[]): Promise<void> => {
+  const state = useGlobalSessionsStore.getState();
+  const fresh = completeLoadAt > 0 && state.status === 'ready' && Date.now() - completeLoadAt < completeMaxAgeMs;
+  if (fresh) await state.refreshSessionHead();
+  else await state.loadSessions(fallbackActive);
+};
+
+export const refreshRecentGlobalSessions = (): Promise<boolean> => (
+  useGlobalSessionsStore.getState().refreshSessionHead()
+);
 
 export const refreshGlobalSessionsForDirectories = async (
   directories: Iterable<string>,

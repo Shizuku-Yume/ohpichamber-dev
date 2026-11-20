@@ -36,6 +36,7 @@ describe('Linear session status runtime', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     clearLinearAuth();
     if (previousDataDir === undefined) delete process.env.OPENCHAMBER_DATA_DIR;

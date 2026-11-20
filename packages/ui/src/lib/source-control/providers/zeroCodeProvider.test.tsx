@@ -76,6 +76,7 @@ let providerReads = 0;
 
 /** The connected server: it serves acme and lists its items through the neutral reads. */
 const sourceControl: SourceControlAPI = {
+ setInstanceAliases: unexpected, issueUpdate: unexpected, changeRequestDraft: unexpected, changeRequestCommentUpdate: unexpected, changeRequestCommentDelete: unexpected, issueCommentUpdate: unexpected, issueCommentDelete: unexpected, discussionUpdate: unexpected, discussionCommentUpdate: unexpected, discussionCommentDelete: unexpected,
  authSetSshUrl: async () => ({ sshUrl: null }),
  providers: async () => { providerReads += 1; return [acme]; },
  references: async (_context, query): Promise<RepositoryReferencePage> => ({

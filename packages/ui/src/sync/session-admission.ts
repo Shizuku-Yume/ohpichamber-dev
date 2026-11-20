@@ -4,12 +4,19 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { getAdmissionNavigationRevision, useSessionUIStore } from './session-ui-store';
 import { subscribeGlobalSessionMoves } from './session-moves';
-import { isSessionDirectoryAdmitted } from './session-admission-rule';
+import { isSessionDirectoryAdmitted, resolveAdmittedLineageDirectory } from './session-admission-rule';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { isVSCodeRuntime } from '@/lib/desktop';
 
 const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
   directory, useProjectsStore.getState().projects, useSessionUIStore.getState().availableWorktreesByProject,
+);
+
+const admittedLineageDirectory = (sessionId: string): string | null => resolveAdmittedLineageDirectory(
+  sessionId, useGlobalSessionsStore.getState().entityById, isSessionAdmitted,
+);
+
+export const withAdmittedLineage = (sessionId: string, directory: string | null): string | null => (
+  directory && !isSessionAdmitted(directory) ? admittedLineageDirectory(sessionId) ?? directory : directory
 );
 
 const ADMISSION_WAIT_MS = 10_000;
@@ -24,15 +31,29 @@ const waitUntilAdmitted = (directory: string): Promise<void> => new Promise((res
   });
 });
 
-const pending = new Map<string, { sessionIds: Map<string, boolean>; request: Promise<boolean> }>();
+const waitUntilRecordedIn = (sessionId: string, directory: string): Promise<boolean> => new Promise((resolve) => {
+  const recorded = (): boolean | null => {
+    const session = useGlobalSessionsStore.getState().entityById.get(sessionId);
+    return session ? normalizePath(resolveGlobalSessionDirectory(session)) === directory : null;
+  };
+  const initial = recorded();
+  if (initial !== false) { resolve(true); return; }
+  const finish = (value: boolean) => { clearTimeout(timer); stop(); resolve(value); };
+  const timer = setTimeout(() => finish(false), ADMISSION_WAIT_MS);
+  const stop = useGlobalSessionsStore.subscribe((state, previous) => {
+    if (state.entityById !== previous.entityById && recorded() !== false) finish(true);
+  });
+});
+
+const pending = new Map<string, { sessionIds: Map<string, boolean>; request: Promise<string | null> }>();
 let generation = 0;
 subscribeRuntimeEndpointWillChange(() => { generation += 1; pending.clear(); });
 
 /** A discovered directory is admitted through the project it belongs to, without a trust prompt. */
-const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean> => {
+const tryAdmitSession = (sessionId: string, directory: string): Promise<string | null> => {
   const normalized = normalizePath(directory);
-  if (!normalized) return Promise.resolve(false);
-  if (isSessionAdmitted(normalized)) return Promise.resolve(true);
+  if (!normalized) return Promise.resolve(null);
+  if (isSessionAdmitted(normalized)) return Promise.resolve(normalized);
   const runtimeKey = getRuntimeKey();
   const version = generation;
   const key = `${runtimeKey}:${normalized}`;
@@ -40,30 +61,31 @@ const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean>
   const indexed = useGlobalSessionsStore.getState().entityById.has(sessionId);
   if (existing) { existing.sessionIds.set(sessionId, indexed); return existing.request; }
   const sessionIds = new Map([[sessionId, indexed]]);
-  const currentSession = (): string | null => {
+  const currentSession = (canonical: string | null = null): string | null => {
     if (runtimeKey !== getRuntimeKey() || version !== generation) return null;
     for (const [id, wasIndexed] of sessionIds) {
       const session = useGlobalSessionsStore.getState().entityById.get(id);
-      if (session ? normalizePath(resolveGlobalSessionDirectory(session)) === normalized : !wasIndexed) return id;
+      if (!session) {
+        if (!wasIndexed) return id;
+        continue;
+      }
+      const recorded = normalizePath(resolveGlobalSessionDirectory(session));
+      if (recorded === normalized || (canonical !== null && recorded === canonical)) return id;
     }
     return null;
   };
   const request = (async () => {
-    // Persisted managed chats can arrive before their server-owned root does.
-    // Never import those directories as ordinary projects during cold startup.
-    if (!isVSCodeRuntime()) await ensureChatsRootDirectory();
-    if (!currentSession()) return false;
-    if (isSessionAdmitted(normalized)) return true;
+    await ensureChatsRootDirectory();
+    if (!currentSession()) return null;
     const currentId = currentSession();
-    if (!currentId) return false;
-    if (isSessionAdmitted(normalized)) return true;
-    if (!await useProjectsStore.getState().adoptSessionProject(currentId, normalized, () => currentSession() !== null)) return false;
-    // A linked worktree joins its repository's project without a new entry and
-    // is admitted once the worktree list (owned by the sidebar) picks it up on
-    // the server's worktree-changed event. An open waits for that, bounded; it
-    // never repeats the registration.
-    if (!isSessionAdmitted(normalized)) await waitUntilAdmitted(normalized);
-    return isSessionAdmitted(normalized);
+    if (!currentId) return null;
+    if (isSessionAdmitted(normalized)) return normalized;
+    const adopted = await useProjectsStore.getState().adoptSessionProject(currentId, normalized, () => currentSession() !== null);
+    if (!adopted) return null;
+    const confirmed = normalized;
+    if (confirmed !== normalized && !await waitUntilRecordedIn(currentId, confirmed)) return null;
+    if (!isSessionAdmitted(confirmed)) await waitUntilAdmitted(confirmed);
+    return isSessionAdmitted(confirmed) ? confirmed : null;
   })().finally(() => { if (pending.get(key)?.request === request) pending.delete(key); });
   pending.set(key, { sessionIds, request });
   return request;
@@ -72,12 +94,6 @@ const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean>
 const RETRY_DELAYS = [1000, 2000, 4000];
 type AdmissionAttempt = { sessionId: string; retries: number; timer: ReturnType<typeof setTimeout> | null };
 
-/**
- * Keep raw records complete; admission affects navigation and projections only.
- * Only a move this client sees, out of an admitted folder, registers its
- * destination on its own. Sessions already in unknown folders (OpenCode's
- * whole history, a removed project) stay hidden until the user opens one.
- */
 export const subscribeSessionAdmission = (): (() => void) => {
   let disposed = false;
   const runtimeKey = getRuntimeKey();
@@ -103,17 +119,12 @@ export const subscribeSessionAdmission = (): (() => void) => {
     });
   };
   const stopMoves = subscribeGlobalSessionMoves(({ sessionId, from, to }) => {
-    // VS Code projects are the user's workspace folders: only a deliberate
-    // open may add one there.
-    if (!current() || isVSCodeRuntime() || !isSessionAdmitted(from) || isSessionAdmitted(to)) return;
+    if (!current() || !isSessionAdmitted(from) || isSessionAdmitted(to)) return;
     forgetAttempt(to);
     const attempt: AdmissionAttempt = { sessionId, retries: 0, timer: null };
     attempted.set(to, attempt);
     check(to, attempt);
   });
-  // The viewed session, put aside while its folder is not admitted. It comes
-  // back once a live move admits the folder; re-opening it here would count as
-  // the user's choice and register any folder, a removed project included.
   let parked: { id: string; revision: number } | null = null;
   const gateSelection = () => {
     if (!current()) return;
@@ -137,7 +148,7 @@ export const subscribeSessionAdmission = (): (() => void) => {
     }
     const selectedRecord = ui.currentSessionId ? records.get(ui.currentSessionId) : null;
     const selectedDirectory = selectedRecord ? resolveGlobalSessionDirectory(selectedRecord) : ui.currentSessionDirectory;
-    if (ui.currentSessionId && selectedDirectory && !isSessionAdmitted(selectedDirectory)) {
+    if (ui.currentSessionId && selectedDirectory && !isSessionAdmitted(selectedDirectory) && !admittedLineageDirectory(ui.currentSessionId)) {
       const id = ui.currentSessionId;
       ui.setCurrentSession(null);
       parked = { id, revision: getAdmissionNavigationRevision() };

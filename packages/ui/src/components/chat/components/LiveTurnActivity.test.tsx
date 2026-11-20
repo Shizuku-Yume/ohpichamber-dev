@@ -20,11 +20,9 @@ import type { ChatMessageEntry, TurnChangedFile, TurnRecord } from '../lib/turns
 
 
 plugin({
-    name: 'live-activity-worker-url',
+    name: 'live-activity-provider-logos',
     setup(build) {
-        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
-        }));
+        // Expand Vite's eager asset glob into the same real file URL map for
         // Bun. This is a loader transform, not a replacement of the logo hook.
         build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
             const folder = resolve(dirname(path), '../assets/provider-logos');
@@ -36,7 +34,8 @@ plugin({
     },
 });
 
-// Loaded after the plugin above, so the worker URL resolves through its stub.
+// Loaded after the plugin: its imports reach the logo glob that Bun cannot
+// expand on its own.
 const { TurnFold, TurnPagesRow } = await import('./LiveTurnActivity');
 const { buildTimelineRows } = await import('../lib/turns/timelineRows');
 const { useTurnFoldContexts } = await import('./useTurnFold');
@@ -166,7 +165,7 @@ describe('live Activity with the real message body', () => {
     beforeEach(async () => {
         const win = new Window({ url: 'http://localhost', settings: { device: { prefersReducedMotion: 'reduce' } } });
         const globals = {
-            window: win, document: win.document, navigator: win.navigator, localStorage: win.localStorage,
+            window: win, document: win.document, Event: win.Event, CustomEvent: win.CustomEvent, navigator: win.navigator, localStorage: win.localStorage,
             customElements: win.customElements,
             Node: win.Node, NodeList: win.NodeList, Element: win.Element, HTMLElement: win.HTMLElement, SVGElement: win.SVGElement,
             HTMLAnchorElement: win.HTMLAnchorElement,
@@ -245,7 +244,7 @@ describe('live Activity with the real message body', () => {
         expect(container.textContent).toContain('Still working');
     });
 
-    test('keeps file statistics visible when expanded and uses an ASCII minus', async () => {
+    test('keeps file statistics visible when expanded', async () => {
         const edit = editParts;
         await act(async () => root.render(<Harness record={turn([
             assistant('progress', edit),
@@ -253,10 +252,10 @@ describe('live Activity with the real message body', () => {
         ])} />));
         const header = container.querySelector<HTMLButtonElement>('button[aria-controls]');
         expect(header?.textContent).toContain('Changed 1 file');
-        expect(header?.textContent).toContain('+2/-1');
+        expect(header?.textContent).toContain('+2 −1');
         await act(async () => header?.click());
         expect(header?.textContent).toContain('Changed 1 file');
-        expect(header?.textContent).toContain('+2/-1');
+        expect(header?.textContent).toContain('+2 −1');
     });
 
     test('shows at most four changed files and folds the rest into one chip, including at the threshold', async () => {
@@ -314,9 +313,9 @@ describe('live Activity with the real message body', () => {
             { file: 'src/c.ts', additions: 1, deletions: 0 },
         ]} />));
         expect(container.querySelector('button[aria-label="Open src/a.ts"]')?.textContent).toBe('a.ts');
-        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1/-2');
+        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1 −2');
         const fileButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open src/c.ts"]');
-        expect(fileButton?.textContent).toBe('c.ts+1/-0');
+        expect(fileButton?.textContent).toBe('c.ts+1 −0');
         await act(async () => fileButton?.click());
         const state = useUIStore.getState();
         expect(state.pendingFileFocusPath).toBe('/project/src/c.ts');
@@ -335,6 +334,7 @@ describe('live Activity with the real message body', () => {
             openChanges: () => { changesOpened += 1; },
             openPlan: () => undefined,
             openSourceBoard: () => undefined,
+            openReceivedPage: () => undefined,
         };
         useUIStore.setState({ isMobile: true });
         await act(async () => root.render(<Harness record={record} changedFiles={[{ file: '/project/src/mobile.ts' }]} mobileActions={mobileActions} />));

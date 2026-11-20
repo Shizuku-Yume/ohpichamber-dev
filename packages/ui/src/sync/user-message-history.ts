@@ -1,9 +1,10 @@
+
 import type { Message, Part } from "@openchamber/agent-contract"
 import type { State } from "./types"
 
 type UserMessageHistoryRecord = { message: Message; parts: Part[] }
 export type TranscriptPrompt = { text: string; createdAt: number }
-type UserMessageHistorySnapshot = {
+export type UserMessageHistorySnapshot = {
   sessionId: string
   records: UserMessageHistoryRecord[]
   history: TranscriptPrompt[]

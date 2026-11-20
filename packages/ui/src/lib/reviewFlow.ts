@@ -300,13 +300,8 @@ const getReviewSessionTitle = (original: Session): string => {
   return `Review: ${implementationTitle}`;
 };
 
-// A review session runs tools too (reads other directories, verifies with commands),
-// so a fresh one starts with the same permission mode as the session it reviews.
-// Failure only leaves the reviewer on the default mode the server gave it.
 const inheritPermissionAutoAccept = async (originalSessionID: string, reviewSessionID: string): Promise<void> => {
   const permissions = usePermissionStore.getState();
-  // `ask` is copied too: otherwise the server's default could make the
-  // reviewer more permissive than the session it reviews.
   const mode = permissions.getSessionMode(originalSessionID);
   try {
     await permissions.setSessionMode(reviewSessionID, mode);

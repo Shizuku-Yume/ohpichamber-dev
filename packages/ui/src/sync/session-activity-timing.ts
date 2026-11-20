@@ -5,6 +5,7 @@ import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { countSyncPerformance } from './performance-diagnostics';
 
+
 type SessionActivityPhase = 'active' | 'settled';
 export type SessionActivityTimingMutation =
   | { type: 'active'; sessionId: string; at?: number; runId?: string }
@@ -13,6 +14,7 @@ export type SessionActivityTimingMutation =
 type ActivityTimingDraft = { startedAt: Map<string, number> | null; settledMs: Map<string, number> | null };
 type SessionActivityTimingState = { startedAt: ReadonlyMap<string, number>; settledMs: ReadonlyMap<string, number> };
 type PersistedStart = { start: number; seen: number };
+
 const SETTLED_LIMIT = 200;
 const MAX_TURN_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_AWAY_MS = 30_000;
@@ -22,6 +24,7 @@ const storageKey = (): string => `oc.session-activity.v2.${encodeURIComponent(ge
 const EMPTY_RESTORED: ReadonlyMap<string, PersistedStart> = new Map();
 export const useSessionActivityTimingStore = create<SessionActivityTimingState>(() => ({ startedAt: new Map(), settledMs: new Map() }));
 useSessionActivityTimingStore.subscribe(() => countSyncPerformance('timingPublications'));
+
 const liveSeen = new Map<string, number>();
 const runIdBySession = new Map<string, string>();
 let restoredStarts: Map<string, PersistedStart> | null = null;
@@ -40,7 +43,11 @@ const readRestoredStarts = (): Map<string, PersistedStart> => {
   try { raw = getSafeStorage().getItem(storageKey()); } catch { return restored; }
   if (!raw) return restored;
   let parsed: unknown;
-  try { parsed = JSON.parse(raw); } catch { return restored; }
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return restored;
+  }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return restored;
   const now = Date.now();
   for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -54,6 +61,7 @@ const getAdoptableStarts = (now: number): ReadonlyMap<string, PersistedStart> =>
   if (now - pageLoadAt > RESTORE_ADOPTION_WINDOW_MS) { restoredStarts?.clear(); return EMPTY_RESTORED; }
   return getRestoredStarts();
 };
+
 const persistStarts = (startedAt: ReadonlyMap<string, number>, now: number): void => {
   const payload: Record<string, PersistedStart> = {};
   for (const [id, entry] of getRestoredStarts()) if (isResumable(entry, now)) payload[id] = entry;
@@ -65,6 +73,7 @@ const persistStarts = (startedAt: ReadonlyMap<string, number>, now: number): voi
     else storage.setItem(storageKey(), JSON.stringify(payload));
   } catch { /* storage is optional */ }
 };
+
 const stampLiveness = (): void => {
   const { startedAt } = useSessionActivityTimingStore.getState();
   if (startedAt.size === 0) return;
@@ -84,6 +93,8 @@ const ensureLivenessStampOnHide = (): void => {
     }
   } catch { /* periodic persistence remains available */ }
 };
+
+
 const trimSettled = (settled: Map<string, number>): void => {
   while (settled.size > SETTLED_LIMIT) { const first = settled.keys().next(); if (first.done) return; settled.delete(first.value); }
 };

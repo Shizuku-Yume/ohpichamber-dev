@@ -36,4 +36,3 @@ describe("message queue runtime ownership", () => {
   })
 
 })
-

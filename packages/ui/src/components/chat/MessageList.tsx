@@ -97,6 +97,7 @@ interface MessageListProps {
 }
 
 export interface MessageListHandle {
+    hasMessageRow: (messageId: string) => boolean;
     scrollToTurnId: (turnId: string, options?: { behavior?: ScrollBehavior }) => boolean;
     scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => boolean;
     captureViewportAnchor: () => MessageViewportAnchor | null;
@@ -1439,6 +1440,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     // restore) already reaches this list, not the one it replaced.
     React.useImperativeHandle(ref, () => {
         const handle: MessageListHandle = {
+            hasMessageRow: (messageId: string) => messageIndexMap.has(messageId),
             scrollToTurnId: (turnId: string, options?: { behavior?: ScrollBehavior }) => {
                 const behavior = options?.behavior ?? 'auto';
                 const index = turnIndexMap.get(turnId);

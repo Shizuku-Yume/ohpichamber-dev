@@ -28,7 +28,7 @@ for (const [folder, names] of [
  ['integrations', ['IntegrationsPage']],
  ['routing', ['RoutingPage']],
  ['extensions', ['ExtensionsPage']],
- ['openchamber', ['OpenChamberPage', 'AboutSettings']],
+ ['openchamber', ['OhPiChamberPage', 'AboutSettings']],
 ] as const) {
  for (const name of names) {
   mock.module(`@/components/sections/${folder}/${name}`, () => ({ [name]: () => null }));
@@ -44,21 +44,21 @@ mock.module('@/components/sections/agents/AgentsSidebar', () => ({
 
 const dom = new Window({ url: 'http://localhost/mobile.html' });
 Object.assign(globalThis, {
- window: dom,
- document: dom.document,
- navigator: dom.navigator,
- HTMLElement: dom.HTMLElement,
- Element: dom.Element,
- Node: dom.Node,
- Event: dom.Event,
- KeyboardEvent: dom.KeyboardEvent,
- ResizeObserver: dom.ResizeObserver,
- requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
- cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
- localStorage: dom.localStorage,
- sessionStorage: dom.sessionStorage,
- IS_REACT_ACT_ENVIRONMENT: true,
- fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
+  window: dom,
+  document: dom.document, CustomEvent: dom.CustomEvent,
+  navigator: dom.navigator,
+  HTMLElement: dom.HTMLElement,
+  Element: dom.Element,
+  Node: dom.Node,
+  Event: dom.Event,
+  KeyboardEvent: dom.KeyboardEvent,
+  ResizeObserver: dom.ResizeObserver,
+  requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+  cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
+  localStorage: dom.localStorage,
+  sessionStorage: dom.sessionStorage,
+  IS_REACT_ACT_ENVIRONMENT: true,
+  fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
 });
 dom.HTMLElement.prototype.scrollIntoView = () => { };
 

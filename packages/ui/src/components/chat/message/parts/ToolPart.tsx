@@ -40,7 +40,7 @@ import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
 import { hasTodoTasks } from '../../todoProgress';
 import { toolDisplayStyles } from '@/lib/typography';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { Button } from '@/components/ui/button';
@@ -63,8 +63,10 @@ import { OpenChamberToolOutput } from './OpenChamberToolOutput';
 import { toToolView } from './toolView';
 import { hasOpenChamberView, parseOpenChamberEnvelope } from './openChamberToolEnvelope';
 import { GuestToolTable } from './GuestToolTable';
+import { GuestToolCard } from './GuestToolCard';
 import {
     guestToolTableRows,
+    resolveGuestToolCard,
     renderGuestToolHeader,
     useGuestToolPresentation,
     type GuestToolRule,
@@ -536,7 +538,7 @@ const JsonToolOutput: React.FC<{
             {jsonViewMode === 'summary' ? (
                 textOutput !== null ? (
                     <div className="typography-code pr-12 text-muted-foreground/90">
-                        <WorkerHighlightedCode
+                        <HighlightedCode
                             language="text"
                             code={textOutput}
                             style={TOOL_COLLAPSED_CUSTOM_STYLE}
@@ -551,7 +553,7 @@ const JsonToolOutput: React.FC<{
                 <JsonTreeViewer data={jsonResult.data} initiallyExpandedDepth={1} maxHeight="400px" />
             ) : (
                 <div className="typography-code pr-12 text-muted-foreground/90">
-                    <WorkerHighlightedCode
+                    <HighlightedCode
                         language="json"
                         code={renderedOutput}
                         style={TOOL_COLLAPSED_CUSTOM_STYLE}
@@ -592,9 +594,14 @@ const ToolScrollableTextOutput: React.FC<{
         if (rows) return <GuestToolTable rows={rows} columns={presentation.columns} />;
     }
 
+    if (forcedMode === 'card' && presentation && jsonResult.isJson) {
+        const card = resolveGuestToolCard(presentation, jsonResult.data);
+        if (card) return <GuestToolCard result={card} />;
+    }
+
     if (forcedMode === 'text' || forcedMode === 'code') {
         return (
-            <WorkerHighlightedCode
+            <HighlightedCode
                 language={forcedMode === 'code' && presentation?.language ? presentation.language : 'text'}
                 code={renderedOutput}
                 style={TOOL_COLLAPSED_CUSTOM_STYLE}
@@ -615,7 +622,7 @@ const ToolScrollableTextOutput: React.FC<{
                     <CopyToolOutputButton output={renderedOutput} />
                 </div>
                 <div className="pr-8">
-                    <WorkerHighlightedCode
+                    <HighlightedCode
                         language={outputLanguage}
                         code={renderedOutput}
                         style={TOOL_COLLAPSED_CUSTOM_STYLE}
@@ -629,7 +636,7 @@ const ToolScrollableTextOutput: React.FC<{
 
     return (
         <div>
-            <WorkerHighlightedCode
+            <HighlightedCode
                 language={outputLanguage}
                 code={renderedOutput}
                 style={TOOL_COLLAPSED_CUSTOM_STYLE}

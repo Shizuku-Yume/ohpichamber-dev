@@ -8,8 +8,6 @@ type SessionDeleteRequest = {
   dateLabel?: string;
   mode?: 'session' | 'worktree';
   worktree?: WorktreeMetadata | null;
-  // Worktree mode only: delete the worktree and its local branch without the
-  // dialog when a fresh check finds nothing to lose; otherwise the dialog opens.
   skipDialogIfSafe?: boolean;
 };
 
@@ -105,7 +103,6 @@ export const sessionEvents = {
       sessionEvents.requestGitRefresh({ directory });
     }, TOOL_GIT_REFRESH_WINDOW_MS));
   },
-  /** Drops tool refreshes still waiting out their window; they belong to the previous runtime. */
   cancelPendingGitRefreshes() {
     for (const timer of pendingToolGitRefreshes.values()) {
       clearTimeout(timer);

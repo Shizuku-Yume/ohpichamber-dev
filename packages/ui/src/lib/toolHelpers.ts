@@ -1,3 +1,7 @@
+
+
+
+
 import type { ToolCallPart } from '@openchamber/agent-contract';
 
 import {
@@ -489,18 +493,14 @@ export function getLanguageFromExtension(filePath: string): string | null {
   'diff': 'diff',
   'patch': 'diff',
 
-  // Prisma
-  'prisma': 'prisma',
+    'prisma': 'prisma',
 
-  // Protocol Buffers
-  'proto': 'protobuf',
+    'proto': 'protobuf',
 
-  // Thrift
-  'thrift': 'thrift',
+    'thrift': 'thrift',
 
-  // WASM
-  'wat': 'wasm',
-  'wast': 'wasm',
+    'wat': 'wasm',
+    'wast': 'wasm',
 
   // GLSL/Shaders
   'glsl': 'glsl',
@@ -555,9 +555,6 @@ export function isSvgFile(filePath: string): boolean {
  return filePath.toLowerCase().endsWith('.svg');
 }
 
-// Playable in a browser media element: the viewer plays these instead of
-// offering a download. What a runtime's engine cannot decode (an HEVC .mov,
-// a .mkv) still opens; the element reports the failure and the viewer says so.
 const AUDIO_EXTENSIONS = ['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'oga', 'opus', 'weba'];
 const VIDEO_EXTENSIONS = ['mp4', 'm4v', 'webm', 'mov', 'ogv', 'mkv'];
 const FONT_EXTENSIONS = ['ttf', 'otf', 'woff', 'woff2'];
@@ -574,7 +571,6 @@ export function isFontFile(filePath: string): boolean {
  return FONT_EXTENSIONS.includes(getFileExtension(filePath));
 }
 
-/** Comma- or tab-separated text the viewer can lay out as a table. */
 export function isDelimitedTableFile(filePath: string): boolean {
  const ext = getFileExtension(filePath);
  return ext === 'csv' || ext === 'tsv';
@@ -593,23 +589,15 @@ export function isMermaidFile(filePath: string): boolean {
  return ext === 'mmd' || ext === 'mermaid';
 }
 
-/** Known non-text extensions that must not be opened or saved as UTF-8 text. */
 const BINARY_FILE_EXTENSIONS = new Set([
- // Documents / office
- 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
- // Archives / packages
- 'zip', 'rar', '7z', 'gz', 'tgz', 'tar', 'bz2', 'xz', 'jar', 'war', 'apk', 'dmg', 'iso',
- 'deb', 'rpm', 'msi',
- // Images (svg is text and is excluded via isSvgFile)
- ...IMAGE_EXTENSIONS.filter((ext) => ext !== 'svg'),
- // Audio / video
- ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS, 'wma', 'avi', 'wmv',
- // Fonts
- ...FONT_EXTENSIONS, 'eot',
- // Native / bytecode
- 'exe', 'dll', 'so', 'dylib', 'bin', 'class', 'o', 'a', 'lib', 'wasm', 'node',
- // Databases / locks / misc binary
- 'sqlite', 'sqlite3', 'db', 'dat', 'parquet', 'feather', 'pickle', 'pyc', 'pyo', 'lockb',
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
+  'zip', 'rar', '7z', 'gz', 'tgz', 'tar', 'bz2', 'xz', 'jar', 'war', 'apk', 'dmg', 'iso',
+  'deb', 'rpm', 'msi',
+  ...IMAGE_EXTENSIONS.filter((ext) => ext !== 'svg'),
+  ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS, 'wma', 'avi', 'wmv',
+  ...FONT_EXTENSIONS, 'eot',
+  'exe', 'dll', 'so', 'dylib', 'bin', 'class', 'o', 'a', 'lib', 'wasm', 'node',
+  'sqlite', 'sqlite3', 'db', 'dat', 'parquet', 'feather', 'pickle', 'pyc', 'pyo', 'lockb',
 ]);
 
 export function getFileExtension(filePath: string): string {
@@ -621,7 +609,6 @@ export function getFileExtension(filePath: string): string {
  return base.slice(dot + 1).toLowerCase();
 }
 
-/** True for known binary extensions (including images/PDF). SVG is not binary. */
 export function isBinaryFile(filePath: string): boolean {
  if (isSvgFile(filePath)) {
   return false;
@@ -630,26 +617,21 @@ export function isBinaryFile(filePath: string): boolean {
  return BINARY_FILE_EXTENSIONS.has(ext);
 }
 
-/**
- * Heuristic for UTF-8 text that is actually binary (or was lossily decoded).
- * Used as defense-in-depth when extension checks miss a binary file.
- */
 export function looksLikeBinaryText(content: string): boolean {
  if (!content) {
   return false;
  }
 
- const sample = content.length > 8192 ? content.slice(0, 8192) : content;
- if (sample.includes('\0')) {
-  return true;
- }
- if (sample.startsWith('%PDF')) {
-  return true;
- }
- // ZIP-based formats (docx/xlsx/pptx/jar/apk…) and raw ZIP.
- if (sample.startsWith('PK\u0003\u0004') || sample.startsWith('PK\u0005\u0006') || sample.startsWith('PK\u0007\u0008')) {
-  return true;
- }
+  const sample = content.length > 8192 ? content.slice(0, 8192) : content;
+  if (sample.includes('\0')) {
+    return true;
+  }
+  if (sample.startsWith('%PDF')) {
+    return true;
+  }
+  if (sample.startsWith('PK\u0003\u0004') || sample.startsWith('PK\u0005\u0006') || sample.startsWith('PK\u0007\u0008')) {
+    return true;
+  }
 
  let suspicious = 0;
  for (let index = 0; index < sample.length; index += 1) {
@@ -689,4 +671,20 @@ export function formatToolInput(input: ToolCallPart['input'], toolName: string):
  if (isEvalTool(toolName) && typeof input.code === 'string') return input.code;
  // Keep complete structured native edit/task/custom-tool inputs visible.
  return JSON.stringify(input, null, 2);
+}
+
+export function hasFileVersionsDiff(filePath: string): boolean {
+  return isImageFile(filePath) || isOfficePreviewFile(filePath);
+}
+
+export function isDataFile(filePath: string): boolean {
+  return ['sqlite', 'sqlite3', 'db', 'parquet'].includes(getFileExtension(filePath));
+}
+
+export function isArchiveFile(filePath: string): boolean {
+  return ['zip', 'jar', 'war'].includes(getFileExtension(filePath));
+}
+
+export function isNotebookFile(filePath: string): boolean {
+  return getFileExtension(filePath) === 'ipynb';
 }

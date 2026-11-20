@@ -28,7 +28,6 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 }) => {
   const { t } = useI18n();
   const showDiagnostics = import.meta.env.DEV;
-  // undefined while the first lookup runs, null once it finished without a version.
   const [version, setVersion] = React.useState<string | null | undefined>(undefined);
   const [isCopyingDiagnostics, setIsCopyingDiagnostics] = React.useState(false);
   const [copiedDiagnostics, setCopiedDiagnostics] = React.useState(false);

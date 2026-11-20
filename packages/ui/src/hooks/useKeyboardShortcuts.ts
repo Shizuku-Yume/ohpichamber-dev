@@ -1,6 +1,10 @@
+import { useComposerAbortEscape } from './useComposerAbortEscape';
+import { isDesktopShell } from '@/lib/desktop';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import React from 'react';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
-import { isTerminalEventTarget } from '@/lib/terminalFocus';
+import { getTerminalFocusOwner, isTerminalEventTarget } from '@/lib/terminalFocus';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { activateAdjacentSessionTab, activateSessionTabByIndex, closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
@@ -54,19 +58,35 @@ const dropdownTargetSelector = [
   '[data-radix-popper-content-wrapper]',
 ].join(',');
 
+function hasOverlayOpen(): boolean {
+  const state = useUIStore.getState();
+  return state.isCommandPaletteOpen
+    || state.isHelpDialogOpen
+    || state.isProjectActionsDialogOpen
+    || state.isSessionSwitcherOpen
+    || state.isAboutDialogOpen
+    || state.isSettingsDialogOpen
+    || state.runOverviewKey !== null
+    || state.isImagePreviewOpen;
+}
 export const useKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
-  const armAbortPrompt = useSessionUIStore((s) => s.armAbortPrompt);
-  const clearAbortPrompt = useSessionUIStore((s) => s.clearAbortPrompt);
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
   const effectiveDirectory = useEffectiveDirectory();
   const activeProject = useProjectsStore((s) => s.getActiveProject());
   const { themeMode, setThemeMode } = useThemeSystem();
   const { phase: sessionPhase } = useCurrentSessionActivity();
-  const abortPrimedUntilRef = React.useRef<number | null>(null);
-  const abortPrimedSessionRef = React.useRef<string | null>(null);
-  const abortPrimedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { handleKeyDown: handleAbortEscapeKeyDown, reset: resetAbortPriming } = useComposerAbortEscape({
+    isBlocked: () => hasOverlayOpen() || hasOpenDropdown(),
+    resolveTarget: (target) => {
+      const pinnedColumn = target.closest<HTMLElement>('[data-chat-column="pinned"]');
+      return pinnedColumn
+        ? { sessionId: pinnedColumn.dataset.chatSessionId ?? null, working: pinnedColumn.dataset.chatWorking === 'true' }
+        : { sessionId: currentSessionId, working: sessionPhase !== 'idle' };
+    },
+    abort: (sessionId) => { void sessionActions.abortCurrentOperation(sessionId); },
+  });
   const themeModeRef = React.useRef(themeMode);
   const dispatcherRef = React.useRef<ShortcutDispatcher | null>(null);
   const selectionToolbarDispatcherRef = React.useRef<ShortcutDispatcher | null>(null);
@@ -98,16 +118,6 @@ export const useKeyboardShortcuts = () => {
 
   React.useEffect(() => { themeModeRef.current = themeMode; }, [themeMode]);
 
-  const resetAbortPriming = React.useCallback(() => {
-    if (abortPrimedTimeoutRef.current) {
-      clearTimeout(abortPrimedTimeoutRef.current);
-      abortPrimedTimeoutRef.current = null;
-    }
-    abortPrimedUntilRef.current = null;
-    abortPrimedSessionRef.current = null;
-    clearAbortPrompt();
-  }, [clearAbortPrompt]);
-
   const toggleTerminalSurface = () => {
     if (!currentDirectory) return;
     useUIStore.getState().openContextSurface(normalizeContextPanelDirectoryKey(currentDirectory), 'terminal');
@@ -132,7 +142,6 @@ export const useKeyboardShortcuts = () => {
       useUIStore.getState().setTimelineDialogOpen(true);
     },
     toggle_source_board: () => {
-      // A desktop and web page: the phone shell has no board.
       const state = useUIStore.getState();
       if (state.isMobile) return false;
       state.setSourceBoardOpen(!state.isSourceBoardOpen);
@@ -143,9 +152,6 @@ export const useKeyboardShortcuts = () => {
         state.setSessionSwitcherOpen(true);
         return;
       }
-      // The switcher dropdown only mounts while the sidebar is collapsed;
-      // with the sidebar visible the list is already on screen, so the
-      // shortcut opens the sidebar's session search instead.
       if (state.isSidebarOpen) {
         window.dispatchEvent(new CustomEvent('openchamber:sidebar-session-search'));
         return;
@@ -333,8 +339,6 @@ export const useKeyboardShortcuts = () => {
   });
 
   function navigateSessionHistoryByShortcut(event: KeyboardEvent, delta: -1 | 1): boolean | void {
-    // An editor that already handled the chord (CodeMirror outdent/indent)
-    // keeps it.
     if (event.defaultPrevented) return false;
     return navigateSessionHistory(delta) ? undefined : false;
   }
@@ -369,6 +373,7 @@ export const useKeyboardShortcuts = () => {
       const handler = shortcutRegistry.get(actionId);
       return handler ? handler(event) !== false : false;
     };
+    const terminalZoomKeyCodes = new Set<string>();
     const handleTerminalShortcutCapture = (event: KeyboardEvent) => {
       if (!isTerminalEventTarget(event.target)) return;
       const getBinding = (actionId: ShortcutActionId) => getEffectiveShortcutCombo(
@@ -380,6 +385,19 @@ export const useKeyboardShortcuts = () => {
       if (actionId && invokeRegistered(actionId, event)) {
         event.preventDefault();
         event.stopPropagation();
+        return;
+      }
+      if (getTerminalFocusOwner(event.target) === 'main' && !isDesktopShell() && !isVSCodeRuntime() && !isMobileSurfaceRuntime() && !event.defaultPrevented && !isIMECompositionEvent(event)) {
+        const zoom = eventMatchesShortcut(event, getBinding('zoom_in')) ? 'zoom-in'
+          : eventMatchesShortcut(event, getBinding('zoom_out')) ? 'zoom-out'
+          : eventMatchesShortcut(event, getBinding('zoom_reset')) ? 'zoom-reset' : null;
+        if (zoom) {
+          event.preventDefault();
+          event.stopPropagation();
+          terminalZoomKeyCodes.add(event.code);
+          window.dispatchEvent(new CustomEvent('openchamber:zoom', { detail: zoom }));
+          return;
+        }
       }
     };
     const handleSelectionToolbarKeyDownCapture = (event: KeyboardEvent) => {
@@ -453,54 +471,10 @@ export const useKeyboardShortcuts = () => {
         resetAbortPriming();
         return;
       }
-      const hasOverlay = state.isCommandPaletteOpen
-        || state.isHelpDialogOpen
-        || state.isSessionSwitcherOpen
-        || state.isAboutDialogOpen
-        || state.runOverviewKey !== null
-        || state.isImagePreviewOpen;
-      // Escape pressed inside a chat pinned in the side panel stops that
-      // chat's session, which the column names on its root; anywhere else it
-      // stops the main chat's.
-      const pinnedColumn = target?.closest<HTMLElement>('[data-chat-column="pinned"]') ?? null;
-      const abortSessionId = pinnedColumn ? pinnedColumn.dataset.chatSessionId ?? null : currentSessionId;
-      const abortable = pinnedColumn ? pinnedColumn.dataset.chatWorking === 'true' : sessionPhase !== 'idle';
-      if (
-        hasOverlay
-        || !abortable
-        || !abortSessionId
-      ) {
-        resetAbortPriming();
-        return;
-      }
-      const now = Date.now();
-      if (abortPrimedUntilRef.current && now < abortPrimedUntilRef.current && abortPrimedSessionRef.current === abortSessionId) {
-        resetAbortPriming();
-        if (pinnedColumn) {
-          event.preventDefault();
-          void sessionActions.abortCurrentOperation(abortSessionId);
-        } else if (invokeRegistered('abort_run', event)) {
-          event.preventDefault();
-        }
-        return;
-      }
-      event.preventDefault();
-      const expiresAt = armAbortPrompt(3000, abortSessionId) ?? now + 3000;
-      abortPrimedUntilRef.current = expiresAt;
-      abortPrimedSessionRef.current = abortSessionId;
-      if (abortPrimedTimeoutRef.current) clearTimeout(abortPrimedTimeoutRef.current);
-      abortPrimedTimeoutRef.current = setTimeout(() => {
-        if (abortPrimedUntilRef.current && Date.now() >= abortPrimedUntilRef.current) {
-          resetAbortPriming();
-        }
-      }, Math.max(expiresAt - now, 0));
     };
     const handleActivePrefixKeyDownCapture = (event: KeyboardEvent) => {
       if (isTerminalEventTarget(event.target)) return;
       if (!dispatcher.hasActivePrefix()) return;
-      // An unmodified completion key typed into an editable target is only a
-      // deliberate sequence when the prefix was armed from that same target;
-      // otherwise it is regular typing and must not be swallowed.
       if (
         !event.ctrlKey && !event.metaKey && !event.altKey
         && isEditableEventTarget(event.target)
@@ -588,9 +562,11 @@ export const useKeyboardShortcuts = () => {
     const handleKeyUp = (event: KeyboardEvent) => {
       heldKeysRef.current.delete(event.key.toLowerCase());
       heldKeysRef.current.delete(resolveShortcutEventKey(event).toLowerCase());
+      if (terminalZoomKeyCodes.delete(event.code)) event.stopPropagation();
     };
     const handleBlur = () => {
       heldKeysRef.current.clear();
+      terminalZoomKeyCodes.clear();
       dispatcher.handleBlur();
       selectionToolbarDispatcher.handleBlur();
     };
@@ -600,6 +576,7 @@ export const useKeyboardShortcuts = () => {
     window.addEventListener('keydown', handleTerminalShortcutCapture, true);
     window.addEventListener('keydown', handleEscapeKeyDownCapture, true);
     window.addEventListener('keydown', handleActivePrefixKeyDownCapture, true);
+    window.addEventListener('keydown', handleAbortEscapeKeyDown);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('blur', handleBlur);
     return () => {
@@ -609,10 +586,11 @@ export const useKeyboardShortcuts = () => {
       window.removeEventListener('keydown', handleTerminalShortcutCapture, true);
       window.removeEventListener('keydown', handleEscapeKeyDownCapture, true);
       window.removeEventListener('keydown', handleActivePrefixKeyDownCapture, true);
+      window.removeEventListener('keydown', handleAbortEscapeKeyDown);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [armAbortPrompt, currentSessionId, dispatcher, effectiveDirectory, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
+  }, [currentSessionId, dispatcher, effectiveDirectory, handleAbortEscapeKeyDown, resetAbortPriming, selectionToolbarDispatcher, sessionPhase]);
 
   React.useEffect(() => () => resetAbortPriming(), [resetAbortPriming]);
 };

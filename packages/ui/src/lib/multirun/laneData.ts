@@ -62,9 +62,7 @@ export async function loadLaneTurnModel(sessionId: string, turnId: string): Prom
 }
 
 export type LaneLastTurn = {
-  /** Latest assistant reply text; empty when it has not answered yet. */
   text: string;
-  /** Error on the newest assistant turn, not on an individual tool result. */
   error: string | null;
   status: TurnStatus | null;
   cost: number | null;
@@ -107,11 +105,6 @@ export async function loadLaneLastReply(sessionId: string): Promise<string> {
   return (await loadLaneLastTurn(sessionId)).text;
 }
 
-/**
- * Uncommitted changes of a lane worktree against its HEAD: every changed path
- * counts as a file, tracked edits contribute line counts. Throws on failure,
- * so a read error is never shown as a lane without changes.
- */
 export async function loadLaneDiffStat(directory: string): Promise<LaneDiffStat> {
   const status = await getGitStatus(directory);
   let insertions = 0;
@@ -127,12 +120,6 @@ export async function loadLaneDiffStat(directory: string): Promise<LaneDiffStat>
 
 type CachedValue<T> = { token: string; value: T };
 
-/**
- * Tiny result cache for the overview: an entry is reused while its token
- * (runtime + session + the lane's last idle time) is unchanged, so reopening
- * the overview does not refetch finished lanes. Bounded by eviction of the
- * oldest entries.
- */
 export function createLaneCache<T>(limit = 200) {
   const entries = new Map<string, CachedValue<T>>();
   return {

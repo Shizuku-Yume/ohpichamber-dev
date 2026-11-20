@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-21 - Restore audit-discovered upload and settings reachability
+
+- **Decided:** compose one Host upload store into browser control and its authenticated download route; expose the existing file-input upload driver as `browser.upload`. Resolve files only inside the captured session folder, never a model-supplied directory or an OpenCode temporary directory. Keep the existing token expiry and file limits.
+- **Settings:** restore the mobile Return-key checkbox that still has live composer/comment consumers, and index the existing worktree-creation command section. No stores, sync infrastructure, sidebar/search or router ownership changes.
+- **Surfaces:** browser bytes stay on the connected Host for Web/PWA, Electron and mobile clients; browser driving remains subject to the existing renderer/provider capability. The Return-key checkbox is mobile-only, matching its search guard.
+- **Remaining:** shared/received and later pages still require retained-feature restoration, not exceptions. Other unresolved audit findings are not waived by this decision.
+- **Follow-up:** after merging the extension-waits port, its Canonical session service replaces the retired OpenCode callbacks. Restore managed chat-directory cleanup with scoped snapshot/event subscriptions, connection gating and shutdown detachment. Remove the unused `agentWorkflowAutoApprove` store/sanitizer fields; no runtime consumed them and workflow admission still requires explicit approval.
+
 Every choice that mattered, with the option it beat. Newest last.
 
 This file exists so the same argument is not had twice. A decision recorded here
@@ -853,7 +861,7 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided:** the lane 12 work modules (`openchamber-sessions`, `openchamber-control`, `quota`, `small-model`, `routing`, `session-assist`, `session-work`, `scheduled-tasks`, `workflows`, `tts`, `package-manager.js`) keep the fork's Host/Canonical API shape; upstream v2.7.0 engine code is not adopted there.
 - **Instead of:** taking upstream's `@opencode/client` and `server/lib/opencode/*` implementations for those modules.
 - **Because:** every one of those modules now dispatches on `/api/agent/v1` through the Host (`sessionService`, `resolveSessionScope`, `credentialAccessToken`, `selected-credential`); upstream's side reintroduces the retired OpenCode runtime, duplicate declarations, and reads of `opencode/auth.js`.
-- **Also retired here:** `session-goal/` (the fork removed the goal runtime), and upstream-only helpers with no fork consumer (`quota/console-budgets`, `quota/extension-quota[s]`, `quota/utils/auth.js`, `scheduled-tasks/model-catalog.js`, `openchamber-control/{form-answer,usage-read,secret-run,tool-envelope}.js`, `openchamber-sessions/session-archive.js`).
+- **Also retired here:** `session-goal/` (the fork removed the goal runtime), and upstream-only helpers with no fork consumer (`quota/console-budgets`, `quota/extension-quota[s]`, `quota/utils/auth.js`, `scheduled-tasks/model-catalog.js`, `openchamber-control/{form-answer,secret-run,tool-envelope}.js`, `openchamber-sessions/session-archive.js`). `usage-read.ts` is retained through the native `openchamber_usage` Host tool: it reads the calling workspace's selected native quota credentials, not OpenCode auth. Session track/done use Canonical eligibility and Host metadata; turn-end background checks use Canonical shell snapshots and live subagent rosters.
 - **Consequence:** the cluster's five remaining failing test files are `main`-identical and fail on tree-wide dependency bumps, not on this resolution: installed `zod@4.6.7` makes `.omit()` throw on the refined canonical event schemas (`agent-service/dist/supervisor/host-authorization-protocol.js`), and `supertest@7.3.2`/`superagent@10.4.2` break `packages/web/test/loopback-supertest.js` (its own self-test fails). Fixing them belongs to the lockfile lane, not this cluster.
 - **Mine:** yes (conservative option; no maintainer question)
 - **Revisit when:** the zod/supertest pins return to `4.3.6`/`7.2.2`, or the canonical event schemas drop their refinements and the loopback harness is repaired.
@@ -1855,3 +1863,35 @@ Later successful listings also retire stale failures: global head polls replace 
 - **Because:** Without the runtime identities, the listener cannot distinguish a switch from an event for the active runtime.
 - **Mine:** yes (records the existing fork fixture).
 - **Revisit when:** Upstream's fixture uses the same runtime-change event contract.
+
+## 2026-11-20 - Exclude the inherited OpenCode verification stand and orphan CI policy test
+
+- **Decided:** exclude `scripts/verify/**` and its root `verify` command. Keep the reusable fixture-request regression under `scripts/perf`, forwarding its opt-in control flag to the fixture process and using a fixture-owned request header. Remove `scripts/pr-checks.test.mjs` with the excluded `.github/scripts/pr-checks.cjs` policy it tests.
+- **Instead of:** restoring `bundled-opencode-server.mjs`, OpenCode environment/configuration, legacy session endpoints, or fork-excluded GitHub policy merely to load upstream tests.
+- **Because:** main has no `scripts/verify` stand; the imported stand configures an OpenCode server, drives `/api/session` and OpenCode CLI operations, and cannot exercise the fork's Host plus supervised OMP Agent Service without a new canonical scenario harness. The existing OMP-aware `scripts/perf/isolated-server.mjs` and canonical performance probes remain authoritative; deleting this inherited stand does not certify replacement behavior coverage.
+- **Mine:** yes, within the requested tooling exclusion option and the existing fork-owned scripts and `.github` exclusions.
+- **Revisit when:** a behavior harness drives `/api/agent/v1` and launches the same Host/Agent Service boundary as the retained runtime.
+
+## 2026-11-20 - Require full retained-platform acceptance before merging the upstream sync
+
+- **Decided:** do not merge the sync until full acceptance on Web/PWA, Android, iOS, Windows and macOS. The owner and designated testers now own testing; this implementation handoff stops all test/build runs and records the existing evidence and open failures.
+- **Instead of:** treating local checks, Linux packaging, or the earlier Web/macOS blocking-smoke fixes as complete merge acceptance.
+- **Because:** the owner expanded the merge bar to every retained platform and explicitly transferred testing ownership.
+- **Mine:** no; owner instruction.
+- **Scope:** acceptance and verification ownership only. Canonical `/api/agent/v1`, OMP 19, the Host/Agent Service boundary and Guest MessagePort v2 remain unchanged.
+
+## 2026-11-20 - Retain runtime-equivalent source compatibility cleanup
+
+- **Decided:** retain removal of unused default React imports under the automatic JSX transform, source formatting and type-only Host/Canonical contract repairs where the normalized runtime output is unchanged. Package renames remain owned by the first-release naming decision, not this exception.
+- **Instead of:** reverting mechanically equivalent source solely to match the new upstream baseline, or treating every type-related change as equivalent.
+- **Because:** the JSX/import-only rows have identical source after removing the unused React default import and blank-line differences; the remaining compatibility rows emit identical JavaScript under the same Bun transpiler after the separately recorded package rename. Neither comparison licenses deleting a route, setting, feature or assertion.
+- **Mine:** yes, limited to the mechanically compared source rows in the audit reconciliation.
+- **Revisit when:** the upstream source converges, or a row gains a behavioral difference requiring its own review.
+
+## 2026-11-20 - Keep UI state aligned with the fork's runtime and workspace contracts
+
+- **Decided:** preserve recording scope and interrupted-send recovery at the Canonical boundary, and keep native preferences and layout validation in their shared UI state owners.
+- **Because:** upstream lacks the authorized workspace for dictation correction and the switch revision that retires pending sends even on a same-key Host change. Unknown delivery is not a reason to drop or replay a send. Upstream also lacks the rail-versus-link intent, native preference fields and same-version layout validation.
+- **Also retained:** the locale direction and dictionary contract, translated attachment regression, and standards-mode DOM setup used by math renderer tests.
+- **Instead of:** treating partial reads as proof of non-delivery, restoring retired state, or dropping behavior or regression coverage to match the upstream blob.
+- **Revisit when:** upstream supports equivalent scopes and state invariants or the corresponding fork feature is retired.

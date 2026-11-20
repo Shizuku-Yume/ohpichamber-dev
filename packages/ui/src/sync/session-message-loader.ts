@@ -144,7 +144,10 @@ export class SessionMessageLoader {
     }
   }
 
-  activate(): void { this.disposed = false }
+  // external: https://react.dev/reference/react/StrictMode Effect setup runs again after development cleanup, so the ref-stable loader must accept new work.
+  activate(): void {
+    this.disposed = false
+  }
 
   startCacheRetention(options: {
     idleTtlMs?: number
@@ -393,6 +396,12 @@ export class SessionMessageLoader {
   getSnapshot(target: SessionMessageTarget): SessionMessageLoadState {
     const normalized = this.normalizeTarget(target)
     return normalized ? this.getEntry(normalized).snapshot : EMPTY_SESSION_MESSAGE_LOAD_STATE
+  }
+
+  coversHistory(target: SessionMessageTarget): boolean {
+    const normalized = this.normalizeTarget(target)
+    const entry = normalized ? this.entries.get(this.keyFor(normalized)) : undefined
+    return Boolean(entry?.snapshot.resolved && !entry.evicted)
   }
 
   subscribe(target: SessionMessageTarget, listener: () => void): () => void {

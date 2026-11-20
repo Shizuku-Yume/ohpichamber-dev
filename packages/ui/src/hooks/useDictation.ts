@@ -1,14 +1,3 @@
-/**
- * Streaming dictation state machine.
- *
- * Status flow: idle -> recording -> uploading -> idle | failed.
- * While recording, mic PCM chunks stream to the server, which transcribes them
- * segment by segment; confirm finalizes and resolves the full text. Nothing is
- * shown while recording — `partialTranscript` holds whatever the server has
- * transcribed so far and exists only so a failed dictation can be salvaged
- * instead of losing minutes of speech. Failed dictations also retain their
- * audio segments so retry can replay them.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -16,10 +5,16 @@ import { dictationClient, type DictationStartOptions } from '@/lib/dictation/dic
 import { DictationStreamSender } from '@/lib/dictation/dictation-stream-sender';
 import { useDictationAudioSource, type DictationLevelListener } from '@/lib/dictation/use-dictation-audio-source';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 
 export type DictationStatus = 'idle' | 'recording' | 'uploading' | 'failed';
 
 export interface UseDictationOptions {
+    directory?: string;
+    sessionId?: string | null;
     onTranscript?: (text: string) => void;
     onError?: (error: Error) => void;
     canStart?: () => boolean;
@@ -29,9 +24,7 @@ export interface UseDictationResult {
     status: DictationStatus;
     isRecording: boolean;
     isProcessing: boolean;
-    /** Server-side transcript so far; recovery only, never shown while recording. */
     partialTranscript: string;
-    /** Subscribe to the normalized (0..1) mic level for the waveform. */
     subscribeLevel: (listener: DictationLevelListener) => () => void;
     duration: number;
     error: string | null;
@@ -49,12 +42,13 @@ const DURATION_TICK_MS = 1000;
 const toError = (value: unknown): Error =>
     value instanceof Error ? value : new Error(String(value));
 
-export const getDictationStartOptions = (): DictationStartOptions => {
+export const getDictationStartOptions = async (scope: Pick<UseDictationOptions, 'directory' | 'sessionId'> = {}): Promise<DictationStartOptions> => {
+    const runtimeKey = getRuntimeKey();
     const state = useConfigStore.getState();
     const language = state.sttLanguage?.trim();
     const correct = state.sttCorrectTranscript ? { correct: true } : {};
-    if (state.sttProvider === 'openai-compatible') {
-        return {
+    const options: DictationStartOptions = state.sttProvider === 'openai-compatible'
+        ? {
             provider: 'openai-compatible',
             ...(language ? { language } : {}),
             ...correct,
@@ -63,18 +57,34 @@ export const getDictationStartOptions = (): DictationStartOptions => {
                 model: state.sttModel,
                 endpointPath: state.sttEndpointPath || undefined,
             },
-        };
-    }
-    return {
+        }
+        : {
         provider: 'local',
         ...(language ? { language } : {}),
         ...correct,
         localModel: state.sttLocalModel,
-    };
+        };
+    if (!options.correct) return options;
+    try {
+        if (scope.sessionId) {
+            options.workspaceId = (await canonicalClient.getSession(scope.sessionId)).session.workspaceId;
+        } else if (scope.directory) {
+            options.workspaceId = (await canonicalClient.resolveWorkspace(scope.directory)).workspaceId;
+        }
+    } catch {
+        options.correct = false;
+    }
+    if (runtimeKey !== getRuntimeKey()) throw new Error('Runtime changed while preparing dictation');
+    if (!options.workspaceId) options.correct = false;
+    return options;
 };
 
 export function useDictation(options: UseDictationOptions = {}): UseDictationResult {
     const { onTranscript, onError, canStart } = options;
+    const column = useChatSessionSelection();
+    const scopeRef = useRef({ options, column });
+    scopeRef.current = { options, column };
+    const recordingScopeRef = useRef<Pick<UseDictationOptions, 'directory' | 'sessionId'>>({});
 
     const [status, setStatus] = useState<DictationStatus>('idle');
     const [partialTranscript, setPartialTranscript] = useState('');
@@ -102,7 +112,7 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
     if (!senderRef.current) {
         senderRef.current = new DictationStreamSender({
             client: dictationClient,
-            getStartOptions: getDictationStartOptions,
+            getStartOptions: () => getDictationStartOptions(recordingScopeRef.current),
         });
     }
 
@@ -141,8 +151,6 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         setPartialTranscript('');
     }, []);
 
-    // Transcripts of segments the server has already committed. Not rendered
-    // while recording; kept so a failed dictation can be salvaged.
     useEffect(() => {
         return dictationClient.onPartial((dictationId, text) => {
             const activeDictationId = senderRef.current?.getDictationId();
@@ -154,7 +162,6 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         });
     }, []);
 
-    // Restart the stream (replaying buffered segments) after a reconnect.
     useEffect(() => {
         return dictationClient.subscribeConnectionStatus((connected) => {
             if (!connected) {
@@ -222,6 +229,12 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         }
 
         gate.starting = true;
+        const { options: current, column: selected } = scopeRef.current;
+        recordingScopeRef.current = {
+            sessionId: current.sessionId !== undefined ? current.sessionId
+                : current.directory !== undefined ? null : selected.sessionId,
+            directory: current.directory ?? selected.directory ?? useDirectoryStore.getState().currentDirectory,
+        };
         clearError();
         setPartialTranscript('');
         setDuration(0);
@@ -230,14 +243,11 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         clearStreamingState();
 
         try {
-            await audio.start();
+            if (!(await audio.start())) {
+                return;
+            }
             startDurationTracking();
-            // Open the stream eagerly so audio uploads while the user speaks
-            // and only the tail is left to transcribe on stop.
             await senderRef.current?.restartStream().catch((err) => {
-                // Non-fatal: segments buffer locally and finish() retries the
-                // start, but surface the reason (e.g. model downloading) so
-                // the overlay can show it.
                 reportError(err);
             });
         } catch (err) {
@@ -264,9 +274,6 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         setDuration(0);
         clearError();
 
-        // Optimistic: dismiss the overlay immediately. Tearing down the audio
-        // graph (AudioContext.close) can take up to ~1s on mobile WebViews and
-        // must not delay the visible response to Cancel.
         setStatus('idle');
         statusRef.current = 'idle';
         try {
@@ -337,10 +344,6 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         }
     }, [clearError, handleFailure, handleSuccess]);
 
-    /**
-     * Failed dictations still hold the last streamed partial transcript.
-     * Accept it as-is instead of retrying the full transcription.
-     */
     const acceptPartialTranscript = useCallback((): string | null => {
         if (statusRef.current !== 'failed') {
             return null;
@@ -371,9 +374,6 @@ export function useDictation(options: UseDictationOptions = {}): UseDictationRes
         clearStreamingState();
     }, [clearError, clearStreamingState]);
 
-    // While recording without an open stream (e.g. the model is still
-    // downloading), retry the stream start so live partials kick in as soon
-    // as the provider becomes ready. Buffered segments replay on success.
     useEffect(() => {
         if (status !== 'recording' || errorReason !== 'model_download_in_progress') {
             return;

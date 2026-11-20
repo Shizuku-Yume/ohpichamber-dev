@@ -86,6 +86,7 @@ Object.assign(globalThis, {
   Text: browser.Text,
   Element: browser.Element,
   HTMLElement: browser.HTMLElement,
+  Window: browser.Window,
   HTMLInputElement: browser.HTMLInputElement,
   HTMLTextAreaElement: browser.HTMLTextAreaElement,
   HTMLFormElement: browser.HTMLFormElement,
@@ -122,6 +123,15 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
   }
   if (path.endsWith('/session')) return Response.json({ data: [] });
+  if (path.startsWith('/api/projects/') && path.endsWith('/config')) return Response.json({
+    trust: { hash: null, trusted: true }, setupWorktree: [], setupWorktreeWait: false,
+    projectActions: [], projectActionsPrimaryId: null, draftStarters: [],
+    shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
+    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: [], projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
+  });
+  if (path === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' });
+  if (path === '/api/agent/v1/workspaces/workspace/commands') return Response.json({ workspaceId: 'workspace', revision: '0', commands: [], builtinCommands: [] });
+  if (path === '/api/agent/v1/workspaces/workspace/skills/catalog') return Response.json({ workspaceId: 'workspace', skills: [] });
   if (path.endsWith('/config')) return Response.json([]);
   // The project registry is instance settings: without it the session is
   // not admitted, so the composer has no session and shows no builtins.
@@ -133,8 +143,10 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
 plugin({
   name: 'composer-keystroke-vite-modules',
   setup(build) {
-    build.onResolve({ filter: /\?worker&url$/ }, ({ path }) => ({ path, namespace: 'worker-url' }));
-    build.onLoad({ filter: /.*/, namespace: 'worker-url' }, () => ({ contents: 'export default "";', loader: 'js' }));
+    // A load transform, as the sibling tests do it, and never an onResolve into a namespace of
+    // its own: Bun keeps transpiled files in a cache on disk that every test process shares, and
+    // a rewritten import specifier cached from this file broke every later file that imports
+    // the rewritten module.
     build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
       const directory = resolve(dirname(path), '../assets/provider-logos');
       const logos = Object.fromEntries(readdirSync(directory).filter((name) => name.endsWith('.svg')).map((name) => [
@@ -152,6 +164,7 @@ const { setLanguageContext } = await import('../composer/editor/composerLanguage
 const { I18nProvider } = await import('@/lib/i18n');
 const { ThemeSystemProvider } = await import('@/contexts/ThemeSystemContext');
 const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+const { useConfigStore } = await import('@/stores/useConfigStore');
 const { ChatInput } = await import('../ChatInput');
 const { SyncProvider } = await import('@/sync/sync-context');
 const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
@@ -270,6 +283,8 @@ afterAll(() => {
  * Before this guard (same scenario, 20 keystrokes): an existing session
  * rendered 23 components and re-tokenized the editor's language context on
  * every keystroke; a new-session draft rendered 52 components per keystroke.
+ * Then ChatInputComponent itself still rendered on every keystroke, because
+ * the draft text was its state; the text now lives in `composerText`.
  */
 const TEXT_INDEPENDENT_CHILDREN = [
   'ComposerFooterView',
@@ -285,8 +300,9 @@ const TEXT_INDEPENDENT_CHILDREN = [
   'ComposerModeSelector',
 ];
 
-const expectOnlyTheEditorFollowsTheText = (cost: TypingCost) => {
-  expect(cost.rendersByComponent.get('ChatInputComponent')).toBe(KEYSTROKES);
+const expectNothingFollowsTheText = (cost: TypingCost) => {
+  // Once, when the first key makes the composer sendable.
+  expect(cost.rendersByComponent.get('ChatInputComponent') ?? 0).toBe(1);
   expect(cost.languageContextUpdates).toBe(0);
   for (const name of TEXT_INDEPENDENT_CHILDREN) {
     // Paired with the name so a failure says which child followed the text.
@@ -295,12 +311,12 @@ const expectOnlyTheEditorFollowsTheText = (cost: TypingCost) => {
   }
 };
 
-test('typing in an existing session re-renders only the composer shell and its editor', async () => {
-  expectOnlyTheEditorFollowsTheText(await measureTyping('session'));
+test('typing in an existing session re-renders the composer only on the first key', async () => {
+  expectNothingFollowsTheText(await measureTyping('session'));
 });
 
-test('typing in a new-session draft re-renders only the composer shell and its editor', async () => {
-  expectOnlyTheEditorFollowsTheText(await measureTyping('draft'));
+test('typing in a new-session draft re-renders the composer only on the first key', async () => {
+  expectNothingFollowsTheText(await measureTyping('draft'));
 });
 
 test('mounting the composer before Git discovery does not reset the draft from a linked worktree', async () => {
@@ -410,5 +426,44 @@ test('worker catalog builtins appear without disk templates and context output i
     await act(async () => root.unmount());
     container.remove();
     load.mockRestore(); loadTemplates.mockRestore(); run.mockRestore(); compact.mockRestore(); notice.mockRestore();
+  }
+});
+
+/** Types `text` one key at a time, each key a transaction of its own, as the keyboard does. */
+const typeKeys = (view: InstanceType<typeof EditorView>, text: string) => {
+  for (const char of text) {
+    const end = view.state.doc.length;
+    view.dispatch({ changes: { from: end, insert: char }, selection: { anchor: end + 1 }, userEvent: 'input.type' });
+  }
+};
+
+test('Enter pressed right after the last key sends the whole text', async () => {
+  const sent: string[] = [];
+  const sendMessage = useSessionUIStore.getState().sendMessage;
+  const config = useConfigStore.getState();
+  useSessionUIStore.setState({ sendMessage: async (content: string) => { sent.push(content); } });
+  useConfigStore.setState({ currentProviderId: 'fixture', currentModelId: 'fixture-model' });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(
+      <RuntimeAPIContext.Provider value={runtimeAPIs}><ThemeSystemProvider><I18nProvider><SyncProvider directory="/workspace"><ChatInput /></SyncProvider></I18nProvider></ThemeSystemProvider></RuntimeAPIContext.Provider>,
+    ));
+    const content = container.querySelector<HTMLElement>('.cm-content');
+    const view = content ? EditorView.findFromDOM(content) : null;
+    if (!view) throw new Error('Expected composer editor');
+    // One synchronous turn: the keys and Enter all land before React renders.
+    await act(async () => {
+      typeKeys(view, 'hello');
+      view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }));
+    });
+    expect(sent).toEqual(['hello']);
+    expect(view.state.doc.toString()).toBe('');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    useSessionUIStore.setState({ sendMessage });
+    useConfigStore.setState({ currentProviderId: config.currentProviderId, currentModelId: config.currentModelId });
   }
 });

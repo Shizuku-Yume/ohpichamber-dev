@@ -8,16 +8,6 @@ export const hasRunningGoal = (session: Pick<Session, 'mode'> | undefined): bool
   getSessionGoal(session as Session | undefined)?.status === 'active'
 );
 
-/**
- * What a run member is doing, from live and recorded facts only:
- * - `permission` / `question`: a blocking request waits for the user, so the
- *   turn cannot move on (a blocked session also counts as busy, so this wins);
- * - `working`: the turn is live;
- * - `failed` / `stopped`: the canonical turn failed or was cancelled;
- * - `notStarted`: no recorded turn and none is running;
- * - `noReply`: the turn ended normally without any answer text;
- * - `finished`: the turn ended normally. It says nothing about quality.
- */
 export type LaneStatus = 'permission' | 'question' | 'working' | 'failed' | 'stopped' | 'notStarted' | 'noReply' | 'finished';
 
 export type LaneBlockingState = 'permission' | 'question' | null;
@@ -39,7 +29,6 @@ export function resolveLaneStatus(input: {
   return 'finished';
 }
 
-/** Order of the overview's status summary: what needs the user comes first. */
 export const LANE_STATUS_ORDER: readonly LaneStatus[] = ['permission', 'question', 'failed', 'working', 'noReply', 'stopped', 'notStarted', 'finished'];
 
 export const LANE_STATUS_COUNT_KEYS = {

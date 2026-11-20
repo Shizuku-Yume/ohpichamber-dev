@@ -107,6 +107,11 @@ on disk. Once the entity exists, the page switches to the autosave rules above.
 `skills/` follows the same split for supporting files: editing an existing file
 writes when the dialog closes, while a new file is only created on confirm.
 
+The skill page fills its create form from the draft once per draft and editor
+(`skills/useDraftFill.ts`). Its details effect also runs on every skill list
+refresh, so filling on each run reset a typed name, location and pending files
+back to the draft's `new-skill` in User when a list read landed mid-form.
+
 ## Providers
 
 Source-control cards whose descriptor carries `auth.login` show its service-owned sign-in hint when that instance has no account. With no PAT method, the instance renders its signed-in user without token, add-account or CLI-switch controls. The service owns sign-in outside the app. Opening that card rechecks status; a failed read keeps the auth store's prior account metadata and reports an error, while only a successful empty result removes the displayed login. The same card is used by the web, desktop and mobile Integrations pages.
@@ -152,7 +157,7 @@ environment shows "From $VAR" with the variable's name and never its value;
 its API-key form stays available, so a key can still be saved for it. The
 environment source is read from the Agent Service's
 `ProviderAuthState.environment` (`{ variable, active }`) on every provider the
-workspace reports. A key saved in OpenChamber outranks the environment
+workspace reports. A key saved in OhPiChamber outranks the environment
 variable, and the environment badge stays on the card because the variable is
 still set. The connect picker lists only providers with no credential yet, so
 an env-backed provider is not in it; the key form for one is reached from its
@@ -223,6 +228,18 @@ Provenance is per field: a value the user typed is never overwritten, while a
 previously filled value may be corrected by a later read — including a limit
 the user cleared, which stays typed and therefore stays empty.
 
+The custom-provider form recognizes the bundled OpenCode adapters for its three protocols, including `anthropic-compatible`. An edit keeps the stored bundled provider package while its protocol stays the same. Changing the protocol selects that protocol's default AI SDK package. The live catalog fills missing display fields but never supplies a package to persist; retained model packages belong to the server's merge.
+
+The custom-provider form has a "Client certificate" section (certificate,
+private key, passphrase) for gateways that require mutual TLS; "Find models"
+presents the same certificate. It is on the custom form only: public APIs
+never ask for a client certificate, so on built-in providers the fields would
+be noise. Paths are saved as `{file:path}` references and only full paths are
+accepted, because OpenCode resolves a relative path beside its config file
+while discovery runs elsewhere, so the same path would read two different
+files. The server keeps a certificate the form never read
+(`packages/web/server/lib/opencode/DOCUMENTATION.md`, `providers.js`).
+
 Model rows render collapsed (name, id, limits, non-text inputs) so a provider
 with dozens of models stays scannable; a row added by hand opens, and a row
 with a validation error opens on submit. A capability is written only when it
@@ -230,7 +247,7 @@ is known (a saved model, a catalog answer, or the user's edit); an unknown
 tool-support value is left out of the request so a save never replaces what
 the native runner knows with a text-only default.
 
-Custom-provider icons are OpenChamber profile preferences, keyed by provider
+Custom-provider icons are OhPiChamber profile preferences, keyed by provider
 ID. They are not written into OpenCode config because OpenCode has no provider
 icon field. "Default" stores nothing, so the provider's own logo (or the
 generic fallback) still shows; `ProviderLogo` reads a chosen icon before trying
@@ -239,15 +256,15 @@ the message footer agree. The status chip and footer used to draw the logo
 URL themselves, which skipped a chosen icon.
 
 Any provider can also carry an uploaded logo image (`lib/customProviderLogos.ts`,
-routes in `packages/web/server/lib/opencode/provider-logo-routes.js`).
+routes in `packages/web/server/lib/appearance/provider-logo-routes.js`).
 `ProviderLogo` draws it first, then a chosen icon, an active extension's logo
 (`contributes.providerLogos`, `lib/guests/provider-logos.ts`), the bundled logo,
 the models.dev logo and the generic fallback. An upload or an extension's logo
 keeps its colours, so it gets no `dark:invert`. While one loads the slot stays
 empty at its size, except that a bundled logo stays on screen until an
 extension's replaces it, and a failed load or draw falls through to the next
-mark. VS Code and mobile keep the guest catalog empty, so extension logos do not
-reach them. A custom provider sets the image in its edit form, beside the icon
+mark. VS Code keeps the guest catalog empty, so extension logos do not reach
+it; the phone loads the catalog and draws them like the desktop. A custom provider sets the image in its edit form, beside the icon
 picker, and Save applies what the user did there after the provider itself is
 saved: a picked file is uploaded, Remove deletes the stored image, and an
 untouched field keeps whatever is stored (a logo kept from when the provider
@@ -255,7 +272,7 @@ was last configured, or one another client just uploaded). A failed image write
 is its own toast and does not reopen the form, whose next Save would store the
 key again. Every other provider, and a custom one while
 enterprise mode hides its form, sets it in a Logo section on its page, applied
-at once. The chosen icon stays the fallback. VS Code runs no OpenChamber server,
+at once. The chosen icon stays the fallback. VS Code runs no OhPiChamber server,
 so it neither offers the upload nor draws an uploaded logo; it shows the icon.
 
 The "Connect provider" page lists `GET /api/integration` minus the
@@ -288,6 +305,10 @@ it when Settings opens. The snapshot is only a starting point: the page reads
 the list again on every visit and after every credential write, a read
 started earlier never replaces a later one, and a snapshot from another
 runtime is ignored.
+
+### Why an edit keeps the stored provider adapter
+
+Two adapters can implement the same API protocol and still load through different OpenCode paths. Replacing a bundled adapter with the form's AI SDK default during an unrelated edit changes the provider the user configured.
 
 ### Why runtime-only MCP rows wait for the config read
 
@@ -431,7 +452,7 @@ or Off. A skill's id is its `SKILL.md` folder name, not its display name. Off
 writes an exact `skill.use` deny for the id where the skill lives (project config for a
 project skill, global config otherwise) and leaves the file's flag alone;
 leaving Off removes the exact deny, in either spelling (`skill.use` `<id>` or
-the legacy `integration.use` `skill:<id>` an older OpenChamber wrote), from
+the legacy `integration.use` `skill:<id>` an older OhPiChamber wrote), from
 every config file OpenCode reads for the directory, hand-written ones included. A skill an exact deny turns off
 reads "Off" in the sidebar. A wildcard deny is someone else's rule: the choice
 is locked, the row reads "Blocked", and the page names the rule and its file.
@@ -455,14 +476,14 @@ clears the skill's exact deny wherever it is, so no file keeps a stale rule.
 
 The Plugins list is the only place a plugin is switched on or off; the detail
 page carries no control. The switch records the entry's `plugin:` resource in
-OpenChamber's own store, and the config layer of the OpenCode OpenChamber starts
+OhPiChamber's own store, and the config layer of the OpenCode OhPiChamber starts
 denies it there. The user's OpenCode config is not written, so the TUI and any
 external server keep loading the plugin. A switched-off plugin reports what
 OpenCode reports for any plugin that does not load: `Not loaded` on the card's
 status pill. The pill keeps that wording, and the card never adds a "Disabled"
 pill, because the switch beside it already says who turned it off.
 
-The switch belongs to OpenChamber and covers every project of the OpenCode it
+The switch belongs to OhPiChamber and covers every project of the OpenCode it
 starts, while web and VS Code each keep their own. The page description says
 that plainly, because a project-scope card suggests otherwise.
 
@@ -470,9 +491,9 @@ When a deny the user wrote themselves blocks the entry, the switch is disabled
 and the detail page says under the status banner that a rule in the config
 blocks it. The switch also stays disabled until the policy read succeeds, and
 while it is failing, because a denied plugin and an enabled one look the same
-before the config is read. A runtime OpenChamber did not start, or a store it
+before the config is read. A runtime OhPiChamber did not start, or a store it
 cannot read, reports `unavailable`: the switch stays disabled and says the switch
-applies only to the OpenCode OpenChamber starts. VS Code renders the same switch
+applies only to the OpenCode OhPiChamber starts. VS Code renders the same switch
 through its bridge; an external OpenCode server (`openchamber.apiUrl`) reports
 every row as unavailable because the extension applies a switch only to the
 OpenCode it starts.
@@ -486,7 +507,7 @@ system and Console policies. The absence of a deny proves nothing there: OpenCod
 applies a rewritten managed file a moment after the write, and the
 `OPENCODE_CONFIG_CONTENT` path only at the next launch.
 
-The same delay keeps OpenChamber's own deny in `/api/config` after a plugin is
+The same delay keeps OhPiChamber's own deny in `/api/config` after a plugin is
 switched back on. A row switched on ignores an exact deny from that layer
 (`opencode.managed.json`, or the pathless `OPENCODE_CONFIG_CONTENT` document),
 so the page never tells the user to remove a rule that is ours. `config.updated`
@@ -582,7 +603,7 @@ Invariants:
   `github-com-device`; the instance list under it, titled "Other instances",
   leaves that instance out.
 - A descriptor that names a settings field kind this version cannot draw shows
-  an "update OpenChamber" line instead of the instance setup.
+  an "update OhPiChamber" line instead of the instance setup.
 - Settings search anchors: the card is `integrations.source-control.<id>`, its
   body `.connect`; tracker cards keep `integrations.<id>` and its
   `.add-workspace`, `.mapping` and `.session-comments` anchors, the ids
@@ -633,7 +654,7 @@ or desktop, and the phone shows the tracker's items once they are.
 
 The maintainer placed it beside the extension's notification channel rather
 than among the built-in integrations: everything one extension owns is in one
-place, and "Built-in integrations" stays what ships with OpenChamber. The card
+place, and "Built-in integrations" stays what ships with OhPiChamber. The card
 itself is `TrackerSettings`, so mapping and session comments read the same.
 
 ### Why `{provider}` keys and not keys per provider
@@ -714,7 +735,7 @@ only ever sends v2.
 | Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `allowedTools`, `color` |
 | Command | `template` (the markdown body), `description`, `agent`, `model` with `#variant`, `subagent` |
 | MCP server | `type` (required), `command` / `url`, `environment`, `headers`, `disabled`, `codemode`, `timeout: { startup, catalog, execution }`, snake_case `oauth` |
-| Provider | `package` with the `aisdk:` prefix, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
+| Provider | `package` with `aisdk:` for AI SDK adapters or a bare bundled OpenCode package, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
 | Plugin | `{ package, options }`, serialized as a bare string when there are no options |
 
 Two consequences worth knowing:
@@ -847,3 +868,160 @@ the theme's canvas and accent.
 
 Imported themes add up quickly (the catalog, a themes folder). Without a cap
 the page below the list moves further down with every import.
+
+## About: updates
+
+About shares bundled Host release notes with the stable desktop update dialog.
+Electron checks the fork's GitHub Releases feed through its updater. Web/PWA,
+hosted mobile and Capacitor install updates outside the app; the upstream CLI
+update service and mobile download mirror remain disabled by the fork's release
+decisions. See `components/update/DOCUMENTATION.md` for ownership and surfaces.
+
+### Why the button lives in About and the toast is not shown again
+
+A user who closed the toast already said no to it, so About is a quiet place
+to find the update instead of a toast that comes back. A second update item
+in the sessions footer was rejected: that item belongs to server updates in
+the browser, and a second meaning there confuses both.
+
+## Invariants
+
+### Drafts, selection and policies
+
+- Settings project selection leaves the chat, session list and file tree in place. Provider detail selection is page-local because the chat's provider selection records a manual model choice.
+- An agent override without a stored mode keeps its resolved mode, so an unrelated edit cannot turn a built-in agent into a subagent. Duplicating carries the stored permission rules into creation.
+- The last agent available to a chat cannot be switched off. Disabled custom agents remain manageable while OpenCode removes them from its runtime list.
+- Policy re-reads keep the last successful rules for the same directory. Changing directories clears them before reading, so failure cannot apply another project's rules. Policy-changing controls wait for a successful read.
+- A selected skill is discarded as missing only after its list loads, since VS Code can select it before that read. Renaming moves the directory in place to preserve supporting files.
+- Snippet editors reset for a different snippet or draft, including a new draft reusing a discarded draft's name. Refreshing the same file preserves edits; an async create selects its result only while that draft remains selected.
+- Routing saves serialize against the runtime where the edit starts. Runtime switches drop pending saves; responses replace only idle drafts, and a response that merely trims the current draft leaves typed whitespace intact.
+- Routing prefills its initial fallback only from a concrete session-default model. Auto cannot prefill the fallback that resolves Auto.
+- Existing `AGENTS.md` content, including an empty file, is authoritative. The stored behavior prompt is a fallback only for a missing file or failed read. Window focus re-reads the file, preserves dirty drafts and carries the exact read content into writes so external edits can be rejected.
+
+### Provider configuration and authentication
+
+- Custom-provider edits start from stored config. Resolved environment variables, headers, generated reasoning levels and certificate PEM text cannot become explicit configuration through an unrelated edit.
+- Provider creation writes the user layer; editing writes the winning existing layer in custom, project, user precedence. Catalog-only providers cannot acquire config editing from matching package or URL metadata alone.
+- Custom-provider config precedes key storage. OpenCode's watcher registers the integration asynchronously, so key storage briefly retries only "Integration not found".
+- Clearing saved reasoning levels sends an empty list; new rows without levels omit the key. Protocol changes rebuild levels because request overlays use protocol-specific spellings.
+- Unchecking an image model writes `chat` explicitly because the server merges over the saved `image` type.
+- Certificate and private key are submitted together. Passphrases retain exact bytes, and an unknown stored certificate stays untouched until the user edits its fields.
+- The custom-provider form hydrates once per provider ID, so parent refreshes preserve in-progress edits.
+- OAuth status, completion and cancellation keep the location client that starts the attempt, even when the app changes project.
+- OAuth runs one method at a time and cancels abandoned attempts, including starts that complete after unmount. Auto-start runs once per mount so renders cannot restart a cancelled sign-in.
+- A pasted redirect URL settles an auto attempt through its existing status poll. A rejected URL leaves the attempt waiting for another paste.
+- Claude Code's CLI opens its own sign-in browser. Its integration URL is informational, so opening it again adds an unrelated documentation tab.
+- Integration forms evaluate conditions in declaration order against active preceding answers. Hidden answers cannot reveal later fields, and hidden fields and blank optional fields stay out of the payload. Methods without a form receive no answer object.
+- Integration defaults fill fields the user has not edited after catalog refreshes. The custom-value sentinel uses a NUL prefix to stay distinct from integration options.
+- Successful credential writes may temporarily mark a provider connected until authoritative integrations arrive. Account switching waits for the server because it owns the active credential.
+- A provider routes through one integration. Credentials under another integration stay removable but cannot be selected for that provider; environment-backed credentials cannot be removed here.
+- A single usable account has no Use action. Its Active mark still distinguishes it from other unusable stored accounts.
+- Automatic account switching is opt-in per provider because another account can intentionally belong to work. Updates start from the latest stored list to preserve other providers' choices.
+- Provider-policy warnings require known config and Console status. Console workspace policies are absent from config reads, so a connected Console prevents a definite claim that policy is missing.
+- Disabled providers remain reachable because OpenCode omits them from its live list. Source-read failure removes only the Project chip, and uncertain credentials never hide a configured custom provider's model editor.
+
+### MCP and source control
+
+- MCP saves carry OAuth fields without editors unchanged because the store rebuilds the entire block. Snippet import accepts v1 and v2 and emits v2; a v1 timeout becomes execution timeout, while startup applies only to local servers.
+- Command import uses paste events because direct clipboard reads can be denied. Only a whole-field single-command paste is split into arguments; partial pastes remain ordinary editing.
+- MCP integration matching uses source and server name because OpenCode owns its registration hash. Lookup retries cover registration completing after the first list read.
+- Runtime MCP status outranks store diagnostics. Policy-blocked servers use the page's blocked state because earlier runtime status is stale.
+- Web-search choice is locked when project configuration overrides the file Settings writes, since a write would immediately appear to revert. Configured providers no longer offered remain named so a missing plugin or typo stays visible.
+- Failed account-list reads preserve an identity's stored account. Only explicit selection changes it; public author writes leave private migration fields to the server.
+- Managed SSH references stay opaque and display only safe labels. Mounting preserves the saved key; a runtime switch clears a reference belonging to another machine.
+- SSH key fields are omitted for other transports. Transport authentication and commit signing remain independent.
+- Re-authentication adds a credential because existing bindings must keep their original credential. Short handles appear only when otherwise identical rows need distinguishing.
+- Stale-address and questionable-account grants remain unresolved in the endpoint editor. The System identity uses effective bindings and reaches every remote through machine Git.
+- Submodule and LFS grants require an identity with an account and transport, excluding legacy identities without them. The repository identity is proposed only for its own instance, including a separate SSH host; another host requires an explicit choice.
+- Instance capabilities reload when descriptor identity changes. Account summaries prefer the acting account because the first account is arbitrary across instances.
+- CLI accounts apply only after an explicit switch. A saved CLI switch with no available account row remains reachable separately.
+- Tracker mappings reload on account change because containers belong to the account. Browser sign-in waits end on leaving the card, so a first successful status read cannot cancel a running wait.
+- Tracker session comments start off because they publish to other people. The server applies the switch to completion and failure comments too.
+- Extension-channel read failure preserves the last list. Approval and pause changes re-read it because they change which channels exist.
+
+### Desktop, models and status
+
+- Either desktop Save + restart action writes every pending restart draft together. Invalid network drafts block restart so another section's restart cannot discard them.
+- The network password is write-only and omitted when unchanged. LAN access requires a valid password draft, and enterprise restrictions remain server-enforced.
+- Global Mini Chat and Quake combos participate in in-app conflict checks. Replacement releases an in-app binding only after the global combo is stored, preserving the working action on failure.
+- Releasing a global combo stores it as unassigned because clearing the setting restores its default and takes the combo back.
+- Shortcut recording suspends the registry and cancels armed sequences because window capture dispatches before field handlers. Recorded Escape stays in the recorder rather than closing Settings.
+- Global shortcuts allow one chord with all 4 modifiers and a key. In-app shortcuts allow sequences with a smaller simultaneous-key limit. macOS Control and Command remain distinct; `mod` means Command there and Control elsewhere, while non-macOS Meta is `super`.
+- The reset dialog stays mounted when its trigger disappears after reset so it can finish closing.
+- Binary selection owns OpenCode restart because other configuration is watched live. Process environment changes reach OpenCode on restart and Git, terminals and project actions on their next run.
+- Project environment never reaches shared managed OpenCode because it serves every project. A changed environment command runs immediately to expose its result.
+- Passkeys are web-only because the other shells do not display the login screen. Capacitor uses native notification permission, suppresses focused notifications and uses generic notification text.
+- Classification, goal automation and per-session warming require an OhPiChamber server. VS Code offers OpenCode's global warming and renders existing goal state.
+- Unavailable classification shows the server's effective safety-mode and goal-checker fallback without erasing the saved choice. Administrator-pinned endpoints remain read-only; empty custom-endpoint keys keep the saved key, including draft tests.
+- Server-persisted language survives lost browser storage and reaches other clients. Enterprise font previews show the effective system font where a stored font needs a CDN.
+- Session defaults preserve a chat's manual model and an explicitly selected agent's pinned model. Offered choices require verified credentials and the live catalog.
+- Thinking levels belong to their model and reset on model change. Clearing the goal-model picker explicitly returns to the small model.
+- Walkthrough models exclude only an explicit lack of structured output; missing metadata keeps a model eligible because the catalog omits capabilities for working models.
+- A memory-organizing model missing from the catalog stays named. A removed browser-provider extension shows the built-in provider because the server already falls back to it.
+- Memory refresh follows the persisted setting write; refreshing on the optimistic toggle can read the earlier disabled state and leave the tab hidden.
+- Compaction rollback restores only fields untouched by newer writes. Hand-written values outside the offered steps stay selectable so the saved choice remains visible.
+- Retention fields remain editable with automatic cleanup off because manual cleanup uses them too. The In work block never includes archived sessions.
+- Message-search status reads continue beyond an initially settled answer after a switch because the debounced save can start indexing later.
+- Voice keys stay on the server. Dictation cleanup starts off because it sends text to the small-model provider, and without that model the server retains the transcription. Voice pickers share install state and list installed models plus the default; dictation displays the server's choice when no saved model is available.
+- Usage panels show only their provider's error, so Console budgets survive a failed Go usage read. Balance-only windows omit percentage bars and used captions because they report no usage share.
+- About separates app, connected-server and OpenCode updates. A latest-version toast waits for every relevant check; failed checks keep prior status, and authoritative running versions replace temporary installed-but-not-running state.
+- About offers upgrade commands only for package-manager installations. Update notes cover the offered release range; a stable release offered to Canary has only that release's notes.
+
+### Extensions, plugins and catalogs
+
+- Only local desktop extension installation hands the server a path. Web and remote desktop upload archives; file drops suppress browser navigation.
+- Extension updates serialize so failures leave completed updates intact. A runtime switch ends the batch, and increased capability requests wait for review.
+- Declining a new extension removes it; existing extensions may stay pending. Changed credential grants require approval again, and approval cannot override enterprise refusal.
+- Plugin pending state is per row so one response cannot enable another writing row. Control entries cannot acquire package options or file actions; discovered package directories remain OpenCode-owned.
+- Exact plugin pins update through npm; reinstallable names, ranges, tags and Git targets update through OpenCode. Runtime matching keeps package strings verbatim and resolves relative local paths against their declaring config file.
+- A failed plugin revision outranks a still-active older revision so its failed update remains visible.
+- Failed catalog-list reads disable mutations because an assumed empty list would overwrite other sources. Only identities with their own credential change cloning; System transport uses ordinary Git setup.
+- Catalog skill paths already include their source subpath; prepending it again breaks repository links.
+
+### Isolated spaces and remote connections
+
+- The host owns the isolated-space switch and idle timeout. Timeout fields commit whole edits because each digit would otherwise broadcast an intermediate value to running spaces.
+- Switching isolated spaces off retains files and asks first when spaces run or their count is unknown. Unregistered-project spaces stay reachable; failed reads cannot claim there are none.
+- Unreachable places retain last-seen spaces without reporting zero. Changing the configured machine re-reads places because routing changes with it.
+- Place disk polling runs around observed image downloads and stops on read failure. Bounded settling reads after completion let Docker's disk inventory learn the image size.
+- Place cleanup is unavailable during image download because the host refuses it. Failed download-status reads stop polling and expose the failure rather than leaving a spinner running.
+- Opening SSH switches the runtime to the forwarded URL. Navigating to the remote UI changes the trusted origin and prevents the desktop shell from reconnecting a dropped tunnel.
+- SSH confirmation stays in the page's dialog focus tree because native confirmation can leave Electron on Windows unable to accept text. Leaving the form abandons the operation, including unresolved password persistence.
+- Pairing uses identical device metadata across transports and deduplicates re-pairing by install ID. Direct candidates precede relay in payload order to avoid relay cost where direct access works.
+- Relay redemption uses a temporary tunnel and never persists its admission grant. Saved hosts keep every offered transport and the shared token so home-network access can fall back to relay elsewhere.
+- Re-importing pairing updates the matching server record. Renaming preserves relay credentials and learned addresses; relay-only transport changes require fresh pairing.
+- Pairing auto-close requires successful reads that first see the session and later see it disappear. Failure retains the list; only a matching redeemed client produces a success notification.
+- Device labels name this server's device-list entry; exported connection labels name the issuing server. Dense pairing payloads use high-resolution QR output with low error correction.
+- LAN availability comes from the server bind address, with browser-origin guessing only after read failure. Publishing a remote server to its network requires its UI password.
+- Only reconnecting SSH status runs the stuck-state clock. Saved-host probes run per list identity, hidden pages pause polling and relay-conflict failures retain the last state.
+- A running tunnel's port belongs to its identity, so changing the configured port requires a different tunnel even if its mode is unchanged.
+
+### Shared controls and project editing
+
+- Card menus and switches are siblings of the navigation button to avoid nested interactive controls. Checkbox descriptions with links remain outside the clickable row.
+- Header actions wrap before starving the title. The first rendered section has no leading gap or rule even when earlier platform-specific sections render nothing.
+- Select caps use the scaled control font in `ch` because typography scaling leaves root `rem` unchanged. Number steppers also reserve button space and keep intrinsic width so increment buttons cannot stretch unevenly.
+- Full-width field rows stay in full-width sections; half-width columns use stacked labels because a fixed label column overflows them.
+- Disabled-row explanations stay readable because they say how to enable the option. Required warnings stay visible because touch users cannot be expected to long-press.
+- Info hints and disabled-option tooltips own trigger click handling so Base UI's trigger-press close cannot undo a touch opening. Disabled buttons use wrapper triggers, and popup links retain their clicks.
+- Dragging closes row tooltips because they can consume Escape needed to cancel keyboard dragging. Mobile project selection uses the bottom sheet because select popups cannot scroll long lists within the viewport.
+- Theme preview controls use divs because the app's button SVG rule clears shape fills. Light-theme selected options use canvas color because elevated colors are darker there.
+- Theme list padding and scroll padding match edge fades so focused edge rows remain readable. Keyboard navigation has one tab stop and transfers focus after deletion; a missing stored theme uses the app's first-theme fallback.
+- Theme search ranks substring matches by prefix and word prefix because fuzzy matching returns unrelated names. Theme import reserves a partial-result line to keep its footer in place.
+- Project icon popups portal into Settings dialogs to remain inside their focus trap and stacking context. System file pickers sit outside popups because opening them closes the popup.
+- Project identity refresh follows the store only while clean. Selecting a symbol removes an image because the sidebar gives images precedence.
+- Custom worktree creation commands stay personal because they name machine-local tools. Worktree mutation lists are invalidation signals; the panel re-reads its authoritative list from the server.
+- New-setting badges use the Settings device context and stay hidden outside it so navigation cannot announce unavailable controls.
+- Disabled subcontrols retain layout space so toggling them cannot resize dialogs or move neighboring rows.
+- Project setup's personal-only mode omits team setup commands but retains team teardown commands. Moving notes and todos between local and repository storage delegates entry migration to the server.
+- Model-picker Auto appears only for selections processed by routing. Routing categories and fallback selections require concrete models, and compact model triggers retain an accessible name when their visible name is hidden.
+- The phone's workspace tabs are device-local and keep at least one visible tab. A Settings page's plain title remains a screen-reader and focus target when the phone header already names it.
+- The floating Settings close button reserves clearance in the content scrollbar so scrollbar interaction remains reachable.
+
+### Why Jev has a dedicated page and not an OpenCode provider editor
+
+Jev answers OhPiChamber classification requests and the server owns its selection and keys. A dedicated Gemini key enables Jev without enabling Gemini chat models.
+
+### Why settings links use text color and not the accent
+
+Underlining identifies links while the accent remains reserved for primary actions. Hover and focus strengthen the underline.

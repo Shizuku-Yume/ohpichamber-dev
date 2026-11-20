@@ -1,3 +1,5 @@
+
+
 import type { Provider, ProviderOAuthMethods } from '@openchamber/agent-contract';
 
 /** Login method identity is not necessarily its stored provider identity. */
@@ -5,11 +7,6 @@ export function oauthMethodsForProvider(methods: ProviderOAuthMethods['methods']
   return methods.filter((method) => method.storeCredentialsAs === providerId);
 }
 
-/**
- * A provider still needs a sign-in before it can be used. The native catalog
- * always advertises the API key method, so the auth state — not the method
- * list — is the authoritative signal.
- */
 export const requiresProviderAuth = (provider: Provider): boolean =>
   provider.auth.status === 'missing' && provider.authMethods.length > 0;
 
@@ -68,11 +65,6 @@ export const getProviderCardStatus = (provider: Provider): ProviderCardStatus | 
   return provider.authMethods.length > 0 ? { kind: 'signInNeeded', environment: null } : null;
 };
 
-/**
- * Credential forms open on their own for a provider that has none, unless the
- * user explicitly hid them; an editable configuration page never has to wait
- * for a sign-in.
- */
 export const shouldAutoOpenAuthPanel = (input: {
   provider: Provider;
   userDismissed: boolean;

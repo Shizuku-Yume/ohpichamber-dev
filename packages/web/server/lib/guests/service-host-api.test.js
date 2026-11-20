@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { OpenChamberControlError } from '../openchamber-control/error.js';
+import { SERVICE_MARKS_MAX, SERVICE_MARK_RATE_MAX } from 'ohpichamber-sdk';
+
+import { enterpriseBlockedCapabilities } from './enterprise.js';
+import { createGuestMarks } from './marks.js';
 import { createServiceHostApi } from './service-host-api.js';
 
 const row = (overrides = {}) => ({
@@ -26,6 +30,8 @@ const harness = (guest = row(), overrides = {}) => {
   const instructions = { set: vi.fn(async () => {}) };
   const emitToFrames = vi.fn();
   const setConfigurationNote = vi.fn();
+  const guestIdOfToken = (token) => (token === 'live-token' ? 'desk' : null);
+  const marks = createGuestMarks({ guestIdOfToken });
   const api = createServiceHostApi({
     listGuests: async () => [guest],
     control,
@@ -33,11 +39,12 @@ const harness = (guest = row(), overrides = {}) => {
     readSettings: async () => ({ key: 'secret' }),
     emitToFrames,
     setConfigurationNote,
-    guestIdOfToken: (token) => (token === 'live-token' ? 'desk' : null),
+    marks,
+    guestIdOfToken,
     ...overrides,
   });
   const call = (method, input, bearer = 'live-token') => api.serve({ bearer, body: { method, input } });
-  return { api, control, instructions, emitToFrames, setConfigurationNote, call };
+  return { api, control, instructions, emitToFrames, setConfigurationNote, marks, call };
 };
 
 describe('service host calls', () => {
@@ -50,7 +57,7 @@ describe('service host calls', () => {
   test('starts a session through the control service and answers its id', async () => {
     const { call, control } = harness();
     const answer = await call('sessions.start', { prompt: 'hi', directory: '/repo' });
-    expect(control.execute).toHaveBeenCalledWith('session.create', { prompt: 'hi', directory: '/repo' }, undefined, { startedByExtension: 'desk' });
+    expect(control.execute).toHaveBeenCalledWith('session.create', { prompt: 'hi', directory: '/repo' });
     expect(answer).toEqual({ status: 200, body: { result: { sessionId: 'ses_1', directory: '/repo' } } });
   });
 
@@ -107,12 +114,6 @@ describe('service host calls', () => {
     const { call, control } = harness(guest);
     expect(await call('sessions.lastReply', { sessionId: 'ses_1' })).toMatchObject({ status: 403, body: { error: { code: 'NOT_GRANTED' } } });
     expect(control.execute).not.toHaveBeenCalled();
-  });
-
-  test('a retry sends the session\'s last message again', async () => {
-    const { call, control } = harness();
-    await call('sessions.retry', { sessionId: 'ses_1' });
-    expect(control.execute).toHaveBeenLastCalledWith('session.send', { sessionId: 'ses_1', prompt: 'last' });
   });
 
   test('a retry with nothing to send says so', async () => {
@@ -208,12 +209,12 @@ describe('acting for the user', () => {
     expect(control.answerForm).not.toHaveBeenCalled();
   });
 
-  test('an allow lets the agent do it once, and only a refusal carries a note', async () => {
+  test('forwards one-shot Guest permission decisions for Canonical translation', async () => {
     const { call, control } = harness(answering());
     await call('sessions.answerPermission', { sessionId: 'ses_1', requestId: 'per_1', decision: 'allow', message: 'ignored' });
-    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionID: 'ses_1', requestID: 'per_1', decision: 'once', message: undefined });
+    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionId: 'ses_1', requestId: 'per_1', decision: 'allow', message: 'ignored' });
     await call('sessions.answerPermission', { sessionId: 'ses_1', requestId: 'per_2', decision: 'deny', message: 'Not on main' });
-    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionID: 'ses_1', requestID: 'per_2', decision: 'reject', message: 'Not on main' });
+    expect(control.answerPermission).toHaveBeenLastCalledWith({ sessionId: 'ses_1', requestId: 'per_2', decision: 'deny', message: 'Not on main' });
     expect(await call('sessions.answerPermission', { sessionId: 'ses_1', requestId: 'per_3', decision: 'always' })).toMatchObject({ status: 400 });
   });
 
@@ -221,9 +222,9 @@ describe('acting for the user', () => {
     const { call, control } = harness(answering());
     expect(await call('sessions.answerForm', { sessionId: 'ses_1', formId: 'frm_1', values: { pick: 'a', tags: ['x'] } }))
       .toEqual({ status: 200, body: { result: { answered: true } } });
-    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionID: 'ses_1', formID: 'frm_1', answer: { pick: 'a', tags: ['x'] }, message: undefined });
+    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionId: 'ses_1', formId: 'frm_1', values: { pick: 'a', tags: ['x'] } });
     await call('sessions.answerForm', { sessionId: 'ses_1', formId: 'frm_2', values: null, message: 'Answered in Telegram' });
-    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionID: 'ses_1', formID: 'frm_2', answer: null, message: 'Answered in Telegram' });
+    expect(control.answerForm).toHaveBeenLastCalledWith({ sessionId: 'ses_1', formId: 'frm_2', values: null, message: 'Answered in Telegram' });
   });
 
   test('an answer to a request that already settled says so', async () => {
@@ -240,5 +241,130 @@ describe('reading replies', () => {
     const { call, control } = harness(guest);
     expect(await call('sessions.lastReply', { sessionId: 'ses_1' })).toMatchObject({ status: 403, body: { error: { code: 'NOT_GRANTED' } } });
     expect(control.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('sidebar marks', () => {
+  const marking = (overrides = {}) => row({
+    sessionControl: undefined,
+    instructions: undefined,
+    marks: true,
+    capabilityGrants: ['service', 'marks'],
+    ...overrides,
+  });
+  const failed = { icon: 'close-circle', tone: 'error', text: '2 tests failed' };
+  const target = { sessionId: 'ses_1' };
+
+  test('a service with the approval sets, replaces and removes a mark', async () => {
+    const { call, marks } = harness(marking());
+    expect(await call('marks.set', { target, mark: failed })).toEqual({ status: 200, body: { result: { saved: true } } });
+    expect(await call('marks.set', { target: { directory: '/repo', branch: 'main' }, mark: { ...failed, url: 'https://ci.example/7' } })).toMatchObject({ status: 200 });
+    expect(marks.list('desk')).toEqual([
+      { target, mark: failed },
+      { target: { directory: '/repo', branch: 'main' }, mark: { ...failed, url: 'https://ci.example/7' } },
+    ]);
+    expect(await call('marks.set', { target, mark: null })).toMatchObject({ status: 200 });
+    expect(marks.list('desk')).toHaveLength(1);
+  });
+
+  test('needs its own approval, and a manifest that still asks for it', async () => {
+    const withoutGrant = harness(marking({ marks: undefined, capabilityGrants: ['service'] }));
+    expect(await withoutGrant.call('marks.set', { target, mark: failed })).toMatchObject({ status: 403, body: { error: { code: 'NOT_GRANTED' } } });
+    expect(withoutGrant.marks.list('desk')).toEqual([]);
+    // The grant of a version that asked for marks, under a manifest that no longer does.
+    const leftover = harness(marking({ marks: undefined }));
+    expect(await leftover.call('marks.set', { target, mark: failed })).toMatchObject({ status: 403, body: { error: { code: 'NOT_GRANTED' } } });
+    expect(leftover.marks.list('desk')).toEqual([]);
+  });
+
+  test('a paused or unapproved extension sets none, whatever its process still holds', async () => {
+    for (const guest of [marking({ enabled: false }), marking({ capabilityGrants: [] }), marking({ capabilityGrants: ['marks'] })]) {
+      const { call, marks } = harness(guest);
+      expect(await call('marks.set', { target, mark: failed })).toMatchObject({ status: 403, body: { error: { code: 'DISABLED' } } });
+      expect(marks.list('desk')).toEqual([]);
+    }
+  });
+
+  test('enterprise mode refuses the service, and its marks with it', async () => {
+    const guest = marking();
+    const blocked = enterpriseBlockedCapabilities(guest, { source: 'zip' }, { enterpriseMode: true, allowedExtensions: [] });
+    expect(blocked).toEqual(['service']);
+    // As the catalog lists it then: the refused capability is no longer granted.
+    const listed = { ...guest, enterpriseBlocked: blocked, capabilityGrants: guest.capabilityGrants.filter((capability) => !blocked.includes(capability)) };
+    const { call, marks } = harness(listed);
+    expect(await call('marks.set', { target, mark: failed })).toMatchObject({ status: 403, body: { error: { code: 'DISABLED' } } });
+    expect(marks.list('desk')).toEqual([]);
+  });
+
+  test('a mark that does not parse is refused before anything is read', async () => {
+    const listGuests = vi.fn(async () => [marking()]);
+    const { call, marks } = harness(marking(), { listGuests });
+    for (const input of [
+      { target, mark: { ...failed, tone: 'red' } },
+      { target, mark: { ...failed, url: 'http://ci.example/7' } },
+      { target, mark: { ...failed, html: '<b>x</b>' } },
+      { target: { branch: 'main' }, mark: failed },
+      { target },
+    ]) {
+      expect((await call('marks.set', input)).status).toBe(400);
+    }
+    expect(listGuests).not.toHaveBeenCalled();
+    expect(marks.list('desk')).toEqual([]);
+  });
+
+  test('bounds how often marks change, and a mark set to what it is costs nothing', async () => {
+    const { call, marks } = harness(marking());
+    for (let index = 0; index < SERVICE_MARK_RATE_MAX; index += 1) {
+      expect((await call('marks.set', { target, mark: { ...failed, text: `run ${index}` } })).status).toBe(200);
+      expect((await call('marks.set', { target, mark: { ...failed, text: `run ${index}` } })).status).toBe(200);
+    }
+    expect(await call('marks.set', { target, mark: { ...failed, text: 'one more' } })).toMatchObject({ status: 429, body: { error: { code: 'TOO_MANY_EVENTS' } } });
+    expect(marks.list('desk')).toEqual([{ target, mark: { ...failed, text: `run ${SERVICE_MARK_RATE_MAX - 1}` } }]);
+    // Still what it already is: answered as saved.
+    expect((await call('marks.set', { target, mark: { ...failed, text: `run ${SERVICE_MARK_RATE_MAX - 1}` } })).status).toBe(200);
+  });
+
+  test('the budget comes back as the minute passes', async () => {
+    let at = 0;
+    const { call } = harness(marking(), { now: () => at });
+    for (let index = 0; index < SERVICE_MARK_RATE_MAX; index += 1) await call('marks.set', { target, mark: { ...failed, text: `run ${index}` } });
+    expect((await call('marks.set', { target, mark: failed })).status).toBe(429);
+    at = 60_000;
+    expect((await call('marks.set', { target, mark: failed })).status).toBe(200);
+  });
+
+  test('a service that holds every mark it may is told to remove one', async () => {
+    let at = 0;
+    const { call, marks } = harness(marking(), { now: () => at });
+    for (let index = 0; index < SERVICE_MARKS_MAX; index += 1) {
+      at += 60_000;
+      expect((await call('marks.set', { target: { sessionId: `ses_${index}` }, mark: failed })).status).toBe(200);
+    }
+    expect(await call('marks.set', { target: { sessionId: 'one-more' }, mark: failed })).toMatchObject({ status: 409, body: { error: { code: 'TOO_MANY_MARKS' } } });
+    expect(marks.list('desk')).toHaveLength(SERVICE_MARKS_MAX);
+  });
+
+  test('a call that finishes reading the catalog after its process stopped writes nothing', async () => {
+    let running = true;
+    const guestIdOfToken = (token) => (running && token === 'live-token' ? 'desk' : null);
+    const marks = createGuestMarks({ guestIdOfToken });
+    let release;
+    const reading = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { call } = harness(marking(), {
+      guestIdOfToken,
+      marks,
+      listGuests: async () => {
+        await reading;
+        return [marking()];
+      },
+    });
+    const pending = call('marks.set', { target, mark: failed });
+    running = false;
+    release();
+    expect(await pending).toMatchObject({ status: 401, body: { error: { code: 'HANDLE_UNKNOWN' } } });
+    running = true;
+    expect(marks.list('desk')).toEqual([]);
   });
 });

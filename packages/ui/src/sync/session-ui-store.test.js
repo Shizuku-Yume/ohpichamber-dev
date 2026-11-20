@@ -1604,4 +1604,3 @@ describe('speculative session preparation in draft lifecycle', () => {
     expect(discardCalls[0]).toMatchObject({ workspaceId: expect.any(String) });
   });
 });
-

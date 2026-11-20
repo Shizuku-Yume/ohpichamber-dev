@@ -55,7 +55,6 @@ export const connectMobileSettingsNavigation = (
   const openRequestedSettings = (): void => {
     const ui = useUIStore.getState();
     if (!ui.isSettingsDialogOpen) return;
-    // This flag belongs to the dialog. Leaving it set blocks chat shortcuts.
     ui.setSettingsDialogOpen(false);
     openSettings(visiblePages.includes(resolveSettingsSlug(ui.settingsPage)) ? 'page-content' : 'nav');
   };

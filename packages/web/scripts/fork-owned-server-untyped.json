@@ -1,0 +1,855 @@
+{
+  "description": "Explicit carried-over JavaScript bodies, renamed or moved to TypeScript without a completed typing port. Preserve prior fork coverage through declaration boundaries; new/upstream modules remain strict. See .workflow/technical-debt.md#fork-owned-server-javascript-awaits-typescript-conversion.",
+  "fork": "881705d19b7e5fa6d62fc590400e7999eb9ef5cf",
+  "upstream": "1928155551cbd80f0f86b94200220271df57fd70",
+  "files": [
+    {
+      "path": "server/lib/appearance/project-icon-routes.ts",
+      "forkPath": "server/lib/host/project-icon-routes.js"
+    },
+    {
+      "path": "server/lib/appearance/provider-logo-routes.ts",
+      "forkPath": "server/lib/host/provider-logo-routes.js"
+    },
+    {
+      "path": "server/lib/appearance/pwa-manifest-routes.ts",
+      "forkPath": "server/lib/host/pwa-manifest-routes.js"
+    },
+    {
+      "path": "server/lib/auto-review/runtime.ts",
+      "forkPath": "server/lib/auto-review/runtime.js"
+    },
+    {
+      "path": "server/lib/browser-control/broker.ts",
+      "forkPath": "server/lib/browser-control/broker.js"
+    },
+    {
+      "path": "server/lib/browser-control/provider.ts",
+      "forkPath": "server/lib/browser-control/provider.js"
+    },
+    {
+      "path": "server/lib/changelog/update-notes.ts",
+      "forkPath": "server/lib/changelog/update-notes.js"
+    },
+    {
+      "path": "server/lib/context-obligatory/runtime.ts",
+      "forkPath": "server/lib/context-obligatory/runtime.js"
+    },
+    {
+      "path": "server/lib/dev-tunnel/client.ts",
+      "forkPath": "server/lib/dev-tunnel/client.js"
+    },
+    {
+      "path": "server/lib/dictation/local/model-catalog.ts",
+      "forkPath": "server/lib/dictation/local/model-catalog.js"
+    },
+    {
+      "path": "server/lib/dictation/service.ts",
+      "forkPath": "server/lib/dictation/service.js"
+    },
+    {
+      "path": "server/lib/dispatch-results/runtime.ts",
+      "forkPath": "server/lib/dispatch-results/runtime.js"
+    },
+    {
+      "path": "server/lib/enterprise-mode.ts",
+      "forkPath": "server/lib/enterprise-mode.js"
+    },
+    {
+      "path": "server/lib/environment/runtime.ts",
+      "forkPath": "server/lib/environment/runtime.js"
+    },
+    {
+      "path": "server/lib/event-stream/global-hub.ts",
+      "forkPath": "server/lib/event-stream/global-hub.js"
+    },
+    {
+      "path": "server/lib/event-stream/global-ws-bridge.ts",
+      "forkPath": "server/lib/event-stream/global-ws-bridge.js"
+    },
+    {
+      "path": "server/lib/event-stream/index.ts",
+      "forkPath": "server/lib/event-stream/index.js"
+    },
+    {
+      "path": "server/lib/event-stream/runtime.ts",
+      "forkPath": "server/lib/event-stream/runtime.js"
+    },
+    {
+      "path": "server/lib/event-stream/translate-v2.ts",
+      "forkPath": "server/lib/event-stream/translate-v2.js"
+    },
+    {
+      "path": "server/lib/fs/routes.ts",
+      "forkPath": "server/lib/fs/routes.js"
+    },
+    {
+      "path": "server/lib/fs/search.ts",
+      "forkPath": "server/lib/fs/search.js"
+    },
+    {
+      "path": "server/lib/gerrit/provider.ts",
+      "forkPath": "server/lib/gerrit/provider.js"
+    },
+    {
+      "path": "server/lib/gerrit/resources.ts",
+      "forkPath": "server/lib/gerrit/resources.js"
+    },
+    {
+      "path": "server/lib/git/routes.ts",
+      "forkPath": "server/lib/git/routes.js"
+    },
+    {
+      "path": "server/lib/git/service.ts",
+      "forkPath": "server/lib/git/service.js"
+    },
+    {
+      "path": "server/lib/git/worktree-creation.ts",
+      "forkPath": "server/lib/git/worktree-creation.js"
+    },
+    {
+      "path": "server/lib/gitea/provider.ts",
+      "forkPath": "server/lib/gitea/provider.js"
+    },
+    {
+      "path": "server/lib/gitea/resources.ts",
+      "forkPath": "server/lib/gitea/resources.js"
+    },
+    {
+      "path": "server/lib/github/mutations.ts",
+      "forkPath": "server/lib/github/mutations.js"
+    },
+    {
+      "path": "server/lib/github/provider.ts",
+      "forkPath": "server/lib/github/provider.js"
+    },
+    {
+      "path": "server/lib/github/reference-search.ts",
+      "forkPath": "server/lib/github/reference-search.js"
+    },
+    {
+      "path": "server/lib/github/resources.ts",
+      "forkPath": "server/lib/github/resources.js"
+    },
+    {
+      "path": "server/lib/gitlab/client.ts",
+      "forkPath": "server/lib/gitlab/client.js"
+    },
+    {
+      "path": "server/lib/gitlab/mappers.ts",
+      "forkPath": "server/lib/gitlab/mappers.js"
+    },
+    {
+      "path": "server/lib/gitlab/provider.ts",
+      "forkPath": "server/lib/gitlab/provider.js"
+    },
+    {
+      "path": "server/lib/gitlab/resources.ts",
+      "forkPath": "server/lib/gitlab/resources.js"
+    },
+    {
+      "path": "server/lib/gitlab/user.ts",
+      "forkPath": "server/lib/gitlab/user.js"
+    },
+    {
+      "path": "server/lib/guests/agent-context.ts",
+      "forkPath": "server/lib/guests/agent-context.js"
+    },
+    {
+      "path": "server/lib/guests/catalog.ts",
+      "forkPath": "server/lib/guests/catalog.js"
+    },
+    {
+      "path": "server/lib/guests/enterprise.ts",
+      "forkPath": "server/lib/guests/enterprise.js"
+    },
+    {
+      "path": "server/lib/guests/files.ts",
+      "forkPath": "server/lib/guests/files.js"
+    },
+    {
+      "path": "server/lib/guests/grant-scope.ts",
+      "forkPath": "server/lib/guests/grant-scope.js"
+    },
+    {
+      "path": "server/lib/guests/host-session.ts",
+      "forkPath": "server/lib/guests/host-session.js"
+    },
+    {
+      "path": "server/lib/guests/html-styles.ts",
+      "forkPath": "server/lib/guests/html-styles.js"
+    },
+    {
+      "path": "server/lib/guests/links.ts",
+      "forkPath": "server/lib/guests/links.js"
+    },
+    {
+      "path": "server/lib/guests/mentions.ts",
+      "forkPath": "server/lib/guests/mentions.js"
+    },
+    {
+      "path": "server/lib/guests/oauth.ts",
+      "forkPath": "server/lib/guests/oauth.js"
+    },
+    {
+      "path": "server/lib/guests/package-watch.ts",
+      "forkPath": "server/lib/guests/package-watch.js"
+    },
+    {
+      "path": "server/lib/guests/persist.ts",
+      "forkPath": "server/lib/guests/persist.js"
+    },
+    {
+      "path": "server/lib/guests/request.ts",
+      "forkPath": "server/lib/guests/request.js"
+    },
+    {
+      "path": "server/lib/guests/routes.ts",
+      "forkPath": "server/lib/guests/routes.js"
+    },
+    {
+      "path": "server/lib/guests/service-host-api.ts",
+      "forkPath": "server/lib/guests/service-host-api.js"
+    },
+    {
+      "path": "server/lib/guests/service-lifetime.ts",
+      "forkPath": "server/lib/guests/service-lifetime.js"
+    },
+    {
+      "path": "server/lib/guests/service-registry.ts",
+      "forkPath": "server/lib/guests/service-registry.js"
+    },
+    {
+      "path": "server/lib/guests/service.ts",
+      "forkPath": "server/lib/guests/service.js"
+    },
+    {
+      "path": "server/lib/guests/sockets.ts",
+      "forkPath": "server/lib/guests/sockets.js"
+    },
+    {
+      "path": "server/lib/guests/storage.ts",
+      "forkPath": "server/lib/guests/storage.js"
+    },
+    {
+      "path": "server/lib/guests/surface.ts",
+      "forkPath": "server/lib/guests/surface.js"
+    },
+    {
+      "path": "server/lib/guests/updates.ts",
+      "forkPath": "server/lib/guests/updates.js"
+    },
+    {
+      "path": "server/lib/linear/auth.ts",
+      "forkPath": "server/lib/linear/auth.js"
+    },
+    {
+      "path": "server/lib/linear/index.ts",
+      "forkPath": "server/lib/linear/index.js"
+    },
+    {
+      "path": "server/lib/linear/oauth.ts",
+      "forkPath": "server/lib/linear/oauth.js"
+    },
+    {
+      "path": "server/lib/linear/routes.ts",
+      "forkPath": "server/lib/linear/routes.js"
+    },
+    {
+      "path": "server/lib/linear/status-runtime.ts",
+      "forkPath": "server/lib/linear/status-runtime.js"
+    },
+    {
+      "path": "server/lib/linear/tracker.ts",
+      "forkPath": "server/lib/linear/tracker.js"
+    },
+    {
+      "path": "server/lib/markdown-image-grants/routes.ts",
+      "forkPath": "server/lib/markdown-image-grants/routes.js"
+    },
+    {
+      "path": "server/lib/message-queue/runtime.ts",
+      "forkPath": "server/lib/message-queue/runtime.js"
+    },
+    {
+      "path": "server/lib/message-search/indexer.ts",
+      "forkPath": "server/lib/message-search/indexer.js"
+    },
+    {
+      "path": "server/lib/message-search/routes.ts",
+      "forkPath": "server/lib/message-search/routes.js"
+    },
+    {
+      "path": "server/lib/message-search/runtime.ts",
+      "forkPath": "server/lib/message-search/runtime.js"
+    },
+    {
+      "path": "server/lib/message-search/store.ts",
+      "forkPath": "server/lib/message-search/store.js"
+    },
+    {
+      "path": "server/lib/notifications/apns-runtime.ts",
+      "forkPath": "server/lib/notifications/apns-runtime.js"
+    },
+    {
+      "path": "server/lib/notifications/emit-route.ts",
+      "forkPath": "server/lib/notifications/emit-route.js"
+    },
+    {
+      "path": "server/lib/notifications/extension-channels.ts",
+      "forkPath": "server/lib/notifications/extension-channels.js"
+    },
+    {
+      "path": "server/lib/notifications/routes.ts",
+      "forkPath": "server/lib/notifications/routes.js"
+    },
+    {
+      "path": "server/lib/notifications/runtime.ts",
+      "forkPath": "server/lib/notifications/runtime.js"
+    },
+    {
+      "path": "server/lib/notifications/template-runtime.ts",
+      "forkPath": "server/lib/notifications/template-runtime.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/actions.ts",
+      "forkPath": "server/lib/openchamber-control/actions.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/project-knowledge.ts",
+      "forkPath": "server/lib/openchamber-control/project-knowledge.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/render-page.ts",
+      "forkPath": "server/lib/openchamber-control/render-page.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/routes.ts",
+      "forkPath": "server/lib/openchamber-control/routes.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/screenshots.ts",
+      "forkPath": "server/lib/openchamber-control/screenshots.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/secret-request.ts",
+      "forkPath": "server/lib/openchamber-control/secret-request.js"
+    },
+    {
+      "path": "server/lib/openchamber-control/service.ts",
+      "forkPath": "server/lib/openchamber-control/service.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/archive-store.ts",
+      "forkPath": "server/lib/openchamber-sessions/archive-store.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/routes.ts",
+      "forkPath": "server/lib/openchamber-sessions/routes.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/session-link.ts",
+      "forkPath": "server/lib/openchamber-sessions/session-link.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/session-linked-issues.ts",
+      "forkPath": "server/lib/openchamber-sessions/session-linked-issues.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/session-metadata-store.ts",
+      "forkPath": "server/lib/openchamber-sessions/session-metadata-store.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/turn-duration.ts",
+      "forkPath": "server/lib/openchamber-sessions/turn-duration.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/work-naming.ts",
+      "forkPath": "server/lib/openchamber-sessions/work-naming.js"
+    },
+    {
+      "path": "server/lib/openchamber-sessions/worktree-move.ts",
+      "forkPath": "server/lib/openchamber-sessions/worktree-move.js"
+    },
+    {
+      "path": "server/lib/permission-auto-accept/runtime.ts",
+      "forkPath": "server/lib/permission-auto-accept/runtime.js"
+    },
+    {
+      "path": "server/lib/pr-watch/runtime.ts",
+      "forkPath": "server/lib/pr-watch/runtime.js"
+    },
+    {
+      "path": "server/lib/project-context/runtime.ts",
+      "forkPath": "server/lib/project-context/runtime.js"
+    },
+    {
+      "path": "server/lib/projects/project-config.ts",
+      "forkPath": "server/lib/projects/project-config.js"
+    },
+    {
+      "path": "server/lib/projects/project-setup.ts",
+      "forkPath": "server/lib/projects/project-setup.js"
+    },
+    {
+      "path": "server/lib/quota/extension-registry.ts",
+      "forkPath": "server/lib/quota/extension-registry.js"
+    },
+    {
+      "path": "server/lib/quota/index.ts",
+      "forkPath": "server/lib/quota/index.js"
+    },
+    {
+      "path": "server/lib/quota/providers/antigravity/auth.ts",
+      "forkPath": "server/lib/quota/providers/antigravity/auth.js"
+    },
+    {
+      "path": "server/lib/quota/providers/antigravity/index.ts",
+      "forkPath": "server/lib/quota/providers/antigravity/index.js"
+    },
+    {
+      "path": "server/lib/quota/providers/claude/index.ts",
+      "forkPath": "server/lib/quota/providers/claude/index.js"
+    },
+    {
+      "path": "server/lib/quota/providers/cline-pass.ts",
+      "forkPath": "server/lib/quota/providers/cline-pass.js"
+    },
+    {
+      "path": "server/lib/quota/providers/codex.ts",
+      "forkPath": "server/lib/quota/providers/codex.js"
+    },
+    {
+      "path": "server/lib/quota/providers/copilot.ts",
+      "forkPath": "server/lib/quota/providers/copilot.js"
+    },
+    {
+      "path": "server/lib/quota/providers/cursor.ts",
+      "forkPath": "server/lib/quota/providers/cursor.js"
+    },
+    {
+      "path": "server/lib/quota/providers/deepinfra.ts",
+      "forkPath": "server/lib/quota/providers/deepinfra.js"
+    },
+    {
+      "path": "server/lib/quota/providers/deepseek.ts",
+      "forkPath": "server/lib/quota/providers/deepseek.js"
+    },
+    {
+      "path": "server/lib/quota/providers/exe-dev.ts",
+      "forkPath": "server/lib/quota/providers/exe-dev.js"
+    },
+    {
+      "path": "server/lib/quota/providers/google/auth.ts",
+      "forkPath": "server/lib/quota/providers/google/auth.js"
+    },
+    {
+      "path": "server/lib/quota/providers/google/index.ts",
+      "forkPath": "server/lib/quota/providers/google/index.js"
+    },
+    {
+      "path": "server/lib/quota/providers/hyper.ts",
+      "forkPath": "server/lib/quota/providers/hyper.js"
+    },
+    {
+      "path": "server/lib/quota/providers/index.ts",
+      "forkPath": "server/lib/quota/providers/index.js"
+    },
+    {
+      "path": "server/lib/quota/providers/kilo.ts",
+      "forkPath": "server/lib/quota/providers/kilo.js"
+    },
+    {
+      "path": "server/lib/quota/providers/kimi.ts",
+      "forkPath": "server/lib/quota/providers/kimi.js"
+    },
+    {
+      "path": "server/lib/quota/providers/minimax-cn-coding-plan.ts",
+      "forkPath": "server/lib/quota/providers/minimax-cn-coding-plan.js"
+    },
+    {
+      "path": "server/lib/quota/providers/minimax-coding-plan.ts",
+      "forkPath": "server/lib/quota/providers/minimax-coding-plan.js"
+    },
+    {
+      "path": "server/lib/quota/providers/minimax-shared.ts",
+      "forkPath": "server/lib/quota/providers/minimax-shared.js"
+    },
+    {
+      "path": "server/lib/quota/providers/nanogpt.ts",
+      "forkPath": "server/lib/quota/providers/nanogpt.js"
+    },
+    {
+      "path": "server/lib/quota/providers/neuralwatt.ts",
+      "forkPath": "server/lib/quota/providers/neuralwatt.js"
+    },
+    {
+      "path": "server/lib/quota/providers/ollama-cloud.ts",
+      "forkPath": "server/lib/quota/providers/ollama-cloud.js"
+    },
+    {
+      "path": "server/lib/quota/providers/openai.ts",
+      "forkPath": "server/lib/quota/providers/openai.js"
+    },
+    {
+      "path": "server/lib/quota/providers/opencode-go.ts",
+      "forkPath": "server/lib/quota/providers/opencode-go.js"
+    },
+    {
+      "path": "server/lib/quota/providers/opencode-zen.ts",
+      "forkPath": "server/lib/quota/providers/opencode-zen.js"
+    },
+    {
+      "path": "server/lib/quota/providers/opencode.ts",
+      "forkPath": "server/lib/quota/providers/opencode.js"
+    },
+    {
+      "path": "server/lib/quota/providers/openrouter.ts",
+      "forkPath": "server/lib/quota/providers/openrouter.js"
+    },
+    {
+      "path": "server/lib/quota/providers/wafer.ts",
+      "forkPath": "server/lib/quota/providers/wafer.js"
+    },
+    {
+      "path": "server/lib/quota/providers/xai.ts",
+      "forkPath": "server/lib/quota/providers/xai.js"
+    },
+    {
+      "path": "server/lib/quota/providers/zai.ts",
+      "forkPath": "server/lib/quota/providers/zai.js"
+    },
+    {
+      "path": "server/lib/quota/providers/zenmux.ts",
+      "forkPath": "server/lib/quota/providers/zenmux.js"
+    },
+    {
+      "path": "server/lib/quota/providers/zhipuai-coding-plan.ts",
+      "forkPath": "server/lib/quota/providers/zhipuai-coding-plan.js"
+    },
+    {
+      "path": "server/lib/quota/routes.ts",
+      "forkPath": "server/lib/quota/routes.js"
+    },
+    {
+      "path": "server/lib/quota/utils/index.ts",
+      "forkPath": "server/lib/quota/utils/index.js"
+    },
+    {
+      "path": "server/lib/quota/utils/transformers.ts",
+      "forkPath": "server/lib/quota/utils/transformers.js"
+    },
+    {
+      "path": "server/lib/relay/host-client.ts",
+      "forkPath": "server/lib/relay/host-client.js"
+    },
+    {
+      "path": "server/lib/relay/identity.ts",
+      "forkPath": "server/lib/relay/identity.js"
+    },
+    {
+      "path": "server/lib/relay/service.ts",
+      "forkPath": "server/lib/relay/service.js"
+    },
+    {
+      "path": "server/lib/routing/defaults.ts",
+      "forkPath": "server/lib/routing/defaults.js"
+    },
+    {
+      "path": "server/lib/routing/history.ts",
+      "forkPath": "server/lib/routing/history.js"
+    },
+    {
+      "path": "server/lib/routing/jev.ts",
+      "forkPath": "server/lib/routing/jev.js"
+    },
+    {
+      "path": "server/lib/routing/routes.ts",
+      "forkPath": "server/lib/routing/routes.js"
+    },
+    {
+      "path": "server/lib/routing/runtime.ts",
+      "forkPath": "server/lib/routing/runtime.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/chats-scope.ts",
+      "forkPath": "server/lib/scheduled-tasks/chats-scope.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/existing-session.ts",
+      "forkPath": "server/lib/scheduled-tasks/existing-session.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/loops.ts",
+      "forkPath": "server/lib/scheduled-tasks/loops.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/runtime.ts",
+      "forkPath": "server/lib/scheduled-tasks/runtime.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/service.ts",
+      "forkPath": "server/lib/scheduled-tasks/service.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/session-defaults.ts",
+      "forkPath": "server/lib/scheduled-tasks/session-defaults.js"
+    },
+    {
+      "path": "server/lib/scheduled-tasks/worktree-bridge.ts",
+      "forkPath": "server/lib/scheduled-tasks/worktree-bridge.js"
+    },
+    {
+      "path": "server/lib/server-frame/bootstrap-runtime.ts",
+      "forkPath": "server/lib/host/bootstrap-runtime.js"
+    },
+    {
+      "path": "server/lib/server-frame/cli-options.ts",
+      "forkPath": "server/lib/host/cli-options.js"
+    },
+    {
+      "path": "server/lib/server-frame/core-routes.ts",
+      "forkPath": "server/lib/host/core-routes.js"
+    },
+    {
+      "path": "server/lib/server-frame/feature-routes-runtime.ts",
+      "forkPath": "server/lib/host/feature-routes-runtime.js"
+    },
+    {
+      "path": "server/lib/server-frame/server-utils-runtime.ts",
+      "forkPath": "server/lib/host/server-utils-runtime.js"
+    },
+    {
+      "path": "server/lib/server-frame/shutdown-runtime.ts",
+      "forkPath": "server/lib/host/shutdown-runtime.js"
+    },
+    {
+      "path": "server/lib/server-frame/startup-pipeline-runtime.ts",
+      "forkPath": "server/lib/host/startup-pipeline-runtime.js"
+    },
+    {
+      "path": "server/lib/server-frame/static-routes-runtime.ts",
+      "forkPath": "server/lib/host/static-routes-runtime.js"
+    },
+    {
+      "path": "server/lib/session-assist/context.ts",
+      "forkPath": "server/lib/session-assist/context.js"
+    },
+    {
+      "path": "server/lib/session-assist/prompt.ts",
+      "forkPath": "server/lib/session-assist/prompt.js"
+    },
+    {
+      "path": "server/lib/session-assist/runtime.ts",
+      "forkPath": "server/lib/session-assist/runtime.js"
+    },
+    {
+      "path": "server/lib/session-folders/folder-changes.ts",
+      "forkPath": "server/lib/session-folders/folder-changes.js"
+    },
+    {
+      "path": "server/lib/session-folders/routes.ts",
+      "forkPath": "server/lib/session-folders/routes.js"
+    },
+    {
+      "path": "server/lib/session-knowledge/routes.ts",
+      "forkPath": "server/lib/session-knowledge/routes.js"
+    },
+    {
+      "path": "server/lib/session-knowledge/runtime.ts",
+      "forkPath": "server/lib/session-knowledge/runtime.js"
+    },
+    {
+      "path": "server/lib/session-lineage.ts",
+      "forkPath": "server/lib/session-lineage.js"
+    },
+    {
+      "path": "server/lib/session-work/questions.ts",
+      "forkPath": "server/lib/session-work/questions.js"
+    },
+    {
+      "path": "server/lib/session-work/runtime.ts",
+      "forkPath": "server/lib/session-work/runtime.js"
+    },
+    {
+      "path": "server/lib/session-work/state.ts",
+      "forkPath": "server/lib/session-work/state.js"
+    },
+    {
+      "path": "server/lib/settings/settings-helpers.ts",
+      "forkPath": "server/lib/host/settings-helpers.js"
+    },
+    {
+      "path": "server/lib/settings/settings-normalization-runtime.ts",
+      "forkPath": "server/lib/host/settings-normalization-runtime.js"
+    },
+    {
+      "path": "server/lib/settings/settings-runtime.ts",
+      "forkPath": "server/lib/host/settings-runtime.js"
+    },
+    {
+      "path": "server/lib/skills-catalog/install.ts",
+      "forkPath": "server/lib/skills-catalog/install.js"
+    },
+    {
+      "path": "server/lib/skills-catalog/scan.ts",
+      "forkPath": "server/lib/skills-catalog/scan.js"
+    },
+    {
+      "path": "server/lib/small-model/client.ts",
+      "forkPath": "server/lib/small-model/client.js"
+    },
+    {
+      "path": "server/lib/small-model/index.ts",
+      "forkPath": "server/lib/small-model/index.js"
+    },
+    {
+      "path": "server/lib/source-control/change-id.ts",
+      "forkPath": "server/lib/source-control/change-id.js"
+    },
+    {
+      "path": "server/lib/source-control/extension-descriptor.ts",
+      "forkPath": "server/lib/source-control/extension-descriptor.js"
+    },
+    {
+      "path": "server/lib/source-control/extension-provider.ts",
+      "forkPath": "server/lib/source-control/extension-provider.js"
+    },
+    {
+      "path": "server/lib/source-control/extension-providers.ts",
+      "forkPath": "server/lib/source-control/extension-providers.js"
+    },
+    {
+      "path": "server/lib/source-control/mutation-storage.ts",
+      "forkPath": "server/lib/source-control/mutation-storage.js"
+    },
+    {
+      "path": "server/lib/source-control/outbound-handles.ts",
+      "forkPath": "server/lib/source-control/outbound-handles.js"
+    },
+    {
+      "path": "server/lib/source-control/provider-routes.ts",
+      "forkPath": "server/lib/source-control/provider-routes.js"
+    },
+    {
+      "path": "server/lib/source-control/repository-identity.ts",
+      "forkPath": "server/lib/source-control/repository-identity.js"
+    },
+    {
+      "path": "server/lib/source-control/review-position.ts",
+      "forkPath": "server/lib/source-control/review-position.js"
+    },
+    {
+      "path": "server/lib/source-control/standard-mutations.ts",
+      "forkPath": "server/lib/source-control/standard-mutations.js"
+    },
+    {
+      "path": "server/lib/source-control/status-cache.ts",
+      "forkPath": "server/lib/source-control/status-cache.js"
+    },
+    {
+      "path": "server/lib/source-control/test-support/service-login.ts",
+      "forkPath": "server/lib/source-control/test-support/service-login.js"
+    },
+    {
+      "path": "server/lib/terminal/runtime.ts",
+      "forkPath": "server/lib/terminal/runtime.js"
+    },
+    {
+      "path": "server/lib/trackers/extension-descriptor.ts",
+      "forkPath": "server/lib/trackers/extension-descriptor.js"
+    },
+    {
+      "path": "server/lib/trackers/extension-tracker.ts",
+      "forkPath": "server/lib/trackers/extension-tracker.js"
+    },
+    {
+      "path": "server/lib/tts/base-url.ts",
+      "forkPath": "server/lib/tts/base-url.js"
+    },
+    {
+      "path": "server/lib/tts/routes.ts",
+      "forkPath": "server/lib/tts/routes.js"
+    },
+    {
+      "path": "server/lib/tts/service.ts",
+      "forkPath": "server/lib/tts/service.js"
+    },
+    {
+      "path": "server/lib/tts/voice-keys.ts",
+      "forkPath": "server/lib/tts/voice-keys.js"
+    },
+    {
+      "path": "server/lib/tunnels/routes.ts",
+      "forkPath": "server/lib/tunnels/routes.js"
+    },
+    {
+      "path": "server/lib/tunnels/tunnel-auth.ts",
+      "forkPath": "server/lib/host/tunnel-auth.js"
+    },
+    {
+      "path": "server/lib/ui-auth/ui-auth.ts",
+      "forkPath": "server/lib/ui-auth/ui-auth.js"
+    },
+    {
+      "path": "server/lib/version-order.ts",
+      "forkPath": "server/lib/version-order.js"
+    },
+    {
+      "path": "server/lib/walkthrough/index.ts",
+      "forkPath": "server/lib/walkthrough/index.js"
+    },
+    {
+      "path": "server/lib/walkthrough/routes.ts",
+      "forkPath": "server/lib/walkthrough/routes.js"
+    },
+    {
+      "path": "server/lib/workflows/agent-session.ts",
+      "forkPath": "server/lib/workflows/agent-session.js"
+    },
+    {
+      "path": "server/lib/workflows/routes.ts",
+      "forkPath": "server/lib/workflows/routes.js"
+    },
+    {
+      "path": "server/lib/workflows/runtime.ts",
+      "forkPath": "server/lib/workflows/runtime.js"
+    },
+    {
+      "path": "server/proxy-headers.ts",
+      "forkPath": "server/proxy-headers.js"
+    },
+    {
+      "path": "server/runtime.ts",
+      "forkPath": "server/index.js"
+    },
+    {
+      "path": "bin/lib/cli-args.ts",
+      "forkPath": "bin/lib/cli-args.js"
+    },
+    {
+      "path": "bin/lib/cli-process.ts",
+      "forkPath": "bin/lib/cli-process.js"
+    },
+    {
+      "path": "bin/lib/cli-startup.ts",
+      "forkPath": "bin/lib/cli-startup.js"
+    },
+    {
+      "path": "bin/lib/commands-connect-url.ts",
+      "forkPath": "bin/lib/commands-connect-url.js"
+    },
+    {
+      "path": "bin/lib/commands-models.ts",
+      "forkPath": "bin/lib/commands-models.js"
+    },
+    {
+      "path": "bin/lib/commands-serve.ts",
+      "forkPath": "bin/lib/commands-serve.js"
+    },
+    {
+      "path": "bin/lib/commands-session.ts",
+      "forkPath": "bin/lib/commands-session.js"
+    }
+  ]
+}

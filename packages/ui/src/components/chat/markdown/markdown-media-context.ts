@@ -16,14 +16,9 @@ export type MarkdownDocumentAssets = {
  colorScheme: 'light' | 'dark';
 };
 
-// The picture route `projectUploads.ts` leaves in a body on the relay. It alone
-// is read with the client's credentials; any other path an author writes stays
-// a plain address.
 const PROJECT_UPLOAD_ROUTE_RE = /^\/api\/source-control\/[^/?#]+\/uploads\/[0-9a-f]{32}\/[^/?#]+\?/;
 
 type GalleryImage = { source: string; filename: string; element: HTMLElement; resolve: () => Promise<string>; load: () => Promise<Blob> };
-// Parts of one message share the existing popup gallery. Entries live only while
-// their React-owned image is mounted and loaded, and retain no resolved URLs.
 const galleries = new Map<string, Set<GalleryImage>>();
 
 type MediaOwner = {

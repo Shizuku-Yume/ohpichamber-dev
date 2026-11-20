@@ -1,3 +1,4 @@
+import { applySessionLiveWorkEvents, resetSessionLiveWork } from '@/sync/session-live-work';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -8,6 +9,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { setSyncRefs } from '@/sync/sync-refs';
+import { applyCanonicalMetadataEvent, setActionRefs } from '@/sync/session-actions';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
@@ -23,6 +25,7 @@ let bSession: Session;
 beforeEach(() => {
   manager = new ChildStoreManager();
   setSyncRefs(manager, '/a');
+  setActionRefs(manager, () => '/a');
   resetWorkspaceDirectories();
   useProjectsStore.setState({ hasServerSnapshot: true, serverSnapshotFailed: false, projects: [
     { id: 'path_/a', path: '/a', label: 'A', addedAt: 1 },
@@ -44,13 +47,30 @@ beforeEach(() => {
   useUIStore.setState({ eventStreamStatus: 'idle' });
   replaceGlobalSessionStatusById(new Map());
 });
-afterEach(() => manager.disposeAll());
+afterEach(() => {
+  manager.disposeAll();
+  resetSessionLiveWork();
+});
 const readB = () => {
   const snapshot = readGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board');
   if (snapshot.kind !== 'sessions') throw new Error('Expected sessions');
   return snapshot;
 };
 describe('extension workspace projection', () => {
+  test('work membership uses canonical metadata and honors its frontend setting', () => {
+    useUIStore.setState({ sessionWorkEnabled: true });
+    applyCanonicalMetadataEvent({ sessionId: bSession.sessionId, revision: '2', metadata: { openchamber: { work: { state: 'open', openedAt: 1, openedBy: 'user' } } } });
+    expect(readB().sessions[0].inWork).toBe(true);
+    useUIStore.setState({ sessionWorkEnabled: false });
+    expect(readB().sessions[0].inWork).toBe(false);
+    useUIStore.setState({ sessionWorkEnabled: true });
+  });
+  test('unread uses Host workbench marks rather than legacy transcript timestamps', () => {
+    applyCanonicalMetadataEvent({ sessionId: bSession.sessionId, revision: '2', metadata: { openchamber: { workbench: { lastIdleAt: 5 } } } });
+    expect(readB().sessions[0].unread).toBe(true);
+    applyCanonicalMetadataEvent({ sessionId: bSession.sessionId, revision: '3', metadata: { openchamber: { workbench: { lastIdleAt: 5, viewedAt: 5 } } } });
+    expect(readB().sessions[0].unread).toBe(false);
+  });
   test('paused and partially approved extensions cannot use retained grants', () => {
     expect(guestMay({ id: 'board', name: 'Board', icon: 'window', enabled: false,
       capabilities: { requested: ['sessions'], granted: ['sessions'] } }, 'sessions')).toBe(false);
@@ -225,5 +245,42 @@ describe('extension workspace projection', () => {
     child.setState({ permission: {}, form: { 'b-session': [{ questionId: 'form', sessionId: 'b-session', turnId: 'turn-1', prompt: 'Pick one', schema: { type: 'boolean' }, status: 'pending', requestedAt: 1, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' }] } });
     expect(readB().sessions[0].activity).toBe('waiting-question');
     expect('messages' in readB().sessions[0]).toBe(false);
+  });
+  test('the running tool shows its path relative to the session, only while the session runs, and publishes', async () => {
+    const call = (id: string, name: string, input: Record<string, string>) => {
+      applySessionLiveWorkEvents([{ type: 'tool.started', sessionId: 'b-session', epoch: 'epoch-1', sequence: '1', timestamp: 1, toolCallId: id, toolName: name, input }]);
+    };
+    const tools: unknown[] = [];
+    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board', (next) => {
+      if (next.kind === 'sessions') tools.push(next.sessions[0].tool);
+    });
+    try {
+      applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '1', timestamp: 1, runtimeStatus: 'running', activeRunId: 'run-1' });
+      call('1', 'edit', { path: '/b-tree/src/layout.ts' });
+      await Promise.resolve();
+      expect(readB().sessions[0].tool).toEqual({ name: 'edit', target: 'src/layout.ts' });
+      // Outside the session's folder only the name shows, however the path is written.
+      call('2', 'read', { filePath: '/etc/hosts' });
+      expect(readB().sessions[0].tool).toEqual({ name: 'read', target: 'hosts' });
+      call('3', 'read', { filePath: '../private/secrets/key.pem' });
+      expect(readB().sessions[0].tool).toEqual({ name: 'read', target: 'key.pem' });
+      call('4', 'read', { filePath: '/b-tree/../private/key.pem' });
+      expect(readB().sessions[0].tool).toEqual({ name: 'read', target: 'key.pem' });
+      call('5', 'read', { filePath: 'src/./page/../main.ts' });
+      expect(readB().sessions[0].tool).toEqual({ name: 'read', target: 'src/main.ts' });
+      // The status says idle: a call still in the index is not shown.
+      applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '2', timestamp: 2, runtimeStatus: 'idle', activeRunId: null });
+      expect(readB().sessions[0].tool).toBeNull();
+      await Promise.resolve();
+      expect(tools.at(-1)).toBeNull();
+      expect(tools.some((entry) => JSON.stringify(entry) === JSON.stringify({ name: 'edit', target: 'src/layout.ts' }))).toBe(true);
+    } finally { stop(); }
+  });
+  test('context fill uses canonical usage and clears on compaction', () => {
+    expect(readB().sessions[0].context).toBeNull();
+    applySessionLiveWorkEvents([{ type: 'message.updated', sessionId: 'b-session', epoch: 'epoch-1', sequence: '1', timestamp: 1, messageId: 'msg', usage: { input: 100_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 100_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } }]);
+    expect(readB().sessions[0].context).toEqual({ tokens: 100_000, limit: null });
+    applySessionLiveWorkEvents([{ type: 'session.compacted', sessionId: 'b-session', epoch: 'epoch-1', sequence: '2', timestamp: 2, compactionId: 'compact-1', tokensBefore: 100_000, completedAt: 2 }]);
+    expect(readB().sessions[0].context).toBeNull();
   });
 });

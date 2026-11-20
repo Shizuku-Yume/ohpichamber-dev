@@ -32,13 +32,6 @@ export const usePermissionFromSubagent = (permission: ApprovalRequest): boolean 
     }, [currentSessionId, permission.sessionId, sessions]);
 };
 
-/**
- * Replies to one native approval and owns its keyboard shortcuts while it is
- * the newest pending one: Alt+Enter allows once, Alt+Shift+Enter allows for
- * the session, Alt+Backspace denies. A session allowance exists only when the
- * request carries a native policy target. A rejected reply keeps the card
- * visible and refreshes the authoritative pending set.
- */
 export const usePermissionResponse = (
     permission: ApprovalRequest,
     onResponse?: (response: PermissionResponse) => void,

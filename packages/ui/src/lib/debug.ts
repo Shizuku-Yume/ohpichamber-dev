@@ -226,7 +226,6 @@ export const debugUtils = {
     }));
   },
 
-  /** Cached message count per session in the current directory store; -1 when not cached. */
   getCachedMessageCount(sessionId: string, directory?: string) {
     const state = getDirectoryState(directory);
     return state?.message[sessionId]?.length ?? -1;
@@ -429,11 +428,7 @@ export const debugUtils = {
       openchamber: {
         settingsInfo,
       },
-      // Empty is a meaningful answer here: it means no prompt was rejected in
-      // this session, so a "my message disappeared" report is not a rejected
-      // send and needs a different explanation.
       recentSendFailures: getRecentSendFailures(),
-      // Same reasoning: empty means this app session recorded no session error.
       recentSessionErrors: getRecentSessionErrors(),
       currentSessionDirectoryResolution: sessionState.currentSessionId
         ? this.diagnoseSessionDirectory(sessionState.currentSessionId)

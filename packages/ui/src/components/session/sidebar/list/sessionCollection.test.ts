@@ -148,6 +148,22 @@ describe('projectSidebarActiveSessions', () => {
     expect(restored.sessionId).toBe('restored');
   });
 
+  test('keeps a subsession in an unknown folder under a parent it shows, and only there', () => {
+    const parent = session('parent', '/workspace/known');
+    const worker = childSession('worker', '/removed/worktree', 'parent');
+    const grandchild = childSession('grandchild', '/removed/worktree', 'worker', { rootSessionId: 'parent' });
+    const stray = childSession('stray', '/removed/worktree', 'unlisted');
+    const input = {
+      globalActiveSessions: [parent, worker, grandchild, stray, session('root', '/removed/worktree')],
+      liveSessions: [],
+      knownDirectories: new Set(['/workspace/known']),
+      isVSCode: false,
+    };
+    expect(projectSidebarActiveSessions(input).map((entry) => entry.sessionId)).toEqual(['parent', 'worker', 'grandchild']);
+    expect(buildSidebarSessionProjection({ ...input, pinnedSessionIds: new Set(), sessionOrderRanks: new Map() })
+      .childrenMap.get('parent')?.map((entry) => entry.sessionId)).toEqual(['worker']);
+  });
+
   test('hides archived sessions in unregistered directories too', () => {
     const archived = session('archived', '/workspace/unknown', { archivedAt: 1 });
 
@@ -215,6 +231,15 @@ describe('projectSidebarCollection', () => {
 
     expect(projects.map((entry) => entry.sessionId)).toEqual(['project']);
     expect(partitionSidebarSessions([managed, project], false).chatSessions.map((entry) => entry.sessionId)).toEqual(['managed']);
+  });
+
+  test("keeps a managed Chat's subsession in an unknown folder under that Chat", () => {
+    const chat = session('chat', '/home/.config/ohpichamber/chats/2026-08-24/session-chat');
+    const worker = childSession('worker', '/removed/worktree', 'chat');
+    const input = { globalActiveSessions: [chat, worker], liveSessions: [], knownDirectories: new Set(['/workspace/a']), isVSCode: false };
+    expect(projectSidebarCollection(input).map((entry) => entry.sessionId)).toEqual(['worker']);
+    expect(buildSidebarSessionProjection({ ...input, pinnedSessionIds: new Set(), sessionOrderRanks: new Map() })
+      .childrenMap.get('chat')?.map((entry) => entry.sessionId)).toEqual(['worker']);
   });
 
   test('keeps managed Chats out of the VS Code sidebar', () => {

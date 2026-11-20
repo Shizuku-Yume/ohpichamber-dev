@@ -1,5 +1,3 @@
-// The panel of Agent Desk: what the service sends arrives on its own, and one
-// button asks the service to start a session.
 import { connectHost } from 'ohpichamber-sdk';
 import { applyHostReady, mountButton, mountText } from 'ohpichamber-sdk/ui';
 

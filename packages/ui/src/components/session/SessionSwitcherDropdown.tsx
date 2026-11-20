@@ -19,7 +19,7 @@ import {
   type SwitcherItem,
 } from '@/components/session/sidebar/shell/useSwitcherItems';
 import { useUIStore } from '@/stores/useUIStore';
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { refreshGlobalSessions, refreshRecentGlobalSessions, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { formatSessionCompactDateLabel } from './sidebar/utils';
 import type { SessionNode } from './sidebar/types';
 import { useI18n } from '@/lib/i18n';
@@ -30,12 +30,14 @@ type SecondaryMeta = SwitcherItem['secondaryMeta'];
 
 type SwitcherVariant = 'default' | 'compact';
 const NEW_SESSION_SWITCHER_TARGET = 'new-session';
+const RECENT_SESSIONS_LIMIT = 10;
 
 type SessionSwitcherDropdownProps = {
   children: React.ReactNode;
   variant?: SwitcherVariant;
   scopeProjectId?: string | null;
   align?: 'start' | 'center' | 'end';
+  recentOnly?: boolean;
 };
 
 export function SessionSwitcherDropdown({
@@ -43,6 +45,7 @@ export function SessionSwitcherDropdown({
   variant = 'default',
   scopeProjectId = null,
   align = 'start',
+  recentOnly = false,
 }: SessionSwitcherDropdownProps): React.ReactElement {
   const isOpen = useUIStore((state) => state.isSessionDropdownOpen);
   const setOpen = useUIStore((state) => state.setSessionDropdownOpen);
@@ -63,6 +66,7 @@ export function SessionSwitcherDropdown({
             onSelect={() => setOpen(false)}
             variant={variant}
             scopeProjectId={scopeProjectId}
+            recentOnly={recentOnly}
           />
         ) : null}
       </DropdownMenuContent>
@@ -74,12 +78,17 @@ type SwitcherContentProps = {
   onSelect: () => void;
   variant: SwitcherVariant;
   scopeProjectId: string | null;
+  recentOnly: boolean;
 };
 
-function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentProps): React.ReactElement {
+function SwitcherContent({ onSelect, variant, scopeProjectId, recentOnly }: SwitcherContentProps): React.ReactElement {
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const isNewSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft.open === true);
-  const items = useSwitcherItems(true, { scopeProjectId, currentSessionId });
+  const items = useSwitcherItems(true, { scopeProjectId, currentSessionId, maxParents: RECENT_SESSIONS_LIMIT, ignorePins: true });
+
+  React.useEffect(() => {
+    void (recentOnly ? refreshRecentGlobalSessions() : refreshGlobalSessions());
+  }, [recentOnly]);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const { t } = useI18n();
 
@@ -336,6 +345,9 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
             runningClassName={cn('h-2 w-2', runningBlink)}
           />
         </span>
+      ) : null}
+      {variant === 'compact' ? (
+        <span className="shrink-0 self-center typography-micro text-muted-foreground tabular-nums">{timeLabel}</span>
       ) : null}
     </BaseMenu.Item>
   );

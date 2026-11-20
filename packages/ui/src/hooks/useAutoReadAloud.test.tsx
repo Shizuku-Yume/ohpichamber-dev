@@ -79,10 +79,10 @@ afterEach(() => {
 });
 
 describe('useAutoReadAloud', () => {
-  const setVisible = (visible: boolean) => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: visible ? 'visible' : 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange'));
-  };
+    const setVisible = (visible: boolean) => {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: visible ? 'visible' : 'hidden' });
+        document.dispatchEvent(new window.Event('visibilitychange'));
+    };
 
   test('reads the answer to a turn this surface watched complete', async () => {
     const { calls, play } = recorder();

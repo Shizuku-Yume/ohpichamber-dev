@@ -6,13 +6,19 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 
 ## High-level flow
 
-- Message parts are rendered from `MessageBody.tsx`.
+- Message parts are rendered from `MessageBody.tsx`, which composes `body/` (`useAssistantRenderedParts.tsx` draws the assistant rows).
 - There are two tool rendering paths:
   - **Static grouped tools** -> `StaticToolRow` in `ProgressiveGroup.tsx`
   - **Expandable tools** -> `ToolPart.tsx`
 - Shared tool icon mapping is centralized in `toolPresentation.tsx` (`getToolIcon`).
 
 ## Which file controls what
+
+- `SecretRequestCard.tsx`
+  - Native `{ action, input }` arguments are read from the canonical tool part by `pageRenderView`; upstream flat and `parameters` forms remain supported.
+  - Renders the memory-only `secret.run` form from canonical calls in `ShownToolCard`. The Host field lookup selects inputs and remembered-field labels; lookup failures remain visible and retry. Only submitted field values and remembered field names go to the Host answer route, never to chat or browser storage.
+  - Completion, decline, expiry, unmount, and runtime switching remove the inputs. Transport errors use generic localized messages, never echoed response bodies. File-mode `secret.request` is refusal-only and cannot collect a value.
+  - Shared web/PWA, Electron, hosted mobile, and Capacitor surfaces use authenticated `runtimeFetch` against their connected Host; mobile does not execute commands locally.
 
 - `ProgressiveGroup.tsx`
   - Renders grouped Activity rows and grouped static tools.
@@ -57,6 +63,7 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 
 - `ReasoningPart.tsx`
   - Thinking block UI (`ReasoningTimelineBlock`), summary + optional duration.
+  - Presentation titles accept inline content. `TimelineNotice` uses this for completed compactions, appending the recorded `providerID/id` in the description color (also on empty-summary rows). Attribution comes from the stored compaction message or `session.compaction.ended`, never the current session selection. Running, failed, and older model-less compactions have no attribution. Custom presentation headers can shrink and wrap long identifiers; ordinary thinking rows retain their existing layout.
 
 - `reasoningText.ts`
   - `cleanReasoningText`, the one reasoning text normalization shared by `ReasoningPart.tsx` and `JustificationBlock.tsx`.
@@ -227,7 +234,7 @@ Descriptions must not invent protocol metadata, aliases, or a successful mutatio
 
 - Do not duplicate icon logic; keep it in `toolPresentation.tsx`.
 - For static tool copy changes, prefer `ProgressiveGroup.tsx` first.
-- For expanded output changes, edit `ToolPart.tsx`.
+- For expanded output changes, edit `toolRow/ToolExpandedContent.tsx`.
 - After edits run:
   - `bun run type-check`
   - `bun run lint`

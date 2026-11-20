@@ -1,8 +1,3 @@
-/**
- * Utilities for creating worktrees and, when needed, sessions bound to them.
- * This is a standalone entrypoint for keyboard shortcuts, menu actions,
- * and other non-hook contexts.
- */
 
 import { toast } from '@/components/ui';
 import { useSessionUIStore, type NewSessionDraftState } from '@/sync/session-ui-store';
@@ -73,14 +68,6 @@ export const resolveProjectRef = (directory: string): ProjectRef | null => {
   return project ? { id: project.id, path: project.path } : null;
 };
 
-/**
- * The project whose folder a session in `directory` works in, for placing it
- * in another worktree. `resolveProjectRef` answers the project that owns the
- * worktree list, which is the repository root when both `repo` and `repo/ai`
- * are registered; the folder comes from where the session sits in its checkout
- * (`projectPathForCheckoutFolder`), as the server does. Falls back to
- * `resolveProjectRef` when git cannot answer.
- */
 export const resolveFolderProjectRef = async (directory: string): Promise<ProjectRef | null> => {
   const owner = resolveProjectRef(directory);
   const located = await Promise.all([resolveGitRepositoryPrefix(directory), resolveGitPrimaryRoot(directory)])
@@ -113,7 +100,6 @@ export const createQuickWorktree = async (
   });
 };
 
-// Track if a worktree creation flow is already running
 let isCreatingWorktreeSession = false;
 
 
@@ -177,7 +163,6 @@ const rollBackCancelledDraftWorktree = (
   previousDraft: NewSessionDraftState,
 ): void => {
   const sessionStore = useSessionUIStore.getState();
-  // A draft that is never sent must not turn the cancel into an unhandled rejection.
   void waitForPendingDraftWorktreeRequest(requestId).catch(() => undefined);
   rejectPendingDraftWorktreeRequest(requestId, new Error('Worktree creation cancelled'));
   if (!previousDraft.open) {
@@ -185,8 +170,6 @@ const rollBackCancelledDraftWorktree = (
     sessionStore.closeNewSessionDraft();
     return;
   }
-  // Put the draft back where it was before the worktree was requested: its
-  // directory target, title and "Creating..." state belong to the cancelled request.
   sessionStore.overrideNewSessionDraftTarget({
     selectedProjectId: previousDraft.selectedProjectId,
     directoryOverride: previousDraft.directoryOverride,
@@ -242,8 +225,6 @@ const createInstantWorktreeDraft = async (options?: {
     const previousDraft = useSessionUIStore.getState().newSessionDraft;
     const pendingRequestId = createPendingDraftWorktreeRequest();
 
-    // Lock the draft immediately so no React effect can reset it to the project
-    // root while we await worktree creation below.
     const sessionStore = useSessionUIStore.getState();
     if (previousDraft.open) {
       sessionStore.overrideNewSessionDraftTarget({
@@ -267,8 +248,6 @@ const createInstantWorktreeDraft = async (options?: {
 
     const preferredName = generateBranchName();
 
-    // A preview path has no bootstrap state yet. Selecting it lets background
-    // OpenCode reads initialize an instance before the worktree exists.
     const metadata = await createQuickWorktree(projectRef, { preferredName, cancelOnTrustDismiss: true });
     if (!metadata) {
       rollBackCancelledDraftWorktree(pendingRequestId, previousDraft);
@@ -305,28 +284,14 @@ const createInstantWorktreeDraft = async (options?: {
   }
 };
 
-/**
- * Create a new worktree and open a draft scoped to it.
- * 
- * @returns The worktree path, or null if creation failed
- */
 export async function createWorktreeSession(): Promise<string | null> {
   return createInstantWorktreeDraft();
 }
 
-/**
- * Check if a worktree session is currently being created.
- */
 export async function createWorktreeDraft(options?: { initialPrompt?: string; title?: string }): Promise<string | null> {
   return createInstantWorktreeDraft(options);
 }
 
-/**
- * Create a worktree session for a new branch name.
- * Callers can still use startPoint for metadata or follow-up git operations.
- * @param selection Optional model/variant selection to apply at creation time.
- * @returns Created session descriptor or null.
- */
 export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,

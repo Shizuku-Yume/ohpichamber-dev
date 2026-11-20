@@ -29,12 +29,19 @@ const draft = (overrides: Partial<InlineCommentDraft> = {}): InlineCommentDraft 
 describe('model-facing text', () => {
     test('diff comments keep the pre-metadata wording, including the side', () => {
         expect(formatContextText(contextPayloadFromDraft(draft())))
-            .toBe('Comment on `src/app.ts` lines 3-5 (modified):\n```ts\nconst x = 1;\n```\n\nfix this');
+            .toBe('The user selected `src/app.ts` lines 3-5 (modified):\n```ts\nconst x = 1;\n```\n\nThe user wrote this to you about these lines:\nfix this');
     });
 
     test('file and plan comments omit the side', () => {
         expect(formatContextText(contextPayloadFromDraft(draft({ source: 'file', side: undefined }))))
-            .toBe('Comment on `src/app.ts` lines 3-5:\n```ts\nconst x = 1;\n```\n\nfix this');
+            .toBe('The user selected `src/app.ts` lines 3-5:\n```ts\nconst x = 1;\n```\n\nThe user wrote this to you about these lines:\nfix this');
+    });
+
+    test('a comment whose code changed under it sends both the code it was written on and the code there now', () => {
+        expect(formatContextText(contextPayloadFromDraft(draft({ source: 'file', side: undefined, changedCode: 'const x = 2;' }))))
+            .toBe('The user selected `src/app.ts` lines 3-5:\n```ts\nconst x = 1;\n```\n\nThe file changed after the user selected these lines, and the quoted code is no longer there. These lines now hold:\n```ts\nconst x = 2;\n```\n\nThe user wrote this to you about these lines:\nfix this');
+        expect(formatContextText(contextPayloadFromDraft(draft({ source: 'file', side: undefined, changedCode: '' }))))
+            .toBe('The user selected `src/app.ts` lines 3-5:\n```ts\nconst x = 1;\n```\n\nThe file changed after the user selected these lines, and the quoted code is no longer there.\n\nThe user wrote this to you about these lines:\nfix this');
     });
 
     test('terminal selections keep the terminal_context envelope', () => {
@@ -66,14 +73,14 @@ describe('model-facing text', () => {
 
     test('chat quotes send the fragment as a blockquote with the comment below', () => {
         expect(formatContextText(contextPayloadFromDraft(draft({ source: 'chat-quote', fileLabel: 'msg_1', code: 'first line\nsecond line', text: 'why so?' }))))
-            .toBe('Comment on this fragment of an earlier message in this conversation:\n> first line\n> second line\n\nwhy so?');
+            .toBe('The user selected this fragment of an earlier message in this conversation:\n> first line\n> second line\n\nThe user wrote this to you about it:\nwhy so?');
     });
 
     test('file quotes carry the fragment with an optional line range', () => {
         expect(formatContextText(contextPayloadFromDraft(draft({ source: 'file-quote', fileLabel: 'docs/CHANGELOG.md', startLine: 12, endLine: 13, code: 'a\nb', text: 'why?' }))))
-            .toBe('Comment on this fragment of `docs/CHANGELOG.md` lines 12-13:\n> a\n> b\n\nwhy?');
+            .toBe('The user selected this fragment of `docs/CHANGELOG.md` lines 12-13:\n> a\n> b\n\nThe user wrote this to you about it:\nwhy?');
         expect(formatContextText(contextPayloadFromDraft(draft({ source: 'file-quote', fileLabel: 'docs/CHANGELOG.md', startLine: 0, endLine: 0, code: 'a', text: '' }))))
-            .toBe('Comment on this fragment of `docs/CHANGELOG.md`:\n> a');
+            .toBe('The user selected this fragment of `docs/CHANGELOG.md`:\n> a');
     });
 
     describe('review comments and failed checks name the change request by the served provider', () => {
@@ -96,7 +103,7 @@ describe('model-facing text', () => {
         test('a whole-file comment names the file and quotes no lines', () => {
             expect(formatContextText(contextPayloadFromDraft(draft({
                 startLine: 0, endLine: 0, side: undefined, code: '',
-            })))).toBe('Comment on `src/app.ts` (the whole file):\n\nfix this');
+            })))).toBe('The user wrote this to you about `src/app.ts` (the whole file):\n\nfix this');
             const part = createContextPart(contextPayloadFromDraft(draft({ startLine: 0, endLine: 0, side: undefined, code: '' })));
             expect(part.metadata.opencodeComment?.selection).toBeUndefined();
         });

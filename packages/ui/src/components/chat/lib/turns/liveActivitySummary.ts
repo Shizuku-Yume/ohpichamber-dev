@@ -16,7 +16,6 @@ const taskResultSchema = z.object({ details: z.object({
 }) });
 
 interface TurnFileChange {
-    /** Canonical path reported by the native tool; no project root is inferred. */
     path: string;
     additions?: number;
     deletions?: number;

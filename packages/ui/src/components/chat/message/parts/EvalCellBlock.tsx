@@ -2,7 +2,7 @@ import type { ToolPopupContent } from '../types';
 import React from 'react';
 
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
-import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
+import { HighlightedCode } from '@/components/code/HighlightedCode';
 import { Icon } from '@/components/icon/Icon';
 import { JsonTreeViewer } from '@/components/ui/JsonTreeViewer';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -206,7 +206,7 @@ export const EvalCellBlock: React.FC<EvalCellBlockProps> = ({
             {/* Code Block */}
             {cell.code ? (
                 <div className="relative rounded-lg border border-border/30 bg-card/60 overflow-hidden">
-                    <WorkerHighlightedCode
+                    <HighlightedCode
                         language={codeLanguage}
                         code={displayedCode}
                         style={CODE_STYLE}

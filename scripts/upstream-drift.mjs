@@ -2,7 +2,7 @@
 // The upstream disposition ledger, derived from git blobs instead of maintained
 // by hand.
 //
-// Every path that the fork and upstream v2.7.0 (`bc50ba56a`) do not share
+// Every path that the fork and pinned upstream baseline do not share
 // byte-for-byte gets a state from the trees themselves:
 //
 //   identical      both sides hold the same blob
@@ -51,7 +51,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const UPSTREAM = 'bc50ba56a';
+export const UPSTREAM = 'cf18602cc77146f35e26e103dbee1ab8e218b663';
 export const DELTAS_FILE = '.workflow/upstream-deltas.tsv';
 export const LANES_FILE = '.workflow/research/ux-v270-omp-alignment/merge-lanes.tsv';
 export const SLICES_FILE = '.workflow/research/ux-v270-omp-alignment/repair-slices.tsv';
@@ -102,6 +102,7 @@ export const EXCLUDED_PREFIXES = [
   '.github/',
   '.workflow/',
   'scripts/omp-m0/',
+  'scripts/verify/',
 ];
 
 /** Root files the exclusion rule keeps; prefixes are directories, these are paths. */

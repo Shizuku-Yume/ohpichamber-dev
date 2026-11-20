@@ -20,10 +20,12 @@ type Props = {
   onMoveToFolder: (folderId: string) => void;
   onCreateFolderAndMove: () => void;
   onRemoveFromFolder: () => void;
-  /** Something selected files in the project's folders: a worktree's sessions do not. */
   canFileSelection: boolean;
   canRemoveFromFolder: boolean;
   onRestore: () => void;
+  showMarkDone: boolean;
+  canMarkDone: boolean;
+  onMarkDone: () => void;
   onArchive: () => void;
   onDelete: () => void;
   onDone: () => void;
@@ -40,6 +42,9 @@ export const BulkActionBar: React.FC<Props> = ({
   canFileSelection,
   canRemoveFromFolder,
   onRestore,
+  showMarkDone,
+  canMarkDone,
+  onMarkDone,
   onArchive,
   onDelete,
   onDone,
@@ -117,6 +122,23 @@ export const BulkActionBar: React.FC<Props> = ({
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.bulkActions.restore')}</p></TooltipContent>
+          </Tooltip>
+        ) : null}
+
+        {showMarkDone ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onMarkDone}
+                disabled={!canMarkDone}
+                className={iconButtonClass}
+                aria-label={t('sessions.sidebar.session.work.markDone')}
+              >
+                <Icon name="check" className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.session.work.markDone')}</p></TooltipContent>
           </Tooltip>
         ) : null}
 

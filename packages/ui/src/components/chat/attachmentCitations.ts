@@ -1,3 +1,10 @@
+import { prepareAttachmentFile } from '@/sync/attachment-files';
+import { HeicConversionError } from '@/sync/attachment-files';
+import { getUnsupportedAttachmentInputs } from '@/sync/attachment-files';
+
+
+
+
 interface ImageAttachmentCandidate {
     name: string;
     type?: string;
@@ -144,7 +151,6 @@ export const assignImageAttachmentFilenames = (
     });
 };
 
-/** Next unused `pasted-context-N.txt` name for a large text paste attachment. */
 export const nextPastedContextFilename = (existingFilenames: string[]): string => {
     const used = new Set(existingFilenames.map(normalizeFilenameKey));
 
@@ -158,7 +164,6 @@ export const nextPastedContextFilename = (existingFilenames: string[]): string =
     return `pasted-context-${Date.now()}.txt`;
 };
 
-/** The attachment carries the name its citation uses. */
 export const renameFileForAttachmentCitation = (file: File, filename: string): File => {
     if (file.name === filename) {
         return file;
@@ -194,8 +199,6 @@ export const findAttachmentCitationRanges = (text: string, filenames: string[]):
             break;
         }
 
-        // Markdown links keep their normal link highlighting; attachment citations
-        // are plain bracket references like [desktop.png].
         if (text[end + 1] !== '(') {
             const name = text.slice(start + 1, end).trim();
             if (known.has(normalizeFilenameKey(name))) {
@@ -207,4 +210,47 @@ export const findAttachmentCitationRanges = (text: string, filenames: string[]):
     }
 
     return ranges;
+};
+
+export const findLocalFileLinks = (text: string): Array<{ start: number; end: number; name: string; path: string }> => (
+    Array.from(text.matchAll(/\[([^\]\n]+)\]\((<[^>\n]+>|[^)\s]+)\)/g), (match) => {
+        const path = match[2].startsWith('<') ? match[2].slice(1, -1) : match[2];
+        return { start: match.index ?? 0, end: (match.index ?? 0) + match[0].length, name: match[1].trim(), path };
+    }).filter((link) => /^(?:\/|[A-Za-z]:\/)/.test(link.path))
+);
+
+export const buildImagePathCitationText = (images: Array<{ filename: string; path: string }>): string => (
+    images.map(({ filename, path }) => {
+        const target = path.replace(/\\/g, '/');
+        return `[${filename}](${/[\s()]/.test(target) ? `<${target}>` : target})`;
+    }).join(' ')
+);
+
+export const findImagePathCitationNames = (text: string): string[] => (
+    Array.from(text.matchAll(/\[([^\]\n]+)\]\(/g), (match) => match[1])
+);
+
+export const imageSaveModeForModel = (
+    savePastedImagesAsFiles: boolean,
+    inputModalities: string[] | undefined,
+): 'instead' | 'alongside' | 'attach' => {
+    if (!savePastedImagesAsFiles) return 'attach';
+    if (inputModalities && getUnsupportedAttachmentInputs([{ mimeType: 'image/png' }], inputModalities).length > 0) {
+        return 'instead';
+    }
+    return 'alongside';
+};
+
+export const prepareImageToSave = async (
+    file: File,
+): Promise<{ filename: string; bytes: Uint8Array; linkOnly: boolean } | null> => {
+    try {
+        const output = await prepareAttachmentFile(file);
+        return output
+            ? { filename: output.file.name, bytes: new Uint8Array(await output.file.arrayBuffer()), linkOnly: false }
+            : null;
+    } catch (error) {
+        if (!(error instanceof HeicConversionError)) return null;
+        return { filename: file.name, bytes: new Uint8Array(await file.arrayBuffer()), linkOnly: true };
+    }
 };

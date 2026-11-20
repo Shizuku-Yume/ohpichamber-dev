@@ -1,3 +1,4 @@
+import { DEFAULT_CONTEXT_EDITOR_TREE_WIDTH } from '@/stores/ui/preferences';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 import { CONTEXT_SURFACES, sortContextSurfaces } from '../lib/surfaces/registry';
@@ -1017,6 +1018,18 @@ describe('useUIStore closeContextPanelTabs bulk', () => {
 describe('useUIStore zone sizes', () => {
   const directory = '/repo';
 
+  test('expanded chat sizes round valid values and ignore non-finite updates', () => {
+    const store = useUIStore.getState();
+    store.setContextZoneExpandedChatSize('right', 400.4);
+    expect(useUIStore.getState().contextZoneExpandedChatSizes).toEqual({ right: 400 });
+    for (const size of [NaN, Infinity, -Infinity]) {
+      store.setContextZoneExpandedChatSize('right', size);
+      expect(useUIStore.getState().contextZoneExpandedChatSizes).toEqual({ right: 400 });
+    }
+    store.setContextZoneExpandedChatSize('right', -1);
+    expect(useUIStore.getState().contextZoneExpandedChatSizes).toEqual({ right: 0 });
+  });
+
   test('a resize sets one clamped size for the zone, whatever surface it shows', () => {
     const store = useUIStore.getState();
     store.openContextPanelTab(directory, { mode: 'diff' });
@@ -1152,6 +1165,15 @@ describe('useUIStore zone sizes', () => {
 
     expect(useUIStore.getState().contextEditorTreeWidth).toBe(260);
     expect(sizes).toEqual({});
+  });
+
+  test('the old default tree width moves to the new one; a width the user set stays', async () => {
+    await rehydrate({}, { contextEditorTreeWidth: 240 }, 28);
+    expect(useUIStore.getState().contextEditorTreeWidth).toBe(DEFAULT_CONTEXT_EDITOR_TREE_WIDTH);
+    await rehydrate({}, { contextEditorTreeWidth: 260 }, 28);
+    expect(useUIStore.getState().contextEditorTreeWidth).toBe(260);
+    await rehydrate({}, { contextEditorTreeWidth: 240 }, 29);
+    expect(useUIStore.getState().contextEditorTreeWidth).toBe(240);
   });
 });
 

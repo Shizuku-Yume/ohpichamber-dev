@@ -35,7 +35,7 @@ describe('parseConnectionPayload', () => {
     const OriginalURL = globalThis.URL;
     class OldWebViewURL extends OriginalURL {
       override get hostname() {
-        return this.protocol === 'openchamber:' ? '' : super.hostname;
+        return this.protocol === 'ohpichamber:' ? '' : super.hostname;
       }
     }
     const url = encodePairingConnectionPayload(buildPairingConnectionPayload({

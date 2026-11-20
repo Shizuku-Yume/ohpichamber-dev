@@ -10,7 +10,6 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import { registerFloatingPanelClearanceReader } from '@/components/chat/composer/state/composerInsetReaders';
 
-/** The scroll action: the arrow, plus the status label while the session works. */
 const ScrollAction: React.FC<{ onClick: () => void; children?: React.ReactNode }> = ({ onClick, children }) => {
     const { t } = useI18n();
     return (
@@ -33,11 +32,6 @@ const ScrollAction: React.FC<{ onClick: () => void; children?: React.ReactNode }
     );
 };
 
-/**
- * Compact one-line mirror of the status row for the pill: same label, none of
- * the status row's animation machinery (which does not survive being squeezed
- * into a 32px chip).
- */
 const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
     const { activeModel, working } = useAssistantStatus();
     const providers = useConfigStore((state) => state.providers);
@@ -53,7 +47,7 @@ const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
 
     return (
         <ScrollAction onClick={onClick}>
-            <span className="-ml-px min-w-0 truncate text-sm text-muted-foreground pr-3">
+                <span className="-ml-px min-w-0 truncate text-sm text-muted-foreground pr-3">
                 {label}
             </span>
         </ScrollAction>
@@ -62,8 +56,6 @@ const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
 
 interface ScrollToBottomButtonProps {
     visible: boolean;
-    /** The session is still streaming: the pill carries the status label
-        while the floating status row is hidden away from the live edge. */
     working?: boolean;
     onClick: () => void;
 }
@@ -78,19 +70,10 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ visible, wo
             )}
             style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
         >
-            {/* The same column that centres the composer, so the pill's left
-                edge lines up exactly with the input frame. */}
             <div className="chat-input-column">
-                {/* The soft shadow lives on this wrapper, away from the glass
-                    pill's backdrop-filter: sharing one element made the
-                    shadow intermittently drop after hide/show cycles. */}
                 <div className="inline-flex max-w-full rounded-full shadow-[0_2px_6px_-2px_rgb(0_0_0_/_0.10)] dark:shadow-[0_2px_6px_-2px_rgb(0_0_0_/_0.35)]">
                 <div
                     className={cn(
-                        // Glass material with a hairline real border — much
-                        // lighter than the oc-glass-floating stack.
-                        // min-h, not h: the mobile touch-target floor grows
-                        // the buttons inside to 36px, and the pill with them.
                         'oc-glass-popover inline-flex min-h-8 max-w-full items-center rounded-full [corner-shape:round]',
                         'border border-black/[0.06] dark:border-white/[0.08]',
                         visible ? 'pointer-events-auto' : 'pointer-events-none',

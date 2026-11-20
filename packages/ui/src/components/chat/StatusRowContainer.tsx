@@ -5,11 +5,6 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import { StatusRow } from './StatusRow';
 
-/**
- * Status row wrapper.
- * Uses the dedicated assistant status hook so the row keeps accurate live activity
- * labels while still limiting subscriptions to the active assistant message.
- */
 export const StatusRowContainer: React.FC = React.memo(() => {
     const { activeModel, working } = useAssistantStatus();
     const providers = useConfigStore((state) => state.providers);

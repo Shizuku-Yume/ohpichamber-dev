@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { QueueState } from '@openchamber/agent-contract';
 import { adoptRelayTunnel, deactivateRelayTunnel } from './relay/runtime-tunnel';
 import type { RelayTunnelClient } from './relay/tunnel-client';
 import { setRuntimeBearerToken, setRuntimeExtraHeaders } from './runtime-auth';
@@ -38,6 +39,75 @@ describe('openchamber events', () => {
     setRuntimeExtraHeaders(null);
     Reflect.deleteProperty(globalThis, 'window');
     Reflect.deleteProperty(globalThis, 'EventSource');
+  });
+
+  test('delivers Guest service events to frame subscribers and ignores malformed envelopes', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const events: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type === 'guest-service-event') events.push(event);
+    });
+    try {
+      const source = MockEventSource.instances.at(-1)!;
+      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:guest-service-event', properties }) });
+      send({ guestId: 'desk', topic: 'refresh', data: { count: 1 } });
+      send({ guestId: 'desk', topic: 'empty' });
+      send({ guestId: '', topic: 'invalid' });
+      send({ guestId: 'desk', topic: 1 });
+      expect(events).toEqual([
+        { type: 'guest-service-event', guestId: 'desk', topic: 'refresh', data: { count: 1 } },
+        { type: 'guest-service-event', guestId: 'desk', topic: 'empty', data: null },
+      ]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test('publishes an empty Host policy snapshot but rejects malformed policy envelopes', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const policies: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type === 'permission-policy') policies.push(event.event);
+    });
+    try {
+      const source = MockEventSource.instances.at(-1)!;
+      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:permission-auto-accept.updated', properties,
+      }) });
+      send({ sessions: {}, modes: {}, revision: 4 });
+      expect(policies).toEqual([{
+        type: 'openchamber:permission-auto-accept.updated',
+        properties: { sessions: {}, modes: {}, revision: 4 },
+      }]);
+      send({ sessions: {}, modes: { session: 'invalid' }, revision: 5 });
+      send({ modes: {}, revision: 5 });
+      send({ sessions: {}, revision: -1 });
+      expect(policies).toHaveLength(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test('preserves desktop delivery flags and rejects malformed notification flags', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const notifications: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type === 'notification') notifications.push(event.payload);
+    });
+    try {
+      const source = MockEventSource.instances.at(-1)!;
+      const send = (properties: unknown) => source.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:notification', properties,
+      }) });
+      send({});
+      send({ title: 'Done', desktopNotificationDelivered: true, desktopStdoutActive: false });
+      expect(notifications).toEqual([{}, { title: 'Done', desktopNotificationDelivered: true, desktopStdoutActive: false }]);
+      send({ title: 'Invalid', desktopNotificationDelivered: 'true' });
+      send({ title: 'Invalid', desktopStdoutActive: 1 });
+      expect(notifications).toHaveLength(2);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test('keeps reconnect status until the replacement Host stream is ready', async () => {
@@ -285,7 +355,7 @@ describe('openchamber events', () => {
     globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
       const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
       if (url.pathname === '/api/message-queue') reads += 1;
-      return Response.json({ revision: 1, sessions: [] });
+      return Response.json({ revision: '1', items: [] });
     }, originalFetch);
     const unsubscribe = subscribeMessageQueueSync(runtimeKey);
     const source = MockEventSource.instances[0];
@@ -293,21 +363,75 @@ describe('openchamber events', () => {
       source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:event-stream-ready', properties: {} }) });
       await useMessageQueueStore.getState().hydrate();
       expect(reads).toBe(1);
-      const session = { sessionId: target.sessionId, directory: target.directory, sendingId: 'q1', items: [{ id: 'q1', content: 'queued', text: 'queued', createdAt: 1, attachments: [], sendConfig: { providerID: 'p', modelID: 'm' } }] };
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 2, session } }) });
+      const queue: QueueState = {
+        sessionId: target.sessionId,
+        revision: '2',
+        items: [{
+          queueItemId: 'q1', status: 'leased', content: 'queued', text: 'queued', createdAt: 1,
+          attachments: [], context: [], lease: { leaseId: 'lease-1', expiresAt: 2 },
+          options: { providerId: 'p', modelId: 'm', agentId: null, variant: null, reasoningEffort: null },
+        }],
+      };
+      const publish = (state: QueueState) => source.onmessage?.({
+        data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { queue: state } }),
+      });
+      publish(queue);
       const key = getMessageQueueKey(target);
       expect(useMessageQueueStore.getState().queuedMessages[key]).toHaveLength(1);
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 3, session: { ...session, items: [], sendingId: null } } }) });
+      expect(useMessageQueueStore.getState().sendingIds[key]).toEqual(['q1']);
+      publish({ ...queue, revision: '3', items: [] });
       expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined();
       expect(useMessageQueueStore.getState().sendingIds[key]).toBeUndefined();
       expect(reads).toBe(1);
       expect(MockEventSource.instances).toHaveLength(1);
       unsubscribe();
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 4, session } }) });
+      publish({ ...queue, revision: '4' });
       expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined();
     } finally {
       unsubscribe();
       globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('extension waits hydrate and then follow the control stream', async () => {
+    const { subscribeExtensionWaitsSync } = await import('@/sync/extension-waits-sync');
+    const { resetExtensionWaitsForRuntimeSwitch, useExtensionWaitsStore } = await import('@/sync/extension-waits');
+    const { getRuntimeKey } = await import('./runtime-switch');
+    const sessionID = 'ses_wait';
+    const waiting = {
+      waitId: 'wait_one', sessionID, directory: '/repo', source: 'timer', extension: 'OpenChamber',
+      title: 'Timer', label: '1 min', args: { minutes: 1 }, startedAt: 100, status: 'waiting',
+    };
+    const fetched = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
+      return url.pathname === '/api/extension-waits'
+        ? Response.json({ revision: 1, waits: [waiting] })
+        : Response.json({}, { status: 404 });
+    });
+    const hydrated = Promise.withResolvers<void>();
+    const unsubscribeStore = useExtensionWaitsStore.subscribe((state) => {
+      if (state.bySession.has(sessionID)) hydrated.resolve();
+    });
+    const unsubscribeSync = subscribeExtensionWaitsSync(getRuntimeKey());
+    try {
+      await hydrated.promise;
+      expect(useExtensionWaitsStore.getState().bySession.get(sessionID)).toEqual([waiting]);
+      const source = MockEventSource.instances.at(-1);
+      source?.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:extension-waits.updated',
+        properties: { revision: 2, sessionID, waits: [{ ...waiting, status: 'waking' }] },
+      }) });
+      expect(useExtensionWaitsStore.getState().bySession.get(sessionID)).toEqual([{ ...waiting, status: 'waking' }]);
+      source?.onmessage?.({ data: JSON.stringify({
+        type: 'openchamber:extension-waits.updated',
+        properties: { revision: 3, sessionID, waits: [] },
+      }) });
+      expect(useExtensionWaitsStore.getState().bySession.has(sessionID)).toBe(false);
+    } finally {
+      unsubscribeStore();
+      unsubscribeSync();
+      resetExtensionWaitsForRuntimeSwitch();
+      fetched.mockRestore();
     }
   });
 

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { HostWorkspacePolicySchema, type HostAuthorizationScope, type NativeOperationDescriptor, type WorkerPolicyRequest } from '@openchamber/agent-service/private-protocol';
 import type { JsonObject } from '@openchamber/agent-contract';
-import { createProjectDirectoryRuntime } from '../../../web/server/lib/host/project-directory-runtime.js';
+import { createProjectDirectoryRuntime } from '../../../web/server/lib/projects/project-directory-runtime.ts';
 import { createWorkerOperationAuthorizer } from '../../../web/server/lib/host/worker-operation-authorizer.js';
 import { describeNativeOperation } from '../worker/native-policy-descriptor.ts';
 

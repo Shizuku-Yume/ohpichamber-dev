@@ -4,6 +4,140 @@ A card rendered to the right of the transcript inside `ChatContainer`. It
 reports the state of the current session, its branch, its quotas and its
 subagents.
 
+## Ownership
+
+This module owns work-status readouts, section composition and the shared row
+controls used by the desktop card and phone Status tab. Stores and sync modules
+own data fetching and reconciliation; the layout's right slot owns column width.
+
+## Invariants
+
+- Turn telemetry reads canonical message usage and step timing. An authoritative
+  idle status permits aggregation even while folded, so the upstream compact
+  time/cost or throughput heading remains useful. Busy/waiting states retain
+  only the last committed result for the same runtime, directory and session;
+  invalidated status or a different scope cannot display it.
+- Subagent identities, token counts and costs come from canonical subagent
+  records, not legacy session summaries. Warning-only activity uses the shared
+  `SubagentLive` owner and authoritative active-run turn membership; an old
+  transcript cannot generate a silent-agent warning in a new run.
+- Subagent activity reads canonical inline parts only for nonterminal turns in
+  the authoritative active run. Historical running calls never prove live work.
+  Call and result identities pair before rendering; native retry notices supply
+  their attempt and error without inventing a deadline or per-tool start time.
+  Web/PWA, Electron, hosted mobile and Capacitor share these projections.
+- The Checks dot owns its blinking subscription, so its clock redraws only the
+  dot rather than the section.
+- Loaded-skill rows include disabled installed skills, because a skill loaded
+  before being disabled must still open. Their history subscription watches parts
+  because a skill call can finish after its message arrives.
+- Installed skills resolve loaded-skill files by id, then name. The tool-reported
+  folder supplies a file before the installed list arrives; built-ins and entries
+  without a file open in Settings.
+- Session knowledge reads its server summary independently of the notes panel.
+  OhPiChamber metadata, source content and memory invalidate it; whole-session
+  updates would refetch it on every step without changing its contents.
+- Linked-item summaries stay associated with their list index, because the same
+  repository thread can be linked from different instances. The session's links
+  stay observed even when its sidebar row is absent.
+- Context-source headings prioritize attached threads and pinned knowledge over
+  ambient counts, because these identify the session's chosen material. MCP
+  counts include only connected servers, which contribute context.
+- Linked rows use kind icons so agent-created links without avatars remain
+  distinguishable as issues or change requests. Identifiers and states keep their
+  space while titles truncate.
+- On the phone, opening a skill in Files switches drawer tabs without closing the
+  drawer. Copy and unlink controls have separate touch targets so a missed copy
+  cannot unlink an item.
+- Pinned-message selectors retain only pinned text. Selecting the entire parts
+  map would redraw on every stream update and retain evicted transcript parts
+  through render closures.
+- Repository readouts use the Git tab's selected nested repository while
+  navigation stays keyed to the project root. Project ownership uses the shared
+  worktree-aware resolver because worktrees can sit beside their project.
+- Changed-file rows remain hidden through bootstrap and the first successful
+  status refresh afterward, because the shared cache can hold setup-file changes
+  that the initial reset removes.
+- Cost formatting keeps 4 decimal places for budget comparisons and drops trailing
+  zeros. Recursive cost walks guard against cycles in parent links, and the own
+  cost is derived from total minus child costs so the displayed split adds up.
+- Context fill stays neutral below its warning band, because green denotes
+  completion. A subagent cost split appears only when subagents exist, when it
+  explains spend beyond the displayed session.
+- Context fill uses the server-reported total for the latest round trip.
+  Breakdown counters accumulate across round trips in a multi-step turn, so
+  summing them overstates the current window.
+- Row values keep their width while labels truncate, so long names cannot hide
+  the reading. Authored names and titles use automatic direction, branches and
+  paths use left-to-right direction, and translated labels follow the interface.
+  Numeric values retain their own direction in RTL layouts.
+- Row actions sit above a stretched, explicitly named row button. Nested buttons
+  are invalid, and a control press must not also navigate the row. Disabled
+  controls use a wrapper to keep their tooltip reachable despite row pointer
+  filtering.
+- Dense rows indicate interactivity through text rather than hover fills, which
+  resemble selection at this density. Tooltips open above rows so they leave
+  subsequent rows and their actions visible.
+- A nonzero context meter has a visible dot-sized minimum fill and keeps vertical
+  room around its text. Its explanatory captions align with the meter and icon
+  edge, because label-column indentation makes them look detached from the bar.
+- Task ordering preserves the agent's order within each state rank and retains
+  completed tasks as a session record. Active work leads because it answers what
+  is happening now.
+- Confirmed absence of quota providers creates no ongoing refresh demand after
+  discovery. Credential changes invalidate that absence.
+- Whole-session token totals remain unavailable when counters are stripped from
+  a persisted snapshot or contain only zeros, until live usage arrives.
+- Telemetry unions overlapping tool intervals before subtracting tool time, so
+  parallel tools cannot subtract the same time twice. TTFT excludes creation
+  stamps copied onto parts, because they are not observed first-output times.
+  Trailing plumbing records do not move a turn's conversation boundary. Positive
+  waits below 50ms remain distinguishable from zero when formatting seconds.
+- Quota aliases identify the same billed account. `claude-agent` and
+  `claude-code` use the Claude subscription reported by `claude`; `kilocode` and
+  `kilo-code` use the Kilo Gateway account reported by `kilo`.
+- Built-in section ids stay stable because saved order and visibility use them.
+  Hidden-state checks test membership of available sections because stale ids
+  from removed sections can inflate a count.
+- Subagent permission requests remain visible in the work-status section because
+  the parent transcript has no representation of those child blockers.
+- Presence reports clear on section unmount, so an absent section cannot keep the
+  card visible. Hidden retained cards are inert so keyboard focus cannot reach
+  invisible controls.
+- Overlay dismissal listeners run only while visible and ignore the header
+  toggle, which closes the overlay itself. Otherwise a press can be swallowed or
+  close and immediately reopen it.
+- The card clips its internal scroll shadows to its rounded edge and hides the
+  scrollbar, which would consume trailing-value space. Horizontal margins leave
+  room for its shadow, and the overlay stays outside flex flow so it cannot push
+  the transcript.
+
+## Decisions
+
+### Why guest meters jump and not glide
+
+Guest meters apply each sample immediately and slide a full-width rounded fill
+inside a clipped track. Animating every polled sample keeps the GPU drawing
+between reads, while the clipped fill preserves its rounded end without a glide.
+
+### Why charts keep chronological direction and not interface direction
+
+Guest charts run from older samples on the left to newer samples on the right in
+every locale. Their own hover labels retain the chart's time and value context,
+so a row tooltip attaches to the label when a chart occupies the middle.
+
+### Why unknown guest icons stay absent and not use a substitute
+
+An unknown icon has no reliable visual meaning in the host. The row keeps its
+label without introducing a replacement glyph.
+
+### Why glass uses an inner layer and not the shadowed card
+
+The overlay separates its glass layer from the card's shadow because combining
+them makes Chromium extend the backdrop-filter layer by the shadow blur and paint
+a grey band past the edge. The glass and edge fade independently while the outer
+overlay keeps full opacity.
+
 ## Structure
 
 Every readout is a **labelled row**: icon, name, trailing value. A number
@@ -84,6 +218,17 @@ closed, so the panel reappeared only once that number crossed the threshold:
 the chat widened and then narrowed again. The chat area does not move when the
 context panel opens. `useWorkStatusVisibility.test.ts` pins both properties.
 
+### Why the area is taken at the width the sidebar leaves it
+
+The session sidebar does move the chat area, over its own animation. The
+decision uses the measured width plus what the sidebar still has to travel
+(`sidebarPendingWidth`), re-decided in the commit that toggles the sidebar, so
+the answer is the settled one from the first frame. The alternative, the width
+as measured, flipped the answer mid-animation: collapsing an expanded context
+panel unfolds the sidebar, the card took its column beside the panel while the
+area was still wide, and gave it back when the area crossed the threshold, so
+the slot animated twice.
+
 The context-panel check mirrors `ContextPanel`'s own derivation: `isOpen` alone
 is not enough, because a panel with no resolvable active tab renders nothing
 and therefore displaces nothing.
@@ -108,12 +253,18 @@ which requests only providers enabled for this panel.
 | Goal | `useSessionGoal` | respects the Settings toggle |
 | MCP | `useMcpStore` | connect/disconnect reuses the dropdown's actions |
 | Pinned messages | `getContextObligatoryMessages` + `state.part` | see below |
-| Todos | live `state.todo[sessionId]`, persisted fallback | live channel wins |
+| Todos | Canonical `snapshot.todos` and ordered `session.updated` | scoped live state; no second cache |
 
 ### Turn stats
 
 The section follows Usage by default and reuses the panel's existing rows. Only its header
-has an icon; metric rows use labels and values without leading icons. It
+has an icon; metric rows use labels and values without leading icons. It starts
+folded: its rows took more height than the rest of the card, and the header
+line carries two of the figures people scan, joined with ` · `, folded and
+open alike, so it fits the card: elapsed time plus cost when the turn cost
+something, response speed plus elapsed time when its cost is absent or zero
+(a subscription, a local model). Once the user opens or folds it,
+`workStatusExpandedSections` keeps that choice. It
 reads already-loaded records without fetching history. The newest turn needs a
 preceding user message and completed assistant steps. A truncated or unfinished
 turn has no whole-turn result; later materialization can supply it.
@@ -132,6 +283,13 @@ Waiting for each model response remains included. Invalid or missing inputs
 omit the dependent metric rather than becoming zero; reported zeros remain
 valid. TTFT averages the earliest text/reasoning start delay from every step,
 only when all steps have a valid sample.
+
+"Average first output" is a separate row from OpenCode's `time.firstToken`
+on each step: when the provider streamed its first output of any kind, a tool
+call included. It is hidden when any step of the turn lacks the field (steps
+written before OpenCode 2.3.0). It does not replace TTFT: a step that opens
+with a tool call would change what TTFT means, so the number would no longer
+be the time to the first visible text.
 
 Either rate above 5,000 tok/s is reported as unknown. No provider streams that
 fast, so such a value means the measured window is broken: a tool that runs
@@ -255,7 +413,7 @@ The sections dialog has drag handles for changing this order, including hidden
 sections. A drop updates the panel immediately. `workStatusSectionOrder` is a
 profile preference persisted through the settings registry and the local UI
 store. Missing or empty order uses the default; duplicate and obsolete ids are
-discarded, and newly introduced sections append in default order. Visibility
+discarded, and newly introduced sections append in default order, except those listed in `PLACED_AFTER` (`sections.ts`), which go right after their default neighbour: Tasks lands after Subagents in every saved list, where the default puts it. Visibility
 changes never alter positions.
 
 Guest SDK status sections remain available through the existing guest catalog
@@ -319,18 +477,24 @@ The Subagents section opens itself when subagents appear where there were none,
 on that edge only: re-expanding on every count change would fight a user who
 just collapsed it.
 
-Its expanded list is capped at eight rows and scrolls independently, so a
-session with many subagents does not crowd every section below it out of the
-panel.
+Its expanded list is capped at eight two-line rows and scrolls independently,
+so a session with many subagents does not crowd every section below it out of
+the panel.
 
 ## Tasks
+
+The section reads Canonical `snapshot.todos` phases through the shared sync
+selector, with explicit session/directory scope. It does not fetch the retired
+Host `/api/session-todos` endpoint or maintain a second checklist cache. Empty
+ordered updates clear the section. Snapshot recovery and errors use the normal
+Canonical sync lifecycle rather than independent todo polling.
 
 Icons and strike-through match the composer's todo dropdown, so one list does
 not read as two. Two deliberate differences:
 
 - **Completed items stay.** The dropdown is a queue to work through; this is a
   record of the session.
-- **Sorted by status** — in progress, then pending, then completed — and stable
+- **Sorted by status** — in progress, blocked, pending, completed, abandoned — and stable
   within each rank, since the agent's own ordering carries meaning.
 
 Rows truncate at this width, so each carries a delayed tooltip with the full
@@ -341,8 +505,9 @@ id. Collapsed, it keeps the heading and completion count, followed by only the
 first `in_progress` task in the agent's order. Without an active task, including
 pending-only and all-completed lists, it shows no preview row. Live updates
 replace the preview without expanding the section. An authoritative empty todo
-list clears the section rather than restoring old persisted tasks; persistence
-is used only while the scoped live list is missing.
+list clears the section rather than restoring old persisted tasks. Completed
+and abandoned rows remain visible as closed tasks; blocked rows retain their
+blocker as a tooltip.
 
 ## Collapsed Usage headline
 
@@ -375,6 +540,7 @@ Rows that name something the app can already show are buttons:
 | Branch | git surface (`openContextSurface(dir, 'git')`) |
 | Pull request, Checks | PR surface (`openContextSurface(dir, 'pr')`) |
 | Subagent | that child session's chat tab, read-only |
+| Subagents heading button | the Subagents panel (`openSubagentsPanel`) |
 | Goal (row) | the composer's own `SessionGoalDialog` |
 | Goal (pause/resume) | OMP `goal` control through the composer's `SessionGoalDialog` |
 | MCP switch | connects/disconnects the server |
@@ -436,8 +602,8 @@ per repository.
 
 ## Loading data the header used to own
 
-Two readouts had no loader of their own and appeared only after the user opened
-the matching header dropdown:
+These readouts had no loader of their own and appeared only after the user
+opened the header's MCP or rate-limit dropdown (both since removed):
 
 - **MCP** — `McpDropdown` was the only mount-time caller of `refresh()`.
 - **Usage** — `useQuotaAutoRefresh` schedules the shared fixed three-minute
@@ -467,7 +633,7 @@ the quota loader treats a working proxy as a transient disconnected runtime
 and skips the initial load.
 
 Quotas, MCP status, skills, agent memory and the Linear/GitHub logins are all
-served by whichever OpenChamber instance is connected, and each was cached
+served by whichever OhPiChamber instance is connected, and each was cached
 globally or by directory alone — which two instances can share. A switch left
 the previous instance's answers on screen, and its Linear login usable against
 a runtime that has no Linear. `apps/runtimeEndpointReset.ts` now drops all of

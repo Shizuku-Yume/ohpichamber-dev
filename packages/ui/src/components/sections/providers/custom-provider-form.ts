@@ -1,3 +1,4 @@
+
 import { ModelSchema, ProviderConfigureRequestSchema, ProviderModelDiscoveryRequestSchema } from '@openchamber/agent-contract';
 import type { Model, ModelCatalogInfo, ModelInfoSource, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
@@ -63,7 +64,6 @@ export interface CustomProviderFormState {
   headers: HeaderRow[];
   models: ModelRow[];
   icon: CustomProviderIcon | null;
-  /** The logo image: a file picked here, the stored one cleared, or null for whatever is stored. Wins over `icon`. */
   logo: File | 'removed' | null;
 }
 export interface CustomProviderPersistPlan {

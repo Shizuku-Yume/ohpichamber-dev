@@ -1,3 +1,4 @@
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -25,7 +26,6 @@ import { useNestedGitDirectory } from '@/hooks/useNestedGitDirectory';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { NestedRepoResolutionStates } from './git/NestedRepoResolutionStates';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toast } from '@/components/ui';
 import {
  Dialog,
@@ -34,7 +34,6 @@ import {
  DialogHeader,
  DialogTitle,
 } from '@/components/ui/dialog';
-// (dropdown menu used inside IntegrateCommitsSection)
 import {
  Command,
  CommandEmpty,
@@ -133,8 +132,6 @@ type GitmojiEntry = {
 const GIT_DIFF_PRIORITY_PREFETCH_LIMIT = 40;
 const GIT_DIFF_PRIORITY_BASELINE_LIMIT = 20;
 
-// The server already serializes reverts per repository, so anything beyond a
-// couple of in-flight POSTs only holds browser connections away from reads.
 const REVERT_PATHS_CONCURRENCY = 2;
 
 const KEYWORD_MAP: Record<string, string> = {
@@ -180,9 +177,8 @@ const KEYWORD_MAP: Record<string, string> = {
 const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): GitmojiEntry | null => {
  const lowerSubject = subject.toLowerCase();
 
- // 1. Check for conventional commit prefix (e.g. "feat:", "fix(scope):")
- const conventionalRegex = /^([a-z]+)(?:\(.*\))?!?:/;
- const match = lowerSubject.match(conventionalRegex);
+  const conventionalRegex = /^([a-z]+)(?:\(.*\))?!?:/;
+  const match = lowerSubject.match(conventionalRegex);
 
  if (match) {
   const type = match[1];

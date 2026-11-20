@@ -1,7 +1,5 @@
 import { create } from 'zustand';
 
-// The composer consumes this flag on submit to create a goal directly; the
-// server starts goal execution, so the submitted objective is not sent as a prompt.
 interface SessionGoalArmStore {
   armed: boolean;
   objectiveOverride: string | null;

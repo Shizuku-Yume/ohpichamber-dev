@@ -94,17 +94,12 @@ const LEGACY_PROJECT_COLORS = new Map<string, string>([
   ['success', 'var(--status-success)'],
 ]);
 
-/** The CSS colour a project's stored `color` paints with, or null for none or an unknown value. */
 export const resolveProjectColor = (color: string | null | undefined): string | null => {
   if (!color) return null;
   if (isHexColor(color)) return color;
   return LEGACY_PROJECT_COLORS.get(color) ?? null;
 };
 
-/**
- * The background an image icon gets for a project colour: the colour itself.
- * A legacy theme key has no hex, and the stored background accepts only hex.
- */
 export const iconBackgroundForProjectColor = (color: string | null): string | null => (
   color && isHexColor(color) ? color.toLowerCase() : null
 );

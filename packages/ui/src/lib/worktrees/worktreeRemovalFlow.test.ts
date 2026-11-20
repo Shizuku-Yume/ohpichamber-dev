@@ -1,6 +1,9 @@
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { describe, expect, test } from 'bun:test';
 import { GitWorktreeRequestError } from '@/lib/api/types';
-import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast } from './worktreeRemovalFlow';
+import type { Session } from '@openchamber/agent-contract';
+
+import { archiveSessionsThenRemoveWorktree, deleteWithoutTeardownToast, groupSessionTreesByFolder, moveSessionsThenRemoveWorktree, WorktreeKeepStoppedError } from './worktreeRemovalFlow';
 
 describe('deleteWithoutTeardownToast', () => {
   test('offers the retry only for a delete its teardown stopped, from the server or the extension host, and waits for it', () => {
@@ -93,5 +96,260 @@ describe('archiveSessionsThenRemoveWorktree', () => {
 
     expect(archived).toBe(false);
     expect(result.removed).toBe(true);
+  });
+});
+
+const WORKTREE = '/repo-worktrees/feature';
+
+const session = (id: string, directory: string, parentSessionId?: string): Session => {
+  const workspaceId = `workspace:${directory}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId: id, projectId: 'project', workspaceId, displayPath: '.', parentSessionId,
+    rootSessionId: parentSessionId ?? id, createdAt: 1, updatedAt: 1,
+    epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    mode: { kind: 'main' }, title: id, metadata: null, metadataRevision: '0', archiveRevision: '0',
+  };
+};
+
+type FlowOptions = Parameters<typeof moveSessionsThenRemoveWorktree>[0];
+
+// The worktree holds `sessions` until each one's tree moves out.
+const flow = (sessions: Session[], calls: string[], overrides: Partial<FlowOptions> = {}): Promise<{ removed: boolean }> => {
+  const moved = new Set<string>();
+  return moveSessionsThenRemoveWorktree({
+    worktreePath: WORKTREE,
+    readSessions: () => sessions.filter((entry) => !moved.has(entry.sessionId)),
+    readActivity: async () => 'idle',
+    resolveDestination: async (directory: string) => (directory.endsWith('/ai') ? '/repo/ai' : '/repo'),
+    moveTree: async (tree) => {
+      const members = [...tree.descendants, tree.root];
+      calls.push(`move:${members.map((entry) => entry.sessionId).join(',')} ${tree.sourceDirectory} -> ${tree.projectDirectory}`);
+      for (const member of members) moved.add(member.sessionId);
+    },
+    confirmMoves: async (moves) => {
+      calls.push(`confirm:${moves.map((move) => move.root.sessionId).join(',')}`);
+      return true;
+    },
+    removeWorktree: async () => {
+      calls.push('remove');
+      return true;
+    },
+    isCurrent: () => true,
+    ...overrides,
+  });
+};
+
+const stopReason = async (run: Promise<{ removed: boolean }>): Promise<string> => {
+  try {
+    await run;
+    return 'resolved';
+  } catch (error) {
+    return error instanceof WorktreeKeepStoppedError ? error.reason : String(error);
+  }
+};
+
+describe('moveSessionsThenRemoveWorktree', () => {
+  test('moves each folder\'s trees to their project, subsessions first, then removes the worktree', async () => {
+    const calls: string[] = [];
+    // Shuffled: a grandchild before its parent and the root last.
+    const result = await flow([
+      session('grandchild', WORKTREE, 'child'),
+      session('ai-session', `${WORKTREE}/ai`),
+      session('child', WORKTREE, 'root'),
+      session('root', WORKTREE),
+    ], calls);
+
+    expect(calls).toEqual([
+      `move:grandchild,child,root ${WORKTREE} -> /repo`,
+      `move:ai-session ${WORKTREE}/ai -> /repo/ai`,
+      'confirm:root,ai-session',
+      'remove',
+    ]);
+    expect(result).toEqual({ removed: true });
+  });
+
+  test('a subsession in another folder of the checkout moves as its own tree', () => {
+    const trees = groupSessionTreesByFolder([
+      session('root', WORKTREE),
+      session('child-in-sub', `${WORKTREE}/sub`, 'root'),
+    ]);
+
+    expect(trees.map((tree) => [tree.root.sessionId, tree.descendants.map((entry) => entry.sessionId), tree.sourceDirectory])).toEqual([
+      ['root', [], WORKTREE],
+      ['child-in-sub', [], `${WORKTREE}/sub`],
+    ]);
+  });
+
+  test('a running session stops it before anything moves or is removed', async () => {
+    const calls: string[] = [];
+    const reason = await stopReason(flow(
+      [session('root', WORKTREE), session('child', WORKTREE, 'root')],
+      calls,
+      { readActivity: async (sessions) => (sessions.some((entry) => entry.sessionId === 'child') ? 'active' : 'idle') },
+    ));
+
+    expect(reason).toBe('busy');
+    expect(calls).toEqual([]);
+  });
+
+  test('a status read that fails stops it as unknown, never as idle', async () => {
+    const calls: string[] = [];
+    const reason = await stopReason(flow([session('root', WORKTREE)], calls, { readActivity: async () => 'unknown' }));
+
+    expect(reason).toBe('unknown');
+    expect(calls).toEqual([]);
+  });
+
+  test('a destination inside the worktree stops it before anything moves', async () => {
+    const calls: string[] = [];
+    // A project registered inside the checkout would be removed with it.
+    await expect(flow([session('root', WORKTREE), session('ai-session', `${WORKTREE}/ai`)], calls, {
+      resolveDestination: async (directory) => (directory.endsWith('/ai') ? `${WORKTREE}/ai` : '/repo'),
+    })).rejects.toThrow('inside the worktree');
+
+    expect(calls).toEqual([]);
+  });
+
+  test('a failed tree move keeps the worktree and the trees already moved', async () => {
+    const calls: string[] = [];
+    await expect(flow([session('first', WORKTREE), session('second', `${WORKTREE}/ai`)], calls, {
+      moveTree: async (tree) => {
+        if (tree.root.sessionId === 'second') throw new Error('Session is not idle');
+        calls.push(`move:${tree.root.sessionId}`);
+      },
+    })).rejects.toThrow('Session is not idle');
+
+    expect(calls).toEqual(['move:first']);
+  });
+
+  test('a session that started in the worktree during the moves keeps the worktree', async () => {
+    const calls: string[] = [];
+    const late = session('late', WORKTREE);
+    const reason = await stopReason(flow([session('root', WORKTREE)], calls, {
+      readSessions: (() => {
+        let reads = 0;
+        // The first read is the set to move; by the last one a new session sits there.
+        return () => (reads++ === 0 ? [session('root', WORKTREE)] : [late]);
+      })(),
+    }));
+
+    expect(reason).toBe('added');
+    expect(calls).toEqual([`move:root ${WORKTREE} -> /repo`, 'confirm:root']);
+  });
+
+  test('a moved session the list still places in the worktree does not keep it', async () => {
+    const calls: string[] = [];
+    // The local list can lag a move the server already applied and still
+    // return the session at its old folder.
+    const result = await flow([session('root', WORKTREE)], calls, {
+      readSessions: () => [session('root', WORKTREE)],
+    });
+
+    expect(calls).toEqual([`move:root ${WORKTREE} -> /repo`, 'confirm:root', 'remove']);
+    expect(result).toEqual({ removed: true });
+  });
+
+  test('a move the server has not applied keeps the worktree', async () => {
+    const calls: string[] = [];
+    const reason = await stopReason(flow([session('root', WORKTREE)], calls, {
+      confirmMoves: async () => false,
+    }));
+
+    expect(reason).toBe('unconfirmed');
+    expect(calls).toEqual([`move:root ${WORKTREE} -> /repo`]);
+  });
+
+  test('a switch to another server during the wait for the moves says so, not that a move failed', async () => {
+    const calls: string[] = [];
+    let current = true;
+    const reason = await stopReason(flow([session('root', WORKTREE)], calls, {
+      isCurrent: () => current,
+      confirmMoves: async () => {
+        current = false;
+        return false;
+      },
+    }));
+
+    expect(reason).toBe('switched');
+    expect(calls).toEqual([`move:root ${WORKTREE} -> /repo`]);
+  });
+
+  test('a switch to another server stops it before the next move and before the removal', async () => {
+    const calls: string[] = [];
+    let current = true;
+    const reason = await stopReason(flow([session('first', WORKTREE), session('second', `${WORKTREE}/ai`)], calls, {
+      isCurrent: () => current,
+      moveTree: async (tree) => {
+        calls.push(`move:${tree.root.sessionId}`);
+        current = false;
+      },
+    }));
+
+    expect(reason).toBe('switched');
+    expect(calls).toEqual(['move:first']);
+  });
+
+  test('a failed removal leaves the moved sessions in the project', async () => {
+    const calls: string[] = [];
+    const result = await flow([session('root', WORKTREE)], calls, {
+      removeWorktree: async () => {
+        calls.push('remove');
+        return false;
+      },
+    });
+
+    expect(calls).toEqual([`move:root ${WORKTREE} -> /repo`, 'confirm:root', 'remove']);
+    expect(result).toEqual({ removed: false });
+  });
+
+  test('removes a worktree with no sessions without reading statuses', async () => {
+    const calls: string[] = [];
+    let statusRead = false;
+    const result = await flow([], calls, {
+      readActivity: async () => {
+        statusRead = true;
+        return 'unknown';
+      },
+    });
+
+    expect(statusRead).toBe(false);
+    expect(calls).toEqual(['remove']);
+    expect(result).toEqual({ removed: true });
+  });
+});
+
+describe('moveSessionsThenRemoveWorktree on Windows paths', () => {
+  test('a drive worktree groups its subfolder sessions and stops for a project inside it, whatever the separator or letter case', async () => {
+    const calls: string[] = [];
+    await expect(flow([session('root', 'C:\\wt\\feature'), session('ai', 'c:\\wt\\feature\\ai')], calls, {
+      worktreePath: 'C:\\wt\\feature\\',
+      resolveDestination: async (directory) => (directory.endsWith('/ai') ? 'c:\\wt\\feature\\ai' : 'C:\\repo'),
+    })).rejects.toThrow('inside the worktree');
+    expect(calls).toEqual([]);
+
+    expect(groupSessionTreesByFolder([session('root', 'C:\\wt\\feature'), session('child', 'c:/wt/feature', 'root')])
+      .map((tree) => [tree.root.sessionId, tree.descendants.map((entry) => entry.sessionId), tree.sourceDirectory]))
+      .toEqual([['root', ['child'], 'C:/wt/feature']]);
+  });
+
+  test('a UNC worktree moves to a sibling share folder with the same prefix, which is not inside it', async () => {
+    const calls: string[] = [];
+    const result = await flow([session('root', '\\\\server\\share\\feature')], calls, {
+      worktreePath: '\\\\server\\share\\feature',
+      resolveDestination: async () => '\\\\server\\share\\feature2',
+    });
+
+    expect(result).toEqual({ removed: true });
+    expect(calls).toEqual(['move:root //server/share/feature -> \\\\server\\share\\feature2', 'confirm:root', 'remove']);
+  });
+
+  test('a UNC project inside the worktree stops it before anything moves', async () => {
+    const calls: string[] = [];
+    await expect(flow([session('root', '\\\\server\\share\\feature\\ai')], calls, {
+      worktreePath: '\\\\server\\share\\feature',
+      resolveDestination: async () => '\\\\server\\share\\feature\\ai',
+    })).rejects.toThrow('inside the worktree');
+    expect(calls).toEqual([]);
   });
 });

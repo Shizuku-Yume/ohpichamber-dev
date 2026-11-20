@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import type { MCPOAuthResult, MCPServerConfig } from '@openchamber/agent-contract';
-import React, { act } from 'react';
+import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Element as HappyElement, HTMLElement, Window } from 'happy-dom';
 
@@ -14,7 +14,7 @@ const descriptors = new Map<string, PropertyDescriptor | undefined>();
 // React DOM detects input-event support when imported, so install the DOM first.
 for (const [key, value] of Object.entries({
   window: browser,
-  document: browser.document,
+  document: browser.document, Event: browser.Event, CustomEvent: browser.CustomEvent,
   navigator: browser.navigator,
   localStorage: browser.localStorage,
   Element: browser.Element,

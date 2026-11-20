@@ -15,7 +15,6 @@ export type WorkflowReport = {
   runId: string;
   name: string;
   state: WorkflowReportState;
-  /** The report without the envelope. */
   output: string;
 };
 

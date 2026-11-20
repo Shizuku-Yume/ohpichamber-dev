@@ -16,10 +16,6 @@ interface AssistantTextPartProps {
     streamPhase: StreamPhase;
     chatRenderMode?: 'sorted' | 'live';
     onShowPopup?: (content: ToolPopupContent) => void;
-    /**
-     * The stretch of a finished text this row draws, when a long answer spans
-     * several transcript rows (`timelineRows.ts`).
-     */
     range?: { start: number; end?: number };
 }
 

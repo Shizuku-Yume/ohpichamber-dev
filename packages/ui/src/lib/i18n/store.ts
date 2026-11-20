@@ -4,9 +4,8 @@ import { dict as enDict, type I18nKey } from './messages/en';
 import { subagentHudI18n } from './messages/subagent-hud.i18n';
 import { timelineNoticesI18n } from './messages/timeline-notices.i18n';
 import { DEFAULT_LOCALE, detectInitialLocale, type Locale, writeStoredLocale } from './runtime';
-import { hasRightToLeftText, isolateInsertedText } from './textDirection';
+import { formatTemplate, type I18nParams } from './format';
 
-export type I18nParams = Record<string, string | number | boolean | null | undefined>;
 export type I18nDictionary = Record<I18nKey, string>;
 
 type I18nState = {
@@ -24,7 +23,7 @@ export function resetI18nDictionaryCacheForTests(): void {
 }
 
 /** One dictionary module; every locale file exports its strings as `dict`. */
-type I18nModule = { readonly dict: I18nDictionary };
+type I18nModule = { readonly dict: Partial<I18nDictionary> };
 
 // A total map rather than a switch, so the module contract is checked at each
 // import instead of asserted after a union of import results.
@@ -58,7 +57,7 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
   const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
 
   /* SAFETY: The merged dictionary follows the I18nDictionary contract. */
-  const fullDict = { ...mod.dict, ...subagentDict, ...noticeDict };
+  const fullDict = { ...enDict, ...mod.dict, ...subagentDict, ...noticeDict };
   dictionaries.set(locale, fullDict);
   return fullDict;
 }
@@ -105,20 +104,7 @@ export function initializeLocale(): void {
 }
 
 export function formatMessage(dictionary: I18nDictionary, key: I18nKey, params?: I18nParams): string {
-  const template = dictionary[key] ?? enDict[key] ?? key;
-  if (!params) {
-    return template;
-  }
-
-  const sentenceHasRightToLeft = hasRightToLeftText(template);
-  return template.replace(/\{([^{}]+)\}/g, (match, rawKey) => {
-    const value = params[rawKey.trim()];
-    if (value === null || value === undefined) return match;
-    // Numbers have no direction of their own, even written as 1e-7 or NaN;
-    // only strings come back from String() unchanged.
-    const text = String(value);
-    return text === value ? isolateInsertedText(text, sentenceHasRightToLeft) : text;
-  });
+  return formatTemplate(dictionary[key] ?? enDict[key] ?? key, params);
 }
 
-export type { I18nKey, Locale };
+export type { I18nKey, I18nParams, Locale };
