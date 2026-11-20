@@ -221,7 +221,10 @@ export const createHostAgentScopeRuntime = ({
     const parsed = WorkspaceDirectorySchema.safeParse(directory);
     if (!parsed.success) return null;
     const requested = await validateDirectoryPath(parsed.data);
-    if (!requested.ok) return null;
+    if (!requested.ok) {
+      const removed = (await discover()).scopes.find((scope) => scope.checkoutRemoved && scope.cwd === parsed.data);
+      return removed ? publicWorkspace(removed) : null;
+    }
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
     let discoveryFailed = false;
     if (managedChatsScope) {

@@ -280,6 +280,7 @@ describe('configured Host scope authority', () => {
     execFileSync('git', ['-C', projectDirectory, 'worktree', 'remove', worktreeDirectory]);
     expect((await runtime.listWorkspaces()).items.map((item) => item.workspaceId)).toContain(scope.workspaceId);
     await expect(runtime.resolveSessionScope('archived-session')).resolves.toMatchObject({ workspaceId: scope.workspaceId, cwd: worktreeDirectory, checkoutRemoved: true });
+    await expect(runtime.resolveWorkspaceDirectory(worktreeDirectory)).resolves.toMatchObject({ workspaceId: scope.workspaceId });
     fs.mkdirSync(worktreeDirectory);
     await expect(runtime.resolveSessionScope('archived-session')).resolves.toBeNull();
   });
