@@ -82,15 +82,6 @@ export function useComposerLanguage({
 
     const commandsDirectory = commandsTarget.status === 'resolved' ? commandsTarget.directory : null;
 
-    const preloadDraftCatalogs = !columnPinned && !currentSessionId && newSessionDraftOpen
-        && Boolean(newSessionDraft.worktreeStartDirectory);
-
-    React.useEffect(() => {
-        if (!preloadDraftCatalogs || !commandsDirectory) return;
-        void useCommandsStore.getState().loadCommands(commandsDirectory);
-        void useSkillsStore.getState().loadSkills(commandsDirectory);
-    }, [commandsDirectory, preloadDraftCatalogs]);
-
     const availableSkills = useSkillsStore((s) => commandsTarget.status === 'pending'
         ? EMPTY_COMPOSER_SKILLS
         : selectAvailableSkillsForDirectory(s, commandsTarget.directory));
@@ -121,7 +112,6 @@ export function useComposerLanguage({
         const triggers = new Set<string>();
         for (const snippet of availableSnippets) {
             triggers.add(snippet.name.toLowerCase());
-            for (const alias of snippet.aliases ?? []) triggers.add(alias.toLowerCase());
         }
         return triggers;
     }, [availableSnippets]);
