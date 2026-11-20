@@ -207,10 +207,11 @@ describe('agent-runtime resolution and supervisor creation', () => {
       fs.rmSync(dataDir, { recursive: true, force: true });
     }
   });
-  it('admitWorkspace leaves a removed checkout unregistered with the Agent Service', async () => {
+  it('admitWorkspace registers a removed checkout from its project root', async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-rt-removed-'));
     try {
-      const removedScope = { workspaceId: 'workspace-removed', projectId: 'project-test-1', cwd: '/test/removed', agentDirectory: '/test/agent', agentDirectoryId: 'agent-dir-1', checkoutRemoved: true };
+      const removedScope = { workspaceId: 'workspace-removed', projectId: 'project-test-1', projectDirectory: '/test/project', cwd: '/test/removed', agentDirectory: '/test/agent', agentDirectoryId: 'agent-dir-1', checkoutRemoved: true };
+      const environmentReads = [];
       const runtime = createHostAgentRuntime({
         dataDir,
         scopeRuntime: {
@@ -221,17 +222,21 @@ describe('agent-runtime resolution and supervisor creation', () => {
           resolveRelocationSourceScope: async () => null,
         },
         validateDirectoryPath: () => true,
-        getEnvironmentForDirectory: async () => { throw new Error('Unexpected environment read'); },
+        getEnvironmentForDirectory: async (directory) => { environmentReads.push(directory); return {}; },
         invokeHostAction: async () => null,
         enterprisePolicyOptions: {},
         bunPath: '/custom/bin/bun',
         entrypoint: '/custom/service/index.js',
         resolveHostTools: async () => ({ web: false, openchamber: false, notify: false }),
       });
-      const requests = [];
-      runtime.service.request = async (requestPath) => { requests.push(requestPath); return new Response('{}', { status: 404 }); };
-      await expect(runtime.resolveWorkspaceScope(removedScope.workspaceId)).resolves.toMatchObject({ workspaceId: removedScope.workspaceId, env: {} });
-      expect(requests).toEqual([]);
+      let registeredBody = null;
+      runtime.service.request = async (requestPath, options) => {
+        registeredBody = JSON.parse(options.body);
+        return new Response(JSON.stringify({ workspaceId: removedScope.workspaceId, projectId: removedScope.projectId, agentDirectoryId: removedScope.agentDirectoryId, authorizationRootId: 'auth-root-1', catalogRevision: '1' }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      };
+      await expect(runtime.resolveWorkspaceScope(removedScope.workspaceId)).resolves.toMatchObject({ workspaceId: removedScope.workspaceId, cwd: '/test/removed' });
+      expect(registeredBody.cwd).toBe('/test/project');
+      expect(environmentReads).toEqual(['/test/project']);
     } finally {
       fs.rmSync(dataDir, { recursive: true, force: true });
     }

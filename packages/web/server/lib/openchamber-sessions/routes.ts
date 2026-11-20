@@ -198,6 +198,7 @@ const createCanonicalSessionService = (dependencies) => {
   };
   const withSessionAdmission = async (scope, operation, rootSessionId, work, readOnly = false) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host session admission authority is unavailable', 503);
+    if (scope.checkoutRemoved && !readOnly) throw new OpenChamberControlError('This chat\'s worktree was deleted, so it is read-only', 409, { code: 'SESSION_READ_ONLY' });
     await recoverPriorCreateAdmissions(scope);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
     let complete = false;
